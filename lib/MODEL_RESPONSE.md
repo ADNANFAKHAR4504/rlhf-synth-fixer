@@ -1,8 +1,3 @@
-I'll create a comprehensive Infrastructure as Code solution using AWS CDK for Terraform (CDKTF) in TypeScript. This will be organized into two files with production-ready, secure, and reusable modules.
-
-## modules.ts
-
-```typescript
 import { Construct } from "constructs";
 import {
   AwsProvider,
@@ -17,14 +12,13 @@ import {
   SecurityGroup,
   SecurityGroupRule,
   Instance,
+  IamRole,
+  IamRolePolicy,
+  IamInstanceProfile,
   S3Bucket,
   S3BucketVersioning,
   S3BucketServerSideEncryptionConfiguration,
   S3BucketPublicAccessBlock,
-  IamRole,
-  IamRolePolicyAttachment,
-  IamInstanceProfile,
-  DataAwsIamPolicyDocument,
   DbSubnetGroup,
   DbInstance,
   CloudwatchLogGroup,
@@ -38,11 +32,22 @@ export interface VpcModuleConfig {
   environment: string;
 }
 
-export interface SecurityGroupModuleConfig {
-  vpcId: string;
+export interface Ec2ModuleConfig {
+  instanceType: string;
+  keyPairName: string;
   allowedSshCidrs: string[];
   projectName: string;
   environment: string;
+  vpcId: string;
+  subnetId: string;
+  iamInstanceProfileName: string;
+}
+
+export interface IamModuleConfig {
+  projectName: string;
+  environment: string;
+  s3BucketArns: string[];
+  cloudwatchLogGroupArn: string;
 }
 
 export interface S3ModuleConfig {
@@ -51,31 +56,15 @@ export interface S3ModuleConfig {
   environment: string;
 }
 
-export interface EC2ModuleConfig {
-  instanceType: string;
-  subnetId: string;
-  securityGroupIds: string[];
-  iamInstanceProfile: string;
-  keyName?: string;
-  projectName: string;
-  environment: string;
-}
-
-export interface RDSModuleConfig {
+export interface RdsModuleConfig {
   instanceClass: string;
   allocatedStorage: number;
   dbName: string;
   username: string;
-  password: string;
-  subnetGroupName: string;
-  securityGroupIds: string[];
   projectName: string;
   environment: string;
-}
-
-export interface IAMModuleConfig {
-  projectName: string;
-  environment: string;
+  subnetIds: string[];
+  vpcId: string;
 }
 
 export interface CloudWatchModuleConfig {
@@ -86,29 +75,27 @@ export interface CloudWatchModuleConfig {
 }
 
 /**
- * VPC Module - Creates a Virtual Private Cloud with public and private subnets
- * Includes Internet Gateway, Route Tables, and NAT Gateway for secure networking
+ * VPC Module - Creates a complete VPC with public subnets, internet gateway, and routing
+ * This provides the network foundation for all other resources
  */
 export class VpcModule extends Construct {
   public readonly vpc: Vpc;
-  public readonly publicSubnet: Subnet;
-  public readonly privateSubnet: Subnet;
+  public readonly publicSubnets: Subnet[];
   public readonly internetGateway: InternetGateway;
-  public readonly publicRouteTable: RouteTable;
-  public readonly privateRouteTable: RouteTable;
+  public readonly routeTable: RouteTable;
 
   constructor(scope: Construct, id: string, config: VpcModuleConfig) {
     super(scope, id);
 
     // Get availability zones for the region
-    const azs = new DataAwsAvailabilityZones(this, "availability-zones", {
+    const availabilityZones = new DataAwsAvailabilityZones(this, "availability-zones", {
       state: "available"
     });
 
-    // Create VPC with DNS support enabled for RDS and other services
+    // Create VPC - This is the main network container for all resources
     this.vpc = new Vpc(this, "vpc", {
       cidrBlock: config.cidrBlock,
-      enableDnsHostnames: true,
+      enableDnsHostnames: true, // Required for RDS and other services
       enableDnsSupport: true,
       tags: {
         Name: `${config.projectName}-${config.environment}-vpc`,
@@ -117,36 +104,8 @@ export class VpcModule extends Construct {
       }
     });
 
-    // Create public subnet for resources that need internet access (e.g., NAT Gateway, Load Balancers)
-    this.publicSubnet = new Subnet(this, "public-subnet", {
-      vpcId: this.vpc.id,
-      cidrBlock: "10.0.1.0/24",
-      availabilityZone: `\${${azs.fqn}.names[0]}`,
-      mapPublicIpOnLaunch: true,
-      tags: {
-        Name: `${config.projectName}-${config.environment}-public-subnet`,
-        ProjectName: config.projectName,
-        Environment: config.environment,
-        Type: "Public"
-      }
-    });
-
-    // Create private subnet for sensitive resources (RDS, internal services)
-    this.privateSubnet = new Subnet(this, "private-subnet", {
-      vpcId: this.vpc.id,
-      cidrBlock: "10.0.2.0/24",
-      availabilityZone: `\${${azs.fqn}.names[1]}`,
-      mapPublicIpOnLaunch: false,
-      tags: {
-        Name: `${config.projectName}-${config.environment}-private-subnet`,
-        ProjectName: config.projectName,
-        Environment: config.environment,
-        Type: "Private"
-      }
-    });
-
-    // Internet Gateway for public internet access
-    this.internetGateway = new InternetGateway(this, "igw", {
+    // Create Internet Gateway - Allows internet access for public subnets
+    this.internetGateway = new InternetGateway(this, "internet-gateway", {
       vpcId: this.vpc.id,
       tags: {
         Name: `${config.projectName}-${config.environment}-igw`,
@@ -155,8 +114,26 @@ export class VpcModule extends Construct {
       }
     });
 
-    // Route table for public subnet - routes traffic to Internet Gateway
-    this.publicRouteTable = new RouteTable(this, "public-rt", {
+    // Create public subnets in multiple AZs for high availability
+    // RDS requires subnets in at least 2 AZs for Multi-AZ deployment
+    this.publicSubnets = [];
+    for (let i = 0; i < 2; i++) {
+      const subnet = new Subnet(this, `public-subnet-${i}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: `10.0.${i + 1}.0/24`, // Creates 10.0.1.0/24, 10.0.2.0/24
+        availabilityZone: `\${${availabilityZones.fqn}.names[${i}]}`,
+        mapPublicIpOnLaunch: true, // Auto-assign public IPs
+        tags: {
+          Name: `${config.projectName}-${config.environment}-public-subnet-${i + 1}`,
+          ProjectName: config.projectName,
+          Environment: config.environment
+        }
+      });
+      this.publicSubnets.push(subnet);
+    }
+
+    // Create route table for public subnets
+    this.routeTable = new RouteTable(this, "public-route-table", {
       vpcId: this.vpc.id,
       tags: {
         Name: `${config.projectName}-${config.environment}-public-rt`,
@@ -165,231 +142,36 @@ export class VpcModule extends Construct {
       }
     });
 
-    // Route table for private subnet - no direct internet access
-    this.privateRouteTable = new RouteTable(this, "private-rt", {
-      vpcId: this.vpc.id,
-      tags: {
-        Name: `${config.projectName}-${config.environment}-private-rt`,
-        ProjectName: config.projectName,
-        Environment: config.environment
-      }
-    });
-
-    // Route for public subnet to internet gateway
+    // Create route to internet gateway - enables internet access
     new Route(this, "public-route", {
-      routeTableId: this.publicRouteTable.id,
+      routeTableId: this.routeTable.id,
       destinationCidrBlock: "0.0.0.0/0",
       gatewayId: this.internetGateway.id
     });
 
-    // Associate route tables with subnets
-    new RouteTableAssociation(this, "public-rt-association", {
-      subnetId: this.publicSubnet.id,
-      routeTableId: this.publicRouteTable.id
-    });
-
-    new RouteTableAssociation(this, "private-rt-association", {
-      subnetId: this.privateSubnet.id,
-      routeTableId: this.privateRouteTable.id
-    });
-  }
-}
-
-/**
- * Security Group Module - Creates security groups with least privilege access
- * Implements defense in depth by restricting access to only necessary ports and sources
- */
-export class SecurityGroupModule extends Construct {
-  public readonly ec2SecurityGroup: SecurityGroup;
-  public readonly rdsSecurityGroup: SecurityGroup;
-
-  constructor(scope: Construct, id: string, config: SecurityGroupModuleConfig) {
-    super(scope, id);
-
-    // Security group for EC2 instances - allows SSH from specified CIDRs only
-    this.ec2SecurityGroup = new SecurityGroup(this, "ec2-sg", {
-      name: `${config.projectName}-${config.environment}-ec2-sg`,
-      description: "Security group for EC2 instances - SSH access only",
-      vpcId: config.vpcId,
-      tags: {
-        Name: `${config.projectName}-${config.environment}-ec2-sg`,
-        ProjectName: config.projectName,
-        Environment: config.environment
-      }
-    });
-
-    // Allow SSH access from specified CIDR blocks only
-    config.allowedSshCidrs.forEach((cidr, index) => {
-      new SecurityGroupRule(this, `ec2-ssh-rule-${index}`, {
-        type: "ingress",
-        fromPort: 22,
-        toPort: 22,
-        protocol: "tcp",
-        cidrBlocks: [cidr],
-        securityGroupId: this.ec2SecurityGroup.id,
-        description: `SSH access from ${cidr}`
+    // Associate subnets with route table
+    this.publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `public-route-association-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: this.routeTable.id
       });
     });
-
-    // Allow all outbound traffic for updates and external communication
-    new SecurityGroupRule(this, "ec2-egress-rule", {
-      type: "egress",
-      fromPort: 0,
-      toPort: 65535,
-      protocol: "-1",
-      cidrBlocks: ["0.0.0.0/0"],
-      securityGroupId: this.ec2SecurityGroup.id,
-      description: "Allow all outbound traffic"
-    });
-
-    // Security group for RDS - allows access only from EC2 security group
-    this.rdsSecurityGroup = new SecurityGroup(this, "rds-sg", {
-      name: `${config.projectName}-${config.environment}-rds-sg`,
-      description: "Security group for RDS - access from EC2 only",
-      vpcId: config.vpcId,
-      tags: {
-        Name: `${config.projectName}-${config.environment}-rds-sg`,
-        ProjectName: config.projectName,
-        Environment: config.environment
-      }
-    });
-
-    // Allow MySQL/Aurora access from EC2 security group only
-    new SecurityGroupRule(this, "rds-mysql-rule", {
-      type: "ingress",
-      fromPort: 3306,
-      toPort: 3306,
-      protocol: "tcp",
-      sourceSecurityGroupId: this.ec2SecurityGroup.id,
-      securityGroupId: this.rdsSecurityGroup.id,
-      description: "MySQL access from EC2 instances"
-    });
   }
 }
 
 /**
- * S3 Module - Creates secure S3 buckets with encryption and versioning
- * Implements AWS security best practices including encryption at rest and public access blocking
+ * EC2 Module - Creates an EC2 instance with security group and CloudWatch monitoring
+ * Security group follows least privilege principle - only allows SSH from specified CIDRs
  */
-export class S3Module extends Construct {
-  public readonly bucket: S3Bucket;
-
-  constructor(scope: Construct, id: string, config: S3ModuleConfig) {
-    super(scope, id);
-
-    // Create S3 bucket with force destroy enabled for easier cleanup in non-production
-    this.bucket = new S3Bucket(this, "bucket", {
-      bucket: config.bucketName,
-      forceDestroy: config.environment !== "production", // Only allow force destroy in non-prod
-      tags: {
-        Name: config.bucketName,
-        ProjectName: config.projectName,
-        Environment: config.environment
-      }
-    });
-
-    // Enable versioning to protect against accidental deletion and provide data recovery
-    new S3BucketVersioning(this, "bucket-versioning", {
-      bucket: this.bucket.id,
-      versioningConfiguration: {
-        status: "Enabled"
-      }
-    });
-
-    // Configure AES-256 server-side encryption for data at rest
-    new S3BucketServerSideEncryptionConfiguration(this, "bucket-encryption", {
-      bucket: this.bucket.id,
-      rule: [{
-        applyServerSideEncryptionByDefault: {
-          sseAlgorithm: "AES256"
-        },
-        bucketKeyEnabled: true // Reduces encryption costs
-      }]
-    });
-
-    // Block all public access to prevent accidental data exposure
-    new S3BucketPublicAccessBlock(this, "bucket-pab", {
-      bucket: this.bucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true
-    });
-  }
-}
-
-/**
- * IAM Module - Creates IAM roles and policies with least privilege access
- * Provides secure access patterns for EC2 instances and other AWS services
- */
-export class IAMModule extends Construct {
-  public readonly ec2Role: IamRole;
-  public readonly ec2InstanceProfile: IamInstanceProfile;
-
-  constructor(scope: Construct, id: string, config: IAMModuleConfig) {
-    super(scope, id);
-
-    // Trust policy document for EC2 service
-    const ec2AssumeRolePolicy = new DataAwsIamPolicyDocument(this, "ec2-assume-role-policy", {
-      statement: [{
-        actions: ["sts:AssumeRole"],
-        effect: "Allow",
-        principals: [{
-          type: "Service",
-          identifiers: ["ec2.amazonaws.com"]
-        }]
-      }]
-    });
-
-    // IAM role for EC2 instances with CloudWatch Logs permissions
-    this.ec2Role = new IamRole(this, "ec2-role", {
-      name: `${config.projectName}-${config.environment}-ec2-role`,
-      assumeRolePolicy: ec2AssumeRolePolicy.json,
-      description: "IAM role for EC2 instances with CloudWatch Logs access",
-      tags: {
-        Name: `${config.projectName}-${config.environment}-ec2-role`,
-        ProjectName: config.projectName,
-        Environment: config.environment
-      }
-    });
-
-    // Attach CloudWatch Logs policy for log streaming
-    new IamRolePolicyAttachment(this, "ec2-cloudwatch-policy", {
-      role: this.ec2Role.name,
-      policyArn: "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
-    });
-
-    // Attach SSM policy for Systems Manager access (useful for maintenance)
-    new IamRolePolicyAttachment(this, "ec2-ssm-policy", {
-      role: this.ec2Role.name,
-      policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-    });
-
-    // Create instance profile for EC2 instances
-    this.ec2InstanceProfile = new IamInstanceProfile(this, "ec2-instance-profile", {
-      name: `${config.projectName}-${config.environment}-ec2-profile`,
-      role: this.ec2Role.name,
-      tags: {
-        Name: `${config.projectName}-${config.environment}-ec2-profile`,
-        ProjectName: config.projectName,
-        Environment: config.environment
-      }
-    });
-  }
-}
-
-/**
- * EC2 Module - Creates EC2 instances with security best practices
- * Includes CloudWatch monitoring and secure configuration
- */
-export class EC2Module extends Construct {
+export class Ec2Module extends Construct {
   public readonly instance: Instance;
+  public readonly securityGroup: SecurityGroup;
 
-  constructor(scope: Construct, id: string, config: EC2ModuleConfig) {
+  constructor(scope: Construct, id: string, config: Ec2ModuleConfig) {
     super(scope, id);
 
     // Get latest Amazon Linux 2 AMI
-    const amazonLinuxAmi = new DataAwsAmi(this, "amazon-linux", {
+    const ami = new DataAwsAmi(this, "amazon-linux", {
       mostRecent: true,
       owners: ["amazon"],
       filter: [
@@ -404,65 +186,62 @@ export class EC2Module extends Construct {
       ]
     });
 
-    // User data script for CloudWatch Logs agent installation and configuration
-    const userData = `#!/bin/bash
-yum update -y
-yum install -y awslogs
+    // Create security group with restrictive SSH access
+    // Only allows SSH from specified IP ranges - follows security best practices
+    this.securityGroup = new SecurityGroup(this, "ec2-security-group", {
+      name: `${config.projectName}-${config.environment}-ec2-sg`,
+      description: "Security group for EC2 instance - SSH access only from allowed CIDRs",
+      vpcId: config.vpcId,
+      tags: {
+        Name: `${config.projectName}-${config.environment}-ec2-sg`,
+        ProjectName: config.projectName,
+        Environment: config.environment
+      }
+    });
 
-# Configure CloudWatch Logs
-cat > /etc/awslogs/awslogs.conf << EOF
-[general]
-state_file = /var/lib/awslogs/agent-state
+    // Add SSH ingress rules for each allowed CIDR
+    config.allowedSshCidrs.forEach((cidr, index) => {
+      new SecurityGroupRule(this, `ssh-ingress-${index}`, {
+        type: "ingress",
+        fromPort: 22,
+        toPort: 22,
+        protocol: "tcp",
+        cidrBlocks: [cidr],
+        securityGroupId: this.securityGroup.id,
+        description: `SSH access from ${cidr}`
+      });
+    });
 
-[/var/log/messages]
-file = /var/log/messages
-log_group_name = ${config.projectName}-${config.environment}-ec2-logs
-log_stream_name = {instance_id}/messages
-datetime_format = %b %d %H:%M:%S
+    // Allow all outbound traffic - needed for package updates and CloudWatch agent
+    new SecurityGroupRule(this, "all-egress", {
+      type: "egress",
+      fromPort: 0,
+      toPort: 0,
+      protocol: "-1",
+      cidrBlocks: ["0.0.0.0/0"],
+      securityGroupId: this.securityGroup.id,
+      description: "All outbound traffic"
+    });
 
-[/var/log/secure]
-file = /var/log/secure
-log_group_name = ${config.projectName}-${config.environment}-ec2-logs
-log_stream_name = {instance_id}/secure
-datetime_format = %b %d %H:%M:%S
-EOF
-
-# Configure CloudWatch Logs region
-sed -i 's/region = us-east-1/region = us-east-1/g' /etc/awslogs/awscli.conf
-
-# Start and enable CloudWatch Logs
-systemctl start awslogsd
-systemctl enable awslogsd
-
-# Install CloudWatch agent for enhanced monitoring
-wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-rpm -U ./amazon-cloudwatch-agent.rpm
-`;
-
-    // Create EC2 instance with security best practices
-    this.instance = new Instance(this, "instance", {
-      ami: amazonLinuxAmi.id,
+    // Create EC2 instance with CloudWatch monitoring enabled
+    this.instance = new Instance(this, "ec2-instance", {
+      ami: ami.id,
       instanceType: config.instanceType,
+      keyName: config.keyPairName,
       subnetId: config.subnetId,
-      vpcSecurityGroupIds: config.securityGroupIds,
-      iamInstanceProfile: config.iamInstanceProfile,
-      keyName: config.keyName,
-      userData: Buffer.from(userData).toString('base64'),
+      vpcSecurityGroupIds: [this.securityGroup.id],
+      iamInstanceProfile: config.iamInstanceProfileName,
+      monitoring: true, // Enable detailed CloudWatch monitoring
       
-      // Enable detailed monitoring for better observability
-      monitoring: true,
-      
-      // Enable EBS optimization for better performance
-      ebsOptimized: true,
-      
-      // Root block device with encryption
-      rootBlockDevice: {
-        volumeType: "gp3",
-        volumeSize: 20,
-        encrypted: true,
-        deleteOnTermination: true
-      },
-      
+      // User data script to install and configure CloudWatch agent
+      userData: `#!/bin/bash
+yum update -y
+yum install -y amazon-cloudwatch-agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-linux
+systemctl enable amazon-cloudwatch-agent
+systemctl start amazon-cloudwatch-agent
+`,
+
       tags: {
         Name: `${config.projectName}-${config.environment}-ec2`,
         ProjectName: config.projectName,
@@ -473,58 +252,229 @@ rpm -U ./amazon-cloudwatch-agent.rpm
 }
 
 /**
- * RDS Module - Creates RDS instances with encryption and automated backups
- * Implements database security best practices including encryption at rest
+ * IAM Module - Creates IAM roles and policies following least privilege principle
+ * EC2 instance gets minimal permissions needed for CloudWatch logging and S3 access
  */
-export class RDSModule extends Construct {
-  public readonly dbSubnetGroup: DbSubnetGroup;
-  public readonly dbInstance: DbInstance;
+export class IamModule extends Construct {
+  public readonly ec2Role: IamRole;
+  public readonly ec2InstanceProfile: IamInstanceProfile;
 
-  constructor(scope: Construct, id: string, config: RDSModuleConfig, privateSubnetIds: string[]) {
+  constructor(scope: Construct, id: string, config: IamModuleConfig) {
     super(scope, id);
 
-    // Create DB subnet group for RDS deployment across multiple AZs
-    this.dbSubnetGroup = new DbSubnetGroup(this, "db-subnet-group", {
-      name: config.subnetGroupName,
-      subnetIds: privateSubnetIds,
-      description: "Subnet group for RDS instances",
+    // Create IAM role for EC2 instance
+    // Trust policy allows EC2 service to assume this role
+    this.ec2Role = new IamRole(this, "ec2-role", {
+      name: `${config.projectName}-${config.environment}-ec2-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Effect: "Allow",
+            Principal: {
+              Service: "ec2.amazonaws.com"
+            },
+            Action: "sts:AssumeRole"
+          }
+        ]
+      }),
       tags: {
-        Name: config.subnetGroupName,
         ProjectName: config.projectName,
         Environment: config.environment
       }
     });
 
-    // Create RDS instance with security and backup best practices
-    this.dbInstance = new DbInstance(this, "db-instance", {
+    // Create policy with minimal required permissions
+    // CloudWatch Logs: write logs and create log streams
+    // S3: read/write access to specific project buckets only
+    const policyDocument = {
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: [
+            "logs:CreateLogGroup",
+            "logs:CreateLogStream",
+            "logs:PutLogEvents",
+            "logs:DescribeLogStreams",
+            "logs:DescribeLogGroups"
+          ],
+          Resource: [
+            config.cloudwatchLogGroupArn,
+            `${config.cloudwatchLogGroupArn}:*`
+          ]
+        },
+        {
+          Effect: "Allow",
+          Action: [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:DeleteObject",
+            "s3:ListBucket"
+          ],
+          Resource: [
+            ...config.s3BucketArns,
+            ...config.s3BucketArns.map(arn => `${arn}/*`)
+          ]
+        },
+        {
+          Effect: "Allow",
+          Action: [
+            "cloudwatch:PutMetricData",
+            "ec2:DescribeVolumes",
+            "ec2:DescribeTags"
+          ],
+          Resource: "*"
+        }
+      ]
+    };
+
+    new IamRolePolicy(this, "ec2-policy", {
+      name: `${config.projectName}-${config.environment}-ec2-policy`,
+      role: this.ec2Role.id,
+      policy: JSON.stringify(policyDocument)
+    });
+
+    // Create instance profile to attach role to EC2 instance
+    this.ec2InstanceProfile = new IamInstanceProfile(this, "ec2-instance-profile", {
+      name: `${config.projectName}-${config.environment}-ec2-profile`,
+      role: this.ec2Role.name,
+      tags: {
+        ProjectName: config.projectName,
+        Environment: config.environment
+      }
+    });
+  }
+}
+
+/**
+ * S3 Module - Creates S3 bucket with security best practices
+ * Encryption at rest, versioning enabled, public access blocked
+ */
+export class S3Module extends Construct {
+  public readonly bucket: S3Bucket;
+
+  constructor(scope: Construct, id: string, config: S3ModuleConfig) {
+    super(scope, id);
+
+    // Create S3 bucket with force_destroy for easy cleanup during development
+    this.bucket = new S3Bucket(this, "s3-bucket", {
+      bucket: config.bucketName,
+      forceDestroy: true, // Allows terraform destroy to work even with objects in bucket
+      tags: {
+        Name: config.bucketName,
+        ProjectName: config.projectName,
+        Environment: config.environment
+      }
+    });
+
+    // Enable versioning - protects against accidental deletion/modification
+    new S3BucketVersioning(this, "s3-versioning", {
+      bucket: this.bucket.id,
+      versioningConfiguration: {
+        status: "Enabled"
+      }
+    });
+
+    // Enable AES-256 server-side encryption
+    // All objects stored in bucket will be encrypted at rest
+    new S3BucketServerSideEncryptionConfiguration(this, "s3-encryption", {
+      bucket: this.bucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: "AES256"
+          },
+          bucketKeyEnabled: true // Reduces encryption costs
+        }
+      ]
+    });
+
+    // Block all public access - security best practice
+    // Prevents accidental exposure of sensitive data
+    new S3BucketPublicAccessBlock(this, "s3-public-access-block", {
+      bucket: this.bucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true
+    });
+  }
+}
+
+/**
+ * RDS Module - Creates RDS instance with security and backup best practices
+ * Encrypted at rest, automated backups, Multi-AZ for production
+ */
+export class RdsModule extends Construct {
+  public readonly dbInstance: DbInstance;
+  public readonly dbSubnetGroup: DbSubnetGroup;
+  public readonly securityGroup: SecurityGroup;
+
+  constructor(scope: Construct, id: string, config: RdsModuleConfig) {
+    super(scope, id);
+
+    // Create DB subnet group - required for RDS in VPC
+    // Must span multiple AZs for Multi-AZ deployment
+    this.dbSubnetGroup = new DbSubnetGroup(this, "db-subnet-group", {
+      name: `${config.projectName}-${config.environment}-db-subnet-group`,
+      subnetIds: config.subnetIds,
+      description: "Subnet group for RDS instance",
+      tags: {
+        Name: `${config.projectName}-${config.environment}-db-subnet-group`,
+        ProjectName: config.projectName,
+        Environment: config.environment
+      }
+    });
+
+    // Create security group for RDS - only allows MySQL access from VPC
+    this.securityGroup = new SecurityGroup(this, "rds-security-group", {
+      name: `${config.projectName}-${config.environment}-rds-sg`,
+      description: "Security group for RDS instance",
+      vpcId: config.vpcId,
+      tags: {
+        Name: `${config.projectName}-${config.environment}-rds-sg`,
+        ProjectName: config.projectName,
+        Environment: config.environment
+      }
+    });
+
+    // Allow MySQL access from VPC CIDR only
+    new SecurityGroupRule(this, "mysql-ingress", {
+      type: "ingress",
+      fromPort: 3306,
+      toPort: 3306,
+      protocol: "tcp",
+      cidrBlocks: ["10.0.0.0/16"], // VPC CIDR block
+      securityGroupId: this.securityGroup.id,
+      description: "MySQL access from VPC"
+    });
+
+    // Create RDS instance with security best practices
+    this.dbInstance = new DbInstance(this, "rds-instance", {
       identifier: `${config.projectName}-${config.environment}-db`,
       engine: "mysql",
       engineVersion: "8.0",
       instanceClass: config.instanceClass,
       allocatedStorage: config.allocatedStorage,
-      storageType: "gp3",
-      storageEncrypted: true, // Encryption at rest
+      storageType: "gp2",
+      storageEncrypted: true, // Encryption at rest - required
       
-      // Database configuration
       dbName: config.dbName,
       username: config.username,
-      password: config.password,
+      managePassword: true, // AWS manages password in Secrets Manager
       
-      // Network configuration
+      vpcSecurityGroupIds: [this.securityGroup.id],
       dbSubnetGroupName: this.dbSubnetGroup.name,
-      vpcSecurityGroupIds: config.securityGroupIds,
-      publiclyAccessible: false, // Keep database private
       
       // Backup configuration
-      backupRetentionPeriod: 7, // 7 days backup retention
-      backupWindow: "03:00-04:00", // Backup during low traffic hours
-      maintenanceWindow: "sun:04:00-sun:05:00", // Maintenance window
+      backupRetentionPeriod: 7, // Keep backups for 7 days
+      backupWindow: "03:00-04:00", // UTC time
+      maintenanceWindow: "sun:04:00-sun:05:00",
       
       // Security settings
-      deletionProtection: config.environment === "production", // Protect production databases
-      skipFinalSnapshot: config.environment !== "production", // Skip snapshot for non-prod
-      finalSnapshotIdentifier: config.environment === "production" ? 
-        `${config.projectName}-${config.environment}-final-snapshot` : undefined,
+      skipFinalSnapshot: true, // For development - set to false in production
+      deletionProtection: false, // For development - set to true in production
       
       // Performance and monitoring
       performanceInsightsEnabled: true,
@@ -542,8 +492,8 @@ export class RDSModule extends Construct {
 }
 
 /**
- * CloudWatch Logs Module - Creates log groups for centralized logging
- * Provides structured logging with configurable retention periods
+ * CloudWatch Logs Module - Creates log group for application logging
+ * Centralized logging with configurable retention period
  */
 export class CloudWatchLogsModule extends Construct {
   public readonly logGroup: CloudwatchLogGroup;
@@ -551,7 +501,8 @@ export class CloudWatchLogsModule extends Construct {
   constructor(scope: Construct, id: string, config: CloudWatchModuleConfig) {
     super(scope, id);
 
-    // Create CloudWatch Log Group with appropriate retention
+    // Create CloudWatch Log Group for application logs
+    // Retention period helps control costs
     this.logGroup = new CloudwatchLogGroup(this, "log-group", {
       name: config.logGroupName,
       retentionInDays: config.retentionInDays,
@@ -563,305 +514,3 @@ export class CloudWatchLogsModule extends Construct {
     });
   }
 }
-```
-
-## tap-stack.ts
-
-```typescript
-import { Construct } from "constructs";
-import { App, TerraformStack, TerraformVariable, TerraformOutput } from "cdktf";
-import { AwsProvider } from "@cdktf/provider-aws";
-import {
-  VpcModule,
-  SecurityGroupModule,
-  S3Module,
-  IAMModule,
-  EC2Module,
-  RDSModule,
-  CloudWatchLogsModule
-} from "./modules";
-
-/**
- * Main Terraform Stack - Orchestrates all infrastructure modules
- * This stack creates a complete, secure AWS infrastructure including:
- * - VPC with public/private subnets
- * - EC2 instance with CloudWatch monitoring
- * - RDS database with encryption
- * - S3 bucket with versioning and encryption
- * - IAM roles with least privilege access
- * - Security groups with restricted access
- */
-export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string) {
-    super(scope, id);
-
-    // Configure AWS Provider for us-east-1 region
-    new AwsProvider(this, "aws", {
-      region: "us-east-1"
-    });
-
-    // =============================================================================
-    // TERRAFORM VARIABLES - Allow customization of key infrastructure parameters
-    // =============================================================================
-
-    // Project identification variables
-    const projectName = new TerraformVariable(this, "project_name", {
-      type: "string",
-      description: "Name of the project for resource tagging",
-      default: "tap-infrastructure"
-    });
-
-    const environment = new TerraformVariable(this, "environment", {
-      type: "string",
-      description: "Environment name (dev, staging, production)",
-      default: "dev"
-    });
-
-    // Network configuration variables
-    const vpcCidr = new TerraformVariable(this, "vpc_cidr", {
-      type: "string",
-      description: "CIDR block for the VPC",
-      default: "10.0.0.0/16"
-    });
-
-    const allowedSshCidrs = new TerraformVariable(this, "allowed_ssh_cidrs", {
-      type: "list(string)",
-      description: "List of CIDR blocks allowed to SSH to EC2 instances",
-      default: ["0.0.0.0/0"] // Should be restricted in production
-    });
-
-    // EC2 configuration variables
-    const ec2InstanceType = new TerraformVariable(this, "ec2_instance_type", {
-      type: "string",
-      description: "EC2 instance type",
-      default: "t3.micro"
-    });
-
-    const keyPairName = new TerraformVariable(this, "key_pair_name", {
-      type: "string",
-      description: "Name of the EC2 Key Pair for SSH access",
-      default: ""
-    });
-
-    // S3 configuration variables
-    const s3BucketName = new TerraformVariable(this, "s3_bucket_name", {
-      type: "string",
-      description: "Name of the S3 bucket (must be globally unique)",
-      default: "tap-infrastructure-bucket-12345"
-    });
-
-    // RDS configuration variables
-    const rdsInstanceClass = new TerraformVariable(this, "rds_instance_class", {
-      type: "string",
-      description: "RDS instance class",
-      default: "db.t3.micro"
-    });
-
-    const rdsAllocatedStorage = new TerraformVariable(this, "rds_allocated_storage", {
-      type: "number",
-      description: "RDS allocated storage in GB",
-      default: 20
-    });
-
-    const rdsDbName = new TerraformVariable(this, "rds_db_name", {
-      type: "string",
-      description: "RDS database name",
-      default: "tapdb"
-    });
-
-    const rdsUsername = new TerraformVariable(this, "rds_username", {
-      type: "string",
-      description: "RDS master username",
-      default: "admin"
-    });
-
-    const rdsPassword = new TerraformVariable(this, "rds_password", {
-      type: "string",
-      description: "RDS master password",
-      sensitive: true
-    });
-
-    // CloudWatch configuration variables
-    const logRetentionDays = new TerraformVariable(this, "log_retention_days", {
-      type: "number",
-      description: "CloudWatch Logs retention period in days",
-      default: 14
-    });
-
-    // =============================================================================
-    // INFRASTRUCTURE MODULES INSTANTIATION
-    // =============================================================================
-
-    // 1. Create VPC with public and private subnets
-    const vpc = new VpcModule(this, "vpc", {
-      cidrBlock: vpcCidr.stringValue,
-      projectName: projectName.stringValue,
-      environment: environment.stringValue
-    });
-
-    // 2. Create security groups for EC2 and RDS
-    const securityGroups = new SecurityGroupModule(this, "security-groups", {
-      vpcId: vpc.vpc.id,
-      allowedSshCidrs: allowedSshCidrs.listValue,
-      projectName: projectName.stringValue,
-      environment: environment.stringValue
-    });
-
-    // 3. Create IAM roles and instance profiles
-    const iam = new IAMModule(this, "iam", {
-      projectName: projectName.stringValue,
-      environment: environment.stringValue
-    });
-
-    // 4. Create CloudWatch Log Group for EC2 monitoring
-    const cloudWatchLogs = new CloudWatchLogsModule(this, "cloudwatch-logs", {
-      logGroupName: `${projectName.stringValue}-${environment.stringValue}-ec2-logs`,
-      retentionInDays: logRetentionDays.numberValue,
-      projectName: projectName.stringValue,
-      environment: environment.stringValue
-    });
-
-    // 5. Create EC2 instance in public subnet with monitoring
-    const ec2 = new EC2Module(this, "ec2", {
-      instanceType: ec2InstanceType.stringValue,
-      subnetId: vpc.publicSubnet.id,
-      securityGroupIds: [securityGroups.ec2SecurityGroup.id],
-      iamInstanceProfile: iam.ec2InstanceProfile.name,
-      keyName: keyPairName.stringValue || undefined,
-      projectName: projectName.stringValue,
-      environment: environment.stringValue
-    });
-
-    // 6. Create RDS instance in private subnet with encryption
-    const rds = new RDSModule(this, "rds", {
-      instanceClass: rdsInstanceClass.stringValue,
-      allocatedStorage: rdsAllocatedStorage.numberValue,
-      dbName: rdsDbName.stringValue,
-      username: rdsUsername.stringValue,
-      password: rdsPassword.stringValue,
-      subnetGroupName: `${projectName.stringValue}-${environment.stringValue}-db-subnet-group`,
-      securityGroupIds: [securityGroups.rdsSecurityGroup.id],
-      projectName: projectName.stringValue,
-      environment: environment.stringValue
-    }, [vpc.privateSubnet.id, vpc.publicSubnet.id]); // Need multiple subnets for RDS
-
-    // 7. Create S3 bucket with encryption and versioning
-    const s3 = new S3Module(this, "s3", {
-      bucketName: s3BucketName.stringValue,
-      projectName: projectName.stringValue,
-      environment: environment.stringValue
-    });
-
-    // =============================================================================
-    // TERRAFORM OUTPUTS - Export important resource information
-    // =============================================================================
-
-    // VPC Outputs
-    new TerraformOutput(this, "vpc_id", {
-      value: vpc.vpc.id,
-      description: "ID of the VPC"
-    });
-
-    new TerraformOutput(this, "public_subnet_id", {
-      value: vpc.publicSubnet.id,
-      description: "ID of the public subnet"
-    });
-
-    new TerraformOutput(this, "private_subnet_id", {
-      value: vpc.privateSubnet.id,
-      description: "ID of the private subnet"
-    });
-
-    // EC2 Outputs
-    new TerraformOutput(this, "ec2_instance_id", {
-      value: ec2.instance.id,
-      description: "ID of the EC2 instance"
-    });
-
-    new TerraformOutput(this, "ec2_public_ip", {
-      value: ec2.instance.publicIp,
-      description: "Public IP address of the EC2 instance"
-    });
-
-    new TerraformOutput(this, "ec2_private_ip", {
-      value: ec2.instance.privateIp,
-      description: "Private IP address of the EC2 instance"
-    });
-
-    // RDS Outputs
-    new TerraformOutput(this, "rds_endpoint", {
-      value: rds.dbInstance.endpoint,
-      description: "RDS instance endpoint",
-      sensitive: false
-    });
-
-    new TerraformOutput(this, "rds_port", {
-      value: rds.dbInstance.port,
-      description: "RDS instance port"
-    });
-
-    // S3 Outputs
-    new TerraformOutput(this, "s3_bucket_name", {
-      value: s3.bucket.bucket,
-      description: "Name of the S3 bucket"
-    });
-
-    new TerraformOutput(this, "s3_bucket_arn", {
-      value: s3.bucket.arn,
-      description: "ARN of the S3 bucket"
-    });
-
-    // Security Group Outputs
-    new TerraformOutput(this, "ec2_security_group_id", {
-      value: securityGroups.ec2SecurityGroup.id,
-      description: "ID of the EC2 security group"
-    });
-
-    new TerraformOutput(this, "rds_security_group_id", {
-      value: securityGroups.rdsSecurityGroup.id,
-      description: "ID of the RDS security group"
-    });
-
-    // IAM Outputs
-    new TerraformOutput(this, "ec2_role_arn", {
-      value: iam.ec2Role.arn,
-      description: "ARN of the EC2 IAM role"
-    });
-
-    // CloudWatch Outputs
-    new TerraformOutput(this, "cloudwatch_log_group_name", {
-      value: cloudWatchLogs.logGroup.name,
-      description: "Name of the CloudWatch Log Group"
-    });
-
-    // SSH Connection Information
-    new TerraformOutput(this, "ssh_connection_command", {
-      value: keyPairName.stringValue ? 
-        `ssh -i ~/.ssh/${keyPairName.stringValue}.pem ec2-user@${ec2.instance.publicIp}` :
-        "SSH key pair not specified. Use AWS Systems Manager Session Manager for secure access.",
-      description: "SSH command to connect to the EC2 instance"
-    });
-  }
-}
-
-// =============================================================================
-// APPLICATION ENTRY POINT
-// =============================================================================
-
-const app = new App();
-new TapStack(app, "tap-infrastructure");
-app.synth();
-```
-
-## Key Features and Security Implementations
-
-### 🔒 **Security Best Practices**
-
-1. **Encryption Everywhere**:
-   - S3 buckets use AES-256 encryption
-   - RDS instances have encryption at rest enabled
-   - EBS volumes are encrypted
-
-2. **Network Security**:
-   - RDS deployed in private subnets
-   - Security groups follow least privilege
