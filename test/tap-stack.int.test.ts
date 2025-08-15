@@ -39,37 +39,37 @@ describe('TapStack Integration Tests (local outputs)', () => {
     }
   });
 
-  test('01 - has VpcId', () => {
-    expect(typeof outputs.VpcId).toBe('string');
-    expect(outputs.VpcId.length).toBeGreaterThan(5);
+  test('01 - has ApiGatewayUrl', () => {
+    expect(typeof outputs.ApiGatewayUrl).toBe('string');
+    expect(outputs.ApiGatewayUrl.length).toBeGreaterThan(10);
   });
 
-  test('02 - has S3BucketName', () => {
-    expect(typeof outputs.S3BucketName).toBe('string');
-    expect(outputs.S3BucketName.length).toBeGreaterThan(5);
+  test('02 - has DynamoDBTableName', () => {
+    expect(typeof outputs.DynamoDBTableName).toBe('string');
+    expect(outputs.DynamoDBTableName.length).toBeGreaterThan(5);
   });
 
-  test('03 - has LambdaFunctionName', () => {
-    expect(typeof outputs.LambdaFunctionName).toBe('string');
-    expect(outputs.LambdaFunctionName.length).toBeGreaterThan(5);
+  test('03 - has DynamoDBTableArn', () => {
+    expect(typeof outputs.DynamoDBTableArn).toBe('string');
+    expect(outputs.DynamoDBTableArn.length).toBeGreaterThan(20);
   });
 
-  test('04 - has GuardDutyDetectorId', () => {
-    expect(typeof outputs.GuardDutyDetectorId).toBe('string');
+  test('04 - has EnvironmentSuffix', () => {
+    expect(typeof outputs.EnvironmentSuffix).toBe('string');
+    expect(outputs.EnvironmentSuffix.length).toBeGreaterThan(0);
   });
 
-  test('05 - has SecurityDashboardURL', () => {
-    expect(typeof outputs.SecurityDashboardURL).toBe('string');
-    expect(outputs.SecurityDashboardURL.startsWith('https://')).toBe(true);
+  test('05 - ApiGatewayUrl is valid HTTPS URL', () => {
+    expect(typeof outputs.ApiGatewayUrl).toBe('string');
+    expect(outputs.ApiGatewayUrl.startsWith('https://')).toBe(true);
   });
 
   // Structure checks for required output keys
   const requiredKeys = [
-    'VpcId',
-    'S3BucketName',
-    'LambdaFunctionName',
-    'GuardDutyDetectorId',
-    'SecurityDashboardURL',
+    'ApiGatewayUrl',
+    'DynamoDBTableName',
+    'DynamoDBTableArn',
+    'EnvironmentSuffix',
   ];
 
   requiredKeys.forEach((key, index) => {
@@ -78,20 +78,24 @@ describe('TapStack Integration Tests (local outputs)', () => {
     });
   });
 
-  test('07 - VpcId starts with expected prefix', () => {
-    expect(outputs.VpcId.startsWith('SecureVpc')).toBe(true);
+  test('07 - ApiGatewayUrl starts with expected prefix', () => {
+    expect(outputs.ApiGatewayUrl.startsWith('https://')).toBe(true);
   });
 
-  test('08 - S3BucketName starts with expected prefix', () => {
-    expect(outputs.S3BucketName.startsWith('SecureS3Bucket')).toBe(true);
+  test('08 - DynamoDBTableName contains environment suffix', () => {
+    expect(outputs.DynamoDBTableName.includes(outputs.EnvironmentSuffix)).toBe(
+      true
+    );
   });
 
-  test('09 - LambdaFunctionName starts with expected prefix', () => {
-    expect(outputs.LambdaFunctionName.startsWith('SecureFunction')).toBe(true);
+  test('09 - DynamoDBTableArn contains expected format', () => {
+    expect(outputs.DynamoDBTableArn.includes('arn:aws:dynamodb')).toBe(true);
   });
 
-  test('10 - SecurityDashboardURL contains cloudwatch', () => {
-    expect(outputs.SecurityDashboardURL.includes('cloudwatch')).toBe(true);
+  test('10 - ApiGatewayUrl contains expected domain', () => {
+    expect(
+      outputs.ApiGatewayUrl.includes('execute-api.us-east-1.amazonaws.com')
+    ).toBe(true);
   });
 
   test('11 - outputs shape is an object', () => {
@@ -105,20 +109,20 @@ describe('TapStack Integration Tests (local outputs)', () => {
     });
   });
 
-  test('13 - VpcId contains environment suffix', () => {
-    expect(outputs.VpcId.includes('dev')).toBe(true);
+  test('13 - EnvironmentSuffix is valid', () => {
+    expect(outputs.EnvironmentSuffix).toMatch(/^[a-zA-Z0-9]+$/);
   });
 
-  test('14 - S3BucketName contains environment suffix', () => {
-    expect(outputs.S3BucketName.includes('dev')).toBe(true);
+  test('14 - DynamoDBTableName follows naming convention', () => {
+    expect(outputs.DynamoDBTableName).toMatch(/^[a-zA-Z0-9-]+$/);
   });
 
-  test('15 - LambdaFunctionName contains environment suffix', () => {
-    expect(outputs.LambdaFunctionName.includes('dev')).toBe(true);
+  test('15 - ApiGatewayUrl contains prod stage', () => {
+    expect(outputs.ApiGatewayUrl.includes('/prod')).toBe(true);
   });
 
-  test('16 - SecurityDashboardURL contains region', () => {
-    expect(outputs.SecurityDashboardURL.includes('us-east-1')).toBe(true);
+  test('16 - DynamoDBTableArn contains correct region', () => {
+    expect(outputs.DynamoDBTableArn.includes('us-east-1')).toBe(true);
   });
 
   // Local file validation checks
