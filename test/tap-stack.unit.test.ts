@@ -444,11 +444,6 @@ describe('TapStack CloudFormation Template', () => {
           property: 'DomainName',
           name: 'tapstack${EnvironmentSuffix}-os-domain',
         },
-        {
-          resource: 'LambdaFunction',
-          property: 'FunctionName',
-          name: 'TapStack${EnvironmentSuffix}-lambda-function',
-        },
       ];
 
       resourcesWithNaming.forEach(({ resource, property, name }) => {

@@ -390,7 +390,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub "${S3Bucket}/*"
+                Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
       Tags:
         - Key: Environment
           Value: Production
@@ -426,7 +426,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub "${S3Bucket}/*"
+                Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
       Tags:
         - Key: Environment
           Value: Production
