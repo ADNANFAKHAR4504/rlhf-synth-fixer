@@ -55,7 +55,6 @@ import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-pub
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import {
-  App,
   AssetType,
   TerraformAsset,
   TerraformOutput,
@@ -107,8 +106,10 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Project prefix for consistent naming - deterministic for redeployments
+    // Add timestamp suffix to avoid resource conflicts
+    const timestamp = Date.now().toString().slice(-6); // Last 6 digits for uniqueness
     const projectPrefix =
-      props?.projectPrefix || `projectXYZ-${environmentSuffix}`;
+      props?.projectPrefix || `projectXYZ-${environmentSuffix}-${timestamp}`;
 
     // VPC Configuration - fully parameterized for production
     let vpcId: string;
@@ -531,10 +532,6 @@ export class TapStack extends TerraformStack {
   }
 }
 
-// CDKTF App
-const app = new App();
-new TapStack(app, 'serverless-data-processing');
-app.synth();
 ```
 
 ## Resources Created
