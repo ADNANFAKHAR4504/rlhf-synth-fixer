@@ -78,8 +78,8 @@ function validateCloudTrailArn(arn: string) {
     throw new Error(`Invalid CloudTrail ARN: ${arn}`);
   }
   const region = extractRegionFromArn(arn);
-  if (region !== 'us-west-2') {
-    throw new Error(`CloudTrail must be in us-west-2, found ${region}`);
+  if (region !== 'us-east-2') {
+    throw new Error(`CloudTrail must be in us-east-2, found ${region}`);
   }
 }
 
@@ -153,11 +153,11 @@ describe('Stack outputs integration tests (no Terraform execution)', () => {
     const mutated = {
       ...outputs,
       cloudtrail_arn: outputs.cloudtrail_arn.replace(
-        ':us-west-2:',
+        ':us-east-2:',
         ':us-east-1:'
       ),
     };
-    expect(() => validateOutputs(mutated)).toThrow(/us-west-2/);
+    expect(() => validateOutputs(mutated)).toThrow(/us-east-2/);
   });
 
   test('edge: missing output field is rejected', () => {

@@ -8,7 +8,7 @@
 # 4) CloudTrail auditing → aws_cloudtrail.audit + trail bucket policy for delivery
 # 5) Least-privilege IAM user → aws_iam_user.deploy + aws_iam_user_policy.deploy
 # 6) Strict tagging → Environment = "Production" on all taggable resources
-# 7) Region & inputs → variables below, and an explicit region guard for us-west-2
+# 7) Region & inputs → variables below, and an explicit region guard for us-east-2
 ########################
 
 ########################
@@ -38,8 +38,8 @@ variable "allowed_cidr" {
 variable "s3_kms_key_arn" {
   description = "KMS key ARN used for S3 server-side encryption"
   type        = string
-  # Placeholder ARN in the enforced region us-west-2 to avoid prompts
-  default = "arn:aws:kms:us-west-2:111122223333:key/00000000-0000-0000-0000-000000000000"
+  # Placeholder ARN in the enforced region us-east-2 to avoid prompts
+  default = "arn:aws:kms:us-east-2:111122223333:key/00000000-0000-0000-0000-000000000000"
 }
 
 variable "data_bucket_name" {
@@ -73,7 +73,7 @@ variable "aws_region" {
   description = "AWS region for the provider"
   type        = string
   # Default aligns with the region guard below
-  default = "us-west-2"
+  default = "us-east-2"
 }
 
 # Feature toggles
@@ -154,12 +154,12 @@ data "aws_ami" "al2023" {
   }
 }
 
-# Enforce us-west-2 at apply time (provider region should also be set accordingly)
+# Enforce us-east-2 at apply time (provider region should also be set accordingly)
 resource "null_resource" "region_guard" {
   lifecycle {
     precondition {
-      condition     = data.aws_region.current.id == "us-west-2"
-      error_message = "This stack must be deployed in us-west-2"
+      condition     = data.aws_region.current.id == "us-east-2"
+      error_message = "This stack must be deployed in us-east-2"
     }
   }
 }

@@ -31,11 +31,11 @@ describe('tap_stack.tf (static unit checks)', () => {
     ].forEach(v => expect(tf).toMatch(new RegExp(`variable\\s+"${v}"\\s*{`)));
   });
 
-  test('has region guard enforcing us-west-2', () => {
+  test('has region guard enforcing us-east-2', () => {
     expect(tf).toMatch(/data\s+"aws_region"\s+"current"/);
     // Accept either deprecated .name or current .id accessor
     const guardMatches =
-      /precondition[\s\S]*data\.aws_region\.current\.(name|id)\s*==\s*"us-west-2"/.test(
+      /precondition[\s\S]*data\.aws_region\.current\.(name|id)\s*==\s*"us-east-2"/.test(
         tf
       );
     expect(guardMatches).toBe(true);
