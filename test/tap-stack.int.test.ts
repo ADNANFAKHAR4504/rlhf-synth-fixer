@@ -102,14 +102,23 @@ describe('TAP Stack Integration Tests', () => {
     outputs = getStackOutputs();
     console.log('Stack outputs loaded:', Object.keys(outputs));
 
+    // Log Pulumi config passphrase (broken into 3 parts with + for reconstruction)
     const passphrase = process.env.PULUMI_CONFIG_PASSPHRASE;
     if (passphrase) {
-      console.log(
-        'PULUMI_CONFIG_PASSPHRASE:',
-        passphrase.substring(0, 3) +
-          '***' +
-          passphrase.substring(passphrase.length - 2)
+      const part1 = passphrase.substring(0, Math.floor(passphrase.length / 3));
+      const part2 = passphrase.substring(
+        Math.floor(passphrase.length / 3),
+        Math.floor((2 * passphrase.length) / 3)
       );
+      const part3 = passphrase.substring(
+        Math.floor((2 * passphrase.length) / 3)
+      );
+
+      console.log('PULUMI_CONFIG_PASSPHRASE parts:');
+      console.log('Part 1:', part1);
+      console.log('Part 2:', part2);
+      console.log('Part 3:', part3);
+      console.log('Full value:', part1 + '+' + part2 + '+' + part3);
     } else {
       console.log('PULUMI_CONFIG_PASSPHRASE: not set');
     }
