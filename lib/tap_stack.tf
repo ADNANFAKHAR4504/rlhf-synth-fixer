@@ -4,7 +4,7 @@
 variable "aws_region" {
   description = "AWS provider region"
   type        = string
-  default     = "eu-west-3"
+  default     = "eu-west-1"
 }
 variable "bucket_region" {
   description = "Region for the S3 bucket"
@@ -212,6 +212,55 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+# Elastic IP for NAT Gateway
+resource "aws_eip" "nat" {
+  count  = 2
+  domain = "vpc"
+
+  depends_on = [aws_internet_gateway.main]
+
+  tags = {
+    Name        = "${var.project_name}-nat-eip-${count.index + 1}"
+    Environment = var.environment
+  }
+}
+
+# NAT Gateway for private subnet internet access
+resource "aws_nat_gateway" "main" {
+  count         = 2
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  depends_on = [aws_internet_gateway.main]
+
+  tags = {
+    Name        = "${var.project_name}-nat-gateway-${count.index + 1}"
+    Environment = var.environment
+  }
+}
+
+# Route Table for Private Subnets
+resource "aws_route_table" "private" {
+  count  = 2
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+
+  tags = {
+    Name        = "${var.project_name}-private-rt-${count.index + 1}"
+    Environment = var.environment
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
 # S3 Bucket with KMS encryption
 resource "aws_s3_bucket" "webapp_bucket" {
   bucket = "${var.project_name}-webapp-${random_id.bucket_suffix.hex}"
@@ -388,10 +437,37 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_policy_attachment" {
   policy_arn = aws_iam_policy.ec2_s3_policy.arn
 }
 
+# Custom CloudWatch Logs policy with minimal permissions
+resource "aws_iam_policy" "cloudwatch_logs_policy" {
+  name        = "${var.project_name}-cloudwatch-logs-policy"
+  description = "Minimal CloudWatch Logs permissions for EC2"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:*:log-group:${var.project_name}-*"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-cloudwatch-logs-policy"
+    Environment = var.environment
+  }
+}
+
 # CloudWatch Logs policy for EC2
 resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_policy" {
   role       = aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+  policy_arn = aws_iam_policy.cloudwatch_logs_policy.arn
 }
 
 # Instance Profile for EC2
@@ -401,9 +477,67 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 # CloudTrail for monitoring
+# CloudWatch Log Group for CloudTrail
+resource "aws_cloudwatch_log_group" "cloudtrail_logs" {
+  name              = "/aws/cloudtrail/${var.project_name}"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.s3_key.arn
+
+  tags = {
+    Name        = "${var.project_name}-cloudtrail-logs"
+    Environment = var.environment
+  }
+}
+
+# IAM role for CloudTrail to write to CloudWatch Logs
+resource "aws_iam_role" "cloudtrail_logs_role" {
+  name = "${var.project_name}-cloudtrail-logs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-cloudtrail-logs-role"
+    Environment = var.environment
+  }
+}
+
+# IAM policy for CloudTrail to write to CloudWatch Logs
+resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
+  name = "${var.project_name}-cloudtrail-logs-policy"
+  role = aws_iam_role.cloudtrail_logs_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.cloudtrail_logs.arn}:*"
+      }
+    ]
+  })
+}
+
 resource "aws_cloudtrail" "main" {
   name           = "${var.project_name}-cloudtrail"
   s3_bucket_name = aws_s3_bucket.cloudtrail_bucket.bucket
+
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail_logs.arn}:*"
+  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_logs_role.arn
 
   event_selector {
     read_write_type                  = "All"
@@ -490,30 +624,30 @@ resource "aws_cloudwatch_log_group" "app_logs" {
 }
 
 # CloudWatch Alarms for security monitoring
+# CloudWatch metric filter for unauthorized access
+resource "aws_cloudwatch_log_metric_filter" "unauthorized_access" {
+  name           = "${var.project_name}-unauthorized-access-filter"
+  log_group_name = aws_cloudwatch_log_group.cloudtrail_logs.name
+  pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
+
+  metric_transformation {
+    name      = "UnauthorizedAccessAttempts"
+    namespace = "Security/CloudTrail"
+    value     = "1"
+  }
+}
+
 resource "aws_cloudwatch_alarm" "unauthorized_access" {
   alarm_name          = "${var.project_name}-unauthorized-access"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
-  metric_name         = "ErrorCount"
-  namespace           = "AWS/CloudTrail"
+  metric_name         = "UnauthorizedAccessAttempts"
+  namespace           = "Security/CloudTrail"
   period              = "300"
   statistic           = "Sum"
   threshold           = "0"
   alarm_description   = "This metric monitors unauthorized access attempts"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-
-  metric_query {
-    id = "m1"
-    metric {
-      metric_name = "ErrorCount"
-      namespace   = "AWS/CloudTrail"
-      period      = 300
-      stat        = "Sum"
-      dimensions = {
-        EventName = "ConsoleLogin"
-      }
-    }
-  }
 
   tags = {
     Name        = "${var.project_name}-unauthorized-access-alarm"
@@ -521,16 +655,29 @@ resource "aws_cloudwatch_alarm" "unauthorized_access" {
   }
 }
 
+# CloudWatch metric filter for IAM policy changes
+resource "aws_cloudwatch_log_metric_filter" "iam_policy_changes" {
+  name           = "${var.project_name}-iam-policy-changes-filter"
+  log_group_name = aws_cloudwatch_log_group.cloudtrail_logs.name
+  pattern        = "{ ($.eventName = \"DeleteGroupPolicy\") || ($.eventName = \"DeleteRolePolicy\") || ($.eventName = \"DeleteUserPolicy\") || ($.eventName = \"PutGroupPolicy\") || ($.eventName = \"PutRolePolicy\") || ($.eventName = \"PutUserPolicy\") || ($.eventName = \"CreatePolicy\") || ($.eventName = \"DeletePolicy\") || ($.eventName = \"CreatePolicyVersion\") || ($.eventName = \"DeletePolicyVersion\") || ($.eventName = \"AttachRolePolicy\") || ($.eventName = \"DetachRolePolicy\") || ($.eventName = \"AttachUserPolicy\") || ($.eventName = \"DetachUserPolicy\") || ($.eventName = \"AttachGroupPolicy\") || ($.eventName = \"DetachGroupPolicy\") }"
+
+  metric_transformation {
+    name      = "IAMPolicyChanges"
+    namespace = "Security/CloudTrail"
+    value     = "1"
+  }
+}
+
 resource "aws_cloudwatch_alarm" "iam_policy_violations" {
   alarm_name          = "${var.project_name}-iam-policy-violations"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
-  metric_name         = "ErrorCount"
-  namespace           = "AWS/CloudTrail"
+  metric_name         = "IAMPolicyChanges"
+  namespace           = "Security/CloudTrail"
   period              = "300"
   statistic           = "Sum"
   threshold           = "0"
-  alarm_description   = "This metric monitors IAM policy violations"
+  alarm_description   = "This metric monitors IAM policy changes"
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   tags = {
@@ -577,6 +724,22 @@ resource "aws_kms_alias" "rds_key_alias" {
   target_key_id = aws_kms_key.rds_key.key_id
 }
 
+# RDS Parameter Group to enforce SSL
+resource "aws_db_parameter_group" "main" {
+  family = "mysql8.0"
+  name   = "${var.project_name}-db-params"
+
+  parameter {
+    name  = "require_secure_transport"
+    value = "1"
+  }
+
+  tags = {
+    Name        = "${var.project_name}-db-params"
+    Environment = var.environment
+  }
+}
+
 # RDS Instance with encryption
 resource "aws_db_instance" "main" {
   identifier     = "${var.project_name}-db"
@@ -590,12 +753,13 @@ resource "aws_db_instance" "main" {
   storage_encrypted     = true
   kms_key_id            = aws_kms_key.rds_key.arn
 
-  db_name  = "webapp"
-  username = "admin"
-  password = "ChangeMe123!" # In production, use AWS Secrets Manager
+  db_name                     = "webapp"
+  username                    = "admin"
+  manage_master_user_password = true
 
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
+  parameter_group_name   = aws_db_parameter_group.main.name
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
