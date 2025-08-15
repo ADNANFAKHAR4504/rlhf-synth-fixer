@@ -5,7 +5,7 @@ Implements enterprise-grade infrastructure with security, monitoring, and compli
 
 import pulumi
 from pulumi import ResourceOptions, Output, Config
-from pulumi_aws import s3, kms, cloudfront, wafv2, route53, acm, iam, logs, cloudwatch
+from pulumi_aws import s3, kms, cloudfront, wafv2, route53, acm, iam, cloudwatch
 from dataclasses import dataclass
 import json
 
@@ -158,13 +158,6 @@ class TapStack(pulumi.ComponentResource):
                     target_bucket=self.logging_bucket.id,
                     target_prefix=f'access-logs/{region}/'
                 ) if self.enable_logging else None,
-                notification=s3.BucketNotificationArgs(
-                    cloudwatch_configurations=[s3.BucketNotificationCloudwatchConfigurationArgs(
-                        cloudwatch_configuration=s3.BucketNotificationCloudwatchConfigurationCloudwatchConfigurationArgs(
-                            log_group_name=f'/aws/s3/{region}-{self.environment_suffix}'
-                        )
-                    )]
-                ) if self.enable_logging else None,
                 tags={
                     'Environment': self.environment_suffix,
                     'Region': region,
@@ -202,7 +195,7 @@ class TapStack(pulumi.ComponentResource):
         
         for region in self.regions:
             # Create log group for each region
-            log_group = logs.LogGroup(
+            log_group = cloudwatch.LogGroup(
                 f'log-group-{region}-{self.environment_suffix}',
                 name=f'/aws/s3/{region}-{self.environment_suffix}',
                 retention_in_days=30,
@@ -406,8 +399,6 @@ class TapStack(pulumi.ComponentResource):
             },
             opts=ResourceOptions(parent=self)
         )
-        
-        # Certificate validation will be handled in Route53 setup
 
     def _create_route53_resources(self):
         """Create Route53 DNS records and certificate validation."""
