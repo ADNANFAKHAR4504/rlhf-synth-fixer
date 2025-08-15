@@ -1,6 +1,6 @@
 /**
  * TAP Stack - Multi-region AWS Infrastructure using CDKTF
- * 
+ *
  * Complete implementation with all requirements:
  * - Multi-region support (us-east-1, eu-west-1, ap-southeast-2)
  * - VPC with public/private subnets across AZs
@@ -409,21 +409,31 @@ export class TapStack extends TerraformStack {
       provider: provider,
     });
 
-    new S3BucketLifecycleConfiguration(this, `${prefix}s3-lifecycle-${region}`, {
-      bucket: s3Bucket.id,
-      rule: [{
-        id: `${prefix}lifecycle-rule`,
-        status: 'Enabled',
-        expiration: [{
-          days: 365,
-        }],
-        transition: [{
-          days: 30,
-          storageClass: 'STANDARD_IA',
-        }],
-      }],
-      provider: provider,
-    });
+    new S3BucketLifecycleConfiguration(
+      this,
+      `${prefix}s3-lifecycle-${region}`,
+      {
+        bucket: s3Bucket.id,
+        rule: [
+          {
+            id: `${prefix}lifecycle-rule`,
+            status: 'Enabled',
+            expiration: [
+              {
+                days: 365,
+              },
+            ],
+            transition: [
+              {
+                days: 30,
+                storageClass: 'STANDARD_IA',
+              },
+            ],
+          },
+        ],
+        provider: provider,
+      }
+    );
 
     this.s3BucketName = s3Bucket.bucket;
 
@@ -482,55 +492,64 @@ export class TapStack extends TerraformStack {
 
     // ========== CROSS-ACCOUNT IAM ==========
     if (crossAccountId) {
-      const crossAccountRole = new IamRole(this, `${prefix}cross-account-role-${region}`, {
-        name: `${prefix}cross-account-role-${region}`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [{
-            Effect: 'Allow',
-            Principal: {
-              AWS: `arn:aws:iam::${crossAccountId}:root`,
-            },
-            Action: 'sts:AssumeRole',
-            Condition: {
-              StringEquals: {
-                'sts:ExternalId': 'secure-external-id-123',
+      const crossAccountRole = new IamRole(
+        this,
+        `${prefix}cross-account-role-${region}`,
+        {
+          name: `${prefix}cross-account-role-${region}`,
+          assumeRolePolicy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${crossAccountId}:root`,
+                },
+                Action: 'sts:AssumeRole',
+                Condition: {
+                  StringEquals: {
+                    'sts:ExternalId': 'secure-external-id-123',
+                  },
+                },
               },
-            },
-          }],
-        }),
-        tags: {
-          ...tags,
-          Name: `${prefix}cross-account-role-${region}`,
-        },
-        provider: provider,
-      });
-
-      const crossAccountPolicy = new IamPolicy(this, `${prefix}cross-account-policy-${region}`, {
-        name: `${prefix}cross-account-policy-${region}`,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [{
-            Effect: 'Allow',
-            Action: [
-              's3:GetObject',
-              's3:PutObject',
-              's3:ListBucket'
             ],
-            Resource: [
-              s3Bucket.arn,
-              `${s3Bucket.arn}/*`
-            ],
-          }],
-        }),
-        provider: provider,
-      });
+          }),
+          tags: {
+            ...tags,
+            Name: `${prefix}cross-account-role-${region}`,
+          },
+          provider: provider,
+        }
+      );
 
-      new IamRolePolicyAttachment(this, `${prefix}cross-account-policy-attach-${region}`, {
-        role: crossAccountRole.name,
-        policyArn: crossAccountPolicy.arn,
-        provider: provider,
-      });
+      const crossAccountPolicy = new IamPolicy(
+        this,
+        `${prefix}cross-account-policy-${region}`,
+        {
+          name: `${prefix}cross-account-policy-${region}`,
+          policy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+                Resource: [s3Bucket.arn, `${s3Bucket.arn}/*`],
+              },
+            ],
+          }),
+          provider: provider,
+        }
+      );
+
+      new IamRolePolicyAttachment(
+        this,
+        `${prefix}cross-account-policy-attach-${region}`,
+        {
+          role: crossAccountRole.name,
+          policyArn: crossAccountPolicy.arn,
+          provider: provider,
+        }
+      );
     }
 
     // Database credentials in Secrets Manager

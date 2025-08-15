@@ -16,9 +16,10 @@ const defaultTags = {
 
 // Correct regions as per requirements
 const requiredRegions = ['us-east-1', 'eu-west-1', 'ap-southeast-2'];
-const targetRegions = process.env.AWS_REGION && requiredRegions.includes(process.env.AWS_REGION)
-  ? [process.env.AWS_REGION]
-  : requiredRegions;
+const targetRegions =
+  process.env.AWS_REGION && requiredRegions.includes(process.env.AWS_REGION)
+    ? [process.env.AWS_REGION]
+    : requiredRegions;
 
 targetRegions.forEach(region => {
   const regionSuffix = region.replace(/-/g, '');
