@@ -562,7 +562,6 @@ Resources:
           - !Ref ElasticsearchSecurityGroup
         SubnetIds:
           - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
       EncryptionAtRestOptions:
         Enabled: true
       NodeToNodeEncryptionOptions:

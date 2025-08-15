@@ -893,9 +893,6 @@
           "SubnetIds": [
             {
               "Ref": "PrivateSubnet1"
-            },
-            {
-              "Ref": "PrivateSubnet2"
             }
           ]
         },
