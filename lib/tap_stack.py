@@ -13,13 +13,6 @@ import json
 class TapStackArgs:
     """
     Configuration arguments for TAP stack deployment.
-    
-    Args:
-        environment_suffix: Environment identifier (dev, staging, prod)
-        domain_name: Domain name for the static website (optional)
-        hosted_zone_id: Route53 hosted zone ID (optional)
-        enable_logging: Enable CloudWatch logging (default: True)
-        cost_optimization: Enable cost optimization features (default: False)
     """
     environment_suffix: str
     domain_name: str = None
@@ -30,14 +23,6 @@ class TapStackArgs:
 class TapStack(pulumi.ComponentResource):
     """
     Multi-region static website deployment stack with enterprise security features.
-    
-    Features:
-    - Multi-region S3 buckets (us-west-2, us-east-1) with KMS encryption and versioning
-    - CloudFront CDN with global distribution and WAF protection
-    - Route53 DNS management with ACM TLS certificates
-    - Comprehensive CloudWatch logging and monitoring
-    - IAM roles with least privilege access
-    - Cost optimization features
     """
     
     def __init__(self, name: str, args: TapStackArgs, opts: ResourceOptions = None):
@@ -55,7 +40,7 @@ class TapStack(pulumi.ComponentResource):
         # Create KMS key for S3 bucket encryption
         self._create_kms_resources()
         
-        # Create S3 buckets with versioning, encryption, and logging
+        # Create S3 buckets with versioning, encryption
         self._create_s3_resources()
         
         # Create CloudWatch resources for monitoring
@@ -105,7 +90,7 @@ class TapStack(pulumi.ComponentResource):
         )
 
     def _create_s3_resources(self):
-        """Create S3 buckets in multiple regions with versioning, encryption, and logging."""
+        """Create S3 buckets in multiple regions with versioning and encryption."""
         self.buckets = {}
         self.bucket_policies = {}
         self.logging_bucket = None
@@ -154,10 +139,6 @@ class TapStack(pulumi.ComponentResource):
                     index_document='index.html',
                     error_document='error.html'
                 ),
-                logging=s3.BucketLoggingArgs(
-                    target_bucket=self.logging_bucket.id,
-                    target_prefix=f'access-logs/{region}/'
-                ) if self.enable_logging else None,
                 tags={
                     'Environment': self.environment_suffix,
                     'Region': region,
@@ -297,13 +278,8 @@ class TapStack(pulumi.ComponentResource):
                 )
             ),
             viewer_certificate=cloudfront.DistributionViewerCertificateArgs(
-                cloudfront_default_certificate=True  # Will be updated after ACM cert creation
+                cloudfront_default_certificate=True
             ),
-            logging_config=cloudfront.DistributionLoggingConfigArgs(
-                bucket=self.logging_bucket.bucket_domain_name,
-                prefix='cloudfront-logs/',
-                include_cookies=False
-            ) if self.enable_logging else None,
             tags={
                 'Environment': self.environment_suffix,
                 'Purpose': 'CDN',
@@ -356,23 +332,6 @@ class TapStack(pulumi.ComponentResource):
                     visibility_config=wafv2.WebAclRuleVisibilityConfigArgs(
                         cloudwatch_metrics_enabled=True,
                         metric_name='AWSManagedRulesKnownBadInputsRuleSet',
-                        sampled_requests_enabled=True
-                    ),
-                ),
-                # Rate limiting rule
-                wafv2.WebAclRuleArgs(
-                    name='RateLimitRule',
-                    priority=3,
-                    action=wafv2.WebAclRuleActionArgs(block={}),
-                    statement=wafv2.WebAclRuleStatementArgs(
-                        rate_based_statement=wafv2.WebAclRuleStatementRateBasedStatementArgs(
-                            limit=2000,
-                            aggregate_key_type='IP'
-                        )
-                    ),
-                    visibility_config=wafv2.WebAclRuleVisibilityConfigArgs(
-                        cloudwatch_metrics_enabled=True,
-                        metric_name='RateLimitRule',
                         sampled_requests_enabled=True
                     ),
                 )
