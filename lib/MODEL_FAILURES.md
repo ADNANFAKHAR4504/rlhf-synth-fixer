@@ -1,34 +1,51 @@
-# Model Failures
 
-## 1. Multi-Region Deployment
-- **Failure:** The solution only deploys resources to a single region (from `AWS_REGION` env var). The prompt requires deployment in both `us-east-1` and `us-west-2`.
+---
 
-## 2. Workspace Isolation
-- **Failure:** No explicit use of Terraform workspaces for environment isolation. The solution uses environment variables, but does not show workspace configuration or switching.
+## Model Failures
 
-## 3. Remote State Management
-- **Failure:** No backend configuration for remote state management or per-workspace state files.
+1. **Region Misconfiguration**  
+   Resources are not provisioned in `us-west-2` as required.
 
-## 4. Security Group Rules
-- **Failure:** Security groups allow HTTP/HTTPS from `0.0.0.0/0` (the entire internet). The prompt requires only known IP ranges and all ports closed by default.
+2. **VPC CIDR Block Incorrect**  
+   VPC is not created with the CIDR block `10.0.0.0/16`.
 
-## 5. IAM Least Privilege
-- **Failure:** IAM roles use broad managed policies (e.g., `AmazonSSMManagedInstanceCore`, `CloudWatchAgentServerPolicy`). The prompt requires permissions limited to minimum required actions and resources.
+3. **EC2 Instance Type Mismatch**  
+   EC2 instances are not of type `t3.micro`.
 
-## 6. Logging/Auditing
-- **Failure:** No logging mechanism for auditing configuration changes is implemented.
+4. **IAM Role Policy Attachments**  
+   IAM roles do not have policy attachments defined in CDKTF code, or are attached manually outside the code.
 
-## 7. Terraform Version
-- **Failure:** The `cdktf.json` only specifies AWS provider version, not Terraform version (`>= 1.0.0`).
+5. **CloudWatch Monitoring Disabled**  
+   EC2 instances do not have detailed CloudWatch monitoring enabled.
 
-## 8. Resource Naming
-- **Failure:** No standard naming convention with environment-specific prefixes for all resources (e.g., `dev-`, `prod-`).
+6. **S3 Encryption Not Enforced**  
+   S3 buckets do not enforce AES-256 encryption.
 
-## 9. Module Usage
-- **Failure:** No explicit use of Terraform modules for reusable components; constructs are used, but not modules as required by the prompt.
+7. **Insufficient EC2 Instances**  
+   Auto Scaling Group provisions fewer than 3 EC2 instances.
 
-## 10. Resource Tagging
-- **Failure:** Tagging is present, but not validated for completeness (e.g., cost monitoring tags).
+8. **Network ACLs Too Permissive**  
+   Network ACLs allow ports other than 443 and 22.
 
-## 11. Testing
-- **Failure:** No tests are provided to validate deployment in multiple regions, workspace isolation, or other critical functionalities.
+9. **Multi-AZ RDS Not Configured**  
+   RDS instance is not set up for Multi-AZ deployment.
+
+10. **User Data Logging Missing**  
+    EC2 user data scripts do not log actions to CloudWatch.
+
+11. **DynamoDB Auto-Scaling Not Enabled**  
+    DynamoDB tables do not have auto-scaling enabled for both read and write capacity units.
+
+12. **Elastic Load Balancer Missing**  
+    No Elastic Load Balancer is provisioned in front of the Auto Scaling Group.
+
+13. **Resource Placement Outside Production Account**  
+    Resources are provisioned in accounts other than the dedicated production AWS account.
+
+14. **Missing Security Best Practices**  
+    Resources lack production tags, proper access controls, or other security best practices.
+
+15. **Code Organization Issues**  
+    Constructs and stacks are not organized for reusability or maintainability.
+
+---

@@ -1,26 +1,39 @@
-You are an expert Prompt Engineer with 10 years of experience. Your task is to create prompts for AI so that the AI will generate a response (IAC code).
+**Prompt:**
 
-Help me write a prompt for creating Infrastructure as Code (IAC) in CDKTF. Please make sure that the provided data should remain intact and it should not change in any way.
-
-**Constraints:**
-- Use Terraform version 1.0.0 or greater.
-- Ensure all security groups are configured with specified inbound and outbound rules.
-- The configuration must support multiple environments using workspaces.
-- Integrate AWS IAM roles and policies to adhere to the principle of least privilege.
-- Use Terraform modules to encapsulate reusable components.
-- Implement a logging mechanism for auditing configuration changes.
-
-**Environment:**
-Create a Terraform HCL configuration that implements a secure cloud infrastructure. The requirements are as follows:
-1. Define and deploy Security Groups with strict inbound and outbound rules in AWS across multiple regions using AWS VPC.
-2. Utilize Terraform workspaces to manage multiple environments (development, staging, production) with isolated settings.
-3. Implement AWS IAM policies and roles to restrict access in line with the principle of least privilege. These roles should be assigned to specific EC2 instances depending on the workspace.
-4. Use Terraform modules to define reusable components for security groups and IAM configurations.
-5. Include detailed resource tagging for cost monitoring and organization.
-6. Ensure all configuration changes are logged for audit purposes.
-
-**Expected output:**  
-The solution should include well-commented HCL files with correct implementations of all required security groups, IAM roles, workspace configurations, and necessary modules. Passing tests must validate the deployment in multiple environments and regions, ensuring all security constraints are met without errors.
-
-**Proposed Statement:**  
-The infrastructure environment consists of multiple AWS accounts distinguished by Terraform workspaces. Resources must be deployed in the us-east-1 and us-west-2 regions, using standard naming conventions with environment-specific prefixes (e.g., dev-, prod-). Each workspace should have its own state file, and backend configurations must be set up for remote state management. Security groups should allow traffic only from known IP ranges, and all ports should be closed by default. IAM roles should have permissions limited to the minimum required actions and resources.
+> You are to write complete, production-ready **CDK for Terraform (TypeScript)** code that provisions AWS infrastructure meeting the following exact requirements.
+>
+> **Constraints (do not change these):**
+>
+> * All AWS resources must reside in the `us-west-2` region.
+> * VPC CIDR block: `10.0.0.0/16`.
+> * All EC2 instances must be `t3.micro`.
+> * IAM roles must have policy attachments defined in CDKTF code, not manually.
+> * Enable **detailed CloudWatch monitoring** for all instances.
+> * All S3 buckets must enforce **AES-256** encryption.
+> * Provision a minimum of **3 EC2 instances** in an **Auto Scaling Group**.
+> * Network ACLs must allow **only** ports `443` and `22`.
+> * Use a single AWS account dedicated to production workloads.
+> * RDS instances must be **Multi-AZ**.
+> * All user data scripts must log their actions to CloudWatch.
+> * DynamoDB tables must have **auto-scaling** enabled for both Read and Write Capacity Units.
+> * An **Elastic Load Balancer** must sit in front of the Auto Scaling Group.
+>
+> **Environment:**
+>
+> * Define a new VPC (`10.0.0.0/16`) in `us-west-2`.
+> * Create an Auto Scaling Group linked to an Elastic Load Balancer with at least 3 `t3.micro` instances.
+> * Enforce AES-256 encryption on all S3 buckets.
+> * Implement IAM roles and inline policy attachments within CDKTF code.
+> * Deploy a Multi-AZ RDS instance.
+> * Enable detailed monitoring in CloudWatch for all EC2 instances, and ensure user data logs to CloudWatch.
+> * Restrict traffic with Network ACLs to allow only ports 443 and 22.
+> * Enable auto-scaling for DynamoDB tables.
+> * All resources must reside in the production AWS account only.
+>
+> **Expected Output:**
+>
+> * Provide a complete **CDKTF (TypeScript)** project containing all necessary stacks and constructs.
+> * The configuration must run without errors when executed with `cdktf synth` and `terraform plan`.
+> * Follow security best practices and organize the code into reusable CDKTF constructs or stacks.
+> * Include any necessary imports, provider configuration, and stack composition in `main.ts`.
+> * Ensure that all naming conventions and tags clearly indicate production use.
