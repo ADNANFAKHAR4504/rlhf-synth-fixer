@@ -89,6 +89,12 @@ variable "use_cmk" {
   default     = false
 }
 
+variable "enable_config_managed_policy" {
+  description = "Attach AWS managed policy AWSConfigRole to the Config role"
+  type        = bool
+  default     = false
+}
+
 variable "create_cloudtrail" {
   description = "Whether to create a CloudTrail trail (set false if account limit reached)"
   type        = bool
@@ -417,13 +423,15 @@ resource "random_id" "bucket_suffix" { byte_length = 4 }
 
 resource "aws_s3_bucket" "logs" {
   # Region included in name to emphasize region scoping
-  bucket = "${local.name_prefix}-logs-${local.region}-${random_id.bucket_suffix.hex}"
-  tags   = local.common_tags
+  bucket        = "${local.name_prefix}-logs-${local.region}-${random_id.bucket_suffix.hex}"
+  force_destroy = true
+  tags          = local.common_tags
 }
 
 resource "aws_s3_bucket" "data" {
-  bucket = "${local.name_prefix}-data-${random_id.bucket_suffix.hex}"
-  tags   = local.common_tags
+  bucket        = "${local.name_prefix}-data-${random_id.bucket_suffix.hex}"
+  force_destroy = true
+  tags          = local.common_tags
 }
 
 resource "aws_s3_bucket_versioning" "logs" {
@@ -785,7 +793,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSConfigRole"
+  policy_arn = var.enable_config_managed_policy ? "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSConfigRole" : null
 }
 
 resource "aws_iam_role_policy" "config_s3" {
