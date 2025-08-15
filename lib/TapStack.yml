@@ -22,6 +22,11 @@ Metadata:
         Parameters:
           - EC2InstanceType
           - RDSInstanceClass
+      - Label:
+          default: "Database Configuration"
+        Parameters:
+          - DBMasterUsername
+          - DBMasterPassword
 
 Parameters:
   EnvironmentSuffix:
@@ -75,6 +80,25 @@ Parameters:
     Default: "db.t3.micro"
     AllowedValues: ["db.t3.micro", "db.t3.small", "db.t3.medium"]
     Description: "RDS instance class"
+
+  DBMasterUsername:
+    Type: String
+    Default: "admin"
+    Description: "Database master username"
+    AllowedPattern: "^[a-zA-Z][a-zA-Z0-9]*$"
+    ConstraintDescription: "Must begin with a letter and contain only alphanumeric characters"
+    MinLength: 1
+    MaxLength: 63
+
+  DBMasterPassword:
+    Type: String
+    Default: "TempPassword123!"
+    Description: "Database master password"
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 128
+    AllowedPattern: "^[a-zA-Z0-9!@#$%^&*()_+={}\\[\\]|\\:;\"'<>,.?/-]*$"
+    ConstraintDescription: "Must be 8-128 characters and contain alphanumeric and special characters"
 
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
@@ -334,31 +358,6 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # Parameter Store for Database Credentials
-  DBMasterUsername:
-    Type: AWS::SSM::Parameter
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      Name: !Sub "/TapStack${EnvironmentSuffix}/db/master-username"
-      Type: String
-      Value: "admin"
-      Description: "Database master username"
-      Tags:
-        Environment: Production
-
-  DBMasterPassword:
-    Type: AWS::SSM::Parameter
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      Name: !Sub "/TapStack${EnvironmentSuffix}/db/master-password"
-      Type: String
-      Value: "TempPassword123!"
-      Description: "Database master password"
-      Tags:
-        Environment: Production
-
   # IAM Roles and Policies
   EC2Role:
     Type: AWS::IAM::Role
@@ -376,16 +375,10 @@ Resources:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Policies:
-        - PolicyName: ParameterStoreAccess
+        - PolicyName: S3Access
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                  - ssm:GetParameters
-                  - ssm:GetParametersByPath
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/TapStack${EnvironmentSuffix}/*"
               - Effect: Allow
                 Action:
                   - s3:GetObject

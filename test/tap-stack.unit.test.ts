@@ -140,25 +140,19 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Parameter Store Resources', () => {
+  describe('Database Configuration Parameters', () => {
     test('should have database username parameter', () => {
-      expect(template.Resources.DBMasterUsername).toBeDefined();
-      expect(template.Resources.DBMasterUsername.Type).toBe(
-        'AWS::SSM::Parameter'
-      );
-      expect(template.Resources.DBMasterUsername.Properties.Type).toBe(
-        'String'
-      );
+      expect(template.Parameters.DBMasterUsername).toBeDefined();
+      expect(template.Parameters.DBMasterUsername.Type).toBe('String');
+      expect(template.Parameters.DBMasterUsername.Default).toBe('admin');
+      expect(template.Parameters.DBMasterUsername.AllowedPattern).toBeDefined();
     });
 
     test('should have database password parameter', () => {
-      expect(template.Resources.DBMasterPassword).toBeDefined();
-      expect(template.Resources.DBMasterPassword.Type).toBe(
-        'AWS::SSM::Parameter'
-      );
-      expect(template.Resources.DBMasterPassword.Properties.Type).toBe(
-        'String'
-      );
+      expect(template.Parameters.DBMasterPassword).toBeDefined();
+      expect(template.Parameters.DBMasterPassword.Type).toBe('String');
+      expect(template.Parameters.DBMasterPassword.NoEcho).toBe(true);
+      expect(template.Parameters.DBMasterPassword.MinLength).toBe(8);
     });
   });
 
@@ -412,7 +406,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have multiple parameters for configuration', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(8);
+      expect(parameterCount).toBeGreaterThanOrEqual(10);
     });
 
     test('should have multiple outputs for integration', () => {

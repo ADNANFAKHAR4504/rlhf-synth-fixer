@@ -33,6 +33,15 @@
             "EC2InstanceType",
             "RDSInstanceClass"
           ]
+        },
+        {
+          "Label": {
+            "default": "Database Configuration"
+          },
+          "Parameters": [
+            "DBMasterUsername",
+            "DBMasterPassword"
+          ]
         }
       ]
     }
@@ -110,6 +119,25 @@
       "NoEcho": true,
       "MinLength": 8,
       "ConstraintDescription": "Must be at least 8 characters long"
+    },
+    "DBMasterUsername": {
+      "Type": "String",
+      "Default": "admin",
+      "Description": "Database master username",
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
+      "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters",
+      "MinLength": 1,
+      "MaxLength": 63
+    },
+    "DBMasterPassword": {
+      "Type": "String",
+      "Default": "TempPassword123!",
+      "Description": "Database master password",
+      "NoEcho": true,
+      "MinLength": 8,
+      "MaxLength": 128,
+      "AllowedPattern": "^[a-zA-Z0-9!@#$%^&*()_+={}\\[\\]|\\:;\"'<>,.?/-]*$",
+      "ConstraintDescription": "Must be 8-128 characters and contain alphanumeric and special characters"
     }
   },
   "Resources": {
@@ -566,46 +594,11 @@
         ]
       }
     },
-    "DBMasterUsername": {
-      "Type": "AWS::SSM::Parameter",
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "/TapStack${EnvironmentSuffix}/db/master-username"
-        },
-        "Type": "String",
-        "Value": "admin",
-        "Description": "Database master username",
-        "Tags": {
-          "Environment": "Production"
-        }
-      }
-    },
-    "DBMasterPassword": {
-      "Type": "AWS::SSM::Parameter",
-      "DeletionPolicy": "Delete",
-      "UpdateReplacePolicy": "Delete",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "/TapStack${EnvironmentSuffix}/db/master-password"
-        },
-        "Type": "String",
-        "Value": "TempPassword123!",
-        "Description": "Database master password",
-        "Tags": {
-          "Environment": "Production"
-        }
-      }
-    },
     "EC2Role": {
       "Type": "AWS::IAM::Role",
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "TapStack${EnvironmentSuffix}-ec2-role"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -624,21 +617,10 @@
         ],
         "Policies": [
           {
-            "PolicyName": "ParameterStoreAccess",
+            "PolicyName": "S3Access",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "ssm:GetParameter",
-                    "ssm:GetParameters",
-                    "ssm:GetParametersByPath"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/TapStack${EnvironmentSuffix}/*"
-                  }
-                },
                 {
                   "Effect": "Allow",
                   "Action": [
@@ -646,7 +628,7 @@
                     "s3:PutObject"
                   ],
                   "Resource": {
-                    "Fn::Sub": "${S3Bucket}/*"
+                    "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                   }
                 }
               ]
@@ -666,9 +648,6 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "TapStack${EnvironmentSuffix}-ec2-profile"
-        },
         "Roles": [
           {
             "Ref": "EC2Role"
@@ -681,9 +660,6 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "TapStack${EnvironmentSuffix}-lambda-role"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -712,7 +688,7 @@
                     "s3:PutObject"
                   ],
                   "Resource": {
-                    "Fn::Sub": "${S3Bucket}/*"
+                    "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                   }
                 }
               ]
@@ -979,9 +955,6 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "FunctionName": {
-          "Fn::Sub": "TapStack${EnvironmentSuffix}-lambda-function"
-        },
         "Runtime": "python3.9",
         "Handler": "index.lambda_handler",
         "Role": {
@@ -1021,9 +994,6 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/ec2/TapStack${EnvironmentSuffix}"
-        },
         "RetentionInDays": 30,
         "Tags": [
           {
@@ -1038,9 +1008,6 @@
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
       "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/TapStack${EnvironmentSuffix}-lambda-function"
-        },
         "RetentionInDays": 30,
         "Tags": [
           {
