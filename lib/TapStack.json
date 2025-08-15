@@ -985,7 +985,7 @@
                 "Targets": [
                     {
                         "Arn": {
-                            "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${CodePipelinePipeline}"
+                            "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${ApplicationName}-pipeline-${EnvironmentSuffix}"
                         },
                         "Id": "PipelineTarget",
                         "RoleArn": {
@@ -1025,7 +1025,7 @@
                                         "codepipeline:StartPipelineExecution"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${CodePipelinePipeline}"
+                                        "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${ApplicationName}-pipeline-${EnvironmentSuffix}"
                                     }
                                 }
                             ]
