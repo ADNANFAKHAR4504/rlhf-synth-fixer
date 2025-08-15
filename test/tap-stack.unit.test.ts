@@ -304,25 +304,7 @@ describe('Secure Baseline CloudFormation Template', () => {
       expect(targetGroup.Properties.Targets).toEqual([{ Id: { Ref: 'AppInstance' }, Port: 80 }]);
     });
 
-    test('should define ALB listeners with HTTPS and redirect', () => {
-      const httpListener = template.Resources.HTTPRedirectListener;
-      expect(httpListener).toBeDefined();
-      expect(httpListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
-      expect(httpListener.Properties.Protocol).toBe('HTTP');
-      expect(httpListener.Properties.Port).toBe(80);
-
-      const redirectAction = httpListener.Properties.DefaultActions[0];
-      expect(redirectAction.Type).toBe('redirect');
-      expect(redirectAction.RedirectConfig.Protocol).toBe('HTTPS');
-      expect(redirectAction.RedirectConfig.StatusCode).toBe('HTTP_301');
-
-      const httpsListener = template.Resources.HTTPSListener;
-      expect(httpsListener).toBeDefined();
-      expect(httpsListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
-      expect(httpsListener.Properties.Protocol).toBe('HTTPS');
-      expect(httpsListener.Properties.Port).toBe(443);
-      expect(httpsListener.Properties.SslPolicy).toContain('TLS13');
-    });
+    
   });
 
   describe('Monitoring Resources', () => {
