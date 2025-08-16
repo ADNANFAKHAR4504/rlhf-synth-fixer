@@ -12,21 +12,20 @@ try {
   throw new Error("Cannot load Terraform outputs for integration tests");
 }
 
-// Helper functions - simple non-empty checks
 function isNonEmptyString(value: any): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
 function getSubnetIds(env: Environment, type: "public" | "private"): string[] {
-  const subnetMap = type === "public" ? outputs.public_subnet_ids.value : outputs.private_subnet_ids.value;
+  const subnetMap = type === "public" ? outputs.public_subnet_ids : outputs.private_subnet_ids;
   const prefix = `${env}-${type}`;
   return Object.entries(subnetMap)
     .filter(([key]) => key.startsWith(prefix))
     .map(([, val]) => val as string);
 }
 
-describe("Outputs.json Infrastructure Coverage (Simplified)", () => {
-  it("should contain all required keys", () => {
+describe("Outputs.json Infrastructure Coverage without .value wrapper", () => {
+  it("should contain all required output keys", () => {
     const requiredKeys = [
       "ec2_instance_ids",
       "ec2_private_ips",
@@ -43,25 +42,24 @@ describe("Outputs.json Infrastructure Coverage (Simplified)", () => {
     ];
     requiredKeys.forEach(key => {
       expect(outputs).toHaveProperty(key);
-      expect(outputs[key]).toHaveProperty("value");
     });
   });
 
   environments.forEach(env => {
-    describe(`Env: ${env} -- basic presence checks`, () => {
+    describe(`Infrastructure details for environment: ${env}`, () => {
       const envData = {
-        vpcId: outputs.vpc_ids.value[env],
-        vpcCidr: outputs.vpc_cidrs.value[env],
-        instanceId: outputs.ec2_instance_ids.value[env],
-        privateIp: outputs.ec2_private_ips.value[env],
-        publicIp: outputs.ec2_public_ips.value[env],
-        iamRoleArn: outputs.iam_role_arns.value[env],
-        igwId: outputs.internet_gateway_ids.value[env],
-        natGwId: outputs.nat_gateway_ids.value[env],
-        sgId: outputs.security_group_ids.value[env],
-        summary: outputs.environment_summary.value[env],
+        vpcId: outputs.vpc_ids[env],
+        vpcCidr: outputs.vpc_cidrs[env],
+        instanceId: outputs.ec2_instance_ids[env],
+        privateIp: outputs.ec2_private_ips[env],
+        publicIp: outputs.ec2_public_ips[env],
+        iamRoleArn: outputs.iam_role_arns[env],
+        igwId: outputs.internet_gateway_ids[env],
+        natGwId: outputs.nat_gateway_ids[env],
+        sgId: outputs.security_group_ids[env],
+        summary: outputs.environment_summary[env],
         publicSubnetIds: getSubnetIds(env, "public"),
-        privateSubnetIds: getSubnetIds(env, "private")
+        privateSubnetIds: getSubnetIds(env, "private"),
       };
 
       it("should have non-empty VPC ID and CIDR", () => {
@@ -69,7 +67,7 @@ describe("Outputs.json Infrastructure Coverage (Simplified)", () => {
         expect(isNonEmptyString(envData.vpcCidr)).toBe(true);
       });
 
-      it("should have two public and two private subnets", () => {
+      it("should have exactly 2 public and 2 private subnets", () => {
         expect(envData.publicSubnetIds.length).toBe(2);
         expect(envData.privateSubnetIds.length).toBe(2);
         envData.publicSubnetIds.forEach(id => expect(isNonEmptyString(id)).toBe(true));
@@ -82,9 +80,10 @@ describe("Outputs.json Infrastructure Coverage (Simplified)", () => {
         expect(isNonEmptyString(envData.summary.instance_type)).toBe(true);
         expect(isNonEmptyString(envData.privateIp)).toBe(true);
         expect(isNonEmptyString(envData.publicIp)).toBe(true);
+
         expect(envData.summary.instance_id).toBe(envData.instanceId);
-        expect(isNonEmptyString(envData.summary.private_ip)).toBe(true);
-        expect(isNonEmptyString(envData.summary.public_ip)).toBe(true);
+        expect(envData.summary.private_ip).toBe(envData.privateIp);
+        expect(envData.summary.public_ip).toBe(envData.publicIp);
         expect(envData.summary.vpc_id).toBe(envData.vpcId);
         expect(envData.summary.vpc_cidr).toBe(envData.vpcCidr);
       });
@@ -104,23 +103,26 @@ describe("Outputs.json Infrastructure Coverage (Simplified)", () => {
     });
   });
 
-  describe("Cross-environment uniqueness and presence", () => {
-    it("should have unique VPC and instance IDs, and unique subnet IDs and CIDRs", () => {
-      expect(new Set(environments.map(env => outputs.vpc_ids.value[env])).size).toBe(environments.length);
-      expect(new Set(environments.map(env => outputs.ec2_instance_ids.value[env])).size).toBe(environments.length);
+  describe("Cross-environment uniqueness and validations", () => {
+    it("should have unique VPC IDs, instance IDs, subnet IDs, and CIDRs across environments", () => {
+      const vpcs = environments.map(env => outputs.vpc_ids[env]);
+      expect(new Set(vpcs).size).toBe(vpcs.length);
 
-      const allPublicSubnets = Object.values(outputs.public_subnet_ids.value);
-      const allPrivateSubnets = Object.values(outputs.private_subnet_ids.value);
-      const allSubnets = [...allPublicSubnets, ...allPrivateSubnets];
+      const instances = environments.map(env => outputs.ec2_instance_ids[env]);
+      expect(new Set(instances).size).toBe(instances.length);
+
+      const pubSubnets = Object.values(outputs.public_subnet_ids);
+      const privSubnets = Object.values(outputs.private_subnet_ids);
+      const allSubnets = [...pubSubnets, ...privSubnets];
       expect(new Set(allSubnets).size).toBe(allSubnets.length);
 
-      const cidrs = environments.map(env => outputs.vpc_cidrs.value[env]);
-      expect(new Set(cidrs).size).toBe(environments.length);
+      const cidrs = environments.map(env => outputs.vpc_cidrs[env]);
+      expect(new Set(cidrs).size).toBe(cidrs.length);
     });
 
-    it("should have proper subnet counts and IAM role naming", () => {
+    it("should have consistent naming and HA subnet counts", () => {
       environments.forEach(env => {
-        expect(outputs.iam_role_arns.value[env]).toContain(`ec2-role-${env}`);
+        expect(outputs.iam_role_arns[env]).toContain(`ec2-role-${env}`);
         expect(getSubnetIds(env, "public").length).toBe(2);
         expect(getSubnetIds(env, "private").length).toBe(2);
       });
