@@ -129,9 +129,9 @@ account_id = data.aws_caller_identity.current.account_id
 
 vpc_id = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
 subnet_id = var.subnet_id != "" ? var.subnet_id : (
-length(try(data.aws_subnet.first_available, [])) > 0 ? data.aws_subnet.first_available[0].id : (
-length(try(data.aws_subnet.any_first_available, [])) > 0 ? data.aws_subnet.any_first_available[0].id : null
-)
+length(try(data.aws_subnets.available[0].ids, [])) > 0 ?
+data.aws_subnets.available[0].ids[0] :
+data.aws_subnets.any_available[0].ids[0]
 )
 
 # Determine KMS key to use
@@ -186,7 +186,7 @@ values = ["true"]
 # Fallback: get any available subnet if no default subnets found
 
 data "aws_subnets" "any_available" {
-count = var.subnet_id == "" && length(try(data.aws_subnets.available[0].ids, [])) == 0 ? 1 : 0
+count = var.subnet_id == "" ? 1 : 0
 filter {
 name = "vpc-id"
 values = [local.vpc_id]
@@ -253,16 +253,6 @@ resource "aws_kms_alias" "s3_encryption" {
 count = var.kms_key_arn == "" ? 1 : 0
 name = "alias/s3-encryption-${random_id.suffix.hex}"
 target_key_id = aws_kms_key.s3_encryption[0].key_id
-}
-
-data "aws_subnet" "first_available" {
-count = var.subnet_id == "" && length(try(data.aws_subnets.available[0].ids, [])) > 0 ? 1 : 0
-id = data.aws_subnets.available[0].ids[0]
-}
-
-data "aws_subnet" "any_first_available" {
-count = var.subnet_id == "" && length(try(data.aws_subnets.available[0].ids, [])) == 0 && length(try(data.aws_subnets.any_available[0].ids, [])) > 0 ? 1 : 0
-id = data.aws_subnets.any_available[0].ids[0]
 }
 
 # S3 Application Bucket
