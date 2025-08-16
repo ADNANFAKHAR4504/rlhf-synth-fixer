@@ -2,7 +2,7 @@
 
 This is the ideal implementation of a secure, production-ready serverless setup using Terraform with Lambda, API Gateway, and Secrets Manager in AWS us-east-1.
 
-## Infrastructure Overview
+## Infrastructure Overview 
 
 The solution creates a comprehensive serverless architecture with:
 - **AWS Lambda Function** with Python 3.12 runtime
