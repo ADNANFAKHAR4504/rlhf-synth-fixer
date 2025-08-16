@@ -8,6 +8,19 @@ Globals:
     Runtime: nodejs20.x
     Timeout: 30
     MemorySize: 128
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, staging, prod)
+    AllowedValues:
+      - dev
+      - staging
+      - prod
 
 Resources:
   # IAM Role for Lambda Functions
@@ -23,17 +36,9 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: CloudWatchLogsPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
         - PolicyName: DynamoDBPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -44,6 +49,9 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
                 Resource: !GetAtt ItemsTable.Arn
               # Granular permissions for Users table
               - Effect: Allow
@@ -51,6 +59,9 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
                 Resource: !GetAtt UsersTable.Arn
               # Granular permissions for Orders table
               - Effect: Allow
@@ -58,6 +69,9 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
                 Resource: !GetAtt OrdersTable.Arn
 
   # DynamoDB Tables
@@ -73,6 +87,15 @@ Resources:
       KeySchema:
         - AttributeName: itemId
           KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   # Users table with on-demand billing
   UsersTable:
@@ -86,6 +109,15 @@ Resources:
       KeySchema:
         - AttributeName: userId
           KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   # Orders table with on-demand billing
   OrdersTable:
@@ -96,9 +128,31 @@ Resources:
       AttributeDefinitions:
         - AttributeName: orderId
           AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
       KeySchema:
         - AttributeName: orderId
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserOrdersIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackName
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   # Lambda Functions
   # Items function for handling item operations
@@ -113,12 +167,19 @@ Resources:
       Environment:
         Variables:
           ITEMS_TABLE_NAME: !Ref ItemsTable
+          ENVIRONMENT: !Ref EnvironmentName
       Events:
-        ItemsApi:
+        ItemsApiRoot:
           Type: Api
           Properties:
             RestApiId: !Ref ServerlessApi
             Path: /items
+            Method: ANY
+        ItemsApiWithId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ServerlessApi
+            Path: /items/{id}
             Method: ANY
 
   # Users function for handling user operations
@@ -133,12 +194,19 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersTable
+          ENVIRONMENT: !Ref EnvironmentName
       Events:
-        UsersApi:
+        UsersApiRoot:
           Type: Api
           Properties:
             RestApiId: !Ref ServerlessApi
             Path: /users
+            Method: ANY
+        UsersApiWithId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ServerlessApi
+            Path: /users/{id}
             Method: ANY
 
   # Orders function for handling order operations
@@ -153,12 +221,21 @@ Resources:
       Environment:
         Variables:
           ORDERS_TABLE_NAME: !Ref OrdersTable
+          USERS_TABLE_NAME: !Ref UsersTable
+          ITEMS_TABLE_NAME: !Ref ItemsTable
+          ENVIRONMENT: !Ref EnvironmentName
       Events:
-        OrdersApi:
+        OrdersApiRoot:
           Type: Api
           Properties:
             RestApiId: !Ref ServerlessApi
             Path: /orders
+            Method: ANY
+        OrdersApiWithId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ServerlessApi
+            Path: /orders/{id}
             Method: ANY
 
   # API Gateway REST API
@@ -168,22 +245,51 @@ Resources:
     Properties:
       Name: !Sub '${AWS::StackName}-api'
       Description: 'REST API Gateway for serverless application with items, users, and orders endpoints'
-      StageName: Prod
+      StageName: !Ref EnvironmentName
       Cors:
         AllowMethods: "'*'"
         AllowHeaders: "'*'"
         AllowOrigin: "'*'"
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: !If [IsProd, ERROR, INFO]
+          DataTraceEnabled: !If [IsProd, false, true]
+          MetricsEnabled: true
+
+Conditions:
+  IsProd: !Equals [!Ref EnvironmentName, prod]
 
 # Outputs section for easy access to deployed resources
 Outputs:
   # API Gateway URL for easy access after deployment
   ApiGatewayUrl:
     Description: 'URL of the deployed API Gateway'
-    Value: !Sub 'https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+    Value: !Sub 'https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}'
     Export:
       Name: !Sub '${AWS::StackName}-api-url'
 
-  # Additional outputs for reference
+  # API endpoints
+  ItemsEndpoint:
+    Description: 'Items API endpoint'
+    Value: !Sub 'https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/items'
+    Export:
+      Name: !Sub '${AWS::StackName}-items-endpoint'
+
+  UsersEndpoint:
+    Description: 'Users API endpoint'
+    Value: !Sub 'https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/users'
+    Export:
+      Name: !Sub '${AWS::StackName}-users-endpoint'
+
+  OrdersEndpoint:
+    Description: 'Orders API endpoint'
+    Value: !Sub 'https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/orders'
+    Export:
+      Name: !Sub '${AWS::StackName}-orders-endpoint'
+
+  # Table outputs
   ItemsTableName:
     Description: 'Name of the Items DynamoDB table'
     Value: !Ref ItemsTable
@@ -202,6 +308,7 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-orders-table'
 
+  # Function ARNs
   ItemsFunctionArn:
     Description: 'ARN of the Items Lambda function'
     Value: !GetAtt ItemsFunction.Arn
