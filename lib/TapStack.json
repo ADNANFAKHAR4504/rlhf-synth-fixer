@@ -26,10 +26,6 @@
             ],
             "Description": "Environment name for resource tagging"
         },
-        "ExistingVPCId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "Existing VPC ID to deploy resources into"
-        },
         "KMSKeyAlias": {
             "Type": "String",
             "Default": "corp-security-key",
@@ -44,6 +40,136 @@
         }
     },
     "Resources": {
+        "CorpVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "corp-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "CorpPublicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "CorpVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "corp-public-subnet-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "CorpInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "corp-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "CorpAttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "CorpVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "CorpInternetGateway"
+                }
+            }
+        },
+        "CorpRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "CorpVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "corp-route-table-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "CorpRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "CorpAttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "CorpRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "CorpInternetGateway"
+                }
+            }
+        },
+        "CorpSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "CorpPublicSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "CorpRouteTable"
+                }
+            }
+        },
         "CorpSecurityKMSKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
@@ -294,7 +420,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "corp-secure-bucket-${Environment}-${AWS::AccountId}"
+                    "Fn::Sub": "corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -348,7 +474,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "corp-access-logs-bucket-${Environment}-${AWS::AccountId}"
+                    "Fn::Sub": "corp-access-logs-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -398,7 +524,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/corp/security/${Environment}"
+                    "Fn::Sub": "/corp/security/${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 365,
                 "KmsKeyId": {
@@ -432,7 +558,7 @@
             "Properties": {
                 "GroupDescription": "Corporate security group with minimal required access",
                 "VpcId": {
-                    "Ref": "ExistingVPCId"
+                    "Ref": "CorpVPC"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -479,7 +605,7 @@
             "Type": "AWS::CloudTrail::Trail",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "corp-cloudtrail-${Environment}"
+                    "Fn::Sub": "corp-cloudtrail-${EnvironmentSuffix}"
                 },
                 "S3BucketName": {
                     "Ref": "CorpS3Bucket"
@@ -602,7 +728,7 @@
             "Type": "AWS::Config::ConfigurationRecorder",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "corp-config-recorder-${Environment}"
+                    "Fn::Sub": "corp-config-recorder-${EnvironmentSuffix}"
                 },
                 "RoleARN": {
                     "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
@@ -618,7 +744,7 @@
             "Type": "AWS::Config::DeliveryChannel",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "corp-config-delivery-${Environment}"
+                    "Fn::Sub": "corp-config-delivery-${EnvironmentSuffix}"
                 },
                 "S3BucketName": {
                     "Ref": "CorpS3Bucket"
@@ -736,6 +862,28 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "CorpVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC"
+                }
+            }
+        },
+        "PublicSubnetId": {
+            "Description": "Public Subnet ID",
+            "Value": {
+                "Ref": "CorpPublicSubnet"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnet"
                 }
             }
         }

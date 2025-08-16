@@ -21,10 +21,6 @@ Parameters:
     AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment name for resource tagging'
 
-  ExistingVPCId:
-    Type: AWS::EC2::VPC::Id
-    Description: 'Existing VPC ID to deploy resources into'
-
   KMSKeyAlias:
     Type: String
     Default: 'corp-security-key'
@@ -38,6 +34,77 @@ Parameters:
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
 Resources:
+  # VPC for secure infrastructure
+  CorpVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'corp-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Public Subnet
+  CorpPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CorpVPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'corp-public-subnet-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Internet Gateway
+  CorpInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'corp-igw-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Attach Internet Gateway to VPC
+  CorpAttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref CorpVPC
+      InternetGatewayId: !Ref CorpInternetGateway
+
+  # Route Table
+  CorpRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CorpVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'corp-route-table-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Route to Internet Gateway
+  CorpRoute:
+    Type: AWS::EC2::Route
+    DependsOn: CorpAttachGateway
+    Properties:
+      RouteTableId: !Ref CorpRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref CorpInternetGateway
+
+  # Associate Route Table with Subnet
+  CorpSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref CorpPublicSubnet
+      RouteTableId: !Ref CorpRouteTable
+
   # KMS Key for Encryption at Rest
   CorpSecurityKMSKey:
     Type: AWS::KMS::Key
@@ -177,7 +244,7 @@ Resources:
   CorpS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'corp-secure-bucket-${Environment}-${AWS::AccountId}'
+      BucketName: !Sub 'corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -206,7 +273,7 @@ Resources:
   CorpS3AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'corp-access-logs-bucket-${Environment}-${AWS::AccountId}'
+      BucketName: !Sub 'corp-access-logs-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -233,7 +300,7 @@ Resources:
   CorpCloudWatchLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/corp/security/${Environment}'
+      LogGroupName: !Sub '/corp/security/${EnvironmentSuffix}'
       RetentionInDays: 365
       KmsKeyId: !GetAtt CorpSecurityKMSKey.Arn
       Tags:
@@ -249,7 +316,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: 'Corporate security group with minimal required access'
-      VpcId: !Ref ExistingVPCId
+      VpcId: !Ref CorpVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
@@ -277,7 +344,7 @@ Resources:
   CorpCloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub 'corp-cloudtrail-${Environment}'
+      TrailName: !Sub 'corp-cloudtrail-${EnvironmentSuffix}'
       S3BucketName: !Ref CorpS3Bucket
       S3KeyPrefix: 'cloudtrail-logs/'
       IncludeGlobalServiceEvents: true
@@ -340,7 +407,7 @@ Resources:
   CorpConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub 'corp-config-recorder-${Environment}'
+      Name: !Sub 'corp-config-recorder-${EnvironmentSuffix}'
       RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true
@@ -351,7 +418,7 @@ Resources:
   CorpConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub 'corp-config-delivery-${Environment}'
+      Name: !Sub 'corp-config-delivery-${EnvironmentSuffix}'
       S3BucketName: !Ref CorpS3Bucket
       S3KeyPrefix: 'config-logs/'
       ConfigSnapshotDeliveryProperties:
@@ -411,6 +478,18 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref CorpVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC'
+
+  PublicSubnetId:
+    Description: 'Public Subnet ID'
+    Value: !Ref CorpPublicSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet'
 ```
 
 ## Key Security Features Implemented

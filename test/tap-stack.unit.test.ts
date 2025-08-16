@@ -32,7 +32,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
-      const expectedParams = ['Environment', 'ExistingVPCId', 'KMSKeyAlias', 'EnvironmentSuffix'];
+      const expectedParams = ['Environment', 'KMSKeyAlias', 'EnvironmentSuffix'];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
@@ -51,9 +51,10 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(envParam.AllowedValues).toEqual(['dev', 'staging', 'prod']);
     });
 
-    test('ExistingVPCId parameter should be VPC ID type', () => {
-      const vpcParam = template.Parameters.ExistingVPCId;
-      expect(vpcParam.Type).toBe('AWS::EC2::VPC::Id');
+    test('KMSKeyAlias parameter should have correct properties', () => {
+      const kmsAliasParam = template.Parameters.KMSKeyAlias;
+      expect(kmsAliasParam.Type).toBe('String');
+      expect(kmsAliasParam.Default).toBe('corp-security-key');
     });
   });
 
@@ -188,6 +189,34 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
   });
 
   describe('Network Security', () => {
+    test('should have VPC', () => {
+      expect(template.Resources.CorpVPC).toBeDefined();
+      expect(template.Resources.CorpVPC.Type).toBe('AWS::EC2::VPC');
+    });
+
+    test('VPC should have correct CIDR block', () => {
+      const vpc = template.Resources.CorpVPC;
+      expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
+    });
+
+    test('should have public subnet', () => {
+      expect(template.Resources.CorpPublicSubnet).toBeDefined();
+      expect(template.Resources.CorpPublicSubnet.Type).toBe('AWS::EC2::Subnet');
+    });
+
+    test('should have internet gateway', () => {
+      expect(template.Resources.CorpInternetGateway).toBeDefined();
+      expect(template.Resources.CorpInternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+    });
+
+    test('should have route table and route', () => {
+      expect(template.Resources.CorpRouteTable).toBeDefined();
+      expect(template.Resources.CorpRoute).toBeDefined();
+      expect(template.Resources.CorpSubnetRouteTableAssociation).toBeDefined();
+    });
+
     test('should have security group', () => {
       expect(template.Resources.CorpSecurityGroup).toBeDefined();
       expect(template.Resources.CorpSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
@@ -261,7 +290,9 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
         'SecurityGroupId',
         'CloudWatchLogGroup',
         'StackName',
-        'EnvironmentSuffix'
+        'EnvironmentSuffix',
+        'VPCId',
+        'PublicSubnetId'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -279,7 +310,9 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
         'SecurityGroupId': 'SecurityGroup',
         'CloudWatchLogGroup': 'LogGroup',
         'StackName': 'StackName',
-        'EnvironmentSuffix': 'EnvironmentSuffix'
+        'EnvironmentSuffix': 'EnvironmentSuffix',
+        'VPCId': 'VPC',
+        'PublicSubnetId': 'PublicSubnet'
       };
 
       Object.keys(template.Outputs).forEach(outputKey => {
@@ -308,17 +341,17 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(14);
+      expect(resourceCount).toBe(21);
     });
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
+      expect(parameterCount).toBe(3);
     });
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(9);
+      expect(outputCount).toBe(11);
     });
   });
 });
