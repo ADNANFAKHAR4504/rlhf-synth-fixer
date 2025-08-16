@@ -203,8 +203,8 @@ class TestHelpers(unittest.TestCase):
   @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock())
   @patch("lib.tap_stack.aws.eks.NodeGroup")
   def test_create_eks_node_group(self, mock_ng_class, _mock_role,
-                                 _mock_role_policy, _mock_role_policy_custom, *_):
-    """Ensure create_eks_node_group provisions a node group with correct scaling configuration."""
+                                 _mock_role_policy, *_):
+    """Ensure create_eks_node_group provisions a managed node group with correct scaling configuration."""
     mock_provider = MagicMock()
     mock_ng_instance = MagicMock()
     mock_ng_instance.node_group_name = "nodes"
@@ -219,13 +219,11 @@ class TestHelpers(unittest.TestCase):
                 func("eks-cluster"))))
     cluster.name = cluster_name_output
 
-    public_subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
-    eks_node_sg = MagicMock(id="sg-123")
+    private_subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
     tags = {"Environment": "Production"}
     ng = create_eks_node_group(
         cluster=cluster,
-        private_subnets=public_subnets,  # Renamed parameter but reusing same mock data
-        eks_node_sg=eks_node_sg,
+        private_subnets=private_subnets,
         tags=tags,
         provider=mock_provider
     )

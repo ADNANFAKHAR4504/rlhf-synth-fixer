@@ -557,7 +557,7 @@ def create_rds(
   rds_instance = aws.rds.Instance(
       "corp-rds-instance",
       engine="postgres",
-      engine_version="15.12",  
+      engine_version="15.12",
       instance_class="db.t3.medium",
       allocated_storage=20,
       db_subnet_group_name=subnet_group.name,
@@ -612,18 +612,18 @@ def create_eks_cluster(
   cluster = aws.eks.Cluster(
       "corp-eks-cluster",
       name="corp-eks-cluster",  # Explicit cluster name
-      version="1.33",  
+      version="1.33",
       role_arn=eks_role.arn,
       vpc_config=aws.eks.ClusterVpcConfigArgs(
           subnet_ids=subnet_ids,
           security_group_ids=[eks_cluster_sg.id],
           endpoint_public_access=True,
-          endpoint_private_access=True,  
+          endpoint_private_access=True,
       ),
-      
+
       enabled_cluster_log_types=[
           "api",
-          "audit", 
+          "audit",
           "authenticator",
           "controllerManager",
           "scheduler"
@@ -637,12 +637,11 @@ def create_eks_cluster(
 def create_eks_node_group(
     cluster: aws.eks.Cluster,
     private_subnets: List[aws.ec2.Subnet],  
-    eks_node_sg: aws.ec2.SecurityGroup,
     tags: Dict[str, str],
     provider: aws.Provider,
 ) -> aws.eks.NodeGroup:
   """
-  Create EKS node group with launch template for security group assignment.
+  Create EKS managed node group that automatically handles bootstrap and cluster joining.
   """
   node_role = aws.iam.Role(
       "corp-eks-node-role",
@@ -661,12 +660,13 @@ def create_eks_node_group(
       tags={**tags, "Name": "corp-eks-node-role"},
       opts=ResourceOptions(provider=provider)
   )
-  # Enhanced IAM policies for EKS nodes
+
+  # Attach required policies for EKS managed node groups
   policies = [
       "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
       "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
       "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-      "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",  # For SSM access
+      "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
   ]
   for i, pol_arn in enumerate(policies):
     aws.iam.RolePolicyAttachment(
@@ -676,55 +676,25 @@ def create_eks_node_group(
         opts=ResourceOptions(provider=provider)
     )
 
-  # Add custom IAM policy for EKS node operations
-  node_policy = aws.iam.RolePolicy(
-      "corp-eks-node-custom-policy",
-      role=node_role.name,
-      policy=json.dumps({
-          "Version": "2012-10-17",
-          "Statement": [
-              {
-                  "Effect": "Allow",
-                  "Action": [
-                      "eks:DescribeCluster",
-                      "eks:ListClusters",
-                      "ec2:DescribeInstances",
-                      "ec2:DescribeRouteTables",
-                      "ec2:DescribeSecurityGroups",
-                      "ec2:DescribeSubnets",
-                      "ec2:DescribeVolumes",
-                      "ec2:DescribeVolumesModifications",
-                      "ec2:DescribeVpcs",
-                      "ecr:GetAuthorizationToken",
-                      "ecr:BatchCheckLayerAvailability",
-                      "ecr:GetDownloadUrlForLayer",
-                      "ecr:BatchGetImage"
-                  ],
-                  "Resource": "*"
-              }
-          ]
-      }),
-      opts=ResourceOptions(provider=provider)
-  )
-
-  # Create node group in PRIVATE subnets
-  # Private subnets with NAT Gateway provide proper internet access for EKS bootstrap
+  # Create managed node group using aws.eks.NodeGroup
+  # This automatically handles bootstrap, AMI selection, and cluster joining
   node_group = aws.eks.NodeGroup(
       "corp-eks-node-group",
       cluster_name=cluster.name,
-      # Let Pulumi auto-generate the name to avoid conflicts
       node_role_arn=node_role.arn,
-      subnet_ids=[s.id for s in private_subnets],  # PRIVATE subnets
-      instance_types=["t3.medium"],  
+      subnet_ids=[s.id for s in private_subnets],
+      instance_types=["t3.medium"],
       capacity_type="ON_DEMAND",
       scaling_config=aws.eks.NodeGroupScalingConfigArgs(
-          desired_size=1, min_size=1, max_size=3  
+          desired_size=1,
+          min_size=1,
+          max_size=3
       ),
-      # Use compatible AMI type for K8s 1.29
-      ami_type="AL2_x86_64",  # Amazon Linux 2 for K8s 1.29 compatibility
-      # Add EKS-required tags 
+      # Use AL2_x86_64 for compatibility with EKS 1.33
+      ami_type="AL2_x86_64",
+      # Enable cluster autoscaler
       tags={
-          **tags, 
+          **tags,
           "Name": "corp-eks-nodegroup",
           "kubernetes.io/cluster-autoscaler/enabled": "true",
           "kubernetes.io/cluster-autoscaler/corp-eks-cluster": "owned"
@@ -1292,7 +1262,6 @@ class TapStack(pulumi.ComponentResource):
     sgs = create_security_groups(vpc_module.vpc, tags, provider)
     db_sg = sgs["db_sg"]
     eks_cluster_sg = sgs["eks_cluster_sg"]
-    eks_node_sg = sgs["eks_node_sg"]
     alb_sg = sgs["alb_sg"]
 
     # Create S3 buckets
@@ -1325,7 +1294,6 @@ class TapStack(pulumi.ComponentResource):
     eks_node_group = create_eks_node_group(
         cluster=eks_cluster,
         private_subnets=vpc_module.private_subnets,  # Use private subnets
-        eks_node_sg=eks_node_sg,
         tags=tags,
         provider=provider
     )

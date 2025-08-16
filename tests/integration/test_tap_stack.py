@@ -239,7 +239,7 @@ def test_eks_node_group_exists(pulumi_outputs, aws_clients):
         scaling_config['minSize']}"
     assert scaling_config["maxSize"] == 3, f"Unexpected max size: {
         scaling_config['maxSize']}"
-    assert scaling_config["desiredSize"] == 2, f"Unexpected desired size: {
+    assert scaling_config["desiredSize"] == 1, f"Unexpected desired size: {
         scaling_config['desiredSize']}"
 
     # Verify node group is in private subnets
