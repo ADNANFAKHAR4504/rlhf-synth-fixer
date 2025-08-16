@@ -922,3 +922,4 @@ Resources:
       Subnets:
         - !Ref PublicSubnet1
         - !
+```
