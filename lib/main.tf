@@ -305,7 +305,7 @@ resource "aws_iam_role_policy_attachment" "ec2_secrets_attachment" {
 
 # Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "production-ec2-profile"
+  name = "${var.project}-ec2-profile"
   role = aws_iam_role.ec2_secrets_role.name
 
   tags = local.common_tags
