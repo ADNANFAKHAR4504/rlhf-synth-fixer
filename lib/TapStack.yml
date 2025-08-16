@@ -672,6 +672,7 @@ Resources:
 
   BuildFailureAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: ValidRegion
     Properties:
       AlarmName: !Sub "${ApplicationName}-build-failure-${EnvironmentSuffix}"
       AlarmDescription: "Alarm for CodeBuild build failures"
