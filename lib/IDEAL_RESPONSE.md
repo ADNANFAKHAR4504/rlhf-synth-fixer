@@ -2,11 +2,11 @@
 
 ## Infrastructure Overview
 
-This implementation provides a secure, highly available, multi-region AWS infrastructure using Terraform. The infrastructure spans two AWS regions (us-east-1 and eu-west-1) and implements enterprise-grade security, observability, and scalability patterns.
+This implementation provides a secure, highly available, multi-region AWS infrastructure using Terraform. The infrastructure spans two AWS regions (us-east-1 and eu-west-2) and implements enterprise-grade security, observability, and scalability patterns.
 
 ### **Architecture Highlights**
 
-- **Multi-Region Deployment**: Primary (us-east-1) and Secondary (eu-west-1)
+- **Multi-Region Deployment**: Primary (us-east-1) and Secondary (eu-west-2)
 - **High Availability**: Multi-AZ RDS, Auto Scaling Groups, Load Balancers
 - **Security**: KMS encryption, Secrets Manager, Security Groups, IAM least privilege
 - **Observability**: CloudWatch logging, monitoring, and alarming
@@ -32,6 +32,7 @@ This implementation provides a secure, highly available, multi-region AWS infras
 6. **Secrets Manager Handling**: Force recreation for development iteration cycles
 7. **Target Group Naming**: Shortened names to comply with AWS 32-character limit
 8. **Health Check Optimization**: Tuned ALB health checks for faster recovery
+9. **Resource Naming Conflicts**: Added 3-character random suffix to prevent naming collisions
 
 ### **Latest Technical Fixes (Deployment-Critical)**
 
@@ -69,6 +70,32 @@ block_device_mappings {
 **Issue**: ASG launch template validation failed due to insufficient volume size  
 **Root Cause**: Amazon Linux 2023 requires ≥30GB (vs AL2's 8GB minimum)  
 **Solution**: Increased EBS volume size to 30GB for both regions
+
+#### **Resource Naming Conflict Prevention**
+```terraform
+# ADDED: Random suffix generator for unique resource names
+resource "random_id" "suffix" {
+  byte_length = 2
+  # This creates a 3-character alphanumeric suffix
+}
+
+# UPDATED: All resource names now include random suffix
+resource "aws_kms_key" "primary" {
+  # ... configuration ...
+  tags = {
+    Name = "${var.project_name}-kms-key-primary-${random_id.suffix.hex}"
+  }
+}
+
+resource "aws_s3_bucket" "static_content_primary" {
+  provider = aws.primary
+  bucket   = "${var.project_name}-static-content-primary-${random_id.suffix.hex}"
+  # ... rest of configuration
+}
+```
+**Issue**: Resource naming conflicts when deploying multiple instances of infrastructure  
+**Root Cause**: Static resource names cause conflicts in shared AWS accounts or regions  
+**Solution**: Added `random_id` generator creating unique 3-character suffix for all resources
 
 ---
 
@@ -124,7 +151,7 @@ provider "aws" {
   }
 }
 
-# Secondary region provider (eu-west-1)
+# Secondary region provider (eu-west-2)
 provider "aws" {
   alias  = "secondary"
   region = var.secondary_region
@@ -169,7 +196,7 @@ variable "primary_region" {
 variable "secondary_region" {
   description = "Secondary AWS region"
   type        = string
-  default     = "eu-west-1"
+  default     = "eu-west-2"
 }
 
 variable "vpc_cidr_primary" {
@@ -251,8 +278,14 @@ data "aws_ami" "amazon_linux_secondary" {
 }
 
 # ============================================================================
-# RANDOM PASSWORD GENERATION
+# RANDOM GENERATORS
 # ============================================================================
+# Generate random suffix for resource naming
+resource "random_id" "suffix" {
+  byte_length = 2
+  # This creates a 3-character alphanumeric suffix
+}
+
 # Generate random password for RDS master user
 resource "random_password" "rds_master_password" {
   length  = 16
@@ -307,13 +340,13 @@ resource "aws_kms_key" "primary" {
   })
 
   tags = {
-    Name = "${var.project_name}-kms-key-primary"
+    Name = "${var.project_name}-kms-key-primary-${random_id.suffix.hex}"
   }
 }
 
 resource "aws_kms_alias" "primary" {
   provider      = aws.primary
-  name          = "alias/${var.project_name}-primary"
+  name          = "alias/${var.project_name}-primary-${random_id.suffix.hex}"
   target_key_id = aws_kms_key.primary.key_id
 }
 
@@ -360,13 +393,13 @@ resource "aws_kms_key" "secondary" {
   })
 
   tags = {
-    Name = "${var.project_name}-kms-key-secondary"
+    Name = "${var.project_name}-kms-key-secondary-${random_id.suffix.hex}"
   }
 }
 
 resource "aws_kms_alias" "secondary" {
   provider      = aws.secondary
-  name          = "alias/${var.project_name}-secondary"
+  name          = "alias/${var.project_name}-secondary-${random_id.suffix.hex}"
   target_key_id = aws_kms_key.secondary.key_id
 }
 
@@ -376,7 +409,7 @@ resource "aws_kms_alias" "secondary" {
 # Store RDS credentials in Secrets Manager (primary region)
 resource "aws_secretsmanager_secret" "rds_credentials_primary" {
   provider                       = aws.primary
-  name                           = "${var.project_name}-rds-credentials-primary"
+  name                           = "${var.project_name}-rds-credentials-primary-${random_id.suffix.hex}"
   description                    = "RDS master user credentials for primary region"
   kms_key_id                     = aws_kms_key.primary.arn
   recovery_window_in_days        = 0
@@ -399,7 +432,7 @@ resource "aws_secretsmanager_secret_version" "rds_credentials_primary" {
 # Store RDS credentials in Secrets Manager (secondary region)
 resource "aws_secretsmanager_secret" "rds_credentials_secondary" {
   provider                       = aws.secondary
-  name                           = "${var.project_name}-rds-credentials-secondary"
+  name                           = "${var.project_name}-rds-credentials-secondary-${random_id.suffix.hex}"
   description                    = "RDS master user credentials for secondary region"
   kms_key_id                     = aws_kms_key.secondary.arn
   recovery_window_in_days        = 0
@@ -980,7 +1013,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # S3 bucket for static content (Primary Region)
 resource "aws_s3_bucket" "static_content_primary" {
   provider = aws.primary
-  bucket   = "${var.project_name}-static-content-primary-${random_password.rds_master_password.id}"
+  bucket   = "${var.project_name}-static-content-primary-${random_id.suffix.hex}"
 
   tags = {
     Name        = "${var.project_name}-static-content-primary"
@@ -1064,7 +1097,7 @@ resource "aws_s3_bucket_policy" "static_content_primary" {
 # S3 bucket for static content (Secondary Region)
 resource "aws_s3_bucket" "static_content_secondary" {
   provider = aws.secondary
-  bucket   = "${var.project_name}-static-content-secondary-${random_password.rds_master_password.id}"
+  bucket   = "${var.project_name}-static-content-secondary-${random_id.suffix.hex}"
 
   tags = {
     Name        = "${var.project_name}-static-content-secondary"
@@ -1952,7 +1985,7 @@ output "s3_bucket_secondary" {
 
 ### **Multi-Region Architecture**
 - **Primary Region**: us-east-1 (Main traffic and RDS primary)
-- **Secondary Region**: eu-west-1 (Disaster recovery and read replica)
+- **Secondary Region**: eu-west-2 (Disaster recovery and read replica)
 - **Cross-Region Replication**: RDS read replica for DR
 
 ### **Instance Bootstrap**

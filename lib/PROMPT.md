@@ -5,7 +5,7 @@ You are an expert in **Infrastructure as Code (IaC)** and **Terraform (v0.14 or 
 
 ### Infrastructure Components
 
-1. **Global Load Balancing:** Deploy load balancers across at least two AWS regions (e.g., `us-east-1` and `eu-west-1`) for global traffic distribution.
+1. **Global Load Balancing:** Deploy load balancers across at least two AWS regions (e.g., `us-east-1` and `eu-west-2`) for global traffic distribution.
 2. **Web Tier:** EC2 web servers with auto-scaling groups for elasticity and high availability.
 3. **Database Tier:** Amazon RDS with Multi-AZ enabled for redundancy.
 4. **Storage Tier:** Amazon S3 buckets for static content, with bucket policies restricting unauthorized access.

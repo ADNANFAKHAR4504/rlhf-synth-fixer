@@ -23,7 +23,7 @@ variable "primary_region" {
 variable "secondary_region" {
   description = "Secondary AWS region"
   type        = string
-  default     = "eu-west-1"
+  default     = "eu-west-2"
 }
 
 variable "vpc_cidr_primary" {
@@ -105,8 +105,14 @@ data "aws_ami" "amazon_linux_secondary" {
 }
 
 # ============================================================================
-# RANDOM PASSWORD GENERATION
+# RANDOM GENERATORS
 # ============================================================================
+# Generate random suffix for resource naming
+resource "random_id" "suffix" {
+  byte_length = 2
+  # This creates a 3-character alphanumeric suffix
+}
+
 # Generate random password for RDS master user
 resource "random_password" "rds_master_password" {
   length  = 16
@@ -161,13 +167,13 @@ resource "aws_kms_key" "primary" {
   })
 
   tags = {
-    Name = "${var.project_name}-kms-key-primary"
+    Name = "${var.project_name}-kms-key-primary-${random_id.suffix.hex}"
   }
 }
 
 resource "aws_kms_alias" "primary" {
   provider      = aws.primary
-  name          = "alias/${var.project_name}-primary"
+  name          = "alias/${var.project_name}-primary-${random_id.suffix.hex}"
   target_key_id = aws_kms_key.primary.key_id
 }
 
@@ -214,13 +220,13 @@ resource "aws_kms_key" "secondary" {
   })
 
   tags = {
-    Name = "${var.project_name}-kms-key-secondary"
+    Name = "${var.project_name}-kms-key-secondary-${random_id.suffix.hex}"
   }
 }
 
 resource "aws_kms_alias" "secondary" {
   provider      = aws.secondary
-  name          = "alias/${var.project_name}-secondary"
+  name          = "alias/${var.project_name}-secondary-${random_id.suffix.hex}"
   target_key_id = aws_kms_key.secondary.key_id
 }
 
@@ -230,7 +236,7 @@ resource "aws_kms_alias" "secondary" {
 # Store RDS credentials in Secrets Manager (primary region)
 resource "aws_secretsmanager_secret" "rds_credentials_primary" {
   provider                       = aws.primary
-  name                           = "${var.project_name}-rds-credentials-primary"
+  name                           = "${var.project_name}-rds-credentials-primary-${random_id.suffix.hex}"
   description                    = "RDS master user credentials for primary region"
   kms_key_id                     = aws_kms_key.primary.arn
   recovery_window_in_days        = 0
@@ -253,7 +259,7 @@ resource "aws_secretsmanager_secret_version" "rds_credentials_primary" {
 # Store RDS credentials in Secrets Manager (secondary region)
 resource "aws_secretsmanager_secret" "rds_credentials_secondary" {
   provider                       = aws.secondary
-  name                           = "${var.project_name}-rds-credentials-secondary"
+  name                           = "${var.project_name}-rds-credentials-secondary-${random_id.suffix.hex}"
   description                    = "RDS master user credentials for secondary region"
   kms_key_id                     = aws_kms_key.secondary.arn
   recovery_window_in_days        = 0
@@ -834,7 +840,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # S3 bucket for static content (Primary Region)
 resource "aws_s3_bucket" "static_content_primary" {
   provider = aws.primary
-  bucket   = "${var.project_name}-static-content-primary-${random_password.rds_master_password.id}"
+  bucket   = "${var.project_name}-static-content-primary-${random_id.suffix.hex}"
 
   tags = {
     Name        = "${var.project_name}-static-content-primary"
@@ -918,7 +924,7 @@ resource "aws_s3_bucket_policy" "static_content_primary" {
 # S3 bucket for static content (Secondary Region)
 resource "aws_s3_bucket" "static_content_secondary" {
   provider = aws.secondary
-  bucket   = "${var.project_name}-static-content-secondary-${random_password.rds_master_password.id}"
+  bucket   = "${var.project_name}-static-content-secondary-${random_id.suffix.hex}"
 
   tags = {
     Name        = "${var.project_name}-static-content-secondary"
