@@ -142,17 +142,29 @@ variable "existing_private_subnet_ids" {
 }
 
 #######################
+# Random Suffix for Unique Naming
+#######################
+
+resource "random_string" "suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
+#######################
 # Locals
 #######################
 
 locals {
-  name_prefix = "${var.project_name}-${var.environment}"
+  # Add version suffix to avoid conflicts with existing resources
+  name_prefix = "${var.project_name}-${var.environment}-v2-${random_string.suffix.result}"
   common_tags = {
     Environment = var.environment
     Project     = var.project_name
     ManagedBy   = "Terraform"
     CreatedBy   = var.author
     CreatedDate = var.created_date
+    Version     = "v2"
   }
 
   # Use existing VPC or create new one
@@ -382,12 +394,12 @@ resource "aws_route_table_association" "database" {
 }
 
 #######################
-# KMS Keys for Encryption
+# KMS Keys for Encryption (with versioned names)
 #######################
 
 # KMS key for RDS encryption
 resource "aws_kms_key" "rds_key" {
-  description             = "KMS key for RDS encryption in ${var.environment} environment"
+  description             = "KMS key for RDS encryption in ${var.environment} environment v2"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -427,7 +439,7 @@ resource "aws_kms_key" "rds_key" {
   })
 }
 
-# KMS key alias for RDS
+# KMS key alias for RDS (versioned)
 resource "aws_kms_alias" "rds_key" {
   name          = "alias/${local.name_prefix}-rds-key"
   target_key_id = aws_kms_key.rds_key.key_id
@@ -435,7 +447,7 @@ resource "aws_kms_alias" "rds_key" {
 
 # KMS key for S3 encryption
 resource "aws_kms_key" "s3_key" {
-  description             = "KMS key for S3 encryption in ${var.environment} environment"
+  description             = "KMS key for S3 encryption in ${var.environment} environment v2"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -475,7 +487,7 @@ resource "aws_kms_key" "s3_key" {
   })
 }
 
-# KMS key alias for S3
+# KMS key alias for S3 (versioned)
 resource "aws_kms_alias" "s3_key" {
   name          = "alias/${local.name_prefix}-s3-key"
   target_key_id = aws_kms_key.s3_key.key_id
@@ -483,7 +495,7 @@ resource "aws_kms_alias" "s3_key" {
 
 # KMS key for EBS encryption
 resource "aws_kms_key" "ebs_key" {
-  description             = "KMS key for EBS encryption in ${var.environment} environment"
+  description             = "KMS key for EBS encryption in ${var.environment} environment v2"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -493,7 +505,7 @@ resource "aws_kms_key" "ebs_key" {
   })
 }
 
-# KMS key alias for EBS
+# KMS key alias for EBS (versioned)
 resource "aws_kms_alias" "ebs_key" {
   name          = "alias/${local.name_prefix}-ebs-key"
   target_key_id = aws_kms_key.ebs_key.key_id
@@ -503,16 +515,9 @@ resource "aws_kms_alias" "ebs_key" {
 # S3 Buckets (moved up to resolve dependencies)
 #######################
 
-# Random string for bucket naming
-resource "random_string" "bucket_suffix" {
-  length  = 8
-  special = false
-  upper   = false
-}
-
 # S3 bucket for application data
 resource "aws_s3_bucket" "app_data" {
-  bucket = "${local.name_prefix}-app-data-${random_string.bucket_suffix.result}"
+  bucket = "${local.name_prefix}-app-data"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-data-bucket"
@@ -522,7 +527,7 @@ resource "aws_s3_bucket" "app_data" {
 
 # S3 bucket for ALB access logs
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${local.name_prefix}-alb-logs-${random_string.bucket_suffix.result}"
+  bucket = "${local.name_prefix}-alb-logs"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb-logs-bucket"
@@ -734,12 +739,12 @@ resource "aws_lb_listener" "app" {
 }
 
 ########################
-# Security Groups
+# Security Groups (with versioned names)
 ########################
 
 resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-${var.environment}-alb-sg"
-  description = "Security group for Application Load Balancer - allows HTTP/HTTPS traffic"
+  name        = "${local.name_prefix}-alb-sg"
+  description = "Security group for Application Load Balancer v2 - allows HTTP/HTTPS traffic"
   vpc_id      = local.vpc_id
 
   ingress {
@@ -767,15 +772,15 @@ resource "aws_security_group" "alb" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-alb-sg"
+    Name = "${local.name_prefix}-alb-sg"
     Type = "LoadBalancer"
   })
 }
 
 # EC2 Instance Security Group
 resource "aws_security_group" "ec2" {
-  name        = "${var.project_name}-${var.environment}-ec2-sg"
-  description = "Security group for EC2 instances - allows traffic from ALB and specific management ports"
+  name        = "${local.name_prefix}-ec2-sg"
+  description = "Security group for EC2 instances v2 - allows traffic from ALB and specific management ports"
   vpc_id      = local.vpc_id
 
   ingress {
@@ -811,15 +816,15 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-ec2-sg"
+    Name = "${local.name_prefix}-ec2-sg"
     Type = "Compute"
   })
 }
 
 # RDS Database Security Group
 resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-${var.environment}-rds-sg"
-  description = "Security group for RDS database - allows MySQL access from EC2 instances only"
+  name        = "${local.name_prefix}-rds-sg"
+  description = "Security group for RDS database v2 - allows MySQL access from EC2 instances only"
   vpc_id      = local.vpc_id
 
   ingress {
@@ -839,15 +844,15 @@ resource "aws_security_group" "rds" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-rds-sg"
+    Name = "${local.name_prefix}-rds-sg"
     Type = "Database"
   })
 }
 
 # Lambda Security Group
 resource "aws_security_group" "lambda" {
-  name        = "${var.project_name}-${var.environment}-lambda-sg"
-  description = "Security group for Lambda functions - restricted VPC access"
+  name        = "${local.name_prefix}-lambda-sg"
+  description = "Security group for Lambda functions v2 - restricted VPC access"
   vpc_id      = local.vpc_id
 
   egress {
@@ -867,13 +872,13 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-lambda-sg"
+    Name = "${local.name_prefix}-lambda-sg"
     Type = "Serverless"
   })
 }
 
 #######################
-# IAM Roles and Policies
+# IAM Roles and Policies (with versioned names)
 #######################
 
 # IAM role for EC2 instances
@@ -910,7 +915,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # IAM policy for EC2 S3 access
 resource "aws_iam_policy" "ec2_s3_access" {
   name        = "${local.name_prefix}-ec2-s3-policy"
-  description = "Policy for EC2 instances to access S3 and KMS"
+  description = "Policy for EC2 instances to access S3 and KMS v2"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -949,7 +954,7 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_access" {
 # IAM policy for CloudWatch logs
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
   name        = "${local.name_prefix}-cloudwatch-logs-policy"
-  description = "Policy for services to write to CloudWatch Logs"
+  description = "Policy for services to write to CloudWatch Logs v2"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -999,37 +1004,37 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
 }
 
 ########################
-# Monitoring
+# Monitoring (with versioned names)
 ########################
 
 # CloudWatch Log Group for EC2 instances
 resource "aws_cloudwatch_log_group" "ec2_logs" {
-  name              = "/aws/ec2/${var.project_name}-${var.environment}"
+  name              = "/aws/ec2/${local.name_prefix}"
   retention_in_days = 14
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-ec2-logs"
+    Name = "${local.name_prefix}-ec2-logs"
     Type = "Logging"
   })
 }
 
 # CloudWatch Log Group for Lambda functions
 resource "aws_cloudwatch_log_group" "lambda_logs" {
-  name              = "/aws/lambda/${var.project_name}-${var.environment}"
+  name              = "/aws/lambda/${local.name_prefix}"
   retention_in_days = 14
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-lambda-logs"
+    Name = "${local.name_prefix}-lambda-logs"
     Type = "Logging"
   })
 }
 
 # SNS Topic for notifications
 resource "aws_sns_topic" "alerts" {
-  name = "${var.project_name}-${var.environment}-alerts"
+  name = "${local.name_prefix}-alerts"
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-alerts"
+    Name = "${local.name_prefix}-alerts"
     Type = "Notification"
   })
 }
@@ -1087,7 +1092,7 @@ resource "aws_launch_template" "app" {
     
     # Create health check endpoint
     echo "OK" > /var/www/html/health
-    echo "<h1>Hello from ${var.project_name} ${var.environment}</h1>" > /var/www/html/index.html
+    echo "<h1>Hello from ${var.project_name} ${var.environment} v2</h1>" > /var/www/html/index.html
     
     # Set proper permissions
     chown apache:apache /var/www/html/health
@@ -1193,7 +1198,7 @@ resource "aws_autoscaling_group" "app" {
 }
 
 #######################
-# RDS Database
+# RDS Database (with versioned names)
 #######################
 
 # DB subnet group
@@ -1250,7 +1255,7 @@ resource "aws_db_instance" "main" {
 
 # CloudWatch Alarm for EC2 CPU utilization
 resource "aws_cloudwatch_metric_alarm" "ec2_cpu_high" {
-  alarm_name          = "${var.project_name}-${var.environment}-ec2-cpu-high"
+  alarm_name          = "${local.name_prefix}-ec2-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1266,14 +1271,14 @@ resource "aws_cloudwatch_metric_alarm" "ec2_cpu_high" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-ec2-cpu-alarm"
+    Name = "${local.name_prefix}-ec2-cpu-alarm"
     Type = "Monitoring"
   })
 }
 
 # CloudWatch Alarm for RDS CPU utilization
 resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
-  alarm_name          = "${var.project_name}-${var.environment}-rds-cpu-high"
+  alarm_name          = "${local.name_prefix}-rds-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1289,14 +1294,14 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-rds-cpu-alarm"
+    Name = "${local.name_prefix}-rds-cpu-alarm"
     Type = "Monitoring"
   })
 }
 
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "${var.project_name}-${var.environment}-dashboard"
+  dashboard_name = "${local.name_prefix}-dashboard"
 
   dashboard_body = jsonencode({
     widgets = [
@@ -1330,7 +1335,7 @@ resource "aws_cloudwatch_dashboard" "main" {
 # Lambda function with VPC configuration
 resource "aws_lambda_function" "app" {
   filename         = "lambda_function.zip"
-  function_name    = "${var.project_name}-${var.environment}-app-function"
+  function_name    = "${local.name_prefix}-app-function"
   role             = aws_iam_role.lambda_role.arn
   handler          = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
@@ -1351,7 +1356,7 @@ resource "aws_lambda_function" "app" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-lambda"
+    Name = "${local.name_prefix}-lambda"
     Type = "Serverless"
   })
 
@@ -1378,7 +1383,7 @@ def handler(event, context):
     return {
         'statusCode': 200,
         'body': json.dumps({
-            'message': 'Hello from ${var.project_name} ${var.environment} Lambda!',
+            'message': 'Hello from ${var.project_name} ${var.environment} Lambda v2!',
             'event': event
         })
     }
@@ -1485,4 +1490,9 @@ output "security_group_ids" {
     rds_sg    = aws_security_group.rds.id
     lambda_sg = aws_security_group.lambda.id
   }
+}
+
+output "resource_name_prefix" {
+  description = "The name prefix used for all resources"
+  value       = local.name_prefix
 }
