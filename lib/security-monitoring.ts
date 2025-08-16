@@ -4,13 +4,13 @@
  * This module defines security monitoring resources including CloudTrail,
  * GuardDuty, and Config for comprehensive security monitoring.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface SecurityMonitoringResources {
   cloudTrail: aws.cloudtrail.Trail;
   cloudTrailBucket: aws.s3.Bucket;
-  guardDutyDetector: aws.guardduty.Detector;
+  guardDutyDetectorId: Promise<string>;
   configRecorder: aws.cfg.Recorder;
   configDeliveryChannel: aws.cfg.DeliveryChannel;
 }
@@ -151,26 +151,43 @@ export function createSecurityMonitoring(
     }
   );
 
-  // Enable GuardDuty
-  const guardDutyDetector = new aws.guardduty.Detector(
-    `guardduty-${environment}`,
-    {
-      enable: true,
-      findingPublishingFrequency: 'FIFTEEN_MINUTES',
-      tags: {
-        Name: `guardduty-${environment}`,
-        Environment: environment,
-        ManagedBy: 'Pulumi',
-      },
-    },
-    { provider }
-  );
+  // Attempt to get the existing GuardDuty detector using `getDetector`
+  const existingDetector = aws.guardduty.getDetector({}, { provider })
+    .then(result => {
+      return aws.guardduty.Detector.get("existing-detector", result.id, undefined, { provider });
+    })
+    .catch(() => {
+      // Detector doesn't exist, create one
+      return new aws.guardduty.Detector("main-detector", {
+        enable: true,
+        findingPublishingFrequency: 'FIFTEEN_MINUTES',
+        tags: {
+          Name: `guardduty-${environment}`,
+          Environment: environment,
+          ManagedBy: 'Pulumi',
+        },
+      }, { provider });
+    });
+
+  // Convert to promise of string for the interface
+  const guardDutyDetectorId = existingDetector.then(async (detector) => {
+    // Convert Pulumi Output to Promise
+    return new Promise<string>((resolve) => {
+      detector.id.apply(id => {
+        resolve(id);
+        return id;
+      });
+    });
+  }).then(promise => promise);
+
+  // For the detector features, we need to use the detector resource directly
+  const detectorForFeatures = pulumi.output(existingDetector);
 
   // Enable S3 protection for GuardDuty
   new aws.guardduty.DetectorFeature(
     `guardduty-s3-protection-${environment}`,
     {
-      detectorId: guardDutyDetector.id,
+      detectorId: detectorForFeatures.apply(d => d.id),
       name: 'S3_DATA_EVENTS',
       status: 'ENABLED',
     },
@@ -181,7 +198,7 @@ export function createSecurityMonitoring(
   new aws.guardduty.DetectorFeature(
     `guardduty-eks-protection-${environment}`,
     {
-      detectorId: guardDutyDetector.id,
+      detectorId: detectorForFeatures.apply(d => d.id),
       name: 'EKS_AUDIT_LOGS',
       status: 'ENABLED',
     },
@@ -192,7 +209,7 @@ export function createSecurityMonitoring(
   new aws.guardduty.DetectorFeature(
     `guardduty-malware-protection-${environment}`,
     {
-      detectorId: guardDutyDetector.id,
+      detectorId: detectorForFeatures.apply(d => d.id),
       name: 'EBS_MALWARE_PROTECTION',
       status: 'ENABLED',
     },
@@ -245,7 +262,7 @@ export function createSecurityMonitoring(
     `config-role-policy-${environment}`,
     {
       role: configRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
+      policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
     },
     { provider }
   );
@@ -280,7 +297,7 @@ export function createSecurityMonitoring(
   return {
     cloudTrail,
     cloudTrailBucket,
-    guardDutyDetector,
+    guardDutyDetectorId,
     configRecorder,
     configDeliveryChannel,
   };

@@ -44,7 +44,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly ec2InstancePublicIp: pulumi.Output<string>;
   public readonly ec2InstancePublicDns: pulumi.Output<string>;
   public readonly cloudTrailArn: pulumi.Output<string>;
-  public readonly guardDutyDetectorId: pulumi.Output<string>;
+  public readonly guardDutyDetectorId: Promise<string>;
 
   /**
    * Creates a new TapStack component.

@@ -4,12 +4,12 @@
  * This module orchestrates the creation of all AWS infrastructure components
  * including VPC, security groups, EC2 instances, and security monitoring.
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import { createVpcResources } from './vpc';
-import { createSecurityGroup } from './security';
+import * as pulumi from '@pulumi/pulumi';
 import { createEc2Instance } from './compute';
+import { createSecurityGroup } from './security';
 import { createSecurityMonitoring } from './security-monitoring';
+import { createVpcResources } from './vpc';
 
 export interface InfrastructureOutputs {
   vpcId: pulumi.Output<string>;
@@ -21,7 +21,7 @@ export interface InfrastructureOutputs {
   ec2InstancePublicIp: pulumi.Output<string>;
   ec2InstancePublicDns: pulumi.Output<string>;
   cloudTrailArn: pulumi.Output<string>;
-  guardDutyDetectorId: pulumi.Output<string>;
+  guardDutyDetectorId: Promise<string>;
 }
 
 export function createInfrastructure(
@@ -68,6 +68,6 @@ export function createInfrastructure(
     ec2InstancePublicIp: ec2Instance.publicIp,
     ec2InstancePublicDns: ec2Instance.publicDns,
     cloudTrailArn: securityMonitoring.cloudTrail.arn,
-    guardDutyDetectorId: securityMonitoring.guardDutyDetector.id,
+    guardDutyDetectorId: securityMonitoring.guardDutyDetectorId,
   };
 }

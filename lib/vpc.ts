@@ -243,12 +243,43 @@ export function createVpcResources(
     { provider }
   );
 
-  // Attach policy for VPC Flow Logs to write to CloudWatch
-  new aws.iam.RolePolicyAttachment(
+  // Create custom policy for VPC Flow Logs
+  const flowLogPolicy = new aws.iam.Policy(
     `vpc-flow-log-policy-${environment}`,
     {
+      name: `vpc-flow-log-policy-${environment}`,
+      description: 'Policy for VPC Flow Logs to write to CloudWatch',
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
+      tags: {
+        Name: `vpc-flow-log-policy-${environment}`,
+        Environment: environment,
+        ManagedBy: 'Pulumi',
+      },
+    },
+    { provider }
+  );
+
+  // Attach custom policy for VPC Flow Logs
+  new aws.iam.RolePolicyAttachment(
+    `vpc-flow-log-policy-attachment-${environment}`,
+    {
       role: flowLogRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+      policyArn: flowLogPolicy.arn,
     },
     { provider }
   );
