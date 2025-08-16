@@ -18,6 +18,13 @@ Parameters:
       - dev
       - staging
       - prod
+  
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming to avoid conflicts'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
 
   EnvironmentSuffix:
     Type: String
