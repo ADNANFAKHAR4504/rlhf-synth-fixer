@@ -15,20 +15,21 @@ Parameters:
       - t3.small
       - t3.medium
       - t3.large
-    Description: EC2 instance type for production environment
-
   ProdEnvNotificationEmail:
     Type: String
     Default: ''
-    Description: Email address for CloudWatch alarm notifications (optional)
     AllowedPattern: '^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Description: Latest Amazon Linux 2023
 
 Conditions:
   ProdEnvHasEmail: !Not [!Equals [!Ref ProdEnvNotificationEmail, '']]
 
 Resources:
 
-  # VPC Configuration
+  # VPC
   ProdEnvVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -38,10 +39,6 @@ Resources:
       Tags:
         - Key: Name
           Value: ProdEnv-VPC
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   ProdEnvPrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -52,10 +49,6 @@ Resources:
       Tags:
         - Key: Name
           Value: ProdEnv-Private-Subnet1
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   ProdEnvPrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -66,10 +59,6 @@ Resources:
       Tags:
         - Key: Name
           Value: ProdEnv-Private-Subnet2
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   ProdEnvPrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -78,10 +67,6 @@ Resources:
       Tags:
         - Key: Name
           Value: ProdEnv-Private-RouteTable
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   ProdEnvSubnetAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -95,6 +80,27 @@ Resources:
       SubnetId: !Ref ProdEnvPrivateSubnet2
       RouteTableId: !Ref ProdEnvPrivateRouteTable
 
+  # VPC Endpoints
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcId: !Ref ProdEnvVPC
+      RouteTableIds:
+        - !Ref ProdEnvPrivateRouteTable
+
+  CloudWatchVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.logs"
+      VpcId: !Ref ProdEnvVPC
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref ProdEnvPrivateSubnet1
+        - !Ref ProdEnvPrivateSubnet2
+      SecurityGroupIds:
+        - !Ref ProdEnvSecurityGroup
+
   # Security Group
   ProdEnvSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -106,53 +112,36 @@ Resources:
           FromPort: 22
           ToPort: 22
           CidrIp: 10.0.0.0/16
-          Description: SSH access within VPC
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 10.0.0.0/16
-          Description: HTTP access within VPC
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 10.0.0.0/16
-          Description: HTTPS access within VPC
       SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 10.0.0.0/16
-          Description: All outbound traffic within VPC
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/16   # Keep internal HTTPS
       Tags:
         - Key: Name
           Value: ProdEnv-SG
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   # Key Pair
   ProdEnvKeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
       KeyName: ProdEnv-KeyPair
-      Tags:
-        - Key: Name
-          Value: ProdEnv-KeyPair
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   # S3 Bucket
   ProdEnvDataBucket:
     Type: AWS::S3::Bucket
-    UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub 'prodenv-data-bucket-${AWS::AccountId}-${AWS::Region}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -160,13 +149,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: ProdEnv-Data-Bucket
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   # IAM Role
   ProdEnvEC2Role:
@@ -180,7 +162,7 @@ Resources:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: ProdEnv-S3Access-Policy
+        - PolicyName: ProdEnv-S3CloudWatch
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -188,8 +170,6 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:ListBucket
                 Resource:
                   - !GetAtt ProdEnvDataBucket.Arn
                   - !Sub '${ProdEnvDataBucket.Arn}/*'
@@ -200,13 +180,6 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: '*'
-      Tags:
-        - Key: Name
-          Value: ProdEnv-EC2Role
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   ProdEnvInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -214,11 +187,11 @@ Resources:
       Roles:
         - !Ref ProdEnvEC2Role
 
-  # EC2 Instances
+  # EC2 Instances with SSM-based AMI and custom CloudWatch config
   ProdEnvInstance1:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c02fb55956c7d316
+      ImageId: !Ref LatestAmiId
       InstanceType: !Ref ProdEnvInstanceType
       KeyName: !Ref ProdEnvKeyPair
       SubnetId: !Ref ProdEnvPrivateSubnet1
@@ -230,19 +203,35 @@ Resources:
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c default
+          cat > /opt/aws/amazon-cloudwatch-agent/bin/config.json <<EOF
+          {
+            "logs": {
+              "logs_collected": {
+                "files": {
+                  "collect_list": [
+                    {
+                      "file_path": "/var/log/messages",
+                      "log_group_name": "/prod/app/messages",
+                      "log_stream_name": "{instance_id}"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+          EOF
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+            -a start -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json
+
       Tags:
         - Key: Name
           Value: ProdEnv-Instance1
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   ProdEnvInstance2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c02fb55956c7d316
+      ImageId: !Ref LatestAmiId
       InstanceType: !Ref ProdEnvInstanceType
       KeyName: !Ref ProdEnvKeyPair
       SubnetId: !Ref ProdEnvPrivateSubnet2
@@ -254,28 +243,36 @@ Resources:
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c default
+          cat > /opt/aws/amazon-cloudwatch-agent/bin/config.json <<EOF
+          {
+            "logs": {
+              "logs_collected": {
+                "files": {
+                  "collect_list": [
+                    {
+                      "file_path": "/var/log/messages",
+                      "log_group_name": "/prod/app/messages",
+                      "log_stream_name": "{instance_id}"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+          EOF
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+            -a start -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json
+
       Tags:
         - Key: Name
           Value: ProdEnv-Instance2
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   # SNS Topic
   ProdEnvCpuAlertTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: ProdEnv-CpuAlertTopic
-      DisplayName: ProdEnv CPU Alert Topic
-      Tags:
-        - Key: Name
-          Value: ProdEnv-CpuAlertTopic
-        - Key: Environment
-          Value: production
-        - Key: Project
-          Value: ProdEnv
 
   ProdEnvEmailSubscription:
     Type: AWS::SNS::Subscription
@@ -290,7 +287,6 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: ProdEnvInstance1-HighCPU
-      AlarmDescription: Alarm when CPU exceeds 80% for Instance 1
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -309,7 +305,6 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: ProdEnvInstance2-HighCPU
-      AlarmDescription: Alarm when CPU exceeds 80% for Instance 2
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -326,34 +321,19 @@ Resources:
 
 Outputs:
   ProdEnvVPCId:
-    Description: VPC ID for the production environment
     Value: !Ref ProdEnvVPC
-    Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
 
   ProdEnvDataBucketName:
-    Description: Name of the S3 data bucket
     Value: !Ref ProdEnvDataBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-DataBucket-Name'
 
   ProdEnvSNSTopicArn:
-    Description: ARN of the CPU alert SNS topic
     Value: !Ref ProdEnvCpuAlertTopic
-    Export:
-      Name: !Sub '${AWS::StackName}-SNSTopic-ARN'
 
   ProdEnvInstance1Id:
-    Description: Instance ID of the first EC2 instance
     Value: !Ref ProdEnvInstance1
-    Export:
-      Name: !Sub '${AWS::StackName}-Instance1-ID'
 
   ProdEnvInstance2Id:
-    Description: Instance ID of the second EC2 instance
     Value: !Ref ProdEnvInstance2
-    Export:
-      Name: !Sub '${AWS::StackName}-Instance2-ID'
 ```
 
 ## **Key Features**

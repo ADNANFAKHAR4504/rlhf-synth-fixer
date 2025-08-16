@@ -108,3 +108,100 @@ ProdEnvKeyPair:
 # Then reference it inside each EC2 instance:
 KeyName: !Ref ProdEnvKeyPair
 ```
+
+## **7. Security Group Allows Unrestricted Egress**
+- **Issue**: The security group uses `IpProtocol: -1` with `CidrIp: 10.0.0.0/16`, which allows all outbound traffic. This violates least-privilege and is overly permissive.
+- **Recommended**: Restrict egress specifically to only the ports and services required (e.g., HTTPS 443 for S3 and CloudWatch VPC endpoints).
+
+**Recommended Fix**:
+
+```yaml
+SecurityGroupEgress:
+  - IpProtocol: tcp
+    FromPort: 443
+    ToPort: 443
+    DestinationPrefixListId: !Ref S3VPCEndpointPrefix
+  - IpProtocol: tcp
+    FromPort: 443
+    ToPort: 443
+    DestinationPrefixListId: !Ref CloudWatchVPCEndpointPrefix
+```
+
+## **8. AMI Hardcoding**
+- **Issue**: The template hardcodes the AMI ID (ami-0c02fb55956c7d316) in two places, which makes the stack less portable and requires manual updates when the image becomes outdated.
+- **Recommended**: Replace the hardcoded AMI with a parameter or SSM Parameter Store reference, ensuring automation and future-proofing.
+
+**Recommended Fix**:
+
+```yaml
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+
+# inside EC2:
+ImageId: !Ref LatestAmiId
+```
+
+## **9. Missing VPC Endpoints for S3 / CloudWatch **
+
+- **Issue**: The stack creates a private VPC but still relies on internet access for CloudWatch logs and S3 traffic, which breaks the goal of a fully private network.
+- **Recommended**: Add VPC endpoints for S3 and CloudWatch so EC2 instances can communicate privately without an internet gateway or NAT.
+
+**Recommended Fix**:
+
+```yaml
+S3VPCEndpoint:
+  Type: AWS::EC2::VPCEndpoint
+  Properties:
+    ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+    VpcId: !Ref ProdEnvVPC
+    RouteTableIds:
+      - !Ref ProdEnvPrivateRouteTable
+
+CloudWatchVPCEndpoint:
+  Type: AWS::EC2::VPCEndpoint
+  Properties:
+    ServiceName: !Sub "com.amazonaws.${AWS::Region}.logs"
+    VpcId: !Ref ProdEnvVPC
+    VpcEndpointType: Interface
+    SubnetIds:
+      - !Ref ProdEnvPrivateSubnet1
+      - !Ref ProdEnvPrivateSubnet2
+    SecurityGroupIds:
+      - !Ref ProdEnvSecurityGroup
+```
+
+## **10. Default CloudWatch Agent Configuration **
+
+- **Issue**: The UserData section for EC2 instances uses the default CloudWatch agent settings via -c default, which does not collect custom application or OS-level metrics.
+- **Recommended**: Replace the default config with a custom CloudWatch agent JSON that collects logs or metrics such as /var/log/messages, CPU, memory, etc.
+
+**Recommended Fix**:
+
+```yaml
+UserData:
+  Fn::Base64: |
+    #!/bin/bash
+    yum install -y amazon-cloudwatch-agent
+    cat > /opt/aws/amazon-cloudwatch-agent/bin/config.json <<EOF
+    {
+      "logs": {
+        "logs_collected": {
+          "files": {
+            "collect_list": [
+              {
+                "file_path": "/var/log/messages",
+                "log_group_name": "/prod/app/messages",
+                "log_stream_name": "{instance_id}"
+              }
+            ]
+          }
+        }
+      }
+    }
+    EOF
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+      -a start -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json
+```
