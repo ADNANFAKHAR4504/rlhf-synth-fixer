@@ -1,6 +1,6 @@
 I need some help scaffolding out a new project with a secure, multi-region AWS baseline using Terraform. The project is called "Nova," and the goal is to build a production-ready, secure foundation that we can build on top of.
 
-For this task, could you generate everything in a **single `./lib/main.tf` file**? That means all the variable declarations (including one for `aws_region` that the provider file will use), locals, resources, and outputs should all be in that one file. We'll handle the `provider.tf` separately, but you can assume it's already set up with the necessary aliases for the different regions. Also, let's build all the resources directly for now—no external modules, please. For multi-region you'll define all provider aliases in provider.tf and reference them inside main.tf like provider = aws.
+For this task, could you generate everything in a **single `./lib/main.tf` file**? That means all the variable declarations (including one for aws regions that the provider file will use), locals, resources, and outputs should all be in that one file. We'll handle the `provider.tf` separately, but you can assume it's already set up with the necessary aliases for the different regions. Also, let's build all the resources directly for now—no external modules, please. For multi-region you'll define all provider aliases in provider.tf and reference them inside main.tf like provider = aws.
 
 Security is the top priority, so everything should follow best practices like the principle of least privilege. Here's a breakdown of what we need:
 
