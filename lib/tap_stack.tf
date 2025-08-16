@@ -9,17 +9,17 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name (production, staging, development)"
   type        = string
-  default     = "reset20250816203000"
+  default     = "reset816"
   validation {
-    condition     = contains(["production", "staging", "development", "freshdeploy", "newenv20250815", "cleanstate20250815", "ultrafresh20250816", "reset20250816203000"], var.environment)
-    error_message = "Environment must be one of: production, staging, development, freshdeploy, newenv20250815, cleanstate20250815, ultrafresh20250816, reset20250816203000."
+    condition     = contains(["production", "staging", "development", "freshdeploy", "newenv20250815", "cleanstate20250815", "ultrafresh20250816", "reset20250816203000", "reset816"], var.environment)
+    error_message = "Environment must be one of: production, staging, development, freshdeploy, newenv20250815, cleanstate20250815, ultrafresh20250816, reset20250816203000, reset816."
   }
 }
 
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "fresh-clean-deploy-v4"
+  default     = "fresh-v4"
 }
 
 variable "vpc_cidr" {
@@ -74,7 +74,7 @@ locals {
     DeploymentId = random_string.deployment_id.result
   }
   
-  name_prefix = "${var.project_name}-${var.environment}-${random_string.deployment_id.result}"
+  name_prefix = "${var.project_name}-${random_string.deployment_id.result}"
 }
 
 # Data sources
@@ -99,11 +99,12 @@ resource "random_string" "unique_suffix" {
 
 # Additional random string for complete state reset
 resource "random_string" "deployment_id" {
-  length  = 12
+  length  = 6
   upper   = false
   special = false
   keepers = {
-    deployment = "reset20250816203000"
+    deployment = "reset816"
+    force_recreation = "20250816-025000"
   }
 }
 
@@ -161,6 +162,7 @@ resource "aws_vpc" "main" {
   })
 
   lifecycle {
+    create_before_destroy = true
     replace_triggered_by = [
       random_string.deployment_id
     ]
@@ -289,7 +291,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "vpc_flow_logs" {
-  name = "${local.name_prefix}-vpc-flow-logs-role"
+  name = "${local.name_prefix}-flow-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -308,7 +310,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
 }
 
 resource "aws_iam_role_policy" "vpc_flow_logs" {
-  name = "${local.name_prefix}-vpc-flow-logs-policy"
+  name = "${local.name_prefix}-flow-policy"
   role = aws_iam_role.vpc_flow_logs.id
 
   policy = jsonencode({
@@ -414,7 +416,7 @@ resource "aws_security_group" "database" {
 
 # S3 Buckets
 resource "aws_s3_bucket" "main" {
-  bucket = "${local.name_prefix}-main-bucket-${random_string.unique_suffix.result}-${formatdate("YYYYMMDD-HHmmss", timestamp())}"
+  bucket = "${local.name_prefix}-main-${random_string.unique_suffix.result}"
 
   # Force delete bucket even if not empty
   force_destroy = true
@@ -425,14 +427,11 @@ resource "aws_s3_bucket" "main" {
     replace_triggered_by = [
       random_string.deployment_id
     ]
-    ignore_changes = [
-      bucket  # Ignore changes to bucket name to prevent recreation on timestamp change
-    ]
   }
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${local.name_prefix}-cloudtrail-${random_string.unique_suffix.result}-${formatdate("YYYYMMDD-HHmmss", timestamp())}"
+  bucket = "${local.name_prefix}-trail-${random_string.unique_suffix.result}"
 
   # Force delete bucket even if not empty
   force_destroy = true
@@ -444,9 +443,6 @@ resource "aws_s3_bucket" "cloudtrail" {
   lifecycle {
     replace_triggered_by = [
       random_string.deployment_id
-    ]
-    ignore_changes = [
-      bucket  # Ignore changes to bucket name to prevent recreation on timestamp change
     ]
   }
 }
