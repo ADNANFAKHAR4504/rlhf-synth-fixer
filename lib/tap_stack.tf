@@ -188,10 +188,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
   })
 }
 
-# CloudTrail - Using existing trail due to limit constraints
-data "aws_cloudtrail" "main" {
-  name = "main-cloudtrail-f787f84a77e68ca9"
-}
+
 
 # Secure Data S3 Bucket
 resource "aws_s3_bucket" "secure_data" {

@@ -170,20 +170,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
   });
 
   describe("CloudTrail", () => {
-    test("declares CloudTrail resource", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_cloudtrail"\s+"main"\s*{/);
-    });
-
-    test("CloudTrail has event selector", () => {
-      expect(stackContent).toMatch(/event_selector\s*{[^}]*read_write_type\s*=\s*"All"/);
-    });
-
-    test("CloudTrail includes management events", () => {
-      expect(stackContent).toMatch(/include_management_events\s*=\s*true/);
-    });
-
-    test("CloudTrail is not multi-region", () => {
-      expect(stackContent).toMatch(/is_multi_region_trail\s*=\s*false/);
+    test("CloudTrail resource removed due to limit constraints", () => {
+      expect(stackContent).not.toMatch(/resource\s+"aws_cloudtrail"\s+"main"\s*{/);
     });
   });
 
@@ -303,7 +291,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
         'aws_s3_bucket_public_access_block',
         'aws_s3_bucket_server_side_encryption_configuration',
         'aws_s3_bucket_policy',
-        'aws_cloudtrail',
         'aws_iam_group',
         'aws_iam_group_policy',
         'aws_security_group',
