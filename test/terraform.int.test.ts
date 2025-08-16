@@ -1,96 +1,64 @@
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeInternetGatewaysCommand,
-} from "@aws-sdk/client-ec2";
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeInternetGatewaysCommand } from "@aws-sdk/client-ec2";
 import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
-import { execSync } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
 
-const ec2 = new EC2Client({ region: process.env.AWS_REGION || "us-east-1" });
-const iam = new IAMClient({ region: process.env.AWS_REGION || "us-east-1" });
+const outputPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
+const outputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
 
-/**
- * Run terraform output -json once and parse
- */
-function getTerraformOutputs() {
-  const raw = execSync("terraform output -json", { encoding: "utf-8" });
-  return JSON.parse(raw);
+// normalize helper → always return string[]
+function normalizeToArray(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
-/**
- * Safely extract ID(s) for given environment
- */
-function resolveOutput(outputs: any, key: string, env: string): string | string[] | undefined {
-  if (!outputs[key]) return undefined;
+const environments = ["dev", "prod"];
 
-  // Terraform json output wraps values like { value: { env: "id" } }
-  const val = outputs[key].value;
-
-  if (Array.isArray(val)) return val;
-  if (typeof val === "string") return val;
-  if (val && typeof val === "object") return val[env]; // environment-specific map
-  return undefined;
-}
-
-describe("Terraform Integration Tests (Live AWS Read-Only)", () => {
-  const outputs = getTerraformOutputs();
-  const environments = ["sensitive", "type", "value"];
+describe("Terraform Infrastructure Integration Tests", () => {
+  const ec2 = new EC2Client({ region: "us-east-1" });
+  const iam = new IAMClient({ region: "us-east-1" });
 
   environments.forEach((env) => {
     describe(`Environment: ${env}`, () => {
-      test("VPC exists", async () => {
-        const vpcId = resolveOutput(outputs, "vpc_ids", env);
-        expect(vpcId).toBeDefined();
-        if (!vpcId) return;
+      // Normalize Terraform outputs
+      const vpcIds: string[] = normalizeToArray(outputs.vpc_ids?.[env]);
+      const publicSubnetIds: string[] = normalizeToArray(outputs.public_subnet_ids?.[env]);
+      const privateSubnetIds: string[] = normalizeToArray(outputs.private_subnet_ids?.[env]);
+      const igwIds: string[] = normalizeToArray(outputs.internet_gateway_ids?.[env]);
+      const iamRoleArns: string[] = normalizeToArray(outputs.iam_role_arns?.[env]);
 
-        const resp = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-        expect(resp.Vpcs?.[0]?.VpcId).toBe(vpcId);
+      it("VPC exists", async () => {
+        expect(vpcIds.length).toBeGreaterThan(0);
+        const result = await ec2.send(new DescribeVpcsCommand({ VpcIds: vpcIds }));
+        expect(result.Vpcs?.length).toBeGreaterThan(0);
       });
 
-      test("Public subnets exist", async () => {
-        const publicSubnetIds = resolveOutput(outputs, "public_subnet_ids", env) || [];
+      it("Public subnets exist", async () => {
         expect(publicSubnetIds.length).toBeGreaterThan(0);
-        if (publicSubnetIds.length === 0) return;
-
-        const resp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds }));
-        const returnedIds = resp.Subnets?.map((s) => s.SubnetId) || [];
-        publicSubnetIds.forEach((id: string) => expect(returnedIds).toContain(id));
+        const result = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds }));
+        expect(result.Subnets?.length).toBe(publicSubnetIds.length);
       });
 
-      test("Private subnets exist", async () => {
-        const privateSubnetIds = resolveOutput(outputs, "private_subnet_ids", env) || [];
+      it("Private subnets exist", async () => {
         expect(privateSubnetIds.length).toBeGreaterThan(0);
-        if (privateSubnetIds.length === 0) return;
-
-        const resp = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds }));
-        const returnedIds = resp.Subnets?.map((s) => s.SubnetId) || [];
-        privateSubnetIds.forEach((id: string) => expect(returnedIds).toContain(id));
+        const result = await ec2.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds }));
+        expect(result.Subnets?.length).toBe(privateSubnetIds.length);
       });
 
-      test("Internet Gateway exists", async () => {
-        const igwId = resolveOutput(outputs, "internet_gateway_ids", env);
-        expect(igwId).toBeDefined();
-        if (!igwId) return;
-
-        const resp = await ec2.send(
-          new DescribeInternetGatewaysCommand({ InternetGatewayIds: [igwId] })
-        );
-        expect(resp.InternetGateways?.[0]?.InternetGatewayId).toBe(igwId);
+      it("Internet Gateway exists", async () => {
+        expect(igwIds.length).toBeGreaterThan(0);
+        const result = await ec2.send(new DescribeInternetGatewaysCommand({ InternetGatewayIds: igwIds }));
+        expect(result.InternetGateways?.length).toBe(igwIds.length);
       });
 
-      test("IAM Role exists", async () => {
-        const iamRoleArn = resolveOutput(outputs, "iam_role_arns", env);
-        expect(iamRoleArn).toBeDefined();
-        if (!iamRoleArn) return;
-
-        // handle arrays or strings
-        const arn = Array.isArray(iamRoleArn) ? iamRoleArn[0] : iamRoleArn;
-        const roleName = arn.split("/").pop();
+      it("IAM Role exists", async () => {
+        expect(iamRoleArns.length).toBeGreaterThan(0);
+        const roleArn = iamRoleArns[0];
+        const roleName = roleArn.split("/").pop(); // extract role name from ARN
         expect(roleName).toBeDefined();
 
-        const resp = await iam.send(new GetRoleCommand({ RoleName: roleName! }));
-        expect(resp.Role?.Arn).toBe(arn);
+        const result = await iam.send(new GetRoleCommand({ RoleName: roleName! }));
+        expect(result.Role?.Arn).toBe(roleArn);
       });
     });
   });
