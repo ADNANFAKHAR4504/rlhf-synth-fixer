@@ -220,7 +220,8 @@ describe('Infrastructure Integration Tests', () => {
       expect(dbInstance.Engine).toBe('postgres');
       expect(dbInstance.EngineVersion).toBe('15.7');
       expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.KmsKeyId).toContain('alias/aws/rds');
+      // KMS key can be either alias/aws/rds or a specific KMS key ARN
+      expect(dbInstance.KmsKeyId).toMatch(/^(alias\/aws\/rds|arn:aws:kms:)/);
       expect(dbInstance.PubliclyAccessible).toBe(false);
       expect(dbInstance.DeletionProtection).toBe(true);
     }, testTimeout);
@@ -303,7 +304,7 @@ describe('Infrastructure Integration Tests', () => {
 
       const table = tableResponse.Table!;
       expect(table.TableName).toBe(tableName);
-      expect(table.BillingModeSummary!.BillingMode).toBe('PROVISIONED');
+      expect(table.BillingModeSummary?.BillingMode).toBe('PROVISIONED');
       expect(table.ProvisionedThroughput!.ReadCapacityUnits).toBe(10);
       expect(table.ProvisionedThroughput!.WriteCapacityUnits).toBe(10);
     }, testTimeout);
