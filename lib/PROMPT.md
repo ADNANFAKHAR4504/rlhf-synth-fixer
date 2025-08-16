@@ -1,27 +1,9 @@
-> **Act as an AWS Solutions Architect** and write a complete **AWS CDK** project in **Python** to design and deploy a **highly available, fault-tolerant infrastructure** for a **large-scale e-commerce application** in the **us-west-2** region. The solution must meet the following requirements:
->
-> 1. **Multi-AZ Deployment**
->
->    * Deploy all core application resources (web servers, databases, caches) across **multiple availability zones** for redundancy.
-> 2. **Automated Failover & Health Checks**
->
->    * Use **Elastic Load Balancers (ALB/NLB)** and health checks to automatically failover for stateful services.
-> 3. **Database Replication**
->
->    * Use **Amazon RDS** or **Amazon Aurora** with **asynchronous cross-AZ replication** to minimize data loss during failures.
-> 4. **Networking & VPC Setup**
->
->    * Create a **VPC** with public and private subnets in multiple AZs.
->    * Configure routing, NAT gateways, and security groups with **least privilege** principles.
-> 5. **Failure Detection & Automated Response**
->
->    * Deploy **AWS Lambda** functions triggered by **CloudWatch Alarms** or **EventBridge Rules** to detect failures and take corrective actions.
-> 6. **IAM Roles & Security**
->
->    * Define minimal IAM roles/policies required for EC2, RDS, ElastiCache, and Lambda functions.
-> 7. **Environment Configuration**
->
->    * Support  environments (dev)
->
-> **Output Requirements: give AWS CDK Python code in app.py file**
->
+Imagine you’re an AWS Solutions Architect and you’ve been asked to build a resilient, highly available infrastructure for a big e-commerce platform in us-west-2. The goal is to make sure everything stays up and running—even if something fails—while keeping things secure and easy to manage.
+
+Here’s what we need: all the main resources (like web servers, databases, and caches) should be spread across multiple availability zones so we don’t have a single point of failure. If something goes wrong, we want automated failover and health checks—think load balancers and smart monitoring.
+
+For the database, use RDS or Aurora with cross-AZ replication to keep our data safe. Networking should be solid: a VPC with both public and private subnets, proper routing, NAT gateways, and security groups that follow least privilege.
+
+We also want Lambda functions that can jump in automatically if CloudWatch or EventBridge spots a problem. IAM roles and policies should be as minimal as possible—just enough for EC2, RDS, ElastiCache, and Lambda to do their jobs.
+
+Finally, make sure the setup supports different environments (like dev), and that it’s easy to deploy and manage. When you’re done, please share the Python AWS CDK code (in app.py) that brings all
