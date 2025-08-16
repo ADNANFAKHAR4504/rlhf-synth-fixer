@@ -14,9 +14,71 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('TAP Stack Unit Tests', () => {
+    test('should validate CloudFormation template structure', async () => {
+      // Test that the template has all required sections
+      expect(template.AWSTemplateFormatVersion).toBeDefined();
+      expect(template.Description).toBeDefined();
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
+    });
+
+    test('should have proper environment suffix parameter', () => {
+      const envParam = template.Parameters.EnvironmentSuffix;
+      expect(envParam).toBeDefined();
+      expect(envParam.Type).toBe('String');
+      expect(envParam.Default).toBe('dev');
+      expect(envParam.AllowedPattern).toBeDefined();
+    });
+
+    test('should create DynamoDB table with correct configuration', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table).toBeDefined();
+      expect(table.Type).toBe('AWS::DynamoDB::Table');
+      expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(table.Properties.AttributeDefinitions).toHaveLength(1);
+      expect(table.Properties.AttributeDefinitions[0].AttributeName).toBe('id');
+      expect(table.Properties.AttributeDefinitions[0].AttributeType).toBe('S');
+    });
+
+    test('should have correct key schema', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.Properties.KeySchema).toHaveLength(1);
+      expect(table.Properties.KeySchema[0].AttributeName).toBe('id');
+      expect(table.Properties.KeySchema[0].KeyType).toBe('HASH');
+    });
+
+    test('should have proper deletion policies for dev environment', () => {
+      const table = template.Resources.TurnAroundPromptTable;
+      expect(table.DeletionPolicy).toBe('Delete');
+      expect(table.UpdateReplacePolicy).toBe('Delete');
+      expect(table.Properties.DeletionProtectionEnabled).toBe(false);
+    });
+
+    test('should include all required outputs', () => {
+      const expectedOutputs = [
+        'TurnAroundPromptTableName',
+        'TurnAroundPromptTableArn',
+        'StackName',
+        'EnvironmentSuffix',
+      ];
+
+      expectedOutputs.forEach(outputName => {
+        expect(template.Outputs[outputName]).toBeDefined();
+        expect(template.Outputs[outputName].Description).toBeDefined();
+        expect(template.Outputs[outputName].Value).toBeDefined();
+        expect(template.Outputs[outputName].Export).toBeDefined();
+      });
+    });
+
+    test('should have proper export names for outputs', () => {
+      const outputs = template.Outputs;
+      Object.keys(outputs).forEach(outputKey => {
+        const exportName = outputs[outputKey].Export.Name;
+        expect(exportName).toContain('${AWS::StackName}');
+        expect(exportName).toContain(outputKey);
+      });
     });
   });
 

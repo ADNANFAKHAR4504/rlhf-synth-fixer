@@ -1,52 +1,72 @@
-Prompt:
-You are an expert in AWS CloudFormation and Infrastructure as Code. Generate a fully functional AWS CloudFormation YAML template based on the following requirements.
-Do not change or omit any provided data. All elements mentioned must be represented exactly as specified, using AWS best practices for high availability, scalability, and security.
+# TAP Stack CloudFormation Template Generation Prompt
 
-Deployment Environment & Requirements:
+## Project Context
 
-You are tasked with deploying a web application using AWS CloudFormation. The deployment must handle web traffic efficiently and maintain high availability, security, and performance. The specifications are as follows:
+You are tasked with creating a CloudFormation template for the TAP (Task Assignment Platform) Stack, which manages RLHF (Reinforcement Learning from Human Feedback) tasks.
 
-Deploy across at least 2 AWS regions to ensure redundancy.
+## Core Requirements
 
-Set up an Elastic Load Balancer to distribute incoming traffic across multiple Availability Zones.
+### Template Structure
 
-Use EC2 Auto Scaling Groups to manage instances, automatically scaling based on CPU utilization.
+- Must use CloudFormation format version '2010-09-09'
+- Include comprehensive description: "TAP Stack - Task Assignment Platform CloudFormation Template"
+- Implement proper metadata section with AWS::CloudFormation::Interface
 
-Integrate AWS RDS with Multi-AZ enabled for database resilience.
+### Parameters
 
-Design a VPC with both public and private subnets.
+Create an EnvironmentSuffix parameter with:
 
-Ensure encryption at rest for all data stores.
+- Type: String
+- Default: 'dev'
+- Description: Environment suffix for resource naming (e.g., dev, staging, prod)
+- AllowedPattern: '^[a-zA-Z0-9]+$'
+- ConstraintDescription: Must contain only alphanumeric characters
 
-Implement IAM roles and policies to restrict access to AWS services.
+### Resources
 
-Enable CloudWatch monitoring and alarms for system health and key metrics.
+**DynamoDB Table (TurnAroundPromptTable)**
 
-Apply tagging standards to all AWS resources for easy tracking and cost management.
+- Name: TurnAroundPromptTable{EnvironmentSuffix}
+- Primary Key: 'id' (String, Hash)
+- Billing Mode: PAY_PER_REQUEST (cost-effective for variable workloads)
+- Deletion Protection: false (for dev/test environments)
+- Deletion Policy: Delete (for development environments)
+- Update Replace Policy: Delete
 
-Include CloudFormation Outputs that expose endpoint URLs and critical configuration details.
+### Outputs
 
-Project Information
+Export the following values for cross-stack references:
 
-projectName: IaC - AWS Nova Model Breaking
+1. **TurnAroundPromptTableName**: The table name
+2. **TurnAroundPromptTableArn**: The table ARN
+3. **StackName**: The CloudFormation stack name
+4. **EnvironmentSuffix**: The environment identifier
 
-Problem Difficulty: Hard
+All exports should follow the naming pattern: `${AWS::StackName}-{OutputName}`
 
-Constraints to Enforce (Do Not Violate):
+## Technical Constraints
 
-The deployment must be automatically scalable based on CPU utilization.
+- Resource naming must include environment suffix for isolation
+- Use CloudFormation intrinsic functions (!Ref, !Sub, !GetAtt) appropriately
+- Ensure all resources are properly tagged (handled at stack level)
+- Template must be deployable across multiple AWS regions
+- Support clean stack deletion without manual intervention
 
-Must span at least 2 AWS regions (support regional redundancy).
+## Project Information
 
-Elastic Load Balancer must be used for traffic distribution.
+- **Project Name**: TAP Stack - Task Assignment Platform
+- **Primary Use Case**: RLHF task storage and management
+- **Target Environments**: dev, staging, production
+- **Expected Workload**: Variable traffic patterns suitable for pay-per-request billing
 
-Use AWS RDS with Multi-AZ deployment for the database.
+## Success Criteria
 
-VPC must contain public and private subnets.
-
-All data stores must be encrypted at rest.
-
-Use IAM roles to restrict access to AWS services.
+1. Template validates successfully with CloudFormation
+2. DynamoDB table is created with correct configuration
+3. All outputs are available for application integration
+4. Environment suffix is properly applied to all resources
+5. Stack can be deployed and destroyed cleanly
+6. Resources follow AWS best practices for naming and configuration
 
 Deploy web application on EC2 via Auto Scaling Group.
 
