@@ -449,4 +449,3 @@ output "secure_data_bucket_name" {
 - **Random Naming**: Unique S3 bucket names using random suffixes
 - **Sensitive Outputs**: Bucket name marked as sensitive in Terraform state
 
-This infrastructure provides a secure, compliant foundation suitable for handling sensitive workloads in AWS.
