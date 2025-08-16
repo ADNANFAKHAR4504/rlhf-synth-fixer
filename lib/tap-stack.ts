@@ -33,11 +33,14 @@ export class TapStack extends TerraformStack {
       publicSubnetIds: vpc.publicSubnetIds,
       privateSubnetIds: vpc.privateSubnetIds,
     });
-    new StorageConstruct(this, 'storage');
+    new StorageConstruct(this, 'storage', {
+      environmentSuffix: props.environmentSuffix,
+    });
     new DatabaseConstruct(this, 'database', {
       vpcId: vpc.vpcId,
       privateSubnetIds: vpc.privateSubnetIds,
       securityGroupId: security.rdsSecurityGroupId,
+      environmentSuffix: props.environmentSuffix,
     });
     new DynamoDbConstruct(this, 'dynamodb');
     const compute = new ComputeConstruct(this, 'compute', {
@@ -48,11 +51,20 @@ export class TapStack extends TerraformStack {
       instanceProfile: security.instanceProfile,
       loadBalancerSecurityGroupId: security.loadBalancerSecurityGroupId,
       domainName: 'tapstack.example.com', // <-- update to your real domain
+      environmentSuffix: props.environmentSuffix,
     });
 
     // Output the ARN of the Application Load Balancer
     new TerraformOutput(this, 'albArn', {
       value: compute.albArn,
+    });
+    // Output S3 bucket name
+    new TerraformOutput(this, 'appDataBucketName', {
+      value: `${props.environmentSuffix}-app-data-bucket`,
+    });
+    // Output DB instance identifier
+    new TerraformOutput(this, 'dbInstanceIdentifier', {
+      value: `${props.environmentSuffix}-db`,
     });
   }
 }

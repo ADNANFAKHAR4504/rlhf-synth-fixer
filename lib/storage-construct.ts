@@ -3,13 +3,17 @@ import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { Construct } from 'constructs';
 
+export interface StorageConstructProps {
+  environmentSuffix: string;
+}
+
 export class StorageConstruct extends Construct {
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, props: StorageConstructProps) {
     super(scope, id);
 
     // Application Data Bucket
     const appDataBucket = new S3Bucket(this, 'app-data-bucket', {
-      bucket: 'production-app-data-bucket',
+      bucket: `${props.environmentSuffix}-app-data-bucket`,
       acl: 'private',
       versioning: {
         enabled: true,
@@ -22,8 +26,8 @@ export class StorageConstruct extends Construct {
         },
       },
       tags: {
-        Name: 'production-app-data-bucket',
-        Environment: 'production',
+        Name: `${props.environmentSuffix}-app-data-bucket`,
+        Environment: props.environmentSuffix,
       },
     });
 

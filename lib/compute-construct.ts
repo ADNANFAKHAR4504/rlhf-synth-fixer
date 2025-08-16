@@ -1,6 +1,5 @@
 // Compute construct for production
-import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
-import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
+// Removed ACM imports
 import { AutoscalingAttachment } from '@cdktf/provider-aws/lib/autoscaling-attachment';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
@@ -12,30 +11,29 @@ import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
 import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { Construct } from 'constructs';
 
+export interface ComputeConstructProps {
+  vpcId: string;
+  publicSubnetIds: string[];
+  privateSubnetIds: string[];
+  securityGroupId: string;
+  instanceProfile: string;
+  loadBalancerSecurityGroupId: string;
+  domainName: string;
+  environmentSuffix: string;
+}
+
 export class ComputeConstruct extends Construct {
   public albArn: string;
-  constructor(
-    scope: Construct,
-    id: string,
-    props: {
-      vpcId: string;
-      publicSubnetIds: string[];
-      privateSubnetIds: string[];
-      securityGroupId: string;
-      instanceProfile: string;
-      loadBalancerSecurityGroupId: string;
-      domainName: string;
-    }
-  ) {
+  constructor(scope: Construct, id: string, props: ComputeConstructProps) {
     super(scope, id);
 
     // CloudWatch Log Group for user data logs
     const logGroup = new CloudwatchLogGroup(this, 'user-data-logs', {
-      name: '/aws/ec2/production/user-data',
+      name: `/aws/ec2/${props.environmentSuffix}/user-data`,
       retentionInDays: 30,
       tags: {
-        Name: 'production-user-data-logs',
-        Environment: 'production',
+        Name: `${props.environmentSuffix}-user-data-logs`,
+        Environment: props.environmentSuffix,
       },
     });
 
@@ -108,8 +106,8 @@ echo "$(date): User data script execution completed"
 
     // Launch Template
     const launchTemplate = new LaunchTemplate(this, 'launch-template', {
-      name: 'production-launch-template',
-      description: 'Launch template for production EC2 instances',
+      name: `${props.environmentSuffix}-launch-template`,
+      description: `Launch template for ${props.environmentSuffix} EC2 instances`,
       imageId: ami.id,
       instanceType: 't3.micro',
       keyName: undefined, // No key pair for production security
@@ -136,43 +134,43 @@ echo "$(date): User data script execution completed"
         {
           resourceType: 'instance',
           tags: {
-            Name: 'production-instance',
-            Environment: 'production',
+            Name: `${props.environmentSuffix}-instance`,
+            Environment: props.environmentSuffix,
             LaunchedBy: 'autoscaling-group',
           },
         },
         {
           resourceType: 'volume',
           tags: {
-            Name: 'production-instance-volume',
-            Environment: 'production',
+            Name: `${props.environmentSuffix}-instance-volume`,
+            Environment: props.environmentSuffix,
           },
         },
       ],
       tags: {
-        Name: 'production-launch-template',
-        Environment: 'production',
+        Name: `${props.environmentSuffix}-launch-template`,
+        Environment: props.environmentSuffix,
       },
     });
 
     // Application Load Balancer
     const loadBalancer = new Lb(this, 'load-balancer', {
-      name: 'production-alb',
+      name: `${props.environmentSuffix}-alb`,
       loadBalancerType: 'application',
       internal: false,
       securityGroups: [props.loadBalancerSecurityGroupId],
       subnets: props.publicSubnetIds,
       enableDeletionProtection: false,
       tags: {
-        Name: 'production-alb',
-        Environment: 'production',
+        Name: `${props.environmentSuffix}-alb`,
+        Environment: props.environmentSuffix,
       },
     });
     this.albArn = loadBalancer.arn;
 
     // Target Group
     const targetGroup = new LbTargetGroup(this, 'target-group', {
-      name: 'production-tg',
+      name: `${props.environmentSuffix}-tg`,
       port: 80,
       protocol: 'HTTP',
       vpcId: props.vpcId,
@@ -189,8 +187,8 @@ echo "$(date): User data script execution completed"
         protocol: 'HTTP',
       },
       tags: {
-        Name: 'production-tg',
-        Environment: 'production',
+        Name: `${props.environmentSuffix}-tg`,
+        Environment: props.environmentSuffix,
       },
     });
 
@@ -200,31 +198,14 @@ echo "$(date): User data script execution completed"
       privateZone: false,
     });
 
-    // ACM Certificate (DNS validation)
-    const certificate = new AcmCertificate(this, 'alb-certificate', {
-      domainName: props.domainName,
-      validationMethod: 'DNS',
-      tags: {
-        Name: 'production-alb-certificate',
-        Environment: 'production',
-      },
-    });
-
-    // ACM Certificate Validation
-    new AcmCertificateValidation(this, 'alb-certificate-validation', {
-      certificateArn: certificate.arn,
-      validationRecordFqdns: [
-        // This will be populated automatically by Terraform/CDKTF
-      ],
-    });
+    // Removed ACM certificate and validation resources
 
     // Load Balancer Listener (use certificate.arn)
+    // Add HTTP listener for ALB (no SSL)
     new LbListener(this, 'lb-listener', {
       loadBalancerArn: loadBalancer.arn,
-      port: 443,
-      protocol: 'HTTPS',
-      sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-      certificateArn: certificate.arn,
+      port: 80,
+      protocol: 'HTTP',
       defaultAction: [
         {
           type: 'forward',
@@ -232,14 +213,14 @@ echo "$(date): User data script execution completed"
         },
       ],
       tags: {
-        Name: 'production-lb-listener',
-        Environment: 'production',
+        Name: `${props.environmentSuffix}-lb-listener`,
+        Environment: props.environmentSuffix,
       },
     });
 
     // Auto Scaling Group
     const autoScalingGroup = new AutoscalingGroup(this, 'autoscaling-group', {
-      name: 'production-asg',
+      name: `${props.environmentSuffix}-asg`,
       minSize: 3,
       maxSize: 10,
       desiredCapacity: 3,
@@ -261,12 +242,12 @@ echo "$(date): User data script execution completed"
       tag: [
         {
           key: 'Name',
-          value: 'production-asg-instance',
+          value: `${props.environmentSuffix}-asg-instance`,
           propagateAtLaunch: true,
         },
         {
           key: 'Environment',
-          value: 'production',
+          value: props.environmentSuffix,
           propagateAtLaunch: true,
         },
       ],
