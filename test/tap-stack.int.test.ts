@@ -317,7 +317,7 @@ describe('TAP Stack Integration Tests', () => {
 
       const table = tableResponse.Table!;
       expect(table.TableName).toBe(tableName);
-      expect(table.BillingModeSummary!.BillingMode).toBe('PROVISIONED');
+      expect(table.BillingModeSummary?.BillingMode).toBe('PROVISIONED');
       expect(table.ProvisionedThroughput!.ReadCapacityUnits).toBe(10);
       expect(table.ProvisionedThroughput!.WriteCapacityUnits).toBe(10);
     }, testTimeout);

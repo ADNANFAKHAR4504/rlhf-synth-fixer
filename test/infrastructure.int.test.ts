@@ -30,18 +30,39 @@ import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Load stack outputs from Pulumi
+const stackName = 'TapStack' + process.env.ENVIRONMENT_SUFFIX;
+
+// Load stack outputs from cfn-outputs/all-outputs.json
 const loadStackOutputs = () => {
-  try {
-    const outputsPath = path.join(__dirname, '../cdn-outputs/all-outputs.json');
-    if (!fs.existsSync(outputsPath)) {
-      throw new Error(`Stack outputs file not found at ${outputsPath}`);
-    }
-    const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-    return JSON.parse(outputsContent);
-  } catch (error) {
-    throw new Error(`Failed to load stack outputs: ${error}`);
+  const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+
+  if (!fs.existsSync(outputsPath)) {
+    throw new Error(
+      `Stack outputs file not found: ${outputsPath}. Please deploy the stack first.`
+    );
   }
+
+  const outputsData = fs.readFileSync(outputsPath, 'utf8');
+  const allOutputs = JSON.parse(outputsData);
+
+  // Look for outputs under different possible keys
+  let outputs = allOutputs[stackName] || allOutputs;
+
+  // If the outputs are nested, find the first stack that has actual output values
+  if (typeof outputs === 'object' && Object.keys(outputs).length === 1) {
+    const firstKey = Object.keys(outputs)[0];
+    if (typeof outputs[firstKey] === 'object' && outputs[firstKey] !== null) {
+      outputs = outputs[firstKey];
+    }
+  }
+
+  if (!outputs || Object.keys(outputs).length === 0) {
+    throw new Error(
+      `No outputs found. Available keys: ${Object.keys(allOutputs).join(', ')}`
+    );
+  }
+
+  return outputs;
 };
 
 // Initialize AWS clients for the deployment region
@@ -57,25 +78,9 @@ const initializeClients = (region: string = 'ap-south-1') => {
   };
 };
 
-// Extract resource identifiers from stack outputs
-const extractResourceIds = (outputs: any) => {
-  const resourceIds: any = {};
-  
-  resourceIds.s3BucketId = outputs.s3BucketId;
-  resourceIds.s3BucketArn = outputs.s3BucketArn;
-  resourceIds.iamRoleArn = outputs.iamRoleArn;
-  resourceIds.rdsEndpoint = outputs.rdsEndpoint;
-  resourceIds.rdsInstanceId = outputs.rdsInstanceId;
-  resourceIds.dynamoTableName = outputs.dynamoTableName;
-  resourceIds.dynamoTableArn = outputs.dynamoTableArn;
-  resourceIds.infrastructureSummary = outputs.infrastructureSummary;
-
-  return resourceIds;
-};
 
 describe('Infrastructure Integration Tests', () => {
   let stackOutputs: any;
-  let resourceIds: any;
   let clients: ReturnType<typeof initializeClients>;
   let accountId: string;
   let deploymentRegion: string = 'ap-south-1';
@@ -86,16 +91,9 @@ describe('Infrastructure Integration Tests', () => {
     try {
       stackOutputs = loadStackOutputs();
       
-      const stackName = Object.keys(stackOutputs)[0];
-      if (!stackName) {
-        throw new Error('No stack outputs found');
-      }
-
-      resourceIds = extractResourceIds(stackOutputs[stackName]);
-      
       // Detect deployment region from RDS endpoint if available
-      if (resourceIds?.rdsEndpoint) {
-        const endpointParts = resourceIds.rdsEndpoint.split('.');
+      if (stackOutputs?.rdsEndpoint) {
+        const endpointParts = stackOutputs.rdsEndpoint.split('.');
         if (endpointParts.length >= 3) {
           deploymentRegion = endpointParts[2];
           console.log(`Detected deployment region: ${deploymentRegion} from RDS endpoint`);
@@ -117,7 +115,7 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('S3 Infrastructure', () => {
     it('should have created S3 bucket with correct configuration', async () => {
-      const bucketName = resourceIds.s3BucketId;
+      const bucketName = stackOutputs.s3BucketId;
       expect(bucketName).toBeDefined();
       expect(bucketName).toMatch(/^corp-s3-secure-data-/);
 
@@ -129,7 +127,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have S3 bucket encryption enabled with AWS-managed KMS', async () => {
-      const bucketName = resourceIds.s3BucketId;
+      const bucketName = stackOutputs.s3BucketId;
 
       const encryptionResponse = await clients.s3.send(
         new GetBucketEncryptionCommand({ Bucket: bucketName })
@@ -144,7 +142,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have S3 bucket versioning enabled', async () => {
-      const bucketName = resourceIds.s3BucketId;
+      const bucketName = stackOutputs.s3BucketId;
 
       const versioningResponse = await clients.s3.send(
         new GetBucketVersioningCommand({ Bucket: bucketName })
@@ -154,7 +152,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have S3 bucket public access blocked', async () => {
-      const bucketName = resourceIds.s3BucketId;
+      const bucketName = stackOutputs.s3BucketId;
 
       const publicAccessResponse = await clients.s3.send(
         new GetPublicAccessBlockCommand({ Bucket: bucketName })
@@ -170,7 +168,7 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('IAM Infrastructure', () => {
     it('should have created IAM role with correct configuration', async () => {
-      const roleArn = resourceIds.iamRoleArn;
+      const roleArn = stackOutputs.iamRoleArn;
       expect(roleArn).toBeDefined();
       expect(roleArn).toMatch(/^arn:aws:iam::\d+:role\/corp-iam-role-s3-access-/);
 
@@ -188,7 +186,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have IAM role with attached S3 access policy', async () => {
-      const roleArn = resourceIds.iamRoleArn;
+      const roleArn = stackOutputs.iamRoleArn;
       const roleName = roleArn.split('/').pop();
 
       const attachedPoliciesResponse = await clients.iam.send(
@@ -209,7 +207,7 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('RDS Infrastructure', () => {
     it('should have created RDS instance with correct configuration', async () => {
-      const instanceId = resourceIds.rdsInstanceId;
+      const instanceId = stackOutputs.rdsInstanceId;
       expect(instanceId).toBeDefined();
       expect(instanceId).toMatch(/^corp-rds-primary-/);
 
@@ -228,7 +226,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have RDS subnet group with correct configuration', async () => {
-      const instanceId = resourceIds.rdsInstanceId;
+      const instanceId = stackOutputs.rdsInstanceId;
       
       const rdsResponse = await clients.rds.send(
         new DescribeDBInstancesCommand({ DBInstanceIdentifier: instanceId })
@@ -247,7 +245,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have RDS parameter group with security configurations', async () => {
-      const instanceId = resourceIds.rdsInstanceId;
+      const instanceId = stackOutputs.rdsInstanceId;
       
       const rdsResponse = await clients.rds.send(
         new DescribeDBInstancesCommand({ DBInstanceIdentifier: instanceId })
@@ -266,7 +264,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have RDS security group with restricted access', async () => {
-      const instanceId = resourceIds.rdsInstanceId;
+      const instanceId = stackOutputs.rdsInstanceId;
       
       const rdsResponse = await clients.rds.send(
         new DescribeDBInstancesCommand({ DBInstanceIdentifier: instanceId })
@@ -295,7 +293,7 @@ describe('Infrastructure Integration Tests', () => {
 
   describe('DynamoDB Infrastructure', () => {
     it('should have created DynamoDB table with correct configuration', async () => {
-      const tableName = resourceIds.dynamoTableName;
+      const tableName = stackOutputs.dynamoTableName;
       expect(tableName).toBeDefined();
       expect(tableName).toMatch(/^corp-dynamodb-main-/);
 
@@ -311,7 +309,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have DynamoDB table with encryption enabled', async () => {
-      const tableName = resourceIds.dynamoTableName;
+      const tableName = stackOutputs.dynamoTableName;
 
       const tableResponse = await clients.dynamodb.send(
         new DescribeTableCommand({ TableName: tableName })
@@ -324,7 +322,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have DynamoDB table with Global Secondary Index', async () => {
-      const tableName = resourceIds.dynamoTableName;
+      const tableName = stackOutputs.dynamoTableName;
 
       const tableResponse = await clients.dynamodb.send(
         new DescribeTableCommand({ TableName: tableName })
@@ -341,7 +339,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have DynamoDB table with production features enabled', async () => {
-      const tableName = resourceIds.dynamoTableName;
+      const tableName = stackOutputs.dynamoTableName;
 
       const tableResponse = await clients.dynamodb.send(
         new DescribeTableCommand({ TableName: tableName })
@@ -365,48 +363,48 @@ describe('Infrastructure Integration Tests', () => {
   describe('e2e: End-to-End Infrastructure Validation', () => {
     it('e2e: should validate complete infrastructure deployment', async () => {
       // Verify all resources exist and are properly configured
-      expect(resourceIds.s3BucketId).toBeDefined();
-      expect(resourceIds.iamRoleArn).toBeDefined();
-      expect(resourceIds.rdsEndpoint).toBeDefined();
-      expect(resourceIds.dynamoTableName).toBeDefined();
+      expect(stackOutputs.s3BucketId).toBeDefined();
+      expect(stackOutputs.iamRoleArn).toBeDefined();
+      expect(stackOutputs.rdsEndpoint).toBeDefined();
+      expect(stackOutputs.dynamoTableName).toBeDefined();
       
       // Verify infrastructure summary
-      expect(resourceIds.infrastructureSummary).toBeDefined();
-      expect(resourceIds.infrastructureSummary.region).toBe(deploymentRegion);
-      expect(resourceIds.infrastructureSummary.encryptionStatus).toContain('AWS-managed KMS keys');
+      expect(stackOutputs.infrastructureSummary).toBeDefined();
+      expect(stackOutputs.infrastructureSummary.region).toBe(deploymentRegion);
+      expect(stackOutputs.infrastructureSummary.encryptionStatus).toContain('AWS-managed KMS keys');
     }, testTimeout);
 
     it('e2e: should validate resource naming conventions', async () => {
       // All resources should follow corp-{service}-{purpose}-{env} pattern
-      expect(resourceIds.s3BucketId).toMatch(/^corp-s3-secure-data-/);
-      expect(resourceIds.iamRoleArn).toMatch(/corp-iam-role-s3-access-/);
-      expect(resourceIds.rdsInstanceId).toMatch(/^corp-rds-primary-/);
-      expect(resourceIds.dynamoTableName).toMatch(/^corp-dynamodb-main-/);
+      expect(stackOutputs.s3BucketId).toMatch(/^corp-s3-secure-data-/);
+      expect(stackOutputs.iamRoleArn).toMatch(/corp-iam-role-s3-access-/);
+      expect(stackOutputs.rdsInstanceId).toMatch(/^corp-rds-primary-/);
+      expect(stackOutputs.dynamoTableName).toMatch(/^corp-dynamodb-main-/);
     }, testTimeout);
 
     it('e2e: should validate security configurations across all services', async () => {
       // S3 - Verify encryption
       const s3EncryptionResponse = await clients.s3.send(
-        new GetBucketEncryptionCommand({ Bucket: resourceIds.s3BucketId })
+        new GetBucketEncryptionCommand({ Bucket: stackOutputs.s3BucketId })
       );
       expect(s3EncryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
 
       // RDS - Verify encryption
       const rdsResponse = await clients.rds.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: resourceIds.rdsInstanceId })
+        new DescribeDBInstancesCommand({ DBInstanceIdentifier: stackOutputs.rdsInstanceId })
       );
       expect(rdsResponse.DBInstances![0].StorageEncrypted).toBe(true);
 
       // DynamoDB - Verify encryption
       const dynamoResponse = await clients.dynamodb.send(
-        new DescribeTableCommand({ TableName: resourceIds.dynamoTableName })
+        new DescribeTableCommand({ TableName: stackOutputs.dynamoTableName })
       );
       expect(dynamoResponse.Table!.SSEDescription!.Status).toBe('ENABLED');
     }, testTimeout);
 
     it('e2e: should validate cross-service integration', async () => {
       // Verify IAM role can access S3 bucket (policy validation)
-      const roleArn = resourceIds.iamRoleArn;
+      const roleArn = stackOutputs.iamRoleArn;
       const roleName = roleArn.split('/').pop();
 
       const attachedPoliciesResponse = await clients.iam.send(
@@ -425,16 +423,16 @@ describe('Infrastructure Integration Tests', () => {
       expect(deploymentRegion).toBe('ap-south-1');
       
       // Verify RDS endpoint contains correct region
-      expect(resourceIds.rdsEndpoint).toContain('.ap-south-1.');
+      expect(stackOutputs.rdsEndpoint).toContain('.ap-south-1.');
       
       // Verify DynamoDB table ARN contains correct region
-      expect(resourceIds.dynamoTableArn).toContain(':ap-south-1:');
+      expect(stackOutputs.dynamoTableArn).toContain(':ap-south-1:');
     }, testTimeout);
   });
 
   describe('Performance and Monitoring', () => {
     it('should have RDS Performance Insights enabled', async () => {
-      const instanceId = resourceIds.rdsInstanceId;
+      const instanceId = stackOutputs.rdsInstanceId;
       
       const rdsResponse = await clients.rds.send(
         new DescribeDBInstancesCommand({ DBInstanceIdentifier: instanceId })
@@ -446,7 +444,7 @@ describe('Infrastructure Integration Tests', () => {
     }, testTimeout);
 
     it('should have proper backup configuration for RDS', async () => {
-      const instanceId = resourceIds.rdsInstanceId;
+      const instanceId = stackOutputs.rdsInstanceId;
       
       const rdsResponse = await clients.rds.send(
         new DescribeDBInstancesCommand({ DBInstanceIdentifier: instanceId })
@@ -463,21 +461,21 @@ describe('Infrastructure Integration Tests', () => {
     it('should have proper resource tagging', async () => {
       // This would require additional AWS API calls to verify tags
       // For now, we verify that resources exist with expected names
-      expect(resourceIds.s3BucketId).toMatch(/^corp-/);
-      expect(resourceIds.dynamoTableName).toMatch(/^corp-/);
-      expect(resourceIds.rdsInstanceId).toMatch(/^corp-/);
+      expect(stackOutputs.s3BucketId).toMatch(/^corp-/);
+      expect(stackOutputs.dynamoTableName).toMatch(/^corp-/);
+      expect(stackOutputs.rdsInstanceId).toMatch(/^corp-/);
     }, testTimeout);
 
     it('should have deletion protection enabled where appropriate', async () => {
       // RDS deletion protection
       const rdsResponse = await clients.rds.send(
-        new DescribeDBInstancesCommand({ DBInstanceIdentifier: resourceIds.rdsInstanceId })
+        new DescribeDBInstancesCommand({ DBInstanceIdentifier: stackOutputs.rdsInstanceId })
       );
       expect(rdsResponse.DBInstances![0].DeletionProtection).toBe(true);
 
       // DynamoDB deletion protection
       const dynamoResponse = await clients.dynamodb.send(
-        new DescribeTableCommand({ TableName: resourceIds.dynamoTableName })
+        new DescribeTableCommand({ TableName: stackOutputs.dynamoTableName })
       );
       expect(dynamoResponse.Table!.DeletionProtectionEnabled).toBe(true);
     }, testTimeout);
