@@ -43,6 +43,7 @@ Parameters:
 
   DateSuffix:
     Type: String
+    Default: 'production'
     Description: Short date/timestamp to make bucket names unique
     AllowedPattern: '^[a-z0-9-]+$'
 
