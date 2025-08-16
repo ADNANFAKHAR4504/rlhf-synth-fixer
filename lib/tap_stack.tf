@@ -1356,7 +1356,7 @@ resource "aws_instance" "bastion_use1" {
     kms_key_id  = aws_kms_key.use1.arn
   }
 
-  user_data = base64encode(templatefile("${path.module}/user-data/bastion.sh", {
+  user_data_base64 = base64encode(templatefile("${path.module}/user-data/bastion.sh", {
     log_group = aws_cloudwatch_log_group.use1_bastion.name
     region    = "us-east-1"
   }))
@@ -1384,7 +1384,7 @@ resource "aws_instance" "bastion_usw2" {
     kms_key_id  = aws_kms_key.usw2.arn
   }
 
-  user_data = base64encode(templatefile("${path.module}/user-data/bastion.sh", {
+  user_data_base64 = base64encode(templatefile("${path.module}/user-data/bastion.sh", {
     log_group = aws_cloudwatch_log_group.usw2_bastion.name
     region    = "us-west-2"
   }))
@@ -1418,7 +1418,7 @@ resource "aws_launch_template" "use1_app" {
     }
   }
 
-  user_data = base64encode(templatefile("${path.module}/user-data/app.sh", {
+  user_data_base64 = base64encode(templatefile("${path.module}/user-data/app.sh", {
     log_group = aws_cloudwatch_log_group.use1_app.name
     region    = "us-east-1"
   }))
@@ -1459,7 +1459,7 @@ resource "aws_launch_template" "usw2_app" {
     }
   }
 
-  user_data = base64encode(templatefile("${path.module}/user-data/app.sh", {
+  user_data_base64 = base64encode(templatefile("${path.module}/user-data/app.sh", {
     log_group = aws_cloudwatch_log_group.usw2_app.name
     region    = "us-west-2"
   }))
@@ -1707,12 +1707,10 @@ resource "aws_lb_listener" "usw2_http_redirect" {
 
 # Auto Scaling Groups
 resource "aws_autoscaling_group" "use1_app" {
-  provider                  = aws.use1
-  name                      = "${local.use1_name_prefix}-app-asg"
-  vpc_zone_identifier       = aws_subnet.use1_private[*].id
-  target_group_arns         = [aws_lb_target_group.use1_app.arn]
-  health_check_type         = "ELB"
-  health_check_grace_period = 300
+  provider            = aws.use1
+  name                = "${local.use1_name_prefix}-app-asg"
+  vpc_zone_identifier = aws_subnet.use1_private[*].id
+  target_group_arns   = [aws_lb_target_group.use1_app.arn]
 
   min_size         = var.asg_min_size
   max_size         = var.asg_max_size
@@ -1748,12 +1746,10 @@ resource "aws_autoscaling_group" "use1_app" {
 }
 
 resource "aws_autoscaling_group" "usw2_app" {
-  provider                  = aws.usw2
-  name                      = "${local.usw2_name_prefix}-app-asg"
-  vpc_zone_identifier       = aws_subnet.usw2_private[*].id
-  target_group_arns         = [aws_lb_target_group.usw2_app.arn]
-  health_check_type         = "ELB"
-  health_check_grace_period = 300
+  provider            = aws.usw2
+  name                = "${local.usw2_name_prefix}-app-asg"
+  vpc_zone_identifier = aws_subnet.usw2_private[*].id
+  target_group_arns   = [aws_lb_target_group.usw2_app.arn]
 
   min_size         = var.asg_min_size
   max_size         = var.asg_max_size
@@ -2521,6 +2517,19 @@ resource "aws_s3_bucket_policy" "use1_logs" {
       {
         Effect = "Allow"
         Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.use1_logs.arn}/alb/AWSLogs/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
           Service = "delivery.logs.amazonaws.com"
         }
         Action   = "s3:PutObject"
@@ -2557,6 +2566,19 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.usw2_logs.arn}/alb/AWSLogs/*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.usw2_logs.arn}/alb/AWSLogs/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
       },
       {
         Effect = "Allow"
