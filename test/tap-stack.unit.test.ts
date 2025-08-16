@@ -1,210 +1,428 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
+describe('TapStack CloudFormation Template Unit Tests', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
+    // Load JSON template (YAML has CloudFormation functions that js-yaml doesn't understand)
+    // The JSON is already converted from YAML using cfn-flip
+    const jsonPath = path.join(__dirname, '..', 'lib', 'TapStack.json');
+    const jsonContent = fs.readFileSync(jsonPath, 'utf8');
+    template = JSON.parse(jsonContent);
   });
 
   describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
+    test('should have correct AWSTemplateFormatVersion', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
+      expect(template.Description.toLowerCase()).toContain('serverless');
+      expect(template.Description).toContain('e-commerce');
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should have Parameters section', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(Object.keys(template.Parameters).length).toBeGreaterThan(0);
+    });
+
+    test('should have Resources section', () => {
+      expect(template.Resources).toBeDefined();
+      expect(Object.keys(template.Resources).length).toBeGreaterThan(0);
+    });
+
+    test('should have Outputs section', () => {
+      expect(template.Outputs).toBeDefined();
+      expect(Object.keys(template.Outputs).length).toBeGreaterThan(0);
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have ProjectName parameter', () => {
+      expect(template.Parameters.ProjectName).toBeDefined();
+      expect(template.Parameters.ProjectName.Type).toBe('String');
+      expect(template.Parameters.ProjectName.Default).toBe('ecommerce-orders');
+      expect(template.Parameters.ProjectName.AllowedPattern).toBe('^[a-z0-9-]+$');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should have Environment parameter', () => {
+      expect(template.Parameters.Environment).toBeDefined();
+      expect(template.Parameters.Environment.Type).toBe('String');
+      expect(template.Parameters.Environment.Default).toBe('dev');
+      expect(template.Parameters.Environment.AllowedValues).toContain('dev');
+      expect(template.Parameters.Environment.AllowedValues).toContain('staging');
+      expect(template.Parameters.Environment.AllowedValues).toContain('prod');
+    });
+
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
+      expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
+      expect(template.Parameters.EnvironmentSuffix.AllowedPattern).toBe('^[a-z0-9-]+$');
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('DynamoDB Table', () => {
+    test('should have OrdersTable resource', () => {
+      expect(template.Resources.OrdersTable).toBeDefined();
+      expect(template.Resources.OrdersTable.Type).toBe('AWS::DynamoDB::Table');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('should have correct DeletionPolicy', () => {
+      expect(template.Resources.OrdersTable.DeletionPolicy).toBe('Delete');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('should use EnvironmentSuffix in table name', () => {
+      const tableName = template.Resources.OrdersTable.Properties.TableName;
+      expect(tableName).toBeDefined();
+      expect(tableName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
+    test('should have orderId as partition key', () => {
+      const attributeDefs = template.Resources.OrdersTable.Properties.AttributeDefinitions;
+      expect(attributeDefs).toHaveLength(1);
+      expect(attributeDefs[0].AttributeName).toBe('orderId');
+      expect(attributeDefs[0].AttributeType).toBe('S');
 
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
-
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
+      const keySchema = template.Resources.OrdersTable.Properties.KeySchema;
       expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
+      expect(keySchema[0].AttributeName).toBe('orderId');
       expect(keySchema[0].KeyType).toBe('HASH');
+    });
+
+    test('should use ON_DEMAND billing mode', () => {
+      expect(template.Resources.OrdersTable.Properties.BillingMode).toBe('ON_DEMAND');
+    });
+
+    test('should have Point-in-Time Recovery enabled', () => {
+      const pitr = template.Resources.OrdersTable.Properties.PointInTimeRecoverySpecification;
+      expect(pitr).toBeDefined();
+      expect(pitr.PointInTimeRecoveryEnabled).toBe(true);
+    });
+
+    test('should have Server-Side Encryption enabled', () => {
+      const sse = template.Resources.OrdersTable.Properties.SSESpecification;
+      expect(sse).toBeDefined();
+      expect(sse.SSEEnabled).toBe(true);
+    });
+
+    test('should have proper tags', () => {
+      const tags = template.Resources.OrdersTable.Properties.Tags;
+      expect(tags).toBeDefined();
+      expect(tags).toHaveLength(2);
+      expect(tags.some((tag: any) => tag.Key === 'Project')).toBe(true);
+      expect(tags.some((tag: any) => tag.Key === 'Environment')).toBe(true);
+    });
+  });
+
+  describe('IAM Role', () => {
+    test('should have OrderProcessorLambdaRole resource', () => {
+      expect(template.Resources.OrderProcessorLambdaRole).toBeDefined();
+      expect(template.Resources.OrderProcessorLambdaRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('should use EnvironmentSuffix in role name', () => {
+      const roleName = template.Resources.OrderProcessorLambdaRole.Properties.RoleName;
+      expect(roleName).toBeDefined();
+      expect(roleName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+    });
+
+    test('should have correct AssumeRolePolicyDocument', () => {
+      const policy = template.Resources.OrderProcessorLambdaRole.Properties.AssumeRolePolicyDocument;
+      expect(policy.Version).toBe('2012-10-17');
+      expect(policy.Statement[0].Effect).toBe('Allow');
+      expect(policy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(policy.Statement[0].Action).toBe('sts:AssumeRole');
+    });
+
+    test('should have AWSLambdaBasicExecutionRole managed policy', () => {
+      const managedPolicies = template.Resources.OrderProcessorLambdaRole.Properties.ManagedPolicyArns;
+      expect(managedPolicies).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
+    });
+
+    test('should have DynamoDB access policy', () => {
+      const policies = template.Resources.OrderProcessorLambdaRole.Properties.Policies;
+      expect(policies).toHaveLength(1);
+      expect(policies[0].PolicyName).toBe('DynamoDBAccess');
+      
+      const statement = policies[0].PolicyDocument.Statement[0];
+      expect(statement.Effect).toBe('Allow');
+      expect(statement.Action).toContain('dynamodb:PutItem');
+      expect(statement.Action).toContain('dynamodb:GetItem');
+      expect(statement.Action).toContain('dynamodb:UpdateItem');
+    });
+  });
+
+  describe('Lambda Function', () => {
+    test('should have OrderProcessorFunction resource', () => {
+      expect(template.Resources.OrderProcessorFunction).toBeDefined();
+      expect(template.Resources.OrderProcessorFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('should use EnvironmentSuffix in function name', () => {
+      const functionName = template.Resources.OrderProcessorFunction.Properties.FunctionName;
+      expect(functionName).toBeDefined();
+      expect(functionName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+    });
+
+    test('should have correct runtime and handler', () => {
+      const props = template.Resources.OrderProcessorFunction.Properties;
+      expect(props.Runtime).toBe('python3.9');
+      expect(props.Handler).toBe('index.lambda_handler');
+    });
+
+    test('should have correct memory and timeout settings', () => {
+      const props = template.Resources.OrderProcessorFunction.Properties;
+      expect(props.MemorySize).toBe(256);
+      expect(props.Timeout).toBe(30);
+    });
+
+    test('should reference IAM role correctly', () => {
+      const role = template.Resources.OrderProcessorFunction.Properties.Role;
+      expect(role['Fn::GetAtt']).toEqual(['OrderProcessorLambdaRole', 'Arn']);
+    });
+
+    test('should have environment variables', () => {
+      const envVars = template.Resources.OrderProcessorFunction.Properties.Environment.Variables;
+      expect(envVars.ORDERS_TABLE_NAME).toBeDefined();
+      expect(envVars.ORDERS_TABLE_NAME.Ref).toBe('OrdersTable');
+      expect(envVars.ENVIRONMENT).toBeDefined();
+      expect(envVars.ENVIRONMENT.Ref).toBe('Environment');
+    });
+
+    test('should have inline code', () => {
+      const code = template.Resources.OrderProcessorFunction.Properties.Code.ZipFile;
+      expect(code).toBeDefined();
+      expect(code).toContain('lambda_handler');
+      expect(code).toContain('dynamodb');
+      expect(code).toContain('orderId');
+    });
+  });
+
+  describe('API Gateway', () => {
+    test('should have OrdersHttpApi resource', () => {
+      expect(template.Resources.OrdersHttpApi).toBeDefined();
+      expect(template.Resources.OrdersHttpApi.Type).toBe('AWS::ApiGatewayV2::Api');
+    });
+
+    test('should use EnvironmentSuffix in API name', () => {
+      const apiName = template.Resources.OrdersHttpApi.Properties.Name;
+      expect(apiName).toBeDefined();
+      expect(apiName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+    });
+
+    test('should be HTTP protocol type', () => {
+      expect(template.Resources.OrdersHttpApi.Properties.ProtocolType).toBe('HTTP');
+    });
+
+    test('should have CORS configuration', () => {
+      const cors = template.Resources.OrdersHttpApi.Properties.CorsConfiguration;
+      expect(cors).toBeDefined();
+      expect(cors.AllowCredentials).toBe(false);
+      expect(cors.AllowMethods).toContain('POST');
+      expect(cors.AllowMethods).toContain('OPTIONS');
+      expect(cors.AllowOrigins).toContain('*');
+      expect(cors.MaxAge).toBe(300);
+    });
+
+    test('should have OrdersApiIntegration resource', () => {
+      expect(template.Resources.OrdersApiIntegration).toBeDefined();
+      expect(template.Resources.OrdersApiIntegration.Type).toBe('AWS::ApiGatewayV2::Integration');
+    });
+
+    test('should have correct integration type', () => {
+      const integration = template.Resources.OrdersApiIntegration.Properties;
+      expect(integration.IntegrationType).toBe('AWS_PROXY');
+      expect(integration.PayloadFormatVersion).toBe('2.0');
+    });
+
+    test('should have OrdersApiRoute resource', () => {
+      expect(template.Resources.OrdersApiRoute).toBeDefined();
+      expect(template.Resources.OrdersApiRoute.Type).toBe('AWS::ApiGatewayV2::Route');
+    });
+
+    test('should have correct route configuration', () => {
+      const route = template.Resources.OrdersApiRoute.Properties;
+      expect(route.RouteKey).toBe('POST /orders');
+      expect(route.AuthorizationType).toBe('NONE');
+    });
+
+    test('should have OrdersApiStage resource', () => {
+      expect(template.Resources.OrdersApiStage).toBeDefined();
+      expect(template.Resources.OrdersApiStage.Type).toBe('AWS::ApiGatewayV2::Stage');
+    });
+
+    test('should have AutoDeploy enabled', () => {
+      expect(template.Resources.OrdersApiStage.Properties.AutoDeploy).toBe(true);
+    });
+  });
+
+  describe('Lambda Permission', () => {
+    test('should have ApiGatewayLambdaPermission resource', () => {
+      expect(template.Resources.ApiGatewayLambdaPermission).toBeDefined();
+      expect(template.Resources.ApiGatewayLambdaPermission.Type).toBe('AWS::Lambda::Permission');
+    });
+
+    test('should have correct permission properties', () => {
+      const permission = template.Resources.ApiGatewayLambdaPermission.Properties;
+      expect(permission.Action).toBe('lambda:InvokeFunction');
+      expect(permission.Principal).toBe('apigateway.amazonaws.com');
+      expect(permission.FunctionName.Ref).toBe('OrderProcessorFunction');
+    });
+
+    test('should have correct SourceArn format', () => {
+      const sourceArn = template.Resources.ApiGatewayLambdaPermission.Properties.SourceArn;
+      expect(sourceArn['Fn::Sub']).toContain('arn:aws:execute-api');
+      expect(sourceArn['Fn::Sub']).toContain('${AWS::Region}');
+      expect(sourceArn['Fn::Sub']).toContain('${AWS::AccountId}');
+      expect(sourceArn['Fn::Sub']).toContain('${OrdersHttpApi}');
+    });
+  });
+
+  describe('CloudWatch Logs', () => {
+    test('should have ApiGatewayLogGroup resource', () => {
+      expect(template.Resources.ApiGatewayLogGroup).toBeDefined();
+      expect(template.Resources.ApiGatewayLogGroup.Type).toBe('AWS::Logs::LogGroup');
+    });
+
+    test('should use EnvironmentSuffix in log group name', () => {
+      const logGroupName = template.Resources.ApiGatewayLogGroup.Properties.LogGroupName;
+      expect(logGroupName).toBeDefined();
+      expect(logGroupName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+    });
+
+    test('should have Delete deletion policy', () => {
+      expect(template.Resources.ApiGatewayLogGroup.DeletionPolicy).toBe('Delete');
+    });
+
+    test('should have retention period set', () => {
+      expect(template.Resources.ApiGatewayLogGroup.Properties.RetentionInDays).toBe(14);
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
+    test('should have ApiGatewayEndpoint output', () => {
+      expect(template.Outputs.ApiGatewayEndpoint).toBeDefined();
+      expect(template.Outputs.ApiGatewayEndpoint.Description).toContain('API Gateway endpoint');
+      expect(template.Outputs.ApiGatewayEndpoint.Value['Fn::Sub']).toContain('https://');
+      expect(template.Outputs.ApiGatewayEndpoint.Value['Fn::Sub']).toContain('/orders');
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('should have DynamoDBTableName output', () => {
+      expect(template.Outputs.DynamoDBTableName).toBeDefined();
+      expect(template.Outputs.DynamoDBTableName.Description).toContain('DynamoDB table');
+      expect(template.Outputs.DynamoDBTableName.Value.Ref).toBe('OrdersTable');
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
+    test('should have LambdaFunctionArn output', () => {
+      expect(template.Outputs.LambdaFunctionArn).toBeDefined();
+      expect(template.Outputs.LambdaFunctionArn.Description).toContain('Lambda function ARN');
+      expect(template.Outputs.LambdaFunctionArn.Value['Fn::GetAtt']).toEqual(['OrderProcessorFunction', 'Arn']);
     });
 
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
+    test('should have LambdaFunctionName output', () => {
+      expect(template.Outputs.LambdaFunctionName).toBeDefined();
+      expect(template.Outputs.LambdaFunctionName.Description).toContain('Lambda function name');
+      expect(template.Outputs.LambdaFunctionName.Value.Ref).toBe('OrderProcessorFunction');
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
-    });
-  });
-
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
+    test('should have ApiGatewayId output', () => {
+      expect(template.Outputs.ApiGatewayId).toBeDefined();
+      expect(template.Outputs.ApiGatewayId.Description).toContain('API Gateway ID');
+      expect(template.Outputs.ApiGatewayId.Value.Ref).toBe('OrdersHttpApi');
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
+    test('all outputs should have Export names', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+        expect(template.Outputs[outputKey].Export).toBeDefined();
+        expect(template.Outputs[outputKey].Export.Name).toBeDefined();
       });
+    });
+  });
+
+  describe('Template Consistency', () => {
+    test('all resources should be properly referenced', () => {
+      // Check that Lambda references the IAM role
+      expect(template.Resources.OrderProcessorFunction.Properties.Role['Fn::GetAtt'][0]).toBe('OrderProcessorLambdaRole');
+      
+      // Check that IAM role policy references DynamoDB table
+      expect(template.Resources.OrderProcessorLambdaRole.Properties.Policies[0].PolicyDocument.Statement[0].Resource['Fn::GetAtt'][0]).toBe('OrdersTable');
+      
+      // Check that Lambda permission references the function
+      expect(template.Resources.ApiGatewayLambdaPermission.Properties.FunctionName.Ref).toBe('OrderProcessorFunction');
+      
+      // Check that API integration references the Lambda function
+      expect(template.Resources.OrdersApiIntegration.Properties.IntegrationUri['Fn::Sub']).toContain('${OrderProcessorFunction.Arn}');
+      
+      // Check that API route references the integration
+      expect(template.Resources.OrdersApiRoute.Properties.Target['Fn::Sub']).toContain('${OrdersApiIntegration}');
+      
+      // Check that API stage references the API
+      expect(template.Resources.OrdersApiStage.Properties.ApiId.Ref).toBe('OrdersHttpApi');
+    });
+  });
+
+  describe('High Availability and Scalability', () => {
+    test('should use services that support auto-scaling', () => {
+      // Lambda auto-scales by default
+      expect(template.Resources.OrderProcessorFunction.Type).toBe('AWS::Lambda::Function');
+      
+      // DynamoDB with ON_DEMAND billing auto-scales
+      expect(template.Resources.OrdersTable.Properties.BillingMode).toBe('ON_DEMAND');
+      
+      // API Gateway HTTP API auto-scales
+      expect(template.Resources.OrdersHttpApi.Type).toBe('AWS::ApiGatewayV2::Api');
+      expect(template.Resources.OrdersHttpApi.Properties.ProtocolType).toBe('HTTP');
+    });
+
+    test('should not have any single points of failure', () => {
+      // All AWS services used are multi-AZ by default
+      const resourceTypes = Object.values(template.Resources).map((r: any) => r.Type);
+      
+      const multiAZServices = [
+        'AWS::DynamoDB::Table',
+        'AWS::Lambda::Function',
+        'AWS::Lambda::Permission',
+        'AWS::ApiGatewayV2::Api',
+        'AWS::ApiGatewayV2::Integration',
+        'AWS::ApiGatewayV2::Route',
+        'AWS::ApiGatewayV2::Stage',
+        'AWS::IAM::Role',
+        'AWS::Logs::LogGroup'
+      ];
+      
+      resourceTypes.forEach(type => {
+        expect(multiAZServices.some(service => type === service || type.startsWith(service))).toBe(true);
+      });
+    });
+  });
+
+  describe('Security Best Practices', () => {
+    test('should follow least privilege principle for IAM', () => {
+      const policies = template.Resources.OrderProcessorLambdaRole.Properties.Policies;
+      const dynamoPolicy = policies[0].PolicyDocument.Statement[0];
+      
+      // Should only have required DynamoDB actions
+      expect(dynamoPolicy.Action).toHaveLength(3);
+      expect(dynamoPolicy.Action).toContain('dynamodb:PutItem');
+      expect(dynamoPolicy.Action).toContain('dynamodb:GetItem');
+      expect(dynamoPolicy.Action).toContain('dynamodb:UpdateItem');
+      
+      // Should reference specific table ARN, not wildcard
+      expect(dynamoPolicy.Resource['Fn::GetAtt']).toBeDefined();
+    });
+
+    test('should have encryption enabled where applicable', () => {
+      // DynamoDB encryption
+      expect(template.Resources.OrdersTable.Properties.SSESpecification.SSEEnabled).toBe(true);
+    });
+
+    test('should have appropriate deletion policies', () => {
+      // For test environments, resources should be deletable
+      expect(template.Resources.OrdersTable.DeletionPolicy).toBe('Delete');
+      expect(template.Resources.ApiGatewayLogGroup.DeletionPolicy).toBe('Delete');
     });
   });
 });

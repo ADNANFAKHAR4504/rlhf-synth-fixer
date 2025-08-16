@@ -18,15 +18,22 @@ Parameters:
       - dev
       - staging
       - prod
+  
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming to avoid conflicts'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
 
 # Resources section - Core infrastructure components
 Resources:
   # DynamoDB Table for storing order data
   OrdersTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Retain # Prevent accidental data loss
+    DeletionPolicy: Delete # Allow deletion for test environments
     Properties:
-      TableName: !Sub '${ProjectName}-${Environment}-orders'
+      TableName: !Sub '${ProjectName}-${EnvironmentSuffix}-orders'
       # Primary key configuration for order data
       AttributeDefinitions:
         - AttributeName: orderId
@@ -52,6 +59,7 @@ Resources:
   OrderProcessorLambdaRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${ProjectName}-${EnvironmentSuffix}-lambda-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -84,7 +92,7 @@ Resources:
   OrderProcessorFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-${Environment}-order-processor'
+      FunctionName: !Sub '${ProjectName}-${EnvironmentSuffix}-order-processor'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt OrderProcessorLambdaRole.Arn
@@ -180,13 +188,13 @@ Resources:
       FunctionName: !Ref OrderProcessorFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${OrdersHttpApi}/*/POST/orders'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${OrdersHttpApi}/*/*'
 
   # HTTP API Gateway for exposing the order processing endpoint
   OrdersHttpApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: !Sub '${ProjectName}-${Environment}-orders-api'
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-orders-api'
       Description: 'HTTP API for e-commerce order processing'
       ProtocolType: HTTP
       # CORS configuration for web applications
@@ -245,8 +253,9 @@ Resources:
   # CloudWatch Log Group for API Gateway access logs
   ApiGatewayLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
     Properties:
-      LogGroupName: !Sub '/aws/apigateway/${ProjectName}-${Environment}-orders-api'
+      LogGroupName: !Sub '/aws/apigateway/${ProjectName}-${EnvironmentSuffix}-orders-api'
       RetentionInDays: 14
 
 # Outputs section - Important resource identifiers and endpoints
