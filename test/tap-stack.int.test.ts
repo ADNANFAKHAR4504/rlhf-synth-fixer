@@ -323,7 +323,7 @@ describe('TAP Infrastructure Integration Tests', () => {
         expect(attachedPolicies.length).toBeGreaterThan(0);
 
         // Should have SSM policy for secure access
-        const ssmPolicy = attachedPolicies.find((policy: any) => 
+        const ssmPolicy = attachedPolicies.find((policy: any) =>
           policy.PolicyName?.includes('SSM') || policy.PolicyArn?.includes('SSM')
         );
         expect(ssmPolicy).toBeDefined();
@@ -624,7 +624,7 @@ describe('TAP Infrastructure Integration Tests', () => {
     }, 60000);
   });
 
-  describe('PROMPT.md Requirements Validation', () => {
+  describe('Requirements Validation', () => {
     it('should have VPC with CIDR block 10.0.0.0/16 as specified', async () => {
       if (!stackOutputs.vpcId) {
         console.log('VPC outputs not found, skipping VPC CIDR test');
@@ -752,7 +752,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(sshRules.length).toBeGreaterThan(0); // Should have SSH rules
 
       // Check that SSH access is restricted to the specified IP range
-      const sshCidrs = sshRules.flatMap((rule: any) => 
+      const sshCidrs = sshRules.flatMap((rule: any) =>
         rule.IpRanges?.map((range: any) => range.CidrIp) || []
       );
 
@@ -844,7 +844,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       // Verify all outputs mentioned in PROMPT.md are available
       const requiredOutputs = [
         'vpcId',
-        'publicSubnetIds', 
+        'publicSubnetIds',
         'privateSubnetIds',
         'internetGatewayId',
         'securityGroupId',
@@ -880,9 +880,9 @@ describe('TAP Infrastructure Integration Tests', () => {
             InstanceIds: [stackOutputs.ec2InstanceId],
           })
         );
-        resourcesToCheck.push({ 
-          type: 'EC2', 
-          tags: ec2Response.Reservations![0].Instances![0].Tags 
+        resourcesToCheck.push({
+          type: 'EC2',
+          tags: ec2Response.Reservations![0].Instances![0].Tags
         });
       }
 
@@ -928,7 +928,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       const egressRules = securityGroup.IpPermissions || [];
       expect(egressRules.length).toBeGreaterThan(0); // Should have some egress rules
     });
-  });
+
     it('should have proper backup and recovery configurations', async () => {
       // This test would verify backup configurations
       // For now, we'll check that resources are properly tagged for backup
@@ -975,9 +975,6 @@ describe('TAP Infrastructure Integration Tests', () => {
 
   describe('Infrastructure Resilience Tests', () => {
     it('should have proper backup and recovery configurations', async () => {
-      // This test would verify backup configurations
-      // For now, we'll check that resources are properly tagged for backup
-      
       if (stackOutputs.ec2InstanceId) {
         const ec2Response = await clients.ec2.send(
           new DescribeInstancesCommand({
