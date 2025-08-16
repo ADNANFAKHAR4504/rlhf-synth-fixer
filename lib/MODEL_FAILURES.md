@@ -1,33 +1,47 @@
-### 🔴 Critical Security Vulnerabilities
+1.  **Hardcoded RDS Password**
+    * **Finding:** The `aws_db_instance` resource has a plaintext password: `password = "changeme123!"`.
+    * **Location:** `resource "aws_db_instance" "nova"`
+    * **Impact:** This is a **critical security flaw**. Committing secrets directly into version control exposes them to anyone with access to the repository, making the database extremely vulnerable. The password should never be hardcoded.
+    * **Recommendation:** Use the `random_password` resource to generate a password and store it securely in AWS Secrets Manager, as was done in previous, correct iterations of this configuration.
 
-These items represent serious security risks that must be fixed immediately.
+2.  **Overly Permissive IAM Policies**
+    * **Finding:** The IAM policy for the EC2 role (`aws_iam_role_policy.ec2`) and the VPC Flow Logs role (`aws_iam_role_policy.flow_logs`) use `Resource = "*"` for multiple actions (SSM, CloudWatch Logs).
+    * **Location:** `resource "aws_iam_role_policy" "ec2"` and `resource "aws_iam_role_policy" "flow_logs"`
+    * **Impact:** This violates the principle of least privilege. Granting wildcard resource access gives these roles far more power than necessary, increasing the potential impact of a compromised instance or service.
+    * **Recommendation:** Scope down the resource ARNs. For example, CloudWatch Logs permissions should be restricted to specific log group ARNs (e.g., `arn:aws:logs:*:*:log-group:/aws/vpc/flowlogs-*`).
 
-1.  **Overly Permissive KMS Key Policy**
-    * **Finding:** The KMS key policy grants unrestricted administrative (`kms:*`) and usage privileges on **all KMS keys** (`Resource: "*"`) to the entire AWS account (`Principal: "...:root"`).
-    * **Location:** `resource "aws_kms_key" "s3_encryption_key"`, `policy` argument.
+---
+### 🟠 Major Architectural & Functional Failures
 
-    * **Impact:** This is a **critical misconfiguration**. Any user or service in the account can manage and use not only this key but potentially **every other KMS key in the account**, including those protecting highly sensitive data. It completely bypasses IAM controls for KMS and violates the principle of least privilege.
-    * **Recommendation:** **Immediately** scope down the policy. The key's administrative permissions should be granted only to specific, trusted IAM roles, not the account root. The `Resource` for the `kms:*` action should be `aws_kms_key.s3_encryption_key.arn` (self-referential) instead of `*`. S3 service permissions can also be restricted to this specific key.
+These items will cause the deployment to fail or result in a misconfigured, non-functional environment.
+
+1.  **Security Group Circular Dependency**
+    * **Finding:** The EC2 security group (`aws_security_group.ec2`) allows ingress from the RDS security group, and the RDS security group (`aws_security_group.rds`) allows ingress from the EC2 security group. They reference each other.
+    * **Location:** `resource "aws_security_group" "ec2"` and `resource "aws_security_group" "rds"`
+    * **Impact:** This will cause a `Cycle` error during `terraform plan` or `apply`. Terraform cannot resolve the dependency graph because each resource is waiting for the other to be created first. The ingress rule on the EC2 security group is also logically incorrect.
+    * **Recommendation:** Remove the `ingress` block from the `aws_security_group.ec2` resource entirely. EC2 instances typically initiate connections *to* a database; they do not need to accept inbound traffic *from* it.
+
+2.  **Missing Network ACLs**
+    * **Finding:** The configuration does not include any `aws_network_acl` resources.
+    * **Impact:** The prompt explicitly required NACLs as a layer of defense-in-depth for the subnets. Their absence means the configuration fails to meet a key network security requirement.
+
+3.  **Incorrect VPC Flow Logs Destination**
+    * **Finding:** The `aws_flow_log` resources are configured to send logs to CloudWatch Logs (`log_destination = aws_cloudwatch_log_group.flow_logs[each.value].arn`).
+    * **Impact:** The requirement was to send **all logs to a central S3 bucket** for unified analysis and long-term storage. This configuration silos the flow logs in CloudWatch, complicating incident response.
 
 ---
 ### 🟡 Best Practice Deviations
 
-These items are not critical failures but deviate from modern, robust IaC practices.
+These items are not critical failures but deviate from modern, robust IaC practices and the prompt's specific instructions.
 
-1.  **Redundant Resource Naming in Tags**
-    * **Finding:** The `Name` tag on resources often duplicates the resource's logical name (e.g., `aws_s3_bucket.main_bucket` has a `Name` tag of `"${local.name_prefix}-storage"`).
-    * **Location:** All `tags` blocks within resources.
-    * **Impact:** This adds verbosity without providing extra information. The logical name already identifies the resource within the Terraform state, and the constructed name (`bucket = ...`) defines its cloud provider identifier.
-    * **Recommendation:** Use more descriptive names in the `Name` tag that explain the resource's *purpose*, such as "Primary application data storage" for the S3 bucket, rather than just repeating its identifier.
+1.  **Inconsistent Tagging**
+    * **Finding:** Many resources, including subnets, security groups, and route tables, are missing the `tags = local.common_tags` block.
+    * **Impact:** This violates the requirement for consistent tagging on all resources, making cost allocation, automation, and resource identification difficult.
 
-2.  **Inconsistent Naming Convention**
-    * **Finding:** The code uses both kebab-case (e.g., `iac-aws-nova-model-breaking`) and snake_case (e.g., `aws_region`, `s3_encryption_key`) for names. Terraform's official style is to use `snake_case` for variables and resource names.
-    * **Location:** Throughout the file, particularly in `variable` and `resource` blocks.
-    * **Impact:** While functionally correct, this inconsistency makes the code harder to read and maintain, especially as the project grows.
-    * **Recommendation:** Standardize on `snake_case` for all Terraform identifiers (variables, locals, resources) to align with community conventions and improve readability.
+2.  **Brittle Provider Configuration**
+    * **Finding:** The `provider` argument in each resource uses a ternary operator (e.g., `provider = each.value == "us-east-1" ? aws.east : aws.west`).
+    * **Impact:** This pattern is not scalable. Adding a third region would require rewriting every single provider line to include another nested ternary condition. The correct pattern is to use a map of providers.
 
-3.  **Missing `provider.tf`**
-    * **Finding:** The configuration uses an `aws_region` variable to implicitly configure the provider.
-    * **Location:** `variable "aws_region"`
-    * **Impact:** This is an outdated pattern. Modern Terraform practice is to define providers explicitly in a separate `provider.tf` file. This makes the configuration clearer, more modular, and easier to adapt for multi-region or multi-cloud setups.
-    * **Recommendation:** Remove the `aws_region` variable and create a `provider.tf` file to explicitly configure the AWS provider.
+3.  **VPC Peering is Not DRY**
+    * **Finding:** The VPC peering resources (`aws_vpc_peering_connection` and routes) are hardcoded for `us-east-1` and `us-west-2` instead of being created dynamically.
+    * **Impact:** This creates technical debt. If the list of regions changes, these resources would need to be manually updated or completely refactored.
