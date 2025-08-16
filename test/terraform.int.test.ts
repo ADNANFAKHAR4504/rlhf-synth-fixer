@@ -24,7 +24,7 @@ const EXPECTED_OUTPUTS = {
 
 // Test configuration values (should match what was used in deployment)
 const TEST_CONFIG = {
-  aws_region: process.env.AWS_REGION || 'us-west-2',
+  aws_region: process.env.AWS_REGION || 'eu-west-3',
   allowed_cidr: process.env.TEST_ALLOWED_CIDR || '10.0.0.0/8',
   expected_environment_tag: 'Production',
 };

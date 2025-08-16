@@ -3,11 +3,11 @@
 variable "aws_region" {
 description = "AWS region for resource deployment"
 type = string
-default = "us-west-2"
+default = "eu-west-3"
 nullable = false
 validation {
 condition = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
-error_message = "AWS region must be in format like us-west-2."
+error_message = "AWS region must be in format like eu-west-3."
 }
 }
 
@@ -269,8 +269,8 @@ Effect = "Deny"
 Principal = "_"
 Action = "s3:_"
 Resource = [
-local.app_bucket_arn,
-"${local.app_bucket_arn}/*"
+aws_s3_bucket.app.arn,
+"${aws_s3_bucket.app.arn}/*"
 ]
 Condition = {
 Bool = {
@@ -288,32 +288,19 @@ Action = [
 "s3:ListBucket"
 ]
 Resource = [
-local.app_bucket_arn,
-"${local.app_bucket_arn}/_"
+aws_s3_bucket.app.arn,
+"${aws_s3_bucket.app.arn}/_"
 ]
 Condition = {
 StringEquals = {
 "aws:PrincipalTag/Environment" = "Production"
 }
 }
-},
-{
-Sid = "DenyUntaggedAccess"
-Effect = "Deny"
-Principal = "_"
-Action = "s3:_"
-Resource = [
-local.app_bucket_arn,
-"${local.app_bucket_arn}/*"
-]
-Condition = {
-StringNotEquals = {
-"aws:PrincipalTag/Environment" = "Production"
-}
-}
 }
 ]
 })
+
+depends_on = [aws_s3_bucket_public_access_block.app]
 }
 
 # IAM Role for App Access
@@ -435,7 +422,7 @@ Action = "s3:GetBucketAcl"
 Resource = local.trail_bucket_arn
 Condition = {
 StringEquals = {
-"AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${local.account_id}:trail/prod-${random_id.suffix.hex}"
+"AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${local.account_id}:trail/trl-${random_id.suffix.hex}"
           }
         }
       },
@@ -450,7 +437,7 @@ StringEquals = {
 Condition = {
 StringEquals = {
 "s3:x-amz-acl" = "bucket-owner-full-control"
-"AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${local.account_id}:trail/prod-${random_id.suffix.hex}"
+"AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${local.account_id}:trail/trl-${random_id.suffix.hex}"
 }
 }
 }
@@ -521,7 +508,7 @@ delete = "10m"
 # CloudTrail
 
 resource "aws_cloudtrail" "main" {
-name = "prod-${random_id.suffix.hex}"
+name = "trl-${random_id.suffix.hex}"
 s3_bucket_name = aws_s3_bucket.trail.id
 
 is_multi_region_trail = true

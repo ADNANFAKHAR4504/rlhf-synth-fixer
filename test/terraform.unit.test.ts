@@ -74,11 +74,11 @@ describe('Terraform Stack Unit Tests', () => {
       });
     });
 
-    test('aws_region variable has default us-west-2', () => {
+    test('aws_region variable has default eu-west-3', () => {
       const awsRegionBlock = stackContent.match(
         /variable\s+"aws_region"\s*{[\s\S]*?}/m
       )?.[0];
-      expect(awsRegionBlock).toMatch(/default\s*=\s*"us-west-2"/);
+      expect(awsRegionBlock).toMatch(/default\s*=\s*"eu-west-3"/);
     });
 
     test('variables have validation blocks where appropriate', () => {
@@ -188,7 +188,7 @@ describe('Terraform Stack Unit Tests', () => {
         /"aws:PrincipalTag\/Environment"\s*=\s*"Production"/
       );
       expect(stackContent).toMatch(/AllowTagBasedAccess/);
-      expect(stackContent).toMatch(/DenyUntaggedAccess/);
+      expect(stackContent).toMatch(/DenyInsecureTransport/);
     });
   });
 

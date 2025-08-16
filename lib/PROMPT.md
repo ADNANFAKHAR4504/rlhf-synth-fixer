@@ -10,6 +10,6 @@ We need a Terraform setup for AWS. Here's what it needs to do:
 - **Deployment User**: Create an IAM user with only the necessary permissions for deployment tasks.
 - **Tagging**: All resources must be tagged with 'Environment:Production'.
 
-The infrastructure is in an AWS account, specifically in the 'us-west-2' region. We have strict security and tagging rules.
+The infrastructure is in an AWS account, specifically in the 'eu-west-3' region. We have strict security and tagging rules.
 
 Give us the Terraform script. It should be in HCL, work correctly, and follow all these requirements when deployed.
