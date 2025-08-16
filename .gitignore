@@ -100,3 +100,5 @@ bin/tfplan
 
 build
 tasks.csv
+
+# Trigger pipeline re-run
