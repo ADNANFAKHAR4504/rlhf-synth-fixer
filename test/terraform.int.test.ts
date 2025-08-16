@@ -13,35 +13,37 @@ try {
 }
 
 function isValidIP(ip: string): boolean {
-  return /^(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[9]?[0-9][0-9]?)){3}$/.test(ip);
+  return /^(?:25[0-5]|2[0-4][0-9]|1\d{2}|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4][0-9]|1\d{2}|[1-9]?\d)){3}$/.test(ip);
 }
+
 function isValidCIDR(cidr: string): boolean {
-  return /^(?:25[0-5]|2[0-4][0-9]|[9]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[9]?[0-9][0-9]?)){3}\/(?:[0-9]|[1-2][0-9]|3[0-2])$/.test(cidr);
+  const cidrRegex = /^(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}\/(?:[0-9]|[1-2]\d|3[0-2])$/;
+  return cidrRegex.test(cidr);
 }
+
 function isValidResourceId(id: string, type: string): boolean {
   const patterns: { [key: string]: RegExp } = {
-    vpc: /^vpc-[0-9a-f]{8,}$/,
-    subnet: /^subnet-[0-9a-f]{8,}$/,
-    igw: /^igw-[0-9a-f]{8,}$/,
-    nat: /^nat-[0-9a-f]{8,}$/,
-    sg: /^sg-[0-9a-f]{8,}$/,
-    instance: /^i-[0-9a-f]{8,}$/,
+    vpc: /^vpc-[0-9a-f]{8,17}$/,
+    subnet: /^subnet-[0-9a-f]{8,17}$/,
+    igw: /^igw-[0-9a-f]{8,17}$/,
+    nat: /^nat-[0-9a-f]{8,17}$/,
+    sg: /^sg-[0-9a-f]{8,17}$/,
+    instance: /^i-[0-9a-f]{8,17}$/,
     arn: /^arn:aws:iam::\d{12}:role\/ec2-role-(dev|staging|production)$/
   };
   return patterns[type]?.test(id) || false;
 }
-// Actual outputs.json does not wrap values in .value for some outputs
+
 function getSubnetIds(env: Environment, type: 'public' | 'private'): string[] {
-  const map = type === 'public' ? outputs.public_subnet_ids : outputs.private_subnet_ids;
+  const subnetMap = type === 'public' ? outputs.public_subnet_ids : outputs.private_subnet_ids;
   const prefix = `${env}-${type}`;
-  return Object.keys(map)
-    .filter(key => key.startsWith(prefix))
-    .map(key => map[key]);
+  return Object.entries(subnetMap)
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([, val]) => val);
 }
 
 describe("Outputs.json Infrastructure Coverage", () => {
   it("should contain all required keys", () => {
-    // No `.value` -- real outputs follows outputs.<resource>
     const requiredKeys = [
       "ec2_instance_ids", "ec2_private_ips", "ec2_public_ips",
       "environment_summary", "iam_role_arns", "internet_gateway_ids",
@@ -55,7 +57,6 @@ describe("Outputs.json Infrastructure Coverage", () => {
 
   environments.forEach(env => {
     describe(`Env: ${env} -- VPC, Subnets, EC2, IAM, Security Group`, () => {
-      // Use .<resource>[env] for outputs that are objects by environment
       const envData = {
         vpcId: outputs.vpc_ids[env],
         vpcCidr: outputs.vpc_cidrs[env],
@@ -71,13 +72,11 @@ describe("Outputs.json Infrastructure Coverage", () => {
         privateSubnetIds: getSubnetIds(env, 'private')
       };
 
-      // VPC coverage
       it("should have valid VPC ID and correct CIDR", () => {
         expect(isValidResourceId(envData.vpcId, 'vpc')).toBe(true);
         expect(isValidCIDR(envData.vpcCidr)).toBe(true);
       });
 
-      // Subnet coverage
       it("should have two valid public and two valid private subnets", () => {
         expect(envData.publicSubnetIds.length).toBe(2);
         expect(envData.privateSubnetIds.length).toBe(2);
@@ -85,7 +84,6 @@ describe("Outputs.json Infrastructure Coverage", () => {
         envData.privateSubnetIds.forEach(id => expect(isValidResourceId(id, 'subnet')).toBe(true));
       });
 
-      // EC2 coverage
       it("should have valid EC2 instance ID, correct instance type, and matching summary info", () => {
         expect(isValidResourceId(envData.instanceId, 'instance')).toBe(true);
         const expectedTypes = { dev: 't2.micro', staging: 't3.medium', production: 'm5.large' };
@@ -99,17 +97,14 @@ describe("Outputs.json Infrastructure Coverage", () => {
         expect(envData.summary.vpc_cidr).toBe(envData.vpcCidr);
       });
 
-      // IAM coverage
       it("should have valid IAM role ARN for environment", () => {
         expect(isValidResourceId(envData.iamRoleArn, 'arn')).toBe(true);
       });
 
-      // Security Group coverage
       it("should have valid security group ID", () => {
         expect(isValidResourceId(envData.sgId, 'sg')).toBe(true);
       });
 
-      // IGW/NAT coverage
       it("should have valid IGW and NAT gateway IDs", () => {
         expect(isValidResourceId(envData.igwId, 'igw')).toBe(true);
         expect(isValidResourceId(envData.natGwId, 'nat')).toBe(true);
