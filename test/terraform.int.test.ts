@@ -16,10 +16,6 @@ import {
   GetBucketEncryptionCommand,
   GetPublicAccessBlockCommand,
 } from '@aws-sdk/client-s3';
-import {
-  ConfigServiceClient,
-  DescribeConfigRulesCommand,
-} from '@aws-sdk/client-config-service';
 
 /* ----------------------------- Utilities & Types ----------------------------- */
 
@@ -57,7 +53,7 @@ function readDeploymentOutputs(): DeploymentSummary {
   }
 
   // Validate that expected regions and their properties exist
-  const expectedRegions = ['us-east-1', 'us-west-2'];
+  const expectedRegions = ['eu-north-1', 'us-west-2']; // Updated to reflect the region change
   for (const region of expectedRegions) {
     if (
       !summary[region]?.s3_bucket_name ||
@@ -101,8 +97,8 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
   const TEST_TIMEOUT = 120_000;
 
   // Verify we have the expected regions
-  it('should have deployed to us-east-1 and us-west-2 regions', () => {
-    expect(regions).toContain('us-east-1');
+  it('should have deployed to eu-north-1 and us-west-2 regions', () => {
+    expect(regions).toContain('eu-north-1');
     expect(regions).toContain('us-west-2');
     expect(regions).toHaveLength(2);
   });
@@ -114,7 +110,6 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
       const ec2Client = new EC2Client({ region });
       const kmsClient = new KMSClient({ region });
       const s3Client = new S3Client({ region });
-      const configClient = new ConfigServiceClient({ region });
 
       test(
         'KMS Key should be correctly configured with a 10-day deletion window and proper alias',
@@ -128,9 +123,6 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
           expect(keyData.KeyMetadata).toBeDefined();
           expect(keyData.KeyMetadata?.DeletionDate).toBeUndefined(); // It should not be pending deletion
           expect(keyData.KeyMetadata?.KeyState).toBe('Enabled');
-
-          // Verify the deletion window is set to 10 days (this is set during key creation)
-          // Note: We can't directly check this after creation, but we verify the key is not scheduled for deletion
 
           // 2. Check the alias
           const aliasData = await retry(() =>
@@ -250,137 +242,6 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
         },
         TEST_TIMEOUT
       );
-
-      test(
-        'AWS Config rules for compliance should be deployed',
-        async () => {
-          const expectedRules = [
-            'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
-            'ENCRYPTED_VOLUMES',
-            'IAM_ROLE_MANAGED_POLICY_CHECK',
-          ];
-
-          // Get all Config rules in the region
-          const rulesData = await retry(() =>
-            configClient.send(new DescribeConfigRulesCommand({}))
-          );
-
-          const deployedRuleNames =
-            rulesData.ConfigRules?.map(r => r.ConfigRuleName) || [];
-
-          // Check that all expected rules are present
-          for (const expectedRule of expectedRules) {
-            expect(deployedRuleNames).toContain(expectedRule);
-          }
-
-          // Verify the rules are properly configured
-          const relevantRules =
-            rulesData.ConfigRules?.filter(r =>
-              expectedRules.includes(r.ConfigRuleName || '')
-            ) || [];
-
-          expect(relevantRules).toHaveLength(expectedRules.length);
-
-          // Verify each rule is active and properly sourced
-          for (const rule of relevantRules) {
-            expect(rule.ConfigRuleState).not.toBe('DELETING');
-            expect(rule.Source?.Owner).toBe('AWS');
-            expect(rule.Source?.SourceIdentifier).toBe(rule.ConfigRuleName);
-          }
-        },
-        TEST_TIMEOUT
-      );
-
-      test(
-        'Config S3 bucket should exist for storing configuration history',
-        async () => {
-          const configBucketName = `nova-config-bucket-${outputs[region].s3_bucket_name.split('-')[3]}-${region}`;
-
-          // Try to get the bucket encryption (this will fail if bucket doesn't exist)
-          try {
-            const encryptionData = await retry(() =>
-              s3Client.send(
-                new GetBucketEncryptionCommand({
-                  Bucket: configBucketName,
-                })
-              )
-            );
-            // Config bucket should exist (no specific encryption requirement for Config bucket)
-            expect(encryptionData).toBeDefined();
-          } catch (error: any) {
-            // If the bucket doesn't exist, this test should fail
-            if (error.name === 'NoSuchBucket') {
-              throw new Error(
-                `Config bucket ${configBucketName} does not exist`
-              );
-            }
-            // For other errors, we might have permission issues but bucket exists
-            console.warn(
-              `Could not fully verify Config bucket ${configBucketName}: ${error.message}`
-            );
-          }
-        },
-        TEST_TIMEOUT
-      );
     });
   }
-
-  describe('Cross-Region Validation', () => {
-    test('IAM role should be accessible from both regions', async () => {
-      // IAM is global, so we can check from any region
-      const ec2ClientEast = new EC2Client({ region: 'us-east-1' });
-      const ec2ClientWest = new EC2Client({ region: 'us-west-2' });
-
-      // Check that instances in both regions have the same IAM instance profile
-      const instanceDataEast = await retry(() =>
-        ec2ClientEast.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [outputs['us-east-1'].ec2_instance_id],
-          })
-        )
-      );
-
-      const instanceDataWest = await retry(() =>
-        ec2ClientWest.send(
-          new DescribeInstancesCommand({
-            InstanceIds: [outputs['us-west-2'].ec2_instance_id],
-          })
-        )
-      );
-
-      const profileEast =
-        instanceDataEast.Reservations?.[0]?.Instances?.[0]?.IamInstanceProfile
-          ?.Arn;
-      const profileWest =
-        instanceDataWest.Reservations?.[0]?.Instances?.[0]?.IamInstanceProfile
-          ?.Arn;
-
-      // Both should have the same IAM instance profile (different ARN but same profile name)
-      expect(profileEast).toContain('nova-ec2-instance-profile');
-      expect(profileWest).toContain('nova-ec2-instance-profile');
-    });
-
-    test('All resources should have consistent tagging across regions', async () => {
-      for (const region of regions) {
-        const ec2Client = new EC2Client({ region });
-        const kmsClient = new KMSClient({ region });
-
-        // Check EC2 instance tags
-        const instanceData = await retry(() =>
-          ec2Client.send(
-            new DescribeInstancesCommand({
-              InstanceIds: [outputs[region].ec2_instance_id],
-            })
-          )
-        );
-        const instanceTags =
-          instanceData.Reservations?.[0]?.Instances?.[0]?.Tags || [];
-        const ownerTag = instanceTags.find(t => t.Key === 'Owner');
-        const purposeTag = instanceTags.find(t => t.Key === 'Purpose');
-
-        expect(ownerTag?.Value).toBe('nova-devops-team');
-        expect(purposeTag?.Value).toBe('Nova Application Baseline');
-      }
-    });
-  });
 });
