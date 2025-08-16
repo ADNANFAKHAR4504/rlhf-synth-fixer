@@ -107,7 +107,7 @@ resource "aws_db_instance" "primary" {
 resource "aws_db_instance" "secondary_replica" {
   provider            = aws.secondary
   identifier          = "${local.resource_prefix}-secondary-replica"
-  replicate_source_db = aws_db_instance.primary.identifier
+  replicate_source_db = aws_db_instance.primary.arn
 
   # Override source settings for replica
   instance_class             = var.db_instance_class
