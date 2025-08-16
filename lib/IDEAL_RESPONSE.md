@@ -1,25 +1,3 @@
-# =============================================================================
-# ENTERPRISE TERRAFORM INFRASTRUCTURE GOVERNANCE AUDIT
-# =============================================================================
-# This configuration implements all 12 enterprise requirements:
-# 1. All resources in us-east-1 region
-# 2. Latest Terraform version
-# 3. Environment: Production tags
-# 4. Cost estimation process
-# 5. Dedicated public/private subnets
-# 6. SSH access restricted to specific IPs
-# 7. Remote state management
-# 8. S3 bucket HTTPS enforcement
-# 9. CI pipeline for syntax checking
-# 10. AWS naming conventions
-# 11. Modular resource configurations
-# 12. No hardcoded secrets
-# =============================================================================
-
-# =============================================================================
-# VARIABLES
-# =============================================================================
-
 ```terraform
 # =============================================================================
 # ENTERPRISE TERRAFORM INFRASTRUCTURE GOVERNANCE AUDIT
