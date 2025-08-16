@@ -589,7 +589,7 @@ export class Infrastructure extends pulumi.ComponentResource {
           {
             applyServerSideEncryptionByDefault: {
               sseAlgorithm: 'aws:kms',
-              kmsMasterKeyId: kmsKey.keyId,
+              kmsMasterKeyId: kmsKey.arn,
             },
             bucketKeyEnabled: true,
           },
@@ -643,7 +643,7 @@ export class Infrastructure extends pulumi.ComponentResource {
           {
             applyServerSideEncryptionByDefault: {
               sseAlgorithm: 'aws:kms',
-              kmsMasterKeyId: kmsKey.keyId,
+              kmsMasterKeyId: kmsKey.arn,
             },
             bucketKeyEnabled: true,
           },
@@ -748,41 +748,27 @@ export class Infrastructure extends pulumi.ComponentResource {
                   },
                 },
                 {
-                  Sid: 'AllowApplicationRoleAccess',
+                  Sid: 'AllowApplicationRoleObjectAccess',
                   Effect: 'Allow',
                   Principal: {
                     AWS: roleArn,
                   },
-                  Action: [
-                    's3:GetObject',
-                    's3:PutObject',
-                    's3:DeleteObject',
-                    's3:ListBucket',
-                  ],
-                  Resource: [bucketArn, `${bucketArn}/*`],
+                  Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+                  Resource: `${bucketArn}/*`,
                   Condition: {
                     StringEquals: {
                       's3:x-amz-server-side-encryption': 'aws:kms',
                     },
-                    DateGreaterThan: {
-                      'aws:CurrentTime': '2024-01-01T00:00:00Z',
-                    },
                   },
                 },
                 {
-                  Sid: 'DenyPublicAccess',
-                  Effect: 'Deny',
-                  Principal: '*',
-                  Action: 's3:*',
-                  Resource: [bucketArn, `${bucketArn}/*`],
-                  Condition: {
-                    StringEquals: {
-                      'aws:PrincipalServiceName': [
-                        'ec2.amazonaws.com',
-                        'lambda.amazonaws.com',
-                      ],
-                    },
+                  Sid: 'AllowApplicationRoleBucketAccess',
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: roleArn,
                   },
+                  Action: ['s3:ListBucket', 's3:GetBucketLocation'],
+                  Resource: bucketArn,
                 },
               ],
             })
@@ -828,7 +814,7 @@ export class Infrastructure extends pulumi.ComponentResource {
       {
         name: createResourceName('db-credentials', region, environment),
         description: 'Database credentials for RDS instance',
-        kmsKeyId: kmsKey.keyId,
+        kmsKeyId: kmsKey.arn,
         tags: resourceTags,
       },
       { provider, parent: this }
@@ -857,7 +843,7 @@ export class Infrastructure extends pulumi.ComponentResource {
         maxAllocatedStorage: config.rdsConfig.allocatedStorage * 2, // Auto-scaling
         storageType: 'gp3',
         storageEncrypted: true,
-        kmsKeyId: kmsKey.keyId,
+        kmsKeyId: kmsKey.arn,
         dbName: config.rdsConfig.dbName,
         username: config.rdsConfig.username,
         manageMasterUserPassword: true, // Let AWS manage the password
@@ -886,7 +872,7 @@ export class Infrastructure extends pulumi.ComponentResource {
         // Monitoring and logging
         monitoringInterval: 60,
         performanceInsightsEnabled: true,
-        performanceInsightsKmsKeyId: kmsKey.keyId,
+        performanceInsightsKmsKeyId: kmsKey.arn,
         performanceInsightsRetentionPeriod: 7,
         // Fixed CloudWatch log exports for MySQL
         enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
@@ -1107,7 +1093,7 @@ export class Infrastructure extends pulumi.ComponentResource {
       {
         name: createResourceName('security-alerts', region, environment),
         displayName: 'Security Alerts',
-        kmsMasterKeyId: kmsKey.keyId,
+        kmsMasterKeyId: kmsKey.arn,
         tags: resourceTags,
       },
       { provider, parent: this }
