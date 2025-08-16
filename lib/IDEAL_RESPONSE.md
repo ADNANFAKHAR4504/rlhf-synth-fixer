@@ -2,13 +2,15 @@
 
 ## Summary
 
-The ideal response should provide a complete, production-ready AWS infrastructure that spans multiple regions with comprehensive security, scalability, and monitoring features. This implementation should demonstrate best practices in Infrastructure as Code (IaC) using Terraform.
+The ideal response should provide a complete, production-ready AWS infrastructure that spans multiple regions
+with comprehensive security, scalability, and monitoring features. This implementation should demonstrate best
+practices in Infrastructure as Code (IaC) using Terraform.
 
 ## Required Components
 
 ### 1. Multi-Region Architecture
 - **Primary Region**: us-east-1
-- **Secondary Region**: us-west-2  
+- **Secondary Region**: us-west-2
 - **Non-overlapping CIDR blocks**: 10.1.0.0/16 (us-east-1), 10.2.0.0/16 (us-west-2)
 - **VPC Peering**: Active cross-region connectivity with proper routing
 
@@ -24,7 +26,7 @@ The ideal response should provide a complete, production-ready AWS infrastructur
 - **KMS Keys**: Regional encryption keys with automatic rotation enabled
 - **Security Groups**: Least privilege access with no wildcard permissions
   - Bastion: SSH access restricted to specified CIDR blocks only
-  - ALB: HTTP/HTTPS from internet, outbound to applications  
+  - ALB: HTTP/HTTPS from internet, outbound to applications
   - Application: Restricted access from ALB and bastion only
   - RDS: Database access only from application and bastion security groups
 - **IAM Roles & Policies**: Least privilege with specific ARN-based permissions
@@ -94,7 +96,7 @@ The ideal response should provide a complete, production-ready AWS infrastructur
   - Proper variable definitions with types and defaults
   - Local values for reusable configurations
   - Comprehensive resource tagging strategy
-- **Security Best Practices**: 
+- **Security Best Practices**:
   - No hardcoded secrets or credentials
   - Encryption at rest for all applicable services
   - Network segmentation and least privilege access

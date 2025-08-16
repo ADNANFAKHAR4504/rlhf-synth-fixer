@@ -2,7 +2,8 @@
 
 ## Overview
 
-This document identifies common failure patterns and issues that may occur when models attempt to implement AWS multi-region infrastructure. Understanding these failures helps improve model training and evaluation.
+This document identifies common failure patterns and issues that may occur when models attempt to implement
+AWS multi-region infrastructure. Understanding these failures helps improve model training and evaluation.
 
 ## Critical Failures
 
@@ -29,7 +30,7 @@ This document identifies common failure patterns and issues that may occur when 
 #### Missing Encryption
 - **Issue**: Resources deployed without encryption at rest
 - **Risk**: Data exposure, compliance violations
-- **Examples**: 
+- **Examples**:
   - RDS without `storage_encrypted = true`
   - S3 buckets without server-side encryption
   - EBS volumes without encryption
@@ -157,7 +158,7 @@ This document identifies common failure patterns and issues that may occur when 
 
 ### Performance Issues
 - **Issue**: Suboptimal resource sizing or configuration
-- **Examples**: 
+- **Examples**:
   - Oversized instances leading to high costs
   - Under-provisioned resources causing performance issues
   - Missing CloudFront CDN for global content delivery
