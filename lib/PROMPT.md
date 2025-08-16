@@ -1,24 +1,22 @@
-Hey there! Here's a rewritten prompt that sounds more like a real person wrote it, with less formatting and a casual, direct tone.
+## Financial App Infrastructure Requirements
 
----
+We need to build a secure cloud infrastructure for our financial services application using Terraform. The infrastructure must meet strict compliance and security requirements.
 
-### We need to build a Secure Financial App Infrastructure
+### Core Requirements
 
-we need to set up a really **secure and available cloud infrastructure** for our financial services app. We have to use **Terraform** to get it all done.
+- All infrastructure components defined in Terraform HCL
+- Multi-region deployment for high availability and disaster recovery
+- Data encryption at rest using AWS KMS with customer-managed keys
+- IAM roles and policies following least privilege access principles
+- VPC architecture with segregated public and private subnets
+- Comprehensive logging and monitoring via AWS CloudWatch
 
-Here’s the rundown of what we need:
+### Deliverables
 
-- **Everything in Terraform:** All the components should be defined using **Terraform HCL**.
-- **Multi-Region:** The whole setup needs to be in multiple AWS regions for high availability. We can't have the system go down.
-- **Data Encryption:** All our stored data has to be encrypted using **AWS KMS**. This is super important for a financial company.
-- **IAM Roles:** Define **IAM roles and policies** to give services and components only the permissions they need.
-- **VPC Layout:** Design a **VPC with both public and private subnets**. This helps with security and makes sure our services can talk to each other safely.
-- **Logging and Monitoring:** We need to set up **AWS CloudWatch** to log and monitor everything.
+Terraform configuration files that validate successfully and deploy without errors:
 
-Just give us the Terraform files that define this infrastructure. They should be clean, pass all the validation, and deploy correctly when we run them.
+- provider.tf - AWS provider and region configuration
+- tap_stack.tf - Main infrastructure stack
+- outputs.tf - Resource outputs for integration
 
-├── outputs.tf
-├── provider.tf
-└── tap_stack.tf
-
-Above is my directory structure. Generate a response accordingly
+The solution should be production-ready and follow AWS best practices for financial services workloads.
