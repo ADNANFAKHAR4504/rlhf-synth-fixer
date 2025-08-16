@@ -3,13 +3,14 @@ variable "name_prefix" {
   type        = string
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
+variable "common_tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default     = {}
 }
 
 variable "vpc_id" {
-  description = "VPC ID"
+  description = "VPC ID where the database will be created"
   type        = string
 }
 
@@ -23,22 +24,6 @@ variable "db_subnet_group_name" {
   type        = string
 }
 
-variable "database_name" {
-  description = "Name of the database"
-  type        = string
-}
-
-variable "database_username" {
-  description = "Database username"
-  type        = string
-}
-
-variable "database_password" {
-  description = "Database password"
-  type        = string
-  sensitive   = true
-}
-
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
@@ -46,36 +31,52 @@ variable "db_instance_class" {
 }
 
 variable "allocated_storage" {
-  description = "Allocated storage in GB"
+  description = "Allocated storage for RDS instance in GB"
   type        = number
   default     = 20
 }
 
 variable "max_allocated_storage" {
-  description = "Maximum allocated storage in GB"
+  description = "Maximum allocated storage for RDS instance in GB"
   type        = number
   default     = 100
 }
 
-variable "backup_retention_period" {
-  description = "Backup retention period in days"
-  type        = number
-  default     = 7
-}
-
-variable "backup_window" {
-  description = "Backup window"
+variable "database_username" {
+  description = "Database username"
   type        = string
-  default     = "03:00-04:00"
+  sensitive   = true
 }
 
-variable "maintenance_window" {
-  description = "Maintenance window"
+variable "database_name" {
+  description = "Database name"
   type        = string
-  default     = "sun:04:00-sun:05:00"
 }
 
-variable "common_tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
+variable "environment" {
+  description = "Environment name (e.g., staging, production)"
+  type        = string
+}
+
+variable "kms_key_arn" {
+  description = "ARN of the KMS key for database encryption"
+  type        = string
+  default     = ""
+}
+
+variable "app_security_group_id" {
+  description = "Security group ID of the application instances"
+  type        = string
+}
+
+variable "bastion_security_group_id" {
+  description = "Security group ID of the bastion host (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "monitoring_role_arn" {
+  description = "ARN of the IAM role for RDS enhanced monitoring"
+  type        = string
+  default     = ""
 }

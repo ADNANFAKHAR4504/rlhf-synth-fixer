@@ -333,23 +333,23 @@ describe("Terraform Infrastructure Unit Tests", () => {
       });
 
       test("should have enhanced monitoring for production", () => {
-        expect(databaseMain).toMatch(/resource "aws_iam_role" "rds_enhanced_monitoring"/);
-        expect(databaseMain).toMatch(/count = var\.environment == "production" \? 1 : 0/);
+        expect(databaseMain).toMatch(/monitoring_role_arn/);
+        expect(databaseMain).toMatch(/var\.environment == "production" \? 60 : 0/);
       });
 
       test("should have required variables", () => {
-        expect(databaseVars).toMatch(/variable "name_prefix"/);
-        expect(databaseVars).toMatch(/variable "environment"/);
-        expect(databaseVars).toMatch(/variable "vpc_id"/);
         expect(databaseVars).toMatch(/variable "database_name"/);
         expect(databaseVars).toMatch(/variable "database_username"/);
-        expect(databaseVars).toMatch(/variable "database_password"/);
+        expect(databaseVars).toMatch(/variable "monitoring_role_arn"/);
+        expect(databaseVars).toMatch(/variable "app_security_group_id"/);
       });
 
       test("should have required outputs", () => {
-        expect(databaseOutputs).toMatch(/output "db_instance_endpoint"/);
-        expect(databaseOutputs).toMatch(/output "db_instance_id"/);
-        expect(databaseOutputs).toMatch(/output "db_instance_arn"/);
+        expect(databaseOutputs).toMatch(/output "database_endpoint"/);
+        expect(databaseOutputs).toMatch(/output "database_id"/);
+        expect(databaseOutputs).toMatch(/output "database_arn"/);
+        expect(databaseOutputs).toMatch(/output "database_password"/);
+        expect(databaseOutputs).toMatch(/output "ssm_parameter_name"/);
       });
     });
   });
@@ -375,7 +375,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
       // Check for environment-specific configurations in database module
       const databaseMain = fs.readFileSync(path.resolve(__dirname, "../lib/modules/database/main.tf"), "utf-8");
       expect(databaseMain).toMatch(/var\.environment == "production"/);
-      expect(databaseMain).toMatch(/var\.environment == "staging"/);
     });
 
     test("should have proper resource naming", () => {

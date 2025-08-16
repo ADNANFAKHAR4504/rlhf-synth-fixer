@@ -4,6 +4,7 @@ variable "name_prefix" {
 }
 
 variable "common_tags" {
-  description = "Common tags for all resources"
+  description = "Common tags to apply to all resources"
   type        = map(string)
+  default     = {}
 }

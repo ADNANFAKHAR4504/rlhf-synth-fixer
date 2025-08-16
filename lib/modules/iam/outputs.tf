@@ -22,3 +22,8 @@ output "autoscaling_role_name" {
   description = "Name of the Auto Scaling role"
   value       = aws_iam_role.autoscaling_role.name
 }
+
+output "rds_monitoring_role_arn" {
+  description = "ARN of the RDS monitoring role"
+  value       = aws_iam_role.rds_monitoring.arn
+}

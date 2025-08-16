@@ -35,6 +35,38 @@ variable "owner" {
   default     = "terraform-admin"
 }
 
+# Variables for SSL/TLS configuration (optional)
+variable "domain_name" {
+  description = "Domain name for SSL certificate (required for HTTPS)"
+  type        = string
+  default     = ""
+}
+
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID for DNS validation"
+  type        = string
+  default     = ""
+}
+
+# Database configuration variables
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "allocated_storage" {
+  description = "Allocated storage for RDS instance in GB"
+  type        = number
+  default     = 20
+}
+
+variable "max_allocated_storage" {
+  description = "Maximum allocated storage for RDS instance in GB"
+  type        = number
+  default     = 100
+}
+
 ########################
 # Data Sources
 ########################
@@ -117,23 +149,38 @@ module "compute" {
 # Database Module
 ########################
 module "database" {
-  source = "./modules/database"
+  source                    = "./modules/database"
+  name_prefix               = local.name_prefix
+  common_tags               = local.common_tags
+  vpc_id                    = module.networking.vpc_id
+  vpc_cidr                  = module.networking.vpc_cidr
+  db_subnet_group_name      = module.networking.db_subnet_group_name
+  db_instance_class         = var.db_instance_class
+  allocated_storage         = var.allocated_storage
+  max_allocated_storage     = var.max_allocated_storage
+  database_username         = "admin"
+  database_name             = "myappdb"
+  environment               = var.environment
+  kms_key_arn               = "" # Database module will create its own KMS key if needed
+  app_security_group_id     = module.compute.app_security_group_id
+  bastion_security_group_id = "" # Optional - can be added later
+  monitoring_role_arn       = module.iam.rds_monitoring_role_arn
+}
 
-  name_prefix             = local.name_prefix
-  environment             = var.environment
-  vpc_id                  = module.networking.vpc_id
-  vpc_cidr                = module.networking.vpc_cidr
-  db_subnet_group_name    = module.networking.db_subnet_group_name
-  database_name           = "myappdb"
-  database_username       = "admin"
-  database_password       = "MyAppDB2024!" # Use AWS Secrets Manager in production
-  db_instance_class       = "db.t3.micro"
-  allocated_storage       = 20
-  max_allocated_storage   = 100
-  backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-  common_tags             = local.common_tags
+########################
+# SSL/TLS Module (Production only)
+########################
+module "ssl" {
+  count  = var.environment == "production" && var.domain_name != "" ? 1 : 0
+  source = "./modules/ssl"
+
+  name_prefix                     = local.name_prefix
+  common_tags                     = local.common_tags
+  domain_name                     = var.domain_name
+  route53_zone_id                 = var.route53_zone_id
+  load_balancer_arn               = module.compute.load_balancer_arn
+  target_group_arn                = module.compute.target_group_arn
+  load_balancer_security_group_id = module.compute.load_balancer_security_group_id
 }
 
 ########################
@@ -142,6 +189,11 @@ module "database" {
 output "vpc_id" {
   description = "ID of the VPC"
   value       = module.networking.vpc_id
+}
+
+output "vpc_cidr" {
+  description = "CIDR block of the VPC"
+  value       = module.networking.vpc_cidr
 }
 
 output "public_subnet_ids" {
@@ -191,17 +243,39 @@ output "autoscaling_role_arn" {
 
 output "database_endpoint" {
   description = "The connection endpoint for the RDS instance"
-  value       = module.database.db_instance_endpoint
+  value       = module.database.database_endpoint
 }
 
 output "database_id" {
-  description = "The RDS instance ID"
-  value       = module.database.db_instance_id
+  description = "ID of the RDS instance"
+  value       = module.database.database_id
+}
+
+output "database_password" {
+  description = "The generated database password (sensitive)"
+  value       = module.database.database_password
+  sensitive   = true
+}
+
+output "ssm_parameter_name" {
+  description = "SSM parameter name for the database password"
+  value       = module.database.ssm_parameter_name
+}
+
+output "kms_key_arn" {
+  description = "ARN of the KMS key used for database encryption"
+  value       = module.database.kms_key_arn
 }
 
 output "application_url" {
   description = "URL to access the application"
-  value       = "http://${module.compute.load_balancer_dns_name}"
+  value       = var.environment == "production" && var.domain_name != "" ? "https://${var.domain_name}" : "http://${module.compute.load_balancer_dns_name}"
+}
+
+# SSL/TLS outputs
+output "ssl_certificate_arn" {
+  description = "ARN of the SSL certificate"
+  value       = var.environment == "production" && var.domain_name != "" ? module.ssl[0].certificate_arn : null
 }
 
 # Additional outputs for integration tests
