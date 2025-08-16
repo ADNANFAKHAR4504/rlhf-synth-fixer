@@ -345,47 +345,48 @@ aws.lb.Listener(
 # ----------------------------------------------------------------------------
 # CloudWatch Dashboard (ALB + EC2 metrics)
 # ----------------------------------------------------------------------------
+import json
 dashboard_body = Output.all(alb.arn_suffix, tg.arn_suffix).apply(
-    lambda args: f"""{{
-  "widgets": [
-    {{
-      "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
-      "properties": {{
-        "view": "timeSeries", "stacked": false, "region": "{aws_region}",
-        "title": "ALB Requests & Status Codes",
-        "metrics": [
-          ["AWS/ApplicationELB","RequestCount","LoadBalancer","{args[0]}"],
-          ["AWS/ApplicationELB","HTTPCode_Target_2XX_Count","LoadBalancer","{args[0]}"],
-          ["AWS/ApplicationELB","HTTPCode_Target_4XX_Count","LoadBalancer","{args[0]}"],
-          ["AWS/ApplicationELB","HTTPCode_Target_5XX_Count","LoadBalancer","{args[0]}"],
-          ["AWS/ApplicationELB","TargetResponseTime","LoadBalancer","{args[0]}"]
+    lambda args: json.dumps({
+        "widgets": [
+            {
+                "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
+                "properties": {
+                    "view": "timeSeries", "stacked": False, "region": aws_region,
+                    "title": "ALB Requests & Status Codes",
+                    "metrics": [
+                        ["AWS/ApplicationELB","RequestCount","LoadBalancer", args[0]],
+                        ["AWS/ApplicationELB","HTTPCode_Target_2XX_Count","LoadBalancer", args[0]],
+                        ["AWS/ApplicationELB","HTTPCode_Target_4XX_Count","LoadBalancer", args[0]],
+                        ["AWS/ApplicationELB","HTTPCode_Target_5XX_Count","LoadBalancer", args[0]],
+                        ["AWS/ApplicationELB","TargetResponseTime","LoadBalancer", args[0]]
+                    ]
+                }
+            },
+            {
+                "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+                "properties": {
+                    "view": "timeSeries", "stacked": False, "region": aws_region,
+                    "title": "Target Health",
+                    "metrics": [
+                        ["AWS/ApplicationELB","HealthyHostCount","TargetGroup", args[1]]
+                    ]
+                }
+            },
+            {
+                "type": "metric", "x": 0, "y": 12, "width": 12, "height": 6,
+                "properties": {
+                    "view": "timeSeries", "stacked": False, "region": aws_region,
+                    "title": "EC2 CPU & Network",
+                    "metrics": [
+                        ["AWS/EC2","CPUUtilization","InstanceId", instance.id],
+                        ["AWS/EC2","NetworkIn","InstanceId", instance.id],
+                        ["AWS/EC2","NetworkOut","InstanceId", instance.id]
+                    ]
+                }
+            }
         ]
-      }}
-    }},
-    {{
-      "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
-      "properties": {{
-        "view": "timeSeries", "stacked": false, "region": "{aws_region}",
-        "title": "Target Health",
-        "metrics": [
-          ["AWS/ApplicationELB","HealthyHostCount","TargetGroup","{args[1]}"]
-        ]
-      }}
-    }},
-    {{
-      "type": "metric", "x": 0, "y": 12, "width": 12, "height": 6,
-      "properties": {{
-        "view": "timeSeries", "stacked": false, "region": "{aws_region}",
-        "title": "EC2 CPU & Network",
-        "metrics": [
-          ["AWS/EC2","CPUUtilization","InstanceId","{instance.id}"] ,
-          ["AWS/EC2","NetworkIn","InstanceId","{instance.id}"],
-          ["AWS/EC2","NetworkOut","InstanceId","{instance.id}"]
-        ]
-      }}
-    }}
-  ]
-}}"""
+    })
 )
 
 aws.cloudwatch.Dashboard(
