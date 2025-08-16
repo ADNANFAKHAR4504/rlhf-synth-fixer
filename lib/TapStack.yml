@@ -74,9 +74,14 @@ Parameters:
 
   PostgresEngineVersion:
     Type: String
-    Default: "14.11"
-    AllowedPattern: "^(1[0-9]|[0-9])([.][0-9]+){0,2}$"
-    Description: Postgres engine version (pinned to stable 14.x)
+    Default: "14.18"
+    AllowedValues:
+      - "17.5"
+      - "16.9"
+      - "15.13"
+      - "14.18"
+      - "13.21"
+    Description: RDS-supported PostgreSQL minor versions
 
   MySqlEngineVersion:
     Type: String
