@@ -384,6 +384,42 @@ resource "aws_kms_key" "s3_key" {
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions",
+        Effect = "Allow",
+        Principal = {
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+        },
+        Action   = "kms:*",
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow ELB to use the key for logging",
+        Effect = "Allow",
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        },
+        Action   = "kms:GenerateDataKey*",
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow EC2 to use the key for S3",
+        Effect = "Allow",
+        Principal = {
+          AWS = aws_iam_role.ec2_role.arn
+        },
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-s3-kms-key"
     Type = "encryption"
