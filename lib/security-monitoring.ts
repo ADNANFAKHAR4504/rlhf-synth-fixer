@@ -125,7 +125,7 @@ export function createSecurityMonitoring(
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableLogFileValidation: true,
-      
+
       eventSelectors: [
         {
           readWriteType: 'All',
@@ -133,7 +133,7 @@ export function createSecurityMonitoring(
           dataResources: [
             {
               type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/*'],
+              values: ['arn:aws:s3:::*/'],
             },
           ],
         },
@@ -145,7 +145,7 @@ export function createSecurityMonitoring(
         ManagedBy: 'Pulumi',
       },
     },
-    { 
+    {
       provider,
       dependsOn: [cloudTrailBucketPolicy],
     }
@@ -153,22 +153,32 @@ export function createSecurityMonitoring(
 
   // Use a simpler approach to handle existing GuardDuty detector
   const guardDutyDetector = pulumi.output(
-    aws.guardduty.getDetector({}, { provider })
+    aws.guardduty
+      .getDetector({}, { provider })
       .then(result => {
         // If detector exists, reference it
-        return aws.guardduty.Detector.get("existing-detector", result.id, undefined, { provider });
+        return aws.guardduty.Detector.get(
+          'existing-detector',
+          result.id,
+          undefined,
+          { provider }
+        );
       })
       .catch(() => {
         // If detector doesn't exist, create one
-        return new aws.guardduty.Detector("main-detector", {
-          enable: true,
-          findingPublishingFrequency: 'FIFTEEN_MINUTES',
-          tags: {
-            Name: `guardduty-${environment}`,
-            Environment: environment,
-            ManagedBy: 'Pulumi',
+        return new aws.guardduty.Detector(
+          'main-detector',
+          {
+            enable: true,
+            findingPublishingFrequency: 'FIFTEEN_MINUTES',
+            tags: {
+              Name: `guardduty-${environment}`,
+              Environment: environment,
+              ManagedBy: 'Pulumi',
+            },
           },
-        }, { provider });
+          { provider }
+        );
       })
   );
 
@@ -224,6 +234,54 @@ export function createSecurityMonitoring(
     { provider }
   );
 
+  // Config bucket policy
+  const configBucketPolicy = new aws.s3.BucketPolicy(
+    `config-bucket-policy-${environment}`,
+    {
+      bucket: configBucket.id,
+      policy: pulumi.all([configBucket.arn]).apply(([bucketArn]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSConfigBucketPermissionsCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'config.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: bucketArn,
+            },
+            {
+              Sid: 'AWSConfigBucketExistenceCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'config.amazonaws.com',
+              },
+              Action: 's3:ListBucket',
+              Resource: bucketArn,
+            },
+            {
+              Sid: 'AWSConfigBucketDelivery',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'config.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${bucketArn}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
+              },
+            },
+          ],
+        })
+      ),
+    },
+    { provider }
+  );
+
   // Config service role
   const configRole = new aws.iam.Role(
     `config-role-${environment}`,
@@ -259,17 +317,7 @@ export function createSecurityMonitoring(
     { provider }
   );
 
-  // Config delivery channel
-  const configDeliveryChannel = new aws.cfg.DeliveryChannel(
-    `config-delivery-channel-${environment}`,
-    {
-      name: `config-delivery-channel-${environment}`,
-      s3BucketName: configBucket.bucket,
-    },
-    { provider }
-  );
-
-  // Config configuration recorder
+  // Config configuration recorder (must be created before delivery channel)
   const configRecorder = new aws.cfg.Recorder(
     `config-recorder-${environment}`,
     {
@@ -280,9 +328,22 @@ export function createSecurityMonitoring(
         includeGlobalResourceTypes: true,
       },
     },
-    { 
+    {
       provider,
-      dependsOn: [configDeliveryChannel],
+      dependsOn: [configBucketPolicy],
+    }
+  );
+
+  // Config delivery channel (depends on recorder)
+  const configDeliveryChannel = new aws.cfg.DeliveryChannel(
+    `config-delivery-channel-${environment}`,
+    {
+      name: `config-delivery-channel-${environment}`,
+      s3BucketName: configBucket.bucket,
+    },
+    {
+      provider,
+      dependsOn: [configRecorder],
     }
   );
 
