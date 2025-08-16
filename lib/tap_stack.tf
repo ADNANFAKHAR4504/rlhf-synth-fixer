@@ -77,9 +77,16 @@ variable "rds_backup_retention_days" {
   default     = 7
 }
 
-variable "cloudfront_acm_certificate_arn" {
-  description = "ACM certificate ARN for CloudFront HTTPS"
+variable "domain_name" {
+  description = "Domain name for ACM certificate and CloudFront. If not provided, CloudFront will use default certificate."
   type        = string
+  default     = null
+}
+
+variable "subject_alternative_names" {
+  description = "List of subject alternative names for the ACM certificate"
+  type        = list(string)
+  default     = []
 }
 
 variable "terraform_role_arn" {
@@ -1515,12 +1522,13 @@ resource "aws_lb_listener" "use1_http" {
 }
 
 resource "aws_lb_listener" "use1_https" {
+  count             = var.domain_name != null ? 1 : 0
   provider          = aws.use1
   load_balancer_arn = aws_lb.use1.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = var.cloudfront_acm_certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.use1_alb[0].certificate_arn
 
   default_action {
     type             = "forward"
@@ -1529,6 +1537,29 @@ resource "aws_lb_listener" "use1_https" {
 
   tags = merge(local.tags, {
     Name   = "${local.use1_name_prefix}-https-listener"
+    Region = "us-east-1"
+  })
+}
+
+# HTTP Listener for US East 1 ALB (when no domain)
+resource "aws_lb_listener" "use1_http_redirect" {
+  count             = var.domain_name == null ? 1 : 0
+  provider          = aws.use1
+  load_balancer_arn = aws_lb.use1.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "OK"
+      status_code  = "200"
+    }
+  }
+
+  tags = merge(local.tags, {
+    Name   = "${local.use1_name_prefix}-http-listener"
     Region = "us-east-1"
   })
 }
@@ -1556,12 +1587,13 @@ resource "aws_lb_listener" "usw2_http" {
 }
 
 resource "aws_lb_listener" "usw2_https" {
+  count             = var.domain_name != null ? 1 : 0
   provider          = aws.usw2
   load_balancer_arn = aws_lb.usw2.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = var.cloudfront_acm_certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.usw2_alb[0].certificate_arn
 
   default_action {
     type             = "forward"
@@ -1570,6 +1602,29 @@ resource "aws_lb_listener" "usw2_https" {
 
   tags = merge(local.tags, {
     Name   = "${local.usw2_name_prefix}-https-listener"
+    Region = "us-west-2"
+  })
+}
+
+# HTTP Listener for US West 2 ALB (when no domain)
+resource "aws_lb_listener" "usw2_http_redirect" {
+  count             = var.domain_name == null ? 1 : 0
+  provider          = aws.usw2
+  load_balancer_arn = aws_lb.usw2.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "OK"
+      status_code  = "200"
+    }
+  }
+
+  tags = merge(local.tags, {
+    Name   = "${local.usw2_name_prefix}-http-listener"
     Region = "us-west-2"
   })
 }
@@ -2504,6 +2559,145 @@ resource "aws_cloudtrail" "main" {
   })
 }
 
+# ACM Certificate for US East 1 ALB (conditional)
+resource "aws_acm_certificate" "use1_alb" {
+  count                     = var.domain_name != null ? 1 : 0
+  provider                  = aws.use1
+  domain_name               = "app.${var.domain_name}"
+  subject_alternative_names = [for san in var.subject_alternative_names : "app.${san}"]
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(local.tags, {
+    Name   = "${var.project}-${var.environment}-use1-alb-cert"
+    Region = "us-east-1"
+  })
+}
+
+# ACM Certificate for US West 2 ALB (conditional)
+resource "aws_acm_certificate" "usw2_alb" {
+  count                     = var.domain_name != null ? 1 : 0
+  provider                  = aws.usw2
+  domain_name               = "app.${var.domain_name}"
+  subject_alternative_names = [for san in var.subject_alternative_names : "app.${san}"]
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(local.tags, {
+    Name   = "${var.project}-${var.environment}-usw2-alb-cert"
+    Region = "us-west-2"
+  })
+}
+
+# Route 53 Certificate Validation Records for ALB certificates (conditional)
+resource "aws_route53_record" "use1_alb_cert_validation" {
+  for_each = var.domain_name != null ? {
+    for dvo in aws_acm_certificate.use1_alb[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  provider        = aws.use1
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.cloudfront[0].zone_id
+}
+
+resource "aws_route53_record" "usw2_alb_cert_validation" {
+  for_each = var.domain_name != null ? {
+    for dvo in aws_acm_certificate.usw2_alb[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  provider        = aws.use1
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.cloudfront[0].zone_id
+}
+
+# ACM Certificate Validation for ALBs (conditional)
+resource "aws_acm_certificate_validation" "use1_alb" {
+  count                   = var.domain_name != null ? 1 : 0
+  provider                = aws.use1
+  certificate_arn         = aws_acm_certificate.use1_alb[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.use1_alb_cert_validation : record.fqdn]
+}
+
+resource "aws_acm_certificate_validation" "usw2_alb" {
+  count                   = var.domain_name != null ? 1 : 0
+  provider                = aws.usw2
+  certificate_arn         = aws_acm_certificate.usw2_alb[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.usw2_alb_cert_validation : record.fqdn]
+}
+
+# ACM Certificate for CloudFront (conditional)
+resource "aws_acm_certificate" "cloudfront" {
+  count                     = var.domain_name != null ? 1 : 0
+  provider                  = aws.use1
+  domain_name               = var.domain_name
+  subject_alternative_names = var.subject_alternative_names
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(local.tags, {
+    Name = "${var.project}-${var.environment}-cloudfront-cert"
+  })
+}
+
+# Route 53 Hosted Zone (conditional)
+data "aws_route53_zone" "cloudfront" {
+  count    = var.domain_name != null ? 1 : 0
+  provider = aws.use1
+  name     = var.domain_name
+}
+
+# Route 53 Certificate Validation Records (conditional)
+resource "aws_route53_record" "cloudfront_cert_validation" {
+  for_each = var.domain_name != null ? {
+    for dvo in aws_acm_certificate.cloudfront[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+
+  provider        = aws.use1
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = data.aws_route53_zone.cloudfront[0].zone_id
+}
+
+# ACM Certificate Validation (conditional)
+resource "aws_acm_certificate_validation" "cloudfront" {
+  count                   = var.domain_name != null ? 1 : 0
+  provider                = aws.use1
+  certificate_arn         = aws_acm_certificate.cloudfront[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.cloudfront_cert_validation : record.fqdn]
+}
+
 # CloudFront Distribution
 resource "aws_cloudfront_distribution" "main" {
   provider = aws.use1
@@ -2515,12 +2709,13 @@ resource "aws_cloudfront_distribution" "main" {
     custom_origin_config {
       http_port              = 80
       https_port             = 443
-      origin_protocol_policy = "https-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
+      origin_protocol_policy = var.domain_name != null ? "https-only" : "http-only"
+      origin_ssl_protocols   = var.domain_name != null ? ["TLSv1.2"] : []
     }
   }
 
   enabled = true
+  aliases = var.domain_name != null ? concat([var.domain_name], var.subject_alternative_names) : []
 
   default_cache_behavior {
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
@@ -2552,9 +2747,10 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = var.cloudfront_acm_certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
+    acm_certificate_arn            = var.domain_name != null ? aws_acm_certificate_validation.cloudfront[0].certificate_arn : null
+    ssl_support_method             = var.domain_name != null ? "sni-only" : null
+    minimum_protocol_version       = var.domain_name != null ? "TLSv1.2_2021" : null
+    cloudfront_default_certificate = var.domain_name == null
   }
 
   tags = merge(local.tags, {
@@ -2593,17 +2789,19 @@ resource "aws_route53_health_check" "usw2_alb" {
   })
 }
 
-# Route 53 Hosted Zone (assuming it exists)
+# Route 53 Hosted Zone for failover records (conditional)
 data "aws_route53_zone" "main" {
+  count    = var.domain_name != null ? 1 : 0
   provider = aws.use1
-  name     = "${var.project}.com"
+  name     = var.domain_name
 }
 
 # Route 53 Failover Records
 resource "aws_route53_record" "primary" {
+  count    = var.domain_name != null ? 1 : 0
   provider = aws.use1
-  zone_id  = data.aws_route53_zone.main.zone_id
-  name     = "app.${data.aws_route53_zone.main.name}"
+  zone_id  = data.aws_route53_zone.main[0].zone_id
+  name     = "app.${data.aws_route53_zone.main[0].name}"
   type     = "A"
 
   set_identifier = "primary"
@@ -2622,9 +2820,10 @@ resource "aws_route53_record" "primary" {
 }
 
 resource "aws_route53_record" "secondary" {
+  count    = var.domain_name != null ? 1 : 0
   provider = aws.use1
-  zone_id  = data.aws_route53_zone.main.zone_id
-  name     = "app.${data.aws_route53_zone.main.name}"
+  zone_id  = data.aws_route53_zone.main[0].zone_id
+  name     = "app.${data.aws_route53_zone.main[0].name}"
   type     = "A"
 
   set_identifier = "secondary"

@@ -78,8 +78,12 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(tapStackContent).toMatch(/variable\s+"rds_engine_version"/);
     });
 
-    test("declares cloudfront_acm_certificate_arn variable", () => {
-      expect(tapStackContent).toMatch(/variable\s+"cloudfront_acm_certificate_arn"/);
+    test("declares domain_name variable", () => {
+      expect(tapStackContent).toMatch(/variable\s+"domain_name"/);
+    });
+
+    test("declares subject_alternative_names variable", () => {
+      expect(tapStackContent).toMatch(/variable\s+"subject_alternative_names"/);
     });
   });
 
