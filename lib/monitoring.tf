@@ -1,6 +1,6 @@
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "web_app" {
-  name              = "/aws/ec2/${local.project_prefix}"
+  name              = "/aws/ec2/${local.project_prefix}-${random_id.bucket_suffix.hex}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
 
@@ -74,8 +74,18 @@ resource "aws_guardduty_detector" "main" {
   tags = local.common_tags
 }
 
-# Simplified Config setup - Create with unique names to avoid conflicts
+# Use existing Config delivery channel and recorder if they exist
+data "aws_config_delivery_channel" "existing" {
+  count = 1
+}
+
+data "aws_config_configuration_recorder" "existing" {
+  count = 1
+}
+
+# Only create Config resources if they don't already exist
 resource "aws_config_delivery_channel" "main" {
+  count          = length(data.aws_config_delivery_channel.existing) == 0 ? 1 : 0
   name           = "${local.project_prefix}-delivery-channel-${random_id.bucket_suffix.hex}"
   s3_bucket_name = aws_s3_bucket.config.bucket
   s3_key_prefix  = "config"
@@ -86,6 +96,7 @@ resource "aws_config_delivery_channel" "main" {
 }
 
 resource "aws_config_configuration_recorder" "main" {
+  count    = length(data.aws_config_configuration_recorder.existing) == 0 ? 1 : 0
   name     = "${local.project_prefix}-recorder-${random_id.bucket_suffix.hex}"
   role_arn = aws_iam_role.config.arn
 
@@ -97,7 +108,8 @@ resource "aws_config_configuration_recorder" "main" {
 
 # Config Configuration Recorder Status
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count      = length(data.aws_config_configuration_recorder.existing) == 0 ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.main]
 }

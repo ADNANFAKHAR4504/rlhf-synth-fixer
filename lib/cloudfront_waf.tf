@@ -1,6 +1,6 @@
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "main" {
-  name                              = "${local.project_prefix}-oac"
+  name                              = "${local.project_prefix}-oac-${random_id.bucket_suffix.hex}"
   description                       = "OAC for ${local.project_prefix}"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -10,7 +10,7 @@ resource "aws_cloudfront_origin_access_control" "main" {
 # WAF Web ACL (must be in us-east-1 for CloudFront)
 resource "aws_wafv2_web_acl" "main" {
   provider = aws
-  name     = "${local.project_prefix}-waf"
+  name     = "${local.project_prefix}-waf-${random_id.bucket_suffix.hex}"
   scope    = "CLOUDFRONT"
 
   default_action {

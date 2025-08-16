@@ -96,12 +96,14 @@ resource "aws_lb" "main" {
     enabled = true
   }
 
+  depends_on = [aws_s3_bucket_policy.logs]
+
   tags = local.common_tags
 }
 
 # ALB Target Group
 resource "aws_lb_target_group" "web" {
-  name     = "${local.short_prefix}-web-tg"
+  name     = "${local.short_prefix}-web-tg-${substr(random_id.bucket_suffix.hex, 0, 6)}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id

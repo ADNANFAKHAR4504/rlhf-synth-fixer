@@ -1,10 +1,10 @@
-# DB Subnet Group
+# DB Subnet Group with unique name to avoid conflicts
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.project_prefix}-db-subnet-group"
+  name       = "${local.project_prefix}-db-subnet-group-${random_id.bucket_suffix.hex}"
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.project_prefix}-db-subnet-group"
+    Name = "${local.project_prefix}-db-subnet-group-${random_id.bucket_suffix.hex}"
   })
 }
 
