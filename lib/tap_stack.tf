@@ -109,8 +109,8 @@ locals {
     "us-west-2" = "usw2"
   }
 
-  use1_name_prefix = format("%s-%s-%s", var.project, var.environment, local.region_suffix["us-east-1"])
-  usw2_name_prefix = format("%s-%s-%s", var.project, var.environment, local.region_suffix["us-west-2"])
+  use1_name_prefix = format("%s-%s-%s", "tap", var.environment, local.region_suffix["us-east-1"])
+  usw2_name_prefix = format("%s-%s-%s", "tap", var.environment, local.region_suffix["us-west-2"])
 }
 
 # Data Sources
