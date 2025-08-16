@@ -623,7 +623,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         name: `main-cloudtrail-${args.environment}`,
         s3BucketName: cloudtrailBucket.bucket,
         includeGlobalServiceEvents: true,
-        isMultiRegionTrail: true,
+        isMultiRegionTrail: false,
         enableLogFileValidation: true,
         kmsKeyId: kmsKey.arn,
 
