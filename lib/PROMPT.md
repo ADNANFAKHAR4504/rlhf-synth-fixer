@@ -1,63 +1,35 @@
-## CI/CD Pipeline Implementation Request
+# CI/CD setup notes
 
-I need to build a complete CI/CD pipeline using Pulumi and TypeScript. This should be a production-ready system that automatically deploys infrastructure to AWS based on GitHub pushes across different environments.
+We need to get our deployment pipeline working. Using Pulumi with TypeScript to define everything.
 
----
+## What we're building
 
-### What I Need Built
+GitHub repo triggers builds automatically:
 
-Create a Pulumi TypeScript project that sets up the entire CI/CD infrastructure.
+- main -> production
+- staging -> staging
+- feature/\* -> dev
 
-#### Source Control Integration
+CodeBuild handles the builds. Needs to be Docker-based so everyone gets the same environment.
 
-- Connect to a **GitHub repository** without authentication (use any public repo for now)
-- Set up automatic triggers based on Git pushes:
-  - `main` branch → **production** stack
-  - `staging` branch → **staging** stack
-  - `feature/*` branches → **development** stack
+## Security
 
-#### Build Infrastructure
+Put secrets in AWS Secrets Manager (slack webhook etc). CodeBuild role should only have permissions it actually needs. Don't hardcode anything in buildspecs.
 
-- Use **AWS CodeBuild** for the build and deployment engine
-- Configure a **Docker-based** build environment for consistency
-- Keep the build process contained within CodeBuild
+## Test deployment
 
-#### Security Requirements
+Add a basic lambda so we can verify deployments work. Pipeline updates it based on branch.
 
-- Store secrets (like Slack webhook URLs) in **AWS Secrets Manager**
-- Create a least-privilege **IAM Role** for CodeBuild to fetch secrets at runtime
-- Don't put any plaintext secrets in the build spec
+## Notifications
 
-#### Sample Application
+CloudWatch for logs. Slack messages when builds finish (success/fail). EventBridge watches build state changes, triggers notification lambda.
 
-- Include a simple **AWS Lambda function** as a deployment target
-- The pipeline should deploy/update this Lambda based on the branch being built
+Requirements:
 
-#### Monitoring Setup
+- TypeScript + Pulumi
+- CodeBuild, IAM roles, secrets manager
+- Multi-environment support
+- CloudWatch logging
+- Slack integration
 
-- Send all CodeBuild logs to **Amazon CloudWatch**
-- Set up real-time Slack notifications for build success/failure
-- Use EventBridge to watch pipeline state and trigger a notification Lambda
-
----
-
-### Requirements Checklist
-
-Make sure the implementation includes:
-
-- Complete CI/CD pipeline (CodeBuild, IAM Roles, etc.) defined in Pulumi TypeScript
-- GitHub integration for source control
-- Environment support: `development`, `staging`, and `production` based on branch names
-- AWS CodeBuild with Docker environment
-- Secure secret fetching from AWS Secrets Manager
-- Sample AWS Lambda function deployment
-- CloudWatch logging for all build activities
-- Slack notifications for build success/failure
-
----
-
-### Deliverables
-
-- **Language**: TypeScript
-- **Infrastructure Tool**: Pulumi
-- **Focus**: Infrastructure code implementation over documentation
+Focus on infrastructure code not docs.
