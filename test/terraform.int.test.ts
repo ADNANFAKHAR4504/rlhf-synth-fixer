@@ -170,7 +170,8 @@ describe('AWS Secure Multi-Account Environment Integration Tests', () => {
       }).promise();
 
       expect(keyDescription.KeyMetadata?.Enabled).toBe(true);
-      expect(keyDescription.KeyMetadata?.KeyRotationStatus).toBe(true);
+      const rotationStatus = await kms.getKeyRotationStatus({ KeyId: kmsKeyInfo.key_id }).promise();
+      expect(rotationStatus.KeyRotationEnabled).toBe(true);
     }, 15000);
   });
 
