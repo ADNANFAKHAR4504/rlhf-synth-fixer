@@ -39,7 +39,7 @@ function getSubnetIds(env: Environment, type: 'public' | 'private'): string[] {
   const prefix = `${env}-${type}`;
   return Object.entries(subnetMap)
     .filter(([key]) => key.startsWith(prefix))
-    .map(([, val]) => val);
+    .map(([, val]) => val as string);
 }
 
 describe("Outputs.json Infrastructure Coverage", () => {
