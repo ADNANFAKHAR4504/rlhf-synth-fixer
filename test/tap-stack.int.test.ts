@@ -63,25 +63,7 @@ const loadStackOutputs = () => {
 };
 
 const initializeClients = (region?: string) => {
-  // Check for AWS_REGION environment variable or region from lib/AWS_REGION file, default to us-east-1
-  let configuredRegion = region || 'us-east-1';
-  
-  // Check for lib/AWS_REGION file as per QA trainer instructions
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const regionFile = path.join(__dirname, '../lib/AWS_REGION');
-    if (fs.existsSync(regionFile)) {
-      const fileRegion = fs.readFileSync(regionFile, 'utf8').trim();
-      if (fileRegion) {
-        configuredRegion = fileRegion;
-      }
-    }
-  } catch (error) {
-    // Ignore file read errors, use default
-  }
-  
-  const defaultRegion = configuredRegion;
+  const defaultRegion = 'ap-south-1';
 
   return {
     ec2: new EC2Client({ region: defaultRegion }),
@@ -99,8 +81,6 @@ const initializeClients = (region?: string) => {
 };
 
 const extractResourceIds = (outputs: any) => {
-  // Handle both Pulumi and CloudFormation output structures
-  const stackOutputs = outputs.TapStackpr1370 || outputs;
   
   return {
     // Pulumi outputs (preferred)
@@ -109,21 +89,18 @@ const extractResourceIds = (outputs: any) => {
     privateSubnetIds: Array.isArray(outputs.privateSubnetIds) ? outputs.privateSubnetIds : [],
     webSecurityGroupId: outputs.webSecurityGroupId,
     dbSecurityGroupId: outputs.dbSecurityGroupId,
-    iamRoleArn: outputs.iamRoleArn || stackOutputs.iamRoleArn,
+    iamRoleArn: outputs.iamRoleArn,
     instanceProfileName: outputs.instanceProfileName,
-    dynamoTableName: outputs.dynamoTableName || stackOutputs.dynamoTableName,
+    dynamoTableName: outputs.dynamoTableName,
     kmsKeyId: outputs.kmsKeyId,
     kmsKeyArn: outputs.kmsKeyArn,
     cloudtrailArn: outputs.cloudtrailArn,
-    s3BucketName: outputs.s3BucketName || (stackOutputs.s3BucketId || stackOutputs.s3BucketArn?.split(':::')[1]),
+    s3BucketName: outputs.s3BucketName,
     availableAZs: Array.isArray(outputs.availableAZs) ? outputs.availableAZs : [],
     snsTopicArn: outputs.snsTopicArn,
     guardDutyDetectorId: outputs.guardDutyDetectorId,
-    configDeliveryChannelName: outputs.configDeliveryChannelName || 'existing-config-delivery-channel',
-    environment: outputs.environment || 'test',
-    // CloudFormation fallbacks
-    rdsEndpoint: stackOutputs.rdsEndpoint,
-    rdsInstanceId: stackOutputs.rdsInstanceId,
+    configDeliveryChannelName: outputs.configDeliveryChannelName,
+    environment: outputs.environment,
   };
 };
 
@@ -134,8 +111,12 @@ describe('TapStack Integration Tests', () => {
 
   beforeAll(async () => {
     try {
-      const outputs = loadStackOutputs();
-      resourceIds = extractResourceIds(outputs);
+      const stackOutputs = loadStackOutputs();
+      const stackName = Object.keys(stackOutputs)[0];
+      if (!stackName) {
+        throw new Error('No stack outputs found');
+      }
+      resourceIds = extractResourceIds(stackOutputs[stackName]);
       clients = initializeClients();
 
       const identity = await clients.sts.send(new GetCallerIdentityCommand({}));
