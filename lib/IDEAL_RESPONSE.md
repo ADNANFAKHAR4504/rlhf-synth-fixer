@@ -136,12 +136,12 @@ length(try(data.aws_subnet.any_first_available, [])) > 0 ? data.aws_subnet.any_f
 
 # Determine KMS key to use
 
-kms_key_arn = var.kms_key_arn != "" ? var.kms_key_arn : data.aws_kms_key.s3[0].arn
+kms_key_arn = var.kms_key_arn != "" ? var.kms_key_arn : aws_kms_key.s3_encryption[0].arn
 
 # Generate unique bucket names if not provided
 
-app_bucket_name = var.app_bucket_name != "" ? var.app_bucket_name : "prod-app-${random_id.suffix.hex}"
-  trail_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : "prod-trail-${random_id.suffix.hex}"
+app_bucket_name = var.app_bucket_name != "" ? var.app_bucket_name : "prod-app-${var.aws_region}-${random_id.suffix.hex}"
+trail_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : "prod-trail-${var.aws_region}-${random_id.suffix.hex}"
 
 app_bucket_arn = "arn:aws:s3:::${local.app_bucket_name}"
   trail_bucket_arn = "arn:aws:s3:::${local.trail_bucket_name}"
@@ -197,11 +197,46 @@ values = ["available"]
 }
 }
 
-# Get AWS managed S3 KMS key if no custom key provided
+# Create a KMS key for S3 encryption when no custom key is provided
 
-data "aws_kms_key" "s3" {
+resource "aws_kms_key" "s3_encryption" {
 count = var.kms_key_arn == "" ? 1 : 0
-key_id = "alias/aws/s3"
+description = "KMS key for S3 bucket encryption"
+
+policy = jsonencode({
+Version = "2012-10-17"
+Statement = [
+{
+Sid = "EnableIAMUserPermissions"
+Effect = "Allow"
+Principal = {
+AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+}
+Action = "kms:_"
+Resource = "_"
+},
+{
+Sid = "AllowS3Service"
+Effect = "Allow"
+Principal = {
+Service = "s3.amazonaws.com"
+}
+Action = [
+"kms:Decrypt",
+"kms:GenerateDataKey"
+]
+Resource = "\*"
+}
+]
+})
+
+tags = local.common_tags
+}
+
+resource "aws_kms_alias" "s3_encryption" {
+count = var.kms_key_arn == "" ? 1 : 0
+name = "alias/s3-encryption-${random_id.suffix.hex}"
+target_key_id = aws_kms_key.s3_encryption[0].key_id
 }
 
 data "aws_subnet" "first_available" {
@@ -218,6 +253,7 @@ id = data.aws_subnets.any_available[0].ids[0]
 
 resource "aws_s3_bucket" "app" {
 bucket = local.app_bucket_name
+force_destroy = true
 tags = local.common_tags
 }
 
@@ -352,6 +388,7 @@ local.app_bucket_arn,
 
 resource "aws_s3_bucket" "trail" {
 bucket = local.trail_bucket_name
+force_destroy = true
 tags = local.common_tags
 }
 
