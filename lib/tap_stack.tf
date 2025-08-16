@@ -211,7 +211,23 @@ resource "aws_kms_key" "s3_encryption" {
         }
         Action = [
           "kms:Decrypt",
-          "kms:GenerateDataKey"
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudTrailService"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
       }
@@ -287,10 +303,12 @@ resource "aws_s3_bucket_policy" "app" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "DenyInsecureTransport"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
+        Sid    = "DenyInsecureTransport"
+        Effect = "Deny"
+        Principal = {
+          AWS = "*"
+        }
+        Action = "s3:*"
         Resource = [
           aws_s3_bucket.app.arn,
           "${aws_s3_bucket.app.arn}/*"
@@ -302,9 +320,11 @@ resource "aws_s3_bucket_policy" "app" {
         }
       },
       {
-        Sid       = "AllowTagBasedAccess"
-        Effect    = "Allow"
-        Principal = "*"
+        Sid    = "AllowTagBasedAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
         Action = [
           "s3:GetObject",
           "s3:PutObject",
@@ -399,9 +419,9 @@ resource "aws_s3_bucket_public_access_block" "trail" {
   bucket = aws_s3_bucket.trail.id
 
   block_public_acls       = true
-  block_public_policy     = true
+  block_public_policy     = false # Allow CloudTrail service policy
   ignore_public_acls      = true
-  restrict_public_buckets = true
+  restrict_public_buckets = false # Allow CloudTrail service access
 }
 
 resource "aws_s3_bucket_ownership_controls" "trail" {

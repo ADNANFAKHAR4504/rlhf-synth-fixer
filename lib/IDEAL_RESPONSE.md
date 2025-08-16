@@ -223,9 +223,25 @@ Service = "s3.amazonaws.com"
 }
 Action = [
 "kms:Decrypt",
-"kms:GenerateDataKey"
+"kms:GenerateDataKey",
+"kms:DescribeKey"
 ]
-Resource = "\*"
+Resource = "_"
+},
+{
+Sid = "AllowCloudTrailService"
+Effect = "Allow"
+Principal = {
+Service = "cloudtrail.amazonaws.com"
+}
+Action = [
+"kms:Encrypt",
+"kms:Decrypt",
+"kms:ReEncrypt_",
+"kms:GenerateDataKey*",
+"kms:DescribeKey"
+]
+Resource = "*"
 }
 ]
 })
@@ -302,7 +318,9 @@ Statement = [
 {
 Sid = "DenyInsecureTransport"
 Effect = "Deny"
-Principal = "_"
+Principal = {
+AWS = "_"
+}
 Action = "s3:_"
 Resource = [
 aws_s3_bucket.app.arn,
@@ -317,15 +335,17 @@ Bool = {
 {
 Sid = "AllowTagBasedAccess"
 Effect = "Allow"
-Principal = "_"
-Action = [
-"s3:GetObject",
-"s3:PutObject",
-"s3:ListBucket"
-]
-Resource = [
-aws_s3_bucket.app.arn,
-"${aws_s3_bucket.app.arn}/_"
+Principal = {
+AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.app.arn,
+          "${aws_s3_bucket.app.arn}/\*"
 ]
 Condition = {
 StringEquals = {
@@ -415,9 +435,9 @@ resource "aws_s3_bucket_public_access_block" "trail" {
 bucket = aws_s3_bucket.trail.id
 
 block_public_acls = true
-block_public_policy = true
+block_public_policy = false # Allow CloudTrail service policy
 ignore_public_acls = true
-restrict_public_buckets = true
+restrict_public_buckets = false # Allow CloudTrail service access
 }
 
 resource "aws_s3_bucket_ownership_controls" "trail" {
