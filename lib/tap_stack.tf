@@ -95,6 +95,12 @@ variable "terraform_role_arn" {
   default     = ""
 }
 
+variable "enable_cloudtrail" {
+  description = "Enable CloudTrail creation (set to false if quota limits are reached)"
+  type        = bool
+  default     = false
+}
+
 # Locals
 locals {
   tags = {
@@ -141,6 +147,41 @@ resource "aws_kms_key" "use1" {
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.us-east-1.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:us-east-1:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
+
   tags = merge(local.tags, {
     Name   = "${local.use1_name_prefix}-kms"
     Region = "us-east-1"
@@ -158,6 +199,41 @@ resource "aws_kms_key" "usw2" {
   description             = "KMS key for ${local.usw2_name_prefix}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.us-west-2.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:us-west-2:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
+      }
+    ]
+  })
 
   tags = merge(local.tags, {
     Name   = "${local.usw2_name_prefix}-kms"
@@ -2550,6 +2626,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 }
 
 resource "aws_cloudtrail" "main" {
+  count                         = var.enable_cloudtrail ? 1 : 0
   provider                      = aws.use1
   name                          = "${var.project}-${var.environment}-cloudtrail"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.id
@@ -2904,7 +2981,7 @@ output "s3_bucket_names" {
 
 output "cloudtrail_trail_arn" {
   description = "CloudTrail trail ARN"
-  value       = aws_cloudtrail.main.arn
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].arn : null
 }
 
 output "route53_failover_record_names" {
