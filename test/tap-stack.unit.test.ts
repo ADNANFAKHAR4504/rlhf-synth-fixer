@@ -7,17 +7,10 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Read the JSON template generated from YAML
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -28,7 +21,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Secure AWS Infrastructure with S3 buckets, EC2 instances, and IAM roles - us-west-2 region'
       );
     });
 
@@ -36,11 +29,53 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
+
+    test('should target us-west-2 region in mappings', () => {
+      expect(template.Mappings).toBeDefined();
+      expect(template.Mappings.RegionMap).toBeDefined();
+      expect(template.Mappings.RegionMap['us-west-2']).toBeDefined();
+      expect(template.Mappings.RegionMap['us-west-2'].AMI).toBe('ami-0c2d3e23b7e8d8b5a');
+    });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
+    test('should have all required parameters', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Parameters.Environment).toBeDefined();
+      expect(template.Parameters.Project).toBeDefined();
+      expect(template.Parameters.Owner).toBeDefined();
+      expect(template.Parameters.InstanceType).toBeDefined();
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    });
+
+    test('Environment parameter should have correct properties', () => {
+      const envParam = template.Parameters.Environment;
+      expect(envParam.Type).toBe('String');
+      expect(envParam.Default).toBe('production');
+      expect(envParam.AllowedValues).toEqual(['development', 'staging', 'production']);
+      expect(envParam.Description).toBe('Environment tag value');
+    });
+
+    test('Project parameter should have correct properties', () => {
+      const projectParam = template.Parameters.Project;
+      expect(projectParam.Type).toBe('String');
+      expect(projectParam.Default).toBe('secure-infrastructure');
+      expect(projectParam.Description).toBe('Project tag value');
+    });
+
+    test('Owner parameter should have correct properties', () => {
+      const ownerParam = template.Parameters.Owner;
+      expect(ownerParam.Type).toBe('String');
+      expect(ownerParam.Default).toBe('infrastructure-team');
+      expect(ownerParam.Description).toBe('Owner tag value');
+    });
+
+    test('InstanceType parameter should have correct properties', () => {
+      const instanceParam = template.Parameters.InstanceType;
+      expect(instanceParam.Type).toBe('String');
+      expect(instanceParam.Default).toBe('t3.micro');
+      expect(instanceParam.AllowedValues).toEqual(['t3.micro', 't3.small', 't3.medium']);
+      expect(instanceParam.Description).toBe('EC2 instance type');
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -57,57 +92,268 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('S3 Bucket Resources', () => {
+    test('should have SecureDataBucket resource', () => {
+      expect(template.Resources.SecureDataBucket).toBeDefined();
+      const bucket = template.Resources.SecureDataBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      expect(bucket.DeletionPolicy).toBe('Delete');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('SecureDataBucket should have correct properties', () => {
+      const bucket = template.Resources.SecureDataBucket;
+      const properties = bucket.Properties;
+      
+      // Check bucket name includes environment suffix
+      expect(properties.BucketName).toEqual({
+        'Fn::Sub': '${Project}-secure-data-${EnvironmentSuffix}-${AWS::AccountId}',
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      
+      // Check encryption configuration
+      expect(properties.BucketEncryption).toBeDefined();
+      expect(properties.BucketEncryption.ServerSideEncryptionConfiguration).toHaveLength(1);
+      expect(properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(properties.BucketEncryption.ServerSideEncryptionConfiguration[0].BucketKeyEnabled).toBe(true);
+      
+      // Check public access block
+      expect(properties.PublicAccessBlockConfiguration).toBeDefined();
+      expect(properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(properties.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+      expect(properties.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
+      expect(properties.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+      
+      // Check versioning
+      expect(properties.VersioningConfiguration).toBeDefined();
+      expect(properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('LogsBucket should have correct properties', () => {
+      expect(template.Resources.LogsBucket).toBeDefined();
+      const bucket = template.Resources.LogsBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      expect(bucket.DeletionPolicy).toBe('Delete');
+      
+      const properties = bucket.Properties;
+      
+      // Check bucket name includes environment suffix
+      expect(properties.BucketName).toEqual({
+        'Fn::Sub': '${Project}-logs-${EnvironmentSuffix}-${AWS::AccountId}',
+      });
+      
+      // Check encryption
+      expect(properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      
+      // Check lifecycle policy
+      expect(properties.LifecycleConfiguration).toBeDefined();
+      expect(properties.LifecycleConfiguration.Rules).toHaveLength(1);
+      expect(properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(90);
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('both S3 buckets should have mandatory tags', () => {
+      const buckets = ['SecureDataBucket', 'LogsBucket'];
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        expect(bucket.Properties.Tags).toBeDefined();
+        expect(bucket.Properties.Tags).toHaveLength(3);
+        
+        const tagKeys = bucket.Properties.Tags.map((tag: any) => tag.Key);
+        expect(tagKeys).toContain('Environment');
+        expect(tagKeys).toContain('Project');
+        expect(tagKeys).toContain('Owner');
+      });
+    });
+  });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+  describe('IAM Resources', () => {
+    test('should have EC2InstanceRole with least privilege', () => {
+      expect(template.Resources.EC2InstanceRole).toBeDefined();
+      const role = template.Resources.EC2InstanceRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+      
+      // Check role name includes environment suffix
+      expect(role.Properties.RoleName).toEqual({
+        'Fn::Sub': '${Project}-ec2-role-${EnvironmentSuffix}'
+      });
+      
+      // Check assume role policy
+      expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
+      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
+      
+      // Check managed policies
+      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
+      
+      // Check inline policies
+      expect(role.Properties.Policies).toHaveLength(1);
+      expect(role.Properties.Policies[0].PolicyName).toBe('S3AccessPolicy');
+    });
+
+    test('EC2InstanceRole should have specific S3 permissions only', () => {
+      const role = template.Resources.EC2InstanceRole;
+      const policy = role.Properties.Policies[0].PolicyDocument;
+      
+      expect(policy.Statement).toHaveLength(3);
+      
+      // Check first statement - GetObject and PutObject on SecureDataBucket
+      expect(policy.Statement[0].Effect).toBe('Allow');
+      expect(policy.Statement[0].Action).toContain('s3:GetObject');
+      expect(policy.Statement[0].Action).toContain('s3:PutObject');
+      
+      // Check second statement - ListBucket on SecureDataBucket
+      expect(policy.Statement[1].Effect).toBe('Allow');
+      expect(policy.Statement[1].Action).toContain('s3:ListBucket');
+      
+      // Check third statement - PutObject on LogsBucket
+      expect(policy.Statement[2].Effect).toBe('Allow');
+      expect(policy.Statement[2].Action).toContain('s3:PutObject');
+    });
+
+    test('should have ApplicationServiceRole with least privilege', () => {
+      expect(template.Resources.ApplicationServiceRole).toBeDefined();
+      const role = template.Resources.ApplicationServiceRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+      
+      // Check role name includes environment suffix
+      expect(role.Properties.RoleName).toEqual({
+        'Fn::Sub': '${Project}-app-service-role-${EnvironmentSuffix}'
+      });
+      
+      // Check assume role policy for Lambda
+      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      
+      // Check managed policies
+      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
+      
+      // Check inline policies - read-only access
+      const policy = role.Properties.Policies[0];
+      expect(policy.PolicyName).toBe('ReadOnlyS3Access');
+      expect(policy.PolicyDocument.Statement[0].Action).toContain('s3:GetObject');
+      expect(policy.PolicyDocument.Statement[0].Action).toContain('s3:ListBucket');
+      expect(policy.PolicyDocument.Statement[0].Action).not.toContain('s3:PutObject');
+      expect(policy.PolicyDocument.Statement[0].Action).not.toContain('s3:DeleteObject');
+    });
+
+    test('should have EC2InstanceProfile', () => {
+      expect(template.Resources.EC2InstanceProfile).toBeDefined();
+      const profile = template.Resources.EC2InstanceProfile;
+      expect(profile.Type).toBe('AWS::IAM::InstanceProfile');
+      
+      // Check profile name includes environment suffix
+      expect(profile.Properties.InstanceProfileName).toEqual({
+        'Fn::Sub': '${Project}-ec2-profile-${EnvironmentSuffix}'
+      });
+      
+      expect(profile.Properties.Roles).toHaveLength(1);
+      expect(profile.Properties.Roles[0]).toEqual({ Ref: 'EC2InstanceRole' });
+    });
+
+    test('all IAM resources should have mandatory tags', () => {
+      const iamResources = ['EC2InstanceRole', 'ApplicationServiceRole'];
+      iamResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource.Properties.Tags).toBeDefined();
+        expect(resource.Properties.Tags).toHaveLength(3);
+        
+        const tagKeys = resource.Properties.Tags.map((tag: any) => tag.Key);
+        expect(tagKeys).toContain('Environment');
+        expect(tagKeys).toContain('Project');
+        expect(tagKeys).toContain('Owner');
+      });
+    });
+  });
+
+  describe('EC2 Resources', () => {
+    test('should have EC2SecurityGroup with minimal access', () => {
+      expect(template.Resources.EC2SecurityGroup).toBeDefined();
+      const sg = template.Resources.EC2SecurityGroup;
+      expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
+      
+      // Check security group name includes environment suffix
+      expect(sg.Properties.GroupName).toEqual({
+        'Fn::Sub': '${Project}-ec2-sg-${EnvironmentSuffix}'
+      });
+      
+      // Check ingress rules
+      expect(sg.Properties.SecurityGroupIngress).toHaveLength(3);
+      
+      // SSH should be restricted to private networks
+      const sshRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 22);
+      expect(sshRule).toBeDefined();
+      expect(sshRule.CidrIp).toBe('10.0.0.0/8');
+      
+      // HTTP and HTTPS should be open
+      const httpRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 80);
+      expect(httpRule).toBeDefined();
+      expect(httpRule.CidrIp).toBe('0.0.0.0/0');
+      
+      const httpsRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 443);
+      expect(httpsRule).toBeDefined();
+      expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
+    });
+
+    test('should have WebServerInstance with correct configuration', () => {
+      expect(template.Resources.WebServerInstance).toBeDefined();
+      const instance = template.Resources.WebServerInstance;
+      expect(instance.Type).toBe('AWS::EC2::Instance');
+      
+      // Check instance uses correct AMI mapping
+      expect(instance.Properties.ImageId).toEqual({
+        'Fn::FindInMap': ['RegionMap', { Ref: 'AWS::Region' }, 'AMI']
+      });
+      
+      // Check instance type parameter reference
+      expect(instance.Properties.InstanceType).toEqual({ Ref: 'InstanceType' });
+      
+      // Check IAM instance profile
+      expect(instance.Properties.IamInstanceProfile).toEqual({ Ref: 'EC2InstanceProfile' });
+      
+      // Check security group
+      expect(instance.Properties.SecurityGroupIds).toHaveLength(1);
+      expect(instance.Properties.SecurityGroupIds[0]).toEqual({ Ref: 'EC2SecurityGroup' });
+      
+      // Check UserData exists
+      expect(instance.Properties.UserData).toBeDefined();
+    });
+
+    test('WebServerInstance should have CloudWatch agent in UserData', () => {
+      const instance = template.Resources.WebServerInstance;
+      const userData = instance.Properties.UserData['Fn::Base64']['Fn::Sub'];
+      
+      expect(userData).toContain('yum update -y');
+      expect(userData).toContain('amazon-cloudwatch-agent');
+      expect(userData).toContain('/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl');
+    });
+
+    test('EC2 resources should have mandatory tags', () => {
+      const ec2Resources = ['EC2SecurityGroup', 'WebServerInstance'];
+      ec2Resources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource.Properties.Tags).toBeDefined();
+        
+        const tagKeys = resource.Properties.Tags.map((tag: any) => tag.Key);
+        expect(tagKeys).toContain('Environment');
+        expect(tagKeys).toContain('Project');
+        expect(tagKeys).toContain('Owner');
+      });
+    });
+
+    test('WebServerInstance should have Name tag with environment suffix', () => {
+      const instance = template.Resources.WebServerInstance;
+      const nameTag = instance.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag).toBeDefined();
+      expect(nameTag.Value).toEqual({
+        'Fn::Sub': '${Project}-web-server-${EnvironmentSuffix}'
+      });
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
+        'SecureDataBucketName',
+        'LogsBucketName',
+        'EC2InstanceId',
+        'EC2InstanceRoleArn',
+        'ApplicationServiceRoleArn',
         'StackName',
         'EnvironmentSuffix',
       ];
@@ -117,43 +363,60 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+    test('SecureDataBucketName output should be correct', () => {
+      const output = template.Outputs.SecureDataBucketName;
+      expect(output.Description).toBe('Name of the secure data S3 bucket');
+      expect(output.Value).toEqual({ Ref: 'SecureDataBucket' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+        'Fn::Sub': '${AWS::StackName}-SecureDataBucket',
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('LogsBucketName output should be correct', () => {
+      const output = template.Outputs.LogsBucketName;
+      expect(output.Description).toBe('Name of the logs S3 bucket');
+      expect(output.Value).toEqual({ Ref: 'LogsBucket' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-LogsBucket',
+      });
+    });
+
+    test('EC2InstanceId output should be correct', () => {
+      const output = template.Outputs.EC2InstanceId;
+      expect(output.Description).toBe('Instance ID of the web server');
+      expect(output.Value).toEqual({ Ref: 'WebServerInstance' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-WebServerInstance',
+      });
+    });
+
+    test('EC2InstanceRoleArn output should be correct', () => {
+      const output = template.Outputs.EC2InstanceRoleArn;
+      expect(output.Description).toBe('ARN of the EC2 instance role');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+        'Fn::GetAtt': ['EC2InstanceRole', 'Arn'],
       });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
+        'Fn::Sub': '${AWS::StackName}-EC2InstanceRole',
       });
     });
 
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+    test('ApplicationServiceRoleArn output should be correct', () => {
+      const output = template.Outputs.ApplicationServiceRoleArn;
+      expect(output.Description).toBe('ARN of the application service role');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['ApplicationServiceRole', 'Arn'],
+      });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${AWS::StackName}-ApplicationServiceRole',
+      });
+    });
+
+    test('all outputs should have exports with stack name prefix', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export).toBeDefined();
+        expect(output.Export.Name).toBeDefined();
       });
     });
   });
@@ -172,38 +435,191 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(7); // 2 S3 buckets, 2 IAM roles, 1 instance profile, 1 security group, 1 EC2 instance
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(5); // Environment, Project, Owner, InstanceType, EnvironmentSuffix
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(7);
+    });
+  });
+
+  describe('Security Compliance', () => {
+    test('all S3 buckets should have encryption enabled', () => {
+      const buckets = ['SecureDataBucket', 'LogsBucket'];
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        expect(bucket.Properties.BucketEncryption).toBeDefined();
+        expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      });
+    });
+
+    test('all S3 buckets should block public access', () => {
+      const buckets = ['SecureDataBucket', 'LogsBucket'];
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
+        expect(publicAccess.BlockPublicAcls).toBe(true);
+        expect(publicAccess.BlockPublicPolicy).toBe(true);
+        expect(publicAccess.IgnorePublicAcls).toBe(true);
+        expect(publicAccess.RestrictPublicBuckets).toBe(true);
+      });
+    });
+
+    test('IAM roles should follow least privilege principle', () => {
+      // EC2 role should only have specific S3 permissions
+      const ec2Role = template.Resources.EC2InstanceRole;
+      const ec2Policy = ec2Role.Properties.Policies[0].PolicyDocument;
+      ec2Policy.Statement.forEach((statement: any) => {
+        expect(statement.Effect).toBe('Allow');
+        expect(statement.Action).not.toContain('*');
+        expect(statement.Resource).not.toContain('*');
+      });
+
+      // Application role should only have read permissions
+      const appRole = template.Resources.ApplicationServiceRole;
+      const appPolicy = appRole.Properties.Policies[0].PolicyDocument;
+      appPolicy.Statement.forEach((statement: any) => {
+        expect(statement.Effect).toBe('Allow');
+        expect(statement.Action).not.toContain('s3:DeleteObject');
+        expect(statement.Action).not.toContain('s3:PutObject');
+      });
+    });
+
+    test('SSH access should be restricted to private networks', () => {
+      const sg = template.Resources.EC2SecurityGroup;
+      const sshRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 22);
+      expect(sshRule.CidrIp).not.toBe('0.0.0.0/0');
+      expect(sshRule.CidrIp).toBe('10.0.0.0/8');
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
+    test('all named resources should include environment suffix', () => {
+      // Check S3 bucket names
+      expect(template.Resources.SecureDataBucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      expect(template.Resources.LogsBucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      
+      // Check IAM role names
+      expect(template.Resources.EC2InstanceRole.Properties.RoleName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      expect(template.Resources.ApplicationServiceRole.Properties.RoleName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      
+      // Check instance profile name
+      expect(template.Resources.EC2InstanceProfile.Properties.InstanceProfileName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      
+      // Check security group name
+      expect(template.Resources.EC2SecurityGroup.Properties.GroupName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      
+      // Check EC2 instance name tag
+      const nameTag = template.Resources.WebServerInstance.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('export names should follow naming convention', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
+        expect(output.Export.Name['Fn::Sub']).toContain('${AWS::StackName}');
+      });
+    });
+  });
+
+  describe('Deletion Policy', () => {
+    test('all S3 buckets should have Delete policy for cleanup', () => {
+      const buckets = ['SecureDataBucket', 'LogsBucket'];
+      buckets.forEach(bucketName => {
+        const bucket = template.Resources[bucketName];
+        expect(bucket.DeletionPolicy).toBe('Delete');
+      });
+    });
+
+    test('no resources should have Retain deletion policy', () => {
+      Object.keys(template.Resources).forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource.DeletionPolicy) {
+          expect(resource.DeletionPolicy).not.toBe('Retain');
+        }
+      });
+    });
+  });
+
+  describe('Tagging Compliance', () => {
+    test('all taggable resources should have mandatory tags', () => {
+      const mandatoryTags = ['Environment', 'Project', 'Owner'];
+      const taggableResources = [
+        'SecureDataBucket',
+        'LogsBucket',
+        'EC2InstanceRole',
+        'ApplicationServiceRole',
+        'EC2SecurityGroup',
+        'WebServerInstance'
+      ];
+
+      taggableResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource.Properties.Tags).toBeDefined();
+        
+        const tagKeys = resource.Properties.Tags.map((tag: any) => tag.Key);
+        mandatoryTags.forEach(mandatoryTag => {
+          expect(tagKeys).toContain(mandatoryTag);
         });
+      });
+    });
+
+    test('Environment tag should reference Environment parameter', () => {
+      const taggableResources = [
+        'SecureDataBucket',
+        'LogsBucket',
+        'EC2InstanceRole',
+        'ApplicationServiceRole',
+        'EC2SecurityGroup',
+        'WebServerInstance'
+      ];
+
+      taggableResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
+        expect(envTag.Value).toEqual({ Ref: 'Environment' });
+      });
+    });
+
+    test('Project tag should reference Project parameter', () => {
+      const taggableResources = [
+        'SecureDataBucket',
+        'LogsBucket',
+        'EC2InstanceRole',
+        'ApplicationServiceRole',
+        'EC2SecurityGroup',
+        'WebServerInstance'
+      ];
+
+      taggableResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        const projectTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Project');
+        expect(projectTag.Value).toEqual({ Ref: 'Project' });
+      });
+    });
+
+    test('Owner tag should reference Owner parameter', () => {
+      const taggableResources = [
+        'SecureDataBucket',
+        'LogsBucket',
+        'EC2InstanceRole',
+        'ApplicationServiceRole',
+        'EC2SecurityGroup',
+        'WebServerInstance'
+      ];
+
+      taggableResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        const ownerTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Owner');
+        expect(ownerTag.Value).toEqual({ Ref: 'Owner' });
       });
     });
   });

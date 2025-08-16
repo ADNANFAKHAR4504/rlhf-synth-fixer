@@ -48,8 +48,9 @@ Resources:
   # S3 Buckets with encryption
   SecureDataBucket:
     Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${Project}-secure-data-${Environment}-${AWS::AccountId}'
+      BucketName: !Sub '${Project}-secure-data-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -72,8 +73,9 @@ Resources:
 
   LogsBucket:
     Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${Project}-logs-${Environment}-${AWS::AccountId}'
+      BucketName: !Sub '${Project}-logs-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -101,7 +103,7 @@ Resources:
   EC2InstanceRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${Project}-ec2-role-${Environment}'
+      RoleName: !Sub '${Project}-ec2-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -143,7 +145,7 @@ Resources:
   EC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      InstanceProfileName: !Sub '${Project}-ec2-profile-${Environment}'
+      InstanceProfileName: !Sub '${Project}-ec2-profile-${EnvironmentSuffix}'
       Roles:
         - !Ref EC2InstanceRole
 
@@ -151,7 +153,7 @@ Resources:
   EC2SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: !Sub '${Project}-ec2-sg-${Environment}'
+      GroupName: !Sub '${Project}-ec2-sg-${EnvironmentSuffix}'
       GroupDescription: 'Security group for EC2 instances with minimal access'
       SecurityGroupIngress:
         - IpProtocol: 'tcp'
@@ -200,7 +202,7 @@ Resources:
             -a fetch-config -m ec2 -c default -s
       Tags:
         - Key: 'Name'
-          Value: !Sub '${Project}-web-server-${Environment}'
+          Value: !Sub '${Project}-web-server-${EnvironmentSuffix}'
         - Key: 'Environment'
           Value: !Ref Environment
         - Key: 'Project'
@@ -212,7 +214,7 @@ Resources:
   ApplicationServiceRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${Project}-app-service-role-${Environment}'
+      RoleName: !Sub '${Project}-app-service-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
