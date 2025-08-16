@@ -1,5 +1,5 @@
 # Compiled JavaScript files (but keep config files)
-/bin/.js
+/bin/*.js
 /lib/*.js
 /test/*.js
 /cli/*.js
