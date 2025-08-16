@@ -171,10 +171,6 @@ Resources:
           ToPort: 443
           CidrIp: '0.0.0.0/0'
           Description: 'HTTPS access'
-      SecurityGroupEgress:
-        - IpProtocol: '-1'
-          CidrIp: '0.0.0.0/0'
-          Description: 'All outbound traffic'
       Tags:
         - Key: 'Environment'
           Value: !Ref Environment
@@ -191,9 +187,9 @@ Resources:
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref EC2InstanceProfile
       SecurityGroupIds:
-        - !Ref EC2SecurityGroup
+        - !GetAtt EC2SecurityGroup.GroupId
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent

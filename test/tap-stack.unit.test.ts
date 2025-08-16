@@ -308,7 +308,7 @@ describe('TapStack CloudFormation Template', () => {
       
       // Check security group
       expect(instance.Properties.SecurityGroupIds).toHaveLength(1);
-      expect(instance.Properties.SecurityGroupIds[0]).toEqual({ Ref: 'EC2SecurityGroup' });
+      expect(instance.Properties.SecurityGroupIds[0]).toEqual({ 'Fn::GetAtt': ['EC2SecurityGroup', 'GroupId'] });
       
       // Check UserData exists
       expect(instance.Properties.UserData).toBeDefined();
@@ -316,7 +316,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('WebServerInstance should have CloudWatch agent in UserData', () => {
       const instance = template.Resources.WebServerInstance;
-      const userData = instance.Properties.UserData['Fn::Base64']['Fn::Sub'];
+      const userData = instance.Properties.UserData['Fn::Base64'];
       
       expect(userData).toContain('yum update -y');
       expect(userData).toContain('amazon-cloudwatch-agent');
