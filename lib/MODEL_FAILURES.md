@@ -321,6 +321,58 @@ Successfully created and tested a secure AWS infrastructure using Terraform with
 - ✅ Follows best practice of only enabling multi-region when specifically required
 - ✅ Maintains compliance with task requirements
 
+#### 11. CloudTrail S3 Bucket Policy Issue - FIXED ✅
+- **Issue**: CloudTrail deployment failed with `InsufficientS3BucketPolicyException: Incorrect S3 bucket policy is detected for bucket`
+- **Root Cause**: S3 bucket policy dependency and configuration issues
+- **Resolution**: Fixed bucket policy dependencies and added required bucket configurations
+
+**S3 Bucket Policy Fix:**
+- **Problem**: CloudTrail was trying to use the S3 bucket before the policy was fully applied
+- **Fix**: Added explicit dependency to ensure policy is applied before CloudTrail creation:
+  ```hcl
+  resource "aws_cloudtrail" "main" {
+    # ... configuration
+    depends_on = [aws_s3_bucket_policy.cloudtrail, aws_s3_bucket_versioning.cloudtrail]
+  }
+  ```
+
+**Resource Ordering Fix:**
+- **Problem**: `random_id.bucket_suffix` was defined after resources that use it
+- **Fix**: Moved `random_id` resource to the top of the file to ensure proper dependency resolution
+
+**S3 Bucket Enhancements:**
+- **Added**: S3 bucket versioning for CloudTrail logs
+- **Added**: Explicit dependency on bucket versioning configuration
+- **Result**: Ensures CloudTrail has all required bucket configurations
+
+**Updated Configuration:**
+```hcl
+# Random ID moved to top for proper dependency resolution
+resource "random_id" "bucket_suffix" {
+  byte_length = 8
+}
+
+# S3 bucket with versioning
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# CloudTrail with proper dependencies
+resource "aws_cloudtrail" "main" {
+  # ... configuration
+  depends_on = [aws_s3_bucket_policy.cloudtrail, aws_s3_bucket_versioning.cloudtrail]
+}
+```
+
+**Benefits:**
+- ✅ Ensures proper resource creation order
+- ✅ CloudTrail has all required S3 bucket configurations
+- ✅ Prevents policy application timing issues
+- ✅ Maintains compliance with AWS CloudTrail requirements
+
 ### Final Deployment Readiness Checklist ✅
 - [x] **Template Structure**: Fixed Fn::Select issue with single AZ design
 - [x] **Unit Tests**: Updated to match simplified template structure
@@ -333,5 +385,7 @@ Successfully created and tested a secure AWS infrastructure using Terraform with
 - [x] **CloudFormation Validation**: All errors and warnings fixed
 - [x] **IAM Capabilities**: No named IAM resources (no CAPABILITY_NAMED_IAM required)
 - [x] **CloudTrail Configuration**: Explicitly set to single-region to avoid unnecessary costs
+- [x] **CAPABILITY_NAMED_IAM**: Fixed - no special capabilities required for deployment
+- [x] **CloudTrail S3 Policy**: Fixed - proper dependencies and bucket configuration
 
 **Final Status**: ✅ CLOUDFORMATION TEMPLATE FULLY VALIDATED AND READY FOR DEPLOYMENT

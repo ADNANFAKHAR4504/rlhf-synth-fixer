@@ -20,6 +20,11 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
+# Random ID for bucket naming
+resource "random_id" "bucket_suffix" {
+  byte_length = 8
+}
+
 # VPC
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -142,6 +147,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
   }
 }
 
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 # CloudTrail S3 Bucket Policy
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
@@ -193,16 +205,13 @@ resource "aws_cloudtrail" "main" {
     }
   }
 
+  depends_on = [aws_s3_bucket_policy.cloudtrail, aws_s3_bucket_versioning.cloudtrail]
+
   tags = {
     Name        = "main-cloudtrail"
     Environment = var.environment_tag
     Owner       = var.owner_tag
   }
-}
-
-# Random ID for bucket naming
-resource "random_id" "bucket_suffix" {
-  byte_length = 8
 }
 
 # Secure Data S3 Bucket
