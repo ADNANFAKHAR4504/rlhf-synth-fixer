@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291349",
+  "team": "6",
+  "startedAt": "2025-08-12T15:30:00.000Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ak-turing",
+  "dockerS3Location": ""
+}
