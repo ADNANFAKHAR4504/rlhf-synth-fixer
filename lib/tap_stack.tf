@@ -159,7 +159,7 @@ resource "aws_kms_key" "primary" {
         Resource = "*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}/web-primary"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}/web-primary-${random_id.suffix.hex}"
           }
         }
       }
@@ -212,7 +212,7 @@ resource "aws_kms_key" "secondary" {
         Resource = "*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}/web-secondary"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}/web-secondary-${random_id.suffix.hex}"
           }
         }
       }
