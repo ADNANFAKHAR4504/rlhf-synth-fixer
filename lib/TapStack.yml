@@ -114,16 +114,14 @@ Resources:
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
             Principal:
               AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
             Resource: "*"
-            Condition:
-              StringEquals:
-                "kms:ViaService":
-                  - !Sub "s3.${AWS::Region}.amazonaws.com"
-          - Effect: Allow
+          - Sid: Allow service access with ViaService condition
+            Effect: Allow
             Principal:
               Service:
                 - s3.amazonaws.com
