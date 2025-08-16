@@ -1,6 +1,19 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "CloudFormation template for a serverless application with three Lambda functions (items, users, orders), DynamoDB tables, and API Gateway endpoints",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "AWS SAM template for a serverless application with three Lambda functions (items, users, orders), DynamoDB tables, and API Gateway endpoints",
+  "Globals": {
+    "Function": {
+      "Runtime": "nodejs20.x",
+      "Timeout": 30,
+      "MemorySize": 128,
+      "Environment": {
+        "Variables": {
+          "AWS_NODEJS_CONNECTION_REUSE_ENABLED": 1
+        }
+      }
+    }
+  },
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
@@ -9,100 +22,6 @@
     }
   },
   "Resources": {
-    "LambdaExecutionRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "lambda.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "Policies": [
-          {
-            "PolicyName": "CloudWatchLogsPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "logs:CreateLogGroup",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents"
-                  ],
-                  "Resource": {
-                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "PolicyName": "DynamoDBPolicy",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "dynamodb:GetItem",
-                    "dynamodb:PutItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:Query",
-                    "dynamodb:Scan"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "ItemsTable",
-                      "Arn"
-                    ]
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "dynamodb:GetItem",
-                    "dynamodb:PutItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:Query",
-                    "dynamodb:Scan"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "UsersTable",
-                      "Arn"
-                    ]
-                  }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "dynamodb:GetItem",
-                    "dynamodb:PutItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:Query",
-                    "dynamodb:Scan"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "OrdersTable",
-                      "Arn"
-                    ]
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
     "ItemsTable": {
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
@@ -167,258 +86,107 @@
       }
     },
     "ItemsFunction": {
-      "Type": "AWS::Lambda::Function",
+      "Type": "AWS::Serverless::Function",
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "${AWS::StackName}-items-function-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs20.x",
         "Handler": "index.handler",
-        "Timeout": 30,
-        "MemorySize": 128,
-        "Code": {
-          "ZipFile": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const itemsTableName = process.env.ITEMS_TABLE_NAME;\n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const item = JSON.parse(event.body);\n        const putParams = {\n          TableName: itemsTableName,\n          Item: marshall(item),\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return { statusCode: 201, body: JSON.stringify({ message: 'Item created successfully' }), };\n      case 'GET':\n        const itemId = event.queryStringParameters?.itemId;\n        if (!itemId) {\n          return { statusCode: 400, body: JSON.stringify({ message: 'Missing itemId query parameter' }), };\n        }\n        const getParams = {\n          TableName: itemsTableName,\n          Key: marshall({ itemId }),\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return { statusCode: 404, body: JSON.stringify({ message: 'Item not found' }), };\n        }\n        return { statusCode: 200, body: JSON.stringify(unmarshall(Item)), };\n      default:\n        return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }), };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return { statusCode: 500, body: JSON.stringify({ message: 'Internal Server Error' }), };\n  }\n};\n"
-        },
-        "Role": {
-          "Fn::GetAtt": [
-            "LambdaExecutionRole",
-            "Arn"
-          ]
-        },
+        "InlineCode": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const itemsTableName = process.env.ITEMS_TABLE_NAME;\n  \n  const headers = {\n    'Content-Type': 'application/json',\n    'Access-Control-Allow-Origin': '*',\n    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',\n    'Access-Control-Allow-Headers': 'Content-Type'\n  };\n  \n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const item = JSON.parse(event.body);\n        const putParams = {\n          TableName: itemsTableName,\n          Item: marshall(item)\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return {\n          statusCode: 201,\n          headers,\n          body: JSON.stringify({ message: 'Item created successfully' })\n        };\n      \n      case 'GET':\n        const itemId = event.queryStringParameters?.itemId;\n        if (!itemId) {\n          return {\n            statusCode: 400,\n            headers,\n            body: JSON.stringify({ message: 'Missing itemId query parameter' })\n          };\n        }\n        const getParams = {\n          TableName: itemsTableName,\n          Key: marshall({ itemId })\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return {\n            statusCode: 404,\n            headers,\n            body: JSON.stringify({ message: 'Item not found' })\n          };\n        }\n        return {\n          statusCode: 200,\n          headers,\n          body: JSON.stringify(unmarshall(Item))\n        };\n      \n      default:\n        return {\n          statusCode: 405,\n          headers,\n          body: JSON.stringify({ message: 'Method Not Allowed' })\n        };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return {\n      statusCode: 500,\n      headers,\n      body: JSON.stringify({ message: 'Internal Server Error', error: error.message })\n    };\n  }\n};\n",
         "Environment": {
           "Variables": {
             "ITEMS_TABLE_NAME": {
               "Ref": "ItemsTable"
             }
           }
+        },
+        "Policies": [
+          {
+            "DynamoDBCrudPolicy": {
+              "TableName": {
+                "Ref": "ItemsTable"
+              }
+            }
+          }
+        ],
+        "Events": {
+          "ItemsApi": {
+            "Type": "Api",
+            "Properties": {
+              "Path": "/items",
+              "Method": "ANY"
+            }
+          }
         }
       }
     },
     "UsersFunction": {
-      "Type": "AWS::Lambda::Function",
+      "Type": "AWS::Serverless::Function",
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "${AWS::StackName}-users-function-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs20.x",
         "Handler": "index.handler",
-        "Timeout": 30,
-        "MemorySize": 128,
-        "Code": {
-          "ZipFile": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const usersTableName = process.env.USERS_TABLE_NAME;\n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const user = JSON.parse(event.body);\n        const putParams = {\n          TableName: usersTableName,\n          Item: marshall(user),\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return { statusCode: 201, body: JSON.stringify({ message: 'User created successfully' }), };\n      case 'GET':\n        const userId = event.queryStringParameters?.userId;\n        if (!userId) {\n          return { statusCode: 400, body: JSON.stringify({ message: 'Missing userId query parameter' }), };\n        }\n        const getParams = {\n          TableName: usersTableName,\n          Key: marshall({ userId }),\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return { statusCode: 404, body: JSON.stringify({ message: 'User not found' }), };\n        }\n        return { statusCode: 200, body: JSON.stringify(unmarshall(Item)), };\n      default:\n        return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }), };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return { statusCode: 500, body: JSON.stringify({ message: 'Internal Server Error' }), };\n  }\n};\n"
-        },
-        "Role": {
-          "Fn::GetAtt": [
-            "LambdaExecutionRole",
-            "Arn"
-          ]
-        },
+        "InlineCode": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const usersTableName = process.env.USERS_TABLE_NAME;\n  \n  const headers = {\n    'Content-Type': 'application/json',\n    'Access-Control-Allow-Origin': '*',\n    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',\n    'Access-Control-Allow-Headers': 'Content-Type'\n  };\n  \n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const user = JSON.parse(event.body);\n        const putParams = {\n          TableName: usersTableName,\n          Item: marshall(user)\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return {\n          statusCode: 201,\n          headers,\n          body: JSON.stringify({ message: 'User created successfully' })\n        };\n      \n      case 'GET':\n        const userId = event.queryStringParameters?.userId;\n        if (!userId) {\n          return {\n            statusCode: 400,\n            headers,\n            body: JSON.stringify({ message: 'Missing userId query parameter' })\n          };\n        }\n        const getParams = {\n          TableName: usersTableName,\n          Key: marshall({ userId })\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return {\n            statusCode: 404,\n            headers,\n            body: JSON.stringify({ message: 'User not found' })\n          };\n        }\n        return {\n          statusCode: 200,\n          headers,\n          body: JSON.stringify(unmarshall(Item))\n        };\n      \n      default:\n        return {\n          statusCode: 405,\n          headers,\n          body: JSON.stringify({ message: 'Method Not Allowed' })\n        };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return {\n      statusCode: 500,\n      headers,\n      body: JSON.stringify({ message: 'Internal Server Error', error: error.message })\n    };\n  }\n};\n",
         "Environment": {
           "Variables": {
             "USERS_TABLE_NAME": {
               "Ref": "UsersTable"
             }
           }
+        },
+        "Policies": [
+          {
+            "DynamoDBCrudPolicy": {
+              "TableName": {
+                "Ref": "UsersTable"
+              }
+            }
+          }
+        ],
+        "Events": {
+          "UsersApi": {
+            "Type": "Api",
+            "Properties": {
+              "Path": "/users",
+              "Method": "ANY"
+            }
+          }
         }
       }
     },
     "OrdersFunction": {
-      "Type": "AWS::Lambda::Function",
+      "Type": "AWS::Serverless::Function",
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "${AWS::StackName}-orders-function-${EnvironmentSuffix}"
         },
-        "Runtime": "nodejs20.x",
         "Handler": "index.handler",
-        "Timeout": 30,
-        "MemorySize": 128,
-        "Code": {
-          "ZipFile": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const ordersTableName = process.env.ORDERS_TABLE_NAME;\n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const order = JSON.parse(event.body);\n        const putParams = {\n          TableName: ordersTableName,\n          Item: marshall(order),\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return { statusCode: 201, body: JSON.stringify({ message: 'Order created successfully' }), };\n      case 'GET':\n        const orderId = event.queryStringParameters?.orderId;\n        if (!orderId) {\n          return { statusCode: 400, body: JSON.stringify({ message: 'Missing orderId query parameter' }), };\n        }\n        const getParams = {\n          TableName: ordersTableName,\n          Key: marshall({ orderId }),\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return { statusCode: 404, body: JSON.stringify({ message: 'Order not found' }), };\n        }\n        return { statusCode: 200, body: JSON.stringify(unmarshall(Item)), };\n      default:\n        return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }), };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return { statusCode: 500, body: JSON.stringify({ message: 'Internal Server Error' }), };\n  }\n};\n"
-        },
-        "Role": {
-          "Fn::GetAtt": [
-            "LambdaExecutionRole",
-            "Arn"
-          ]
-        },
+        "InlineCode": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const ordersTableName = process.env.ORDERS_TABLE_NAME;\n  \n  const headers = {\n    'Content-Type': 'application/json',\n    'Access-Control-Allow-Origin': '*',\n    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',\n    'Access-Control-Allow-Headers': 'Content-Type'\n  };\n  \n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const order = JSON.parse(event.body);\n        // Auto-generate orderId if not provided\n        if (!order.orderId) {\n          order.orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;\n        }\n        order.createdAt = new Date().toISOString();\n        order.status = order.status || 'PENDING';\n        \n        const putParams = {\n          TableName: ordersTableName,\n          Item: marshall(order)\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return {\n          statusCode: 201,\n          headers,\n          body: JSON.stringify({ \n            message: 'Order created successfully',\n            orderId: order.orderId,\n            status: order.status\n          })\n        };\n      \n      case 'GET':\n        const orderId = event.queryStringParameters?.orderId;\n        if (!orderId) {\n          return {\n            statusCode: 400,\n            headers,\n            body: JSON.stringify({ message: 'Missing orderId query parameter' })\n          };\n        }\n        const getParams = {\n          TableName: ordersTableName,\n          Key: marshall({ orderId })\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return {\n            statusCode: 404,\n            headers,\n            body: JSON.stringify({ message: 'Order not found' })\n          };\n        }\n        return {\n          statusCode: 200,\n          headers,\n          body: JSON.stringify(unmarshall(Item))\n        };\n      \n      default:\n        return {\n          statusCode: 405,\n          headers,\n          body: JSON.stringify({ message: 'Method Not Allowed' })\n        };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return {\n      statusCode: 500,\n      headers,\n      body: JSON.stringify({ message: 'Internal Server Error', error: error.message })\n    };\n  }\n};\n",
         "Environment": {
           "Variables": {
             "ORDERS_TABLE_NAME": {
               "Ref": "OrdersTable"
             }
           }
-        }
-      }
-    },
-    "ApiGateway": {
-      "Type": "AWS::ApiGateway::RestApi",
-      "Properties": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-api-${EnvironmentSuffix}"
         },
-        "Description": "API Gateway REST API with endpoints for items, users, and orders",
-        "EndpointConfiguration": {
-          "Types": [
-            "REGIONAL"
-          ]
-        }
-      }
-    },
-    "ItemsResource": {
-      "Type": "AWS::ApiGateway::Resource",
-      "Properties": {
-        "RestApiId": {
-          "Ref": "ApiGateway"
-        },
-        "ParentId": {
-          "Fn::GetAtt": [
-            "ApiGateway",
-            "RootResourceId"
-          ]
-        },
-        "PathPart": "items"
-      }
-    },
-    "UsersResource": {
-      "Type": "AWS::ApiGateway::Resource",
-      "Properties": {
-        "RestApiId": {
-          "Ref": "ApiGateway"
-        },
-        "ParentId": {
-          "Fn::GetAtt": [
-            "ApiGateway",
-            "RootResourceId"
-          ]
-        },
-        "PathPart": "users"
-      }
-    },
-    "OrdersResource": {
-      "Type": "AWS::ApiGateway::Resource",
-      "Properties": {
-        "RestApiId": {
-          "Ref": "ApiGateway"
-        },
-        "ParentId": {
-          "Fn::GetAtt": [
-            "ApiGateway",
-            "RootResourceId"
-          ]
-        },
-        "PathPart": "orders"
-      }
-    },
-    "ItemsMethod": {
-      "Type": "AWS::ApiGateway::Method",
-      "Properties": {
-        "RestApiId": {
-          "Ref": "ApiGateway"
-        },
-        "ResourceId": {
-          "Ref": "ItemsResource"
-        },
-        "HttpMethod": "ANY",
-        "AuthorizationType": "NONE",
-        "Integration": {
-          "Type": "AWS_PROXY",
-          "IntegrationHttpMethod": "POST",
-          "Uri": {
-            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ItemsFunction.Arn}/invocations"
+        "Policies": [
+          {
+            "DynamoDBCrudPolicy": {
+              "TableName": {
+                "Ref": "OrdersTable"
+              }
+            }
           }
-        }
-      }
-    },
-    "UsersMethod": {
-      "Type": "AWS::ApiGateway::Method",
-      "Properties": {
-        "RestApiId": {
-          "Ref": "ApiGateway"
-        },
-        "ResourceId": {
-          "Ref": "UsersResource"
-        },
-        "HttpMethod": "ANY",
-        "AuthorizationType": "NONE",
-        "Integration": {
-          "Type": "AWS_PROXY",
-          "IntegrationHttpMethod": "POST",
-          "Uri": {
-            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersFunction.Arn}/invocations"
+        ],
+        "Events": {
+          "OrdersApi": {
+            "Type": "Api",
+            "Properties": {
+              "Path": "/orders",
+              "Method": "ANY"
+            }
           }
-        }
-      }
-    },
-    "OrdersMethod": {
-      "Type": "AWS::ApiGateway::Method",
-      "Properties": {
-        "RestApiId": {
-          "Ref": "ApiGateway"
-        },
-        "ResourceId": {
-          "Ref": "OrdersResource"
-        },
-        "HttpMethod": "ANY",
-        "AuthorizationType": "NONE",
-        "Integration": {
-          "Type": "AWS_PROXY",
-          "IntegrationHttpMethod": "POST",
-          "Uri": {
-            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OrdersFunction.Arn}/invocations"
-          }
-        }
-      }
-    },
-    "ApiDeployment": {
-      "Type": "AWS::ApiGateway::Deployment",
-      "DependsOn": [
-        "ItemsMethod",
-        "UsersMethod",
-        "OrdersMethod"
-      ],
-      "Properties": {
-        "RestApiId": {
-          "Ref": "ApiGateway"
-        },
-        "StageName": "Prod"
-      }
-    },
-    "ItemsFunctionPermission": {
-      "Type": "AWS::Lambda::Permission",
-      "Properties": {
-        "FunctionName": {
-          "Ref": "ItemsFunction"
-        },
-        "Action": "lambda:InvokeFunction",
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
-        }
-      }
-    },
-    "UsersFunctionPermission": {
-      "Type": "AWS::Lambda::Permission",
-      "Properties": {
-        "FunctionName": {
-          "Ref": "UsersFunction"
-        },
-        "Action": "lambda:InvokeFunction",
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
-        }
-      }
-    },
-    "OrdersFunctionPermission": {
-      "Type": "AWS::Lambda::Permission",
-      "Properties": {
-        "FunctionName": {
-          "Ref": "OrdersFunction"
-        },
-        "Action": "lambda:InvokeFunction",
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
         }
       }
     }
@@ -427,7 +195,7 @@
     "ApiGatewayUrl": {
       "Description": "URL of the deployed API Gateway",
       "Value": {
-        "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+        "Fn::Sub": "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
       },
       "Export": {
         "Name": {
@@ -466,6 +234,33 @@
         "Name": {
           "Fn::Sub": "${AWS::StackName}-orders-table-${EnvironmentSuffix}"
         }
+      }
+    },
+    "ItemsFunctionArn": {
+      "Description": "ARN of the Items Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "ItemsFunction",
+          "Arn"
+        ]
+      }
+    },
+    "UsersFunctionArn": {
+      "Description": "ARN of the Users Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "UsersFunction",
+          "Arn"
+        ]
+      }
+    },
+    "OrdersFunctionArn": {
+      "Description": "ARN of the Orders Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "OrdersFunction",
+          "Arn"
+        ]
       }
     }
   }

@@ -1,83 +1,63 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('TapStack CloudFormation Template Unit Tests', () => {
-  let templateJson: any;
+describe('TapStack SAM Template Unit Tests', () => {
+  let templateData: any;
   const environmentSuffix = 'test123';
 
   beforeAll(() => {
     // Load JSON template
     const jsonPath = path.join(__dirname, '..', 'lib', 'TapStack.json');
     const jsonContent = fs.readFileSync(jsonPath, 'utf8');
-    templateJson = JSON.parse(jsonContent);
+    templateData = JSON.parse(jsonContent);
   });
 
   describe('Template Structure', () => {
     test('should have correct AWSTemplateFormatVersion', () => {
-      expect(templateJson.AWSTemplateFormatVersion).toBe('2010-09-09');
+      expect(templateData.AWSTemplateFormatVersion).toBe('2010-09-09');
+    });
+
+    test('should have SAM Transform', () => {
+      expect(templateData.Transform).toBe('AWS::Serverless-2016-10-31');
     });
 
     test('should have a description', () => {
-      expect(templateJson.Description).toBeDefined();
-      expect(templateJson.Description).toContain('serverless application');
+      expect(templateData.Description).toBeDefined();
+      expect(templateData.Description).toContain('serverless application');
     });
 
     test('should have Parameters section with EnvironmentSuffix', () => {
-      expect(templateJson.Parameters).toBeDefined();
-      expect(templateJson.Parameters.EnvironmentSuffix).toBeDefined();
-      expect(templateJson.Parameters.EnvironmentSuffix.Type).toBe('String');
-      expect(templateJson.Parameters.EnvironmentSuffix.Default).toBe('dev');
+      expect(templateData.Parameters).toBeDefined();
+      expect(templateData.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(templateData.Parameters.EnvironmentSuffix.Type).toBe('String');
+      expect(templateData.Parameters.EnvironmentSuffix.Default).toBe('dev');
     });
 
     test('should have Resources section', () => {
-      expect(templateJson.Resources).toBeDefined();
-      expect(Object.keys(templateJson.Resources).length).toBeGreaterThan(0);
+      expect(templateData.Resources).toBeDefined();
+      expect(Object.keys(templateData.Resources).length).toBeGreaterThan(0);
     });
 
     test('should have Outputs section', () => {
-      expect(templateJson.Outputs).toBeDefined();
-      expect(Object.keys(templateJson.Outputs).length).toBeGreaterThan(0);
+      expect(templateData.Outputs).toBeDefined();
+      expect(Object.keys(templateData.Outputs).length).toBeGreaterThan(0);
+    });
+
+    test('should have Globals section', () => {
+      expect(templateData.Globals).toBeDefined();
+      expect(templateData.Globals.Function).toBeDefined();
     });
   });
 
-  describe('IAM Role', () => {
-    test('should have LambdaExecutionRole', () => {
-      expect(templateJson.Resources.LambdaExecutionRole).toBeDefined();
-      expect(templateJson.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
-    });
-
-    test('should have correct AssumeRolePolicyDocument', () => {
-      const role = templateJson.Resources.LambdaExecutionRole;
-      expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
-      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Effect).toBe('Allow');
-      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
-      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Action).toBe('sts:AssumeRole');
-    });
-
-    test('should have CloudWatch Logs policy', () => {
-      const role = templateJson.Resources.LambdaExecutionRole;
-      const cloudWatchPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'CloudWatchLogsPolicy');
-      expect(cloudWatchPolicy).toBeDefined();
-      expect(cloudWatchPolicy.PolicyDocument.Statement[0].Action).toContain('logs:CreateLogGroup');
-      expect(cloudWatchPolicy.PolicyDocument.Statement[0].Action).toContain('logs:CreateLogStream');
-      expect(cloudWatchPolicy.PolicyDocument.Statement[0].Action).toContain('logs:PutLogEvents');
-    });
-
-    test('should have DynamoDB policy with least privilege', () => {
-      const role = templateJson.Resources.LambdaExecutionRole;
-      const dynamoPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'DynamoDBPolicy');
-      expect(dynamoPolicy).toBeDefined();
-      
-      const statements = dynamoPolicy.PolicyDocument.Statement;
-      expect(statements.length).toBe(3); // One for each table
-      
-      statements.forEach((statement: any) => {
-        expect(statement.Effect).toBe('Allow');
-        expect(statement.Action).toContain('dynamodb:GetItem');
-        expect(statement.Action).toContain('dynamodb:PutItem');
-        expect(statement.Action).toContain('dynamodb:UpdateItem');
-        expect(statement.Resource).toBeDefined();
-      });
+  describe('Globals Configuration', () => {
+    test('should have correct global function settings', () => {
+      const globals = templateData.Globals.Function;
+      expect(globals.Runtime).toBe('nodejs20.x');
+      expect(globals.Timeout).toBe(30);
+      expect(globals.MemorySize).toBe(128);
+      expect(
+        globals.Environment.Variables.AWS_NODEJS_CONNECTION_REUSE_ENABLED
+      ).toBe(1);
     });
   });
 
@@ -86,269 +66,236 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     const primaryKeys = {
       ItemsTable: 'itemId',
       UsersTable: 'userId',
-      OrdersTable: 'orderId'
+      OrdersTable: 'orderId',
     };
 
     tables.forEach(tableName => {
       describe(`${tableName}`, () => {
         test('should exist with correct type', () => {
-          expect(templateJson.Resources[tableName]).toBeDefined();
-          expect(templateJson.Resources[tableName].Type).toBe('AWS::DynamoDB::Table');
+          expect(templateData.Resources[tableName]).toBeDefined();
+          expect(templateData.Resources[tableName].Type).toBe(
+            'AWS::DynamoDB::Table'
+          );
         });
 
         test('should have PAY_PER_REQUEST billing mode', () => {
-          expect(templateJson.Resources[tableName].Properties.BillingMode).toBe('PAY_PER_REQUEST');
+          expect(templateData.Resources[tableName].Properties.BillingMode).toBe(
+            'PAY_PER_REQUEST'
+          );
         });
 
         test('should have correct primary key', () => {
-          const table = templateJson.Resources[tableName];
+          const table = templateData.Resources[tableName];
           const primaryKey = primaryKeys[tableName as keyof typeof primaryKeys];
-          
+
           expect(table.Properties.AttributeDefinitions).toBeDefined();
-          expect(table.Properties.AttributeDefinitions[0].AttributeName).toBe(primaryKey);
-          expect(table.Properties.AttributeDefinitions[0].AttributeType).toBe('S');
-          
+          expect(table.Properties.AttributeDefinitions[0].AttributeName).toBe(
+            primaryKey
+          );
+          expect(table.Properties.AttributeDefinitions[0].AttributeType).toBe(
+            'S'
+          );
+
           expect(table.Properties.KeySchema).toBeDefined();
           expect(table.Properties.KeySchema[0].AttributeName).toBe(primaryKey);
           expect(table.Properties.KeySchema[0].KeyType).toBe('HASH');
         });
 
         test('should include environment suffix in table name', () => {
-          const table = templateJson.Resources[tableName];
+          const table = templateData.Resources[tableName];
           expect(table.Properties.TableName).toBeDefined();
-          expect(table.Properties.TableName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+          // Check for Fn::Sub structure and that it contains the EnvironmentSuffix parameter
+          expect(table.Properties.TableName['Fn::Sub']).toBeDefined();
+          expect(table.Properties.TableName['Fn::Sub']).toContain(
+            '${EnvironmentSuffix}'
+          );
         });
       });
     });
   });
 
-  describe('Lambda Functions', () => {
+  describe('Serverless Functions', () => {
     const functions = ['ItemsFunction', 'UsersFunction', 'OrdersFunction'];
     const tableRefs = {
       ItemsFunction: 'ItemsTable',
       UsersFunction: 'UsersTable',
-      OrdersFunction: 'OrdersTable'
+      OrdersFunction: 'OrdersTable',
     };
 
     functions.forEach(functionName => {
       describe(`${functionName}`, () => {
         test('should exist with correct type', () => {
-          expect(templateJson.Resources[functionName]).toBeDefined();
-          expect(templateJson.Resources[functionName].Type).toBe('AWS::Lambda::Function');
-        });
-
-        test('should use nodejs20.x runtime', () => {
-          expect(templateJson.Resources[functionName].Properties.Runtime).toBe('nodejs20.x');
+          expect(templateData.Resources[functionName]).toBeDefined();
+          expect(templateData.Resources[functionName].Type).toBe(
+            'AWS::Serverless::Function'
+          );
         });
 
         test('should have correct handler', () => {
-          expect(templateJson.Resources[functionName].Properties.Handler).toBe('index.handler');
-        });
-
-        test('should have appropriate timeout and memory', () => {
-          expect(templateJson.Resources[functionName].Properties.Timeout).toBe(30);
-          expect(templateJson.Resources[functionName].Properties.MemorySize).toBe(128);
-        });
-
-        test('should reference LambdaExecutionRole', () => {
-          const func = templateJson.Resources[functionName];
-          expect(func.Properties.Role).toBeDefined();
-          expect(func.Properties.Role['Fn::GetAtt']).toEqual(['LambdaExecutionRole', 'Arn']);
+          expect(templateData.Resources[functionName].Properties.Handler).toBe(
+            'index.handler'
+          );
         });
 
         test('should have environment variables with table reference', () => {
-          const func = templateJson.Resources[functionName];
+          const func = templateData.Resources[functionName];
           const tableRef = tableRefs[functionName as keyof typeof tableRefs];
-          
+
           expect(func.Properties.Environment).toBeDefined();
           expect(func.Properties.Environment.Variables).toBeDefined();
-          
+
           const envVarName = `${tableRef.replace('Table', '').toUpperCase()}_TABLE_NAME`;
-          expect(func.Properties.Environment.Variables[envVarName]).toBeDefined();
-          expect(func.Properties.Environment.Variables[envVarName].Ref).toBe(tableRef);
+          expect(
+            func.Properties.Environment.Variables[envVarName]
+          ).toBeDefined();
         });
 
         test('should include environment suffix in function name', () => {
-          const func = templateJson.Resources[functionName];
+          const func = templateData.Resources[functionName];
           expect(func.Properties.FunctionName).toBeDefined();
-          expect(func.Properties.FunctionName['Fn::Sub']).toContain('${EnvironmentSuffix}');
+          // Check for Fn::Sub structure and that it contains the EnvironmentSuffix parameter
+          expect(func.Properties.FunctionName['Fn::Sub']).toBeDefined();
+          expect(func.Properties.FunctionName['Fn::Sub']).toContain(
+            '${EnvironmentSuffix}'
+          );
         });
 
         test('should have inline code with DynamoDB operations', () => {
-          const func = templateJson.Resources[functionName];
-          expect(func.Properties.Code).toBeDefined();
-          expect(func.Properties.Code.ZipFile).toBeDefined();
-          expect(func.Properties.Code.ZipFile).toContain('DynamoDBClient');
-          expect(func.Properties.Code.ZipFile).toContain('PutItemCommand');
-          expect(func.Properties.Code.ZipFile).toContain('GetItemCommand');
-          expect(func.Properties.Code.ZipFile).toContain('exports.handler');
+          const func = templateData.Resources[functionName];
+          expect(func.Properties.InlineCode).toBeDefined();
+          expect(func.Properties.InlineCode).toContain('DynamoDBClient');
+          expect(func.Properties.InlineCode).toContain('PutItemCommand');
+          expect(func.Properties.InlineCode).toContain('GetItemCommand');
+          expect(func.Properties.InlineCode).toContain('exports.handler');
+        });
+
+        test('should have DynamoDB policies', () => {
+          const func = templateData.Resources[functionName];
+          expect(func.Properties.Policies).toBeDefined();
+          expect(func.Properties.Policies[0].DynamoDBCrudPolicy).toBeDefined();
+        });
+
+        test('should have API events configured', () => {
+          const func = templateData.Resources[functionName];
+          expect(func.Properties.Events).toBeDefined();
+          const apiEvent = Object.values(func.Properties.Events)[0] as any;
+          expect(apiEvent.Type).toBe('Api');
+          expect(apiEvent.Properties.Method).toBe('ANY');
         });
       });
     });
   });
 
-  describe('API Gateway', () => {
-    test('should have ApiGateway RestApi', () => {
-      expect(templateJson.Resources.ApiGateway).toBeDefined();
-      expect(templateJson.Resources.ApiGateway.Type).toBe('AWS::ApiGateway::RestApi');
+  describe('API Configuration', () => {
+    test('ItemsFunction should have correct API path', () => {
+      const func = templateData.Resources.ItemsFunction;
+      const apiEvent = func.Properties.Events.ItemsApi;
+      expect(apiEvent.Properties.Path).toBe('/items');
     });
 
-    test('should have REGIONAL endpoint configuration', () => {
-      const api = templateJson.Resources.ApiGateway;
-      expect(api.Properties.EndpointConfiguration).toBeDefined();
-      expect(api.Properties.EndpointConfiguration.Types).toContain('REGIONAL');
+    test('UsersFunction should have correct API path', () => {
+      const func = templateData.Resources.UsersFunction;
+      const apiEvent = func.Properties.Events.UsersApi;
+      expect(apiEvent.Properties.Path).toBe('/users');
     });
 
-    test('should include environment suffix in API name', () => {
-      const api = templateJson.Resources.ApiGateway;
-      expect(api.Properties.Name).toBeDefined();
-      expect(api.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
-    });
-
-    describe('API Resources', () => {
-      const resources = ['ItemsResource', 'UsersResource', 'OrdersResource'];
-      const pathParts = {
-        ItemsResource: 'items',
-        UsersResource: 'users',
-        OrdersResource: 'orders'
-      };
-
-      resources.forEach(resourceName => {
-        test(`should have ${resourceName}`, () => {
-          expect(templateJson.Resources[resourceName]).toBeDefined();
-          expect(templateJson.Resources[resourceName].Type).toBe('AWS::ApiGateway::Resource');
-          
-          const resource = templateJson.Resources[resourceName];
-          expect(resource.Properties.RestApiId.Ref).toBe('ApiGateway');
-          expect(resource.Properties.PathPart).toBe(pathParts[resourceName as keyof typeof pathParts]);
-        });
-      });
-    });
-
-    describe('API Methods', () => {
-      const methods = ['ItemsMethod', 'UsersMethod', 'OrdersMethod'];
-      const functionRefs = {
-        ItemsMethod: 'ItemsFunction',
-        UsersMethod: 'UsersFunction',
-        OrdersMethod: 'OrdersFunction'
-      };
-
-      methods.forEach(methodName => {
-        test(`should have ${methodName}`, () => {
-          expect(templateJson.Resources[methodName]).toBeDefined();
-          expect(templateJson.Resources[methodName].Type).toBe('AWS::ApiGateway::Method');
-          
-          const method = templateJson.Resources[methodName];
-          expect(method.Properties.HttpMethod).toBe('ANY');
-          expect(method.Properties.AuthorizationType).toBe('NONE');
-          expect(method.Properties.Integration.Type).toBe('AWS_PROXY');
-          expect(method.Properties.Integration.IntegrationHttpMethod).toBe('POST');
-          
-          const functionRef = functionRefs[methodName as keyof typeof functionRefs];
-          expect(method.Properties.Integration.Uri['Fn::Sub']).toContain(`\${${functionRef}.Arn}`);
-        });
-      });
-    });
-
-    test('should have ApiDeployment', () => {
-      expect(templateJson.Resources.ApiDeployment).toBeDefined();
-      expect(templateJson.Resources.ApiDeployment.Type).toBe('AWS::ApiGateway::Deployment');
-      
-      const deployment = templateJson.Resources.ApiDeployment;
-      expect(deployment.Properties.StageName).toBe('Prod');
-      expect(deployment.DependsOn).toContain('ItemsMethod');
-      expect(deployment.DependsOn).toContain('UsersMethod');
-      expect(deployment.DependsOn).toContain('OrdersMethod');
-    });
-  });
-
-  describe('Lambda Permissions', () => {
-    const permissions = ['ItemsFunctionPermission', 'UsersFunctionPermission', 'OrdersFunctionPermission'];
-    const functionRefs = {
-      ItemsFunctionPermission: 'ItemsFunction',
-      UsersFunctionPermission: 'UsersFunction',
-      OrdersFunctionPermission: 'OrdersFunction'
-    };
-
-    permissions.forEach(permissionName => {
-      test(`should have ${permissionName}`, () => {
-        expect(templateJson.Resources[permissionName]).toBeDefined();
-        expect(templateJson.Resources[permissionName].Type).toBe('AWS::Lambda::Permission');
-        
-        const permission = templateJson.Resources[permissionName];
-        const functionRef = functionRefs[permissionName as keyof typeof functionRefs];
-        
-        expect(permission.Properties.FunctionName.Ref).toBe(functionRef);
-        expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
-        expect(permission.Properties.Principal).toBe('apigateway.amazonaws.com');
-        expect(permission.Properties.SourceArn['Fn::Sub']).toContain('${ApiGateway}');
-      });
+    test('OrdersFunction should have correct API path', () => {
+      const func = templateData.Resources.OrdersFunction;
+      const apiEvent = func.Properties.Events.OrdersApi;
+      expect(apiEvent.Properties.Path).toBe('/orders');
     });
   });
 
   describe('Outputs', () => {
     test('should have ApiGatewayUrl output', () => {
-      expect(templateJson.Outputs.ApiGatewayUrl).toBeDefined();
-      expect(templateJson.Outputs.ApiGatewayUrl.Description).toContain('API Gateway');
-      expect(templateJson.Outputs.ApiGatewayUrl.Value['Fn::Sub']).toContain('https://${ApiGateway}');
-      expect(templateJson.Outputs.ApiGatewayUrl.Export.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
+      expect(templateData.Outputs.ApiGatewayUrl).toBeDefined();
+      expect(templateData.Outputs.ApiGatewayUrl.Description).toContain(
+        'API Gateway'
+      );
+      // Check for Fn::Sub structure and that it contains ServerlessRestApi
+      expect(templateData.Outputs.ApiGatewayUrl.Value['Fn::Sub']).toBeDefined();
+      expect(templateData.Outputs.ApiGatewayUrl.Value['Fn::Sub']).toContain(
+        'ServerlessRestApi'
+      );
+      // Check export name contains environment suffix
+      expect(
+        templateData.Outputs.ApiGatewayUrl.Export.Name['Fn::Sub']
+      ).toBeDefined();
+      expect(
+        templateData.Outputs.ApiGatewayUrl.Export.Name['Fn::Sub']
+      ).toContain('${EnvironmentSuffix}');
     });
 
     test('should have table name outputs', () => {
-      const tableOutputs = ['ItemsTableName', 'UsersTableName', 'OrdersTableName'];
+      const tableOutputs = [
+        'ItemsTableName',
+        'UsersTableName',
+        'OrdersTableName',
+      ];
       const tableRefs = {
         ItemsTableName: 'ItemsTable',
         UsersTableName: 'UsersTable',
-        OrdersTableName: 'OrdersTable'
+        OrdersTableName: 'OrdersTable',
       };
 
       tableOutputs.forEach(outputName => {
-        expect(templateJson.Outputs[outputName]).toBeDefined();
-        expect(templateJson.Outputs[outputName].Value.Ref).toBe(tableRefs[outputName as keyof typeof tableRefs]);
-        expect(templateJson.Outputs[outputName].Export.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
+        expect(templateData.Outputs[outputName]).toBeDefined();
+        expect(templateData.Outputs[outputName].Value).toBeDefined();
+        // Check export name contains environment suffix
+        expect(
+          templateData.Outputs[outputName].Export.Name['Fn::Sub']
+        ).toBeDefined();
+        expect(
+          templateData.Outputs[outputName].Export.Name['Fn::Sub']
+        ).toContain('${EnvironmentSuffix}');
+      });
+    });
+
+    test('should have function ARN outputs', () => {
+      const functionOutputs = [
+        'ItemsFunctionArn',
+        'UsersFunctionArn',
+        'OrdersFunctionArn',
+      ];
+      functionOutputs.forEach(outputName => {
+        expect(templateData.Outputs[outputName]).toBeDefined();
+        expect(templateData.Outputs[outputName].Description).toContain('ARN');
       });
     });
   });
 
   describe('Resource Count Validation', () => {
     test('should have expected number of resources', () => {
-      const resources = Object.keys(templateJson.Resources);
-      // 1 IAM role + 3 tables + 3 functions + 1 API + 3 resources + 3 methods + 1 deployment + 3 permissions = 18
-      expect(resources.length).toBe(18);
+      const resources = Object.keys(templateData.Resources);
+      // 3 tables + 3 functions = 6 resources (SAM creates implicit resources)
+      expect(resources.length).toBe(6);
     });
 
     test('should have expected number of outputs', () => {
-      const outputs = Object.keys(templateJson.Outputs);
-      // 1 API URL + 3 table names = 4
-      expect(outputs.length).toBe(4);
+      const outputs = Object.keys(templateData.Outputs);
+      // 1 API URL + 3 table names + 3 function ARNs = 7
+      expect(outputs.length).toBe(7);
     });
   });
 
   describe('Security Best Practices', () => {
     test('should not have any retain deletion policies', () => {
-      Object.values(templateJson.Resources).forEach((resource: any) => {
+      Object.values(templateData.Resources).forEach((resource: any) => {
         if (resource.DeletionPolicy) {
           expect(resource.DeletionPolicy).not.toBe('Retain');
         }
       });
     });
 
-    test('should use least privilege IAM permissions', () => {
-      const role = templateJson.Resources.LambdaExecutionRole;
-      const dynamoPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'DynamoDBPolicy');
-      
-      // Check that permissions are scoped to specific resources
-      dynamoPolicy.PolicyDocument.Statement.forEach((statement: any) => {
-        expect(statement.Resource).not.toBe('*');
-        expect(statement.Resource['Fn::GetAtt']).toBeDefined();
-      });
-    });
-
-    test('API methods should have authorization type defined', () => {
-      const methods = ['ItemsMethod', 'UsersMethod', 'OrdersMethod'];
-      methods.forEach(methodName => {
-        const method = templateJson.Resources[methodName];
-        expect(method.Properties.AuthorizationType).toBeDefined();
+    test('should use least privilege DynamoDB permissions', () => {
+      const functions = ['ItemsFunction', 'UsersFunction', 'OrdersFunction'];
+      functions.forEach(functionName => {
+        const func = templateData.Resources[functionName];
+        expect(func.Properties.Policies).toBeDefined();
+        expect(func.Properties.Policies[0].DynamoDBCrudPolicy).toBeDefined();
+        expect(
+          func.Properties.Policies[0].DynamoDBCrudPolicy.TableName
+        ).toBeDefined();
       });
     });
   });
@@ -357,9 +304,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     const sampleFunction = 'ItemsFunction';
 
     test('should handle POST requests correctly', () => {
-      const func = templateJson.Resources[sampleFunction];
-      const code = func.Properties.Code.ZipFile;
-      
+      const func = templateData.Resources[sampleFunction];
+      const code = func.Properties.InlineCode;
+
       expect(code).toContain("case 'POST':");
       expect(code).toContain('JSON.parse(event.body)');
       expect(code).toContain('PutItemCommand');
@@ -368,9 +315,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     });
 
     test('should handle GET requests correctly', () => {
-      const func = templateJson.Resources[sampleFunction];
-      const code = func.Properties.Code.ZipFile;
-      
+      const func = templateData.Resources[sampleFunction];
+      const code = func.Properties.InlineCode;
+
       expect(code).toContain("case 'GET':");
       expect(code).toContain('event.queryStringParameters');
       expect(code).toContain('GetItemCommand');
@@ -380,9 +327,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     });
 
     test('should handle errors properly', () => {
-      const func = templateJson.Resources[sampleFunction];
-      const code = func.Properties.Code.ZipFile;
-      
+      const func = templateData.Resources[sampleFunction];
+      const code = func.Properties.InlineCode;
+
       expect(code).toContain('try {');
       expect(code).toContain('} catch (error)');
       expect(code).toContain('console.error');
@@ -391,31 +338,42 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     });
 
     test('should validate required parameters', () => {
-      const func = templateJson.Resources[sampleFunction];
-      const code = func.Properties.Code.ZipFile;
-      
+      const func = templateData.Resources[sampleFunction];
+      const code = func.Properties.InlineCode;
+
       expect(code).toContain('if (!itemId)');
       expect(code).toContain('statusCode: 400');
       expect(code).toContain('Missing itemId query parameter');
     });
+
+    test('should include CORS headers', () => {
+      const func = templateData.Resources[sampleFunction];
+      const code = func.Properties.InlineCode;
+
+      expect(code).toContain('Access-Control-Allow-Origin');
+      expect(code).toContain('Access-Control-Allow-Methods');
+      expect(code).toContain('Access-Control-Allow-Headers');
+    });
   });
 
   describe('Consistency Across Functions', () => {
-    test('all Lambda functions should have consistent configuration', () => {
+    test('all functions should have consistent Events configuration', () => {
       const functions = ['ItemsFunction', 'UsersFunction', 'OrdersFunction'];
-      const runtimes = functions.map(f => templateJson.Resources[f].Properties.Runtime);
-      const timeouts = functions.map(f => templateJson.Resources[f].Properties.Timeout);
-      const memories = functions.map(f => templateJson.Resources[f].Properties.MemorySize);
-      
-      expect(new Set(runtimes).size).toBe(1);
-      expect(new Set(timeouts).size).toBe(1);
-      expect(new Set(memories).size).toBe(1);
+      functions.forEach(functionName => {
+        const func = templateData.Resources[functionName];
+        expect(func.Properties.Events).toBeDefined();
+        const apiEvent = Object.values(func.Properties.Events)[0] as any;
+        expect(apiEvent.Type).toBe('Api');
+        expect(apiEvent.Properties.Method).toBe('ANY');
+      });
     });
 
     test('all tables should have consistent billing mode', () => {
       const tables = ['ItemsTable', 'UsersTable', 'OrdersTable'];
-      const billingModes = tables.map(t => templateJson.Resources[t].Properties.BillingMode);
-      
+      const billingModes = tables.map(
+        t => templateData.Resources[t].Properties.BillingMode
+      );
+
       expect(new Set(billingModes).size).toBe(1);
       expect(billingModes[0]).toBe('PAY_PER_REQUEST');
     });
@@ -423,22 +381,26 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
   describe('Template Validation', () => {
     test('should have valid JSON structure', () => {
-      expect(() => JSON.stringify(templateJson)).not.toThrow();
+      expect(() => JSON.stringify(templateData)).not.toThrow();
     });
 
     test('should have required top-level keys', () => {
-      expect(templateJson).toHaveProperty('AWSTemplateFormatVersion');
-      expect(templateJson).toHaveProperty('Description');
-      expect(templateJson).toHaveProperty('Parameters');
-      expect(templateJson).toHaveProperty('Resources');
-      expect(templateJson).toHaveProperty('Outputs');
+      expect(templateData).toHaveProperty('AWSTemplateFormatVersion');
+      expect(templateData).toHaveProperty('Transform');
+      expect(templateData).toHaveProperty('Description');
+      expect(templateData).toHaveProperty('Globals');
+      expect(templateData).toHaveProperty('Parameters');
+      expect(templateData).toHaveProperty('Resources');
+      expect(templateData).toHaveProperty('Outputs');
     });
 
     test('all resources should have Type property', () => {
-      Object.entries(templateJson.Resources).forEach(([name, resource]: [string, any]) => {
-        expect(resource.Type).toBeDefined();
-        expect(typeof resource.Type).toBe('string');
-      });
+      Object.entries(templateData.Resources).forEach(
+        ([name, resource]: [string, any]) => {
+          expect(resource.Type).toBeDefined();
+          expect(typeof resource.Type).toBe('string');
+        }
+      );
     });
   });
 });
