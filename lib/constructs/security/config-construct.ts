@@ -84,7 +84,21 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    // Configuration Recorder
+    // Delivery Channel - must be created before Configuration Recorder
+    const deliveryChannel = new config.CfnDeliveryChannel(
+      this,
+      `${SecurityConfig.RESOURCE_PREFIX}-DeliveryChannel`,
+      {
+        name: 'default',
+        s3BucketName: this.configBucket.bucketName,
+        s3KeyPrefix: 'config-logs/',
+        configSnapshotDeliveryProperties: {
+          deliveryFrequency: 'TwentyFour_Hours',
+        },
+      }
+    );
+
+    // Configuration Recorder - depends on delivery channel
     const configRecorder = new config.CfnConfigurationRecorder(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-ConfigRecorder`,
@@ -98,19 +112,8 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    // Delivery Channel
-    const deliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-DeliveryChannel`,
-      {
-        name: 'default',
-        s3BucketName: this.configBucket.bucketName,
-        s3KeyPrefix: 'config-logs/',
-        configSnapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
-      }
-    );
+    // Ensure configuration recorder depends on delivery channel
+    configRecorder.addDependency(deliveryChannel);
 
     // Security-related Config rules - create after recorder and delivery channel
     const s3BucketPublicReadProhibited = new config.ManagedRule(
@@ -200,8 +203,5 @@ export class ConfigConstruct extends Construct {
 
     vpcDefaultSecurityGroupClosed.node.addDependency(configRecorder);
     vpcDefaultSecurityGroupClosed.node.addDependency(deliveryChannel);
-
-    // Delivery channel depends on recorder
-    deliveryChannel.addDependency(configRecorder);
   }
 }
