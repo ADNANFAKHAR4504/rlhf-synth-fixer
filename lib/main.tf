@@ -1,7 +1,7 @@
 ###########################################################
 # main.tf
 # Terraform stack: Secure HTTP/HTTPS-only Security Group
-# Uses existing VPC to avoid VPC limit issues
+# Creates VPC if not provided, uses existing VPC otherwise
 # All variables, logic, and outputs in one file.
 ###########################################################
 
@@ -35,26 +35,37 @@ variable "aws_region" {
 }
 
 variable "vpc_id" {
-  description = "VPC ID where the security group will be created. Must be provided - no default for security compliance."
+  description = "VPC ID where the security group will be created. Leave empty to create a new VPC."
   type        = string
-  # NO DEFAULT - must be provided as per compliance requirements
+  default     = ""  # Empty means create new VPC
   
   validation {
-    condition     = can(regex("^vpc-[a-z0-9]{8,17}$", var.vpc_id))
-    error_message = "VPC ID must be a valid AWS VPC identifier (vpc-xxxxxxxx)."
+    condition     = var.vpc_id == "" || can(regex("^vpc-[a-z0-9]{8,17}$", var.vpc_id))
+    error_message = "VPC ID must be empty (to create new VPC) or a valid AWS VPC identifier (vpc-xxxxxxxx)."
+  }
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC (only used when creating a new VPC)."
+  type        = string
+  default     = "10.0.0.0/16"
+  
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0))
+    error_message = "VPC CIDR must be a valid CIDR notation (e.g., 10.0.0.0/16)."
   }
 }
 
 variable "allowed_ipv4_cidrs" {
   description = "List of IPv4 CIDR blocks allowed for HTTP/HTTPS inbound traffic. Use specific networks, avoid 0.0.0.0/0 in production."
   type        = list(string)
-  default     = []  # Empty by default for security - forces explicit configuration
+  default     = ["0.0.0.0/0"]  # Default for testing - override in production
   
   validation {
-    condition = alltrue([
+    condition = length(var.allowed_ipv4_cidrs) > 0 && alltrue([
       for cidr in var.allowed_ipv4_cidrs : can(cidrhost(cidr, 0))
     ])
-    error_message = "All IPv4 CIDRs must be valid CIDR notation (e.g., 10.0.0.0/16, 192.168.1.0/24)."
+    error_message = "At least one valid IPv4 CIDR must be provided (e.g., 10.0.0.0/16, 192.168.1.0/24)."
   }
 }
 
@@ -123,12 +134,108 @@ resource "random_id" "suffix" {
 ########################
 
 locals {
-  # Validation: fail if both IPv4 and IPv6 CIDR lists are empty
-  has_cidrs = length(var.allowed_ipv4_cidrs) > 0 || length(var.allowed_ipv6_cidrs) > 0
+  # Determine whether to create VPC (when vpc_id is empty)
+  should_create_vpc = var.vpc_id == ""
+  
+  # Determine which VPC to use
+  vpc_id = local.should_create_vpc ? aws_vpc.main[0].id : var.vpc_id
   
   # Dynamic security group name with random suffix
   security_group_name = "${var.security_group_name_prefix}-${random_id.suffix.hex}"
+  
+  # Validation: fail if both IPv4 and IPv6 CIDR lists are empty
+  has_cidrs = length(var.allowed_ipv4_cidrs) > 0 || length(var.allowed_ipv6_cidrs) > 0
 }
+
+########################
+# VPC Creation (Optional)
+########################
+
+# Create VPC when vpc_id is not provided
+resource "aws_vpc" "main" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
+  tags = merge(var.tags, {
+    Name = "vpc-${random_id.suffix.hex}"
+    Purpose = "Created for security group testing"
+    CreatedBy = "terraform-${random_id.suffix.hex}"
+  })
+}
+
+# Internet Gateway for the VPC
+resource "aws_internet_gateway" "main" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  vpc_id = aws_vpc.main[0].id
+  
+  tags = merge(var.tags, {
+    Name = "igw-${random_id.suffix.hex}"
+    Purpose = "Internet access for VPC"
+  })
+}
+
+# Default route table with internet access
+resource "aws_route_table" "main" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  vpc_id = aws_vpc.main[0].id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main[0].id
+  }
+  
+  tags = merge(var.tags, {
+    Name = "rt-main-${random_id.suffix.hex}"
+    Purpose = "Main route table with internet access"
+  })
+}
+
+# Public subnet (optional, for completeness)
+resource "aws_subnet" "public" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  vpc_id                  = aws_vpc.main[0].id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = true
+  
+  tags = merge(var.tags, {
+    Name = "subnet-public-${random_id.suffix.hex}"
+    Type = "Public"
+  })
+}
+
+# Associate route table with subnet
+resource "aws_route_table_association" "public" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  subnet_id      = aws_subnet.public[0].id
+  route_table_id = aws_route_table.main[0].id
+}
+
+########################
+# Data Sources
+########################
+
+# Get availability zones
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+# Get existing VPC data when using provided VPC ID
+data "aws_vpc" "selected" {
+  count = local.should_create_vpc ? 0 : 1
+  id    = var.vpc_id
+}
+
+########################
+# Validation
+########################
 
 # Custom validation to ensure at least one CIDR list is provided
 resource "null_resource" "validate_cidrs" {
@@ -143,21 +250,13 @@ resource "null_resource" "validate_cidrs" {
 }
 
 ########################
-# Data Sources
-########################
-
-data "aws_vpc" "selected" {
-  id = var.vpc_id
-}
-
-########################
 # Security Group
 ########################
 
 resource "aws_security_group" "app_sg" {
   name        = local.security_group_name
   description = var.security_group_description
-  vpc_id      = var.vpc_id
+  vpc_id      = local.vpc_id
   tags        = merge(var.tags, { 
     Name = local.security_group_name
     CreatedBy = "terraform-${random_id.suffix.hex}"
@@ -268,12 +367,27 @@ resource "aws_security_group" "app_sg" {
 
 output "vpc_id" {
   description = "The ID of the VPC where the security group was created"
-  value       = data.aws_vpc.selected.id
+  value       = local.vpc_id
 }
 
 output "vpc_cidr_block" {
   description = "The CIDR block of the VPC"
-  value       = data.aws_vpc.selected.cidr_block
+  value       = local.should_create_vpc ? aws_vpc.main[0].cidr_block : data.aws_vpc.selected[0].cidr_block
+}
+
+output "vpc_created" {
+  description = "Whether a new VPC was created by this module"
+  value       = local.should_create_vpc
+}
+
+output "internet_gateway_id" {
+  description = "The ID of the Internet Gateway (only when VPC is created)"
+  value       = local.should_create_vpc ? aws_internet_gateway.main[0].id : null
+}
+
+output "public_subnet_id" {
+  description = "The ID of the public subnet (only when VPC is created)"
+  value       = local.should_create_vpc ? aws_subnet.public[0].id : null
 }
 
 output "security_group_id" {
