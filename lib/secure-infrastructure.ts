@@ -623,7 +623,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         name: `main-cloudtrail-${args.environment}`,
         s3BucketName: cloudtrailBucket.bucket,
         includeGlobalServiceEvents: true,
-        isMultiRegionTrail: false,
+        isMultiRegionTrail: true,
         enableLogFileValidation: true,
         kmsKeyId: kmsKey.arn,
 
@@ -1141,12 +1141,34 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Create a reference to the existing delivery channel for outputs
-    const configDeliveryChannelName = pulumi.output(
-      'existing-config-delivery-channel'
+    // Config configuration recorder (must be created before delivery channel)
+    const configRecorder = new aws.cfg.Recorder(
+      `main-config-recorder-${args.environment}`,
+      {
+        name: `main-config-recorder-${args.environment}`,
+        roleArn: configRole.arn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+        },
+      },
+      { provider, parent: this }
     );
 
-    // Config rules for compliance (using existing Config recorder)
+    // Config delivery channel (depends on recorder)
+    const configDeliveryChannel = new aws.cfg.DeliveryChannel(
+      `main-config-delivery-channel-${args.environment}`,
+      {
+        name: `main-config-delivery-channel-${args.environment}`,
+        s3BucketName: configBucket.bucket,
+        snapshotDeliveryProperties: {
+          deliveryFrequency: 'TwentyFour_Hours',
+        },
+      },
+      { provider, parent: this, dependsOn: [configRecorder] }
+    );
+
+    // Config rules for compliance
     void new aws.cfg.Rule(
       `encrypted-volumes-rule-${args.environment}`,
       {
@@ -1160,7 +1182,23 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: `encrypted-volumes-rule-${args.environment}`,
         },
       },
-      { provider, parent: this }
+      { provider, parent: this, dependsOn: [configRecorder] }
+    );
+
+    void new aws.cfg.Rule(
+      `s3-bucket-public-read-prohibited-${args.environment}`,
+      {
+        name: `s3-bucket-public-read-prohibited-${args.environment}`,
+        source: {
+          owner: 'AWS',
+          sourceIdentifier: 'S3_BUCKET_PUBLIC_READ_PROHIBITED',
+        },
+        tags: {
+          ...commonTags,
+          Name: `s3-bucket-public-read-prohibited-${args.environment}`,
+        },
+      },
+      { provider, parent: this, dependsOn: [configRecorder] }
     );
 
     void new aws.cfg.Rule(
@@ -1285,7 +1323,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     this.availableAZs = pulumi.output(availabilityZones.then(az => az.names));
     this.snsTopicArn = securityAlertsTopic.arn;
     this.guardDutyDetectorId = guardDutyDetector.id;
-    this.configDeliveryChannelName = configDeliveryChannelName;
+    this.configDeliveryChannelName = configDeliveryChannel.name;
 
     // Register outputs
     this.registerOutputs({

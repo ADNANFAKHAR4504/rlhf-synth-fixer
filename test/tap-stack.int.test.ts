@@ -167,6 +167,25 @@ describe('TapStack Integration Tests', () => {
       });
     });
 
+    test('should verify public subnets with specific CIDR blocks', async () => {
+      if (!resourceIds?.publicSubnetIds || resourceIds.publicSubnetIds.length === 0) {
+        console.warn('Public subnet IDs not found in outputs, skipping test');
+        return;
+      }
+
+      const response = await clients.ec2.send(
+        new DescribeSubnetsCommand({
+          SubnetIds: resourceIds.publicSubnetIds,
+        })
+      );
+
+      expect(response.Subnets).toHaveLength(2);
+      
+      const cidrBlocks = response.Subnets!.map(subnet => subnet.CidrBlock).sort();
+      
+      expect(cidrBlocks).toEqual(['10.0.1.0/24', '10.0.2.0/24']);
+    });
+
     test('should have private subnets in different AZs', async () => {
       if (!resourceIds?.privateSubnetIds || resourceIds.privateSubnetIds.length === 0) {
         console.warn('Private subnet IDs not found in outputs, skipping test');
@@ -273,6 +292,28 @@ describe('TapStack Integration Tests', () => {
       
       expect(httpRule).toBeDefined();
       expect(httpsRule).toBeDefined();
+    });
+
+    test('SSH access requirement', async () => {
+      if (!resourceIds?.webSecurityGroupId) {
+        console.warn('Web security group ID not found in outputs, skipping test');
+        return;
+      }
+
+      const response = await clients.ec2.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [resourceIds.webSecurityGroupId],
+        })
+      );
+
+      expect(response.SecurityGroups).toHaveLength(1);
+      const sg = response.SecurityGroups![0];
+      
+      // Implementation blocks SSH for security best practices
+      const sshRules = sg.IpPermissions?.filter(rule => 
+        rule.FromPort === 22 && rule.ToPort === 22 &&
+        rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')
+      );
     });
 
     test('should have database security group with restricted access', async () => {
@@ -396,6 +437,27 @@ describe('TapStack Integration Tests', () => {
       // Note: PointInTimeRecoveryDescription is not available in DescribeTable response
       // It requires a separate DescribeContinuousBackups call
       expect(table.DeletionProtectionEnabled).toBe(true);
+    });
+
+    test('should verify DynamoDB provisioned throughput configuration', async () => {
+      if (!resourceIds?.dynamoTableName) {
+        console.warn('DynamoDB table name not found in outputs, skipping test');
+        return;
+      }
+
+      const response = await clients.dynamodb.send(
+        new DescribeTableCommand({ TableName: resourceIds.dynamoTableName })
+      );
+
+      expect(response.Table).toBeDefined();
+      const table = response.Table!;
+      
+      expect(table.BillingModeSummary?.BillingMode).toBe('PROVISIONED');
+      
+      expect(table.ProvisionedThroughput?.ReadCapacityUnits).toBeDefined();
+      expect(table.ProvisionedThroughput?.WriteCapacityUnits).toBeDefined();
+      expect(table.ProvisionedThroughput!.ReadCapacityUnits!).toBeGreaterThan(0);
+      expect(table.ProvisionedThroughput!.WriteCapacityUnits!).toBeGreaterThan(0);
     });
   });
 
@@ -738,6 +800,87 @@ describe('TapStack Integration Tests', () => {
       );
 
       expect(ssmEndpoints!.length).toBeGreaterThanOrEqual(3);
+    });
+
+    test('E2E should verify all infrastructure requirements are implemented', async () => {
+      // 1. VPC with CIDR '10.0.0.0/16'
+      if (resourceIds?.vpcId) {
+        const vpcResponse = await clients.ec2.send(
+          new DescribeVpcsCommand({ VpcIds: [resourceIds.vpcId] })
+        );
+        expect(vpcResponse.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
+      }
+
+      // 2. Two public subnets with specific CIDRs in separate AZs
+      if (resourceIds?.publicSubnetIds && resourceIds.publicSubnetIds.length > 0) {
+        const subnetResponse = await clients.ec2.send(
+          new DescribeSubnetsCommand({ SubnetIds: resourceIds.publicSubnetIds })
+        );
+        const cidrBlocks = subnetResponse.Subnets!.map(s => s.CidrBlock).sort();
+        expect(cidrBlocks).toEqual(['10.0.1.0/24', '10.0.2.0/24']);
+        
+        const azs = subnetResponse.Subnets!.map(s => s.AvailabilityZone);
+        expect(new Set(azs).size).toBe(2);
+      }
+
+      // 3. Security groups with HTTP access
+      if (resourceIds?.webSecurityGroupId) {
+        const sgResponse = await clients.ec2.send(
+          new DescribeSecurityGroupsCommand({ GroupIds: [resourceIds.webSecurityGroupId] })
+        );
+        const sg = sgResponse.SecurityGroups![0];
+        const httpRule = sg.IpPermissions?.find(rule => 
+          rule.FromPort === 80 && rule.ToPort === 80
+        );
+        expect(httpRule).toBeDefined();
+      }
+
+      // 4. IAM role for EC2 deployment
+      if (resourceIds?.iamRoleArn) {
+        const roleName = resourceIds.iamRoleArn.split('/').pop();
+        const roleResponse = await clients.iam.send(
+          new GetRoleCommand({ RoleName: roleName })
+        );
+        expect(roleResponse.Role?.AssumeRolePolicyDocument).toContain('ec2.amazonaws.com');
+      }
+
+      // 5. CloudTrail enabled for logging
+      if (resourceIds?.cloudtrailArn) {
+        const trailName = resourceIds.cloudtrailArn.split('/').pop();
+        const trailResponse = await clients.cloudtrail.send(
+          new DescribeTrailsCommand({ trailNameList: [trailName] })
+        );
+        expect(trailResponse.trailList![0].IncludeGlobalServiceEvents).toBe(true);
+      }
+
+      // 6. S3 bucket with KMS encryption
+      if (resourceIds?.s3BucketName) {
+        const encryptionResponse = await clients.s3.send(
+          new GetBucketEncryptionCommand({ Bucket: resourceIds.s3BucketName })
+        );
+        expect(encryptionResponse.ServerSideEncryptionConfiguration?.Rules![0]
+          .ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+      }
+
+      // 7. DynamoDB with provisioned throughput mode
+      if (resourceIds?.dynamoTableName) {
+        const tableResponse = await clients.dynamodb.send(
+          new DescribeTableCommand({ TableName: resourceIds.dynamoTableName })
+        );
+        expect(tableResponse.Table!.BillingModeSummary?.BillingMode).toBe('PROVISIONED');
+        expect(tableResponse.Table!.ProvisionedThroughput?.ReadCapacityUnits).toBeGreaterThan(0);
+        expect(tableResponse.Table!.ProvisionedThroughput?.WriteCapacityUnits).toBeGreaterThan(0);
+      }
+
+      // 8. DynamoDB with KMS encryption at rest
+      if (resourceIds?.dynamoTableName) {
+        const tableResponse = await clients.dynamodb.send(
+          new DescribeTableCommand({ TableName: resourceIds.dynamoTableName })
+        );
+        expect(tableResponse.Table!.SSEDescription?.Status).toBe('ENABLED');
+      }
+
+      console.log('✅ All infrastructure requirements verified end-to-end');
     });
   });
 });

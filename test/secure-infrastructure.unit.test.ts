@@ -253,6 +253,18 @@ describe('SecureInfrastructure Unit Tests', () => {
       );
     });
 
+    it('should verify VPC CIDR block configuration', () => {
+      const aws = require('@pulumi/aws');
+      const vpcCalls = (aws.ec2.Vpc as jest.Mock).mock.calls;
+      
+      // Find the main VPC call
+      const mainVpcCall = vpcCalls.find(call => call[0] === 'main-vpc-test');
+      expect(mainVpcCall).toBeDefined();
+      
+      const vpcConfig = mainVpcCall[1];
+      expect(vpcConfig.cidrBlock).toBe('10.0.0.0/16');
+    });
+
     it('should create public subnets in different AZs', () => {
       const aws = require('@pulumi/aws');
       
@@ -273,6 +285,25 @@ describe('SecureInfrastructure Unit Tests', () => {
         }),
         expect.any(Object)
       );
+    });
+
+    it('should verify public subnets with specific CIDR blocks', () => {
+      const aws = require('@pulumi/aws');
+      const subnetCalls = (aws.ec2.Subnet as jest.Mock).mock.calls;
+      
+      // Find public subnet calls
+      const publicSubnet1 = subnetCalls.find(call => call[0] === 'public-subnet-1-test');
+      const publicSubnet2 = subnetCalls.find(call => call[0] === 'public-subnet-2-test');
+      
+      expect(publicSubnet1).toBeDefined();
+      expect(publicSubnet2).toBeDefined();
+      
+      expect(publicSubnet1[1].cidrBlock).toBe('10.0.1.0/24');
+      expect(publicSubnet2[1].cidrBlock).toBe('10.0.2.0/24');
+      
+      // Verify they are public subnets
+      expect(publicSubnet1[1].mapPublicIpOnLaunch).toBe(true);
+      expect(publicSubnet2[1].mapPublicIpOnLaunch).toBe(true);
     });
 
     it('should create private subnets in different AZs', () => {
@@ -373,6 +404,45 @@ describe('SecureInfrastructure Unit Tests', () => {
       );
     });
 
+    it('should verify SSH access configuration', () => {
+      const aws = require('@pulumi/aws');
+      const securityGroupCalls = (aws.ec2.SecurityGroup as jest.Mock).mock.calls;
+      
+      // Check if any security group allows SSH access
+      const hasSSHAccess = securityGroupCalls.some(call => {
+        const config = call[1];
+        if (config.ingress) {
+          return config.ingress.some((rule: any) => 
+            rule.fromPort === 22 && rule.toPort === 22 && 
+            rule.cidrBlocks && rule.cidrBlocks.includes('0.0.0.0/0')
+          );
+        }
+        return false;
+      });
+      
+      expect(hasSSHAccess).toBe(false);
+    });
+
+    it('should verify HTTP access configuration', () => {
+      const aws = require('@pulumi/aws');
+      const securityGroupCalls = (aws.ec2.SecurityGroup as jest.Mock).mock.calls;
+      
+      // Check if web security group allows HTTP access
+      const webSecurityGroupCall = securityGroupCalls.find(call => 
+        call[0] === 'web-security-group-test'
+      );
+      
+      expect(webSecurityGroupCall).toBeDefined();
+      const config = webSecurityGroupCall[1];
+      
+      const hasHTTPAccess = config.ingress.some((rule: any) => 
+        rule.fromPort === 80 && rule.toPort === 80 && 
+        rule.cidrBlocks && rule.cidrBlocks.includes('0.0.0.0/0')
+      );
+      
+      expect(hasHTTPAccess).toBe(true);
+    });
+
     it('should create database security group with restricted access', () => {
       const aws = require('@pulumi/aws');
       
@@ -446,6 +516,41 @@ describe('SecureInfrastructure Unit Tests', () => {
       );
     });
 
+    it('should verify DynamoDB provisioned throughput configuration', () => {
+      const aws = require('@pulumi/aws');
+      const dynamoTableCalls = (aws.dynamodb.Table as jest.Mock).mock.calls;
+      
+      // Find the main DynamoDB table call
+      const tableCall = dynamoTableCalls.find(call => call[0] === 'application-table-test');
+      expect(tableCall).toBeDefined();
+      
+      const tableConfig = tableCall[1];
+      
+      expect(tableConfig.billingMode).toBe('PROVISIONED');
+      
+      // Verify read and write capacity units are specified
+      expect(tableConfig.readCapacity).toBeDefined();
+      expect(tableConfig.writeCapacity).toBeDefined();
+      expect(typeof tableConfig.readCapacity).toBe('number');
+      expect(typeof tableConfig.writeCapacity).toBe('number');
+      expect(tableConfig.readCapacity).toBeGreaterThan(0);
+      expect(tableConfig.writeCapacity).toBeGreaterThan(0);
+    });
+
+    it('should verify DynamoDB KMS encryption configuration', () => {
+      const aws = require('@pulumi/aws');
+      const dynamoTableCalls = (aws.dynamodb.Table as jest.Mock).mock.calls;
+      
+      const tableCall = dynamoTableCalls.find(call => call[0] === 'application-table-test');
+      expect(tableCall).toBeDefined();
+      
+      const tableConfig = tableCall[1];
+      
+      expect(tableConfig.serverSideEncryption).toBeDefined();
+      expect(tableConfig.serverSideEncryption.enabled).toBe(true);
+      expect(tableConfig.serverSideEncryption.kmsKeyArn).toBeDefined();
+    });
+
     it('should create KMS key with proper policy', () => {
       const aws = require('@pulumi/aws');
       
@@ -504,6 +609,41 @@ describe('SecureInfrastructure Unit Tests', () => {
       );
     });
 
+    it('should verify IAM role configuration for EC2 deployment', () => {
+      const aws = require('@pulumi/aws');
+      const iamRoleCalls = (aws.iam.Role as jest.Mock).mock.calls;
+      const iamPolicyCalls = (aws.iam.Policy as jest.Mock).mock.calls;
+      
+      // Find the EC2 deployment role
+      const ec2RoleCall = iamRoleCalls.find(call => call[0] === 'ec2-deployment-role-test');
+      expect(ec2RoleCall).toBeDefined();
+      
+      // Find the EC2 deployment policy
+      const ec2PolicyCall = iamPolicyCalls.find(call => call[0] === 'ec2-deployment-policy-test');
+      expect(ec2PolicyCall).toBeDefined();
+      
+      const roleConfig = ec2RoleCall[1];
+      const policyConfig = ec2PolicyCall[1];
+      
+      expect(policyConfig.description).toContain('necessary EC2 actions for application deployment');
+      
+      // Verify role is for EC2 service
+      expect(roleConfig.assumeRolePolicy).toContain('ec2.amazonaws.com');
+    });
+
+    it('should verify ap-south-1 region deployment configuration', () => {
+      const aws = require('@pulumi/aws');
+      const providerCalls = (aws.Provider as jest.Mock).mock.calls;
+      
+      // Find the ap-south-1 provider
+      const apSouthProvider = providerCalls.find(call => call[0] === 'ap-south-1-provider-test');
+      expect(apSouthProvider).toBeDefined();
+      
+      const providerConfig = apSouthProvider[1];
+      
+      expect(providerConfig.region).toBe('ap-south-1');
+    });
+
     it('should attach SSM managed policy for Session Manager', () => {
       const aws = require('@pulumi/aws');
       
@@ -540,6 +680,50 @@ describe('SecureInfrastructure Unit Tests', () => {
         }),
         expect.any(Object)
       );
+    });
+
+    it('should verify CloudTrail logging configuration', () => {
+      const aws = require('@pulumi/aws');
+      const cloudtrailCalls = (aws.cloudtrail.Trail as jest.Mock).mock.calls;
+      
+      // Find the main CloudTrail
+      const cloudtrailCall = cloudtrailCalls.find(call => call[0] === 'main-cloudtrail-test');
+      expect(cloudtrailCall).toBeDefined();
+      
+      const trailConfig = cloudtrailCall[1];
+      
+      expect(trailConfig.includeGlobalServiceEvents).toBe(true);
+      expect(trailConfig.enableLogFileValidation).toBe(true);
+      expect(trailConfig.eventSelectors).toBeDefined();
+      
+      // Verify S3 bucket is specified for log storage
+      expect(trailConfig.s3BucketName).toBeDefined();
+    });
+
+    it('should verify CloudTrail S3 bucket encryption configuration', () => {
+      const aws = require('@pulumi/aws');
+      const cloudtrailCalls = (aws.cloudtrail.Trail as jest.Mock).mock.calls;
+      const s3BucketCalls = (aws.s3.Bucket as jest.Mock).mock.calls;
+      const s3EncryptionCalls = (aws.s3.BucketServerSideEncryptionConfiguration as jest.Mock).mock.calls;
+      
+      // Find CloudTrail configuration
+      const cloudtrailCall = cloudtrailCalls.find(call => call[0] === 'main-cloudtrail-test');
+      expect(cloudtrailCall).toBeDefined();
+      
+      // Find CloudTrail S3 bucket
+      const cloudtrailBucketCall = s3BucketCalls.find(call => call[0] === 'cloudtrail-logs-bucket-test');
+      expect(cloudtrailBucketCall).toBeDefined();
+      
+      // Find S3 encryption configuration
+      const encryptionCall = s3EncryptionCalls.find(call => call[0] === 'cloudtrail-bucket-encryption-test');
+      expect(encryptionCall).toBeDefined();
+      
+      const trailConfig = cloudtrailCall[1];
+      const encryptionConfig = encryptionCall[1];
+      
+      expect(trailConfig.kmsKeyId).toBeDefined();
+      expect(encryptionConfig.rules[0].applyServerSideEncryptionByDefault.sseAlgorithm).toBe('aws:kms');
+      expect(encryptionConfig.rules[0].applyServerSideEncryptionByDefault.kmsMasterKeyId).toBeDefined();
     });
 
     it('should create SNS topic for alerts', () => {
@@ -684,6 +868,91 @@ describe('SecureInfrastructure Unit Tests', () => {
       expect(infrastructure.snsTopicArn).toBeDefined();
       expect(infrastructure.guardDutyDetectorId).toBeDefined();
       expect(infrastructure.configDeliveryChannelName).toBeDefined();
+    });
+  });
+
+  describe('Infrastructure Requirements Compliance', () => {
+    let infrastructure: SecureInfrastructure;
+
+    beforeEach(() => {
+      infrastructure = new SecureInfrastructure('test-infra', {
+        environment: 'test',
+        tags: { Environment: 'test' }
+      });
+    });
+
+    it('should verify all infrastructure requirements are implemented', () => {
+      const aws = require('@pulumi/aws');
+      
+      // 1. VPC with CIDR '10.0.0.0/16'
+      const vpcCalls = (aws.ec2.Vpc as jest.Mock).mock.calls;
+      const vpcCall = vpcCalls.find(call => call[0] === 'main-vpc-test');
+      expect(vpcCall[1].cidrBlock).toBe('10.0.0.0/16');
+      
+      // 2. Two public subnets with specific CIDRs in separate AZs
+      const subnetCalls = (aws.ec2.Subnet as jest.Mock).mock.calls;
+      const publicSubnet1 = subnetCalls.find(call => call[0] === 'public-subnet-1-test');
+      const publicSubnet2 = subnetCalls.find(call => call[0] === 'public-subnet-2-test');
+      expect(publicSubnet1[1].cidrBlock).toBe('10.0.1.0/24');
+      expect(publicSubnet2[1].cidrBlock).toBe('10.0.2.0/24');
+      
+      // 3. Security groups with HTTP access
+      const sgCalls = (aws.ec2.SecurityGroup as jest.Mock).mock.calls;
+      const webSgCall = sgCalls.find(call => call[0] === 'web-security-group-test');
+      const hasHTTP = webSgCall[1].ingress.some((rule: any) => rule.fromPort === 80);
+      expect(hasHTTP).toBe(true);
+      
+      // 4. IAM role for EC2 deployment
+      const iamRoleCalls = (aws.iam.Role as jest.Mock).mock.calls;
+      const ec2RoleCall = iamRoleCalls.find(call => call[0] === 'ec2-deployment-role-test');
+      expect(ec2RoleCall[1].assumeRolePolicy).toContain('ec2.amazonaws.com');
+      
+      // 5. CloudTrail enabled for logging
+      const cloudtrailCalls = (aws.cloudtrail.Trail as jest.Mock).mock.calls;
+      const trailCall = cloudtrailCalls.find(call => call[0] === 'main-cloudtrail-test');
+      expect(trailCall[1].includeGlobalServiceEvents).toBe(true);
+      
+      // 6. S3 bucket with KMS encryption
+      const s3EncryptionCalls = (aws.s3.BucketServerSideEncryptionConfiguration as jest.Mock).mock.calls;
+      const encryptionCall = s3EncryptionCalls.find(call => call[0] === 'cloudtrail-bucket-encryption-test');
+      expect(encryptionCall[1].rules[0].applyServerSideEncryptionByDefault.sseAlgorithm).toBe('aws:kms');
+      
+      // 7. DynamoDB with provisioned throughput mode
+      const dynamoCalls = (aws.dynamodb.Table as jest.Mock).mock.calls;
+      const tableCall = dynamoCalls.find(call => call[0] === 'application-table-test');
+      expect(tableCall[1].billingMode).toBe('PROVISIONED');
+      expect(tableCall[1].readCapacity).toBeGreaterThan(0);
+      expect(tableCall[1].writeCapacity).toBeGreaterThan(0);
+      
+      // 8. DynamoDB with KMS encryption at rest
+      expect(tableCall[1].serverSideEncryption.enabled).toBe(true);
+      expect(tableCall[1].serverSideEncryption.kmsKeyArn).toBeDefined();
+      
+      // 9. Resource tagging
+      expect(vpcCall[1].tags).toBeDefined();
+      expect(vpcCall[1].tags.Environment).toBe('test');
+      
+      // 10. ap-south-1 region deployment
+      const providerCalls = (aws.Provider as jest.Mock).mock.calls;
+      const providerCall = providerCalls.find(call => call[0] === 'ap-south-1-provider-test');
+      expect(providerCall[1].region).toBe('ap-south-1');
+    });
+
+    it('should verify SSH access is blocked for security', () => {
+      const aws = require('@pulumi/aws');
+      const sgCalls = (aws.ec2.SecurityGroup as jest.Mock).mock.calls;
+      
+      const hasSSHAccess = sgCalls.some(call => {
+        const config = call[1];
+        if (config.ingress) {
+          return config.ingress.some((rule: any) => 
+            rule.fromPort === 22 && rule.cidrBlocks?.includes('0.0.0.0/0')
+          );
+        }
+        return false;
+      });
+      
+      expect(hasSSHAccess).toBe(false);
     });
   });
 });

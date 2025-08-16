@@ -1,4 +1,4 @@
-# Comprehensive Secure AWS Infrastructure with Pulumi TypeScript
+# Secure AWS Infrastructure with Pulumi TypeScript
 
 ```typescript
 import * as aws from '@pulumi/aws';
