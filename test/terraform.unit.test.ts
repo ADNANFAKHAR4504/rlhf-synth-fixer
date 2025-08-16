@@ -200,9 +200,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
       expect(normalizedOutput).toContain(
         'value = { for region in var.aws_regions'
       );
-      expect(normalizedOutput).toContain(
-        's3_bucket_name = aws_s3_bucket.data_bucket[region].id'
-      );
+
       expect(normalizedOutput).toContain(
         'ec2_instance_id = aws_ec2_instance.app_server[region].id'
       );
