@@ -175,7 +175,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource:
-                  - !Sub '${CorpS3Bucket}/*'
+                  - !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -228,7 +228,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub '${CorpS3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
       Tags:
         - Key: Name
           Value: !Sub 'corp-lambda-execution-role-${Environment}'
@@ -355,7 +355,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${CorpS3Bucket}/*'
+                - !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
       Tags:
         - Key: Name
           Value: !Sub 'corp-cloudtrail-${Environment}'

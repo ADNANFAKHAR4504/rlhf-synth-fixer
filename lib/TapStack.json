@@ -286,7 +286,7 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${CorpS3Bucket}/*"
+                                            "Fn::Sub": "arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*"
                                         }
                                     ]
                                 },
@@ -394,7 +394,7 @@
                                         "s3:GetObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${CorpS3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*"
                                     }
                                 }
                             ]
@@ -640,7 +640,7 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${CorpS3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*"
                                     }
                                 ]
                             }
