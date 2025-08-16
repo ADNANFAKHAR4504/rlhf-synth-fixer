@@ -9,17 +9,17 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name (production, staging, development)"
   type        = string
-  default     = "cleanstate20250815"
+  default     = "ultrafresh20250816"
   validation {
-    condition     = contains(["production", "staging", "development", "freshdeploy", "newenv20250815", "cleanstate20250815"], var.environment)
-    error_message = "Environment must be one of: production, staging, development, freshdeploy, newenv20250815, cleanstate20250815."
+    condition     = contains(["production", "staging", "development", "freshdeploy", "newenv20250815", "cleanstate20250815", "ultrafresh20250816"], var.environment)
+    error_message = "Environment must be one of: production, staging, development, freshdeploy, newenv20250815, cleanstate20250815, ultrafresh20250816."
   }
 }
 
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "cleanstart-project-v2"
+  default     = "megafresh-deploy-v3"
 }
 
 variable "vpc_cidr" {
