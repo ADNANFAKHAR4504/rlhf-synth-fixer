@@ -1140,9 +1140,11 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       },
       { provider, parent: this }
     );
-    
+
     // Create a reference to the existing delivery channel for outputs
-    const configDeliveryChannelName = pulumi.output('existing-config-delivery-channel');
+    const configDeliveryChannelName = pulumi.output(
+      'existing-config-delivery-channel'
+    );
 
     // Config rules for compliance (using existing Config recorder)
     void new aws.cfg.Rule(
