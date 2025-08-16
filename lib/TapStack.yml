@@ -85,8 +85,60 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${Environment}-create-user'
-      CodeUri: src/create_user/
-      Handler: app.lambda_handler
+      InlineCode: |
+        import json
+        import os
+        import uuid
+        import boto3
+        from datetime import datetime
+
+        def lambda_handler(event, context):
+            # Feature flag check
+            if os.environ.get('FEATURE_FLAG_VALIDATION', 'false').lower() == 'true':
+                print("Feature flag validation is enabled")
+            
+            try:
+                # Parse request body
+                body = json.loads(event.get('body', '{}'))
+                
+                # Generate user ID and timestamp
+                user_id = str(uuid.uuid4())
+                timestamp = datetime.utcnow().isoformat()
+                
+                # Create user record
+                user_data = {
+                    'id': user_id,
+                    'name': body.get('name', ''),
+                    'email': body.get('email', ''),
+                    'created_at': timestamp,
+                    'updated_at': timestamp
+                }
+                
+                # Store in DynamoDB
+                dynamodb = boto3.resource('dynamodb')
+                table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+                table.put_item(Item=user_data)
+                
+                return {
+                    'statusCode': 201,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                        'Access-Control-Allow-Methods': 'POST,OPTIONS'
+                    },
+                    'body': json.dumps(user_data)
+                }
+            except Exception as e:
+                return {
+                    'statusCode': 500,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'error': str(e)})
+                }
+      Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
@@ -104,8 +156,66 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${Environment}-get-user'
-      CodeUri: src/get_user/
-      Handler: app.lambda_handler
+      InlineCode: |
+        import json
+        import os
+        import boto3
+        from boto3.dynamodb.conditions import Key
+
+        def lambda_handler(event, context):
+            # Feature flag check
+            if os.environ.get('FEATURE_FLAG_CACHING', 'false').lower() == 'true':
+                print("Feature flag caching is enabled")
+            
+            try:
+                # Extract user ID from path parameters
+                user_id = event['pathParameters']['id']
+                
+                # Get user from DynamoDB
+                dynamodb = boto3.resource('dynamodb')
+                table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+                
+                response = table.get_item(Key={'id': user_id})
+                
+                if 'Item' in response:
+                    return {
+                        'statusCode': 200,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*',
+                            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                            'Access-Control-Allow-Methods': 'GET,OPTIONS'
+                        },
+                        'body': json.dumps(response['Item'], default=str)
+                    }
+                else:
+                    return {
+                        'statusCode': 404,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        },
+                        'body': json.dumps({'error': 'User not found'})
+                    }
+            except KeyError as e:
+                return {
+                    'statusCode': 400,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'error': f'Missing parameter: {str(e)}'})
+                }
+            except Exception as e:
+                return {
+                    'statusCode': 500,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({'error': str(e)})
+                }
+      Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:

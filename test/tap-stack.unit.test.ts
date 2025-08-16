@@ -135,8 +135,8 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       
       const props = lambda.Properties;
       expect(props.FunctionName).toEqual({ 'Fn::Sub': '${Environment}-create-user' });
-      expect(props.CodeUri).toBe('src/create_user/');
-      expect(props.Handler).toBe('app.lambda_handler');
+      expect(props.InlineCode).toBeDefined();
+      expect(props.Handler).toBe('index.lambda_handler');
       expect(props.Role).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
       expect(props.Environment.Variables.FEATURE_FLAG_VALIDATION).toBe('true');
       expect(props.Events.CreateUserApi.Type).toBe('Api');
@@ -149,8 +149,8 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       
       const props = lambda.Properties;
       expect(props.FunctionName).toEqual({ 'Fn::Sub': '${Environment}-get-user' });
-      expect(props.CodeUri).toBe('src/get_user/');
-      expect(props.Handler).toBe('app.lambda_handler');
+      expect(props.InlineCode).toBeDefined();
+      expect(props.Handler).toBe('index.lambda_handler');
       expect(props.Role).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
       expect(props.Environment.Variables.FEATURE_FLAG_CACHING).toBe('false');
       expect(props.Events.GetUserApi.Type).toBe('Api');
