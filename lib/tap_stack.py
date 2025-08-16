@@ -346,7 +346,7 @@ aws.lb.Listener(
 # CloudWatch Dashboard (ALB + EC2 metrics)
 # ----------------------------------------------------------------------------
 import json
-dashboard_body = Output.all(alb.arn_suffix, tg.arn_suffix).apply(
+dashboard_body = Output.all(alb.arn_suffix, tg.arn_suffix, instance.id).apply(
     lambda args: json.dumps({
         "widgets": [
             {
@@ -379,9 +379,9 @@ dashboard_body = Output.all(alb.arn_suffix, tg.arn_suffix).apply(
                     "view": "timeSeries", "stacked": False, "region": aws_region,
                     "title": "EC2 CPU & Network",
                     "metrics": [
-                        ["AWS/EC2","CPUUtilization","InstanceId", instance.id],
-                        ["AWS/EC2","NetworkIn","InstanceId", instance.id],
-                        ["AWS/EC2","NetworkOut","InstanceId", instance.id]
+                        ["AWS/EC2","CPUUtilization","InstanceId", args[2]],
+                        ["AWS/EC2","NetworkIn","InstanceId", args[2]],
+                        ["AWS/EC2","NetworkOut","InstanceId", args[2]]
                     ]
                 }
             }
