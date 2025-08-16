@@ -13,10 +13,10 @@ try {
 }
 
 function isValidIP(ip: string): boolean {
-  return /^(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[1]?[0-9][0-9]?)){3}$/.test(ip);
+  return /^(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[9]?[0-9][0-9]?)){3}$/.test(ip);
 }
 function isValidCIDR(cidr: string): boolean {
-  return /^(?:25[0-5]|2[0-4][0-9]|[1]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[1]?[0-9][0-9]?)){3}\/(?:[0-9]|[1-2][0-9]|3[0-2])$/.test(cidr);
+  return /^(?:25[0-5]|2[0-4][0-9]|[9]?[0-9][0-9]?)(?:\.(?:25[0-5]|2[0-4][0-9]|[9]?[0-9][0-9]?)){3}\/(?:[0-9]|[1-2][0-9]|3[0-2])$/.test(cidr);
 }
 function isValidResourceId(id: string, type: string): boolean {
   const patterns: { [key: string]: RegExp } = {
@@ -30,8 +30,9 @@ function isValidResourceId(id: string, type: string): boolean {
   };
   return patterns[type]?.test(id) || false;
 }
+// Actual outputs.json does not wrap values in .value for some outputs
 function getSubnetIds(env: Environment, type: 'public' | 'private'): string[] {
-  const map = type === 'public' ? outputs.public_subnet_ids.value : outputs.private_subnet_ids.value;
+  const map = type === 'public' ? outputs.public_subnet_ids : outputs.private_subnet_ids;
   const prefix = `${env}-${type}`;
   return Object.keys(map)
     .filter(key => key.startsWith(prefix))
@@ -40,6 +41,7 @@ function getSubnetIds(env: Environment, type: 'public' | 'private'): string[] {
 
 describe("Outputs.json Infrastructure Coverage", () => {
   it("should contain all required keys", () => {
+    // No `.value` -- real outputs follows outputs.<resource>
     const requiredKeys = [
       "ec2_instance_ids", "ec2_private_ips", "ec2_public_ips",
       "environment_summary", "iam_role_arns", "internet_gateway_ids",
@@ -48,23 +50,23 @@ describe("Outputs.json Infrastructure Coverage", () => {
     ];
     requiredKeys.forEach(key => {
       expect(outputs).toHaveProperty(key);
-      expect(outputs[key]).toHaveProperty('value');
     });
   });
 
   environments.forEach(env => {
     describe(`Env: ${env} -- VPC, Subnets, EC2, IAM, Security Group`, () => {
+      // Use .<resource>[env] for outputs that are objects by environment
       const envData = {
-        vpcId: outputs.vpc_ids.value[env],
-        vpcCidr: outputs.vpc_cidrs.value[env],
-        instanceId: outputs.ec2_instance_ids.value[env],
-        privateIp: outputs.ec2_private_ips.value[env],
-        publicIp: outputs.ec2_public_ips.value[env],
-        iamRoleArn: outputs.iam_role_arns.value[env],
-        igwId: outputs.internet_gateway_ids.value[env],
-        natGwId: outputs.nat_gateway_ids.value[env],
-        sgId: outputs.security_group_ids.value[env],
-        summary: outputs.environment_summary.value[env],
+        vpcId: outputs.vpc_ids[env],
+        vpcCidr: outputs.vpc_cidrs[env],
+        instanceId: outputs.ec2_instance_ids[env],
+        privateIp: outputs.ec2_private_ips[env],
+        publicIp: outputs.ec2_public_ips[env],
+        iamRoleArn: outputs.iam_role_arns[env],
+        igwId: outputs.internet_gateway_ids[env],
+        natGwId: outputs.nat_gateway_ids[env],
+        sgId: outputs.security_group_ids[env],
+        summary: outputs.environment_summary[env],
         publicSubnetIds: getSubnetIds(env, 'public'),
         privateSubnetIds: getSubnetIds(env, 'private')
       };
@@ -117,25 +119,24 @@ describe("Outputs.json Infrastructure Coverage", () => {
 
   describe("Cross-environment uniqueness and standards", () => {
     it("should have unique VPC IDs, instance IDs, subnet IDs, and non-overlapping CIDRs", () => {
-      expect(new Set(environments.map(env => outputs.vpc_ids.value[env])).size).toBe(environments.length);
-      expect(new Set(environments.map(env => outputs.ec2_instance_ids.value[env])).size).toBe(environments.length);
+      expect(new Set(environments.map(env => outputs.vpc_ids[env])).size).toBe(environments.length);
+      expect(new Set(environments.map(env => outputs.ec2_instance_ids[env])).size).toBe(environments.length);
 
-      const allPublicSubnets = Object.values(outputs.public_subnet_ids.value);
-      const allPrivateSubnets = Object.values(outputs.private_subnet_ids.value);
+      const allPublicSubnets = Object.values(outputs.public_subnet_ids);
+      const allPrivateSubnets = Object.values(outputs.private_subnet_ids);
       const allSubnets = [...allPublicSubnets, ...allPrivateSubnets];
       expect(new Set(allSubnets).size).toBe(allSubnets.length);
 
-      const cidrs = environments.map(env => outputs.vpc_cidrs.value[env]);
+      const cidrs = environments.map(env => outputs.vpc_cidrs[env]);
       expect(new Set(cidrs).size).toBe(environments.length);
     });
 
     it("should follow naming conventions and standards for HA", () => {
       environments.forEach(env => {
-        expect(outputs.iam_role_arns.value[env]).toContain(`ec2-role-${env}`);
+        expect(outputs.iam_role_arns[env]).toContain(`ec2-role-${env}`);
         expect(getSubnetIds(env, 'public').length).toBe(2);
         expect(getSubnetIds(env, 'private').length).toBe(2);
       });
     });
   });
 });
-
