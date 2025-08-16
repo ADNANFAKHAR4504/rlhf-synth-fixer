@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface InfrastructureConfig {
   region: string;
@@ -53,6 +53,10 @@ export class Infrastructure extends pulumi.ComponentResource {
   public readonly applicationRoleArn: pulumi.Output<string>;
   public readonly kmsKeyId: pulumi.Output<string>;
   public readonly instanceProfileArn: pulumi.Output<string>;
+  public readonly webSecurityGroupId: pulumi.Output<string>;
+  public readonly appSecurityGroupId: pulumi.Output<string>;
+  public readonly securityAlertsTopicArn: pulumi.Output<string>;
+  public readonly webAclArn: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -117,25 +121,38 @@ export class Infrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    const vpcFlowLogGroup = new aws.cloudwatch.LogGroup(
+      createResourceName('vpc-flow-logs', region, environment),
+      {
+        name: `/aws/vpc/flowlogs/${environment}`,
+        retentionInDays: 14,
+        kmsKeyId: kmsKey.arn,
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
     const vpcFlowLogPolicy = new aws.iam.Policy(
       createResourceName('vpc-flow-log-policy', region, environment),
       {
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams',
-              ],
-              Resource: '*',
-            },
-          ],
-        }),
+        policy: pulumi.all([vpcFlowLogGroup.arn]).apply(([logGroupArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                Resource: [logGroupArn, `${logGroupArn}:*`],
+              },
+            ],
+          })
+        ),
         tags: resourceTags,
       },
       { provider, parent: this }
@@ -146,17 +163,6 @@ export class Infrastructure extends pulumi.ComponentResource {
       {
         role: vpcFlowLogRole.name,
         policyArn: vpcFlowLogPolicy.arn,
-      },
-      { provider, parent: this }
-    );
-
-    const vpcFlowLogGroup = new aws.cloudwatch.LogGroup(
-      createResourceName('vpc-flow-logs', region, environment),
-      {
-        name: `/aws/vpc/flowlogs/${environment}`,
-        retentionInDays: 14,
-        kmsKeyId: kmsKey.arn,
-        tags: resourceTags,
       },
       { provider, parent: this }
     );
@@ -412,6 +418,134 @@ export class Infrastructure extends pulumi.ComponentResource {
         { provider, parent: this }
       );
     });
+
+    // Application Security Groups with proper tier separation
+    const webSecurityGroup = new aws.ec2.SecurityGroup(
+      createResourceName('web-sg', region, environment),
+      {
+        namePrefix: createResourceName('web-sg', region, environment),
+        vpcId: vpc.id,
+        description: 'Security group for web tier - public facing',
+        ingress: [
+          {
+            fromPort: 443,
+            toPort: 443,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTPS from internet',
+          },
+          {
+            fromPort: 80,
+            toPort: 80,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTP redirect to HTTPS',
+          },
+        ],
+        egress: [
+          {
+            fromPort: 443,
+            toPort: 443,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTPS outbound for updates',
+          },
+          {
+            fromPort: 8080,
+            toPort: 8080,
+            protocol: 'tcp',
+            cidrBlocks: config.privateSubnetCidrs,
+            description: 'To application tier',
+          },
+        ],
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('web-sg', region, environment),
+          Tier: 'Web',
+        },
+      },
+      { provider, parent: this }
+    );
+
+    const appSecurityGroup = new aws.ec2.SecurityGroup(
+      createResourceName('app-sg', region, environment),
+      {
+        namePrefix: createResourceName('app-sg', region, environment),
+        vpcId: vpc.id,
+        description: 'Security group for application tier',
+        ingress: [
+          {
+            fromPort: 8080,
+            toPort: 8080,
+            protocol: 'tcp',
+            securityGroups: [webSecurityGroup.id],
+            description: 'From web tier only',
+          },
+        ],
+        egress: [
+          {
+            fromPort: 443,
+            toPort: 443,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTPS for external APIs',
+          },
+          {
+            fromPort: 3306,
+            toPort: 3306,
+            protocol: 'tcp',
+            cidrBlocks: config.privateSubnetCidrs,
+            description: 'To database tier',
+          },
+        ],
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('app-sg', region, environment),
+          Tier: 'Application',
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // RDS Security Group with enhanced security
+    const rdsSecurityGroup = new aws.ec2.SecurityGroup(
+      createResourceName('rds-sg', region, environment),
+      {
+        namePrefix: createResourceName('rds-sg', region, environment),
+        vpcId: vpc.id,
+        description: 'Security group for RDS instance - restricted access',
+        ingress: [
+          {
+            fromPort: 3306,
+            toPort: 3306,
+            protocol: 'tcp',
+            cidrBlocks: config.privateSubnetCidrs, // Only from private subnets
+            description: 'MySQL access from private subnets only',
+          },
+        ],
+        egress: [], // No outbound traffic needed for RDS
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('rds-sg', region, environment),
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // Update RDS security group to reference app security group
+    new aws.ec2.SecurityGroupRule(
+      createResourceName('rds-sg-rule', region, environment),
+      {
+        type: 'ingress',
+        fromPort: 3306,
+        toPort: 3306,
+        protocol: 'tcp',
+        sourceSecurityGroupId: appSecurityGroup.id,
+        securityGroupId: rdsSecurityGroup.id,
+        description: 'MySQL access from application tier',
+      },
+      { provider, parent: this }
+    );
     // DB Subnet Group
     const dbSubnetGroup = new aws.rds.SubnetGroup(
       createResourceName('db-subnet-group', region, environment),
@@ -471,10 +605,17 @@ export class Infrastructure extends pulumi.ComponentResource {
       {
         bucket: bucketName,
         tags: resourceTags,
-        logging: {
-          targetBucket: accessLogsBucket.bucket,
-          targetPrefix: 'access-logs/',
-        },
+      },
+      { provider, parent: this }
+    );
+
+    // S3 Bucket Logging (using separate resource as recommended)
+    new aws.s3.BucketLogging(
+      createResourceName('bucket-logging', region, environment),
+      {
+        bucket: bucket.id,
+        targetBucket: accessLogsBucket.id,
+        targetPrefix: 'access-logs/',
       },
       { provider, parent: this }
     );
@@ -550,75 +691,102 @@ export class Infrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    // IAM Role
+    const applicationRole = new aws.iam.Role(
+      createResourceName('app-role', region, environment),
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'ec2.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
     // S3 Bucket Policy for additional security
     new aws.s3.BucketPolicy(
       createResourceName('bucket-policy', region, environment),
       {
         bucket: bucket.id,
-        policy: pulumi.all([bucket.arn]).apply(([bucketArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Sid: 'DenyInsecureConnections',
-                Effect: 'Deny',
-                Principal: '*',
-                Action: 's3:*',
-                Resource: [bucketArn, `${bucketArn}/*`],
-                Condition: {
-                  Bool: {
-                    'aws:SecureTransport': 'false',
+        policy: pulumi
+          .all([bucket.arn, applicationRole.arn])
+          .apply(([bucketArn, roleArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'DenyInsecureConnections',
+                  Effect: 'Deny',
+                  Principal: '*',
+                  Action: 's3:*',
+                  Resource: [bucketArn, `${bucketArn}/*`],
+                  Condition: {
+                    Bool: {
+                      'aws:SecureTransport': 'false',
+                    },
                   },
                 },
-              },
-              {
-                Sid: 'DenyUnencryptedObjectUploads',
-                Effect: 'Deny',
-                Principal: '*',
-                Action: 's3:PutObject',
-                Resource: `${bucketArn}/*`,
-                Condition: {
-                  StringNotEquals: {
-                    's3:x-amz-server-side-encryption': 'aws:kms',
+                {
+                  Sid: 'DenyUnencryptedObjectUploads',
+                  Effect: 'Deny',
+                  Principal: '*',
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/*`,
+                  Condition: {
+                    StringNotEquals: {
+                      's3:x-amz-server-side-encryption': 'aws:kms',
+                    },
                   },
                 },
-              },
-            ],
-          })
-        ),
-      },
-      { provider, parent: this }
-    );
-
-    // RDS Security Group
-    const rdsSecurityGroup = new aws.ec2.SecurityGroup(
-      createResourceName('rds-sg', region, environment),
-      {
-        namePrefix: createResourceName('rds-sg', region, environment),
-        vpcId: vpc.id,
-        description: 'Security group for RDS instance',
-        ingress: [
-          {
-            fromPort: 3306,
-            toPort: 3306,
-            protocol: 'tcp',
-            cidrBlocks: [config.vpcCidr],
-            description: 'MySQL access from VPC',
-          },
-        ],
-        egress: [
-          {
-            fromPort: 0,
-            toPort: 0,
-            protocol: '-1',
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'All outbound traffic',
-          },
-        ],
-        tags: {
-          ...resourceTags,
-          Name: createResourceName('rds-sg', region, environment),
-        },
+                {
+                  Sid: 'AllowApplicationRoleAccess',
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: roleArn,
+                  },
+                  Action: [
+                    's3:GetObject',
+                    's3:PutObject',
+                    's3:DeleteObject',
+                    's3:ListBucket',
+                  ],
+                  Resource: [bucketArn, `${bucketArn}/*`],
+                  Condition: {
+                    StringEquals: {
+                      's3:x-amz-server-side-encryption': 'aws:kms',
+                    },
+                    DateGreaterThan: {
+                      'aws:CurrentTime': '2024-01-01T00:00:00Z',
+                    },
+                  },
+                },
+                {
+                  Sid: 'DenyPublicAccess',
+                  Effect: 'Deny',
+                  Principal: '*',
+                  Action: 's3:*',
+                  Resource: [bucketArn, `${bucketArn}/*`],
+                  Condition: {
+                    StringEquals: {
+                      'aws:PrincipalServiceName': [
+                        'ec2.amazonaws.com',
+                        'lambda.amazonaws.com',
+                      ],
+                    },
+                  },
+                },
+              ],
+            })
+          ),
       },
       { provider, parent: this }
     );
@@ -654,8 +822,29 @@ export class Infrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // RDS Instance - Generate a secure password
-    const randomPassword = 'TempPassword123!';
+    // RDS Instance - Use AWS Secrets Manager for password
+    const dbSecret = new aws.secretsmanager.Secret(
+      createResourceName('db-secret', region, environment),
+      {
+        name: createResourceName('db-credentials', region, environment),
+        description: 'Database credentials for RDS instance',
+        kmsKeyId: kmsKey.keyId,
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.secretsmanager.SecretVersion(
+      createResourceName('db-secret-version', region, environment),
+      {
+        secretId: dbSecret.id,
+        secretString: JSON.stringify({
+          username: config.rdsConfig.username,
+          password: pulumi.secret('GeneratedSecurePassword123!@#'),
+        }),
+      },
+      { provider, parent: this }
+    );
 
     const rdsInstance = new aws.rds.Instance(
       createResourceName('db-instance', region, environment),
@@ -671,7 +860,7 @@ export class Infrastructure extends pulumi.ComponentResource {
         kmsKeyId: kmsKey.keyId,
         dbName: config.rdsConfig.dbName,
         username: config.rdsConfig.username,
-        password: randomPassword,
+        manageMasterUserPassword: true, // Let AWS manage the password
         dbSubnetGroupName: dbSubnetGroup.name,
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         parameterGroupName: dbParameterGroup.name,
@@ -699,36 +888,19 @@ export class Infrastructure extends pulumi.ComponentResource {
         performanceInsightsEnabled: true,
         performanceInsightsKmsKeyId: kmsKey.keyId,
         performanceInsightsRetentionPeriod: 7,
-        enabledCloudwatchLogsExports: ['error', 'general', 'slow-query'],
+        // Fixed CloudWatch log exports for MySQL
+        enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
 
         // Multi-AZ for high availability
         multiAz: true,
+
+        // Enable SSL/TLS
+        caCertIdentifier: 'rds-ca-rsa2048-g1',
 
         tags: {
           ...resourceTags,
           Name: createResourceName('db-instance', region, environment),
         },
-      },
-      { provider, parent: this }
-    );
-
-    // IAM Role
-    const applicationRole = new aws.iam.Role(
-      createResourceName('app-role', region, environment),
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ec2.amazonaws.com',
-              },
-            },
-          ],
-        }),
-        tags: resourceTags,
       },
       { provider, parent: this }
     );
@@ -817,20 +989,34 @@ export class Infrastructure extends pulumi.ComponentResource {
                   'logs:PutLogEvents',
                   'logs:DescribeLogStreams',
                 ],
-                Resource: `${logGroupArn}:*`,
+                Resource: [logGroupArn, `${logGroupArn}:*`],
               },
               {
                 Sid: 'CloudWatchMetrics',
                 Effect: 'Allow',
+                Action: ['cloudwatch:PutMetricData'],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'cloudwatch:namespace': `Application/${environment}`,
+                  },
+                },
+              },
+              {
+                Sid: 'CloudWatchMetricsRead',
+                Effect: 'Allow',
                 Action: [
-                  'cloudwatch:PutMetricData',
                   'cloudwatch:GetMetricStatistics',
                   'cloudwatch:ListMetrics',
                 ],
                 Resource: '*',
                 Condition: {
-                  StringEquals: {
-                    'cloudwatch:namespace': `Application/${environment}`,
+                  StringLike: {
+                    'cloudwatch:namespace': [
+                      `Application/${environment}`,
+                      'AWS/EC2',
+                      'AWS/RDS',
+                    ],
                   },
                 },
               },
@@ -915,6 +1101,134 @@ export class Infrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    // SNS Topic for Security Alerts
+    const securityAlertsTopic = new aws.sns.Topic(
+      createResourceName('security-alerts', region, environment),
+      {
+        name: createResourceName('security-alerts', region, environment),
+        displayName: 'Security Alerts',
+        kmsMasterKeyId: kmsKey.keyId,
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // CloudWatch Alarms for Security Monitoring
+    new aws.cloudwatch.MetricAlarm(
+      createResourceName('failed-login-alarm', region, environment),
+      {
+        name: createResourceName('failed-login-alarm', region, environment),
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'FailedLoginAttempts',
+        namespace: `Application/${environment}`,
+        period: 300,
+        statistic: 'Sum',
+        threshold: 5,
+        alarmDescription: 'Alert on multiple failed login attempts',
+        alarmActions: [securityAlertsTopic.arn],
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.cloudwatch.MetricAlarm(
+      createResourceName('rds-cpu-alarm', region, environment),
+      {
+        name: createResourceName('rds-cpu-alarm', region, environment),
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'CPUUtilization',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 80,
+        alarmDescription: 'Alert on high RDS CPU utilization',
+        alarmActions: [securityAlertsTopic.arn],
+        dimensions: {
+          DBInstanceIdentifier: rdsInstance.id,
+        },
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // WAF Web ACL for additional protection
+    const webAcl = new aws.wafv2.WebAcl(
+      createResourceName('web-acl', region, environment),
+      {
+        name: createResourceName('web-acl', region, environment),
+        description: 'WAF rules for application protection',
+        scope: 'REGIONAL',
+        defaultAction: {
+          allow: {},
+        },
+        rules: [
+          {
+            name: 'AWSManagedRulesCommonRuleSet',
+            priority: 1,
+            overrideAction: {
+              none: {},
+            },
+            statement: {
+              managedRuleGroupStatement: {
+                name: 'AWSManagedRulesCommonRuleSet',
+                vendorName: 'AWS',
+              },
+            },
+            visibilityConfig: {
+              sampledRequestsEnabled: true,
+              cloudwatchMetricsEnabled: true,
+              metricName: 'CommonRuleSetMetric',
+            },
+          },
+          {
+            name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            priority: 2,
+            overrideAction: {
+              none: {},
+            },
+            statement: {
+              managedRuleGroupStatement: {
+                name: 'AWSManagedRulesKnownBadInputsRuleSet',
+                vendorName: 'AWS',
+              },
+            },
+            visibilityConfig: {
+              sampledRequestsEnabled: true,
+              cloudwatchMetricsEnabled: true,
+              metricName: 'KnownBadInputsMetric',
+            },
+          },
+          {
+            name: 'RateLimitRule',
+            priority: 3,
+            action: {
+              block: {},
+            },
+            statement: {
+              rateBasedStatement: {
+                limit: 2000,
+                aggregateKeyType: 'IP',
+              },
+            },
+            visibilityConfig: {
+              sampledRequestsEnabled: true,
+              cloudwatchMetricsEnabled: true,
+              metricName: 'RateLimitMetric',
+            },
+          },
+        ],
+        visibilityConfig: {
+          sampledRequestsEnabled: true,
+          cloudwatchMetricsEnabled: true,
+          metricName: createResourceName('web-acl-metric', region, environment),
+        },
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
     // Exports
     this.vpcId = vpc.id;
     this.publicSubnetIds = publicSubnets.map(subnet => subnet.id);
@@ -924,5 +1238,9 @@ export class Infrastructure extends pulumi.ComponentResource {
     this.applicationRoleArn = applicationRole.arn;
     this.kmsKeyId = kmsKey.keyId;
     this.instanceProfileArn = instanceProfile.arn;
+    this.webSecurityGroupId = webSecurityGroup.id;
+    this.appSecurityGroupId = appSecurityGroup.id;
+    this.securityAlertsTopicArn = securityAlertsTopic.arn;
+    this.webAclArn = webAcl.arn;
   }
 }
