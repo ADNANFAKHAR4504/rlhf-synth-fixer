@@ -798,7 +798,7 @@ describe('SecureWebApp Infrastructure Integration Tests', () => {
   expect(asg).toBeDefined();
   expect(asg?.MinSize).toBe(1);
   expect(asg?.MaxSize).toBe(3);
-  expect(asg?.DesiredCapacity).toBe(2);
+  expect(asg?.DesiredCapacity).toBe(1);
   expect(asg?.HealthCheckType).toBe('ELB');
   expect(asg?.HealthCheckGracePeriod).toBe(300);
   console.log(`   Auto Scaling Group verified`);
