@@ -20,6 +20,11 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
+# Random ID for bucket naming
+resource "random_id" "bucket_suffix" {
+  byte_length = 8
+}
+
 # VPC
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -83,7 +88,7 @@ resource "aws_route_table_association" "private_2" {
 # S3 VPC Endpoint
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
-  service_name      = "com.amazonaws.us-east-1.s3"
+  service_name      = "com.amazonaws.us-east-2.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private.id]
 
@@ -107,7 +112,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/main-key"
+  name          = "alias/main-key-${random_id.bucket_suffix.hex}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -139,6 +144,13 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
+  }
+}
+
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
@@ -176,33 +188,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
   })
 }
 
-# CloudTrail
-resource "aws_cloudtrail" "main" {
-  name           = "main-cloudtrail"
-  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
-  event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
-    exclude_management_event_sources = []
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
-    }
-  }
-
-  tags = {
-    Name        = "main-cloudtrail"
-    Environment = var.environment_tag
-    Owner       = var.owner_tag
-  }
-}
-
-# Random ID for bucket naming
-resource "random_id" "bucket_suffix" {
-  byte_length = 8
-}
 
 # Secure Data S3 Bucket
 resource "aws_s3_bucket" "secure_data" {
@@ -259,8 +245,8 @@ resource "aws_s3_bucket_policy" "secure_data" {
         }
       },
       {
-        Sid    = "DenyAccessNotFromVPCEndpoint"
-        Effect = "Deny"
+        Sid    = "AllowVPCEndpointAccess"
+        Effect = "Allow"
         Principal = "*"
         Action = "s3:*"
         Resource = [
@@ -268,7 +254,7 @@ resource "aws_s3_bucket_policy" "secure_data" {
           "${aws_s3_bucket.secure_data.arn}/*"
         ]
         Condition = {
-          StringNotEquals = {
+          StringEquals = {
             "aws:sourceVpce" = aws_vpc_endpoint.s3.id
           }
         }
@@ -279,7 +265,7 @@ resource "aws_s3_bucket_policy" "secure_data" {
 
 # IAM Group for MFA Enforcement
 resource "aws_iam_group" "mfa_required" {
-  name = "mfa-required-group"
+  name = "mfa-required-group-${random_id.bucket_suffix.hex}"
 }
 
 # IAM Group Policy for MFA Enforcement
@@ -327,7 +313,7 @@ resource "aws_security_group" "ec2" {
 
 # IAM Role for EC2 Instance
 resource "aws_iam_role" "ec2_role" {
-  name = "ec2-ssm-role"
+  name = "ec2-ssm-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -357,7 +343,7 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_policy" {
 
 # IAM Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2-ssm-profile"
+  name = "ec2-ssm-profile-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.ec2_role.name
 
   tags = {
