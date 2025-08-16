@@ -19,6 +19,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
+    Description: 'Environment suffix for resource naming'
 
 # All resources created by this CloudFormation stack
 Resources:
@@ -52,7 +53,6 @@ Resources:
   # DynamoDB Table to store information about orders
   OrdersTable:
     Type: AWS::DynamoDB::Table
-
     Properties:
       TableName: !Sub '${AWS::StackName}-orders-table-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
@@ -66,7 +66,6 @@ Resources:
   # SAM Serverless Function for handling all /items API requests
   ItemsFunction:
     Type: AWS::Serverless::Function
-    Description: 'Lambda function for handling item-related operations (create, retrieve)'
     Properties:
       FunctionName: !Sub '${AWS::StackName}-items-function-${EnvironmentSuffix}'
       Handler: index.handler
@@ -163,7 +162,6 @@ Resources:
   # SAM Serverless Function for handling all /users API requests
   UsersFunction:
     Type: AWS::Serverless::Function
-    Description: 'Lambda function for handling user-related operations (create, retrieve)'
     Properties:
       FunctionName: !Sub '${AWS::StackName}-users-function-${EnvironmentSuffix}'
       Handler: index.handler
@@ -257,7 +255,6 @@ Resources:
   # SAM Serverless Function for handling all /orders API requests
   OrdersFunction:
     Type: AWS::Serverless::Function
-    Description: 'Lambda function for processing and managing e-commerce orders'
     Properties:
       FunctionName: !Sub '${AWS::StackName}-orders-function-${EnvironmentSuffix}'
       Handler: index.handler
@@ -281,7 +278,7 @@ Resources:
             switch (event.httpMethod) {
               case 'POST':
                 const order = JSON.parse(event.body);
-                # Auto-generate orderId if not provided
+                // Auto-generate orderId if not provided
                 if (!order.orderId) {
                   order.orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                 }
