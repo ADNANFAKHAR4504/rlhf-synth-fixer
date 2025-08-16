@@ -285,7 +285,7 @@ describe('TapStack', () => {
       // Config delivery channel
       template.hasResourceProperties('AWS::Config::DeliveryChannel', {
         Name: 'default',
-        S3KeyPrefix: 'config-logs/',
+        S3KeyPrefix: 'config-logs', // Updated to match the fixed implementation (no trailing slash)
         ConfigSnapshotDeliveryProperties: {
           DeliveryFrequency: 'TwentyFour_Hours',
         },

@@ -22,10 +22,7 @@ export class ConfigConstruct extends Construct {
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-Config-Bucket`,
       {
-        bucketName: `${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-cfg-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}-${new Date()
-          .toISOString()
-          .replace(/[-:T.]/g, '')
-          .slice(0, 8)}`,
+        bucketName: `${SecurityConfig.RESOURCE_PREFIX.toLowerCase()}-cfg-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}-${Date.now()}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: encryptionKey,
         versioned: true,
