@@ -410,7 +410,10 @@ resource "aws_iam_role_policy_attachment" "replication_policy_attachment" {
 
 # S3 Bucket Replication Configuration
 resource "aws_s3_bucket_replication_configuration" "primary_replication" {
-  depends_on = [aws_s3_bucket_versioning.primary_versioning]
+  depends_on = [
+    aws_s3_bucket_versioning.primary_versioning,
+    aws_s3_bucket_versioning.replication_destination_versioning
+  ]
 
   role   = aws_iam_role.replication_role.arn
   bucket = aws_s3_bucket.primary.id
