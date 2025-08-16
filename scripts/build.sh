@@ -10,8 +10,11 @@ if [ -f "metadata.json" ]; then
   echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 fi
 
-# Build the project
-echo "Building project..."
-npm run build
-
-echo "✅ Build completed successfully"
+# Build the project only if language is not Python
+if [ "$LANGUAGE" != "py" ]; then
+  echo "Building project..."
+  npm run build
+  echo "✅ Build completed successfully"
+else
+  echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
+fi
