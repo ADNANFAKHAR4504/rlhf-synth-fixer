@@ -516,7 +516,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
 
     // 14.7. Create the actual secret value with secure password
     const rdsPassword =
-      'SecureRDS' + Math.random().toString(36).substring(2, 15) + '!@#$%^&*()';
+      'SecureRDS' + Math.random().toString(36).substring(2, 15) + '!$%^&*()';
 
     new aws.secretsmanager.SecretVersion(
       'rds-credentials-version',
