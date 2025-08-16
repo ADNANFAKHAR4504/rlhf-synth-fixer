@@ -19,14 +19,12 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
-    Description: 'Environment suffix for resource naming'
 
 # All resources created by this CloudFormation stack
 Resources:
   # DynamoDB Table to store information about items
   ItemsTable:
     Type: AWS::DynamoDB::Table
-    Description: 'DynamoDB table for storing items data with on-demand capacity'
     Properties:
       TableName: !Sub '${AWS::StackName}-items-table-${EnvironmentSuffix}'
       # On-demand billing for automatic scaling with no capacity planning
@@ -41,7 +39,6 @@ Resources:
   # DynamoDB Table to store information about users
   UsersTable:
     Type: AWS::DynamoDB::Table
-    Description: 'DynamoDB table for storing users data with on-demand capacity'
     Properties:
       TableName: !Sub '${AWS::StackName}-users-table-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
@@ -55,7 +52,7 @@ Resources:
   # DynamoDB Table to store information about orders
   OrdersTable:
     Type: AWS::DynamoDB::Table
-    Description: 'DynamoDB table for storing orders data with on-demand capacity'
+
     Properties:
       TableName: !Sub '${AWS::StackName}-orders-table-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
