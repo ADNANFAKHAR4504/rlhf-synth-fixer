@@ -1,9 +1,9 @@
 """
 tap_stack.py
 
-Single-file Pulumi script for AWS infrastructure deployment.
+Enhanced AWS Multi-Region VPC Infrastructure with Pulumi
 This script creates a complete VPC infrastructure with public and private subnets,
-NAT Gateway, security groups, and proper routing.
+NAT Gateway, security groups, and proper routing across multiple regions.
 
 Run with: pulumi up
 """
@@ -11,6 +11,7 @@ Run with: pulumi up
 import pulumi
 from pulumi import Config
 from pulumi_aws import ec2, get_availability_zones
+from typing import Dict, List, Any
 
 
 def create_infrastructure(export_outputs=True):
@@ -20,6 +21,24 @@ def create_infrastructure(export_outputs=True):
   environment = config.get('environment') or 'dev'
   team = config.get('team') or 'platform'
   project = config.get('project') or 'tap'
+  
+  # Multi-region support
+  regions = config.get_object("regions") or ["us-east-1"]
+  
+  # High availability NAT Gateway option (default: false for cost optimization)
+  enable_ha_nat = config.get_bool("enable_ha_nat") or False
+  
+  # CIDR blocks for each region (non-overlapping)
+  region_cidrs = {
+    "us-east-1": "10.0.0.0/16",
+    "us-west-2": "10.1.0.0/16",
+    "us-east-2": "10.2.0.0/16",
+    "us-west-1": "10.3.0.0/16",
+    "eu-west-1": "10.4.0.0/16",
+    "eu-central-1": "10.5.0.0/16",
+    "ap-southeast-1": "10.6.0.0/16",
+    "ap-northeast-1": "10.7.0.0/16"
+  }
   
   # Security configuration - ENVIRONMENT-AWARE SSH ACCESS CONTROL
   # SSH access is restricted based on environment for security compliance
@@ -50,264 +69,523 @@ def create_infrastructure(export_outputs=True):
   # Final security validation: Log security configuration for audit
   print(f"Security: SSH access configured for {environment} environment with CIDRs: {ssh_allowed_cidrs}")
 
-  # Get availability zones
-  azs = get_availability_zones(state="available")
+  def calculate_subnet_cidrs(vpc_cidr: str, num_subnets: int) -> List[str]:
+    """Calculate subnet CIDR blocks from VPC CIDR"""
+    import ipaddress
+    
+    vpc_network = ipaddress.IPv4Network(vpc_cidr)
+    # Use /24 subnets (256 IPs each)
+    subnet_size = 24
+    subnets = list(vpc_network.subnets(new_prefix=subnet_size))
+    
+    return [str(subnet) for subnet in subnets[:num_subnets]]
 
-  # VPC
-  vpc = ec2.Vpc(f"vpc-{environment}",
-    cidr_block="10.0.0.0/16",
-    enable_dns_hostnames=True,
-    enable_dns_support=True,
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"vpc-{environment}"
-    }
-  )
+  def create_vpc_infrastructure(region: str) -> Dict[str, Any]:
+    """Create complete VPC infrastructure for a region"""
+    
+    # Get VPC CIDR for this region
+    vpc_cidr = region_cidrs.get(region, f"10.{hash(region) % 200 + 10}.0.0/16")
+    
+    # Get availability zones
+    azs = get_availability_zones(state="available")
+    
+    # Use exactly 2 AZs for cost optimization
+    num_azs = max(2, min(len(azs.names), 2))
+    total_subnets = num_azs * 4  # 2 public + 2 private per AZ
+    subnet_cidrs = calculate_subnet_cidrs(vpc_cidr, total_subnets)
 
-  # Internet Gateway
-  igw = ec2.InternetGateway(f"igw-{environment}",
-    vpc_id=vpc.id,
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"igw-{environment}"
-    }
-  )
+    # VPC
+    vpc = ec2.Vpc(f"vpc-{region}-{environment}",
+      cidr_block=vpc_cidr,
+      enable_dns_hostnames=True,
+      enable_dns_support=True,
+      tags={
+        "Environment": environment,
+        "Team": team,
+        "Project": project,
+        "Name": f"vpc-{region}-{environment}",
+        "Region": region
+      }
+    )
 
-  # Public Subnets
-  public_subnet_1 = ec2.Subnet(f"public-subnet-1-{environment}",
-    vpc_id=vpc.id,
-    cidr_block="10.0.1.0/24",
-    availability_zone=azs.names[0],
-    map_public_ip_on_launch=True,
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"public-subnet-1-{environment}"
-    }
-  )
+    # Internet Gateway
+    igw = ec2.InternetGateway(f"igw-{region}-{environment}",
+      vpc_id=vpc.id,
+      tags={
+        "Environment": environment,
+        "Team": team,
+        "Project": project,
+        "Name": f"igw-{region}-{environment}",
+        "Region": region
+      }
+    )
 
-  public_subnet_2 = ec2.Subnet(f"public-subnet-2-{environment}",
-    vpc_id=vpc.id,
-    cidr_block="10.0.2.0/24",
-    availability_zone=azs.names[1],
-    map_public_ip_on_launch=True,
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"public-subnet-2-{environment}"
-    }
-  )
+    # Create public and private subnets
+    public_subnets = []
+    private_subnets = []
+    
+    # Create 2 public and 2 private subnets per AZ
+    for i in range(num_azs):
+      az = azs.names[i]
+      
+      # Public subnets (2 per AZ)
+      for j in range(2):
+        subnet_idx = i * 4 + j
+        public_subnet = ec2.Subnet(f"public-subnet-{region}-{i+1}-{j+1}-{environment}",
+          vpc_id=vpc.id,
+          cidr_block=subnet_cidrs[subnet_idx],
+          availability_zone=az,
+          map_public_ip_on_launch=True,
+          tags={
+            "Environment": environment,
+            "Team": team,
+            "Project": project,
+            "Name": f"public-subnet-{region}-{i+1}-{j+1}-{environment}",
+            "Type": "public",
+            "Region": region,
+            "AZ": az
+          }
+        )
+        public_subnets.append(public_subnet)
+      
+      # Private subnets (2 per AZ)
+      for j in range(2):
+        subnet_idx = i * 4 + j + 2
+        private_subnet = ec2.Subnet(f"private-subnet-{region}-{i+1}-{j+1}-{environment}",
+          vpc_id=vpc.id,
+          cidr_block=subnet_cidrs[subnet_idx],
+          availability_zone=az,
+          map_public_ip_on_launch=False,
+          tags={
+            "Environment": environment,
+            "Team": team,
+            "Project": project,
+            "Name": f"private-subnet-{region}-{i+1}-{j+1}-{environment}",
+            "Type": "private",
+            "Region": region,
+            "AZ": az
+          }
+        )
+        private_subnets.append(private_subnet)
 
-  # Private Subnets
-  private_subnet_1 = ec2.Subnet(f"private-subnet-1-{environment}",
-    vpc_id=vpc.id,
-    cidr_block="10.0.3.0/24",
-    availability_zone=azs.names[0],
-    map_public_ip_on_launch=False,
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"private-subnet-1-{environment}"
-    }
-  )
-
-  private_subnet_2 = ec2.Subnet(f"private-subnet-2-{environment}",
-    vpc_id=vpc.id,
-    cidr_block="10.0.4.0/24",
-    availability_zone=azs.names[1],
-    map_public_ip_on_launch=False,
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"private-subnet-2-{environment}"
-    }
-  )
-
-  # Elastic IP for NAT Gateway
-  eip = ec2.Eip(f"nat-eip-{environment}",
-    vpc=True,
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"nat-eip-{environment}"
-    }
-  )
-
-  # NAT Gateway
-  nat_gateway = ec2.NatGateway(f"nat-gateway-{environment}",
-    allocation_id=eip.id,
-    subnet_id=public_subnet_1.id,
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"nat-gateway-{environment}"
-    }
-  )
-
-  # Route Tables
-  public_rt = ec2.RouteTable(f"public-rt-{environment}",
-    vpc_id=vpc.id,
-    routes=[
-      ec2.RouteTableRouteArgs(
-        cidr_block="0.0.0.0/0",
-        gateway_id=igw.id
+    # Create Elastic IPs for NAT Gateways
+    nat_eips = []
+    if enable_ha_nat:
+      # One NAT Gateway per AZ for high availability
+      for i in range(num_azs):
+        eip = ec2.Eip(f"nat-eip-{region}-{i+1}-{environment}",
+          vpc=True,
+          tags={
+            "Environment": environment,
+            "Team": team,
+            "Project": project,
+            "Name": f"nat-eip-{region}-{i+1}-{environment}",
+            "Region": region
+          }
+        )
+        nat_eips.append(eip)
+    else:
+      # Single NAT Gateway for cost optimization
+      eip = ec2.Eip(f"nat-eip-{region}-{environment}",
+        vpc=True,
+        tags={
+          "Environment": environment,
+          "Team": team,
+          "Project": project,
+          "Name": f"nat-eip-{region}-{environment}",
+          "Region": region
+        }
       )
-    ],
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"public-rt-{environment}"
+      nat_eips.append(eip)
+
+    # Create NAT Gateways
+    nat_gateways = []
+    if enable_ha_nat:
+      # One NAT Gateway per AZ
+      for i in range(num_azs):
+        nat_gw = ec2.NatGateway(f"nat-gw-{region}-{i+1}-{environment}",
+          allocation_id=nat_eips[i].id,
+          subnet_id=public_subnets[i * 2].id,  # Use first public subnet of each AZ
+          tags={
+            "Environment": environment,
+            "Team": team,
+            "Project": project,
+            "Name": f"nat-gw-{region}-{i+1}-{environment}",
+            "Region": region
+          }
+        )
+        nat_gateways.append(nat_gw)
+    else:
+      # Single NAT Gateway in first AZ
+      nat_gw = ec2.NatGateway(f"nat-gw-{region}-{environment}",
+        allocation_id=nat_eips[0].id,
+        subnet_id=public_subnets[0].id,
+        tags={
+          "Environment": environment,
+          "Team": team,
+          "Project": project,
+          "Name": f"nat-gw-{region}-{environment}",
+          "Region": region
+        }
+      )
+      nat_gateways.append(nat_gw)
+
+    # Route Tables
+    public_rt = ec2.RouteTable(f"public-rt-{region}-{environment}",
+      vpc_id=vpc.id,
+      routes=[
+        ec2.RouteTableRouteArgs(
+          cidr_block="0.0.0.0/0",
+          gateway_id=igw.id
+        )
+      ],
+      tags={
+        "Environment": environment,
+        "Team": team,
+        "Project": project,
+        "Name": f"public-rt-{region}-{environment}",
+        "Type": "public",
+        "Region": region
+      }
+    )
+
+    # Associate public subnets with public route table
+    public_rtas = []
+    for i, subnet in enumerate(public_subnets):
+      rta = ec2.RouteTableAssociation(f"public-rta-{region}-{i+1}-{environment}",
+        subnet_id=subnet.id,
+        route_table_id=public_rt.id
+      )
+      public_rtas.append(rta)
+
+    # Private route tables
+    private_rts = []
+    private_rtas = []
+    if enable_ha_nat:
+      # One route table per AZ for HA NAT
+      for i in range(num_azs):
+        private_rt = ec2.RouteTable(f"private-rt-{region}-{i+1}-{environment}",
+          vpc_id=vpc.id,
+          routes=[
+            ec2.RouteTableRouteArgs(
+              cidr_block="0.0.0.0/0",
+              nat_gateway_id=nat_gateways[i].id
+            )
+          ],
+          tags={
+            "Environment": environment,
+            "Team": team,
+            "Project": project,
+            "Name": f"private-rt-{region}-{i+1}-{environment}",
+            "Type": "private",
+            "Region": region,
+            "AZ": azs.names[i]
+          }
+        )
+        private_rts.append(private_rt)
+        
+        # Associate private subnets in this AZ
+        for j in range(2):  # 2 private subnets per AZ
+          subnet_idx = i * 2 + j
+          rta = ec2.RouteTableAssociation(f"private-rta-{region}-{i+1}-{j+1}-{environment}",
+            subnet_id=private_subnets[subnet_idx].id,
+            route_table_id=private_rt.id
+          )
+          private_rtas.append(rta)
+    else:
+      # Single private route table for all private subnets
+      private_rt = ec2.RouteTable(f"private-rt-{region}-{environment}",
+        vpc_id=vpc.id,
+        routes=[
+          ec2.RouteTableRouteArgs(
+            cidr_block="0.0.0.0/0",
+            nat_gateway_id=nat_gateways[0].id
+          )
+        ],
+        tags={
+          "Environment": environment,
+          "Team": team,
+          "Project": project,
+          "Name": f"private-rt-{region}-{environment}",
+          "Type": "private",
+          "Region": region
+        }
+      )
+      private_rts.append(private_rt)
+      
+      # Associate all private subnets
+      for i, subnet in enumerate(private_subnets):
+        rta = ec2.RouteTableAssociation(f"private-rta-{region}-{i+1}-{environment}",
+          subnet_id=subnet.id,
+          route_table_id=private_rt.id
+        )
+        private_rtas.append(rta)
+
+    # TIERED SECURITY GROUPS - ENHANCED SECURITY BEST PRACTICES
+    # Web tier security group (public)
+    web_sg = ec2.SecurityGroup(f"web-sg-{region}-{environment}",
+      description="Security group for web tier - allows HTTP/HTTPS inbound",
+      vpc_id=vpc.id,
+      ingress=[
+        ec2.SecurityGroupIngressArgs(
+          description="HTTP from internet",
+          from_port=80,
+          to_port=80,
+          protocol="tcp",
+          cidr_blocks=["0.0.0.0/0"]
+        ),
+        ec2.SecurityGroupIngressArgs(
+          description="HTTPS from internet",
+          from_port=443,
+          to_port=443,
+          protocol="tcp",
+          cidr_blocks=["0.0.0.0/0"]
+        ),
+        ec2.SecurityGroupIngressArgs(
+          description="SSH - Environment-aware access control",
+          from_port=22,
+          to_port=22,
+          protocol="tcp",
+          cidr_blocks=ssh_allowed_cidrs
+        )
+      ],
+      egress=[
+        # Minimal egress - only HTTPS for updates and HTTP for health checks
+        ec2.SecurityGroupEgressArgs(
+          description="HTTPS outbound",
+          from_port=443,
+          to_port=443,
+          protocol="tcp",
+          cidr_blocks=["0.0.0.0/0"]
+        ),
+        ec2.SecurityGroupEgressArgs(
+          description="HTTP outbound",
+          from_port=80,
+          to_port=80,
+          protocol="tcp",
+          cidr_blocks=["0.0.0.0/0"]
+        ),
+        # DNS
+        ec2.SecurityGroupEgressArgs(
+          description="DNS TCP",
+          from_port=53,
+          to_port=53,
+          protocol="tcp",
+          cidr_blocks=["0.0.0.0/0"]
+        ),
+        ec2.SecurityGroupEgressArgs(
+          description="DNS UDP",
+          from_port=53,
+          to_port=53,
+          protocol="udp",
+          cidr_blocks=["0.0.0.0/0"]
+        )
+      ],
+      tags={
+        "Environment": environment,
+        "Team": team,
+        "Project": project,
+        "Name": f"web-sg-{region}-{environment}",
+        "Tier": "web",
+        "Region": region,
+        "SecurityLevel": "Public"
+      }
+    )
+
+    # Application tier security group (private)
+    app_sg = ec2.SecurityGroup(f"app-sg-{region}-{environment}",
+      description="Security group for application tier - restrictive access",
+      vpc_id=vpc.id,
+      ingress=[
+        # Application port from web tier only
+        ec2.SecurityGroupIngressArgs(
+          description="App port from web tier",
+          from_port=8080,
+          to_port=8080,
+          protocol="tcp",
+          source_security_group_id=web_sg.id
+        ),
+        # SSH from VPC only
+        ec2.SecurityGroupIngressArgs(
+          description="SSH from VPC",
+          from_port=22,
+          to_port=22,
+          protocol="tcp",
+          cidr_blocks=[vpc_cidr]
+        )
+      ],
+      egress=[
+        # Database access within VPC
+        ec2.SecurityGroupEgressArgs(
+          description="MySQL to database tier",
+          from_port=3306,
+          to_port=3306,
+          protocol="tcp",
+          cidr_blocks=[vpc_cidr]
+        ),
+        ec2.SecurityGroupEgressArgs(
+          description="PostgreSQL to database tier",
+          from_port=5432,
+          to_port=5432,
+          protocol="tcp",
+          cidr_blocks=[vpc_cidr]
+        ),
+        # HTTPS for external APIs
+        ec2.SecurityGroupEgressArgs(
+          description="HTTPS for external APIs",
+          from_port=443,
+          to_port=443,
+          protocol="tcp",
+          cidr_blocks=["0.0.0.0/0"]
+        ),
+        # DNS
+        ec2.SecurityGroupEgressArgs(
+          description="DNS TCP",
+          from_port=53,
+          to_port=53,
+          protocol="tcp",
+          cidr_blocks=["0.0.0.0/0"]
+        ),
+        ec2.SecurityGroupEgressArgs(
+          description="DNS UDP",
+          from_port=53,
+          to_port=53,
+          protocol="udp",
+          cidr_blocks=["0.0.0.0/0"]
+        )
+      ],
+      tags={
+        "Environment": environment,
+        "Team": team,
+        "Project": project,
+        "Name": f"app-sg-{region}-{environment}",
+        "Tier": "application",
+        "Region": region,
+        "SecurityLevel": "Private"
+      }
+    )
+
+    # Database tier security group (private) - MOST RESTRICTIVE
+    db_sg = ec2.SecurityGroup(f"db-sg-{region}-{environment}",
+      description="Security group for database tier - most restrictive",
+      vpc_id=vpc.id,
+      ingress=[
+        # MySQL from app tier only
+        ec2.SecurityGroupIngressArgs(
+          description="MySQL from app tier",
+          from_port=3306,
+          to_port=3306,
+          protocol="tcp",
+          source_security_group_id=app_sg.id
+        ),
+        # PostgreSQL from app tier only
+        ec2.SecurityGroupIngressArgs(
+          description="PostgreSQL from app tier",
+          from_port=5432,
+          to_port=5432,
+          protocol="tcp",
+          source_security_group_id=app_sg.id
+        ),
+        # SSH from VPC only (for maintenance)
+        ec2.SecurityGroupIngressArgs(
+          description="SSH from VPC",
+          from_port=22,
+          to_port=22,
+          protocol="tcp",
+          cidr_blocks=[vpc_cidr]
+        )
+      ],
+      egress=[
+        # Very minimal egress - only for updates via HTTPS
+        ec2.SecurityGroupEgressArgs(
+          description="HTTPS for updates only",
+          from_port=443,
+          to_port=443,
+          protocol="tcp",
+          cidr_blocks=["0.0.0.0/0"]
+        ),
+        # DNS
+        ec2.SecurityGroupEgressArgs(
+          description="DNS TCP",
+          from_port=53,
+          to_port=53,
+          protocol="tcp",
+          cidr_blocks=["0.0.0.0/0"]
+        ),
+        ec2.SecurityGroupEgressArgs(
+          description="DNS UDP",
+          from_port=53,
+          to_port=53,
+          protocol="udp",
+          cidr_blocks=["0.0.0.0/0"]
+        )
+      ],
+      tags={
+        "Environment": environment,
+        "Team": team,
+        "Project": project,
+        "Name": f"db-sg-{region}-{environment}",
+        "Tier": "database",
+        "Region": region,
+        "SecurityLevel": "Restricted"
+      }
+    )
+
+    return {
+      "vpc": vpc,
+      "igw": igw,
+      "public_subnets": public_subnets,
+      "private_subnets": private_subnets,
+      "nat_gateways": nat_gateways,
+      "security_groups": {
+        "web": web_sg,
+        "app": app_sg,
+        "db": db_sg
+      },
+      "region": region
     }
-  )
 
-  private_rt = ec2.RouteTable(f"private-rt-{environment}",
-    vpc_id=vpc.id,
-    routes=[
-      ec2.RouteTableRouteArgs(
-        cidr_block="0.0.0.0/0",
-        nat_gateway_id=nat_gateway.id
-      )
-    ],
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"private-rt-{environment}"
-    }
-  )
-
-  # Route Table Associations
-  public_rta_1 = ec2.RouteTableAssociation(f"public-rta-1-{environment}",
-    subnet_id=public_subnet_1.id,
-    route_table_id=public_rt.id
-  )
-
-  public_rta_2 = ec2.RouteTableAssociation(f"public-rta-2-{environment}",
-    subnet_id=public_subnet_2.id,
-    route_table_id=public_rt.id
-  )
-
-  private_rta_1 = ec2.RouteTableAssociation(f"private-rta-1-{environment}",
-    subnet_id=private_subnet_1.id,
-    route_table_id=private_rt.id
-  )
-
-  private_rta_2 = ec2.RouteTableAssociation(f"private-rta-2-{environment}",
-    subnet_id=private_subnet_2.id,
-    route_table_id=private_rt.id
-  )
-
-  # SECURITY GROUPS - SECURITY BEST PRACTICES IMPLEMENTED
-  # Public SG: SSH (explicit allowlist) + HTTP/HTTPS + full egress
-  # Private SG: Internal VPC only + full egress via NAT
-  # Security Approach: Least-privilege access with explicit allowlisting
-  public_sg = ec2.SecurityGroup(f"public-sg-{environment}",
-    description="Security group for public subnets - Web traffic and SSH access",
-    vpc_id=vpc.id,
-    ingress=[
-      ec2.SecurityGroupIngressArgs(
-        description="SSH - Environment-aware access control",
-        from_port=22,
-        to_port=22,
-        protocol="tcp",
-        cidr_blocks=ssh_allowed_cidrs  # SECURE: Explicit SSH allowlist from config - no defaults
-      ),
-      ec2.SecurityGroupIngressArgs(
-        description="HTTP - Web traffic",
-        from_port=80,
-        to_port=80,
-        protocol="tcp",
-        cidr_blocks=["0.0.0.0/0"]  # SECURE: Required for public web access - standard practice
-      ),
-      ec2.SecurityGroupIngressArgs(
-        description="HTTPS - Secure web traffic",
-        from_port=443,
-        to_port=443,
-        protocol="tcp",
-        cidr_blocks=["0.0.0.0/0"]  # SECURE: Required for public HTTPS access - standard practice
-      )
-    ],
-    egress=[
-      ec2.SecurityGroupEgressArgs(
-        description="All outbound traffic",
-        from_port=0,
-        to_port=0,
-        protocol="-1",
-        cidr_blocks=["0.0.0.0/0"]  # SECURE: Required for internet access - standard practice for public subnets
-      )
-    ],
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"public-sg-{environment}",
-      "SecurityLevel": "Public"
-    }
-  )
-
-  # PRIVATE SECURITY GROUP - INTERNAL VPC TRAFFIC ONLY
-  private_sg = ec2.SecurityGroup(f"private-sg-{environment}",
-    description="Security group for private subnets - Internal VPC traffic only (SECURE)",
-    vpc_id=vpc.id,
-    ingress=[
-      ec2.SecurityGroupIngressArgs(
-        description="All internal VPC traffic - Secure internal communication",
-        from_port=0,
-        to_port=0,
-        protocol="-1",
-        cidr_blocks=[vpc.cidr_block]  # SECURE: VPC CIDR reference - internal traffic only
-      )
-    ],
-    egress=[
-      ec2.SecurityGroupEgressArgs(
-        description="All outbound traffic via NAT Gateway",
-        from_port=0,
-        to_port=0,
-        protocol="-1",
-        cidr_blocks=["0.0.0.0/0"]  # SECURE: Required for internet access through NAT Gateway - standard practice for private subnets
-      )
-    ],
-    tags={
-      "Environment": environment,
-      "Team": team,
-      "Project": project,
-      "Name": f"private-sg-{environment}",
-      "SecurityLevel": "Private"
-    }
-  )
+  # Create infrastructure for all regions
+  regional_infrastructure = {}
+  for region in regions:
+    regional_infrastructure[region] = create_vpc_infrastructure(region)
 
   # Outputs (only when running in Pulumi context)
   if export_outputs:
-    pulumi.export("vpc_id", vpc.id)
-    pulumi.export("vpc_cidr", vpc.cidr_block)
-    pulumi.export("public_subnet_ids", [public_subnet_1.id, public_subnet_2.id])
-    pulumi.export("private_subnet_ids", [private_subnet_1.id, private_subnet_2.id])
-    pulumi.export("public_security_group_id", public_sg.id)
-    pulumi.export("private_security_group_id", private_sg.id)
-    pulumi.export("internet_gateway_id", igw.id)
-    pulumi.export("nat_gateway_id", nat_gateway.id)
-    pulumi.export("availability_zones", azs.names)
+    # Export VPC information for all regions
+    for region, infra in regional_infrastructure.items():
+      region_key = region.replace('-', '_')
+      pulumi.export(f"vpc_{region_key}_id", infra["vpc"].id)
+      pulumi.export(f"vpc_{region_key}_cidr", infra["vpc"].cidr_block)
+      
+      # Export subnet IDs
+      pulumi.export(f"public_subnets_{region_key}", [subnet.id for subnet in infra["public_subnets"]])
+      pulumi.export(f"private_subnets_{region_key}", [subnet.id for subnet in infra["private_subnets"]])
+      
+      # Export security group IDs
+      pulumi.export(f"web_sg_{region_key}_id", infra["security_groups"]["web"].id)
+      pulumi.export(f"app_sg_{region_key}_id", infra["security_groups"]["app"].id)
+      pulumi.export(f"db_sg_{region_key}_id", infra["security_groups"]["db"].id)
+      
+      # Export NAT Gateway IDs
+      pulumi.export(f"nat_gateways_{region_key}", [nat_gw.id for nat_gw in infra["nat_gateways"]])
 
-  return {
-    "vpc": vpc,
-    "igw": igw,
-    "public_subnets": [public_subnet_1, public_subnet_2],
-    "private_subnets": [private_subnet_1, private_subnet_2],
-    "nat_gateway": nat_gateway,
-    "public_sg": public_sg,
-    "private_sg": private_sg
-  }
+    # Export configuration for verification
+    pulumi.export("regions", regions)
+    pulumi.export("environment", environment)
+    pulumi.export("enable_ha_nat", enable_ha_nat)
+
+    # Export summary information for easy verification
+    pulumi.export("infrastructure_summary", {
+      "total_regions": len(regions),
+      "total_vpcs": len(regional_infrastructure),
+      "total_public_subnets": sum(len(infra["public_subnets"]) for infra in regional_infrastructure.values()),
+      "total_private_subnets": sum(len(infra["private_subnets"]) for infra in regional_infrastructure.values()),
+      "total_security_groups": sum(len(infra["security_groups"]) for infra in regional_infrastructure.values()),
+      "ha_nat_enabled": enable_ha_nat
+    })
+
+  return regional_infrastructure
 
 
 # Create infrastructure when this file is run directly
