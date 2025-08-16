@@ -123,7 +123,7 @@ export class RDSStack extends pulumi.ComponentResource {
           Purpose: 'DatabaseSecurity',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     // RDS Instance with encryption at rest using AWS-managed KMS key
@@ -247,8 +247,7 @@ export class RDSStack extends pulumi.ComponentResource {
     );
 
     this.endpoint = rdsInstance.endpoint;
-    // Use the identifier property like other stacks use .id, .arn, .name
-    this.instanceId = rdsInstance.identifier;
+    this.instanceId = rdsInstance.id;
 
     this.registerOutputs({
       endpoint: this.endpoint,

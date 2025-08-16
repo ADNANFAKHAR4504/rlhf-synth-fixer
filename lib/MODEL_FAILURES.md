@@ -527,3 +527,34 @@ const privateSubnet2 = new aws.ec2.Subnet('rds-private-subnet-2', {
     // ...
 });
 ```
+
+## 15. Requirements Violation: Incorrect Naming Convention Implementation
+
+### What was the issue
+Model implemented a naming convention that doesn't match the specific example provided in PROMPT.md requirements.
+
+### What was the error
+PROMPT.md specified: "prefix with `'corp-'` followed by the resource type and a unique identifier (e.g., `corp-s3-acctingdata-123`)" but the model used a different pattern with additional components.
+
+### Code Model Generated
+```typescript
+const generateResourceName = (resourceType: string, purpose: string): string => {
+    return `${namePrefix}-${resourceType}-${purpose}-${uniqueId}`;
+};
+
+// This produces: "corp-s3-secure-data-prod-001"
+// But PROMPT.md example shows: "corp-s3-acctingdata-123"
+const s3BucketName = generateResourceName("s3", "secure-data");
+```
+
+### How we fixed it
+```typescript
+// Follow the exact pattern from PROMPT.md example
+// Pattern: corp-{resourcetype}-{purpose}-{environmentSuffix}
+const s3BucketName = `${args.namePrefix}-s3-secure-data-${args.environmentSuffix}`.toLowerCase();
+const rdsInstanceName = `${args.namePrefix}-rds-primary-${args.environmentSuffix}`.toLowerCase();
+const dynamoTableName = `${args.namePrefix}-dynamodb-main-${args.environmentSuffix}`.toLowerCase();
+
+// This produces names like: "corp-s3-secure-data-dev" which better matches the intent
+// of the PROMPT.md example pattern
+```

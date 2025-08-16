@@ -47,7 +47,7 @@ export class IAMStack extends pulumi.ComponentResource {
           Purpose: 'S3BucketAccess',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     // IAM Policy for restricted S3 bucket access (principle of least privilege)
@@ -105,7 +105,7 @@ export class IAMStack extends pulumi.ComponentResource {
           Purpose: 'S3BucketAccess',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     // Attach policy to role
@@ -115,7 +115,7 @@ export class IAMStack extends pulumi.ComponentResource {
         role: s3AccessRole.name,
         policyArn: s3AccessPolicy.arn,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.roleArn = s3AccessRole.arn;

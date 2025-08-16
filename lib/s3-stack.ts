@@ -36,7 +36,7 @@ export class S3Stack extends pulumi.ComponentResource {
           Purpose: 'SecureDataStorage',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     // S3 Bucket Server-Side Encryption Configuration with AWS-managed KMS
@@ -54,7 +54,7 @@ export class S3Stack extends pulumi.ComponentResource {
           },
         ],
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     // S3 Bucket Public Access Block (security best practice)
@@ -67,7 +67,7 @@ export class S3Stack extends pulumi.ComponentResource {
         ignorePublicAcls: true,
         restrictPublicBuckets: true,
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     // S3 Bucket Versioning (production best practice)
@@ -79,7 +79,7 @@ export class S3Stack extends pulumi.ComponentResource {
           status: 'Enabled',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.bucketId = s3Bucket.id;

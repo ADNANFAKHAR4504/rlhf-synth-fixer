@@ -96,7 +96,7 @@ export class DynamoDBStack extends pulumi.ComponentResource {
           Purpose: 'MainApplicationData',
         },
       },
-      { parent: this }
+      { parent: this, provider: opts?.provider }
     );
 
     this.tableName = dynamoTable.name;
