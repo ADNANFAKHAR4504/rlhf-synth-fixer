@@ -245,7 +245,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(role.Condition).toBe('EnableReplication');
       expect(pol.Condition).toBe('EnableReplication');
       expect(pol.Type).toBe('AWS::IAM::Policy');
-      expect(pol.Properties.Roles).toContain({ Ref: 'S3ReplicationRole' });
+      // object deep-compare for array entries
+      expect(pol.Properties.Roles).toContainEqual({ Ref: 'S3ReplicationRole' });
     });
 
     test('instance profile references the role', () => {
@@ -320,11 +321,26 @@ describe('TapStack CloudFormation Template', () => {
       expect(p.AutoMinorVersionUpgrade).toBe(true);
       expect(p.CopyTagsToSnapshot).toBe(true);
 
-      // Secrets resolution (either conditional branch contains secretsmanager reference)
-      const userStr = p.MasterUsername['Fn::Sub'] as string;
-      const passStr = p.MasterUserPassword['Fn::Sub'] as string;
-      expect(userStr).toContain('secretsmanager');
-      expect(passStr).toContain('secretsmanager');
+      // Secrets resolution is inside Fn::If branches with Fn::Sub in each branch.
+      const extractSubStrings = (expr: any): string[] => {
+        if (!expr) return [];
+        if (expr['Fn::Sub']) return [expr['Fn::Sub'] as string];
+        if (expr['Fn::If']) {
+          const [, thenVal, elseVal] = expr['Fn::If'] as [string, any, any];
+          const thenStr = thenVal && thenVal['Fn::Sub'];
+          const elseStr = elseVal && elseVal['Fn::Sub'];
+          return [thenStr, elseStr].filter(Boolean);
+        }
+        return [];
+      };
+
+      const userSubs = extractSubStrings(p.MasterUsername);
+      const passSubs = extractSubStrings(p.MasterUserPassword);
+
+      expect(userSubs.length).toBeGreaterThan(0);
+      expect(passSubs.length).toBeGreaterThan(0);
+      userSubs.forEach((s) => expect(s).toContain('secretsmanager'));
+      passSubs.forEach((s) => expect(s).toContain('secretsmanager'));
     });
   });
 
