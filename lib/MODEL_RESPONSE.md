@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 4bb7f3b05d21c79862aaac8e024337477383dc3f
 # IaC - AWS Nova Model Breaking
 
 **Author:** ngwakoleslieelijah  
@@ -1050,6 +1053,7 @@ resource "aws_iam_role" "rds_monitoring" {
         Principal = {
           Service = "monitoring.rds.amazonaws.com"
 ```
+<<<<<<< HEAD
 =======
 # Serverless Data Processing Infrastructure
 
@@ -1405,3 +1409,5 @@ cdktf deploy
 - `kms-key-id`: KMS key for encryption
 - `lambda-role-arn`: Lambda execution role ARN
 >>>>>>> d9c22907f0dee3f6a2dcdecdec2393589bfbe3a4
+=======
+>>>>>>> 4bb7f3b05d21c79862aaac8e024337477383dc3f

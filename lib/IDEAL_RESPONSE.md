@@ -1,3 +1,5 @@
+<<<<<<<<< Temporary merge branch 1
+
 # Serverless Data Processing Stack
 
 A comprehensive CDKTF implementation for serverless data processing using AWS services with enhanced security features.
@@ -15,6 +17,7 @@ A comprehensive CDKTF implementation for serverless data processing using AWS se
 ## Key Features
 
 ✅ **Enhanced Security Best Practices**
+
 - KMS encryption for S3 with key rotation and restrictive policies
 - S3 bucket policy enforcing HTTPS and encrypted uploads
 - Public access blocked on S3 bucket
@@ -23,11 +26,13 @@ A comprehensive CDKTF implementation for serverless data processing using AWS se
 - VPC parameterization for flexible deployment
 
 ✅ **Event-Driven Processing**
+
 - S3 bucket notifications trigger Lambda on object creation
 - Filter for specific prefixes (`input/`) and suffixes (`.json`)
 - Lambda permission for S3 invocation
 
 ✅ **Infrastructure as Code**
+
 - TypeScript implementation using CDKTF
 - Configurable via constructor props (environment, region, VPC, tags)
 - Comprehensive outputs for integration
@@ -558,20 +563,19 @@ export class TapStack extends TerraformStack {
     });
   }
 }
-
 ```
 
 ## Resources Created
 
-| Resource Type | Resource Name | Description |
-|---------------|---------------|-------------|
-| S3 Bucket | `{projectPrefix}-data-processing-{accountId}` | Main data processing bucket |
-| Lambda Function | `{projectPrefix}-data-processor` | Data processing function |
-| KMS Key | `{projectPrefix} S3 encryption key` | Customer managed encryption key |
-| KMS Alias | `alias/{projectPrefix}-s3-encryption` | Key alias for easier reference |
-| Security Group | `{projectPrefix}-lambda-sg` | Dedicated security group for Lambda |
-| IAM Role | `{projectPrefix}-lambda-execution-role` | Lambda execution role |
-| IAM Policy | `{projectPrefix}-lambda-s3-kms-policy` | Custom policy for S3 and KMS access |
+| Resource Type   | Resource Name                                 | Description                         |
+| --------------- | --------------------------------------------- | ----------------------------------- |
+| S3 Bucket       | `{projectPrefix}-data-processing-{accountId}` | Main data processing bucket         |
+| Lambda Function | `{projectPrefix}-data-processor`              | Data processing function            |
+| KMS Key         | `{projectPrefix} S3 encryption key`           | Customer managed encryption key     |
+| KMS Alias       | `alias/{projectPrefix}-s3-encryption`         | Key alias for easier reference      |
+| Security Group  | `{projectPrefix}-lambda-sg`                   | Dedicated security group for Lambda |
+| IAM Role        | `{projectPrefix}-lambda-execution-role`       | Lambda execution role               |
+| IAM Policy      | `{projectPrefix}-lambda-s3-kms-policy`        | Custom policy for S3 and KMS access |
 
 ## Enhanced Configuration
 
@@ -579,20 +583,21 @@ The stack accepts comprehensive props for flexible deployment:
 
 ```typescript
 interface TapStackProps {
-  environmentSuffix?: string;        // Default: 'dev'
-  stateBucket?: string;             // For Terraform state
-  stateBucketRegion?: string;       // State bucket region
-  awsRegion?: string;               // Default: 'us-east-1'
-  vpcId?: string;                   // VPC ID for production use
-  subnetIds?: string[];             // Subnet IDs for Lambda deployment
-  availabilityZones?: string[];     // AZ validation for subnets
-  createVpc?: boolean;              // Create new VPC (not implemented)
-  vpcCidr?: string;                 // VPC CIDR block
-  lambdaConfig?: {                  // Lambda configuration
-    runtime?: string;               // Default: 'nodejs20.x'
-    timeout?: number;               // Default: 300s
-    memorySize?: number;            // Default: 512MB
-    architecture?: string;          // Default: 'x86_64'
+  environmentSuffix?: string; // Default: 'dev'
+  stateBucket?: string; // For Terraform state
+  stateBucketRegion?: string; // State bucket region
+  awsRegion?: string; // Default: 'us-east-1'
+  vpcId?: string; // VPC ID for production use
+  subnetIds?: string[]; // Subnet IDs for Lambda deployment
+  availabilityZones?: string[]; // AZ validation for subnets
+  createVpc?: boolean; // Create new VPC (not implemented)
+  vpcCidr?: string; // VPC CIDR block
+  lambdaConfig?: {
+    // Lambda configuration
+    runtime?: string; // Default: 'nodejs20.x'
+    timeout?: number; // Default: 300s
+    memorySize?: number; // Default: 512MB
+    architecture?: string; // Default: 'x86_64'
   };
   defaultTags?: { tags: Record<string, string> };
 }
@@ -605,7 +610,7 @@ interface TapStackProps {
    - **Development**: Fallback to default VPC with environment-specific warnings
    - **Advanced**: Placeholder for VPC creation (not implemented)
 
-2. **Enhanced Lambda Asset Management**: 
+2. **Enhanced Lambda Asset Management**:
    - Comprehensive file validation (`index.js`, `package.json`)
    - Modern AWS SDK v3 integration
    - Configurable runtime, timeout, memory, and architecture
@@ -625,4 +630,107 @@ interface TapStackProps {
 - `bucket-name`: S3 bucket name for data processing
 - `lambda-function-name`: Lambda function name
 - `kms-key-id`: KMS key ID for encryption
-- `lambda-role-arn`: Lambda execution role ARN
+- # `lambda-role-arn`: Lambda execution role ARN
+  ########################
+
+Variables
+########################
+
+variable "aws_region" { description = "AWS region for resources" type = string default = "us-east-1" }
+
+variable "project_name" { description = "Name of the project" type = string default = "iac-aws-nova-model-breaking" }
+
+variable "author" { description = "Author of the project" type = string default = "ngwakoleslieelijah" }
+
+variable "environment" { description = "Environment name" type = string default = "production" }
+
+variable "created_date" { description = "Creation date" type = string default = "2025-08-14T21:08:49Z" }
+
+variable "vpc_cidr" { description = "CIDR block for VPC" type = string default = "10.0.0.0/16" }
+
+variable "public_subnet_cidrs" { description = "CIDR blocks for public subnets" type = list(string) default = ["10.0.1.0/24", "10.0.2.0/24"] }
+
+variable "private_subnet_cidrs" { description = "CIDR blocks for private subnets" type = list(string) default = ["10.0.10.0/24", "10.0.20.0/24"] }
+
+variable "db_username" { description = "Database master username" type = string default = "admin" sensitive = true }
+
+variable "db_password" { description = "Database master password" type = string sensitive = true }
+
+########################
+
+Data sources
+########################
+
+Data sources
+data "aws_availability_zones" "available" { state = "available" }
+
+data "aws_caller_identity" "current" {}
+
+KMS Key for encryption
+resource "aws_kms_key" "main" { description = "KMS key for ${var.project_name}" deletion_window_in_days = 7 enable_key_rotation = true
+
+policy = jsonencode({ Version = "2012-10-17" Statement = [ { Sid = "Enable IAM User Permissions" Effect = "Allow" Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" } Action = "kms:" Resource = "" } ] }) }
+
+resource "aws_kms_alias" "main" { name = "alias/${var.project_name}-key" target_key_id = aws_kms_key.main.key_id }
+
+Networking Module
+module "networking" { source = "./modules/networking"
+
+project_name = var.project_name vpc_cidr = var.vpc_cidr public_subnet_cidrs = var.public_subnet_cidrs private_subnet_cidrs = var.private_subnet_cidrs availability_zones = data.aws_availability_zones.available.names }
+
+Security Module
+module "security" { source = "./modules/security"
+
+project_name = var.project_name vpc_id = module.networking.vpc_id vpc_cidr = var.vpc_cidr }
+
+IAM Module
+module "iam" { source = "./modules/iam"
+
+project_name = var.project_name kms_key_arn = aws_kms_key.main.arn }
+
+Storage Module
+module "storage" { source = "./modules/storage"
+
+project_name = var.project_name vpc_id = module.networking.vpc_id route_table_ids = module.networking.private_route_table_ids kms_key_arn = aws_kms_key.main.arn vpc_endpoint_sg_id = module.security.vpc_endpoint_sg_id ec2_instance_role_arn = module.iam.ec2_instance_role_arn }
+
+Database Module
+module "database" { source = "./modules/database"
+
+project_name = var.project_name vpc_id = module.networking.vpc_id private_subnet_ids = module.networking.private_subnet_ids rds_security_group_id = module.security.rds_sg_id kms_key_arn = aws_kms_key.main.arn db_username = var.db_username db_password = var.db_password }
+
+Compute Module
+module "compute" { source = "./modules/compute"
+
+project_name = var.project_name vpc_id = module.networking.vpc_id public_subnet_ids = module.networking.public_subnet_ids private_subnet_ids = module.networking.private_subnet_ids alb_security_group_id = module.security.alb_sg_id ec2_security_group_id = module.security.ec2_sg_id instance_profile_name = module.iam.ec2_instance_profile_name kms_key_arn = aws_kms_key.main.arn }
+
+Monitoring Module
+module "monitoring" { source = "./modules/monitoring"
+
+project_name = var.project_name vpc_id = module.networking.vpc_id kms_key_arn = aws_kms_key.main.arn }
+
+########################
+
+Outputs
+########################
+
+output "vpc_id" { description = "ID of the VPC" value = module.networking.vpc_id }
+
+output "vpc_cidr" { description = "CIDR block of the VPC" value = module.networking.vpc_cidr }
+
+output "public_subnet_ids" { description = "IDs of the public subnets" value = module.networking.public_subnet_ids }
+
+output "private_subnet_ids" { description = "IDs of the private subnets" value = module.networking.private_subnet_ids }
+
+output "alb_dns_name" { description = "DNS name of the Application Load Balancer" value = module.compute.alb_dns_name }
+
+output "rds_endpoint" { description = "RDS instance endpoint" value = module.database.rds_endpoint sensitive = true }
+
+output "s3_data_bucket_name" { description = "Name of the S3 data bucket" value = module.storage.s3_data_bucket_name }
+
+output "s3_logs_bucket_name" { description = "Name of the S3 logs bucket" value = module.storage.s3_logs_bucket_name }
+
+output "kms_key_id" { description = "ID of the KMS key" value = aws_kms_key.main.key_id }
+
+output "cloudtrail_arn" { description = "ARN of the CloudTrail" value = module.monitoring.cloudtrail_arn }
+
+> > > > > > > > > Temporary merge branch 2

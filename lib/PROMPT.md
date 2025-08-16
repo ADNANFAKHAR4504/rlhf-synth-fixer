@@ -1,4 +1,7 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 4bb7f3b05d21c79862aaac8e024337477383dc3f
 You are an expert AWS infrastructure architect and Terraform developer specializing in secure, production-ready cloud environments. Create a comprehensive Terraform configuration that establishes a secure AWS infrastructure with proper resource connectivity and security isolation.
 
 ## Project Requirements
@@ -107,6 +110,7 @@ The infrastructure must:
 - Block all unauthorized network access paths
 
 Focus on creating secure, interconnected resources that follow AWS Well-Architected Framework security pillar principles while maintaining operational efficiency through proper Terraform module design.
+<<<<<<< HEAD
 =======
 # TF-ServerlessDataProc-Hard-Single
 
@@ -143,3 +147,5 @@ Design a Terraform CDK (CDKTF) application using **TypeScript** that creates a *
 
 ---
 >>>>>>> d9c22907f0dee3f6a2dcdecdec2393589bfbe3a4
+=======
+>>>>>>> 4bb7f3b05d21c79862aaac8e024337477383dc3f
