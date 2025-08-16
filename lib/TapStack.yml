@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: 'Complete serverless application with Lambda functions, DynamoDB tables, and API Gateway for managing items, users, and orders'
+
+Description: 'SAM template for a serverless application with three Lambda functions (items, users, orders), DynamoDB tables, and API Gateway endpoints'
 
 # Global configuration to reduce redundancy across Lambda functions
 Globals:
@@ -8,27 +9,12 @@ Globals:
     Runtime: nodejs20.x
     Timeout: 30
     MemorySize: 128
-    Environment:
-      Variables:
-        LOG_LEVEL: INFO
-
-Parameters:
-  EnvironmentName:
-    Type: String
-    Default: dev
-    Description: Environment name (dev, staging, prod)
-    AllowedValues:
-      - dev
-      - staging
-      - prod
 
 Resources:
-  # IAM Role for Lambda Functions
-  # Single reusable role following principle of least privilege
+  # IAM Role for all Lambda functions with least privilege permissions
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      Description: 'IAM role for Lambda functions with CloudWatch Logs and DynamoDB permissions'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -36,9 +22,17 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
         - PolicyName: DynamoDBPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -49,9 +43,8 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:Scan
                   - dynamodb:Query
+                  - dynamodb:Scan
                 Resource: !GetAtt ItemsTable.Arn
               # Granular permissions for Users table
               - Effect: Allow
@@ -59,9 +52,8 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:Scan
                   - dynamodb:Query
+                  - dynamodb:Scan
                 Resource: !GetAtt UsersTable.Arn
               # Granular permissions for Orders table
               - Effect: Allow
@@ -69,17 +61,15 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:Scan
                   - dynamodb:Query
+                  - dynamodb:Scan
                 Resource: !GetAtt OrdersTable.Arn
 
-  # DynamoDB Tables
-  # Items table with on-demand billing
+  # DynamoDB Tables with on-demand capacity
   ItemsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${AWS::StackName}-items'
+      TableName: !Sub '${AWS::StackName}-items-table'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: itemId
@@ -87,21 +77,12 @@ Resources:
       KeySchema:
         - AttributeName: itemId
           KeyType: HASH
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
-      SSESpecification:
-        SSEEnabled: true
-      Tags:
-        - Key: Application
-          Value: !Ref AWS::StackName
-        - Key: Environment
-          Value: !Ref EnvironmentName
+    Description: 'DynamoDB table for storing items data'
 
-  # Users table with on-demand billing
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${AWS::StackName}-users'
+      TableName: !Sub '${AWS::StackName}-users-table'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: userId
@@ -109,187 +90,328 @@ Resources:
       KeySchema:
         - AttributeName: userId
           KeyType: HASH
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
-      SSESpecification:
-        SSEEnabled: true
-      Tags:
-        - Key: Application
-          Value: !Ref AWS::StackName
-        - Key: Environment
-          Value: !Ref EnvironmentName
+    Description: 'DynamoDB table for storing users data'
 
-  # Orders table with on-demand billing
   OrdersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${AWS::StackName}-orders'
+      TableName: !Sub '${AWS::StackName}-orders-table'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: orderId
           AttributeType: S
-        - AttributeName: userId
-          AttributeType: S
-        - AttributeName: createdAt
-          AttributeType: S
       KeySchema:
         - AttributeName: orderId
           KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: UserOrdersIndex
-          KeySchema:
-            - AttributeName: userId
-              KeyType: HASH
-            - AttributeName: createdAt
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
-      SSESpecification:
-        SSEEnabled: true
-      Tags:
-        - Key: Application
-          Value: !Ref AWS::StackName
-        - Key: Environment
-          Value: !Ref EnvironmentName
+    Description: 'DynamoDB table for storing orders data'
 
-  # Lambda Functions
-  # Items function for handling item operations
+  # Lambda Functions with Inline Code
   ItemsFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${AWS::StackName}-items-function'
-      Description: 'Lambda function for handling items operations'
-      CodeUri: lib/src/items-function
+      # Inline code for Items function
+      InlineCode: |
+        const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+        const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
+        const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+
+        exports.handler = async (event) => {
+          console.log('Received event:', JSON.stringify(event, null, 2));
+
+          const itemsTableName = process.env.ITEMS_TABLE_NAME;
+
+          try {
+            switch (event.httpMethod) {
+              case 'POST':
+                const item = JSON.parse(event.body);
+                const putParams = {
+                  TableName: itemsTableName,
+                  Item: marshall(item),
+                };
+                await ddbClient.send(new PutItemCommand(putParams));
+                return {
+                  statusCode: 201,
+                  body: JSON.stringify({ message: 'Item created successfully' }),
+                };
+              case 'GET':
+                const itemId = event.queryStringParameters?.itemId;
+                if (!itemId) {
+                  return {
+                    statusCode: 400,
+                    body: JSON.stringify({ message: 'Missing itemId query parameter' }),
+                  };
+                }
+                const getParams = {
+                  TableName: itemsTableName,
+                  Key: marshall({ itemId }),
+                };
+                const { Item } = await ddbClient.send(new GetItemCommand(getParams));
+                if (!Item) {
+                  return {
+                    statusCode: 404,
+                    body: JSON.stringify({ message: 'Item not found' }),
+                  };
+                }
+                return {
+                  statusCode: 200,
+                  body: JSON.stringify(unmarshall(Item)),
+                };
+              default:
+                return {
+                  statusCode: 405,
+                  body: JSON.stringify({ message: 'Method Not Allowed' }),
+                };
+            }
+          } catch (error) {
+            console.error('Error:', error);
+            return {
+              statusCode: 500,
+              body: JSON.stringify({ message: 'Internal Server Error' }),
+            };
+          }
+        };
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           ITEMS_TABLE_NAME: !Ref ItemsTable
-          ENVIRONMENT: !Ref EnvironmentName
       Events:
-        ItemsApiRoot:
+        ApiEvent:
           Type: Api
           Properties:
-            RestApiId: !Ref ServerlessApi
+            RestApiId: !Ref ApiGateway
             Path: /items
             Method: ANY
-        ItemsApiWithId:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ServerlessApi
-            Path: /items/{id}
-            Method: ANY
+    Description: 'Lambda function for handling items operations'
 
-  # Users function for handling user operations
   UsersFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${AWS::StackName}-users-function'
-      Description: 'Lambda function for handling users operations'
-      CodeUri: lib/src/users-function
+      # Inline code for Users function
+      InlineCode: |
+        const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+        const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
+        const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+
+        exports.handler = async (event) => {
+          console.log('Received event:', JSON.stringify(event, null, 2));
+
+          const usersTableName = process.env.USERS_TABLE_NAME;
+
+          try {
+            switch (event.httpMethod) {
+              case 'POST':
+                const user = JSON.parse(event.body);
+                const putParams = {
+                  TableName: usersTableName,
+                  Item: marshall(user),
+                };
+                await ddbClient.send(new PutItemCommand(putParams));
+                return {
+                  statusCode: 201,
+                  body: JSON.stringify({ message: 'User created successfully' }),
+                };
+              case 'GET':
+                const userId = event.queryStringParameters?.userId;
+                if (!userId) {
+                  return {
+                    statusCode: 400,
+                    body: JSON.stringify({ message: 'Missing userId query parameter' }),
+                  };
+                }
+                const getParams = {
+                  TableName: usersTableName,
+                  Key: marshall({ userId }),
+                };
+                const { Item } = await ddbClient.send(new GetItemCommand(getParams));
+                if (!Item) {
+                  return {
+                    statusCode: 404,
+                    body: JSON.stringify({ message: 'User not found' }),
+                  };
+                }
+                return {
+                  statusCode: 200,
+                  body: JSON.stringify(unmarshall(Item)),
+                };
+              default:
+                return {
+                  statusCode: 405,
+                  body: JSON.stringify({ message: 'Method Not Allowed' }),
+                };
+            }
+          } catch (error) {
+            console.error('Error:', error);
+            return {
+              statusCode: 500,
+              body: JSON.stringify({ message: 'Internal Server Error' }),
+            };
+          }
+        };
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersTable
-          ENVIRONMENT: !Ref EnvironmentName
       Events:
-        UsersApiRoot:
+        ApiEvent:
           Type: Api
           Properties:
-            RestApiId: !Ref ServerlessApi
+            RestApiId: !Ref ApiGateway
             Path: /users
             Method: ANY
-        UsersApiWithId:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ServerlessApi
-            Path: /users/{id}
-            Method: ANY
+    Description: 'Lambda function for handling users operations'
 
-  # Orders function for handling order operations
   OrdersFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub '${AWS::StackName}-orders-function'
-      Description: 'Lambda function for handling orders operations'
-      CodeUri: lib/src/orders-function
+      # Inline code for Orders function
+      InlineCode: |
+        const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+        const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
+        const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+
+        exports.handler = async (event) => {
+          console.log('Received event:', JSON.stringify(event, null, 2));
+
+          const ordersTableName = process.env.ORDERS_TABLE_NAME;
+
+          try {
+            switch (event.httpMethod) {
+              case 'POST':
+                const order = JSON.parse(event.body);
+                const putParams = {
+                  TableName: ordersTableName,
+                  Item: marshall(order),
+                };
+                await ddbClient.send(new PutItemCommand(putParams));
+                return {
+                  statusCode: 201,
+                  body: JSON.stringify({ message: 'Order created successfully' }),
+                };
+              case 'GET':
+                const orderId = event.queryStringParameters?.orderId;
+                if (!orderId) {
+                  return {
+                    statusCode: 400,
+                    body: JSON.stringify({ message: 'Missing orderId query parameter' }),
+                  };
+                }
+                const getParams = {
+                  TableName: ordersTableName,
+                  Key: marshall({ orderId }),
+                };
+                const { Item } = await ddbClient.send(new GetItemCommand(getParams));
+                if (!Item) {
+                  return {
+                    statusCode: 404,
+                    body: JSON.stringify({ message: 'Order not found' }),
+                  };
+                }
+                return {
+                  statusCode: 200,
+                  body: JSON.stringify(unmarshall(Item)),
+                };
+              default:
+                return {
+                  statusCode: 405,
+                  body: JSON.stringify({ message: 'Method Not Allowed' }),
+                };
+            }
+          } catch (error) {
+            console.error('Error:', error);
+            return {
+              statusCode: 500,
+              body: JSON.stringify({ message: 'Internal Server Error' }),
+            };
+          }
+        };
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
         Variables:
           ORDERS_TABLE_NAME: !Ref OrdersTable
-          USERS_TABLE_NAME: !Ref UsersTable
-          ITEMS_TABLE_NAME: !Ref ItemsTable
-          ENVIRONMENT: !Ref EnvironmentName
       Events:
-        OrdersApiRoot:
+        ApiEvent:
           Type: Api
           Properties:
-            RestApiId: !Ref ServerlessApi
+            RestApiId: !Ref ApiGateway
             Path: /orders
             Method: ANY
-        OrdersApiWithId:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ServerlessApi
-            Path: /orders/{id}
-            Method: ANY
+    Description: 'Lambda function for handling orders operations'
 
   # API Gateway REST API
-  # Single API with three endpoints for items, users, and orders
-  ServerlessApi:
+  ApiGateway:
     Type: AWS::Serverless::Api
     Properties:
       Name: !Sub '${AWS::StackName}-api'
-      Description: 'REST API Gateway for serverless application with items, users, and orders endpoints'
-      StageName: !Ref EnvironmentName
+      StageName: Prod
       Cors:
         AllowMethods: "'*'"
         AllowHeaders: "'*'"
         AllowOrigin: "'*'"
-      TracingEnabled: true
-      MethodSettings:
-        - ResourcePath: '/*'
-          HttpMethod: '*'
-          LoggingLevel: !If [IsProd, ERROR, INFO]
-          DataTraceEnabled: !If [IsProd, false, true]
-          MetricsEnabled: true
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title: !Sub '${AWS::StackName} API'
+          version: '1.0'
+        paths:
+          /items:
+            x-amazon-apigateway-any-method:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ItemsFunction.Arn}/invocations'
+          /users:
+            x-amazon-apigateway-any-method:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersFunction.Arn}/invocations'
+          /orders:
+            x-amazon-apigateway-any-method:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OrdersFunction.Arn}/invocations'
+    Description: 'API Gateway REST API with endpoints for items, users, and orders'
 
-Conditions:
-  IsProd: !Equals [!Ref EnvironmentName, prod]
+  # Lambda permissions for API Gateway to invoke functions
+  ItemsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ItemsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*'
 
-# Outputs section for easy access to deployed resources
+  UsersFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref UsersFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*'
+
+  OrdersFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OrdersFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*'
+
+# Outputs section to export the API Gateway URL
 Outputs:
-  # API Gateway URL for easy access after deployment
   ApiGatewayUrl:
     Description: 'URL of the deployed API Gateway'
-    Value: !Sub 'https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod'
     Export:
       Name: !Sub '${AWS::StackName}-api-url'
 
-  # API endpoints
-  ItemsEndpoint:
-    Description: 'Items API endpoint'
-    Value: !Sub 'https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/items'
-    Export:
-      Name: !Sub '${AWS::StackName}-items-endpoint'
-
-  UsersEndpoint:
-    Description: 'Users API endpoint'
-    Value: !Sub 'https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/users'
-    Export:
-      Name: !Sub '${AWS::StackName}-users-endpoint'
-
-  OrdersEndpoint:
-    Description: 'Orders API endpoint'
-    Value: !Sub 'https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/orders'
-    Export:
-      Name: !Sub '${AWS::StackName}-orders-endpoint'
-
-  # Table outputs
   ItemsTableName:
     Description: 'Name of the Items DynamoDB table'
     Value: !Ref ItemsTable
@@ -307,22 +429,3 @@ Outputs:
     Value: !Ref OrdersTable
     Export:
       Name: !Sub '${AWS::StackName}-orders-table'
-
-  # Function ARNs
-  ItemsFunctionArn:
-    Description: 'ARN of the Items Lambda function'
-    Value: !GetAtt ItemsFunction.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-items-function-arn'
-
-  UsersFunctionArn:
-    Description: 'ARN of the Users Lambda function'
-    Value: !GetAtt UsersFunction.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-users-function-arn'
-
-  OrdersFunctionArn:
-    Description: 'ARN of the Orders Lambda function'
-    Value: !GetAtt OrdersFunction.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-orders-function-arn'

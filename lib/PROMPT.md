@@ -14,9 +14,6 @@ Three AWS Lambda Functions:
 
     All functions must use the nodejs20.x runtime.
 
-    Each function's CodeUri should point to a placeholder local directory
-    (e.g., ./src/items-function) to be packaged by the SAM CLI.
-
 Three DynamoDB Tables:
 
     A table for items with a primary key.
