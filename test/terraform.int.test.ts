@@ -12,29 +12,32 @@ import * as fs from "fs";
 import * as path from "path";
 
 const outputPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
-const outputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
+const outputs: any = JSON.parse(fs.readFileSync(outputPath, "utf-8")); // mark as any to avoid type noise
 
 const environments = ["dev", "staging", "production"];
 
 describe("Terraform Infrastructure Integration Tests", () => {
-  const ec2 = new EC2Client({ region: "us-east-1" });
-  const iam = new IAMClient({ region: "us-east-1" });
+  const ec2 = new EC2Client({ region: "us-west-2" });
+  const iam = new IAMClient({ region: "us-west-2" });
 
   environments.forEach((env) => {
     describe(`Environment: ${env}`, () => {
-      const vpcId = outputs.vpc_ids.value[env];
-      const vpcCidr = outputs.vpc_cidrs.value[env];
-      const publicSubnetIds = Object.entries(outputs.public_subnet_ids.value)
+      const vpcId: string = outputs.vpc_ids.value[env];
+      const vpcCidr: string = outputs.vpc_cidrs.value[env];
+
+      const publicSubnetIds: string[] = Object.entries(outputs.public_subnet_ids.value)
         .filter(([k]) => k.startsWith(env))
-        .map(([_, v]) => v);
-      const privateSubnetIds = Object.entries(outputs.private_subnet_ids.value)
+        .map(([_, v]) => v as string);
+
+      const privateSubnetIds: string[] = Object.entries(outputs.private_subnet_ids.value)
         .filter(([k]) => k.startsWith(env))
-        .map(([_, v]) => v);
-      const igwId = outputs.internet_gateway_ids.value[env];
-      const natId = outputs.nat_gateway_ids.value[env];
-      const iamRoleArn = outputs.iam_role_arns.value[env];
-      const sgId = outputs.security_group_ids.value[env];
-      const instanceId = outputs.ec2_instance_ids.value[env];
+        .map(([_, v]) => v as string);
+
+      const igwId: string = outputs.internet_gateway_ids.value[env];
+      const natId: string = outputs.nat_gateway_ids.value[env];
+      const iamRoleArn: string = outputs.iam_role_arns.value[env];
+      const sgId: string = outputs.security_group_ids.value[env];
+      const instanceId: string = outputs.ec2_instance_ids.value[env];
       const instanceSummary = outputs.environment_summary.value[env];
 
       it("VPC exists and CIDR matches", async () => {
