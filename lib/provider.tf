@@ -1,31 +1,39 @@
-# provider.tf
-
+# /-----------------------------------------------------------------------------
+# | Terraform & Provider Configuration
+# |-----------------------------------------------------------------------------
 terraform {
-  required_version = ">= 1.4.0"
+  # This backend block is required by your CI/CD pipeline.
+  # The configuration is passed in dynamically during initialization.
+  backend "s3" {}
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
+      version = "~> 5.0"
     }
   }
-
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
 }
 
-# Provider for the primary region: us-east-1 (N. Virginia)
+# Variable for the default AWS region.
+variable "aws_region" {
+  description = "The default AWS region for provider configuration."
+  type        = string
+  default     = "us-west-2"
+}
+
+# Default provider configuration for non-regional resources like IAM.
 provider "aws" {
+  region = var.aws_region
+}
+
+# Provider alias for the US East (N. Virginia) region.
+provider "aws" {
+  alias  = "us-east-1"
   region = "us-east-1"
-  alias  = "useast1"
 }
 
-# Provider for the secondary/DR region: us-west-2 (Oregon)
+# Provider alias for the US West (Oregon) region.
 provider "aws" {
+  alias  = "us-west-2"
   region = "us-west-2"
-  alias  = "uswest2"
 }

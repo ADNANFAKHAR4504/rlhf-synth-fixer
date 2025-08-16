@@ -1,44 +1,19 @@
-**Role:** You are an expert AWS Cloud Solutions Architect specializing in Infrastructure as Code (IaC) and cybersecurity, with deep expertise in Terraform.
+I need some help scaffolding out a new project with a secure, multi-region AWS baseline using Terraform. The project is called "Nova," and the goal is to build a production-ready, secure foundation that we can build on top of.
 
-**Objective:** Your goal is to generate a comprehensive, secure, and production-ready Terraform configuration to provision a multi-region AWS infrastructure. The configuration must adhere strictly to security best practices, including the principle of least privilege.
+For this task, could you generate everything in a **single `./lib/main.tf` file**? That means all the variable declarations (including one for `aws_region` that the provider file will use), locals, resources, and outputs should all be in that one file. We'll handle the `provider.tf` separately, but you can assume it's already set up with the necessary aliases for the different regions. Also, let's build all the resources directly for now—no external modules, please. For multi-region you'll define all provider aliases in provider.tf and reference them inside main.tf like provider = aws.
 
-### Core Infrastructure Requirements
+Security is the top priority, so everything should follow best practices like the principle of least privilege. Here's a breakdown of what we need:
 
-This is the blueprint for the infrastructure you will build using Terraform.
+* **Multi-Region Setup:** We need this to run in two separate AWS regions for disaster recovery (you can use `us-east-1` as the primary and `us-west-2` as the secondary for the example). The two regions need to communicate privately, so let's set up a VPC in each and then connect them with **VPC peering**. Don't forget to update the route tables so the resources can actually talk to each other.
 
-1.  **Project Naming:** Use the project name `nova` and environment `prod`. All resources must follow a consistent naming convention, such as `nova-prod-<service>-<resource-type>`.
-2.  **Multi-Region Setup:**
-    * The primary region is **us-east-1** (N. Virginia) and the secondary/DR region is **us-west-2** (Oregon).
-    * Create a dedicated **VPC** in each region.
-    * Establish a **VPC Peering connection** between the two regional VPCs to ensure secure, private communication. You must also update the route tables in both VPCs to direct cross-region traffic through the peering connection.
-3.  **Network Configuration (for each region):**
-    * Configure at least one **public subnet** and at least one **private subnet**.
-    * Use **Network Access Control Lists (NACLs)** and **Security Groups** to enforce strict, least-privilege ingress/egress rules.
-    * Ensure all data-handling resources (EC2, RDS) are placed in the private subnets.
-4.  **Compute and Database:**
-    * Provision one **EC2 instance** (t3.micro) within a private subnet in *each* region.
-    * Deploy a **Multi-AZ RDS for PostgreSQL instance** (db.t3.micro) within the private subnets in *each* region.
-5.  **Data Protection & Encryption:**
-    * Create a customer-managed **AWS KMS Key** in each region.
-    * Encrypt all data at rest for S3, RDS, and EC2 EBS volumes using the respective regional KMS key.
-    * Create a primary **S3 bucket** in `us-east-1`. Enable **Cross-Region Replication (CRR)** to a backup bucket in `us-west-2`. Enforce server-side encryption with your KMS key (SSE-KMS) on both buckets.
-6.  **Identity and Access Management (IAM):**
-    * Create a specific **IAM Role** for the EC2 instances.
-    * Define an IAM policy attached to this role that grants the **absolute minimum permissions** required (e.g., permissions for SSM Session Manager, CloudWatch agent logs, and read-only access to the S3 bucket). **Do not use wildcard (`*`) permissions** for actions or resources where specific ARNs can be used.
-7.  **Logging and Monitoring:**
-    * Enable **VPC Flow Logs** and **AWS CloudTrail** in both regions. Configure them to deliver logs to a central, secure S3 bucket created for this purpose in `us-east-1`.
-    * Set up basic **CloudWatch Alarms** for high CPU utilization on EC2 instances and low free storage on the RDS instances.
+* **Secure Networking:** Inside each VPC, we'll need the standard **public and private subnets**. All our important stuff, like the app servers and database, must live in the private subnets. This means we'll also need **NAT Gateways** in the public subnets so the private resources can get out to the internet for patches and updates. Please lock everything down with tight **Security Groups** and **NACLs**—no `0.0.0.0/0` on sensitive ports.
 
----
+* **Application & Database:** In each region, please provision one small **EC2 instance** (a `t3.micro` is perfect) and a **Multi-AZ PostgreSQL RDS instance** (also `t3.micro`). Both of these must be placed in the private subnets.
 
-### Expected Output and Formatting
+* **Encryption is Key:** This is super important. All data needs to be encrypted at rest. Please create a customer-managed **KMS key** in each region. This key should be used to encrypt the EC2 instance's EBS volume and the RDS database. Also, let's set up a primary **S3 bucket** in the main region that replicates to a backup bucket in the secondary region. Both buckets need to be private and enforce server-side encryption using our new KMS keys (SSE-KMS).
 
-* **File Structure:** Provide all Terraform code within a single file named `main.tf`.
-* **Provider Configuration:** Your `main.tf` file should be written with the assumption that a separate `provider.tf` file defines the multi-region providers. You must correctly reference the provider aliases (e.g., `aws.useast1` for `us-east-1` and `aws.uswest2` for `us-west-2`) when creating resources in their respective regions.
-* **Best Practices:**
-    * Follow Terraform best practices rigorously.
-    * Build all resources directly; **do not use external modules**.
-    * Implement **least-privilege IAM** policies and **secure security groups** (e.g., no `0.0.0.0/0` ingress for sensitive ports).
-    * Define and use variables for key configurable values (like CIDR blocks, instance types) and locals for repeated values or complex logic.
-    * Provide useful **outputs** for key resource identifiers like VPC IDs, EC2 instance IDs, and RDS endpoint addresses. Do not output any secrets.
-    * Add comments throughout the code to explain complex resources or security configurations.
+* **IAM Permissions:** Let's create a single, specific **IAM Role** for the EC2 instances. The policy attached to it needs to be locked down tight—only the absolute minimum permissions required. It'll need access for SSM Session Manager (so we can connect without SSH keys), permissions to send logs to CloudWatch, and read-only access to the S3 bucket. Please avoid using wildcards (`*`) on actions or resources where a specific ARN can be used.
+
+* **Logging and Monitoring:** To make sure we have visibility, please enable **VPC Flow Logs** and **CloudTrail** in both regions. All these logs should be sent to a central, secure S3 bucket in the primary region for safekeeping. It would also be great to have a couple of basic **CloudWatch alarms**—one for high CPU on the EC2 instances and another for low free storage space on the RDS instances.
+
+* **Outputs:** Finally, please emit some useful outputs that our CI/CD pipeline and tests can use, like the instance IDs, VPC IDs, and bucket names. Just make sure not to output any secrets.
