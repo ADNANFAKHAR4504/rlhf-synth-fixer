@@ -794,34 +794,35 @@ class TapStack:
 # stack_args = TapStackArgs(environment_suffix=clean_suffix)
 # stack = TapStack("TapStack", args=stack_args)
 
-if __name__ == "__main__":
-    # SINGLE POINT OF EXECUTION - Debug and Initialize
-    print("=" * 60)
-    print("🔧 ENVIRONMENT VARIABLE DEBUG:")
-    print("=" * 60)
-    print(f"🔧 ENVIRONMENT_SUFFIX: {os.environ.get('ENVIRONMENT_SUFFIX', 'NOT SET')}")
-    print(f"🔧 PULUMI_DEPLOYMENT_SUFFIX: {os.environ.get('PULUMI_DEPLOYMENT_SUFFIX', 'NOT SET')}")
-    print(f"🔧 GITHUB_PR_NUMBER: {os.environ.get('GITHUB_PR_NUMBER', 'NOT SET')}")
-    print(f"🔧 GITHUB_HEAD_REF: {os.environ.get('GITHUB_HEAD_REF', 'NOT SET')}")
-    print(f"🔧 GITHUB_REF_NAME: {os.environ.get('GITHUB_REF_NAME', 'NOT SET')}")
-    print(f"🔧 GITHUB_RUN_ID: {os.environ.get('GITHUB_RUN_ID', 'NOT SET')}")
-    print(f"🔧 Current working directory: {os.getcwd()}")
-    print("=" * 60)
+# Remove the if __name__ == "__main__": guard and replace with this:
 
-    # Get suffix from environment variables with priority order
-    raw_suffix = (
-        os.environ.get('PULUMI_DEPLOYMENT_SUFFIX') or 
-        os.environ.get('ENVIRONMENT_SUFFIX') or 
-        str(int(time.time()))
-    )
+# SINGLE POINT OF EXECUTION - Debug and Initialize
+print("=" * 60)
+print("🔧 ENVIRONMENT VARIABLE DEBUG:")
+print("=" * 60)
+print(f"🔧 ENVIRONMENT_SUFFIX: {os.environ.get('ENVIRONMENT_SUFFIX', 'NOT SET')}")
+print(f"🔧 PULUMI_DEPLOYMENT_SUFFIX: {os.environ.get('PULUMI_DEPLOYMENT_SUFFIX', 'NOT SET')}")
+print(f"🔧 GITHUB_PR_NUMBER: {os.environ.get('GITHUB_PR_NUMBER', 'NOT SET')}")
+print(f"🔧 GITHUB_HEAD_REF: {os.environ.get('GITHUB_HEAD_REF', 'NOT SET')}")
+print(f"🔧 GITHUB_REF_NAME: {os.environ.get('GITHUB_REF_NAME', 'NOT SET')}")
+print(f"🔧 GITHUB_RUN_ID: {os.environ.get('GITHUB_RUN_ID', 'NOT SET')}")
+print(f"🔧 Current working directory: {os.getcwd()}")
+print("=" * 60)
 
-    # Clean the suffix
-    clean_suffix = clean_aws_suffix(raw_suffix)
+# Get suffix from environment variables with priority order
+raw_suffix = (
+    os.environ.get('PULUMI_DEPLOYMENT_SUFFIX') or 
+    os.environ.get('ENVIRONMENT_SUFFIX') or 
+    str(int(time.time()))
+)
 
-    print(f"🔧 Raw suffix: {raw_suffix}")
-    print(f"🔧 Clean suffix: {clean_suffix}")
-    print("=" * 60)
+# Clean the suffix
+clean_suffix = clean_aws_suffix(raw_suffix)
 
-    # SINGLE STACK INITIALIZATION - This should be the ONLY place creating a stack
-    stack_args = TapStackArgs(environment_suffix=clean_suffix)
-    stack = TapStack("TapStack", args=stack_args)
+print(f"🔧 Raw suffix: {raw_suffix}")
+print(f"🔧 Clean suffix: {clean_suffix}")
+print("=" * 60)
+
+# SINGLE STACK INITIALIZATION - This should be the ONLY place creating a stack
+stack_args = TapStackArgs(environment_suffix=clean_suffix)
+stack = TapStack("TapStack", args=stack_args)
