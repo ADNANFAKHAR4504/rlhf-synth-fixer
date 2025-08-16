@@ -128,7 +128,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ### `resource.ts`
 
-```typescript
+````typescript
 /**
  * resource.ts
  *
@@ -171,6 +171,8 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
   public readonly lambdaFunction: aws.lambda.Function;
   public readonly route53Record?: aws.route53.Record;
   public readonly cloudTrail: aws.cloudtrail.Trail;
+  public readonly rdsSecret: aws.secretsmanager.Secret;
+  public readonly sshKeyPair: pulumi.Output<aws.ec2.GetKeyPairResult>;
 
   constructor(
     name: string,
@@ -597,32 +599,30 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // 14b. Create IAM role for RDS Enhanced Monitoring
+    // 14. Create RDS monitoring role
     const rdsMonitoringRole = new aws.iam.Role(
       'rds-monitoring-role',
       {
-        name: 'rds-enhanced-monitoring-role',
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
+        name: 'rds-monitoring-role',
+        assumeRolePolicy: aws.iam.getPolicyDocumentOutput({
+          statements: [
             {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'monitoring.rds.amazonaws.com',
-              },
+              effect: 'Allow',
+              principals: [
+                {
+                  type: 'Service',
+                  identifiers: ['monitoring.rds.amazonaws.com'],
+                },
+              ],
+              actions: ['sts:AssumeRole'],
             },
           ],
-        }),
-        tags: {
-          Name: 'rds-enhanced-monitoring-role',
-          ...commonTags,
-        },
+        }).json,
       },
       defaultOpts
     );
 
-    // Attach the AWS managed policy for RDS Enhanced Monitoring
+    // 14.5. Attach RDS monitoring policy
     new aws.iam.RolePolicyAttachment(
       'rds-monitoring-policy',
       {
@@ -633,7 +633,52 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // 15. Create RDS instance
+    // 14.6. Create RDS credentials in AWS Secrets Manager
+    this.rdsSecret = new aws.secretsmanager.Secret(
+      'rds-credentials',
+      {
+        name: `${args.environment}-rds-credentials`,
+        description: 'RDS database credentials for secure web app',
+        kmsKeyId: this.kmsKey.id,
+        tags: commonTags,
+      },
+      defaultOpts
+    );
+
+    // 14.7. Create the actual secret value with secure password
+    // Use environment variable if available, otherwise generate a secure password
+    const rdsPassword =
+      process.env.RDS_PASSWORD ||
+      'SecureRDS' + Math.random().toString(36).substring(2, 15) + '!$%^&*()';
+
+    new aws.secretsmanager.SecretVersion(
+      'rds-credentials-version',
+      {
+        secretId: this.rdsSecret.id,
+        secretString: JSON.stringify({
+          username: 'admin',
+          password: rdsPassword,
+          engine: 'mysql',
+          host: 'localhost',
+          port: 3306,
+          dbname: 'appdb',
+          // Add additional metadata for better secret management
+          created: new Date().toISOString(),
+          environment: args.environment,
+          rotation: 'manual', // Can be automated later
+        }),
+      },
+      defaultOpts
+    );
+
+    // 14.8. Store the password for RDS configuration (no circular dependency)
+    // We'll use the password directly since we just created it
+    const rdsCredentials = {
+      username: 'admin',
+      password: rdsPassword,
+    };
+
+    // 15. Create RDS instance using the secret
     this.rdsInstance = new aws.rds.Instance(
       'mysql-db',
       {
@@ -648,24 +693,28 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
         kmsKeyId: this.kmsKey.arn,
 
         dbName: 'appdb',
-        username: 'admin',
-        password: 'TempPassword123!',
+        username: rdsCredentials.username,
+        password: rdsCredentials.password, // Use password from Secrets Manager
 
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: dbSubnetGroup.name,
         parameterGroupName: dbParameterGroup.name,
         monitoringRoleArn: rdsMonitoringRole.arn,
 
-        backupRetentionPeriod: 7,
+        skipFinalSnapshot: true,
+        deletionProtection: args.environment === 'prod', // Enable deletion protection for production
+        multiAz: args.environment === 'prod' || args.environment === 'staging', // Enable Multi-AZ for production environments
+
+        // Enhanced backup strategy
+        backupRetentionPeriod: args.environment === 'prod' ? 30 : 7, // 30 days for prod, 7 for others
         backupWindow: '03:00-04:00',
         maintenanceWindow: 'sun:04:00-sun:05:00',
 
-        skipFinalSnapshot: true,
-        deletionProtection: false,
-        multiAz: false,
-
-        monitoringInterval: 60,
-        performanceInsightsEnabled: false,
+        // Enhanced monitoring and performance
+        monitoringInterval: args.environment === 'prod' ? 60 : 0, // Continuous monitoring for prod
+        performanceInsightsEnabled: args.environment === 'prod', // Enable for production
+        performanceInsightsRetentionPeriod:
+          args.environment === 'prod' ? 7 : undefined, // 7 days retention for prod
 
         tags: {
           Name: 'mysql-database',
@@ -675,7 +724,15 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // 16. Get latest Amazon Linux 2023 AMI
+    // 16.5. Use existing SSH key pair in the region
+    this.sshKeyPair = aws.ec2.getKeyPairOutput(
+      {
+        keyName: `${args.environment}-web-server-key`,
+      },
+      defaultOpts
+    );
+
+    // 17. Get latest Amazon Linux 2023 AMI
     const ami = aws.ec2.getAmiOutput(
       {
         mostRecent: true,
@@ -704,6 +761,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
         subnetId: this.publicSubnet.id,
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
         associatePublicIpAddress: true,
+        keyName: pulumi.interpolate`${this.sshKeyPair.keyName}`, // Add SSH key pair for access
 
         userData: `#!/bin/bash
 yum update -y
@@ -984,21 +1042,21 @@ def handler(event, context):
     """
     s3 = boto3.client('s3')
     bucket_name = os.environ.get('BUCKET_NAME')
-    
+
     if not bucket_name:
         return {
             'statusCode': 500,
             'body': json.dumps({'error': 'BUCKET_NAME environment variable not set'})
         }
-    
+
     try:
         # List objects in the bucket
         response = s3.list_objects_v2(Bucket=bucket_name, MaxKeys=10)
         objects = response.get('Contents', [])
-        
+
         # Get bucket metadata
         bucket_info = s3.head_bucket(Bucket=bucket_name)
-        
+
         return {
             'statusCode': 200,
             'headers': {
@@ -1201,6 +1259,57 @@ def handler(event, context):
       defaultOpts
     );
 
+    // 14.8. Create Parameter Store parameters for configuration management
+    const appConfigParams = [
+      {
+        name: `/${args.environment}/app/database/name`,
+        value: 'appdb',
+        type: 'String',
+        description: 'Application database name',
+      },
+      {
+        name: `/${args.environment}/app/database/port`,
+        value: '3306',
+        type: 'String',
+        description: 'Database port',
+      },
+      {
+        name: `/${args.environment}/app/environment`,
+        value: args.environment,
+        type: 'String',
+        description: 'Application environment',
+      },
+      {
+        name: `/${args.environment}/app/region`,
+        value: args.region,
+        type: 'String',
+        description: 'AWS region',
+      },
+    ];
+
+    // Create Parameter Store parameters
+    appConfigParams.forEach((param, index) => {
+      new aws.ssm.Parameter(
+        `app-config-${index}`,
+        {
+          name: param.name,
+          value: param.value,
+          type: param.type,
+          description: param.description,
+          tags: commonTags,
+        },
+        defaultOpts
+      );
+    });
+
+    // 14.9. Enhanced security and compliance features
+    // Note: AWS Config rules can be added later for production environments
+    // Current implementation includes:
+    // - KMS encryption for all resources
+    // - Secrets Manager for RDS credentials
+    // - Enhanced RDS monitoring and backup
+    // - Parameter Store for configuration
+
     // Register outputs
     this.registerOutputs({
       vpcId: this.vpc.id,
@@ -1216,8 +1325,8 @@ def handler(event, context):
     });
   }
 }
-```
 
+```
 ## Key Features Implemented
 
 ### ✅ **Infrastructure Components**
@@ -1276,7 +1385,7 @@ pulumi up
 
 # View outputs
 pulumi stack output
-```
+````
 
 ## Important Notes
 
