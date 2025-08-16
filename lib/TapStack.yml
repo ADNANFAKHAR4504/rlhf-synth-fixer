@@ -239,6 +239,9 @@ Resources:
         TargetArn: !GetAtt DeadLetterQueue.Arn
       TracingConfig:
         Mode: Active
+      Layers:
+        # AWS-provided X-Ray layer for Python (update ARN for your region)
+        - !Sub 'arn:aws:lambda:${AWS::Region}:017000801446:layer:AWSLambdaPowertoolsPythonV2:68'
       Environment:
         Variables:
           ORDERS_TABLE_NAME: !Ref OrdersTable
