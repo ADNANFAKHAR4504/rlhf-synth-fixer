@@ -28,3 +28,29 @@ RequestID: 7a040382-8dd7-4243-baf2-8be80de89c02,
 InvalidCloudWatchLogsLogGroupArnException: CloudTrail cannot validate the specified log group ARN.
 ```
 
+**Root Cause**  
+- Incorrect dependency ordering in resource creation
+- Missing explicit dependencies in Pulumi configuration
+- CloudWatch Log Group ARN not properly formatted or accessible
+
+**Resolution**  
+- Ensure CloudWatch Log Group is created before CloudTrail
+- Add explicit dependencies using `pulumi.ResourceOptions(depends_on=[log_group])`
+- Verify IAM role permissions for CloudTrail to access CloudWatch Logs
+
+## 3. Security Configuration Failures
+
+**Description**  
+Generated IAM policies and security configurations often lack proper scoping and fail to follow security best practices.
+
+**Common Issues**  
+- Overly permissive IAM policies with wildcard (*) permissions
+- Missing encryption configurations for data at rest and in transit
+- Inadequate security group rules allowing unnecessary access
+- Missing KMS key configurations for sensitive resources
+
+**Prevention Strategies**  
+- Implement least-privilege IAM policy templates
+- Enable encryption by default for all data services
+- Use security scanning tools in CI/CD pipeline
+- Regular security audits of generated configurations

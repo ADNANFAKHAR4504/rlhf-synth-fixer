@@ -164,10 +164,6 @@ def deploy_infrastructure():
       pulumi.log.error(f"Deployment failed in region {region}: {e}")
       raise
 
-    # Ensure CloudTrail waits for S3 bucket policy
-    pulumi.Output.all(bucket_policy.id, cloudtrail.name).apply(
-      lambda args: print(f"CloudTrail {args[1]} created with S3 policy {args[0]}")
-    )
 
   # Export important resource information
   export_outputs(vpcs, security_groups, iam_roles, s3_buckets, code_pipeline)
