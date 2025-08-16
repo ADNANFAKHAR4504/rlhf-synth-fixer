@@ -26,18 +26,45 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const config = new pulumi.Config();
-    const region = config.require('region');
+
+    const region = config.get('region') || 'ap-south-1';
 
     const infrastructureConfig: InfrastructureConfig = {
       region,
-      availabilityZones: config.requireObject<string[]>('availabilityZones'),
-      vpcCidr: config.require('vpcCidr'),
-      publicSubnetCidrs: config.requireObject<string[]>('publicSubnetCidrs'),
-      privateSubnetCidrs: config.requireObject<string[]>('privateSubnetCidrs'),
-      rdsConfig: config.requireObject('rdsConfig'),
-      s3Config: config.requireObject('s3Config'),
+      availabilityZones: config.getObject<string[]>('availabilityZones') || [
+        `${region}a`,
+        `${region}b`,
+      ],
+      vpcCidr: config.get('vpcCidr') || '10.0.0.0/16',
+      publicSubnetCidrs: config.getObject<string[]>('publicSubnetCidrs') || [
+        '10.0.1.0/24',
+        '10.0.2.0/24',
+      ],
+      privateSubnetCidrs: config.getObject<string[]>('privateSubnetCidrs') || [
+        '10.0.10.0/24',
+        '10.0.20.0/24',
+      ],
+      rdsConfig: config.getObject('rdsConfig') || {
+        instanceClass: 'db.t3.micro',
+        allocatedStorage: 20,
+        engine: 'mysql',
+        engineVersion: '8.0',
+        dbName: 'appdb',
+        username: 'admin',
+      },
+      s3Config: config.getObject('s3Config') || {
+        lifecyclePolicies: {
+          transitionToIa: 30,
+          transitionToGlacier: 90,
+          expiration: 365,
+        },
+      },
       tags: {
-        ...(config.getObject<Record<string, string>>('tags') || {}),
+        ...(config.getObject<Record<string, string>>('tags') || {
+          Environment: environmentSuffix,
+          Project: 'TAP',
+          Owner: 'DevTeam',
+        }),
         ...(args.tags || {}),
         Environment: environmentSuffix,
       },
