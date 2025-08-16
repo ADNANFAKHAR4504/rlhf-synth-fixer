@@ -215,7 +215,6 @@ Resources:
   EC2InstanceRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${Project}-ec2-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -273,7 +272,6 @@ Resources:
   EC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      InstanceProfileName: !Sub '${Project}-ec2-profile-${EnvironmentSuffix}'
       Roles:
         - !Ref EC2InstanceRole
 
@@ -281,7 +279,6 @@ Resources:
   EC2SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupName: !Sub '${Project}-ec2-sg-${EnvironmentSuffix}'
       GroupDescription: 'Security group for EC2 instances with minimal access'
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
@@ -341,7 +338,6 @@ Resources:
   ApplicationServiceRole:
     Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub '${Project}-app-service-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

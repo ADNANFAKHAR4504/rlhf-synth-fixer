@@ -417,9 +417,6 @@
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${Project}-ec2-role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -539,9 +536,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${Project}-ec2-profile-${EnvironmentSuffix}"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2InstanceRole"
@@ -552,9 +546,6 @@
         "EC2SecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${Project}-ec2-sg-${EnvironmentSuffix}"
-                },
                 "GroupDescription": "Security group for EC2 instances with minimal access",
                 "VpcId": {
                     "Ref": "SecureVPC"
@@ -678,9 +669,6 @@
         "ApplicationServiceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${Project}-app-service-role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
