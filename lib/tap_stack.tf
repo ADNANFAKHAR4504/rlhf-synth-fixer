@@ -580,39 +580,30 @@ resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
 
   policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
-        Sid    = "AWSConsoleStatement-1"
-        Effect = "Allow"
+        Sid    = "AllowLogDelivery",
+        Effect = "Allow",
         Principal = {
-          AWS = data.aws_elb_service_account.main.arn
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
-      },
-      {
-        Sid    = "AWSLogDeliveryCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.alb_logs.arn
-      },
-      {
-        Sid    = "AWSLogDeliveryWrite"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        },
+        Action   = "s3:PutObject",
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*",
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
           }
         }
+      },
+      {
+        Sid    = "AllowLogDeliveryAclCheck",
+        Effect = "Allow",
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        },
+        Action   = "s3:GetBucketAcl",
+        Resource = aws_s3_bucket.alb_logs.arn
       }
     ]
   })
