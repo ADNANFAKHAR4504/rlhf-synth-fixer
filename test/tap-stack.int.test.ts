@@ -262,10 +262,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(asg.Instances!.length).toBe(asg.DesiredCapacity);
 
       // Verify ASG is deployed in private subnets
-      const privateSubnets = outputs.PrivateSubnets.split(',').filter((s: string) => s.length > 0);
+      const privateSubnets: string[] = outputs.PrivateSubnets.split(',').filter((s: string) => s.length > 0);
       expect(asg.VPCZoneIdentifier).toBeDefined();
-      const asgSubnets = asg.VPCZoneIdentifier!.split(',');
-      privateSubnets.forEach((subnet) => {
+      const asgSubnets: string[] = asg.VPCZoneIdentifier!.split(',');
+      privateSubnets.forEach((subnet: string) => {
         expect(asgSubnets).toContain(subnet);
       });
 
