@@ -1,7 +1,6 @@
 # /-----------------------------------------------------------------------------
 # | Terraform & Provider Configuration
 # |-----------------------------------------------------------------------------
-
 terraform {
   # This backend block is required by your CI/CD pipeline.
   # The configuration is passed in dynamically during initialization.
@@ -29,12 +28,12 @@ provider "aws" {
 
 # Provider alias for the US East (N. Virginia) region.
 provider "aws" {
-  alias  = "us_east_1"
+  alias  = "us-east-1"
   region = "us-east-1"
 }
 
 # Provider alias for the US West (Oregon) region.
 provider "aws" {
-  alias  = "us_west_2"
+  alias  = "us-west-2"
   region = "us-west-2"
 }
