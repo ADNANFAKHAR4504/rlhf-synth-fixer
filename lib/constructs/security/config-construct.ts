@@ -91,7 +91,7 @@ export class ConfigConstruct extends Construct {
       {
         name: 'default',
         s3BucketName: this.configBucket.bucketName,
-        s3KeyPrefix: 'config-logs/',
+        s3KeyPrefix: 'config-logs', // Removed trailing slash as AWS Config doesn't allow it
         configSnapshotDeliveryProperties: {
           deliveryFrequency: 'TwentyFour_Hours',
         },
