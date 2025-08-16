@@ -952,13 +952,10 @@ export class Infrastructure extends pulumi.ComponentResource {
           environment
         )}-${Date.now()}`,
 
-        // Monitoring and logging
+        // Monitoring and logging - CloudWatch Database Insights approach
         monitoringInterval: 60,
         monitoringRoleArn: rdsMonitoringRole.arn,
-        performanceInsightsEnabled: true,
-        performanceInsightsKmsKeyId: kmsKey.arn,
-        performanceInsightsRetentionPeriod: 7,
-        // Fixed CloudWatch log exports for MySQL
+        performanceInsightsEnabled: false,
         enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
 
         // Multi-AZ for high availability
@@ -1219,6 +1216,209 @@ export class Infrastructure extends pulumi.ComponentResource {
           DBInstanceIdentifier: rdsInstance.id,
         },
         tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // RDS Database Insights - Additional Monitoring Alarms
+    new aws.cloudwatch.MetricAlarm(
+      createResourceName('rds-connections-alarm', region, environment),
+      {
+        name: createResourceName('rds-connections-alarm', region, environment),
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'DatabaseConnections',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 40, // 80% of max connections for db.t3.micro
+        alarmDescription: 'Alert on high database connection count',
+        alarmActions: [securityAlertsTopic.arn],
+        dimensions: {
+          DBInstanceIdentifier: rdsInstance.id,
+        },
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.cloudwatch.MetricAlarm(
+      createResourceName('rds-read-latency-alarm', region, environment),
+      {
+        name: createResourceName('rds-read-latency-alarm', region, environment),
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'ReadLatency',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 0.2, // 200ms
+        alarmDescription: 'Alert on high database read latency',
+        alarmActions: [securityAlertsTopic.arn],
+        dimensions: {
+          DBInstanceIdentifier: rdsInstance.id,
+        },
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.cloudwatch.MetricAlarm(
+      createResourceName('rds-write-latency-alarm', region, environment),
+      {
+        name: createResourceName(
+          'rds-write-latency-alarm',
+          region,
+          environment
+        ),
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'WriteLatency',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 0.2, // 200ms
+        alarmDescription: 'Alert on high database write latency',
+        alarmActions: [securityAlertsTopic.arn],
+        dimensions: {
+          DBInstanceIdentifier: rdsInstance.id,
+        },
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.cloudwatch.MetricAlarm(
+      createResourceName('rds-storage-alarm', region, environment),
+      {
+        name: createResourceName('rds-storage-alarm', region, environment),
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'FreeStorageSpace',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 2000000000, // 2GB in bytes
+        alarmDescription: 'Alert when free storage space is low',
+        alarmActions: [securityAlertsTopic.arn],
+        dimensions: {
+          DBInstanceIdentifier: rdsInstance.id,
+        },
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.cloudwatch.MetricAlarm(
+      createResourceName('rds-memory-alarm', region, environment),
+      {
+        name: createResourceName('rds-memory-alarm', region, environment),
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'FreeableMemory',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 100000000, // 100MB in bytes
+        alarmDescription: 'Alert when freeable memory is low',
+        alarmActions: [securityAlertsTopic.arn],
+        dimensions: {
+          DBInstanceIdentifier: rdsInstance.id,
+        },
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // CloudWatch Dashboard for Database Insights
+    new aws.cloudwatch.Dashboard(
+      createResourceName('db-insights-dashboard', region, environment),
+      {
+        dashboardName: createResourceName(
+          'db-insights-dashboard',
+          region,
+          environment
+        ),
+        dashboardBody: pulumi.all([rdsInstance.id]).apply(([dbInstanceId]) =>
+          JSON.stringify({
+            widgets: [
+              {
+                type: 'metric',
+                x: 0,
+                y: 0,
+                width: 12,
+                height: 6,
+                properties: {
+                  metrics: [
+                    [
+                      'AWS/RDS',
+                      'CPUUtilization',
+                      'DBInstanceIdentifier',
+                      dbInstanceId,
+                    ],
+                    ['.', 'DatabaseConnections', '.', '.'],
+                    ['.', 'FreeableMemory', '.', '.'],
+                    ['.', 'FreeStorageSpace', '.', '.'],
+                  ],
+                  view: 'timeSeries',
+                  stacked: false,
+                  region: region,
+                  title: 'RDS Performance Metrics',
+                  period: 300,
+                },
+              },
+              {
+                type: 'metric',
+                x: 0,
+                y: 6,
+                width: 12,
+                height: 6,
+                properties: {
+                  metrics: [
+                    [
+                      'AWS/RDS',
+                      'ReadLatency',
+                      'DBInstanceIdentifier',
+                      dbInstanceId,
+                    ],
+                    ['.', 'WriteLatency', '.', '.'],
+                    ['.', 'ReadIOPS', '.', '.'],
+                    ['.', 'WriteIOPS', '.', '.'],
+                  ],
+                  view: 'timeSeries',
+                  stacked: false,
+                  region: region,
+                  title: 'RDS I/O Performance',
+                  period: 300,
+                },
+              },
+              {
+                type: 'metric',
+                x: 0,
+                y: 12,
+                width: 12,
+                height: 6,
+                properties: {
+                  metrics: [
+                    [
+                      'AWS/RDS',
+                      'BinLogDiskUsage',
+                      'DBInstanceIdentifier',
+                      dbInstanceId,
+                    ],
+                    ['.', 'NetworkReceiveThroughput', '.', '.'],
+                    ['.', 'NetworkTransmitThroughput', '.', '.'],
+                  ],
+                  view: 'timeSeries',
+                  stacked: false,
+                  region: region,
+                  title: 'RDS Network and Storage',
+                  period: 300,
+                },
+              },
+            ],
+          })
+        ),
       },
       { provider, parent: this }
     );
