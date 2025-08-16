@@ -185,7 +185,7 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub '${CorpCloudWatchLogGroup}:*'
+                Resource: !GetAtt CorpCloudWatchLogGroup.Arn
       Tags:
         - Key: Name
           Value: !Sub 'corp-ec2-role-${Environment}'
@@ -384,7 +384,7 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub '${CorpCloudWatchLogGroup}:*'
+                Resource: !GetAtt CorpCloudWatchLogGroup.Arn
       Tags:
         - Key: Name
           Value: !Sub 'corp-cloudtrail-role-${Environment}'

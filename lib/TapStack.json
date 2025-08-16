@@ -310,7 +310,10 @@
                                         "logs:PutLogEvents"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${CorpCloudWatchLogGroup}:*"
+                                        "Fn::GetAtt": [
+                                            "CorpCloudWatchLogGroup",
+                                            "Arn"
+                                        ]
                                     }
                                 }
                             ]
@@ -692,7 +695,10 @@
                                         "logs:PutLogEvents"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${CorpCloudWatchLogGroup}:*"
+                                        "Fn::GetAtt": [
+                                            "CorpCloudWatchLogGroup",
+                                            "Arn"
+                                        ]
                                     }
                                 }
                             ]
