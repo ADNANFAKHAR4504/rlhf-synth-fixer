@@ -68,7 +68,7 @@ class TapStack(pulumi.ComponentResource):
     # Create a separate logging bucket (optional but recommended)
     logging_bucket = aws.s3.Bucket(
       "access-logging-bucket",
-      bucket=f"{project_name}-access-logs-{stack_name}",
+      bucket=f"{project_name}-access-logs-{stack_name}".lower(),
       force_destroy=True  # Only for demo purposes
     )
 

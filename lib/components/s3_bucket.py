@@ -1,5 +1,7 @@
 from typing import Optional
 import dataclasses
+import random
+import string
 
 import pulumi
 import pulumi_aws as aws
@@ -9,6 +11,8 @@ class SecureS3BucketConfig:
   kms_key_id: pulumi.Output[str]
   sns_topic_arn: pulumi.Output[str]
   access_logging_bucket: Optional[str] = None
+  enable_mfa_delete: bool = False
+  tags: Optional[dict] = None
 
 
 class SecureS3Bucket(pulumi.ComponentResource):
@@ -16,20 +20,41 @@ class SecureS3Bucket(pulumi.ComponentResource):
                opts: Optional[pulumi.ResourceOptions] = None):
     super().__init__("custom:aws:SecureS3Bucket", name, None, opts)
 
+    # Generate random suffix for bucket name security
+    random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    
+    # Apply default tags
+    default_tags = {
+      "Name": f"{name}-secure-s3-bucket",
+      "Component": "SecureS3Bucket", 
+      "Stack": pulumi.get_stack(),
+      "Purpose": "Secure storage with encryption and monitoring"
+    }
+    if config.tags:
+      default_tags.update(config.tags)
+
     # Create the main S3 bucket
     self.bucket = aws.s3.Bucket(
       f"{name}-bucket",
-      bucket=f"{name}-secure-bucket-{pulumi.get_stack()}".lower(),
+      bucket=f"{name}-secure-bucket-{pulumi.get_stack()}-{random_suffix}".lower(),
+      tags=default_tags,
       opts=pulumi.ResourceOptions(parent=self)
     )
 
-    # Enable versioning
+    # Enable versioning with optional MFA delete
+    versioning_config = aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+      status="Enabled"
+    )
+    if config.enable_mfa_delete:
+      versioning_config = aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+        status="Enabled",
+        mfa_delete="Enabled"
+      )
+    
     self.versioning = aws.s3.BucketVersioningV2(
       f"{name}-versioning",
       bucket=self.bucket.id,
-      versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
-        status="Enabled"
-      ),
+      versioning_configuration=versioning_config,
       opts=pulumi.ResourceOptions(parent=self)
     )
 

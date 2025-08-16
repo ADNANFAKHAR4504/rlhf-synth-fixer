@@ -1,5 +1,6 @@
 from typing import Optional
 import json
+import dataclasses
 import pulumi
 import pulumi_aws as aws
 
@@ -18,8 +19,20 @@ def _get_key_policy() -> str:
         "Principal": {
           "AWS": f"arn:aws:iam::{current.account_id}:root"
         },
-        "Action": "kms:*",
-        "Resource": "*"
+        "Action": [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:ReEncrypt*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringEquals": {
+            "kms:ViaService": ["s3.*.amazonaws.com", "sns.*.amazonaws.com"]
+          }
+        }
       },
       {
         "Sid": "Allow S3 Service",
@@ -39,19 +52,36 @@ def _get_key_policy() -> str:
   return json.dumps(policy)
 
 
+@dataclasses.dataclass
+class KMSKeyConfig:
+  description: str = "KMS key for S3 bucket encryption"
+  deletion_window_days: int = 30
+  tags: Optional[dict] = None
+
+
 class KMSKey(pulumi.ComponentResource):
   def __init__(self, name: str,
-               description: str = "KMS key for S3 bucket encryption",
+               config: KMSKeyConfig,
                opts: Optional[pulumi.ResourceOptions] = None):
     super().__init__("custom:aws:KMSKey", name, None, opts)
+
+    # Apply default tags
+    default_tags = {
+      "Name": f"{name}-kms-key",
+      "Component": "KMSKey",
+      "Purpose": "S3 and SNS encryption"
+    }
+    if config.tags:
+      default_tags.update(config.tags)
 
     # Create KMS key
     self.key = aws.kms.Key(
       f"{name}-key",
-      description=description,
-      deletion_window_in_days=7,
+      description=config.description,
+      deletion_window_in_days=config.deletion_window_days,
       enable_key_rotation=True,
       policy=pulumi.Output.all().apply(lambda _: _get_key_policy()),
+      tags=default_tags,
       opts=pulumi.ResourceOptions(parent=self)
     )
 

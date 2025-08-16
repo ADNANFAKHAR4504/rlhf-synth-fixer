@@ -1,14 +1,38 @@
 from typing import Optional
+import dataclasses
 import pulumi
 import pulumi_aws as aws
 
 
+@dataclasses.dataclass
+class CloudWatchAlarmConfig:
+  bucket_name: pulumi.Output[str]
+  sns_topic_arn: pulumi.Output[str]
+  error_threshold: int = 5
+  request_threshold: int = 1000
+  tags: Optional[dict] = None
+
+
 class CloudWatchAlarm(pulumi.ComponentResource):
   def __init__(self, name: str,
-               bucket_name: pulumi.Output[str],
-               sns_topic_arn: pulumi.Output[str],
+               config: CloudWatchAlarmConfig,
                opts: Optional[pulumi.ResourceOptions] = None):
     super().__init__("custom:aws:CloudWatchAlarm", name, None, opts)
+    
+    # Apply default tags
+    default_tags = {
+      "Name": f"{name}-cloudwatch-alarms",
+      "Component": "CloudWatchAlarm",
+      "Purpose": "S3 monitoring and alerting"
+    }
+    if config.tags:
+      default_tags.update(config.tags)
+    
+    # Validate SNS topic ARN format
+    def validate_sns_arn(arn):
+      if not arn.startswith('arn:aws:sns:'):
+        raise ValueError(f"Invalid SNS topic ARN format: {arn}")
+      return arn
 
     # Create CloudWatch alarm for 4xx errors (failed access attempts)
     self.access_denied_alarm = aws.cloudwatch.MetricAlarm(
@@ -22,14 +46,14 @@ class CloudWatchAlarm(pulumi.ComponentResource):
       period=300,  # 5 minutes
       evaluation_periods=2,
       datapoints_to_alarm=1,
-      threshold=5,
+      threshold=config.error_threshold,
       comparison_operator="GreaterThanThreshold",
-      dimensions=bucket_name.apply(lambda name: {
-        "BucketName": name,
-        "FilterId": "EntireBucket"
+      dimensions=config.bucket_name.apply(lambda name: {
+        "BucketName": name
       }),
-      alarm_actions=[sns_topic_arn],
-      ok_actions=[sns_topic_arn],
+      alarm_actions=[config.sns_topic_arn.apply(validate_sns_arn)],
+      ok_actions=[config.sns_topic_arn.apply(validate_sns_arn)],
+      tags=default_tags,
       treat_missing_data="notBreaching",
       opts=pulumi.ResourceOptions(parent=self)
     )
@@ -46,14 +70,14 @@ class CloudWatchAlarm(pulumi.ComponentResource):
       period=300,  # 5 minutes
       evaluation_periods=2,
       datapoints_to_alarm=2,
-      threshold=1000,
+      threshold=config.request_threshold,
       comparison_operator="GreaterThanThreshold",
-      dimensions=bucket_name.apply(lambda name: {
-        "BucketName": name,
-        "FilterId": "EntireBucket"
+      dimensions=config.bucket_name.apply(lambda name: {
+        "BucketName": name
       }),
-      alarm_actions=[sns_topic_arn],
-      ok_actions=[sns_topic_arn],
+      alarm_actions=[config.sns_topic_arn.apply(validate_sns_arn)],
+      ok_actions=[config.sns_topic_arn.apply(validate_sns_arn)],
+      tags=default_tags,
       treat_missing_data="notBreaching",
       opts=pulumi.ResourceOptions(parent=self)
     )

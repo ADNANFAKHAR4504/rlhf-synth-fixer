@@ -12,10 +12,10 @@ import pulumi
 
 # Import the components we're testing
 from lib.components.s3_bucket import SecureS3Bucket, SecureS3BucketConfig
-from lib.components.sns_topic import SNSTopic
-from lib.components.kms_key import KMSKey
-from lib.components.iam_role import S3IAMRole
-from lib.components.cloudwatch_alarm import CloudWatchAlarm
+from lib.components.sns_topic import SNSTopic, SNSTopicConfig
+from lib.components.kms_key import KMSKey, KMSKeyConfig
+from lib.components.iam_role import S3IAMRole, S3IAMRoleConfig
+from lib.components.cloudwatch_alarm import CloudWatchAlarm, CloudWatchAlarmConfig
 
 
 class TestSecureS3Bucket(unittest.TestCase):
@@ -99,7 +99,7 @@ class TestSNSTopic(unittest.TestCase):
     """Test SNSTopic creates topic and policy."""
     SNSTopic(
       "test-topic",
-      kms_key_id=self.kms_key_id
+      SNSTopicConfig(kms_key_id=self.kms_key_id)
     )
 
     mock_topic.assert_called_once()
@@ -112,8 +112,10 @@ class TestSNSTopic(unittest.TestCase):
     """Test SNSTopic creates email subscription when provided."""
     SNSTopic(
       "test-topic",
-      kms_key_id=self.kms_key_id,
-      email_endpoint="test@example.com"
+      SNSTopicConfig(
+        kms_key_id=self.kms_key_id,
+        email_endpoint="test@example.com"
+      )
     )
 
     mock_topic.assert_called_once()
@@ -131,7 +133,7 @@ class TestKMSKey(unittest.TestCase):
     """Test KMSKey creates key and alias."""
     mock_caller_id.return_value = Mock(account_id="123456789012")
 
-    KMSKey("test-key", "Test KMS key")
+    KMSKey("test-key", KMSKeyConfig(description="Test KMS key"))
 
     mock_key.assert_called_once()
     mock_alias.assert_called_once()
@@ -142,7 +144,7 @@ class TestKMSKey(unittest.TestCase):
     """Test KMS key has rotation enabled."""
     mock_caller_id.return_value = Mock(account_id="123456789012")
 
-    KMSKey("test-key")
+    KMSKey("test-key", KMSKeyConfig())
 
     call_args = mock_key.call_args[1]
     self.assertTrue(call_args['enable_key_rotation'])
@@ -165,8 +167,10 @@ class TestS3IAMRole(unittest.TestCase):
     """Test S3IAMRole creates all IAM resources."""
     S3IAMRole(
       "test-role",
-      bucket_arn=self.bucket_arn,
-      kms_key_arn=self.kms_key_arn
+      S3IAMRoleConfig(
+        bucket_arn=self.bucket_arn,
+        kms_key_arn=self.kms_key_arn
+      )
     )
 
     mock_role.assert_called_once()
@@ -179,8 +183,10 @@ class TestS3IAMRole(unittest.TestCase):
     """Test IAM role has correct assume role policy."""
     S3IAMRole(
       "test-role",
-      bucket_arn=self.bucket_arn,
-      kms_key_arn=self.kms_key_arn
+      S3IAMRoleConfig(
+        bucket_arn=self.bucket_arn,
+        kms_key_arn=self.kms_key_arn
+      )
     )
 
     call_args = mock_role.call_args[1]
@@ -206,8 +212,10 @@ class TestCloudWatchAlarm(unittest.TestCase):
     """Test CloudWatchAlarm creates both alarms."""
     CloudWatchAlarm(
       "test-alarm",
-      bucket_name=self.bucket_name,
-      sns_topic_arn=self.sns_topic_arn
+      CloudWatchAlarmConfig(
+        bucket_name=self.bucket_name,
+        sns_topic_arn=self.sns_topic_arn
+      )
     )
 
     # Should create two alarms (access denied and high request)
@@ -218,8 +226,10 @@ class TestCloudWatchAlarm(unittest.TestCase):
     """Test CloudWatch alarms have correct parameters."""
     CloudWatchAlarm(
       "test-alarm",
-      bucket_name=self.bucket_name,
-      sns_topic_arn=self.sns_topic_arn
+      CloudWatchAlarmConfig(
+        bucket_name=self.bucket_name,
+        sns_topic_arn=self.sns_topic_arn
+      )
     )
 
     # Check first alarm call (access denied)
