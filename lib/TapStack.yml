@@ -149,17 +149,17 @@ Resources:
   # CodePipeline Service Role
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
+    Condition: ValidRegion
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-  # CodePipeline Service Role
-  CodePipelineServiceRole:
-    Type: AWS::IAM::Role
-    Condition: ValidRegion
-    Properties:yName: CodePipelineExecutionPolicy
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelineExecutionPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -217,16 +217,16 @@ Resources:
   # CodeBuild Service Role
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
+    Condition: ValidRegion
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
-  # CodeBuild Service Role
-  CodeBuildServiceRole:
-    Type: AWS::IAM::Role
-    Condition: ValidRegion
-    Properties:
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
         - PolicyName: CodeBuildExecutionPolicy
           PolicyDocument:
             Version: "2012-10-17"
