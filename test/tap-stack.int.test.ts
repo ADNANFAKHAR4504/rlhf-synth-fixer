@@ -27,22 +27,10 @@ import * as path from 'path';
 // Load stack outputs from deployment
 const loadStackOutputs = () => {
   try {
-    // Try multiple possible output file locations
-    const possiblePaths = [
-      path.join(__dirname, '../stack-outputs.json'),
-      path.join(__dirname, '../outputs.json'),
-      path.join(process.cwd(), 'stack-outputs.json'),
-      path.join(process.cwd(), 'outputs.json'),
-    ];
-
-    for (const outputsPath of possiblePaths) {
-      if (fs.existsSync(outputsPath)) {
-        const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-        return JSON.parse(outputsContent);
-      }
-    }
-
-    throw new Error(`Stack outputs file not found. Tried paths: ${possiblePaths.join(', ')}`);
+    // Follow the exact pattern from archive/pulumi-ts examples
+    const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+    const outputsContent = fs.readFileSync(outputsPath, 'utf8');
+    return JSON.parse(outputsContent);
   } catch (error) {
     throw new Error(`Failed to load stack outputs: ${error}`);
   }
@@ -62,41 +50,40 @@ const initializeClients = (region?: string) => {
 };
 
 // Extract resource IDs from outputs
-const extractResourceIds = (outputs: any) => {
-  const resourceIds: any = {};
-
-  // Handle both direct outputs and nested outputs
-  const flattenOutputs = (obj: any, prefix = '') => {
-    for (const [key, value] of Object.entries(obj)) {
-      const fullKey = prefix ? `${prefix}.${key}` : key;
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        flattenOutputs(value, fullKey);
-      } else {
-        resourceIds[key] = value;
-      }
-    }
-  };
-
-  flattenOutputs(outputs);
-  return resourceIds;
+const extractResourceIds = (stackOutputs: any) => {
+  // Get the first stack (assuming single stack deployment)
+  const stackName = Object.keys(stackOutputs)[0];
+  if (!stackName) {
+    throw new Error('No stack outputs found');
+  }
+  
+  // Return the outputs for the first stack
+  return stackOutputs[stackName];
 };
 
 describe('TapStack Integration Tests', () => {
-  let outputs: any;
+  let stackOutputs: any;
   let resourceIds: any;
   let clients: any;
   let testRegion: string;
 
   beforeAll(async () => {
     try {
-      outputs = loadStackOutputs();
-      resourceIds = extractResourceIds(outputs);
-      testRegion = outputs.region || process.env.AWS_REGION || 'us-east-1';
+      // Load stack outputs following archive/pulumi-ts pattern
+      stackOutputs = loadStackOutputs();
+      resourceIds = extractResourceIds(stackOutputs);
+      
+      // Get the first stack name for logging
+      const stackName = Object.keys(stackOutputs)[0];
+      console.log(`Stack outputs loaded:`, Object.keys(stackOutputs));
+      
+      testRegion = resourceIds.region || process.env.AWS_REGION || 'us-east-1';
       clients = initializeClients(testRegion);
 
       // Verify AWS credentials
       const identity = await clients.sts.send(new GetCallerIdentityCommand({}));
       console.log(`Running integration tests with AWS Account: ${identity.Account} in region: ${testRegion}`);
+      console.log(`Testing stack: ${stackName}`);
       
       // Log available resource IDs for debugging
       console.log('Available resource IDs:', Object.keys(resourceIds));
