@@ -51,3 +51,9 @@ variable "environment_suffix" {
   type        = string
   default     = ""
 }
+
+variable "enable_config" {
+  description = "Enable AWS Config service (disable if Config already exists in region)"
+  type        = bool
+  default     = false
+}

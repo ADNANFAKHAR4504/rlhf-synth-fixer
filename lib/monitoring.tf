@@ -74,11 +74,11 @@ resource "aws_guardduty_detector" "main" {
   tags = local.common_tags
 }
 
-# Config delivery channel
+# Config delivery channel - conditionally create based on variable
 resource "aws_config_delivery_channel" "main" {
-  count          = 1
+  count          = var.enable_config ? 1 : 0
   name           = "${local.project_prefix}-delivery-channel-${random_id.bucket_suffix.hex}"
-  s3_bucket_name = aws_s3_bucket.config.bucket
+  s3_bucket_name = aws_s3_bucket.config[0].bucket
   s3_key_prefix  = "config"
 
   snapshot_delivery_properties {
@@ -86,10 +86,11 @@ resource "aws_config_delivery_channel" "main" {
   }
 }
 
+# Config recorder - conditionally create based on variable
 resource "aws_config_configuration_recorder" "main" {
-  count    = 1
+  count    = var.enable_config ? 1 : 0
   name     = "${local.project_prefix}-recorder-${random_id.bucket_suffix.hex}"
-  role_arn = aws_iam_role.config.arn
+  role_arn = aws_iam_role.config[0].arn
 
   recording_group {
     all_supported                 = true
@@ -97,16 +98,17 @@ resource "aws_config_configuration_recorder" "main" {
   }
 }
 
-# Config Configuration Recorder Status
+# Config Configuration Recorder Status - conditionally create
 resource "aws_config_configuration_recorder_status" "main" {
-  count      = 1
+  count      = var.enable_config ? 1 : 0
   name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.main]
 }
 
-# S3 Bucket for Config
+# S3 Bucket for Config - conditionally create
 resource "aws_s3_bucket" "config" {
+  count         = var.enable_config ? 1 : 0
   bucket        = "${local.project_prefix}-config-${random_id.bucket_suffix.hex}"
   force_destroy = true
 
@@ -114,7 +116,8 @@ resource "aws_s3_bucket" "config" {
 }
 
 resource "aws_s3_bucket_policy" "config" {
-  bucket = aws_s3_bucket.config.id
+  count  = var.enable_config ? 1 : 0
+  bucket = aws_s3_bucket.config[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -126,7 +129,7 @@ resource "aws_s3_bucket_policy" "config" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.config.arn
+        Resource = aws_s3_bucket.config[0].arn
         Condition = {
           StringEquals = {
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -140,7 +143,7 @@ resource "aws_s3_bucket_policy" "config" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:ListBucket"
-        Resource = aws_s3_bucket.config.arn
+        Resource = aws_s3_bucket.config[0].arn
         Condition = {
           StringEquals = {
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -154,7 +157,7 @@ resource "aws_s3_bucket_policy" "config" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.config.arn}/*"
+        Resource = "${aws_s3_bucket.config[0].arn}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"      = "bucket-owner-full-control"
@@ -166,9 +169,10 @@ resource "aws_s3_bucket_policy" "config" {
   })
 }
 
-# IAM Role for Config
+# IAM Role for Config - conditionally create
 resource "aws_iam_role" "config" {
-  name = "${local.project_prefix}-config-role"
+  count = var.enable_config ? 1 : 0
+  name  = "${local.project_prefix}-config-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -187,7 +191,8 @@ resource "aws_iam_role" "config" {
 }
 
 resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
+  count      = var.enable_config ? 1 : 0
+  role       = aws_iam_role.config[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 

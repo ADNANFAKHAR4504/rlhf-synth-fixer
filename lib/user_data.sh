@@ -1,8 +1,29 @@
 #!/bin/bash
+set -e
+
+# Set up error logging
+exec > >(tee /var/log/user-data.log)
+exec 2>&1
+
+echo "Starting user data script execution at $(date)"
+
+# Update system
 yum update -y
-yum install -y httpd mysql
+
+# Install necessary packages
+yum install -y httpd mysql aws-cli
+
+# Start and enable httpd
 systemctl start httpd
 systemctl enable httpd
+
+# Ensure httpd is running
+sleep 10
+if ! systemctl is-active --quiet httpd; then
+    echo "Apache failed to start, restarting..."
+    systemctl restart httpd
+    sleep 10
+fi
 
 # Install CloudWatch agent
 yum install -y amazon-cloudwatch-agent
@@ -66,3 +87,5 @@ cat <<EOF > /var/www/html/index.html
 EOF
 
 systemctl restart httpd
+
+echo "User data script completed successfully at $(date)"

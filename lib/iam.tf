@@ -64,6 +64,18 @@ resource "aws_iam_role_policy_attachment" "ec2_policy" {
   policy_arn = aws_iam_policy.ec2_policy.arn
 }
 
+# Attach CloudWatch Agent policy
+resource "aws_iam_role_policy_attachment" "ec2_cloudwatch" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+# Attach SSM policy for parameter store access
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.project_prefix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
