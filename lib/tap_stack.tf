@@ -7,8 +7,38 @@ terraform {
 }
 
 #######################
+# Provider Configuration
+#######################
+
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Author      = var.author
+      CreatedDate = var.created_date
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "Terraform"
+    }
+  }
+}
+
+#######################
 # Variables
 #######################
+
+variable "author" {
+  description = "The author of the infrastructure"
+  type        = string
+  default     = "ngwakoleslieelijah"
+}
+
+variable "created_date" {
+  description = "The date when the infrastructure was created"
+  type        = string
+  default     = "2025-08-16"
+}
 
 variable "aws_region" {
   description = "The AWS region where resources will be created"
@@ -139,8 +169,8 @@ locals {
     Environment = var.environment
     Project     = var.project_name
     ManagedBy   = "Terraform"
-    CreatedBy   = "ngwakoleslieelijah"
-    CreatedDate = formatdate("YYYY-MM-DD", timestamp())
+    CreatedBy   = var.author
+    CreatedDate = var.created_date
   }
 
   # Use existing VPC or create new one
@@ -1303,7 +1333,7 @@ resource "aws_cloudwatch_dashboard" "main" {
           ]
           period = 300
           stat   = "Average"
-          region = var.region
+          region = var.aws_region
           title  = "System Metrics"
         }
       }
