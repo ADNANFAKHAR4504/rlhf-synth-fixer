@@ -13,447 +13,416 @@ Resources:
 - 2x public dual-stack subnets in different AZs
 - IGW + public route table with IPv4/IPv6 default routes
 - IAM role + instance profile for EC2 (CloudWatch policy)
-  load_balancer_arn=alb.arn,
-  port="80",
-  protocol="HTTP",
-  default_actions=[
-    aws.lb.ListenerDefaultActionArgs(
-      type="forward",
-      target_group_arn=target_group.arn
-    )
-  ],
-  opts=pulumi.ResourceOptions(provider=aws_provider)
+- Security groups (ALB open to world on :80; EC2 :80 only from ALB)
+- EC2 t3.micro with Amazon Linux 2 + Nginx via user-data
+- ALB (dualstack) + HTTP listener + target group
+- CloudWatch dashboard for ALB + EC2 metrics
+
+Exports:
+- alb_dns_name, vpc_id, subnet_ids, instance info, dashboard URL
+
+Notes:
+- Uses Pulumi config where possible; safe defaults provided.
+- Optionally adopts a legacy VPC named "web-vpc" using its ID to stop Pulumi
+  from attempting to delete it (handles DependencyViolation cleanup errors).
+  Configure via config key `legacyVpcId` or env `LEGACY_VPC_ID`. Default is
+  the ID seen in prior logs.
+"""
+
+import os
+import ipaddress
+import pulumi
+import pulumi_aws as aws
+from pulumi import Config, Output, export
+
+
+# ----------------------------------------------------------------------------
+# Configuration
+# ----------------------------------------------------------------------------
+config = Config()
+
+# Region (default to us-east-1, but allow overriding via Pulumi config or env)
+aws_region = (
+    config.get("aws:region")
+    or os.getenv("AWS_REGION")
+    or os.getenv("AWS_DEFAULT_REGION")
+    or "us-east-1"
 )
 
-dashboard_body = alb.arn_suffix.apply(lambda arn_suffix: json.dumps({
-  "widgets": [
-    {
-      "type": "metric",
-      "x": 0,
-      "y": 0,
-      "width": 12,
-      "height": 6,
-      "properties": {
-        "metrics": [
-          ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", arn_suffix]
-        ],
-        "view": "timeSeries",
-        "region": AWS_REGION,
-        "title": "ALB Request Count",
-        "period": 300
-      }
-    }
-  ]
-}))
+# Project name (distinct from prior runs)
+project_name = config.get("projectName") or "tap-ds-demo"
+environment = config.get("environment") or "dev"
 
-cloudwatch_dashboard = aws.cloudwatch.Dashboard(
-  get_resource_name("monitoring-dashboard"),
-  dashboard_name=get_resource_name("monitoring-dashboard"),
-  dashboard_body=dashboard_body,
-  opts=pulumi.ResourceOptions(provider=aws_provider)
+# Optional legacy VPC adoption to prevent deletions causing exit code 255
+# This re-introduces the old resource (name: web-vpc) so Pulumi keeps it.
+legacy_vpc_id = (
+    config.get("legacyVpcId")
+    or os.getenv("LEGACY_VPC_ID")
+    or "vpc-07ef2128d4615de32"  # from previous logs; override via config/env if needed
 )
 
-unhealthy_targets_alarm = aws.cloudwatch.MetricAlarm(
-  get_resource_name("unhealthy-targets-alarm"),
-  name=get_resource_name("unhealthy-targets-alarm"),
-  metric_name="UnHealthyHostCount",
-  namespace="AWS/ApplicationELB",
-  statistic="Average",
-  period=300,
-  evaluation_periods=2,
-  threshold=1,
-  comparison_operator="GreaterThanOrEqualToThreshold",
-  dimensions={"TargetGroup": target_group.arn_suffix},
-  tags={
-    "Name": get_resource_name("unhealthy-targets-alarm"),
-    "Environment": ENVIRONMENT,
-    "Project": PROJECT_NAME
-  },
-  opts=pulumi.ResourceOptions(provider=aws_provider)
-)
 
-high_response_time_alarm = aws.cloudwatch.MetricAlarm(
-  get_resource_name("high-response-time-alarm"),
-  name=get_resource_name("high-response-time-alarm"),
-  metric_name="TargetResponseTime",
-  namespace="AWS/ApplicationELB",
-  statistic="Average",
-  period=300,
-  evaluation_periods=2,
-  threshold=1.0,
-  comparison_operator="GreaterThanThreshold",
-  dimensions={"LoadBalancer": alb.arn_suffix},
-  tags={
-    "Name": get_resource_name("high-response-time-alarm"),
-    "Environment": ENVIRONMENT,
-    "Project": PROJECT_NAME
-  },
-  opts=pulumi.ResourceOptions(provider=aws_provider)
-)
+def name(resource: str) -> str:
+    return f"{project_name}-{environment}-{resource}"
 
-pulumi.export("vpc_id", vpc.id)
-pulumi.export("vpc_ipv4_cidr", vpc.cidr_block)
-pulumi.export("vpc_ipv6_cidr", vpc.ipv6_cidr_block)
-pulumi.export("public_subnet_ids", [subnet.id for subnet in public_subnets])
-pulumi.export("availability_zones", [subnet.availability_zone for subnet in public_subnets])
-pulumi.export("ec2_instance_ids", [instance.id for instance in ec2_instances])
-pulumi.export("ec2_public_ips", [instance.public_ip for instance in ec2_instances])
-pulumi.export("ec2_ipv6_addresses", [
-  instance.ipv6_addresses.apply(lambda addrs: addrs if addrs else []) 
-  for instance in ec2_instances
-])
-pulumi.export("alb_arn", alb.arn)
-pulumi.export("alb_dns_name", alb.dns_name)
-pulumi.export("alb_zone_id", alb.zone_id)
-pulumi.export("alb_security_group_id", alb_security_group.id)
-pulumi.export("target_group_arn", target_group.arn)
-pulumi.export("cloudwatch_dashboard_url", 
-  pulumi.Output.concat(
-    "https://", AWS_REGION, ".console.aws.amazon.com/cloudwatch/home?region=",
-    AWS_REGION, "#dashboards:name=", cloudwatch_dashboard.dashboard_name
-  )
-)
-pulumi.export("application_url", pulumi.Output.concat("http://", alb.dns_name))
-pulumi.export("deployment_summary", {
-  "environment": ENVIRONMENT,
-  "region": AWS_REGION,
-  "instance_type": INSTANCE_TYPE,
-  "project_name": PROJECT_NAME,
-  "dual_stack_enabled": vpc.ipv6_cidr_block.apply(lambda cidr: cidr is not None and cidr != ""),
-  "high_availability": True,
-  "monitoring_enabled": True,
-  "security_hardened": True
-})
-pulumi.export("deployment_instructions", {
-  "step_1": "Run 'pulumi up' to deploy the infrastructure",
-  "step_2": "Wait for deployment to complete (typically 5-10 minutes)",
-  "step_3": "Access the application using the 'application_url' output",
-  "step_4": "Monitor the infrastructure using the CloudWatch dashboard",
-  "verification": {
-    "web_access": "Open the application_url in a web browser",
-    "ipv6_test": vpc.ipv6_cidr_block.apply(
-      lambda cidr: "Use 'curl -6' with the ALB DNS name to test IPv6 connectivity" 
-      if cidr else "IPv6 not available - existing VPC lacks IPv6 CIDR block"
-    ),
-    "health_check": "Check target group health in AWS Console",
-    "monitoring": "View metrics in the CloudWatch dashboard"
-  }
-})
 
-# Infrastructure deployment summary
-pulumi.export("deployment_info", {
-  "environment": ENVIRONMENT,
-  "region": AWS_REGION,
-  "project": PROJECT_NAME,
-  "instance_type": INSTANCE_TYPE,
-  "strategy": "independent_resources_with_fallback",
-  "deployment_id": DEPLOYMENT_ID
-})
+# Provider pinned to selected region (unique name to avoid URN collision)
+provider = aws.Provider(f"aws-provider-{aws_region}-{environment}", region=aws_region)
 
-# Protect against old VPC deletion issues - ignore legacy VPC cleanup failures
+
+# ----------------------------------------------------------------------------
+# Adopt legacy VPC (optional) to stop Pulumi from deleting prior 'web-vpc'
+# ----------------------------------------------------------------------------
 try:
-    # This handles old VPC resources that might be in Pulumi state
-    # but are not part of current deployment - prevents exit code 255
-    if hasattr(pulumi, 'ResourceOptions'):
-        legacy_protection = pulumi.ResourceOptions(
+    legacy = aws.ec2.get_vpc(id=legacy_vpc_id, opts=pulumi.InvokeOptions(provider=provider))
+    legacy_vpc = aws.ec2.Vpc(
+        "web-vpc",
+        cidr_block=legacy.cidr_block,
+        enable_dns_support=True,
+        enable_dns_hostnames=True,
+        instance_tenancy="default",
+        tags={"Name": "web-vpc-adopted", "Adopted": "true"},
+        opts=pulumi.ResourceOptions(
+            provider=provider,
+            import_=legacy_vpc_id,
             protect=True,
             retain_on_delete=True,
             ignore_changes=["*"]
-        )
-except Exception as e:
-    pass  # Silently handle any legacy resource protection errors
+        ),
+    )
+except Exception:
+    pass
 
-# Add independent deployment validation feedback
-pulumi.export("vpc_optimization", {
-  "primary_strategy": "CREATE_COMPLETELY_NEW_RESOURCES",  # Main approach attempted
-  "fallback_strategy_activated": "REUSE_EXISTING_VPC_DUE_TO_QUOTA",  # Quota exceeded
-  "independence_level": "PARTIAL",  # VPC reused, but other resources new
-  "quota_status": "VPC_LIMIT_EXCEEDED",  # AWS VPC quota reached
-  "new_resources_created": True,  # Fresh subnets, route tables, IGW
-  "dependency_protection": True,  # Protects against deletion conflicts
-  "cleanup_protection": True,  # Prevents accidental resource deletions
-  "quota_management": True,  # Smart quota handling activated
-  "conflict_avoidance": True,  # Avoids CIDR and resource conflicts
-  "error_handling": True,  # Graceful error management worked
-  "legacy_vpc_protection": True,  # Protects against old VPC deletion
-  "deployment_time": DEPLOYMENT_ID,
-  "deployment_status": "SUCCESSFUL_WITH_QUOTA_FALLBACK",
-  "resource_independence": "PARTIAL_NEW_RESOURCES_VPC_REUSED"
-})
 
-# Final deployment completion handler to prevent exit code 255 from legacy VPC issues
-# This transformation completely ignores legacy VPC resources to prevent deletion attempts
-def vpc_protection_transform(args):
-    """Completely block legacy VPC resources to prevent deletion conflicts"""
-    try:
-        resource_name = args.get("name", "")
-        resource_type = args.get("type", "")
-        resource_props = args.get("props", {})
-        
-        # AGGRESSIVELY BLOCK the problematic legacy VPC and related resources
-        blocking_conditions = [
-            resource_name == "web-vpc",
-            "web-vpc" in resource_name,
-            resource_name.startswith("web-"),
-            "vpc-07ef2128d4615de32" in str(resource_props),
-            (resource_type == "aws:ec2/vpc:Vpc" and resource_name in ["web-vpc", "vpc-07ef2128d4615de32"])
+# ----------------------------------------------------------------------------
+# Networking: VPC + Subnets + IGW + Routes (dual-stack)
+# ----------------------------------------------------------------------------
+vpc = aws.ec2.Vpc(
+    name("vpc"),
+    cidr_block="10.0.0.0/16",
+    assign_generated_ipv6_cidr_block=True,
+    enable_dns_support=True,
+    enable_dns_hostnames=True,
+    tags={"Name": name("vpc"), "Project": project_name, "Env": environment},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+igw = aws.ec2.InternetGateway(
+    name("igw"),
+    vpc_id=vpc.id,
+    tags={"Name": name("igw")},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+rt = aws.ec2.RouteTable(
+    name("public-rt"),
+    vpc_id=vpc.id,
+    tags={"Name": name("public-rt"), "Tier": "public"},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+route_v4 = aws.ec2.Route(
+    name("ipv4-route"),
+    route_table_id=rt.id,
+    destination_cidr_block="0.0.0.0/0",
+    gateway_id=igw.id,
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+route_v6 = aws.ec2.Route(
+    name("ipv6-route"),
+    route_table_id=rt.id,
+    destination_ipv6_cidr_block="::/0",
+    gateway_id=igw.id,
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+# Pick two AZs
+azs = aws.get_availability_zones(state="available", opts=pulumi.InvokeOptions(provider=provider)).names[:2]
+
+
+def ipv6_subnet_from_vpc_cidr(vpc_ipv6_cidr: Output[str], idx: int) -> Output[str]:
+    """Return the idx-th /64 subnet from the VPC's /56 IPv6 CIDR using ipaddress."""
+    def compute(cidr: str) -> str:
+        net = ipaddress.IPv6Network(cidr)
+        subnets = list(net.subnets(new_prefix=64))
+        return str(subnets[idx])
+
+    return vpc_ipv6_cidr.apply(compute)
+
+
+subnet1 = aws.ec2.Subnet(
+    name("public-subnet-1"),
+    vpc_id=vpc.id,
+    availability_zone=azs[0],
+    cidr_block="10.0.1.0/24",
+    ipv6_cidr_block=ipv6_subnet_from_vpc_cidr(vpc.ipv6_cidr_block, 0),
+    map_public_ip_on_launch=True,
+    assign_ipv6_address_on_creation=True,
+    tags={"Name": name("public-1"), "Tier": "public"},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+subnet2 = aws.ec2.Subnet(
+    name("public-subnet-2"),
+    vpc_id=vpc.id,
+    availability_zone=azs[1],
+    cidr_block="10.0.2.0/24",
+    ipv6_cidr_block=ipv6_subnet_from_vpc_cidr(vpc.ipv6_cidr_block, 1),
+    map_public_ip_on_launch=True,
+    assign_ipv6_address_on_creation=True,
+    tags={"Name": name("public-2"), "Tier": "public"},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+aws.ec2.RouteTableAssociation(
+    name("public-rta-1"),
+    subnet_id=subnet1.id,
+    route_table_id=rt.id,
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+aws.ec2.RouteTableAssociation(
+    name("public-rta-2"),
+    subnet_id=subnet2.id,
+    route_table_id=rt.id,
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+
+# ----------------------------------------------------------------------------
+# Security Groups
+# ----------------------------------------------------------------------------
+alb_sg = aws.ec2.SecurityGroup(
+    name("alb-sg"),
+    vpc_id=vpc.id,
+    description="ALB SG allowing :80 from anywhere (IPv4/IPv6)",
+    ingress=[
+        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=80, to_port=80, cidr_blocks=["0.0.0.0/0"]),
+        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=80, to_port=80, ipv6_cidr_blocks=["::/0"]),
+    ],
+    egress=[
+        aws.ec2.SecurityGroupEgressArgs(protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]),
+        aws.ec2.SecurityGroupEgressArgs(protocol="-1", from_port=0, to_port=0, ipv6_cidr_blocks=["::/0"]),
+    ],
+    tags={"Name": name("alb-sg")},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+ec2_sg = aws.ec2.SecurityGroup(
+    name("ec2-sg"),
+    vpc_id=vpc.id,
+    description="EC2 SG allowing :80 only from ALB SG",
+    ingress=[aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=80, to_port=80, security_groups=[alb_sg.id])],
+    egress=[
+        aws.ec2.SecurityGroupEgressArgs(protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]),
+        aws.ec2.SecurityGroupEgressArgs(protocol="-1", from_port=0, to_port=0, ipv6_cidr_blocks=["::/0"]),
+    ],
+    tags={"Name": name("ec2-sg")},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+
+# ----------------------------------------------------------------------------
+# IAM Role/Instance Profile (least privilege for monitoring)
+# ----------------------------------------------------------------------------
+ec2_role = aws.iam.Role(
+    name("ec2-role"),
+    assume_role_policy='''{
+      "Version": "2012-10-17",
+      "Statement": [{
+        "Action": "sts:AssumeRole",
+        "Effect": "Allow",
+        "Principal": {"Service": "ec2.amazonaws.com"}
+      }]
+    }''',
+    tags={"Name": name("ec2-role")},
+)
+
+aws.iam.RolePolicyAttachment(
+    name("ec2-cloudwatch-policy"),
+    role=ec2_role.name,
+    policy_arn="arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+)
+
+ec2_profile = aws.iam.InstanceProfile(name("ec2-instance-profile"), role=ec2_role.name)
+
+
+# ----------------------------------------------------------------------------
+# EC2 Instance (Amazon Linux 2) with Nginx
+# ----------------------------------------------------------------------------
+ami = aws.ec2.get_ami(
+    most_recent=True,
+    owners=["amazon"],
+    filters=[
+        aws.ec2.GetAmiFilterArgs(name="name", values=["amzn2-ami-hvm-*-x86_64-gp2"]),
+        aws.ec2.GetAmiFilterArgs(name="state", values=["available"]),
+    ],
+    opts=pulumi.InvokeOptions(provider=provider),
+)
+
+user_data = """#!/bin/bash
+set -eux
+yum update -y
+yum install -y nginx
+systemctl enable nginx
+systemctl start nginx
+cat > /usr/share/nginx/html/index.html << 'EOF'
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Dual-Stack</title></head>
+<body style="font-family:Arial;margin:40px;">
+<h1>Dual-Stack Web App</h1>
+<p>Server: Nginx on Amazon Linux 2</p>
+<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+<p>AZ: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+<p>IPv4: $(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 || echo n/a)</p>
+<p>IPv6: $(curl -s http://169.254.169.254/latest/meta-data/ipv6 || echo n/a)</p>
+</body></html>
+EOF
+"""
+
+instance = aws.ec2.Instance(
+    name("web-server"),
+    instance_type="t3.micro",
+    ami=ami.id,
+    subnet_id=subnet1.id,
+    vpc_security_group_ids=[ec2_sg.id],
+    iam_instance_profile=ec2_profile.name,
+    user_data=user_data,
+    associate_public_ip_address=True,
+    ipv6_address_count=1,
+    monitoring=True,
+    tags={"Name": name("web-server"), "Role": "web"},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+
+# ----------------------------------------------------------------------------
+# Load Balancer (dualstack) + Target Group + Listener
+# ----------------------------------------------------------------------------
+tg = aws.lb.TargetGroup(
+    name("web-tg"),
+    port=80,
+    protocol="HTTP",
+    target_type="instance",
+    vpc_id=vpc.id,
+    health_check=aws.lb.TargetGroupHealthCheckArgs(enabled=True, path="/", matcher="200", interval=30, timeout=5),
+    tags={"Name": name("web-tg")},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+aws.lb.TargetGroupAttachment(
+    name("web-tg-attachment-1"),
+    target_group_arn=tg.arn,
+    target_id=instance.id,
+    port=80,
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+alb = aws.lb.LoadBalancer(
+    name("web-alb"),
+    load_balancer_type="application",
+    internal=False,
+    security_groups=[alb_sg.id],
+    subnets=[subnet1.id, subnet2.id],
+    ip_address_type="dualstack",
+    enable_deletion_protection=False,
+    idle_timeout=60,
+    tags={"Name": name("web-alb")},
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+aws.lb.Listener(
+    name("web-listener"),
+    load_balancer_arn=alb.arn,
+    port=80,
+    protocol="HTTP",
+    default_actions=[aws.lb.ListenerDefaultActionArgs(type="forward", target_group_arn=tg.arn)],
+    opts=pulumi.ResourceOptions(provider=provider),
+)
+
+
+# ----------------------------------------------------------------------------
+# CloudWatch Dashboard (ALB + EC2 metrics)
+# ----------------------------------------------------------------------------
+dashboard_body = Output.all(alb.arn_suffix, tg.arn_suffix).apply(
+    lambda args: f"""{{
+  "widgets": [
+    {{
+      "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
+      "properties": {{
+        "view": "timeSeries", "stacked": false, "region": "{aws_region}",
+        "title": "ALB Requests & Status Codes",
+        "metrics": [
+          ["AWS/ApplicationELB","RequestCount","LoadBalancer","{args[0]}"],
+          ["AWS/ApplicationELB","HTTPCode_Target_2XX_Count","LoadBalancer","{args[0]}"],
+          ["AWS/ApplicationELB","HTTPCode_Target_4XX_Count","LoadBalancer","{args[0]}"],
+          ["AWS/ApplicationELB","HTTPCode_Target_5XX_Count","LoadBalancer","{args[0]}"],
+          ["AWS/ApplicationELB","TargetResponseTime","LoadBalancer","{args[0]}"]
         ]
-        
-        if any(blocking_conditions):
-            print(f"� BLOCKING legacy resource: {resource_name} ({resource_type}) to prevent exit code 255")
-            # Completely prevent this resource from being processed
-            raise pulumi.ResourceTransformationError(f"Blocked legacy resource: {resource_name}")
-        
-        # For all other VPC resources, apply minimal protection
-        if resource_type == "aws:ec2/vpc:Vpc":
-            opts = args.get("opts") or pulumi.ResourceOptions()
-            protected_opts = pulumi.ResourceOptions(
-                retain_on_delete=True,  # Always retain VPCs to prevent deletion errors
-                protect=False,  # Don't protect new VPCs (allow updates)
-                ignore_changes=[],  # Allow changes to new VPCs
-                delete_before_replace=False  # Prevent deletion conflicts
-            )
-            return {
-                "resource": args["resource"],
-                "type": args["type"], 
-                "name": args["name"],
-                "props": args["props"],
-                "opts": protected_opts
-            }
-        
-        return args
-    except pulumi.ResourceTransformationError:
-        # Re-raise transformation errors to block the resource
-        raise
-    except Exception as e:
-        # For other errors, block the resource to be safe
-        print(f"🛡️  Blocking resource due to transformation error: {e}")
-        raise pulumi.ResourceTransformationError(f"Blocked due to error: {e}")
+      }}
+    }},
+    {{
+      "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+      "properties": {{
+        "view": "timeSeries", "stacked": false, "region": "{aws_region}",
+        "title": "Target Health",
+        "metrics": [
+          ["AWS/ApplicationELB","HealthyHostCount","TargetGroup","{args[1]}"]
+        ]
+      }}
+    }},
+    {{
+      "type": "metric", "x": 0, "y": 12, "width": 12, "height": 6,
+      "properties": {{
+        "view": "timeSeries", "stacked": false, "region": "{aws_region}",
+        "title": "EC2 CPU & Network",
+        "metrics": [
+          ["AWS/EC2","CPUUtilization","InstanceId","{instance.id}"] ,
+          ["AWS/EC2","NetworkIn","InstanceId","{instance.id}"],
+          ["AWS/EC2","NetworkOut","InstanceId","{instance.id}"]
+        ]
+      }}
+    }}
+  ]
+}}"""
+)
 
-# Register the VPC protection transformation
-pulumi.runtime.register_stack_transformation(vpc_protection_transform)
-
-# Add deployment success indicator
-pulumi.export("deployment_exit_code", "0")
-pulumi.export("legacy_vpc_issue_resolution", "HANDLED_VIA_PROTECTION_MECHANISM")
-pulumi.export("deployment_status", "SUCCESS")
-pulumi.export("infrastructure_ready", True)
-
-# Create a success marker resource that always succeeds
-success_marker = pulumi.Config().get("success_marker") or "deployment_successful"
-pulumi.export("success_marker", success_marker)
-
-# CI/CD Pipeline compatibility exports
-pulumi.export("pipeline_status", {
-  "deployment_successful": True,
-  "application_accessible": True,
-  "infrastructure_operational": True,
-  "vpc_deletion_issue": "EXPECTED_AND_HANDLED",
-  "recommended_action": "CHECK_APPLICATION_URL_FOR_SUCCESS_VERIFICATION"
-})
-
-# Final exit code override for CI/CD compatibility
-def force_success_exit():
-    """Aggressively force exit code 0 for CI/CD pipeline compatibility"""
-    try:
-        print("🎯 Deployment completed - forcing exit code 0 for CI/CD compatibility")
-        print("✅ Infrastructure deployment was successful despite any VPC cleanup issues")
-        
-        # Flush all outputs
-        sys.stdout.flush()
-        sys.stderr.flush()
-        
-        # Override sys.exit to always return 0
-        original_exit = sys.exit
-        def force_zero_exit(code=0):
-            original_exit(0)  # Always exit with 0
-        sys.exit = force_zero_exit
-        
-        # Set up signal handler for any termination signals
-        def success_signal_handler(signum, frame):
-            os._exit(0)
-        
-        signal.signal(signal.SIGTERM, success_signal_handler)
-        signal.signal(signal.SIGINT, success_signal_handler)
-        
-        # Use os._exit to completely bypass any error handling that might set exit code 255
-        os._exit(0)
-        
-    except Exception:
-        # Ultimate fallback - force exit at OS level
-        os._exit(0)
-
-# Consolidated monitoring and exit protection
-def deployment_monitor():
-    """Single comprehensive monitoring function for deployment success"""
-    time.sleep(2)  # Brief delay for normal exit
-    print("🔄 Deployment monitor: Ensuring CI/CD compatibility...")
-    
-    def monitor_task():
-        time.sleep(5)  # Wait for deployment completion
-        print("🚀 Infrastructure deployment process completed successfully")
-        print("✅ All resources processed - deployment ready for CI/CD pipeline")
-        
-        # Maximum deployment time protection
-        time.sleep(1800)  # 30 minutes max
-        print("⏰ Maximum deployment time reached - forcing success")
-        os._exit(0)
-    
-    threading.Thread(target=monitor_task, daemon=True).start()
-
-# Single comprehensive exit handler
-def final_exit_handler(signum=None, frame=None):
-    """Comprehensive exit handler ensuring exit code 0"""
-    print("🎯 Final exit handler triggered - ensuring exit code 0")
-    os._exit(0)
-
-# Module-level VPC deletion protection
-original_excepthook = sys.excepthook
-
-def vpc_deletion_excepthook(exc_type, exc_value, exc_traceback):
-    """Final protection against VPC deletion errors"""
-    error_msg = str(exc_value).lower() if exc_value else ""
-    
-    vpc_error_indicators = [
-        "dependencyviolation", "vpc-07ef2128d4615de32", "cannot be deleted",
-        "web-vpc", "deleting ec2 vpc", "has dependencies"
-    ]
-    
-    if any(indicator in error_msg for indicator in vpc_error_indicators):
-        print("🛡️  FINAL PROTECTION: Caught VPC deletion error at module level")
-        print("✅ Infrastructure deployment was successful - forcing exit code 0")
-        os._exit(0)
-    else:
-        original_excepthook(exc_type, exc_value, exc_traceback)
-
-# Install all protection mechanisms
-sys.excepthook = vpc_deletion_excepthook
-atexit.register(force_success_exit)
-deployment_monitor()
-
-# Install signal handlers
-try:
-    signal.signal(signal.SIGTERM, final_exit_handler)
-    signal.signal(signal.SIGINT, final_exit_handler)
-except:
-    pass
-
-# Final success messages and timer
-print("🚀 Infrastructure deployment process completed successfully")
-print("✅ All resources processed - deployment ready for CI/CD pipeline")
-
-def final_success_timer():
-    time.sleep(1)  # Short delay for export processing
-    final_exit_handler()
-
-threading.Thread(target=final_success_timer, daemon=True).start()
-
-# Enhanced DNS propagation and health validation
-def validate_deployment_success():
-    """Validate deployment success and handle DNS propagation delays"""
-    try:
-        print("🔍 Performing final deployment validation...")
-        
-        # Add ALB DNS validation with retry mechanism
-        alb_dns = alb.dns_name
-        
-        def check_alb_readiness():
-            try:
-                import socket
-                # Check if ALB DNS resolves (basic connectivity test)
-                socket.gethostbyname(alb_dns.apply(lambda dns: dns if isinstance(dns, str) else str(dns)))
-                print("✅ ALB DNS resolution successful")
-                return True
-            except:
-                print("⏳ ALB DNS propagation in progress...")
-                return False
-        
-        # Add deployment success markers
-        pulumi.export("deployment_validation", {
-            "status": "SUCCESSFUL",
-            "timestamp": str(int(time.time())),
-            "infrastructure_ready": True,
-            "alb_provisioned": True,
-            "dns_propagation": "IN_PROGRESS_OR_READY",
-            "expected_ready_time": "2-5 minutes after deployment"
-        })
-        
-        # Force successful completion regardless of DNS timing
-        pulumi.export("success_marker", "deployment_successful")
-        pulumi.export("force_success_exit", True)
-        
-        print("🎯 Deployment completed - forcing exit code 0 for CI/CD compatibility")
-        print("✅ Infrastructure deployment was successful despite any VPC cleanup issues")
-        
-    except Exception as e:
-        # Even validation errors should not fail the deployment
-        print(f"⚠️  Validation completed with minor issues: {e}")
-        print("✅ Infrastructure is operational - deployment considered successful")
-        pulumi.export("validation_note", "Deployment successful with minor validation issues")
-
-# Run validation
-validate_deployment_success()
-
-# Final protection against any exit issues
-try:
-    import atexit
-    def ultimate_success_exit():
-        print("🔒 ULTIMATE PROTECTION: Ensuring successful exit")
-        os._exit(0)
-    atexit.register(ultimate_success_exit)
-except:
-    pass
-
-# FINAL SAFETY NET - Handle any remaining exit scenarios
-def setup_final_safety_net():
-    """Last line of defense against non-zero exit codes"""
-    try:
-        # Force success in all scenarios
-        import signal
-        import threading
-        import time
-        
-        def emergency_exit_handler(signum=None, frame=None):
-            print("🚨 Emergency exit handler activated")
-            print("✅ Infrastructure deployment was successful")
-            print("🎯 Forcing exit code 0 for CI/CD compatibility")
-            os._exit(0)
-        
-        # Handle termination signals
-        try:
-            signal.signal(signal.SIGTERM, emergency_exit_handler)
-            signal.signal(signal.SIGINT, emergency_exit_handler)
-        except:
-            pass
-        
-        # Set up a final timer to force success after a delay
-        def final_success_timer():
-            time.sleep(2)  # Give time for normal completion
-            print("⏰ Final timer: Ensuring deployment success")
-            print("✅ Infrastructure is operational - deployment successful")
-            os._exit(0)
-        
-        # Start background timer
-        timer_thread = threading.Thread(target=final_success_timer, daemon=True)
-        timer_thread.start()
-        
-        # Set environment variables for success
-        os.environ['DEPLOYMENT_FORCED_SUCCESS'] = 'true'
-        os.environ['VPC_CLEANUP_BYPASS'] = 'true'
-        
-        print("🛡️ Final safety net installed - deployment protection active")
-        
-    except Exception as e:
-        # Even safety net setup failures should result in success
-        print(f"⚠️ Safety net setup completed with warnings: {e}")
-        print("✅ Infrastructure deployment is successful regardless")
-
-# Install final safety net
-setup_final_safety_net()
-
-# Print final success message
-print("🎉 DEPLOYMENT COMPLETE: Infrastructure is operational and ready!")
-print("✅ All protection mechanisms active - exit code will be 0")
-print("🚀 Application accessible via ALB DNS when DNS propagation completes")
+aws.cloudwatch.Dashboard(
+    name("dashboard"),
+    dashboard_name=f"{project_name}-{environment}-dashboard",
+    dashboard_body=dashboard_body,
+    opts=pulumi.ResourceOptions(provider=provider),
+)
 
 
+# ----------------------------------------------------------------------------
+# Outputs
+# ----------------------------------------------------------------------------
+export("region", aws_region)
+export("project", project_name)
+export("vpc_id", vpc.id)
+export("vpc_ipv6_cidr_block", vpc.ipv6_cidr_block)
+export("public_subnet_1_id", subnet1.id)
+export("public_subnet_2_id", subnet2.id)
+export("ec2_instance_id", instance.id)
+export("ec2_instance_public_ip", instance.public_ip)
+export("ec2_instance_ipv6_addresses", instance.ipv6_addresses)
+export("alb_dns_name", alb.dns_name)
+export("alb_arn", alb.arn)
+export("target_group_arn", tg.arn)
+export(
+    "dashboard_url",
+    Output.concat(
+        "https://", aws_region, ".console.aws.amazon.com/cloudwatch/home?region=", aws_region,
+        "#dashboards:name=", f"{project_name}-{environment}-dashboard"
+    ),
+)
+export(
+    "verification_instructions",
+    Output.concat(
+        "Open: http://", alb.dns_name, "\n",
+        "Test IPv4: curl -4 http://", alb.dns_name, "\n",
+        "Test IPv6 (if your network supports it): curl -6 http://", alb.dns_name,
+    ),
+)
