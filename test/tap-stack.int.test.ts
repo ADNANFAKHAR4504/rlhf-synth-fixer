@@ -318,8 +318,8 @@ describe('Secure Infrastructure Integration Tests', () => {
       // Verify all outputs are present and follow naming convention
       expect(outputs.SecureDataBucketName).toContain('secure-data');
       expect(outputs.LogsBucketName).toContain('logs');
-      expect(outputs.EC2InstanceRoleArn).toContain('ec2-role');
-      expect(outputs.ApplicationServiceRoleArn).toContain('app-service-role');
+      expect(outputs.EC2InstanceRoleArn).toContain('EC2InstanceRole');
+      expect(outputs.ApplicationServiceRoleArn).toContain('ApplicationServiceRole');
       
       // Verify environment suffix is consistently applied
       const suffix = outputs.EnvironmentSuffix;
@@ -350,9 +350,9 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(outputs.LogsBucketName.toLowerCase()).not.toContain('password');
       expect(outputs.LogsBucketName.toLowerCase()).not.toContain('secret');
       
-      // Verify IAM roles follow least privilege naming
-      expect(outputs.EC2InstanceRoleArn).toContain('ec2-role');
-      expect(outputs.ApplicationServiceRoleArn).toContain('app-service-role');
+      // Verify IAM roles follow CloudFormation auto-generated naming
+      expect(outputs.EC2InstanceRoleArn).toContain('EC2InstanceRole');
+      expect(outputs.ApplicationServiceRoleArn).toContain('ApplicationServiceRole');
     });
   });
 
