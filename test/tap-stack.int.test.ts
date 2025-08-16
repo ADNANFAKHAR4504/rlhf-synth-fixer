@@ -63,7 +63,25 @@ const loadStackOutputs = () => {
 };
 
 const initializeClients = (region?: string) => {
-  const defaultRegion = region || 'ap-south-1';
+  // Check for AWS_REGION environment variable or region from lib/AWS_REGION file, default to us-east-1
+  let configuredRegion = region || process.env.AWS_REGION || 'us-east-1';
+  
+  // Check for lib/AWS_REGION file as per QA trainer instructions
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const regionFile = path.join(__dirname, '../lib/AWS_REGION');
+    if (fs.existsSync(regionFile)) {
+      const fileRegion = fs.readFileSync(regionFile, 'utf8').trim();
+      if (fileRegion) {
+        configuredRegion = fileRegion;
+      }
+    }
+  } catch (error) {
+    // Ignore file read errors, use default
+  }
+  
+  const defaultRegion = configuredRegion;
 
   return {
     ec2: new EC2Client({ region: defaultRegion }),
