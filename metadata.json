@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "platform": "tf",
   "language": "hcl",
   "complexity": "hard",
@@ -6,4 +7,13 @@
   "po_id": "291312",
   "team": "1",
   "startedAt": "2025-08-15T11:23:36.834Z"
+=======
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291307",
+  "team": "1",
+  "startedAt": "2025-08-14T17:41:15.022Z"
+>>>>>>> d9c22907f0dee3f6a2dcdecdec2393589bfbe3a4
 }
