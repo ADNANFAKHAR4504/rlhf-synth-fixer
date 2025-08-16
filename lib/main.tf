@@ -1,3 +1,9 @@
+# Local values for consistent resource naming
+locals {
+  deployment_suffix = var.deployment_id != null ? var.deployment_id : random_id.resource_suffix.hex
+  base_name         = "${var.project_name}-${var.environment_suffix}"
+}
+
 # Data source for latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux" {
   most_recent = true
@@ -22,14 +28,23 @@ resource "aws_s3_bucket" "main_bucket" {
   bucket = "${lower(var.project_name)}-${var.environment_suffix}-s3bucket-${random_id.bucket_suffix.hex}"
 
   tags = {
-    Name        = "${var.project_name}-${var.environment_suffix}-s3bucket"
+    Name        = "${local.base_name}-s3bucket"
     Environment = var.environment
     Purpose     = "CloudFront Origin"
   }
 }
 
+# Random suffix for unique resource naming
 resource "random_id" "bucket_suffix" {
   byte_length = 4
+}
+
+resource "random_id" "resource_suffix" {
+  byte_length = 3
+  keepers = {
+    # Generate new ID when deployment timestamp changes
+    timestamp = timestamp()
+  }
 }
 
 # S3 Bucket Server-Side Encryption
@@ -93,10 +108,10 @@ resource "aws_s3_bucket_policy" "main_bucket_policy" {
   ]
 }
 
-# CloudFront Origin Access Control
+# CloudFront Origin Access Control with unique suffix
 resource "aws_cloudfront_origin_access_control" "main_oac" {
-  name                              = "${var.project_name}-${var.environment_suffix}-oac"
-  description                       = "OAC for ${var.project_name}-${var.environment_suffix} S3 bucket"
+  name                              = "${local.base_name}-oac-${local.deployment_suffix}"
+  description                       = "OAC for ${local.base_name} S3 bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
@@ -147,14 +162,14 @@ resource "aws_cloudfront_distribution" "main_distribution" {
   }
 
   tags = {
-    Name        = "${var.project_name}-${var.environment_suffix}-distribution"
+    Name        = "${local.base_name}-distribution"
     Environment = var.environment
   }
 }
 
-# IAM Role for EC2 instance
+# IAM Role for EC2 instance with unique suffix
 resource "aws_iam_role" "ec2_s3_role" {
-  name = "${var.project_name}-${var.environment_suffix}-ec2-s3-role"
+  name = "${local.base_name}-ec2-s3-role-${local.deployment_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -170,14 +185,14 @@ resource "aws_iam_role" "ec2_s3_role" {
   })
 
   tags = {
-    Name        = "${var.project_name}-${var.environment_suffix}-ec2-s3-role"
+    Name        = "${local.base_name}-ec2-s3-role-${local.deployment_suffix}"
     Environment = var.environment
   }
 }
 
-# IAM Policy for S3 access (least privilege)
+# IAM Policy for S3 access (least privilege) with unique suffix
 resource "aws_iam_policy" "ec2_s3_policy" {
-  name        = "${var.project_name}-${var.environment_suffix}-ec2-s3-policy"
+  name        = "${local.base_name}-ec2-s3-policy-${local.deployment_suffix}"
   description = "Policy allowing EC2 to access specific S3 bucket"
 
   policy = jsonencode({
@@ -213,15 +228,15 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_policy_attachment" {
   policy_arn = aws_iam_policy.ec2_s3_policy.arn
 }
 
-# Instance profile for EC2
+# Instance profile for EC2 with unique suffix
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-${var.environment_suffix}-ec2-profile"
+  name = "${local.base_name}-ec2-profile-${local.deployment_suffix}"
   role = aws_iam_role.ec2_s3_role.name
 }
 
-# Security Group for EC2
+# Security Group for EC2 with unique suffix
 resource "aws_security_group" "ec2_sg" {
-  name        = "${var.project_name}-${var.environment_suffix}-webserver-sg"
+  name        = "${local.base_name}-webserver-sg-${local.deployment_suffix}"
   description = "Security group for web server"
 
   ingress {
@@ -257,7 +272,7 @@ resource "aws_security_group" "ec2_sg" {
   }
 
   tags = {
-    Name        = "${var.project_name}-${var.environment_suffix}-webserver-sg"
+    Name        = "${local.base_name}-webserver-sg-${local.deployment_suffix}"
     Environment = var.environment
   }
 }
@@ -290,7 +305,7 @@ resource "aws_instance" "webserver" {
     <html>
     <head><title>Secure Infrastructure</title></head>
     <body>
-    <h1>Welcome to ${var.project_name}</h1>
+    <h1>Welcome to ${local.base_name}</h1>
     <p>This is a secure infrastructure deployed with Terraform</p>
     <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
     </body>
@@ -304,7 +319,7 @@ HTML
   )
 
   tags = {
-    Name        = "${var.project_name}-${var.environment_suffix}-webserver"
+    Name        = "${local.base_name}-webserver"
     Environment = var.environment
   }
 

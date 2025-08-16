@@ -37,3 +37,23 @@ output "iam_role_name" {
   description = "Name of the IAM role for EC2"
   value       = aws_iam_role.ec2_s3_role.name
 }
+
+output "deployment_suffix" {
+  description = "Unique suffix used for this deployment"
+  value       = local.deployment_suffix
+}
+
+output "security_group_name" {
+  description = "Name of the EC2 security group"
+  value       = aws_security_group.ec2_sg.name
+}
+
+output "iam_policy_name" {
+  description = "Name of the IAM policy"
+  value       = aws_iam_policy.ec2_s3_policy.name
+}
+
+output "cloudfront_oac_name" {
+  description = "Name of the CloudFront Origin Access Control"
+  value       = aws_cloudfront_origin_access_control.main_oac.name
+}

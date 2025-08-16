@@ -27,3 +27,9 @@ variable "allowed_ip_ranges" {
   type        = list(string)
   default     = ["0.0.0.0/0"] # Restrict this in production
 }
+
+variable "deployment_id" {
+  description = "Unique deployment identifier to prevent resource name conflicts"
+  type        = string
+  default     = null
+}
