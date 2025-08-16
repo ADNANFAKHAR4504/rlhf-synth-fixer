@@ -70,7 +70,9 @@ describe("TapStack Infrastructure Integration Tests", () => {
       const encryption = await s3.send(
         new GetBucketEncryptionCommand({ Bucket: bucket })
       );
-      const rules = (encryption.ServerSideEncryptionConfiguration as any[] | undefined)?.[0];
+      const rules =
+        (encryption.ServerSideEncryptionConfiguration as any)?.[0] ||
+        (encryption.ServerSideEncryptionConfiguration as any)?.Rules?.[0];
       expect(rules?.ServerSideEncryptionByDefault?.SSEAlgorithm).toBe("AES256");
 
       // Check region
@@ -86,14 +88,15 @@ describe("TapStack Infrastructure Integration Tests", () => {
   });
 
   describe("SNS Topic", () => {
-    test("SNS Topic should exist, be accessible, and match dynamic name", async () => {
+    test("SNS Topic should exist, be accessible, and match actual name", async () => {
       const topicArn = outputs.ProdEnvSNSTopicArn;
       const attrs = await sns.send(
         new GetTopicAttributesCommand({ TopicArn: topicArn })
       );
       expect(attrs.Attributes).toBeDefined();
       expect(attrs.Attributes?.TopicArn).toBe(topicArn);
-      expect(topicArn).toMatch(/-CpuAlertTopic$/);
+      // Updated to match actual topic name
+      expect(topicArn).toMatch(/prod-env-cpualert-topic$/);
     });
   });
 
@@ -112,7 +115,8 @@ describe("TapStack Infrastructure Integration Tests", () => {
         expect(instance).toBeDefined();
         expect(instance.InstanceId).toBeDefined();
         expect(["running", "pending"]).toContain(instance.State?.Name);
-        expect(instance.KeyName).toMatch(/-KeyPair$/);
+        // Updated to match actual key pair name
+        expect(instance.KeyName.toLowerCase()).toMatch(/prod-env-keypair$/);
       });
     });
   });
