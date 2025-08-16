@@ -1,13 +1,5 @@
 name: TapStack
 runtime:
   name: python
-description: Secure multi-region AWS infrastructure with Pulumi
+description: Pulumi infrastructure for TAP
 main: tap.py
-template:
-  config:
-    aws:region:
-      description: The AWS region to deploy to
-      default: us-east-1
-    owner:
-      description: Owner of the infrastructure
-      default: DevOps-Team
