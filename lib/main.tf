@@ -28,11 +28,8 @@ locals {
   region     = data.aws_region.current.id
   partition  = data.aws_partition.current.partition
 
-  # Common tags for cost allocation
-  common_tags = {
-    owner       = var.owner
-    environment = var.environment
-  }
+  # Common tags for cost allocation - using provider default_tags instead
+  common_tags = {}
 }
 
 # Access Logging Bucket

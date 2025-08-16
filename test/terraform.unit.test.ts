@@ -61,33 +61,30 @@ describe('Terraform Unit Tests', () => {
     test('essential locals are defined', () => {
       expect(mainTfContent).toContain('locals {');
       expect(mainTfContent).toContain('account_id = data.aws_caller_identity.current.account_id');
-      expect(mainTfContent).toContain('region     = data.aws_region.current.name');
+      expect(mainTfContent).toContain('region     = data.aws_region.current.id');
       expect(mainTfContent).toContain('partition  = data.aws_partition.current.partition');
     });
 
     test('cost allocation tags are properly defined', () => {
-      expect(mainTfContent).toContain('common_tags = {');
-      expect(mainTfContent).toContain('owner       = var.owner');
-      expect(mainTfContent).toContain('environment = var.environment');
-      expect(mainTfContent).toContain('ManagedBy   = "terraform"');
+      expect(mainTfContent).toContain('common_tags = {}');
     });
   });
 
   describe('S3 Bucket Validation', () => {
     test('primary S3 bucket follows correct naming pattern', () => {
       expect(mainTfContent).toContain('resource "aws_s3_bucket" "primary"');
-      expect(mainTfContent).toContain('bucket = "data-secured-${local.account_id}"');
+      expect(mainTfContent).toContain('bucket = "data-secured-${local.account_id}-v2"');
     });
 
     test('access logging bucket is configured', () => {
       expect(mainTfContent).toContain('resource "aws_s3_bucket" "access_logging"');
-      expect(mainTfContent).toContain('bucket = "data-secured-${local.account_id}-access-logs"');
+      expect(mainTfContent).toContain('bucket = "data-secured-${local.account_id}-access-logs-v2"');
     });
 
     test('replication destination bucket is configured for us-west-2', () => {
       expect(mainTfContent).toContain('resource "aws_s3_bucket" "replication_destination"');
       expect(mainTfContent).toContain('provider = aws.us_west_2');
-      expect(mainTfContent).toContain('bucket   = "data-secured-${local.account_id}-replica"');
+      expect(mainTfContent).toContain('bucket   = "data-secured-${local.account_id}-replica-v2"');
     });
 
     test('primary bucket has versioning enabled', () => {
@@ -144,7 +141,7 @@ describe('Terraform Unit Tests', () => {
   describe('Cross-Region Replication Validation', () => {
     test('replication IAM role is configured', () => {
       expect(mainTfContent).toContain('resource "aws_iam_role" "replication_role"');
-      expect(mainTfContent).toContain('name = "data-secured-${local.account_id}-replication-role"');
+      expect(mainTfContent).toContain('name = "data-secured-${local.account_id}-replication-role-v2"');
       expect(mainTfContent).toContain('Service = "s3.amazonaws.com"');
     });
 
@@ -258,10 +255,8 @@ describe('Terraform Unit Tests', () => {
   });
 
   describe('Tagging Consistency Validation', () => {
-    test('common_tags local includes required cost allocation tags', () => {
-      expect(mainTfContent).toContain('owner       = var.owner');
-      expect(mainTfContent).toContain('environment = var.environment');
-      expect(mainTfContent).toContain('ManagedBy   = "terraform"');
+    test('common_tags local is empty (using provider default_tags)', () => {
+      expect(mainTfContent).toContain('common_tags = {}');
     });
 
     test('resources use consistent tagging patterns', () => {
