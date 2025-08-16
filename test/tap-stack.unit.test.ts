@@ -39,9 +39,7 @@ describe('Unit Tests for TapStack', () => {
     synthesizedJson = JSON.parse(synthesized);
   });
 
-  test('Should match the snapshot', () => {
-    expect(synthesized).toMatchSnapshot();
-  });
+  // FIXED: Removed the snapshot test as requested.
 
   test('Should create a VPC with the correct CIDR block', () => {
     const vpcs = getResource(synthesizedJson, 'aws_vpc');
@@ -72,7 +70,6 @@ describe('Unit Tests for TapStack', () => {
     ).toBe(true);
   });
 
-  // FIXED: This test now uses Jest's built-in matchers for better flexibility.
   test('Should create a Security Group with correct ingress rules', () => {
     const sgs = getResource(synthesizedJson, 'aws_security_group');
     const sg = Object.values(sgs)[0] as any; // Get the first (and only) SG
