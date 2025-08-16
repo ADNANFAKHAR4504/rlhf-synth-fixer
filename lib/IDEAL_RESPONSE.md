@@ -5,8 +5,8 @@ This document presents the ideal, production-ready Terraform infrastructure solu
 ## Architecture Overview
 
 A robust multi-region AWS infrastructure featuring:
-- **Primary Region**: us-west-2 
-- **Secondary Region**: us-east-2
+- **Primary Region**: us-east-1 
+- **Secondary Region**: us-west-2
 - **High Availability**: Resources distributed across multiple AZs
 - **Security**: KMS encryption, IAM least privilege, VPC isolation
 - **Monitoring**: CloudWatch logs, alarms, and SNS notifications
@@ -56,7 +56,7 @@ variable "primary_region" {
 variable "secondary_region" {
   description = "Secondary AWS region"
   type        = string
-  default     = "us-east-2"
+  default     = "us-west-2"
 }
 
 variable "environment_suffix" {

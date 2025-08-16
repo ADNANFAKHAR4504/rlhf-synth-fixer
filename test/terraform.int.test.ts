@@ -114,8 +114,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
     }
 
     // Initialize AWS clients
-    const primaryRegion = outputs.primary_region || 'us-east-2';
-    const secondaryRegion = outputs.secondary_region || 'us-west-1';
+    const primaryRegion = outputs.primary_region || 'us-east-1';
+    const secondaryRegion = outputs.secondary_region || 'us-west-2';
 
     primaryEC2 = new EC2Client({ region: primaryRegion });
     secondaryEC2 = new EC2Client({ region: secondaryRegion });
