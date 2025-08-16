@@ -105,3 +105,85 @@ output "secondary_region" {
   description = "Secondary AWS region"
   value       = var.secondary_region
 }
+
+# Environment and Naming Outputs
+output "environment_suffix" {
+  description = "Environment suffix used for resource naming"
+  value       = local.environment_suffix
+}
+
+output "name_prefix" {
+  description = "Name prefix used for all resources"
+  value       = local.name_prefix
+}
+
+# Random suffix for verification
+output "random_suffix" {
+  description = "Random suffix for unique resource naming"
+  value       = random_string.suffix.result
+}
+
+# Internet Gateway Outputs
+output "igw_primary_id" {
+  description = "ID of the internet gateway in primary region"
+  value       = aws_internet_gateway.primary.id
+}
+
+output "igw_secondary_id" {
+  description = "ID of the internet gateway in secondary region"
+  value       = aws_internet_gateway.secondary.id
+}
+
+# NAT Gateway Outputs
+output "nat_gateway_primary_ids" {
+  description = "IDs of NAT gateways in primary region"
+  value       = aws_nat_gateway.primary[*].id
+}
+
+output "nat_gateway_secondary_ids" {
+  description = "IDs of NAT gateways in secondary region"
+  value       = aws_nat_gateway.secondary[*].id
+}
+
+# Route Table Outputs
+output "public_route_table_primary_id" {
+  description = "ID of public route table in primary region"
+  value       = aws_route_table.public_primary.id
+}
+
+output "private_route_table_primary_ids" {
+  description = "IDs of private route tables in primary region"
+  value       = aws_route_table.private_primary[*].id
+}
+
+output "public_route_table_secondary_id" {
+  description = "ID of public route table in secondary region"
+  value       = aws_route_table.public_secondary.id
+}
+
+output "private_route_table_secondary_ids" {
+  description = "IDs of private route tables in secondary region"
+  value       = aws_route_table.private_secondary[*].id
+}
+
+# CloudWatch Alarm Outputs
+output "cloudwatch_alarm_primary_name" {
+  description = "Name of CloudWatch alarm in primary region"
+  value       = aws_cloudwatch_metric_alarm.high_cpu_primary.alarm_name
+}
+
+output "cloudwatch_alarm_secondary_name" {
+  description = "Name of CloudWatch alarm in secondary region"
+  value       = aws_cloudwatch_metric_alarm.high_cpu_secondary.alarm_name
+}
+
+# KMS Alias Outputs
+output "kms_alias_primary_name" {
+  description = "Name of KMS alias in primary region"
+  value       = aws_kms_alias.financial_app_primary.name
+}
+
+output "kms_alias_secondary_name" {
+  description = "Name of KMS alias in secondary region"
+  value       = aws_kms_alias.financial_app_secondary.name
+}

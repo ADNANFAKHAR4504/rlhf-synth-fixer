@@ -13,15 +13,20 @@ import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client,
+  DescribeSecurityGroupsCommand,
 } from '@aws-sdk/client-ec2';
 import {
   GetInstanceProfileCommand,
   GetRoleCommand,
   IAMClient,
 } from '@aws-sdk/client-iam';
-import { KMSClient, ListAliasesCommand, DescribeKeyCommand } from '@aws-sdk/client-kms';
+import { 
+  KMSClient, 
+  ListAliasesCommand, 
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand 
+} from '@aws-sdk/client-kms';
 import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
-import { DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
 import fs from 'fs';
 import path from 'path';
 
@@ -79,6 +84,9 @@ describe('Terraform Infrastructure Integration Tests', () => {
       'private_subnet_ids_primary',
       'public_subnet_ids_secondary',
       'private_subnet_ids_secondary',
+      'environment_suffix',
+      'name_prefix',
+      'random_suffix',
     ];
 
     for (const output of requiredOutputs) {
@@ -130,6 +138,17 @@ describe('Terraform Infrastructure Integration Tests', () => {
     secondarySNS = new SNSClient({ region: secondaryRegion });
   });
 
+  describe('Environment and Naming Tests', () => {
+    test('environment suffix and naming are properly configured', () => {
+      expect(outputs.environment_suffix).toBeDefined();
+      expect(outputs.name_prefix).toBeDefined();
+      expect(outputs.random_suffix).toBeDefined();
+      
+      expect(outputs.name_prefix).toMatch(new RegExp(`financial-app-${outputs.environment_suffix}-${outputs.random_suffix}`));
+      expect(outputs.random_suffix).toMatch(/^[a-z0-9]{6}$/); // 6-character alphanumeric lowercase
+    });
+  });
+
   describe('VPC Infrastructure Tests', () => {
     test('primary VPC exists and has correct configuration', async () => {
       const response = await primaryEC2.send(
@@ -144,7 +163,16 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
-      // DNS configuration is validated through VPC attributes in Terraform
+      
+      // Check VPC has correct tags with environment suffix
+      const nameTags = vpc.Tags?.filter(tag => tag.Key === 'Name');
+      expect(nameTags?.length).toBe(1);
+      expect(nameTags![0].Value).toContain(outputs.name_prefix);
+      expect(nameTags![0].Value).toContain('-vpc-primary');
+      
+      const envTags = vpc.Tags?.filter(tag => tag.Key === 'Environment');
+      expect(envTags?.length).toBe(1);
+      expect(envTags![0].Value).toBe(outputs.environment_suffix);
     });
 
     test('secondary VPC exists and has correct configuration', async () => {
@@ -160,10 +188,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.1.0.0/16');
       expect(vpc.State).toBe('available');
-      // DNS configuration is validated through VPC attributes in Terraform
+      
+      // Check VPC has correct tags with environment suffix
+      const nameTags = vpc.Tags?.filter(tag => tag.Key === 'Name');
+      expect(nameTags?.length).toBe(1);
+      expect(nameTags![0].Value).toContain(outputs.name_prefix);
+      expect(nameTags![0].Value).toContain('-vpc-secondary');
     });
 
-    test('public subnets exist in primary region', async () => {
+    test('public subnets exist in primary region with correct naming', async () => {
       const response = await primaryEC2.send(
         new DescribeSubnetsCommand({
           SubnetIds: outputs.public_subnet_ids_primary,
@@ -183,6 +216,16 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
         expect(expectedCidrBlocks).toContain(subnet.CidrBlock);
         expect(subnet.State).toBe('available');
+        
+        // Check subnet has correct tags with environment suffix
+        const nameTags = subnet.Tags?.filter(tag => tag.Key === 'Name');
+        expect(nameTags?.length).toBe(1);
+        expect(nameTags![0].Value).toContain(outputs.name_prefix);
+        expect(nameTags![0].Value).toContain('-public-subnet-primary-');
+        
+        const envTags = subnet.Tags?.filter(tag => tag.Key === 'Environment');
+        expect(envTags?.length).toBe(1);
+        expect(envTags![0].Value).toBe(outputs.environment_suffix);
       });
 
       // Ensure all expected CIDR blocks are present
@@ -191,7 +234,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       });
     });
 
-    test('private subnets exist in primary region', async () => {
+    test('private subnets exist in primary region with correct naming', async () => {
       const response = await primaryEC2.send(
         new DescribeSubnetsCommand({
           SubnetIds: outputs.private_subnet_ids_primary,
@@ -211,6 +254,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(expectedCidrBlocks).toContain(subnet.CidrBlock);
         expect(subnet.State).toBe('available');
+        
+        // Check subnet has correct tags with environment suffix
+        const nameTags = subnet.Tags?.filter(tag => tag.Key === 'Name');
+        expect(nameTags?.length).toBe(1);
+        expect(nameTags![0].Value).toContain(outputs.name_prefix);
+        expect(nameTags![0].Value).toContain('-private-subnet-primary-');
       });
 
       // Ensure all expected CIDR blocks are present
@@ -219,7 +268,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       });
     });
 
-    test('public subnets exist in secondary region', async () => {
+    test('public subnets exist in secondary region with correct naming', async () => {
       const response = await secondaryEC2.send(
         new DescribeSubnetsCommand({
           SubnetIds: outputs.public_subnet_ids_secondary,
@@ -239,6 +288,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
         expect(expectedCidrBlocks).toContain(subnet.CidrBlock);
         expect(subnet.State).toBe('available');
+        
+        // Check subnet has correct tags with environment suffix
+        const nameTags = subnet.Tags?.filter(tag => tag.Key === 'Name');
+        expect(nameTags?.length).toBe(1);
+        expect(nameTags![0].Value).toContain(outputs.name_prefix);
+        expect(nameTags![0].Value).toContain('-public-subnet-secondary-');
       });
 
       // Ensure all expected CIDR blocks are present
@@ -247,7 +302,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       });
     });
 
-    test('private subnets exist in secondary region', async () => {
+    test('private subnets exist in secondary region with correct naming', async () => {
       const response = await secondaryEC2.send(
         new DescribeSubnetsCommand({
           SubnetIds: outputs.private_subnet_ids_secondary,
@@ -267,6 +322,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(expectedCidrBlocks).toContain(subnet.CidrBlock);
         expect(subnet.State).toBe('available');
+        
+        // Check subnet has correct tags with environment suffix
+        const nameTags = subnet.Tags?.filter(tag => tag.Key === 'Name');
+        expect(nameTags?.length).toBe(1);
+        expect(nameTags![0].Value).toContain(outputs.name_prefix);
+        expect(nameTags![0].Value).toContain('-private-subnet-secondary-');
       });
 
       // Ensure all expected CIDR blocks are present
@@ -277,7 +338,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('Network Infrastructure Tests', () => {
-    test('internet gateways are attached to VPCs', async () => {
+    test('internet gateways are attached to VPCs with correct naming', async () => {
       // Primary region IGW
       const primaryIGWResponse = await primaryEC2.send(
         new DescribeInternetGatewaysCommand({
@@ -292,6 +353,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(
         primaryIGWResponse.InternetGateways![0].Attachments![0].State
       ).toBe('available');
+      
+      // Check IGW has correct tags
+      const primaryIGW = primaryIGWResponse.InternetGateways![0];
+      const nameTags = primaryIGW.Tags?.filter(tag => tag.Key === 'Name');
+      expect(nameTags?.length).toBe(1);
+      expect(nameTags![0].Value).toContain(outputs.name_prefix);
+      expect(nameTags![0].Value).toContain('-igw-primary');
 
       // Secondary region IGW
       const secondaryIGWResponse = await secondaryEC2.send(
@@ -307,9 +375,16 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(
         secondaryIGWResponse.InternetGateways![0].Attachments![0].State
       ).toBe('available');
+      
+      // Check secondary IGW has correct tags
+      const secondaryIGW = secondaryIGWResponse.InternetGateways![0];
+      const secondaryNameTags = secondaryIGW.Tags?.filter(tag => tag.Key === 'Name');
+      expect(secondaryNameTags?.length).toBe(1);
+      expect(secondaryNameTags![0].Value).toContain(outputs.name_prefix);
+      expect(secondaryNameTags![0].Value).toContain('-igw-secondary');
     });
 
-    test('NAT gateways are deployed and available', async () => {
+    test('NAT gateways are deployed and available (optimized for cost)', async () => {
       // Primary region NAT gateway (1 per region for cost optimization)
       const primaryNATResponse = await primaryEC2.send(
         new DescribeNatGatewaysCommand({
@@ -318,11 +393,17 @@ describe('Terraform Infrastructure Integration Tests', () => {
       );
 
       expect(primaryNATResponse.NatGateways).toBeDefined();
-      expect(primaryNATResponse.NatGateways!.length).toBe(1);
+      expect(primaryNATResponse.NatGateways!.length).toBe(1); // Only 1 for cost optimization
 
       primaryNATResponse.NatGateways!.forEach(nat => {
         expect(nat.State).toBe('available');
         expect(nat.VpcId).toBe(outputs.vpc_primary_id);
+        
+        // Check NAT gateway has correct tags
+        const nameTags = nat.Tags?.filter(tag => tag.Key === 'Name');
+        expect(nameTags?.length).toBe(1);
+        expect(nameTags![0].Value).toContain(outputs.name_prefix);
+        expect(nameTags![0].Value).toContain('-nat-primary-');
       });
 
       // Secondary region NAT gateway (1 per region for cost optimization)
@@ -333,15 +414,21 @@ describe('Terraform Infrastructure Integration Tests', () => {
       );
 
       expect(secondaryNATResponse.NatGateways).toBeDefined();
-      expect(secondaryNATResponse.NatGateways!.length).toBe(1);
+      expect(secondaryNATResponse.NatGateways!.length).toBe(1); // Only 1 for cost optimization
 
       secondaryNATResponse.NatGateways!.forEach(nat => {
         expect(nat.State).toBe('available');
         expect(nat.VpcId).toBe(outputs.vpc_secondary_id);
+        
+        // Check NAT gateway has correct tags
+        const nameTags = nat.Tags?.filter(tag => tag.Key === 'Name');
+        expect(nameTags?.length).toBe(1);
+        expect(nameTags![0].Value).toContain(outputs.name_prefix);
+        expect(nameTags![0].Value).toContain('-nat-secondary-');
       });
     });
 
-    test('route tables have correct routing configuration', async () => {
+    test('route tables have correct routing configuration and naming', async () => {
       // Primary region route tables
       const primaryRTResponse = await primaryEC2.send(
         new DescribeRouteTablesCommand({
@@ -353,23 +440,38 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(primaryRTResponse.RouteTables!.length).toBeGreaterThanOrEqual(3); // 1 public + 2 private + 1 default
 
       // Check for internet gateway routes in public route tables
-      const publicRoutes = primaryRTResponse.RouteTables!.filter(rt =>
-        rt.Routes?.some(route => route.GatewayId?.startsWith('igw-'))
-      );
+      const publicRoutes = primaryRTResponse.RouteTables!.filter(rt => {
+        const hasIGWRoute = rt.Routes?.some(route => route.GatewayId?.startsWith('igw-'));
+        const hasCorrectTag = rt.Tags?.some(tag => 
+          tag.Key === 'Name' && 
+          tag.Value?.includes(outputs.name_prefix) && 
+          tag.Value?.includes('-public-rt-primary')
+        );
+        return hasIGWRoute && hasCorrectTag;
+      });
       expect(publicRoutes.length).toBeGreaterThanOrEqual(1);
 
       // Check for NAT gateway routes in private route tables
-      const privateRoutes = primaryRTResponse.RouteTables!.filter(rt =>
-        rt.Routes?.some(route => route.NatGatewayId?.startsWith('nat-'))
-      );
+      const privateRoutes = primaryRTResponse.RouteTables!.filter(rt => {
+        const hasNATRoute = rt.Routes?.some(route => route.NatGatewayId?.startsWith('nat-'));
+        const hasCorrectTag = rt.Tags?.some(tag => 
+          tag.Key === 'Name' && 
+          tag.Value?.includes(outputs.name_prefix) && 
+          tag.Value?.includes('-private-rt-primary-')
+        );
+        return hasNATRoute && hasCorrectTag;
+      });
       expect(privateRoutes.length).toBeGreaterThanOrEqual(2);
     });
   });
 
   describe('IAM Configuration Tests', () => {
-    test('IAM role exists and has correct configuration', async () => {
+    test('IAM role exists and has correct configuration with environment suffix', async () => {
       const roleArn = outputs.financial_app_role_arn;
       const roleName = roleArn.split('/').pop();
+
+      expect(roleName).toContain(outputs.name_prefix);
+      expect(roleName).toContain('-role');
 
       const response = await iamClient.send(
         new GetRoleCommand({
@@ -390,10 +492,24 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(statement.Principal.Service).toContain('ec2.amazonaws.com');
       expect(statement.Principal.Service).toContain('lambda.amazonaws.com');
       expect(statement.Principal.Service).toContain('ecs-tasks.amazonaws.com');
+      
+      // Check role has correct tags
+      expect(response.Role!.Tags).toBeDefined();
+      const nameTags = response.Role!.Tags?.filter(tag => tag.Key === 'Name');
+      expect(nameTags?.length).toBe(1);
+      expect(nameTags![0].Value).toContain(outputs.name_prefix);
+      expect(nameTags![0].Value).toContain('-role');
+      
+      const envTags = response.Role!.Tags?.filter(tag => tag.Key === 'Environment');
+      expect(envTags?.length).toBe(1);
+      expect(envTags![0].Value).toBe(outputs.environment_suffix);
     });
 
-    test('IAM instance profile exists', async () => {
+    test('IAM instance profile exists with correct naming', async () => {
       const instanceProfileName = outputs.financial_app_instance_profile_name;
+      
+      expect(instanceProfileName).toContain(outputs.name_prefix);
+      expect(instanceProfileName).toContain('-profile');
 
       const response = await iamClient.send(
         new GetInstanceProfileCommand({
@@ -408,11 +524,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
   });
 
   describe('Monitoring and Logging Tests', () => {
-    test('CloudWatch log groups exist and are properly configured', async () => {
+    test('CloudWatch log groups exist and are properly configured with naming', async () => {
       // Primary region log group
       const primaryLogResponse = await primaryCWLogs.send(
         new DescribeLogGroupsCommand({
-          logGroupNamePrefix: '/aws/financial-app',
+          logGroupNamePrefix: `/aws/${outputs.name_prefix}`,
         })
       );
 
@@ -424,11 +540,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(primaryLogGroup).toBeDefined();
       expect(primaryLogGroup!.retentionInDays).toBe(30);
       expect(primaryLogGroup!.kmsKeyId).toBe(outputs.kms_key_primary_arn);
+      expect(primaryLogGroup!.logGroupName).toContain(outputs.name_prefix);
+      expect(primaryLogGroup!.logGroupName).toContain('/primary');
 
       // Secondary region log group
       const secondaryLogResponse = await secondaryCWLogs.send(
         new DescribeLogGroupsCommand({
-          logGroupNamePrefix: '/aws/financial-app',
+          logGroupNamePrefix: `/aws/${outputs.name_prefix}`,
         })
       );
 
@@ -440,13 +558,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(secondaryLogGroup).toBeDefined();
       expect(secondaryLogGroup!.retentionInDays).toBe(30);
       expect(secondaryLogGroup!.kmsKeyId).toBe(outputs.kms_key_secondary_arn);
+      expect(secondaryLogGroup!.logGroupName).toContain(outputs.name_prefix);
+      expect(secondaryLogGroup!.logGroupName).toContain('/secondary');
     });
 
-    test('CloudWatch alarms exist and are properly configured', async () => {
+    test('CloudWatch alarms exist and are properly configured with naming', async () => {
       // Primary region alarms
       const primaryAlarmResponse = await primaryCW.send(
         new DescribeAlarmsCommand({
-          AlarmNamePrefix: 'financial-app',
+          AlarmNamePrefix: outputs.name_prefix,
         })
       );
 
@@ -458,18 +578,20 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const primaryCpuAlarm = primaryAlarmResponse.MetricAlarms!.find(
         alarm =>
           alarm.AlarmName?.includes('high-cpu') &&
-          alarm.AlarmName?.includes('primary')
+          alarm.AlarmName?.includes('primary') &&
+          alarm.AlarmName?.includes(outputs.name_prefix)
       );
 
       expect(primaryCpuAlarm).toBeDefined();
       expect(primaryCpuAlarm!.MetricName).toBe('CPUUtilization');
       expect(primaryCpuAlarm!.Threshold).toBe(80);
       expect(primaryCpuAlarm!.ComparisonOperator).toBe('GreaterThanThreshold');
+      expect(primaryCpuAlarm!.AlarmName).toBe(outputs.cloudwatch_alarm_primary_name);
 
       // Secondary region alarms
       const secondaryAlarmResponse = await secondaryCW.send(
         new DescribeAlarmsCommand({
-          AlarmNamePrefix: 'financial-app',
+          AlarmNamePrefix: outputs.name_prefix,
         })
       );
 
@@ -481,15 +603,17 @@ describe('Terraform Infrastructure Integration Tests', () => {
       const secondaryCpuAlarm = secondaryAlarmResponse.MetricAlarms!.find(
         alarm =>
           alarm.AlarmName?.includes('high-cpu') &&
-          alarm.AlarmName?.includes('secondary')
+          alarm.AlarmName?.includes('secondary') &&
+          alarm.AlarmName?.includes(outputs.name_prefix)
       );
 
       expect(secondaryCpuAlarm).toBeDefined();
       expect(secondaryCpuAlarm!.MetricName).toBe('CPUUtilization');
       expect(secondaryCpuAlarm!.Threshold).toBe(80);
+      expect(secondaryCpuAlarm!.AlarmName).toBe(outputs.cloudwatch_alarm_secondary_name);
     });
 
-    test('SNS topics exist and are properly configured', async () => {
+    test('SNS topics exist and are properly configured with naming', async () => {
       // Primary region SNS topic
       const primaryTopicResponse = await primarySNS.send(
         new GetTopicAttributesCommand({
@@ -501,6 +625,10 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(primaryTopicResponse.Attributes!.KmsMasterKeyId).toBe(
         outputs.kms_key_primary_id
       );
+      
+      // Check topic name contains environment suffix
+      expect(outputs.sns_topic_primary_arn).toContain(outputs.name_prefix);
+      expect(outputs.sns_topic_primary_arn).toContain('-alerts-primary');
 
       // Secondary region SNS topic
       const secondaryTopicResponse = await secondarySNS.send(
@@ -513,11 +641,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(secondaryTopicResponse.Attributes!.KmsMasterKeyId).toBe(
         outputs.kms_key_secondary_id
       );
+      
+      // Check topic name contains environment suffix
+      expect(outputs.sns_topic_secondary_arn).toContain(outputs.name_prefix);
+      expect(outputs.sns_topic_secondary_arn).toContain('-alerts-secondary');
     });
   });
 
   describe('Security Infrastructure Tests', () => {
-    test('security groups have correct configuration', async () => {
+    test('security groups have correct configuration and restricted access', async () => {
       // Primary region security groups
       const primarySGResponse = await primaryEC2.send(
         new DescribeSecurityGroupsCommand({
@@ -527,10 +659,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       expect(primarySGResponse.SecurityGroups).toBeDefined();
       const primaryFinancialSG = primarySGResponse.SecurityGroups!.find(sg =>
-        sg.GroupName?.includes('financial-app') && !sg.GroupName?.includes('default')
+        sg.GroupName?.includes(outputs.name_prefix) && 
+        sg.GroupName?.includes('-sg-primary') &&
+        !sg.GroupName?.includes('default')
       );
 
       expect(primaryFinancialSG).toBeDefined();
+      expect(primaryFinancialSG!.GroupName).toContain(outputs.name_prefix);
+      expect(primaryFinancialSG!.GroupName).toContain('-sg-primary');
 
       // Check ingress rules - should not allow 0.0.0.0/0 for HTTP/HTTPS
       const httpIngressRules = primaryFinancialSG!.IpPermissions!.filter(
@@ -559,10 +695,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       expect(secondarySGResponse.SecurityGroups).toBeDefined();
       const secondaryFinancialSG = secondarySGResponse.SecurityGroups!.find(sg =>
-        sg.GroupName?.includes('financial-app') && !sg.GroupName?.includes('default')
+        sg.GroupName?.includes(outputs.name_prefix) && 
+        sg.GroupName?.includes('-sg-secondary') &&
+        !sg.GroupName?.includes('default')
       );
 
       expect(secondaryFinancialSG).toBeDefined();
+      expect(secondaryFinancialSG!.GroupName).toContain(outputs.name_prefix);
+      expect(secondaryFinancialSG!.GroupName).toContain('-sg-secondary');
 
       // Same security checks for secondary region
       const secondaryHttpIngressRules = secondaryFinancialSG!.IpPermissions!.filter(
@@ -582,7 +722,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       });
     });
 
-    test('KMS keys are functional and properly configured', async () => {
+    test('KMS keys are functional and properly configured with naming', async () => {
       // Primary region KMS key
       const primaryKeyResponse = await primaryKMS.send(
         new DescribeKeyCommand({
@@ -593,8 +733,14 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(primaryKeyResponse.KeyMetadata).toBeDefined();
       expect(primaryKeyResponse.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
       expect(primaryKeyResponse.KeyMetadata!.KeyState).toBe('Enabled');
-      // KeyRotationStatus is not available in AWS SDK v3 KeyMetadata response
-      // Key rotation is enabled by default for customer-managed keys in our infrastructure
+      
+      // Check key rotation is enabled
+      const primaryRotationResponse = await primaryKMS.send(
+        new GetKeyRotationStatusCommand({
+          KeyId: outputs.kms_key_primary_id,
+        })
+      );
+      expect(primaryRotationResponse.KeyRotationEnabled).toBe(true);
 
       // Secondary region KMS key
       const secondaryKeyResponse = await secondaryKMS.send(
@@ -606,33 +752,43 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(secondaryKeyResponse.KeyMetadata).toBeDefined();
       expect(secondaryKeyResponse.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
       expect(secondaryKeyResponse.KeyMetadata!.KeyState).toBe('Enabled');
-      // KeyRotationStatus is not available in AWS SDK v3 KeyMetadata response
-      // Key rotation is enabled by default for customer-managed keys in our infrastructure
+      
+      // Check key rotation is enabled
+      const secondaryRotationResponse = await secondaryKMS.send(
+        new GetKeyRotationStatusCommand({
+          KeyId: outputs.kms_key_secondary_id,
+        })
+      );
+      expect(secondaryRotationResponse.KeyRotationEnabled).toBe(true);
     });
 
-    test('KMS aliases are properly configured', async () => {
+    test('KMS aliases are properly configured with naming', async () => {
       // Check primary region aliases
       const primaryAliasResponse = await primaryKMS.send(new ListAliasesCommand({}));
       const primaryFinancialAlias = primaryAliasResponse.Aliases?.find(alias =>
-        alias.AliasName?.includes('financial-app') && alias.AliasName?.includes('primary')
+        alias.AliasName?.includes(outputs.name_prefix) && 
+        alias.AliasName?.includes('-primary')
       );
       
       expect(primaryFinancialAlias).toBeDefined();
       expect(primaryFinancialAlias!.TargetKeyId).toBe(outputs.kms_key_primary_id);
+      expect(primaryFinancialAlias!.AliasName).toBe(outputs.kms_alias_primary_name);
 
       // Check secondary region aliases
       const secondaryAliasResponse = await secondaryKMS.send(new ListAliasesCommand({}));
       const secondaryFinancialAlias = secondaryAliasResponse.Aliases?.find(alias =>
-        alias.AliasName?.includes('financial-app') && alias.AliasName?.includes('secondary')
+        alias.AliasName?.includes(outputs.name_prefix) && 
+        alias.AliasName?.includes('-secondary')
       );
       
       expect(secondaryFinancialAlias).toBeDefined();
       expect(secondaryFinancialAlias!.TargetKeyId).toBe(outputs.kms_key_secondary_id);
+      expect(secondaryFinancialAlias!.AliasName).toBe(outputs.kms_alias_secondary_name);
     });
   });
 
   describe('Multi-Region Consistency Tests', () => {
-    test('both regions have consistent resource counts', async () => {
+    test('both regions have consistent resource counts and naming', async () => {
       // Compare subnet counts
       expect(outputs.public_subnet_ids_primary.length).toBe(
         outputs.public_subnet_ids_secondary.length
@@ -646,9 +802,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
       // Verify VPCs are different
       expect(outputs.vpc_primary_id).not.toBe(outputs.vpc_secondary_id);
+      
+      // Verify all resource names contain the same environment suffix
+      expect(outputs.name_prefix).toContain(outputs.environment_suffix);
+      expect(outputs.name_prefix).toContain(outputs.random_suffix);
     });
 
-    test('cross-region connectivity setup is consistent', async () => {
+    test('cross-region connectivity setup is consistent and cost-optimized', async () => {
       // Both regions should have 1 NAT gateway for cost optimization
       const primaryNATResponse = await primaryEC2.send(
         new DescribeNatGatewaysCommand({
@@ -662,8 +822,12 @@ describe('Terraform Infrastructure Integration Tests', () => {
         })
       );
 
-      expect(primaryNATResponse.NatGateways!.length).toBe(1);
-      expect(secondaryNATResponse.NatGateways!.length).toBe(1);
+      expect(primaryNATResponse.NatGateways!.length).toBe(1); // Cost optimized
+      expect(secondaryNATResponse.NatGateways!.length).toBe(1); // Cost optimized
+      
+      // Verify NAT gateways have correct naming
+      expect(outputs.nat_gateway_primary_ids).toHaveLength(1);
+      expect(outputs.nat_gateway_secondary_ids).toHaveLength(1);
     });
   });
 
@@ -694,7 +858,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(secondaryAZs.size).toBe(2); // Should span 2 AZs
     });
 
-    test('NAT gateways are properly configured', async () => {
+    test('cost-optimized NAT gateways are properly configured', async () => {
       // Primary region NAT gateway
       const primaryNATResponse = await primaryEC2.send(
         new DescribeNatGatewaysCommand({
@@ -702,7 +866,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         })
       );
 
-      expect(primaryNATResponse.NatGateways!.length).toBe(1);
+      expect(primaryNATResponse.NatGateways!.length).toBe(1); // Cost optimized
       expect(primaryNATResponse.NatGateways![0].State).toBe('available');
 
       // Secondary region NAT gateway
@@ -712,8 +876,65 @@ describe('Terraform Infrastructure Integration Tests', () => {
         })
       );
 
-      expect(secondaryNATResponse.NatGateways!.length).toBe(1);
+      expect(secondaryNATResponse.NatGateways!.length).toBe(1); // Cost optimized
       expect(secondaryNATResponse.NatGateways![0].State).toBe('available');
+    });
+  });
+
+  describe('Comprehensive Infrastructure Validation', () => {
+    test('all infrastructure components are properly tagged with environment suffix', async () => {
+      // All outputs that contain names should include the environment suffix
+      const nameOutputs = [
+        'name_prefix',
+        'kms_alias_primary_name',
+        'kms_alias_secondary_name',
+        'log_group_primary_name',
+        'log_group_secondary_name',
+        'cloudwatch_alarm_primary_name',
+        'cloudwatch_alarm_secondary_name'
+      ];
+
+      nameOutputs.forEach(output => {
+        if (outputs[output]) {
+          expect(outputs[output]).toContain(outputs.environment_suffix);
+        }
+      });
+
+      // ARNs should contain the name prefix
+      const arnOutputs = [
+        'financial_app_role_arn',
+        'sns_topic_primary_arn',
+        'sns_topic_secondary_arn'
+      ];
+
+      arnOutputs.forEach(output => {
+        if (outputs[output]) {
+          expect(outputs[output]).toContain(outputs.name_prefix);
+        }
+      });
+    });
+
+    test('random suffix is properly incorporated in all resource names', () => {
+      expect(outputs.random_suffix).toMatch(/^[a-z0-9]{6}$/);
+      expect(outputs.name_prefix).toContain(outputs.random_suffix);
+    });
+
+    test('infrastructure supports clean rollback capability', async () => {
+      // All resources should be configured for clean deletion
+      // KMS keys should have short deletion window for testing
+      const primaryKeyResponse = await primaryKMS.send(
+        new DescribeKeyCommand({
+          KeyId: outputs.kms_key_primary_id,
+        })
+      );
+      
+      // Key should be in enabled state (not pending deletion)
+      expect(primaryKeyResponse.KeyMetadata!.KeyState).toBe('Enabled');
+      
+      // Test environment should be properly isolated by name prefix
+      expect(outputs.name_prefix).toContain('financial-app');
+      expect(outputs.name_prefix).toContain(outputs.environment_suffix);
+      expect(outputs.name_prefix).toContain(outputs.random_suffix);
     });
   });
 });

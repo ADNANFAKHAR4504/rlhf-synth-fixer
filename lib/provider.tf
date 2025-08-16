@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
   }
 }
 
@@ -15,7 +19,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Environment = var.environment
+      Environment = local.environment_suffix
       Project     = "financial-app"
       ManagedBy   = "terraform"
     }
@@ -29,7 +33,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Environment = var.environment
+      Environment = local.environment_suffix
       Project     = "financial-app"
       ManagedBy   = "terraform"
     }
@@ -48,8 +52,33 @@ variable "secondary_region" {
   default     = "us-west-2"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming"
+  type        = string
+  default     = "dev"
+}
+
+variable "aws_region" {
+  description = "Primary AWS region"
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "environment" {
   description = "Environment name"
   type        = string
   default     = "production"
+}
+
+# Random string for unique resource naming
+resource "random_string" "suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
+# Local values for consistent naming
+locals {
+  environment_suffix = var.environment_suffix
+  name_prefix        = "financial-app-${local.environment_suffix}-${random_string.suffix.result}"
 }
