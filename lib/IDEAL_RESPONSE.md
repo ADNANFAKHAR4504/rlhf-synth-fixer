@@ -1,14 +1,34 @@
-import { App, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
+import { Construct } from 'constructs';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
+import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { Construct } from 'constructs';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketLifecycleConfigurationA } from '@cdktf/provider-aws/lib s3-bucket-lifecycle-configuration-a';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { LoggingConstruct } from './logging-construct';
-import { SecurityConstruct } from './security-construct';
-import { NetworkingConstruct } from './networking-construct';
-import { StorageConstruct } from './storage-construct';
+import { DataAwsAccountId } from '@cdktf/provider-aws/lib/data-aws-account-id';
+import { Construct } from 'constructs';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { Fn } from 'cdktf';
 
 const commonTags = {
 Project: 'SecureMultiRegionApp',
@@ -115,16 +135,6 @@ const app = new App();
 new MultiRegionStack(app, 'secure-multi-region-stack');
 app.synth();
 
-// storage-construct
-
-import { Construct } from 'constructs';
-import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
-
 export interface StorageConstructProps {
 readonly tags: { [key: string]: string };
 readonly region: string;
@@ -171,20 +181,6 @@ super(scope, id);
 
 }
 }
-
-// networking-construct
-
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { NetworkAcl } from '@cdktf/provider-aws/lib/network-acl';
-import { NetworkAclRule } from '@cdktf/provider-aws/lib/network-acl-rule';
-import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 
 export interface NetworkingConstructProps {
 readonly tags: { [key: string]: string };
@@ -305,16 +301,6 @@ super(scope, id);
 }
 }
 
-// logging-construct
-
-import { Construct } from 'constructs';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { S3BucketLifecycleConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration-a';
-import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { DataAwsAccountId } from '@cdktf/provider-aws/lib/data-aws-account-id';
-
 export interface LoggingConstructProps {
 readonly tags: { [key: string]: string };
 }
@@ -400,15 +386,6 @@ super(scope, id);
 
 }
 }
-
-// security-construct
-
-import { Construct } from 'constructs';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { Fn } from 'cdktf';
 
 export interface SecurityConstructProps {
 readonly tags: { [key: string]: string };
