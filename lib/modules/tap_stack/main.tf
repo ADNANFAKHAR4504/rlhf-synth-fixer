@@ -33,7 +33,7 @@ resource "aws_secretsmanager_secret" "db_master_username" {
 
 resource "aws_secretsmanager_secret_version" "db_master_username" {
   secret_id     = aws_secretsmanager_secret.db_master_username.id
-  secret_string = "admin"
+  secret_string = "dbadmin"
 }
 
 resource "aws_secretsmanager_secret" "db_master_password" {
