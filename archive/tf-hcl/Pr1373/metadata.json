@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291751",
+  "team": "3",
+  "startedAt": "2025-08-15T17:17:09.074Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "IaC Optimization",
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "Database Management",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ALB",
+    "NAT Gateway",
+    "Security Groups",
+    "Secrets Manager",
+    "CloudWatch",
+    "Budgets",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "shreyaspturing",
+  "dockerS3Location": ""
+}
