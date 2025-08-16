@@ -120,15 +120,17 @@ resource "aws_kms_key" "financial_app_secondary" {
   }
 }
 
+# Primary KMS Alias
 resource "aws_kms_alias" "financial_app_primary" {
   provider      = aws.primary
-  name          = "alias/${local.name_prefix}-primary"
+  name          = "alias/financial-app/${local.environment_suffix}/primary"
   target_key_id = aws_kms_key.financial_app_primary.key_id
 }
 
+# Secondary KMS Alias
 resource "aws_kms_alias" "financial_app_secondary" {
   provider      = aws.secondary
-  name          = "alias/${local.name_prefix}-secondary"
+  name          = "alias/financial-app/${local.environment_suffix}/secondary"
   target_key_id = aws_kms_key.financial_app_secondary.key_id
 }
 
@@ -429,8 +431,8 @@ resource "aws_iam_policy" "financial_app_policy" {
           "kms:DescribeKey"
         ]
         Resource = [
-          aws_kms_key.financial_app_primary.arn,
-          aws_kms_key.financial_app_secondary.arn
+          aws_kms_alias.financial_app_primary.arn,
+          aws_kms_alias.financial_app_secondary.arn
         ]
       },
       {
@@ -485,7 +487,7 @@ resource "aws_cloudwatch_log_group" "financial_app_primary" {
   provider          = aws.primary
   name              = "/aws/${local.name_prefix}/primary"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.financial_app_primary.arn
+  kms_key_id        = aws_kms_alias.financial_app_primary.arn
 
   tags = {
     Name        = "${local.name_prefix}-logs-primary"
@@ -498,7 +500,7 @@ resource "aws_cloudwatch_log_group" "financial_app_secondary" {
   provider          = aws.secondary
   name              = "/aws/${local.name_prefix}/secondary"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.financial_app_secondary.arn
+  kms_key_id        = aws_kms_alias.financial_app_secondary.arn
 
   tags = {
     Name        = "${local.name_prefix}-logs-secondary"
