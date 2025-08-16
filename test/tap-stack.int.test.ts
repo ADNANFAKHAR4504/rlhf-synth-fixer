@@ -710,32 +710,38 @@ describe('SecureWebApp Infrastructure Integration Tests', () => {
       console.log(`   ALB verified: ${albDnsName}`);
     });
 
-    test('should have target group with healthy targets', async () => {
-      const response = await elbv2.send(new DescribeTargetGroupsCommand({}));
-      
-      const targetGroup = response.TargetGroups?.find(tg => 
-        tg.TargetGroupName?.includes(projectName) || 
-        tg.TargetGroupName?.includes(environment)
-      );
+  test('should have target group with healthy targets', async () => {
+  // use the TG created by this stack
+  const tgRes =
+    stackResources.find(r =>
+      r.ResourceType === 'AWS::ElasticLoadBalancingV2::TargetGroup' &&
+      r.LogicalResourceId === 'ALBTargetGroup'
+    ) || stackResources.find(r => r.ResourceType === 'AWS::ElasticLoadBalancingV2::TargetGroup');
 
-      expect(targetGroup).toBeDefined();
-      expect(targetGroup?.Port).toBe(80);
-      expect(targetGroup?.Protocol).toBe('HTTP');
-      expect(targetGroup?.HealthCheckPath).toBe('/health');
+  const tgArn = tgRes?.PhysicalResourceId;
+  expect(tgArn).toBeDefined();
 
-      if (targetGroup?.TargetGroupArn) {
-        const healthResponse = await elbv2.send(new DescribeTargetHealthCommand({
-          TargetGroupArn: targetGroup.TargetGroupArn
-        }));
+  const { TargetGroups } = await elbv2.send(
+    new DescribeTargetGroupsCommand({ TargetGroupArns: [tgArn!] })
+  );
+  const targetGroup = TargetGroups?.[0];
 
-        const healthyTargets = healthResponse.TargetHealthDescriptions?.filter(t => 
-          t.TargetHealth?.State === 'healthy'
-        );
+  expect(targetGroup).toBeDefined();
+  expect(targetGroup?.Port).toBe(80);
+  expect(targetGroup?.Protocol).toBe('HTTP');
+  expect(targetGroup?.HealthCheckPath).toBe('/health');
 
-        expect(healthyTargets?.length).toBeGreaterThanOrEqual(1);
-        console.log(`   Target group verified with ${healthyTargets?.length} healthy targets`);
-      }
-    });
+  const healthResp = await elbv2.send(
+    new DescribeTargetHealthCommand({ TargetGroupArn: tgArn! })
+  );
+  const healthyTargets = healthResp.TargetHealthDescriptions?.filter(
+    t => t.TargetHealth?.State === 'healthy'
+  );
+  expect(healthyTargets?.length).toBeGreaterThanOrEqual(1);
+  console.log(`   Target group verified with ${healthyTargets?.length} healthy targets`);
+});
+
+
 
     test('should have listener configured', async () => {
       const albDnsName = outputs.ALBDNSName;
@@ -774,25 +780,30 @@ describe('SecureWebApp Infrastructure Integration Tests', () => {
 
   describe('Auto Scaling', () => {
     test('should have auto scaling group with correct configuration', async () => {
-      const response = await autoscaling.send(new DescribeAutoScalingGroupsCommand({
-        AutoScalingGroupNames: []
-      }));
+  // use the ASG created by this stack
+  const asgRes =
+    stackResources.find(r =>
+      r.ResourceType === 'AWS::AutoScaling::AutoScalingGroup' &&
+      r.LogicalResourceId === 'AutoScalingGroup'
+    ) || stackResources.find(r => r.ResourceType === 'AWS::AutoScaling::AutoScalingGroup');
 
-      const asg = response.AutoScalingGroups?.find(g => 
-        g.Tags?.some(t => 
-          (t.Key === 'ProjectName' && t.Value === projectName) ||
-          (t.Key === 'Environment' && t.Value === environment)
-        )
-      );
+  const asgName = asgRes?.PhysicalResourceId;
+  expect(asgName).toBeDefined();
 
-      expect(asg).toBeDefined();
-      expect(asg?.MinSize).toBe(1);
-      expect(asg?.MaxSize).toBe(3);
-      expect(asg?.DesiredCapacity).toBe(2);
-      expect(asg?.HealthCheckType).toBe('ELB');
-      expect(asg?.HealthCheckGracePeriod).toBe(300);
-      console.log(`   Auto Scaling Group verified`);
-    });
+  const { AutoScalingGroups } = await autoscaling.send(
+    new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName!] })
+  );
+  const asg = AutoScalingGroups?.[0];
+
+  expect(asg).toBeDefined();
+  expect(asg?.MinSize).toBe(1);
+  expect(asg?.MaxSize).toBe(3);
+  expect(asg?.DesiredCapacity).toBe(2);
+  expect(asg?.HealthCheckType).toBe('ELB');
+  expect(asg?.HealthCheckGracePeriod).toBe(300);
+  console.log(`   Auto Scaling Group verified`);
+});
+
 
     test('should have scaling policies', async () => {
       const asgResponse = await autoscaling.send(new DescribeAutoScalingGroupsCommand({}));
