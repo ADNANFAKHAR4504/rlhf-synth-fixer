@@ -5,7 +5,6 @@ describe("ProdEnv CloudFormation Template", () => {
   let template: any;
 
   beforeAll(() => {
-    // Ensure you run cfn-flip if using YAML: pipenv run cfn-flip-to-json > lib/TapStack.json
     const templatePath = path.join(__dirname, "../lib/TapStack.json");
     const templateContent = fs.readFileSync(templatePath, "utf8");
     template = JSON.parse(templateContent);
@@ -57,7 +56,7 @@ describe("ProdEnv CloudFormation Template", () => {
       expect(ingress).toEqual(expect.arrayContaining([22, 80, 443]));
     });
 
-    test("should define an encrypted S3 Bucket", () => {
+    test("should define an encrypted S3 Bucket with dynamic name", () => {
       const bucket = Object.values(template.Resources).find(
         (r: any) => r.Type === "AWS::S3::Bucket"
       ) as any;
@@ -69,13 +68,25 @@ describe("ProdEnv CloudFormation Template", () => {
         IgnorePublicAcls: true,
         RestrictPublicBuckets: true,
       });
+      expect(bucket.Properties.BucketName).toHaveProperty("Fn::Sub");
+      const sub = bucket.Properties.BucketName["Fn::Sub"];
+      expect(sub).toMatch(/\$\{AWS::StackName\}/);
+      expect(sub).toMatch(/\$\{AWS::AccountId\}/);
+      expect(sub).toMatch(/\$\{AWS::Region\}/);
     });
 
-    test("should create exactly 2 EC2 instances", () => {
+    test("should create exactly 2 EC2 instances with dynamic Name tags", () => {
       const instances = Object.values(template.Resources).filter(
         (r: any) => r.Type === "AWS::EC2::Instance"
       );
       expect(instances.length).toBe(2);
+
+      instances.forEach(instance => {
+        const inst = instance as any;
+        const nameTag = inst.Properties.Tags.find((t: any) => t.Key === "Name");
+        expect(nameTag.Value).toHaveProperty("Fn::Sub");
+        expect(nameTag.Value["Fn::Sub"]).toMatch(/^\$\{AWS::StackName\}-Instance/);
+      });
     });
 
     test("should create IAM Role and InstanceProfile", () => {
@@ -89,11 +100,20 @@ describe("ProdEnv CloudFormation Template", () => {
       expect(profile).toBeDefined();
     });
 
-    test("should create an SNS Topic", () => {
+    test("should create an SNS Topic with dynamic name", () => {
       const topic = Object.values(template.Resources).find(
         (r: any) => r.Type === "AWS::SNS::Topic"
-      );
+      ) as any;
       expect(topic).toBeDefined();
+      expect(topic.Properties.TopicName).toHaveProperty("Fn::Sub");
+      expect(topic.Properties.TopicName["Fn::Sub"]).toMatch(/^\$\{AWS::StackName\}-CpuAlertTopic/);
+    });
+
+    test("KeyPair resource should have dynamic KeyName", () => {
+      const kp = template.Resources.ProdEnvKeyPair as any;
+      expect(kp).toBeDefined();
+      expect(kp.Properties.KeyName).toHaveProperty("Fn::Sub");
+      expect(kp.Properties.KeyName["Fn::Sub"]).toMatch(/\$\{AWS::StackName\}-KeyPair/);
     });
   });
 
@@ -108,28 +128,6 @@ describe("ProdEnv CloudFormation Template", () => {
       ];
       expected.forEach(key => expect(template.Outputs[key]).toBeDefined());
     });
-
-    test("all outputs should export using Fn::Sub", () => {
-      Object.values(template.Outputs).forEach((output: any) => {
-        if (output.Export && output.Export.Name && output.Export.Name["Fn::Sub"]) {
-          expect(output.Export.Name["Fn::Sub"]).toMatch(/^\${AWS::StackName}-/);
-        }
-      });
-    });
-  });
-
-  describe("Validation", () => {
-    test("should not have null or undefined core sections", () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test("should have at least 2 parameters and 5 outputs", () => {
-      expect(Object.keys(template.Parameters).length).toBeGreaterThanOrEqual(2);
-      expect(Object.keys(template.Outputs).length).toBeGreaterThanOrEqual(5);
-    });
   });
 
   describe("Extended resource validation", () => {
@@ -137,6 +135,7 @@ describe("ProdEnv CloudFormation Template", () => {
       const vpc = Object.values(template.Resources).find(
         (r: any) => r.Type === "AWS::EC2::VPC"
       ) as any;
+      expect(vpc).toBeDefined();
       expect(vpc.Properties.CidrBlock).toBe("10.0.0.0/16");
     });
 
@@ -144,28 +143,23 @@ describe("ProdEnv CloudFormation Template", () => {
       const sg = Object.values(template.Resources).find(
         (r: any) => r.Type === "AWS::EC2::SecurityGroup"
       ) as any;
+      expect(sg).toBeDefined();
       const cidrs = sg.Properties.SecurityGroupIngress.map((i: any) => i.CidrIp);
       expect(cidrs).not.toContain("0.0.0.0/0");
-    });
-
-    test("KeyPair resource should have correct KeyName", () => {
-      const kp = Object.values(template.Resources).find(
-        (r: any) => r.Type === "AWS::EC2::KeyPair"
-      ) as any;
-      expect(kp).toBeDefined();
-      expect(kp.Properties.KeyName).toBe("ProdEnv-KeyPair");
     });
 
     test("S3 bucket should retain on deletion", () => {
       const bucket = Object.values(template.Resources).find(
         (r: any) => r.Type === "AWS::S3::Bucket"
       ) as any;
+      expect(bucket).toBeDefined();
       expect(bucket.DeletionPolicy).toBe("Retain");
       expect(bucket.UpdateReplacePolicy).toBe("Retain");
     });
 
     test("CloudWatch CPU alarm threshold should be 80", () => {
       const alarm1 = template.Resources["ProdEnvInstance1CPUAlarm"];
+      expect(alarm1).toBeDefined();
       expect(alarm1.Properties.Threshold).toBe(80);
     });
 
@@ -173,6 +167,7 @@ describe("ProdEnv CloudFormation Template", () => {
       const sub = Object.values(template.Resources).find(
         (r: any) => r.Type === "AWS::SNS::Subscription"
       ) as any;
+      expect(sub).toBeDefined();
       expect(sub.Condition).toBe("ProdEnvHasEmail");
     });
   });

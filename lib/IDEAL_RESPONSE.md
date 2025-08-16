@@ -18,7 +18,7 @@ Parameters:
   ProdEnvNotificationEmail:
     Type: String
     Default: ''
-    AllowedPattern: '^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
+    AllowedPattern: '^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
@@ -38,7 +38,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: ProdEnv-VPC
+          Value: !Sub "${AWS::StackName}-VPC"
 
   ProdEnvPrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -48,7 +48,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: ProdEnv-Private-Subnet1
+          Value: !Sub "${AWS::StackName}-Private-Subnet1"
 
   ProdEnvPrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -58,7 +58,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: ProdEnv-Private-Subnet2
+          Value: !Sub "${AWS::StackName}-Private-Subnet2"
 
   ProdEnvPrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -66,7 +66,7 @@ Resources:
       VpcId: !Ref ProdEnvVPC
       Tags:
         - Key: Name
-          Value: ProdEnv-Private-RouteTable
+          Value: !Sub "${AWS::StackName}-Private-RouteTable"
 
   ProdEnvSubnetAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -121,27 +121,29 @@ Resources:
           ToPort: 443
           CidrIp: 10.0.0.0/16
       SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 10.0.0.0/16   # Keep internal HTTPS
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: ProdEnv-SG
+          Value: !Sub "${AWS::StackName}-SG"
 
-  # Key Pair
+  # Key Pair (automatic naming)
   ProdEnvKeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
-      KeyName: ProdEnv-KeyPair
+      KeyName: !Sub "${AWS::StackName}-KeyPair"
 
-  # S3 Bucket
+  # S3 Bucket with Encryption and Versioning
   ProdEnvDataBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'prodenv-data-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub "${AWS::StackName}-data-${AWS::AccountId}-${AWS::Region}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -150,7 +152,7 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
 
-  # IAM Role
+  # IAM Role and Instance Profile
   ProdEnvEC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -187,7 +189,7 @@ Resources:
       Roles:
         - !Ref ProdEnvEC2Role
 
-  # EC2 Instances with SSM-based AMI and custom CloudWatch config
+  # EC2 Instances
   ProdEnvInstance1:
     Type: AWS::EC2::Instance
     Properties:
@@ -198,35 +200,9 @@ Resources:
       SecurityGroupIds:
         - !Ref ProdEnvSecurityGroup
       IamInstanceProfile: !Ref ProdEnvInstanceProfile
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          yum update -y
-          yum install -y amazon-cloudwatch-agent
-          cat > /opt/aws/amazon-cloudwatch-agent/bin/config.json <<EOF
-          {
-            "logs": {
-              "logs_collected": {
-                "files": {
-                  "collect_list": [
-                    {
-                      "file_path": "/var/log/messages",
-                      "log_group_name": "/prod/app/messages",
-                      "log_stream_name": "{instance_id}"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-          EOF
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-            -a start -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json
-
       Tags:
         - Key: Name
-          Value: ProdEnv-Instance1
+          Value: !Sub "${AWS::StackName}-Instance1"
 
   ProdEnvInstance2:
     Type: AWS::EC2::Instance
@@ -238,41 +214,15 @@ Resources:
       SecurityGroupIds:
         - !Ref ProdEnvSecurityGroup
       IamInstanceProfile: !Ref ProdEnvInstanceProfile
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          yum update -y
-          yum install -y amazon-cloudwatch-agent
-          cat > /opt/aws/amazon-cloudwatch-agent/bin/config.json <<EOF
-          {
-            "logs": {
-              "logs_collected": {
-                "files": {
-                  "collect_list": [
-                    {
-                      "file_path": "/var/log/messages",
-                      "log_group_name": "/prod/app/messages",
-                      "log_stream_name": "{instance_id}"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-          EOF
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop
-          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-            -a start -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json
-
       Tags:
         - Key: Name
-          Value: ProdEnv-Instance2
+          Value: !Sub "${AWS::StackName}-Instance2"
 
   # SNS Topic
   ProdEnvCpuAlertTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: ProdEnv-CpuAlertTopic
+      TopicName: !Sub "${AWS::StackName}-CpuAlertTopic"
 
   ProdEnvEmailSubscription:
     Type: AWS::SNS::Subscription
@@ -286,7 +236,7 @@ Resources:
   ProdEnvInstance1CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: ProdEnvInstance1-HighCPU
+      AlarmName: !Sub "${AWS::StackName}-Instance1-HighCPU"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -304,7 +254,7 @@ Resources:
   ProdEnvInstance2CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: ProdEnvInstance2-HighCPU
+      AlarmName: !Sub "${AWS::StackName}-Instance2-HighCPU"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average

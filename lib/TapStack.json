@@ -15,7 +15,7 @@
         "ProdEnvNotificationEmail": {
             "Type": "String",
             "Default": "",
-            "AllowedPattern": "^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}$"
+            "AllowedPattern": "^$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
         },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
@@ -47,7 +47,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "ProdEnv-VPC"
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-VPC"
+                        }
                     }
                 ]
             }
@@ -70,7 +72,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "ProdEnv-Private-Subnet1"
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Private-Subnet1"
+                        }
                     }
                 ]
             }
@@ -93,7 +97,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "ProdEnv-Private-Subnet2"
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Private-Subnet2"
+                        }
                     }
                 ]
             }
@@ -107,7 +113,9 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "ProdEnv-Private-RouteTable"
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Private-RouteTable"
+                        }
                     }
                 ]
             }
@@ -204,16 +212,16 @@
                 ],
                 "SecurityGroupEgress": [
                     {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "10.0.0.0/16"
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "ProdEnv-SG"
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-SG"
+                        }
                     }
                 ]
             }
@@ -221,7 +229,9 @@
         "ProdEnvKeyPair": {
             "Type": "AWS::EC2::KeyPair",
             "Properties": {
-                "KeyName": "ProdEnv-KeyPair"
+                "KeyName": {
+                    "Fn::Sub": "${AWS::StackName}-KeyPair"
+                }
             }
         },
         "ProdEnvDataBucket": {
@@ -230,7 +240,16 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "prodenv-data-bucket-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${AWS::StackName}-data-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -331,13 +350,12 @@
                 "IamInstanceProfile": {
                     "Ref": "ProdEnvInstanceProfile"
                 },
-                "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\ncat > /opt/aws/amazon-cloudwatch-agent/bin/config.json <<EOF\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/prod/app/messages\",\n            \"log_stream_name\": \"{instance_id}\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a start -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json\n"
-                },
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "ProdEnv-Instance1"
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Instance1"
+                        }
                     }
                 ]
             }
@@ -365,13 +383,12 @@
                 "IamInstanceProfile": {
                     "Ref": "ProdEnvInstanceProfile"
                 },
-                "UserData": {
-                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\ncat > /opt/aws/amazon-cloudwatch-agent/bin/config.json <<EOF\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/prod/app/messages\",\n            \"log_stream_name\": \"{instance_id}\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a stop\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a start -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json\n"
-                },
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": "ProdEnv-Instance2"
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Instance2"
+                        }
                     }
                 ]
             }
@@ -379,7 +396,9 @@
         "ProdEnvCpuAlertTopic": {
             "Type": "AWS::SNS::Topic",
             "Properties": {
-                "TopicName": "ProdEnv-CpuAlertTopic"
+                "TopicName": {
+                    "Fn::Sub": "${AWS::StackName}-CpuAlertTopic"
+                }
             }
         },
         "ProdEnvEmailSubscription": {
@@ -398,7 +417,9 @@
         "ProdEnvInstance1CPUAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmName": "ProdEnvInstance1-HighCPU",
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-Instance1-HighCPU"
+                },
                 "MetricName": "CPUUtilization",
                 "Namespace": "AWS/EC2",
                 "Statistic": "Average",
@@ -425,7 +446,9 @@
         "ProdEnvInstance2CPUAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmName": "ProdEnvInstance2-HighCPU",
+                "AlarmName": {
+                    "Fn::Sub": "${AWS::StackName}-Instance2-HighCPU"
+                },
                 "MetricName": "CPUUtilization",
                 "Namespace": "AWS/EC2",
                 "Statistic": "Average",

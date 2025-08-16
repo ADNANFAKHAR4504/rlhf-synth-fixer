@@ -4,6 +4,7 @@ import {
   EC2Client,
 } from "@aws-sdk/client-ec2";
 import {
+  GetBucketEncryptionCommand,
   GetBucketLocationCommand,
   GetBucketVersioningCommand,
   S3Client,
@@ -44,23 +45,33 @@ describe("TapStack Infrastructure Integration Tests", () => {
   });
 
   describe("VPC", () => {
-    test("should exist in the correct region", async () => {
+    test("should exist in the correct region and have correct CIDR", async () => {
       const vpcId = outputs.ProdEnvVPCId;
       const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
       expect(res.Vpcs?.length).toBe(1);
-      expect(res.Vpcs?.[0].VpcId).toBe(vpcId);
-      expect(res.Vpcs?.[0].CidrBlock).toBeDefined();
+      const vpc = res.Vpcs?.[0];
+      expect(vpc).toBeDefined();
+      expect(vpc!.VpcId).toBe(vpcId);
+      expect(vpc!.CidrBlock).toBe("10.0.0.0/16");
     });
   });
 
   describe("S3 Bucket", () => {
-    test("ProdEnvDataBucket should be versioned and in correct region", async () => {
+    test("ProdEnvDataBucket should be versioned, encrypted, and in correct region", async () => {
       const bucket = outputs.ProdEnvDataBucketName;
+
       // Check versioning
       const versioning = await s3.send(
         new GetBucketVersioningCommand({ Bucket: bucket })
       );
       expect(versioning.Status).toBe("Enabled");
+
+      // Check encryption
+      const encryption = await s3.send(
+        new GetBucketEncryptionCommand({ Bucket: bucket })
+      );
+      const rules = (encryption.ServerSideEncryptionConfiguration as any[] | undefined)?.[0];
+      expect(rules?.ServerSideEncryptionByDefault?.SSEAlgorithm).toBe("AES256");
 
       // Check region
       const location = await s3.send(
@@ -75,17 +86,19 @@ describe("TapStack Infrastructure Integration Tests", () => {
   });
 
   describe("SNS Topic", () => {
-    test("SNS Topic should exist and be accessible", async () => {
+    test("SNS Topic should exist, be accessible, and match dynamic name", async () => {
       const topicArn = outputs.ProdEnvSNSTopicArn;
       const attrs = await sns.send(
         new GetTopicAttributesCommand({ TopicArn: topicArn })
       );
+      expect(attrs.Attributes).toBeDefined();
       expect(attrs.Attributes?.TopicArn).toBe(topicArn);
+      expect(topicArn).toMatch(/-CpuAlertTopic$/);
     });
   });
 
   describe("EC2 Instances", () => {
-    test("Instance1 and Instance2 should exist and be in running or pending state", async () => {
+    test("Instance1 and Instance2 should exist, be running/pending, and have correct KeyName", async () => {
       const ids = [outputs.ProdEnvInstance1Id, outputs.ProdEnvInstance2Id];
       const res = await ec2.send(
         new DescribeInstancesCommand({ InstanceIds: ids })
@@ -96,8 +109,10 @@ describe("TapStack Infrastructure Integration Tests", () => {
 
       expect(instances.length).toBe(2);
       instances.forEach((instance) => {
+        expect(instance).toBeDefined();
         expect(instance.InstanceId).toBeDefined();
         expect(["running", "pending"]).toContain(instance.State?.Name);
+        expect(instance.KeyName).toMatch(/-KeyPair$/);
       });
     });
   });
