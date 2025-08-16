@@ -2,10 +2,10 @@
 terraform {
   required_version = ">= 1.0"
 
-  backend "s3" {
-    # Backend configuration will be provided via backend config files
-    # or command line during terraform init
-  }
+  # backend "s3" {
+  #   # Backend configuration disabled for CI/CD environments
+  #   # Use local state for testing and validation
+  # }
 
   required_providers {
     aws = {
