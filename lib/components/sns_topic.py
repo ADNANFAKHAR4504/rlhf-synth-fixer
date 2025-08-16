@@ -61,7 +61,7 @@ class SNSTopic(pulumi.ComponentResource):
       opts=pulumi.ResourceOptions(parent=self)
     )
 
-    # Create topic policy
+    # Create topic policy to allow S3 to publish to SNS
     self.topic_policy = aws.sns.TopicPolicy(
       f"{name}-topic-policy",
       arn=self.topic.arn,

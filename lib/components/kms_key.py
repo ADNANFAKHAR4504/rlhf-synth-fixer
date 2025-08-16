@@ -101,7 +101,7 @@ class KMSKey(pulumi.ComponentResource):
       description=config.description,
       deletion_window_in_days=config.deletion_window_days,
       enable_key_rotation=True,
-      policy=pulumi.Output.all().apply(lambda _: _get_key_policy()),
+      policy=_get_key_policy(),
       tags=default_tags,
       opts=pulumi.ResourceOptions(parent=self)
     )

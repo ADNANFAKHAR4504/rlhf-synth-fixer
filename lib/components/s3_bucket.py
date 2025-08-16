@@ -44,16 +44,16 @@ class SecureS3Bucket(pulumi.ComponentResource):
     )
 
     # Enable versioning with optional MFA delete
-    versioning_config = aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+    versioning_config = aws.s3.BucketVersioningVersioningConfigurationArgs(
       status="Enabled"
     )
     if config.enable_mfa_delete:
-      versioning_config = aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+      versioning_config = aws.s3.BucketVersioningVersioningConfigurationArgs(
         status="Enabled",
         mfa_delete="Enabled"
       )
     
-    self.versioning = aws.s3.BucketVersioningV2(
+    self.versioning = aws.s3.BucketVersioning(
       f"{name}-versioning",
       bucket=self.bucket.id,
       versioning_configuration=versioning_config,
@@ -61,15 +61,17 @@ class SecureS3Bucket(pulumi.ComponentResource):
     )
 
     # Configure server-side encryption
-    self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+    self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
       f"{name}-encryption",
       bucket=self.bucket.id,
-      rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+      rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
         apply_server_side_encryption_by_default=
-        aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
           sse_algorithm="aws:kms",
           kms_master_key_id=config.kms_key_id
-        ))],
+        ),
+        bucket_key_enabled=True
+      )],
       opts=pulumi.ResourceOptions(parent=self)
     )
 
@@ -85,31 +87,31 @@ class SecureS3Bucket(pulumi.ComponentResource):
     )
 
     # Configure lifecycle policy
-    self.lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+    self.lifecycle = aws.s3.BucketLifecycleConfiguration(
       f"{name}-lifecycle",
       bucket=self.bucket.id,
       rules=[
-        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+        aws.s3.BucketLifecycleConfigurationRuleArgs(
           id="delete_old_versions",
           status="Enabled",
           noncurrent_version_expiration=
-          aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
+          aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs(
             noncurrent_days=90
           ),
           abort_incomplete_multipart_upload=
-          aws.s3.BucketLifecycleConfigurationV2RuleAbortIncompleteMultipartUploadArgs(
+          aws.s3.BucketLifecycleConfigurationRuleAbortIncompleteMultipartUploadArgs(
             days_after_initiation=7
           )
         ),
-        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+        aws.s3.BucketLifecycleConfigurationRuleArgs(
           id="transition_to_ia",
           status="Enabled",
           transitions=[
-            aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+            aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
               days=30,
               storage_class="STANDARD_IA"
             ),
-            aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+            aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
               days=90,
               storage_class="GLACIER"
             )
@@ -121,7 +123,7 @@ class SecureS3Bucket(pulumi.ComponentResource):
 
     # Configure access logging if logging bucket is provided
     if config.access_logging_bucket:
-      self.logging = aws.s3.BucketLoggingV2(
+      self.logging = aws.s3.BucketLogging(
         f"{name}-logging",
         bucket=self.bucket.id,
         target_bucket=config.access_logging_bucket,
@@ -131,7 +133,7 @@ class SecureS3Bucket(pulumi.ComponentResource):
 
     # Configure SNS notifications
     # Note: SNS topic policy must be created before bucket notification
-    notification_depends_on = [self.bucket]
+    notification_depends_on = [self.bucket, self.bucket_encryption, self.versioning, self.public_access_block]
     if config.sns_topic_component:
       notification_depends_on.append(config.sns_topic_component)
     
