@@ -235,7 +235,7 @@ describe('Terraform HTTP/HTTPS Security Group Infrastructure Unit Tests', () => 
   describe('Tagging Compliance', () => {
     test('all resources should use merge with var.tags', () => {
       const merges = mainTfContent.match(/tags\s*=\s*merge\(var\.tags/g) || [];
-      expect(merges.length).toBeGreaterThan(5); // VPC, IGW, RT, Subnet, SG
+      expect(merges.length).toBeGreaterThanOrEqual(5); // VPC, IGW, RT, Subnet, SG
     });
 
     test('should use consistent tagging strategy with metadata', () => {
