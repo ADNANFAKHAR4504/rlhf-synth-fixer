@@ -10,7 +10,7 @@ Parameters:
 
   ProjectName:
     Type: String
-    Default: secure-web-app1
+    Default: secure-web-app18
     Description: Project name for resource tagging
 
   AllowedCIDR:
