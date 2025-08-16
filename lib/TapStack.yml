@@ -119,7 +119,7 @@ Resources:
             Principal:
               AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
-            Resource: "*"
+            Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
           - Sid: Allow service access with ViaService condition
             Effect: Allow
             Principal:
@@ -131,7 +131,7 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
               - kms:DescribeKey
-            Resource: "*"
+            Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
             Condition:
               StringEquals:
                 "kms:ViaService":
