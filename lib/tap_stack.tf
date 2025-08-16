@@ -7,6 +7,11 @@ variable "bucket_region" {
   default     = "us-west-2"
 }
 
+variable "aws_region" {
+  description = "AWS region for the deployment"
+  type        = string
+  default     = "us-west-2"
+}
 variable "bucket_name" {
   description = "Name of the S3 bucket"
   type        = string
@@ -17,7 +22,7 @@ variable "bucket_tags" {
   description = "Tags to apply to the S3 bucket"
   type        = map(string)
   default = {
-    Project     = "ExampleProject"
+    Project     = "IaC - AWS Nova Model Breaking"
     Environment = "dev"
     ManagedBy   = "terraform"
   }

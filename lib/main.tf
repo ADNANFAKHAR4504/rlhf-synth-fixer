@@ -421,7 +421,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-ec2-profile"
+  name = "${var.project_name}-ec2-291749"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -539,7 +539,7 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Instance with Multi-AZ
 resource "aws_db_instance" "main" {
-  identifier     = "${var.project_name}-database"
+  identifier     = "${var.project_name}-data-291749"
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = "db.t3.micro"
@@ -684,7 +684,7 @@ resource "aws_iam_role_policy_attachment" "maintenance_window" {
 
 # CloudTrail for API monitoring
 resource "aws_cloudtrail" "main" {
-  name           = "${var.project_name}-cloudtrail-${var.environment}-291749"
+  name           = "${var.project_name}-cloudtrail-291749"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
   event_selector {
