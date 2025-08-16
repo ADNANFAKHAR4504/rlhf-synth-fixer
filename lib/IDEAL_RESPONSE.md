@@ -878,5 +878,4 @@ systemctl restart httpd
         "target_group_arn": self.target_group.arn,
     })
 
-
 ```

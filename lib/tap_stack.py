@@ -52,8 +52,8 @@ Compliance-focused mapping to the prompt requirements
    - user_data installs httpd, renders env-specific index.html.
    - adds '/env' and '/health' endpoints (static content).
    - Logs shipped to CloudWatch (awslogs).
-11) Deletion MODE is allowed only in Prod, not in Dev
-12) Follow cost saving rules as well
+11) Deletion MODE is allowed only in Prod, not in Dev.
+12) Follow cost saving rules as well.
 
 SECURITY / ZERO DOWNTIME / ROLLBACK markers are included inline below.
 ================================================================================
