@@ -12,13 +12,9 @@ import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
 import * as fs from "fs";
 import * as path from "path";
 
-// Type definitions
+// Type definitions based on actual outputs.json structure
 type Environment = "dev" | "staging" | "production";
 type ResourceType = "vpc" | "subnet" | "igw" | "nat" | "sg" | "instance" | "arn";
-
-interface EnvironmentConfig {
-  [key: string]: string;
-}
 
 interface ExpectedInstanceTypes {
   dev: string;
@@ -32,14 +28,129 @@ interface ExpectedCidrs {
   production: string;
 }
 
+// Interface definitions matching your actual outputs.json structure
+interface TerraformOutputs {
+  ec2_instance_ids: {
+    value: {
+      dev: string;
+      staging: string;
+      production: string;
+    };
+  };
+  ec2_private_ips: {
+    value: {
+      dev: string;
+      staging: string;
+      production: string;
+    };
+  };
+  ec2_public_ips: {
+    value: {
+      dev: string;
+      staging: string;
+      production: string;
+    };
+  };
+  environment_summary: {
+    value: {
+      dev: {
+        instance_id: string;
+        instance_type: string;
+        private_ip: string;
+        public_ip: string;
+        vpc_cidr: string;
+        vpc_id: string;
+      };
+      staging: {
+        instance_id: string;
+        instance_type: string;
+        private_ip: string;
+        public_ip: string;
+        vpc_cidr: string;
+        vpc_id: string;
+      };
+      production: {
+        instance_id: string;
+        instance_type: string;
+        private_ip: string;
+        public_ip: string;
+        vpc_cidr: string;
+        vpc_id: string;
+      };
+    };
+  };
+  iam_role_arns: {
+    value: {
+      dev: string;
+      staging: string;
+      production: string;
+    };
+  };
+  internet_gateway_ids: {
+    value: {
+      dev: string;
+      staging: string;
+      production: string;
+    };
+  };
+  nat_gateway_ids: {
+    value: {
+      dev: string;
+      staging: string;
+      production: string;
+    };
+  };
+  private_subnet_ids: {
+    value: {
+      "dev-private-0": string;
+      "dev-private-1": string;
+      "staging-private-0": string;
+      "staging-private-1": string;
+      "production-private-0": string;
+      "production-private-1": string;
+    };
+  };
+  public_subnet_ids: {
+    value: {
+      "dev-public-0": string;
+      "dev-public-1": string;
+      "staging-public-0": string;
+      "staging-public-1": string;
+      "production-public-0": string;
+      "production-public-1": string;
+    };
+  };
+  security_group_ids: {
+    value: {
+      dev: string;
+      staging: string;
+      production: string;
+    };
+  };
+  vpc_cidrs: {
+    value: {
+      dev: string;
+      staging: string;
+      production: string;
+    };
+  };
+  vpc_ids: {
+    value: {
+      dev: string;
+      staging: string;
+      production: string;
+    };
+  };
+}
+
 // Test configuration
 const REGION = process.env.AWS_REGION || "us-west-2";
 const environments: Environment[] = ["dev", "staging", "production"];
-const SKIP_AWS_CALLS = process.env.SKIP_AWS_CALLS === "true"; // Flag to skip actual AWS calls for testing
+const SKIP_AWS_CALLS = process.env.SKIP_AWS_CALLS === "true";
 
 // Load outputs from the specified path
 const outputPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
-let outputs: any;
+let outputs: TerraformOutputs;
 
 try {
   outputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
@@ -48,13 +159,23 @@ try {
   throw new Error("Cannot load Terraform outputs for integration tests");
 }
 
-// AWS clients - only create if not skipping AWS calls
+// AWS clients
 let ec2Client: EC2Client | null = null;
 let iamClient: IAMClient | null = null;
 
 if (!SKIP_AWS_CALLS) {
   ec2Client = new EC2Client({ region: REGION });
   iamClient = new IAMClient({ region: REGION });
+}
+
+// Helper function to get subnet IDs for an environment
+function getSubnetIds(env: Environment, type: 'public' | 'private'): string[] {
+  const subnetMap = type === 'public' ? outputs.public_subnet_ids.value : outputs.private_subnet_ids.value;
+  const prefix = `${env}-${type}`;
+  
+  return Object.keys(subnetMap)
+    .filter(key => key.startsWith(prefix))
+    .map(key => subnetMap[key as keyof typeof subnetMap]);
 }
 
 // Helper function to validate IP format
@@ -121,7 +242,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       
       requiredKeys.forEach(key => {
         expect(outputs).toHaveProperty(key);
-        expect(outputs[key]).toHaveProperty('value');
+        expect(outputs[key as keyof TerraformOutputs]).toHaveProperty('value');
       });
     });
 
@@ -130,6 +251,16 @@ describe("Terraform Infrastructure Integration Tests", () => {
         expect(outputs.vpc_ids.value).toHaveProperty(env);
         expect(outputs.ec2_instance_ids.value).toHaveProperty(env);
         expect(outputs.environment_summary.value).toHaveProperty(env);
+      });
+    });
+
+    it("should have correct subnet structure", () => {
+      // Validate public subnets
+      environments.forEach(env => {
+        expect(outputs.public_subnet_ids.value).toHaveProperty(`${env}-public-0`);
+        expect(outputs.public_subnet_ids.value).toHaveProperty(`${env}-public-1`);
+        expect(outputs.private_subnet_ids.value).toHaveProperty(`${env}-private-0`);
+        expect(outputs.private_subnet_ids.value).toHaveProperty(`${env}-private-1`);
       });
     });
   });
@@ -150,7 +281,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
           igwId: outputs.internet_gateway_ids.value[env],
           natGwId: outputs.nat_gateway_ids.value[env],
           sgId: outputs.security_group_ids.value[env],
-          summary: outputs.environment_summary.value[env]
+          summary: outputs.environment_summary.value[env],
+          publicSubnetIds: getSubnetIds(env, 'public'),
+          privateSubnetIds: getSubnetIds(env, 'private')
         };
       });
 
@@ -162,6 +295,15 @@ describe("Terraform Infrastructure Integration Tests", () => {
           expect(isValidAWSResourceId(envData.natGwId, 'nat')).toBe(true);
           expect(isValidAWSResourceId(envData.sgId, 'sg')).toBe(true);
           expect(isValidAWSResourceId(envData.iamRoleArn, 'arn')).toBe(true);
+        });
+
+        it("should have valid subnet IDs", () => {
+          envData.publicSubnetIds.forEach((id: string) => {
+            expect(isValidAWSResourceId(id, 'subnet')).toBe(true);
+          });
+          envData.privateSubnetIds.forEach((id: string) => {
+            expect(isValidAWSResourceId(id, 'subnet')).toBe(true);
+          });
         });
 
         it("should have valid IP addresses and CIDR blocks", () => {
@@ -232,24 +374,25 @@ describe("Terraform Infrastructure Integration Tests", () => {
       });
 
       describe("Subnet Infrastructure", () => {
+        it("should have exactly 2 public subnets per environment", () => {
+          expect(envData.publicSubnetIds).toHaveLength(2);
+        });
+
+        it("should have exactly 2 private subnets per environment", () => {
+          expect(envData.privateSubnetIds).toHaveLength(2);
+        });
+
         it("should validate public subnets configuration", async () => {
-          const publicSubnetKeys = Object.keys(outputs.public_subnet_ids.value)
-            .filter(key => key.startsWith(`${env}-public`));
-          
-          expect(publicSubnetKeys.length).toBeGreaterThanOrEqual(2);
-          
-          const subnetIds = publicSubnetKeys.map(key => outputs.public_subnet_ids.value[key]);
-          
           const result = await safeAwsCall(
             () => ec2Client!.send(new DescribeSubnetsCommand({
-              SubnetIds: subnetIds
+              SubnetIds: envData.publicSubnetIds
             })),
             "Public Subnets",
-            subnetIds.join(", ")
+            envData.publicSubnetIds.join(", ")
           );
 
           if (result.success && result.data) {
-            expect(result.data.Subnets).toHaveLength(subnetIds.length);
+            expect(result.data.Subnets).toHaveLength(envData.publicSubnetIds.length);
             result.data.Subnets!.forEach(subnet => {
               expect(subnet.VpcId).toBe(envData.vpcId);
               expect(subnet.MapPublicIpOnLaunch).toBe(true);
@@ -258,28 +401,21 @@ describe("Terraform Infrastructure Integration Tests", () => {
           } else {
             console.warn(`Public subnet validation skipped: ${result.error}`);
             // Validate structure at minimum
-            subnetIds.forEach(id => expect(id).toMatch(/^subnet-[0-9a-f]+$/));
+            envData.publicSubnetIds.forEach((id: string) => expect(id).toMatch(/^subnet-[0-9a-f]+$/));
           }
         });
 
         it("should validate private subnets configuration", async () => {
-          const privateSubnetKeys = Object.keys(outputs.private_subnet_ids.value)
-            .filter(key => key.startsWith(`${env}-private`));
-          
-          expect(privateSubnetKeys.length).toBeGreaterThanOrEqual(2);
-          
-          const subnetIds = privateSubnetKeys.map(key => outputs.private_subnet_ids.value[key]);
-          
           const result = await safeAwsCall(
             () => ec2Client!.send(new DescribeSubnetsCommand({
-              SubnetIds: subnetIds
+              SubnetIds: envData.privateSubnetIds
             })),
             "Private Subnets",
-            subnetIds.join(", ")
+            envData.privateSubnetIds.join(", ")
           );
 
           if (result.success && result.data) {
-            expect(result.data.Subnets).toHaveLength(subnetIds.length);
+            expect(result.data.Subnets).toHaveLength(envData.privateSubnetIds.length);
             result.data.Subnets!.forEach(subnet => {
               expect(subnet.VpcId).toBe(envData.vpcId);
               expect(subnet.MapPublicIpOnLaunch).toBe(false);
@@ -288,7 +424,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
           } else {
             console.warn(`Private subnet validation skipped: ${result.error}`);
             // Validate structure at minimum
-            subnetIds.forEach(id => expect(id).toMatch(/^subnet-[0-9a-f]+$/));
+            envData.privateSubnetIds.forEach((id: string) => expect(id).toMatch(/^subnet-[0-9a-f]+$/));
           }
         });
       });
@@ -401,11 +537,11 @@ describe("Terraform Infrastructure Integration Tests", () => {
 
           if (result.success && result.data) {
             const instance = result.data.Reservations![0].Instances![0];
-            expect(instance.InstanceType).toBe(expectedTypes[env as keyof ExpectedInstanceTypes]);
+            expect(instance.InstanceType).toBe(expectedTypes[env]);
           }
           
           // Always validate the summary data regardless of AWS API success
-          expect(envData.summary.instance_type).toBe(expectedTypes[env as keyof ExpectedInstanceTypes]);
+          expect(envData.summary.instance_type).toBe(expectedTypes[env]);
         });
 
         it("should validate network configuration", async () => {
@@ -463,7 +599,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
             staging: '10.1.0.0/16',
             production: '10.2.0.0/16'
           };
-          expect(envData.vpcCidr).toBe(expectedCidrs[env as keyof ExpectedCidrs]);
+          expect(envData.vpcCidr).toBe(expectedCidrs[env]);
         });
 
         it("should have private IP in correct CIDR range", () => {
@@ -495,6 +631,15 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(uniqueInstanceIds.size).toBe(environments.length);
     });
 
+    it("should have unique subnet IDs across all environments", () => {
+      const allPublicSubnets = Object.values(outputs.public_subnet_ids.value);
+      const allPrivateSubnets = Object.values(outputs.private_subnet_ids.value);
+      const allSubnets = [...allPublicSubnets, ...allPrivateSubnets];
+      
+      const uniqueSubnets = new Set(allSubnets);
+      expect(uniqueSubnets.size).toBe(allSubnets.length);
+    });
+
     it("should have non-overlapping CIDR blocks", () => {
       const cidrs = environments.map(env => outputs.vpc_cidrs.value[env]);
       const uniqueCidrs = new Set(cidrs);
@@ -510,14 +655,11 @@ describe("Terraform Infrastructure Integration Tests", () => {
   describe("Infrastructure Standards Compliance", () => {
     environments.forEach(env => {
       it(`${env} environment should meet high availability standards`, () => {
-        // Check for multiple subnets (HA requirement)
-        const publicSubnetKeys = Object.keys(outputs.public_subnet_ids.value)
-          .filter(key => key.startsWith(`${env}-public`));
-        const privateSubnetKeys = Object.keys(outputs.private_subnet_ids.value)  
-          .filter(key => key.startsWith(`${env}-private`));
+        const publicSubnetIds = getSubnetIds(env, 'public');
+        const privateSubnetIds = getSubnetIds(env, 'private');
           
-        expect(publicSubnetKeys.length).toBeGreaterThanOrEqual(2);
-        expect(privateSubnetKeys.length).toBeGreaterThanOrEqual(2);
+        expect(publicSubnetIds.length).toBe(2); // Exactly 2 for HA
+        expect(privateSubnetIds.length).toBe(2); // Exactly 2 for HA
       });
     });
 
@@ -525,6 +667,38 @@ describe("Terraform Infrastructure Integration Tests", () => {
       environments.forEach(env => {
         const roleArn = outputs.iam_role_arns.value[env];
         expect(roleArn).toContain(`ec2-role-${env}`);
+        
+        // Validate subnet naming
+        const publicSubnets = getSubnetIds(env, 'public');
+        const privateSubnets = getSubnetIds(env, 'private');
+        
+        expect(publicSubnets).toHaveLength(2);
+        expect(privateSubnets).toHaveLength(2);
+      });
+    });
+
+    it("should have all required infrastructure components per environment", () => {
+      environments.forEach(env => {
+        // Each environment should have all core components
+        expect(outputs.vpc_ids.value[env]).toBeTruthy();
+        expect(outputs.ec2_instance_ids.value[env]).toBeTruthy();
+        expect(outputs.iam_role_arns.value[env]).toBeTruthy();
+        expect(outputs.internet_gateway_ids.value[env]).toBeTruthy();
+        expect(outputs.nat_gateway_ids.value[env]).toBeTruthy();
+        expect(outputs.security_group_ids.value[env]).toBeTruthy();
+        
+        // Network components
+        expect(getSubnetIds(env, 'public')).toHaveLength(2);
+        expect(getSubnetIds(env, 'private')).toHaveLength(2);
+        
+        // Environment summary should be complete
+        const summary = outputs.environment_summary.value[env];
+        expect(summary.instance_id).toBeTruthy();
+        expect(summary.instance_type).toBeTruthy();
+        expect(summary.private_ip).toBeTruthy();
+        expect(summary.public_ip).toBeTruthy();
+        expect(summary.vpc_cidr).toBeTruthy();
+        expect(summary.vpc_id).toBeTruthy();
       });
     });
   });
