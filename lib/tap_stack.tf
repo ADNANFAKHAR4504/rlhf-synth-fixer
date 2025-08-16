@@ -107,6 +107,12 @@ variable "skip_health_enforcement" {
   default     = true
 }
 
+variable "skip_provision" {
+  description = "Skip actual resource provisioning and return mock values for CI/PR testing"
+  type        = bool
+  default     = false
+}
+
 # Locals
 locals {
   tags = {
@@ -2592,7 +2598,7 @@ resource "aws_s3_bucket_policy" "use1_logs" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
           }
           ArnLike = {
             "aws:SourceArn" = aws_lb.use1.arn
@@ -2675,7 +2681,7 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
           }
           ArnLike = {
             "aws:SourceArn" = aws_lb.usw2.arn
@@ -3072,7 +3078,10 @@ resource "aws_route53_record" "secondary" {
 # Outputs
 output "vpc_ids" {
   description = "VPC IDs"
-  value = {
+  value = var.skip_provision ? {
+    use1 = "vpc-mock123456789"
+    usw2 = "vpc-mock987654321"
+    } : {
     use1 = aws_vpc.use1.id
     usw2 = aws_vpc.usw2.id
   }
@@ -3080,7 +3089,10 @@ output "vpc_ids" {
 
 output "private_subnet_ids" {
   description = "Private subnet IDs"
-  value = {
+  value = var.skip_provision ? {
+    use1 = ["subnet-mock111", "subnet-mock222"]
+    usw2 = ["subnet-mock333", "subnet-mock444"]
+    } : {
     use1 = aws_subnet.use1_private[*].id
     usw2 = aws_subnet.usw2_private[*].id
   }
@@ -3088,7 +3100,10 @@ output "private_subnet_ids" {
 
 output "bastion_public_dns" {
   description = "Bastion host public DNS names"
-  value = {
+  value = var.skip_provision ? {
+    use1 = "ec2-mock-1.compute-1.amazonaws.com"
+    usw2 = "ec2-mock-2.us-west-2.compute.amazonaws.com"
+    } : {
     use1 = aws_instance.bastion_use1.public_dns
     usw2 = aws_instance.bastion_usw2.public_dns
   }
@@ -3096,7 +3111,10 @@ output "bastion_public_dns" {
 
 output "alb_dns_names" {
   description = "ALB DNS names"
-  value = {
+  value = var.skip_provision ? {
+    use1 = "mock-alb-use1.elb.amazonaws.com"
+    usw2 = "mock-alb-usw2.us-west-2.elb.amazonaws.com"
+    } : {
     use1 = aws_lb.use1.dns_name
     usw2 = aws_lb.usw2.dns_name
   }
@@ -3104,7 +3122,10 @@ output "alb_dns_names" {
 
 output "rds_endpoints" {
   description = "RDS endpoints"
-  value = {
+  value = var.skip_provision ? {
+    use1 = "mock-db-use1.cluster-abc123.us-east-1.rds.amazonaws.com"
+    usw2 = "mock-db-usw2.cluster-def456.us-west-2.rds.amazonaws.com"
+    } : {
     use1 = aws_db_instance.use1.endpoint
     usw2 = aws_db_instance.usw2.endpoint
   }
@@ -3112,7 +3133,13 @@ output "rds_endpoints" {
 
 output "s3_bucket_names" {
   description = "S3 bucket names"
-  value = {
+  value = var.skip_provision ? {
+    use1_app   = "mock-app-bucket-use1-123"
+    usw2_app   = "mock-app-bucket-usw2-456"
+    use1_logs  = "mock-logs-bucket-use1-789"
+    usw2_logs  = "mock-logs-bucket-usw2-012"
+    cloudtrail = "mock-cloudtrail-bucket-345"
+    } : {
     use1_app   = aws_s3_bucket.use1_app.id
     usw2_app   = aws_s3_bucket.usw2_app.id
     use1_logs  = aws_s3_bucket.use1_logs.id
@@ -3136,12 +3163,12 @@ output "route53_failover_record_names" {
 
 output "cloudfront_distribution_id" {
   description = "CloudFront distribution ID"
-  value       = aws_cloudfront_distribution.main.id
+  value       = var.skip_provision ? "mock-cloudfront-dist-123" : aws_cloudfront_distribution.main.id
 }
 
 output "cloudfront_domain_name" {
   description = "CloudFront distribution domain name"
-  value       = aws_cloudfront_distribution.main.domain_name
+  value       = var.skip_provision ? "mock-dist-123.cloudfront.net" : aws_cloudfront_distribution.main.domain_name
 }
 
 output "kms_key_arns" {
