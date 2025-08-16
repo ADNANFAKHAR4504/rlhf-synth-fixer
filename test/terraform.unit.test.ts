@@ -130,7 +130,7 @@ describe('Terraform Stack Unit Tests', () => {
       const appBucketBlock = stackContent.match(
         /resource\s+"aws_s3_bucket"\s+"app"\s*{[\s\S]*?}/m
       )?.[0];
-      expect(appBucketBlock).toMatch(/bucket\s*=\s*var\.app_bucket_name/);
+      expect(appBucketBlock).toMatch(/bucket\s*=\s*local\.app_bucket_name/);
     });
 
     test('app bucket has common tags', () => {
@@ -151,7 +151,9 @@ describe('Terraform Stack Unit Tests', () => {
       expect(stackContent).toMatch(
         /resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"app"/
       );
-      expect(stackContent).toMatch(/kms_master_key_id\s*=\s*var\.kms_key_arn/);
+      expect(stackContent).toMatch(
+        /kms_master_key_id\s*=\s*local\.kms_key_arn/
+      );
       expect(stackContent).toMatch(/sse_algorithm\s*=\s*"aws:kms"/);
     });
 
@@ -280,7 +282,7 @@ describe('Terraform Stack Unit Tests', () => {
       expect(instanceBlock).toMatch(
         /instance_type\s*=\s*var\.ec2_instance_type/
       );
-      expect(instanceBlock).toMatch(/subnet_id\s*=\s*var\.subnet_id/);
+      expect(instanceBlock).toMatch(/subnet_id\s*=\s*local\.subnet_id/);
     });
 
     test('EC2 instance has no public IP for security', () => {
@@ -304,7 +306,7 @@ describe('Terraform Stack Unit Tests', () => {
 
     test('CloudTrail has required security configurations', () => {
       const trailBlock = stackContent.match(
-        /resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?}/m
+        /resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?^}/m
       )?.[0];
       expect(trailBlock).toMatch(/is_multi_region_trail\s*=\s*true/);
       expect(trailBlock).toMatch(/include_global_service_events\s*=\s*true/);
@@ -313,14 +315,14 @@ describe('Terraform Stack Unit Tests', () => {
 
     test('CloudTrail uses KMS encryption', () => {
       const trailBlock = stackContent.match(
-        /resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?}/m
+        /resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?^}/m
       )?.[0];
-      expect(trailBlock).toMatch(/kms_key_id\s*=\s*var\.kms_key_arn/);
+      expect(trailBlock).toMatch(/kms_key_id\s*=\s*local\.kms_key_arn/);
     });
 
     test('CloudTrail depends on trail bucket policy', () => {
       const trailBlock = stackContent.match(
-        /resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?}/m
+        /resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?^}/m
       )?.[0];
       expect(trailBlock).toMatch(
         /depends_on\s*=\s*\[aws_s3_bucket_policy\.trail\]/
@@ -344,7 +346,7 @@ describe('Terraform Stack Unit Tests', () => {
         const resourceType = resource.split('.')[0];
         const resourceName = resource.split('.')[1];
         const resourceRegex = new RegExp(
-          `resource\\s+"${resourceType}"\\s+"${resourceName}"\\s*{[\\s\\S]*?}`,
+          `resource\\s+"${resourceType}"\\s+"${resourceName}"\\s*{[\\s\\S]*?^}`,
           'm'
         );
         const resourceBlock = stackContent.match(resourceRegex)?.[0];
@@ -417,7 +419,9 @@ describe('Terraform Stack Unit Tests', () => {
 
     test('S3 buckets have encryption enabled', () => {
       expect(stackContent).toMatch(/sse_algorithm\s*=\s*"aws:kms"/);
-      expect(stackContent).toMatch(/kms_master_key_id\s*=\s*var\.kms_key_arn/);
+      expect(stackContent).toMatch(
+        /kms_master_key_id\s*=\s*local\.kms_key_arn/
+      );
     });
 
     test('security groups follow least privilege', () => {

@@ -11,13 +11,13 @@ variable "aws_region" {
 }
 
 variable "kms_key_arn" {
-  description = "KMS key ARN for S3 SSE-KMS encryption"
+  description = "KMS key ARN for S3 SSE-KMS encryption. Leave empty to use AWS managed key"
   type        = string
-  default     = "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012"
+  default     = ""
   nullable    = false
   validation {
-    condition     = can(regex("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+$", var.kms_key_arn))
-    error_message = "KMS key ARN must be valid AWS KMS key ARN format."
+    condition     = var.kms_key_arn == "" || can(regex("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+$", var.kms_key_arn))
+    error_message = "KMS key ARN must be valid AWS KMS key ARN format or empty to use AWS managed key."
   }
 }
 
@@ -35,10 +35,10 @@ variable "allowed_cidr" {
 variable "app_bucket_name" {
   description = "S3 bucket name for application data with tag-restricted access"
   type        = string
-  default     = "production-app-bucket-default"
+  default     = ""
   nullable    = false
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.app_bucket_name)) && length(var.app_bucket_name) >= 3 && length(var.app_bucket_name) <= 63
+    condition     = var.app_bucket_name == "" || (can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.app_bucket_name)) && length(var.app_bucket_name) >= 3 && length(var.app_bucket_name) <= 63)
     error_message = "S3 bucket name must be 3-63 characters, lowercase, start/end with alphanumeric, and contain only lowercase letters, numbers, and hyphens."
   }
 }
@@ -46,10 +46,10 @@ variable "app_bucket_name" {
 variable "trail_bucket_name" {
   description = "S3 bucket name dedicated for CloudTrail logs"
   type        = string
-  default     = "production-trail-bucket-default"
+  default     = ""
   nullable    = false
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.trail_bucket_name)) && length(var.trail_bucket_name) >= 3 && length(var.trail_bucket_name) <= 63
+    condition     = var.trail_bucket_name == "" || (can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.trail_bucket_name)) && length(var.trail_bucket_name) >= 3 && length(var.trail_bucket_name) <= 63)
     error_message = "S3 bucket name must be 3-63 characters, lowercase, start/end with alphanumeric, and contain only lowercase letters, numbers, and hyphens."
   }
 }
@@ -88,25 +88,30 @@ variable "iam_user_name" {
 }
 
 variable "vpc_id" {
-  description = "VPC ID for EC2 instance deployment"
+  description = "VPC ID for EC2 instance deployment. Leave empty to use default VPC"
   type        = string
-  default     = "vpc-12345678" # Default VPC placeholder
+  default     = ""
   nullable    = false
   validation {
-    condition     = can(regex("^vpc-[a-f0-9]{8,17}$", var.vpc_id))
-    error_message = "VPC ID must be in format vpc-xxxxxxxx."
+    condition     = var.vpc_id == "" || can(regex("^vpc-[a-f0-9]{8,17}$", var.vpc_id))
+    error_message = "VPC ID must be in format vpc-xxxxxxxx or empty to use default VPC."
   }
 }
 
 variable "subnet_id" {
-  description = "Subnet ID for EC2 instance deployment"
+  description = "Subnet ID for EC2 instance deployment. Leave empty to use first available subnet"
   type        = string
-  default     = "subnet-12345678" # Default subnet placeholder
+  default     = ""
   nullable    = false
   validation {
-    condition     = can(regex("^subnet-[a-f0-9]{8,17}$", var.subnet_id))
-    error_message = "Subnet ID must be in format subnet-xxxxxxxx."
+    condition     = var.subnet_id == "" || can(regex("^subnet-[a-f0-9]{8,17}$", var.subnet_id))
+    error_message = "Subnet ID must be in format subnet-xxxxxxxx or empty to use first available subnet."
   }
+}
+
+# Random ID for unique resource naming
+resource "random_id" "suffix" {
+  byte_length = 4
 }
 
 # Locals
@@ -117,16 +122,59 @@ locals {
 
   account_id = data.aws_caller_identity.current.account_id
 
-  app_bucket_arn   = "arn:aws:s3:::${var.app_bucket_name}"
-  trail_bucket_arn = "arn:aws:s3:::${var.trail_bucket_name}"
+  # Determine VPC and subnet to use
+  vpc_id    = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
+  subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnet.first_available[0].id
+
+  # Determine KMS key to use
+  kms_key_arn = var.kms_key_arn != "" ? var.kms_key_arn : data.aws_kms_key.s3[0].arn
+
+  # Generate unique bucket names if not provided
+  app_bucket_name   = var.app_bucket_name != "" ? var.app_bucket_name : "prod-app-${random_id.suffix.hex}"
+  trail_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : "prod-trail-${random_id.suffix.hex}"
+
+  app_bucket_arn   = "arn:aws:s3:::${local.app_bucket_name}"
+  trail_bucket_arn = "arn:aws:s3:::${local.trail_bucket_name}"
 }
 
 # Data sources
 data "aws_caller_identity" "current" {}
 
+# Get default VPC if no VPC ID provided
+data "aws_vpc" "default" {
+  count   = var.vpc_id == "" ? 1 : 0
+  default = true
+}
+
+# Get VPC by ID if provided
+data "aws_vpc" "selected" {
+  count = var.vpc_id != "" ? 1 : 0
+  id    = var.vpc_id
+}
+
+# Get first available subnet in the VPC if no subnet ID provided
+data "aws_subnets" "available" {
+  count = var.subnet_id == "" ? 1 : 0
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id]
+  }
+}
+
+# Get AWS managed S3 KMS key if no custom key provided
+data "aws_kms_key" "s3" {
+  count  = var.kms_key_arn == "" ? 1 : 0
+  key_id = "alias/aws/s3"
+}
+
+data "aws_subnet" "first_available" {
+  count = var.subnet_id == "" ? 1 : 0
+  id    = data.aws_subnets.available[0].ids[0]
+}
+
 # S3 Application Bucket
 resource "aws_s3_bucket" "app" {
-  bucket = var.app_bucket_name
+  bucket = local.app_bucket_name
   tags   = local.common_tags
 }
 
@@ -142,7 +190,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = var.kms_key_arn
+      kms_master_key_id = local.kms_key_arn
       sse_algorithm     = "aws:kms"
     }
     bucket_key_enabled = true
@@ -276,7 +324,7 @@ resource "aws_iam_role_policy" "app_access" {
 
 # S3 CloudTrail Bucket
 resource "aws_s3_bucket" "trail" {
-  bucket = var.trail_bucket_name
+  bucket = local.trail_bucket_name
   tags   = local.common_tags
 }
 
@@ -292,7 +340,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "trail" {
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = var.kms_key_arn
+      kms_master_key_id = local.kms_key_arn
       sse_algorithm     = "aws:kms"
     }
     bucket_key_enabled = true
@@ -373,7 +421,7 @@ resource "aws_s3_bucket_policy" "trail" {
 # Security Group
 resource "aws_security_group" "main" {
   name_prefix = "production-sg-"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.vpc_id
   tags        = merge(local.common_tags, { Name = "production-security-group" })
 
   ingress {
@@ -405,7 +453,7 @@ resource "aws_security_group" "main" {
 resource "aws_instance" "main" {
   ami                    = var.ec2_ami_id
   instance_type          = var.ec2_instance_type
-  subnet_id              = var.subnet_id
+  subnet_id              = local.subnet_id
   vpc_security_group_ids = [aws_security_group.main.id]
 
   # No public IP for security
@@ -428,14 +476,14 @@ resource "aws_instance" "main" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name           = "production-trail"
+  name           = "production-trail-${random_id.suffix.hex}"
   s3_bucket_name = aws_s3_bucket.trail.id
 
   is_multi_region_trail         = true
   include_global_service_events = true
   enable_log_file_validation    = true
 
-  kms_key_id = var.kms_key_arn
+  kms_key_id = local.kms_key_arn
 
   tags = local.common_tags
 
@@ -543,6 +591,6 @@ output "iam_deployer_user_arn" {
 }
 
 output "kms_key_arn_passthrough" {
-  description = "KMS key ARN passed through from input"
-  value       = var.kms_key_arn
+  description = "KMS key ARN used for encryption"
+  value       = local.kms_key_arn
 }
