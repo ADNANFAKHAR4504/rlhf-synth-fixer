@@ -1356,7 +1356,7 @@ resource "aws_instance" "bastion_use1" {
     kms_key_id  = aws_kms_key.use1.arn
   }
 
-  user_data_base64 = base64encode(templatefile("${path.module}/user-data/bastion.sh", {
+  user_data = base64encode(templatefile("${path.module}/user-data/bastion.sh", {
     log_group = aws_cloudwatch_log_group.use1_bastion.name
     region    = "us-east-1"
   }))
@@ -1384,7 +1384,7 @@ resource "aws_instance" "bastion_usw2" {
     kms_key_id  = aws_kms_key.usw2.arn
   }
 
-  user_data_base64 = base64encode(templatefile("${path.module}/user-data/bastion.sh", {
+  user_data = base64encode(templatefile("${path.module}/user-data/bastion.sh", {
     log_group = aws_cloudwatch_log_group.usw2_bastion.name
     region    = "us-west-2"
   }))
@@ -1418,7 +1418,7 @@ resource "aws_launch_template" "use1_app" {
     }
   }
 
-  user_data_base64 = base64encode(templatefile("${path.module}/user-data/app.sh", {
+  user_data = base64encode(templatefile("${path.module}/user-data/app.sh", {
     log_group = aws_cloudwatch_log_group.use1_app.name
     region    = "us-east-1"
   }))
@@ -1459,7 +1459,7 @@ resource "aws_launch_template" "usw2_app" {
     }
   }
 
-  user_data_base64 = base64encode(templatefile("${path.module}/user-data/app.sh", {
+  user_data = base64encode(templatefile("${path.module}/user-data/app.sh", {
     log_group = aws_cloudwatch_log_group.usw2_app.name
     region    = "us-west-2"
   }))
