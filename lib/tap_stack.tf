@@ -104,7 +104,7 @@ resource "random_string" "deployment_id" {
   special = false
   keepers = {
     deployment = "reset816"
-    force_recreation = "20250816-030000"
+    force_recreation = "20250816-031000"
   }
 }
 
@@ -132,6 +132,7 @@ resource "aws_kms_key" "main" {
   tags = local.common_tags
 
   lifecycle {
+    create_before_destroy = true
     replace_triggered_by = [
       random_string.deployment_id
     ]
@@ -144,6 +145,7 @@ resource "aws_kms_alias" "main" {
   depends_on    = [aws_kms_key.main]
 
   lifecycle {
+    create_before_destroy = true
     replace_triggered_by = [
       random_string.deployment_id
     ]
@@ -176,6 +178,12 @@ resource "aws_internet_gateway" "main" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-igw"
   })
+
+  depends_on = [aws_vpc.main]
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Public Subnets
@@ -284,9 +292,13 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/flowlogs/${local.name_prefix}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
-  depends_on        = [aws_kms_key.main]
+  depends_on        = [aws_kms_key.main, aws_kms_alias.main]
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # IAM Role for VPC Flow Logs
@@ -431,7 +443,7 @@ resource "aws_s3_bucket" "main" {
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${local.name_prefix}-ct-${random_string.unique_suffix.result}"
+  bucket = "${local.name_prefix}-logs-${random_string.unique_suffix.result}"
 
   # Force delete bucket even if not empty
   force_destroy = true
@@ -445,6 +457,10 @@ resource "aws_s3_bucket" "cloudtrail" {
       random_string.deployment_id
     ]
     create_before_destroy = true
+    prevent_destroy = false
+    ignore_changes = [
+      # Ignore any attempts to reference old bucket
+    ]
   }
 }
 
