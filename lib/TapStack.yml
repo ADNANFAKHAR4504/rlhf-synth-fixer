@@ -137,6 +137,13 @@ Parameters:
     Default: DevOps
     Description: Owner tag
 
+  # NEW: toggle for named IAM (default off)
+  UseNamedIam:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: "If true, use fixed IAM names (requires CAPABILITY_NAMED_IAM). If false, let CFN auto-name (only CAPABILITY_IAM required)."
+
 Conditions:
   EnableReplication: !And
     - !Equals [!Ref EnableS3Replication, "true"]
@@ -149,6 +156,7 @@ Conditions:
   HasBucketOverride: !Not [!Equals [!Ref S3BucketNameOverride, ""]]
   HasDBSecretArn: !Not [!Equals [!Ref DBSecretArn, ""]]
   CreateDBSecret: !Equals [!Ref DBSecretArn, ""]
+  UseNamedIamCond: !Equals [!Ref UseNamedIam, "true"]
 
 Resources:
   VPC:
@@ -660,7 +668,12 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${EnvironmentName}-ec2-instance-role"
+      RoleName:
+        !If [
+          UseNamedIamCond,
+          !Sub "${EnvironmentName}-ec2-instance-role",
+          !Ref "AWS::NoValue",
+        ]
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -694,13 +707,23 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub "${EnvironmentName}-ec2-instance-profile"
+      InstanceProfileName:
+        !If [
+          UseNamedIamCond,
+          !Sub "${EnvironmentName}-ec2-instance-profile",
+          !Ref "AWS::NoValue",
+        ]
       Roles: [!Ref EC2InstanceRole]
 
   RDSMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${EnvironmentName}-rds-monitoring-role"
+      RoleName:
+        !If [
+          UseNamedIamCond,
+          !Sub "${EnvironmentName}-rds-monitoring-role",
+          !Ref "AWS::NoValue",
+        ]
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -715,7 +738,12 @@ Resources:
     Type: AWS::IAM::Role
     Condition: EnableReplication
     Properties:
-      RoleName: !Sub "${EnvironmentName}-s3-replication-role"
+      RoleName:
+        !If [
+          UseNamedIamCond,
+          !Sub "${EnvironmentName}-s3-replication-role",
+          !Ref "AWS::NoValue",
+        ]
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
