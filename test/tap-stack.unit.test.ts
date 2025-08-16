@@ -240,20 +240,16 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
   });
 
   describe('Compliance Resources', () => {
-    test('should have Config recorder', () => {
-      expect(template.Resources.CorpConfigRecorder).toBeDefined();
-      expect(template.Resources.CorpConfigRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
+    test('should have CloudTrail for audit logging', () => {
+      expect(template.Resources.CorpCloudTrail).toBeDefined();
+      expect(template.Resources.CorpCloudTrail.Type).toBe('AWS::CloudTrail::Trail');
     });
 
-    test('Config recorder should record all resources', () => {
-      const configRecorder = template.Resources.CorpConfigRecorder;
-      expect(configRecorder.Properties.RecordingGroup.AllSupported).toBe(true);
-      expect(configRecorder.Properties.RecordingGroup.IncludeGlobalResourceTypes).toBe(true);
-    });
-
-    test('should have Config delivery channel', () => {
-      expect(template.Resources.CorpConfigDeliveryChannel).toBeDefined();
-      expect(template.Resources.CorpConfigDeliveryChannel.Type).toBe('AWS::Config::DeliveryChannel');
+    test('CloudTrail should have encryption and logging enabled', () => {
+      const cloudTrail = template.Resources.CorpCloudTrail;
+      expect(cloudTrail.Properties.IsLogging).toBe(true);
+      expect(cloudTrail.Properties.EnableLogFileValidation).toBe(true);
+      expect(cloudTrail.Properties.KMSKeyId).toEqual({ Ref: 'CorpSecurityKMSKey' });
     });
   });
 
@@ -336,7 +332,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(20);
+      expect(resourceCount).toBe(18);
     });
 
     test('should have correct number of parameters', () => {
