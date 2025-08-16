@@ -18,7 +18,7 @@ terraform {
 variable "aws_region" {
   description = "The default AWS region for provider configuration."
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
 }
 
 # Default provider configuration for non-regional resources like IAM.
