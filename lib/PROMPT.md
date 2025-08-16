@@ -1,40 +1,14 @@
-> **Act as an AWS Solutions Architect** and write a complete **AWS CDK** project in **Python** to design and deploy an **advanced disaster recovery infrastructure** in AWS (region: **us-west-2**). The solution must meet the following requirements:
->
-> **1. High Availability**
->
-> * Deploy all resources across **multiple availability zones** for redundancy and fault tolerance.
->
-> **2. IAM Roles & Security**
->
-> * Define **IAM roles and policies** with **least privilege access** for all services.
-> * Ensure encryption **at rest** (KMS-managed keys)
->
-> **3. Automatic Rollback**
->
-> * Implement an **automatic rollback mechanism** to revert infrastructure changes on deployment failure.
->
-> **4. Backup Strategy**
->
-> * Regularly backup **critical data** to **Amazon S3** with lifecycle policies and encryption enabled.
->
-> **5. Automated Recovery**
->
-> * Use **AWS Lambda functions** to detect failures and **restore failed services/resources** automatically.
->
-> **6. Monitoring & Alarms**
->
-> * Set up **CloudWatch Alarms** for CPU, memory, and service availability.
-> * Create a **CloudWatch Dashboard** for centralized monitoring.
->
-> **7. Traffic Routing**
->
-> * Configure **CloudFront**  for secure global content delivery.
->
-> **8. Logging & Auditing**
->
-> * Enable **comprehensive logging** for all services (CloudFront, S3, Lambda, CloudWatch).
-> * Store audit logs in an encrypted S3 bucket with restricted access.
->
-> **Output Requirements:**
->
-> * Provide a **deploy-ready AWS CDK Python project** in app.py file
+As an AWS Solutions Architect, your goal is to design and deploy a robust disaster recovery setup in AWS (specifically in us-west-2). The infrastructure should be highly available, secure, and ready to handle failures automatically.
+
+Here’s what we’re looking for:
+
+- Everything should run across multiple AZs so we don’t have a single point of failure.
+- Security is key: IAM roles and policies should be tightly scoped (least privilege), and all data should be encrypted at rest using KMS.
+- If something goes wrong during deployment, the system should roll back changes automatically.
+- We need a solid backup plan: critical data should be regularly backed up to S3, with lifecycle rules and encryption.
+- If a service or resource fails, Lambda should kick in and restore it without manual intervention.
+- Monitoring matters: set up CloudWatch alarms for things like CPU, memory, and service health, and build a dashboard so we can see everything at a glance.
+- For global users, traffic should be routed securely using CloudFront.
+- Logging and auditing should be thorough—every service (CloudFront, S3, Lambda, CloudWatch) needs to be covered, and audit logs should go to an encrypted S3 bucket that’s locked down.
+
+When you’re done, please provide a Python AWS CDK project (in app.py) that’s ready to deploy. The code should reflect all these requirements in a practical, real
