@@ -76,8 +76,20 @@ describe('TapStack CloudFormation Template', () => {
       const outputs = template.Outputs;
       Object.keys(outputs).forEach(outputKey => {
         const exportName = outputs[outputKey].Export.Name;
-        expect(exportName).toContain('${AWS::StackName}');
-        expect(exportName).toContain(outputKey);
+
+        // Handle CloudFormation intrinsic functions
+        if (typeof exportName === 'object' && exportName['Fn::Sub']) {
+          // For !Sub function, check the template string
+          const subTemplate = exportName['Fn::Sub'];
+          expect(subTemplate).toContain('${AWS::StackName}');
+          expect(subTemplate).toContain(outputKey);
+        } else if (typeof exportName === 'string') {
+          // For plain strings
+          expect(exportName).toContain('${AWS::StackName}');
+          expect(exportName).toContain(outputKey);
+        } else {
+          fail(`Unexpected export name format: ${JSON.stringify(exportName)}`);
+        }
       });
     });
   });
