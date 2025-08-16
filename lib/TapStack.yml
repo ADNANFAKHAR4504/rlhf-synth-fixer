@@ -23,6 +23,19 @@ Parameters:
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
     ConstraintDescription: "Must be a valid email address"
 
+  # Region validation to enforce us-east-1 deployment only
+  RegionValidation:
+    Type: String
+    Default: "us-east-1"
+    AllowedValues:
+      - "us-east-1"
+    Description: "This template can only be deployed in us-east-1 region as per security requirements"
+    ConstraintDescription: "Template must be deployed in us-east-1 region only"
+
+Conditions:
+  # Validate that the template is being deployed in us-east-1 region only
+  ValidRegion: !Equals [!Ref "AWS::Region", "us-east-1"]
+
 Resources:
   # ==========================================
   # S3 BUCKET FOR SOURCE CODE WITH VERSIONING
@@ -36,7 +49,8 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -64,7 +78,8 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -85,7 +100,8 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -95,6 +111,44 @@ Resources:
         Rules:
           - Status: Enabled
             ExpirationInDays: 90
+
+  # ==========================================
+  # KMS KEY FOR ENHANCED S3 ENCRYPTION
+  # ==========================================
+  S3EncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS Key for S3 bucket encryption in ${ApplicationName}-${EnvironmentSuffix}"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+                - codepipeline.amazonaws.com
+                - codebuild.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+              - kms:DescribeKey
+            Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApplicationName}-s3-encryption-key-${EnvironmentSuffix}"
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  S3EncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${ApplicationName}-s3-encryption-${EnvironmentSuffix}"
+      TargetKeyId: !Ref S3EncryptionKey
 
   # ==========================================
   # IAM ROLES WITH LEAST PRIVILEGE
@@ -143,7 +197,10 @@ Resources:
                   - codedeploy:GetDeployment
                   - codedeploy:GetDeploymentConfig
                   - codedeploy:RegisterApplicationRevision
-                Resource: "*"
+                Resource:
+                  - !Sub "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:application/${ApplicationName}-${EnvironmentSuffix}"
+                  - !Sub "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentgroup/${ApplicationName}-${EnvironmentSuffix}/${ApplicationName}-deployment-group-${EnvironmentSuffix}"
+                  - !Sub "arn:aws:codedeploy:${AWS::Region}:${AWS::AccountId}:deploymentconfig/*"
               - Effect: Allow
                 Action:
                   - lambda:InvokeFunction
@@ -153,7 +210,16 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: "*"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/${ApplicationName}*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${ApplicationName}*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codedeploy-agent/${ApplicationName}*"
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource: !GetAtt S3EncryptionKey.Arn
 
   # CodeBuild Service Role
   CodeBuildServiceRole:
@@ -198,6 +264,12 @@ Resources:
                   - ssm:GetParameter
                   - ssm:GetParametersByPath
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ApplicationName}/*"
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource: !GetAtt S3EncryptionKey.Arn
 
   # CodeDeploy Service Role
   CodeDeployServiceRole:
@@ -222,7 +294,9 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: "*"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codedeploy/${ApplicationName}*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:codedeploy-agent-${ApplicationName}*"
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -250,17 +324,18 @@ Resources:
                 Action:
                   - codepipeline:PutJobSuccessResult
                   - codepipeline:PutJobFailureResult
-                Resource: "*"
+                Resource: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:pipeline/${ApplicationName}-pipeline-${EnvironmentSuffix}"
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: "*"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ApplicationName}*"
               - Effect: Allow
                 Action:
                   - cloudwatch:PutMetricData
-                Resource: "*"
+                Resource: !Sub "arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:metric/AWS/Lambda/*"
 
   # EC2 Instance Role for CodeDeploy Agent
   EC2InstanceRole:
@@ -293,7 +368,9 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: "*"
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codedeploy-agent/${ApplicationName}*"
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:codedeploy-agent*"
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
