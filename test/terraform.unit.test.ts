@@ -212,9 +212,9 @@ describe('Terraform Unit Tests', () => {
 
     test('S3 bucket notification is configured', () => {
       expect(mainTfContent).toContain('resource "aws_s3_bucket_notification" "bucket_notification"');
-      expect(mainTfContent).toContain('events             = ["s3:ObjectCreated:*"]');
-      expect(mainTfContent).toContain('filter_prefix      = "input/"');
-      expect(mainTfContent).toContain('filter_suffix      = ".json"');
+      expect(mainTfContent).toContain('events              = ["s3:ObjectCreated:*"]');
+      expect(mainTfContent).toContain('filter_prefix       = "input/"');
+      expect(mainTfContent).toContain('filter_suffix       = ".json"');
     });
   });
 

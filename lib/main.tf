@@ -62,21 +62,21 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
   partition  = data.aws_partition.current.partition
-  
+
   # Project prefix for consistent naming
   project_prefix = "projectXYZ-${var.environment_suffix}"
-  
+
   # VPC configuration
   vpc_id     = var.vpc_id != null ? var.vpc_id : data.aws_vpc.default[0].id
   subnet_ids = length(var.subnet_ids) > 0 ? var.subnet_ids : data.aws_subnets.vpc_subnets.ids
-  
+
   # Common tags
   common_tags = {
     Environment = var.environment_suffix
     Project     = local.project_prefix
     ManagedBy   = "terraform"
   }
-  
+
   # Lambda configuration
   lambda_config = {
     runtime      = var.lambda_config.runtime
@@ -91,7 +91,7 @@ resource "aws_security_group" "lambda_sg" {
   name        = "${local.project_prefix}-lambda-sg"
   description = "Security group for Lambda data processing function"
   vpc_id      = local.vpc_id
-  
+
   egress {
     from_port   = 443
     to_port     = 443
@@ -99,7 +99,7 @@ resource "aws_security_group" "lambda_sg" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS outbound for S3/KMS API calls"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.project_prefix}-lambda-sg"
   })
@@ -110,7 +110,7 @@ resource "aws_kms_key" "s3_kms_key" {
   description             = "${local.project_prefix} S3 encryption key"
   enable_key_rotation     = true
   deletion_window_in_days = 7
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -170,10 +170,30 @@ resource "aws_kms_key" "s3_kms_key" {
             "kms:ViaService" = "s3.${local.region}.amazonaws.com"
           }
         }
+      },
+      {
+        Sid    = "Allow CloudWatch Logs Service Access"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${local.region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:${local.partition}:logs:${local.region}:${local.account_id}:log-group:/aws/lambda/${local.project_prefix}-data-processor"
+          }
+        }
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.project_prefix}-s3-kms-key"
   })
@@ -188,7 +208,7 @@ resource "aws_kms_alias" "s3_kms_key_alias" {
 # S3 Bucket for data processing
 resource "aws_s3_bucket" "data_bucket" {
   bucket = "${lower(local.project_prefix)}-data-processing-${local.account_id}"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.project_prefix}-data-processing-bucket"
   })
@@ -197,7 +217,7 @@ resource "aws_s3_bucket" "data_bucket" {
 # S3 Bucket Server-Side Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "data_bucket_encryption" {
   bucket = aws_s3_bucket.data_bucket.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
@@ -210,7 +230,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data_bucket_encry
 # S3 Bucket Public Access Block
 resource "aws_s3_bucket_public_access_block" "data_bucket_pab" {
   bucket = aws_s3_bucket.data_bucket.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -220,7 +240,7 @@ resource "aws_s3_bucket_public_access_block" "data_bucket_pab" {
 # S3 Bucket Policy
 resource "aws_s3_bucket_policy" "data_bucket_policy" {
   bucket = aws_s3_bucket.data_bucket.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -265,7 +285,7 @@ data "archive_file" "lambda_zip" {
 # IAM Role for Lambda execution
 resource "aws_iam_role" "lambda_execution_role" {
   name = "${local.project_prefix}-lambda-execution-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -278,7 +298,7 @@ resource "aws_iam_role" "lambda_execution_role" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.project_prefix}-lambda-execution-role"
   })
@@ -294,7 +314,7 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_execution" {
 resource "aws_iam_policy" "lambda_s3_kms_policy" {
   name        = "${local.project_prefix}-lambda-s3-kms-policy"
   description = "Policy for Lambda to access S3 bucket and KMS key"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -325,7 +345,7 @@ resource "aws_iam_policy" "lambda_s3_kms_policy" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.project_prefix}-lambda-s3-kms-policy"
   })
@@ -349,12 +369,12 @@ resource "aws_lambda_function" "data_processor" {
   memory_size      = local.lambda_config.memory_size
   architectures    = [local.lambda_config.architecture]
   publish          = var.environment_suffix == "prod"
-  
+
   vpc_config {
     subnet_ids         = local.subnet_ids
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
-  
+
   environment {
     variables = {
       BUCKET_NAME    = aws_s3_bucket.data_bucket.bucket
@@ -362,11 +382,11 @@ resource "aws_lambda_function" "data_processor" {
       PROJECT_PREFIX = local.project_prefix
     }
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.project_prefix}-data-processor"
   })
-  
+
   depends_on = [
     aws_iam_role_policy_attachment.lambda_vpc_execution,
     aws_iam_role_policy_attachment.lambda_s3_kms_attachment,
@@ -379,7 +399,7 @@ resource "aws_cloudwatch_log_group" "lambda_log_group" {
   name              = "/aws/lambda/${local.project_prefix}-data-processor"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.s3_kms_key.arn
-  
+
   tags = local.common_tags
 }
 
@@ -395,14 +415,14 @@ resource "aws_lambda_permission" "s3_lambda_permission" {
 # S3 Bucket Notification to trigger Lambda
 resource "aws_s3_bucket_notification" "bucket_notification" {
   bucket = aws_s3_bucket.data_bucket.id
-  
+
   lambda_function {
     lambda_function_arn = aws_lambda_function.data_processor.arn
-    events             = ["s3:ObjectCreated:*"]
-    filter_prefix      = "input/"
-    filter_suffix      = ".json"
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "input/"
+    filter_suffix       = ".json"
   }
-  
+
   depends_on = [aws_lambda_permission.s3_lambda_permission]
 }
 
