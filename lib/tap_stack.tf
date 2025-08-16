@@ -743,7 +743,7 @@ resource "aws_security_group" "db_secondary" {
 # ============================================================================
 # IAM role for EC2 instances with necessary permissions
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}-ec2-role"
+  name = "${var.project_name}-ec2-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -765,7 +765,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # IAM policy for EC2 instances to access Secrets Manager and CloudWatch
 resource "aws_iam_role_policy" "ec2_policy" {
-  name = "${var.project_name}-ec2-policy"
+  name = "${var.project_name}-ec2-policy-${random_id.suffix.hex}"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -830,7 +830,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 
 # Instance profile for EC2 instances
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-ec2-profile"
+  name = "${var.project_name}-ec2-profile-${random_id.suffix.hex}"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -1007,7 +1007,7 @@ resource "aws_s3_bucket_policy" "static_content_secondary" {
 # CloudWatch Log Group for web servers (Primary Region)
 resource "aws_cloudwatch_log_group" "web_logs_primary" {
   provider          = aws.primary
-  name              = "/aws/ec2/${var.project_name}/web-primary"
+  name              = "/aws/ec2/${var.project_name}/web-primary-${random_id.suffix.hex}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.primary.arn
 
@@ -1019,7 +1019,7 @@ resource "aws_cloudwatch_log_group" "web_logs_primary" {
 # CloudWatch Log Group for web servers (Secondary Region)
 resource "aws_cloudwatch_log_group" "web_logs_secondary" {
   provider          = aws.secondary
-  name              = "/aws/ec2/${var.project_name}/web-secondary"
+  name              = "/aws/ec2/${var.project_name}/web-secondary-${random_id.suffix.hex}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.secondary.arn
 
@@ -1034,7 +1034,7 @@ resource "aws_cloudwatch_log_group" "web_logs_secondary" {
 # DB Subnet Group for primary region
 resource "aws_db_subnet_group" "primary" {
   provider   = aws.primary
-  name       = "${var.project_name}-db-subnet-group-primary"
+  name       = "${var.project_name}-db-subnet-group-primary-${random_id.suffix.hex}"
   subnet_ids = aws_subnet.db_primary[*].id
 
   tags = {
@@ -1045,7 +1045,7 @@ resource "aws_db_subnet_group" "primary" {
 # DB Subnet Group for secondary region
 resource "aws_db_subnet_group" "secondary" {
   provider   = aws.secondary
-  name       = "${var.project_name}-db-subnet-group-secondary"
+  name       = "${var.project_name}-db-subnet-group-secondary-${random_id.suffix.hex}"
   subnet_ids = aws_subnet.db_secondary[*].id
 
   tags = {
@@ -1056,7 +1056,7 @@ resource "aws_db_subnet_group" "secondary" {
 # RDS Instance in primary region (Multi-AZ enabled)
 resource "aws_db_instance" "primary" {
   provider                = aws.primary
-  identifier              = "${var.project_name}-db-primary"
+  identifier              = "${var.project_name}-db-primary-${random_id.suffix.hex}"
   allocated_storage       = 20
   max_allocated_storage   = 100
   storage_type            = "gp2"
@@ -1094,7 +1094,7 @@ resource "aws_db_instance" "primary" {
 # RDS Instance in secondary region (Read Replica)
 resource "aws_db_instance" "secondary" {
   provider               = aws.secondary
-  identifier             = "${var.project_name}-db-secondary"
+  identifier             = "${var.project_name}-db-secondary-${random_id.suffix.hex}"
   replicate_source_db    = aws_db_instance.primary.arn
   instance_class         = "db.t3.micro"
   vpc_security_group_ids = [aws_security_group.db_secondary.id]
@@ -1118,7 +1118,7 @@ resource "aws_db_instance" "secondary" {
 
 # IAM role for RDS enhanced monitoring
 resource "aws_iam_role" "rds_monitoring" {
-  name = "${var.project_name}-rds-monitoring-role"
+  name = "${var.project_name}-rds-monitoring-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1150,7 +1150,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 # Launch template for primary region
 resource "aws_launch_template" "web_primary" {
   provider      = aws.primary
-  name          = "${var.project_name}-web-template-primary"
+  name          = "${var.project_name}-web-template-primary-${random_id.suffix.hex}"
   description   = "Launch template for web servers in primary region"
   image_id      = data.aws_ami.amazon_linux_primary.id
   instance_type = var.instance_type
@@ -1270,7 +1270,7 @@ EOF
 # Launch template for secondary region
 resource "aws_launch_template" "web_secondary" {
   provider      = aws.secondary
-  name          = "${var.project_name}-web-template-secondary"
+  name          = "${var.project_name}-web-template-secondary-${random_id.suffix.hex}"
   description   = "Launch template for web servers in secondary region"
   image_id      = data.aws_ami.amazon_linux_secondary.id
   instance_type = var.instance_type
@@ -1390,7 +1390,7 @@ EOF
 # Application Load Balancer for primary region
 resource "aws_lb" "primary" {
   provider           = aws.primary
-  name               = "${var.project_name}-alb-primary"
+  name               = "${var.project_name}-alb-primary-${random_id.suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_primary.id]
@@ -1406,7 +1406,7 @@ resource "aws_lb" "primary" {
 # Application Load Balancer for secondary region
 resource "aws_lb" "secondary" {
   provider           = aws.secondary
-  name               = "${var.project_name}-alb-secondary"
+  name               = "${var.project_name}-alb-secondary-${random_id.suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_secondary.id]
@@ -1422,7 +1422,7 @@ resource "aws_lb" "secondary" {
 # Target Group for primary region
 resource "aws_lb_target_group" "web_primary" {
   provider = aws.primary
-  name     = "${var.project_name}-web-primary"
+  name     = "${var.project_name}-web-primary-${random_id.suffix.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.primary.id
@@ -1447,7 +1447,7 @@ resource "aws_lb_target_group" "web_primary" {
 # Target Group for secondary region
 resource "aws_lb_target_group" "web_secondary" {
   provider = aws.secondary
-  name     = "${var.project_name}-web-secondary"
+  name     = "${var.project_name}-web-secondary-${random_id.suffix.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.secondary.id
@@ -1509,7 +1509,7 @@ resource "aws_lb_listener" "web_secondary" {
 # Auto Scaling Group for primary region
 resource "aws_autoscaling_group" "web_primary" {
   provider                  = aws.primary
-  name                      = "${var.project_name}-asg-primary"
+  name                      = "${var.project_name}-asg-primary-${random_id.suffix.hex}"
   vpc_zone_identifier       = aws_subnet.private_primary[*].id
   target_group_arns         = [aws_lb_target_group.web_primary.arn]
   health_check_type         = "ELB"
@@ -1551,7 +1551,7 @@ resource "aws_autoscaling_group" "web_primary" {
 # Auto Scaling Group for secondary region
 resource "aws_autoscaling_group" "web_secondary" {
   provider                  = aws.secondary
-  name                      = "${var.project_name}-asg-secondary"
+  name                      = "${var.project_name}-asg-secondary-${random_id.suffix.hex}"
   vpc_zone_identifier       = aws_subnet.private_secondary[*].id
   target_group_arns         = [aws_lb_target_group.web_secondary.arn]
   health_check_type         = "ELB"
@@ -1595,7 +1595,7 @@ resource "aws_autoscaling_group" "web_secondary" {
 # Scale up policy for primary region
 resource "aws_autoscaling_policy" "scale_up_primary" {
   provider               = aws.primary
-  name                   = "${var.project_name}-scale-up-primary"
+  name                   = "${var.project_name}-scale-up-primary-${random_id.suffix.hex}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1605,7 +1605,7 @@ resource "aws_autoscaling_policy" "scale_up_primary" {
 # Scale down policy for primary region
 resource "aws_autoscaling_policy" "scale_down_primary" {
   provider               = aws.primary
-  name                   = "${var.project_name}-scale-down-primary"
+  name                   = "${var.project_name}-scale-down-primary-${random_id.suffix.hex}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1615,7 +1615,7 @@ resource "aws_autoscaling_policy" "scale_down_primary" {
 # CloudWatch alarms for primary region
 resource "aws_cloudwatch_metric_alarm" "cpu_high_primary" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-cpu-high-primary"
+  alarm_name          = "${var.project_name}-cpu-high-primary-${random_id.suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1637,7 +1637,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high_primary" {
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low_primary" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-cpu-low-primary"
+  alarm_name          = "${var.project_name}-cpu-low-primary-${random_id.suffix.hex}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1660,7 +1660,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low_primary" {
 # Scale up policy for secondary region
 resource "aws_autoscaling_policy" "scale_up_secondary" {
   provider               = aws.secondary
-  name                   = "${var.project_name}-scale-up-secondary"
+  name                   = "${var.project_name}-scale-up-secondary-${random_id.suffix.hex}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1670,7 +1670,7 @@ resource "aws_autoscaling_policy" "scale_up_secondary" {
 # Scale down policy for secondary region
 resource "aws_autoscaling_policy" "scale_down_secondary" {
   provider               = aws.secondary
-  name                   = "${var.project_name}-scale-down-secondary"
+  name                   = "${var.project_name}-scale-down-secondary-${random_id.suffix.hex}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1680,7 +1680,7 @@ resource "aws_autoscaling_policy" "scale_down_secondary" {
 # CloudWatch alarms for secondary region
 resource "aws_cloudwatch_metric_alarm" "cpu_high_secondary" {
   provider            = aws.secondary
-  alarm_name          = "${var.project_name}-cpu-high-secondary"
+  alarm_name          = "${var.project_name}-cpu-high-secondary-${random_id.suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1702,7 +1702,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high_secondary" {
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low_secondary" {
   provider            = aws.secondary
-  alarm_name          = "${var.project_name}-cpu-low-secondary"
+  alarm_name          = "${var.project_name}-cpu-low-secondary-${random_id.suffix.hex}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
