@@ -41,6 +41,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
   public readonly route53Record?: aws.route53.Record;
   public readonly cloudTrail: aws.cloudtrail.Trail;
   public readonly rdsSecret: aws.secretsmanager.Secret;
+  public readonly sshKeyPair: pulumi.Output<aws.ec2.GetKeyPairResult>;
 
   constructor(
     name: string,
@@ -514,13 +515,16 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
     );
 
     // 14.7. Create the actual secret value with secure password
+    const rdsPassword =
+      'SecureRDS' + Math.random().toString(36).substring(2, 15) + '!@#$%^&*()';
+
     new aws.secretsmanager.SecretVersion(
       'rds-credentials-version',
       {
         secretId: this.rdsSecret.id,
         secretString: JSON.stringify({
           username: 'admin',
-          password: 'SecureRDS2024!@#$%^&*()', // More secure password - should be rotated regularly
+          password: rdsPassword,
           engine: 'mysql',
           host: 'localhost',
           port: 3306,
@@ -530,7 +534,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // 15. Create RDS instance
+    // 15. Create RDS instance using the secret
     this.rdsInstance = new aws.rds.Instance(
       'mysql-db',
       {
@@ -546,7 +550,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
 
         dbName: 'appdb',
         username: 'admin',
-        password: 'TempPassword123!', // TODO: Replace with secret reference when Pulumi supports it
+        password: rdsPassword, // Use the generated password from secret
 
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: dbSubnetGroup.name,
@@ -572,19 +576,13 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // 16.5. Create SSH key pair for EC2 instance access (commented out due to AWS SDK requirements)
-    // TODO: Implement proper SSH key pair creation when AWS SDK supports it
-    // this.sshKeyPair = new aws.ec2.KeyPair(
-    //   'web-server-key',
-    //   {
-    //     keyName: `${args.environment}-web-server-key`,
-    //     tags: {
-    //       Name: `${args.environment}-web-server-key`,
-    //       ...commonTags,
-    //     },
-    //   },
-    //   { ...defaultOpts, provider: opts?.provider }
-    // );
+    // 16.5. Use existing SSH key pair in the region
+    this.sshKeyPair = aws.ec2.getKeyPairOutput(
+      {
+        keyName: `${args.environment}-web-server-key`,
+      },
+      { provider: opts?.provider }
+    );
 
     // 17. Get latest Amazon Linux 2023 AMI
     const ami = aws.ec2.getAmiOutput(
@@ -615,6 +613,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
         subnetId: this.publicSubnet.id,
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
         associatePublicIpAddress: true,
+        keyName: pulumi.interpolate`${this.sshKeyPair.keyName}`, // Add SSH key pair for access
 
         userData: `#!/bin/bash
 yum update -y
