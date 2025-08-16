@@ -54,9 +54,9 @@ describe("TapStack Integration Tests", () => {
     }
 
     const stackOutputs = outputs[stackKey];
-    vpcId = stackOutputs["vpc_id"];
-    publicSubnetId = stackOutputs["public_subnet_ids"][0];
-    privateSubnetId = stackOutputs["private_subnet_ids"][0];
+    vpcId = stackOutputs["vpc-id"];
+    publicSubnetId = stackOutputs["public-subnet-ids"][0];
+    privateSubnetId = stackOutputs["private-subnet-ids"][0];
     dataBucketName = stackOutputs["data-bucket-name"];
     logsBucketName = stackOutputs["logs-bucket-name"];
     ec2RoleArn = stackOutputs["ec2-role-arn"];
