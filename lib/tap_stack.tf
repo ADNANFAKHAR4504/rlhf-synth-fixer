@@ -1505,6 +1505,8 @@ resource "aws_lb" "use1" {
     Name   = "${local.use1_name_prefix}-alb"
     Region = "us-east-1"
   })
+
+  depends_on = [aws_s3_bucket_policy.use1_logs]
 }
 
 resource "aws_lb" "usw2" {
@@ -1527,6 +1529,8 @@ resource "aws_lb" "usw2" {
     Name   = "${local.usw2_name_prefix}-alb"
     Region = "us-west-2"
   })
+
+  depends_on = [aws_s3_bucket_policy.usw2_logs]
 }
 
 # ALB Target Groups
@@ -2441,6 +2445,42 @@ resource "aws_s3_bucket_public_access_block" "usw2_logs" {
   restrict_public_buckets = true
 }
 
+# S3 Object Ownership Controls for ALB Access Logs
+resource "aws_s3_bucket_ownership_controls" "use1_logs" {
+  provider = aws.use1
+  bucket   = aws_s3_bucket.use1_logs.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "usw2_logs" {
+  provider = aws.usw2
+  bucket   = aws_s3_bucket.usw2_logs.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+# S3 Bucket ACLs for ALB Access Logs
+resource "aws_s3_bucket_acl" "use1_logs" {
+  provider = aws.use1
+  bucket   = aws_s3_bucket.use1_logs.id
+  acl      = "private"
+
+  depends_on = [aws_s3_bucket_ownership_controls.use1_logs]
+}
+
+resource "aws_s3_bucket_acl" "usw2_logs" {
+  provider = aws.usw2
+  bucket   = aws_s3_bucket.usw2_logs.id
+  acl      = "private"
+
+  depends_on = [aws_s3_bucket_ownership_controls.usw2_logs]
+}
+
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
   provider = aws.use1
   bucket   = aws_s3_bucket.cloudtrail.id
@@ -2537,10 +2577,31 @@ resource "aws_s3_bucket_policy" "use1_logs" {
       {
         Effect = "Allow"
         Principal = {
+          AWS = "arn:aws:iam::127311923021:root" # ELB service account for us-east-1
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.use1_logs.arn
+      },
+      {
+        Effect = "Allow"
+        Principal = {
           Service = "logdelivery.elasticloadbalancing.amazonaws.com"
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.use1_logs.arn}/alb/AWSLogs/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.use1_logs.arn
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -2570,6 +2631,11 @@ resource "aws_s3_bucket_policy" "use1_logs" {
       }
     ]
   })
+
+  depends_on = [
+    aws_s3_bucket_ownership_controls.use1_logs,
+    aws_s3_bucket_acl.use1_logs
+  ]
 }
 
 resource "aws_s3_bucket_policy" "usw2_logs" {
@@ -2590,10 +2656,31 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
       {
         Effect = "Allow"
         Principal = {
+          AWS = "arn:aws:iam::797873946194:root" # ELB service account for us-west-2
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.usw2_logs.arn
+      },
+      {
+        Effect = "Allow"
+        Principal = {
           Service = "logdelivery.elasticloadbalancing.amazonaws.com"
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.usw2_logs.arn}/alb/AWSLogs/*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.usw2_logs.arn
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -2623,6 +2710,11 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
       }
     ]
   })
+
+  depends_on = [
+    aws_s3_bucket_ownership_controls.usw2_logs,
+    aws_s3_bucket_acl.usw2_logs
+  ]
 }
 
 # CloudTrail
