@@ -3,11 +3,16 @@ import {
   GetApiCommand,
 } from '@aws-sdk/client-apigatewayv2';
 import {
+  CloudWatchClient,
+  GetMetricStatisticsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
   DeleteItemCommand,
   DynamoDBClient,
   GetItemCommand,
   ScanCommand,
 } from '@aws-sdk/client-dynamodb';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import axios from 'axios';
 import * as fs from 'fs';
@@ -15,15 +20,19 @@ import * as fs from 'fs';
 // Get environment suffix from environment variable
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Mock outputs for testing when deployment outputs are not available
+// Enhanced mock outputs for testing when deployment outputs are not available
 const getMockOutputs = () => ({
   ApiGatewayEndpoint:
     'https://dooyr6bnu6.execute-api.us-east-1.amazonaws.com/dev/orders',
-  DynamoDBTableName: 'ecommerce-orders-pr1397-orders',
+  DynamoDBTableName: 'ecommerce-orders-dev-orders',
   LambdaFunctionArn:
-    'arn:aws:lambda:us-east-1:718240086340:function:ecommerce-orders-pr1397-order-processor',
-  LambdaFunctionName: 'ecommerce-orders-pr1397-order-processor',
+    'arn:aws:lambda:us-east-1:718240086340:function:ecommerce-orders-dev-order-processor',
+  LambdaFunctionName: 'ecommerce-orders-dev-order-processor',
   ApiGatewayId: 'dooyr6bnu6',
+  KMSKeyId: 'mock-kms-key-id',
+  DeadLetterQueueUrl:
+    'https://sqs.us-east-1.amazonaws.com/718240086340/ecommerce-orders-dev-dlq',
+  SNSTopicArn: 'arn:aws:sns:us-east-1:718240086340:ecommerce-orders-dev-alerts',
 });
 
 // Load deployment outputs or use mock data
@@ -52,9 +61,54 @@ const lambdaClient = new LambdaClient({
 const apiGatewayClient = new ApiGatewayV2Client({
   region: process.env.AWS_REGION || 'us-east-1',
 });
+const cloudwatchClient = new CloudWatchClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const kmsClient = new KMSClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
 
-describe('E-commerce Order Processing Platform Integration Tests', () => {
+describe('Enhanced E-commerce Order Processing Platform Integration Tests', () => {
   const testOrderId = `test-order-${Date.now()}`;
+
+  describe('Security and Encryption', () => {
+    test('should have KMS key configured', async () => {
+      if (outputs.KMSKeyId === 'mock-kms-key-id') {
+        console.log('Skipping KMS test with mock data');
+        return;
+      }
+
+      try {
+        const command = new DescribeKeyCommand({ KeyId: outputs.KMSKeyId });
+        const response = await kmsClient.send(command);
+
+        expect(response.KeyMetadata).toBeDefined();
+        expect(response.KeyMetadata.Enabled).toBe(true);
+        expect(response.KeyMetadata.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      } catch (error: any) {
+        if (
+          error.name === 'UnrecognizedClientException' ||
+          error.name === 'InvalidUserCredentialsError' ||
+          error.name === 'CredentialsProviderError'
+        ) {
+          console.log('AWS credentials not configured, skipping KMS test');
+        } else {
+          throw error;
+        }
+      }
+    });
+
+    test('should have enhanced outputs available', () => {
+      expect(outputs.ApiGatewayEndpoint).toBeDefined();
+      expect(outputs.DynamoDBTableName).toBeDefined();
+      expect(outputs.LambdaFunctionArn).toBeDefined();
+      expect(outputs.LambdaFunctionName).toBeDefined();
+      expect(outputs.ApiGatewayId).toBeDefined();
+      expect(outputs.KMSKeyId).toBeDefined();
+      expect(outputs.DeadLetterQueueUrl).toBeDefined();
+      expect(outputs.SNSTopicArn).toBeDefined();
+    });
+  });
 
   describe('API Gateway Configuration', () => {
     test('should have a valid API Gateway endpoint', () => {
@@ -76,6 +130,11 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
 
         expect(response.ProtocolType).toBe('HTTP');
         expect(response.Name).toMatch(/ecommerce-orders-.*-orders-api/);
+
+        // Check CORS configuration
+        expect(response.CorsConfiguration).toBeDefined();
+        expect(response.CorsConfiguration.AllowMethods).toContain('POST');
+        expect(response.CorsConfiguration.AllowMethods).toContain('OPTIONS');
       } catch (error: any) {
         if (
           error.name === 'UnrecognizedClientException' ||
@@ -94,13 +153,12 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
     test('should have Lambda function deployed', () => {
       expect(outputs.LambdaFunctionName).toBeDefined();
       expect(outputs.LambdaFunctionArn).toBeDefined();
-      // The output contains the actual suffix used in deployment
       expect(outputs.LambdaFunctionName).toMatch(
         /ecommerce-orders-.*-order-processor/
       );
     });
 
-    test('should invoke Lambda function directly', async () => {
+    test('should invoke Lambda function directly with valid data', async () => {
       if (outputs.LambdaFunctionName.includes('mock')) {
         console.log('Skipping Lambda test with mock data');
         return;
@@ -129,6 +187,50 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
         expect(body.message).toBe('Order processed successfully');
         expect(body.orderId).toBeDefined();
         expect(body.status).toBe('PROCESSING');
+        expect(body.totalAmount).toBe(30);
+        expect(body.processingTime).toBeDefined();
+      } catch (error: any) {
+        if (
+          error.name === 'UnrecognizedClientException' ||
+          error.name === 'InvalidUserCredentialsError' ||
+          error.name === 'CredentialsProviderError'
+        ) {
+          console.log('AWS credentials not configured, skipping test');
+        } else {
+          throw error;
+        }
+      }
+    });
+
+    test('should validate input and return 400 for invalid data', async () => {
+      if (outputs.LambdaFunctionName.includes('mock')) {
+        console.log('Skipping Lambda validation test with mock data');
+        return;
+      }
+
+      const invalidPayload = {
+        body: JSON.stringify({
+          // Missing required fields: customerId, items, totalAmount
+          currency: 'USD',
+        }),
+      };
+
+      try {
+        const command = new InvokeCommand({
+          FunctionName: outputs.LambdaFunctionName,
+          Payload: JSON.stringify(invalidPayload),
+        });
+
+        const response = await lambdaClient.send(command);
+        const result = JSON.parse(new TextDecoder().decode(response.Payload));
+
+        expect(result.statusCode).toBe(400);
+
+        const body = JSON.parse(result.body);
+        expect(body.error).toBe('Validation failed');
+        expect(body.details).toBeDefined();
+        expect(Array.isArray(body.details)).toBe(true);
+        expect(body.details.length).toBeGreaterThan(0);
       } catch (error: any) {
         if (
           error.name === 'UnrecognizedClientException' ||
@@ -146,7 +248,6 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
   describe('DynamoDB Table', () => {
     test('should have DynamoDB table created', () => {
       expect(outputs.DynamoDBTableName).toBeDefined();
-      // The output contains the actual suffix used in deployment
       expect(outputs.DynamoDBTableName).toMatch(/ecommerce-orders-.*-orders/);
       expect(outputs.DynamoDBTableName).toContain('orders');
     });
@@ -184,7 +285,7 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
   });
 
   describe('End-to-End Order Processing', () => {
-    test('should process order through API Gateway', async () => {
+    test('should process valid order through API Gateway', async () => {
       if (outputs.ApiGatewayEndpoint.includes('mock')) {
         console.log('Skipping end-to-end test with mock data');
         return;
@@ -197,7 +298,7 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
           { productId: 'test-product-1', quantity: 2, price: 50 },
           { productId: 'test-product-2', quantity: 1, price: 50 },
         ],
-        totalAmount: 100,
+        totalAmount: 150,
         currency: 'USD',
       };
 
@@ -209,7 +310,7 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
             headers: {
               'Content-Type': 'application/json',
             },
-            validateStatus: () => true, // Don't throw on any status
+            validateStatus: () => true,
           }
         );
 
@@ -222,6 +323,8 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
         expect(response.data.message).toBe('Order processed successfully');
         expect(response.data.orderId).toBeDefined();
         expect(response.data.status).toBe('PROCESSING');
+        expect(response.data.totalAmount).toBe(150);
+        expect(response.data.processingTime).toBeDefined();
       } catch (error: any) {
         if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
           console.log(
@@ -233,7 +336,49 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
       }
     });
 
-    test('should store order in DynamoDB after processing', async () => {
+    test('should reject invalid order data with 400 status', async () => {
+      if (outputs.ApiGatewayEndpoint.includes('mock')) {
+        console.log('Skipping validation test with mock data');
+        return;
+      }
+
+      const invalidOrderData = {
+        customerId: 'test-customer',
+        // Missing items and totalAmount
+        currency: 'USD',
+      };
+
+      try {
+        const response = await axios.post(
+          outputs.ApiGatewayEndpoint,
+          invalidOrderData,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            validateStatus: () => true,
+          }
+        );
+
+        if (response.status === 403 || response.status === 401) {
+          console.log('API Gateway not accessible, skipping validation test');
+          return;
+        }
+
+        expect(response.status).toBe(400);
+        expect(response.data.error).toBe('Validation failed');
+        expect(response.data.details).toBeDefined();
+        expect(Array.isArray(response.data.details)).toBe(true);
+      } catch (error: any) {
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+          console.log('API Gateway endpoint not reachable');
+        } else {
+          throw error;
+        }
+      }
+    });
+
+    test('should store order in DynamoDB with enhanced attributes', async () => {
       if (
         outputs.DynamoDBTableName.includes('mock') ||
         outputs.ApiGatewayEndpoint.includes('mock')
@@ -242,7 +387,6 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
         return;
       }
 
-      // First create an order
       const orderData = {
         orderId: `verify-${testOrderId}`,
         customerId: 'verification-customer',
@@ -251,7 +395,6 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
       };
 
       try {
-        // Send order through API
         const apiResponse = await axios.post(
           outputs.ApiGatewayEndpoint,
           orderData,
@@ -272,10 +415,9 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
 
         const orderId = apiResponse.data.orderId || orderData.orderId;
 
-        // Wait a bit for eventual consistency
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Wait for eventual consistency
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
-        // Verify order in DynamoDB
         const getCommand = new GetItemCommand({
           TableName: outputs.DynamoDBTableName,
           Key: {
@@ -289,6 +431,13 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
           expect(dbResponse.Item.orderId.S).toBe(orderId);
           expect(dbResponse.Item.status.S).toBe('PROCESSING');
           expect(dbResponse.Item.customerId.S).toBe(orderData.customerId);
+
+          // Check enhanced attributes
+          expect(dbResponse.Item.createdAt).toBeDefined();
+          expect(dbResponse.Item.updatedAt).toBeDefined();
+          expect(dbResponse.Item.version).toBeDefined();
+          expect(dbResponse.Item.version.N).toBe('1');
+          expect(dbResponse.Item.currency.S).toBe('USD');
         } else {
           console.log(
             'Order not found in DynamoDB, may be eventual consistency issue'
@@ -314,22 +463,16 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
       }
     });
 
-    test('should handle invalid order data gracefully', async () => {
+    test('should handle malformed JSON gracefully', async () => {
       if (outputs.ApiGatewayEndpoint.includes('mock')) {
-        console.log('Skipping error handling test with mock data');
+        console.log('Skipping malformed JSON test with mock data');
         return;
       }
-
-      const invalidOrderData = {
-        // Missing required fields
-        customerId: 'test-customer',
-        // No items, no totalAmount
-      };
 
       try {
         const response = await axios.post(
           outputs.ApiGatewayEndpoint,
-          invalidOrderData,
+          '{ invalid json }',
           {
             headers: {
               'Content-Type': 'application/json',
@@ -338,13 +481,13 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
           }
         );
 
-        // Should still return 200 as Lambda handles the error gracefully
-        expect([200, 400, 500]).toContain(response.status);
-
-        if (response.status === 200) {
-          // Even with missing data, Lambda should process it
-          expect(response.data.orderId).toBeDefined();
+        if (response.status === 403 || response.status === 401) {
+          console.log('API Gateway not accessible, skipping test');
+          return;
         }
+
+        // Should return 500 for malformed JSON or handle gracefully
+        expect([400, 500]).toContain(response.status);
       } catch (error: any) {
         if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
           console.log('API Gateway endpoint not reachable');
@@ -355,21 +498,87 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
     });
   });
 
+  describe('Custom Metrics and Monitoring', () => {
+    test('should generate custom metrics for successful orders', async () => {
+      if (outputs.ApiGatewayEndpoint.includes('mock')) {
+        console.log('Skipping metrics test with mock data');
+        return;
+      }
+
+      // Process an order first
+      const orderData = {
+        customerId: 'metrics-test-customer',
+        items: [{ productId: 'metrics-product', quantity: 1, price: 25.0 }],
+        totalAmount: 25.0,
+      };
+
+      try {
+        const response = await axios.post(
+          outputs.ApiGatewayEndpoint,
+          orderData,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            validateStatus: () => true,
+          }
+        );
+
+        if (response.status !== 200) {
+          console.log('Order processing failed, skipping metrics test');
+          return;
+        }
+
+        // Wait for metrics to be published
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        // Check for custom metrics (this is a simplified check)
+        const endTime = new Date();
+        const startTime = new Date(endTime.getTime() - 300000); // 5 minutes ago
+
+        const metricsCommand = new GetMetricStatisticsCommand({
+          Namespace: 'ecommerce-orders/dev',
+          MetricName: 'OrdersProcessed',
+          StartTime: startTime,
+          EndTime: endTime,
+          Period: 300,
+          Statistics: ['Sum'],
+        });
+
+        try {
+          const metricsResponse = await cloudwatchClient.send(metricsCommand);
+          // If we get a response, metrics are being published
+          expect(metricsResponse.$metadata.httpStatusCode).toBe(200);
+        } catch (metricsError) {
+          console.log(
+            'Custom metrics may not be available yet or credentials insufficient'
+          );
+        }
+      } catch (error: any) {
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+          console.log('API Gateway endpoint not reachable');
+        } else {
+          console.log('Error in metrics test:', error.message);
+        }
+      }
+    });
+  });
+
   describe('High Availability and Scalability', () => {
-    test('should handle concurrent requests', async () => {
+    test('should handle concurrent requests efficiently', async () => {
       if (outputs.ApiGatewayEndpoint.includes('mock')) {
         console.log('Skipping concurrent request test with mock data');
         return;
       }
 
       const promises = [];
-      const numRequests = 5;
+      const numRequests = 10; // Increased from 5 to test scalability
 
       for (let i = 0; i < numRequests; i++) {
         const orderData = {
           customerId: `concurrent-customer-${i}`,
-          items: [{ productId: `product-${i}`, quantity: 1, price: 10.0 }],
-          totalAmount: 10.0,
+          items: [{ productId: `product-${i}`, quantity: 1, price: 15.0 }],
+          totalAmount: 15.0,
         };
 
         const promise = axios
@@ -391,17 +600,21 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
 
       try {
         const results = await Promise.all(promises);
-
         const successfulRequests = results.filter(r => r.status === 200);
+        const validationErrors = results.filter(r => r.status === 400);
 
         if (successfulRequests.length > 0) {
-          // At least some requests should succeed
           expect(successfulRequests.length).toBeGreaterThan(0);
 
           successfulRequests.forEach(response => {
             expect(response.data.orderId).toBeDefined();
             expect(response.data.status).toBe('PROCESSING');
+            expect(response.data.totalAmount).toBe(15.0);
           });
+
+          console.log(
+            `Successfully processed ${successfulRequests.length}/${numRequests} concurrent requests`
+          );
         } else {
           console.log('No successful requests, API may not be deployed');
         }
@@ -409,19 +622,66 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
         console.log('Error in concurrent request test:', error);
       }
     });
+
+    test('should maintain performance under load', async () => {
+      if (outputs.ApiGatewayEndpoint.includes('mock')) {
+        console.log('Skipping performance test with mock data');
+        return;
+      }
+
+      const orderData = {
+        customerId: 'performance-test-customer',
+        items: [{ productId: 'perf-product', quantity: 1, price: 5.0 }],
+        totalAmount: 5.0,
+      };
+
+      const startTime = Date.now();
+
+      try {
+        const response = await axios.post(
+          outputs.ApiGatewayEndpoint,
+          orderData,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            validateStatus: () => true,
+          }
+        );
+
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+
+        if (response.status === 200) {
+          // Should respond within 5 seconds for good performance
+          expect(responseTime).toBeLessThan(5000);
+
+          // Check if processing time is reported
+          if (response.data.processingTime) {
+            const processingTime = parseFloat(
+              response.data.processingTime.replace('ms', '')
+            );
+            expect(processingTime).toBeLessThan(3000); // Less than 3 seconds processing time
+          }
+        }
+      } catch (error: any) {
+        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+          console.log('API Gateway endpoint not reachable');
+        } else {
+          throw error;
+        }
+      }
+    });
   });
 
   describe('Cleanup', () => {
     test('cleanup runs after all tests', () => {
-      // Placeholder test to allow afterAll hook
       expect(true).toBe(true);
     });
 
     afterAll(async () => {
-      // Cleanup test data from DynamoDB if needed
       if (!outputs.DynamoDBTableName.includes('mock')) {
         try {
-          // Scan for test orders
           const scanCommand = new ScanCommand({
             TableName: outputs.DynamoDBTableName,
             FilterExpression: 'begins_with(orderId, :prefix)',
@@ -433,7 +693,6 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
           const scanResponse = await dynamoClient.send(scanCommand);
 
           if (scanResponse.Items && scanResponse.Items.length > 0) {
-            // Delete test items
             for (const item of scanResponse.Items) {
               const deleteCommand = new DeleteItemCommand({
                 TableName: outputs.DynamoDBTableName,

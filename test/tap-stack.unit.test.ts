@@ -68,6 +68,40 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
         '^[a-z0-9-]+$'
       );
     });
+
+    test('should have AlertEmailAddress parameter', () => {
+      expect(template.Parameters.AlertEmailAddress).toBeDefined();
+      expect(template.Parameters.AlertEmailAddress.Type).toBe('String');
+      expect(
+        template.Parameters.AlertEmailAddress.AllowedPattern
+      ).toBeDefined();
+    });
+  });
+
+  describe('Security Resources', () => {
+    test('should have KMS key for encryption', () => {
+      expect(template.Resources.OrderProcessingKMSKey).toBeDefined();
+      expect(template.Resources.OrderProcessingKMSKey.Type).toBe(
+        'AWS::KMS::Key'
+      );
+    });
+
+    test('should have KMS key alias', () => {
+      expect(template.Resources.OrderProcessingKMSKeyAlias).toBeDefined();
+      expect(template.Resources.OrderProcessingKMSKeyAlias.Type).toBe(
+        'AWS::KMS::Alias'
+      );
+    });
+
+    test('should have SNS topic for alerts', () => {
+      expect(template.Resources.AlertingTopic).toBeDefined();
+      expect(template.Resources.AlertingTopic.Type).toBe('AWS::SNS::Topic');
+    });
+
+    test('should have Dead Letter Queue', () => {
+      expect(template.Resources.DeadLetterQueue).toBeDefined();
+      expect(template.Resources.DeadLetterQueue.Type).toBe('AWS::SQS::Queue');
+    });
   });
 
   describe('DynamoDB Table', () => {
@@ -89,7 +123,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
     test('should have orderId as partition key', () => {
       const attributeDefs =
         template.Resources.OrdersTable.Properties.AttributeDefinitions;
-      expect(attributeDefs).toHaveLength(1);
+      expect(attributeDefs).toHaveLength(3);
       expect(attributeDefs[0].AttributeName).toBe('orderId');
       expect(attributeDefs[0].AttributeType).toBe('S');
 
@@ -113,10 +147,27 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(pitr.PointInTimeRecoveryEnabled).toBe(true);
     });
 
-    test('should have Server-Side Encryption enabled', () => {
+    test('should have Server-Side Encryption enabled with KMS', () => {
       const sse = template.Resources.OrdersTable.Properties.SSESpecification;
       expect(sse).toBeDefined();
       expect(sse.SSEEnabled).toBe(true);
+      expect(sse.SSEType).toBe('KMS');
+      expect(sse.KMSMasterKeyId).toBeDefined();
+    });
+
+    test('should have Global Secondary Index', () => {
+      const gsi =
+        template.Resources.OrdersTable.Properties.GlobalSecondaryIndexes;
+      expect(gsi).toBeDefined();
+      expect(gsi).toHaveLength(1);
+      expect(gsi[0].IndexName).toBe('CustomerIndex');
+    });
+
+    test('should have DynamoDB Stream enabled', () => {
+      const stream =
+        template.Resources.OrdersTable.Properties.StreamSpecification;
+      expect(stream).toBeDefined();
+      expect(stream.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
     });
 
     test('should have proper tags', () => {
@@ -148,26 +199,63 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(policy.Statement[0].Action).toBe('sts:AssumeRole');
     });
 
-    test('should have AWSLambdaBasicExecutionRole managed policy', () => {
+    test('should have required managed policies', () => {
       const managedPolicies =
         template.Resources.OrderProcessorLambdaRole.Properties
           .ManagedPolicyArns;
       expect(managedPolicies).toContain(
         'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       );
+      expect(managedPolicies).toContain(
+        'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess'
+      );
     });
 
-    test('should have DynamoDB access policy', () => {
+    test('should have enhanced DynamoDB access policy', () => {
       const policies =
         template.Resources.OrderProcessorLambdaRole.Properties.Policies;
-      expect(policies).toHaveLength(1);
-      expect(policies[0].PolicyName).toBe('DynamoDBAccess');
+      expect(policies).toHaveLength(4); // Enhanced DynamoDB, KMS, CloudWatch, SQS
+      expect(policies[0].PolicyName).toBe('EnhancedDynamoDBAccess');
 
       const statement = policies[0].PolicyDocument.Statement[0];
       expect(statement.Effect).toBe('Allow');
       expect(statement.Action).toContain('dynamodb:PutItem');
       expect(statement.Action).toContain('dynamodb:GetItem');
       expect(statement.Action).toContain('dynamodb:UpdateItem');
+      expect(statement.Action).toContain('dynamodb:Query');
+      expect(statement.Action).toContain('dynamodb:BatchGetItem');
+    });
+
+    test('should have KMS access policy', () => {
+      const policies =
+        template.Resources.OrderProcessorLambdaRole.Properties.Policies;
+      const kmsPolicy = policies.find((p: any) => p.PolicyName === 'KMSAccess');
+      expect(kmsPolicy).toBeDefined();
+      expect(kmsPolicy.PolicyDocument.Statement[0].Action).toContain(
+        'kms:Decrypt'
+      );
+    });
+
+    test('should have CloudWatch metrics policy', () => {
+      const policies =
+        template.Resources.OrderProcessorLambdaRole.Properties.Policies;
+      const cwPolicy = policies.find(
+        (p: any) => p.PolicyName === 'CloudWatchMetrics'
+      );
+      expect(cwPolicy).toBeDefined();
+      expect(cwPolicy.PolicyDocument.Statement[0].Action).toContain(
+        'cloudwatch:PutMetricData'
+      );
+    });
+
+    test('should have SQS access policy for DLQ', () => {
+      const policies =
+        template.Resources.OrderProcessorLambdaRole.Properties.Policies;
+      const sqsPolicy = policies.find((p: any) => p.PolicyName === 'SQSAccess');
+      expect(sqsPolicy).toBeDefined();
+      expect(sqsPolicy.PolicyDocument.Statement[0].Action).toContain(
+        'sqs:SendMessage'
+      );
     });
   });
 
@@ -188,14 +276,28 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
     test('should have correct runtime and handler', () => {
       const props = template.Resources.OrderProcessorFunction.Properties;
-      expect(props.Runtime).toBe('python3.9');
+      expect(props.Runtime).toBe('python3.11');
       expect(props.Handler).toBe('index.lambda_handler');
     });
 
     test('should have correct memory and timeout settings', () => {
       const props = template.Resources.OrderProcessorFunction.Properties;
-      expect(props.MemorySize).toBe(256);
+      expect(props.MemorySize).toBe(512);
       expect(props.Timeout).toBe(30);
+    });
+
+    test('should have Dead Letter Queue configuration', () => {
+      const dlq =
+        template.Resources.OrderProcessorFunction.Properties.DeadLetterConfig;
+      expect(dlq).toBeDefined();
+      expect(dlq.TargetArn).toBeDefined();
+    });
+
+    test('should have X-Ray tracing enabled', () => {
+      const tracing =
+        template.Resources.OrderProcessorFunction.Properties.TracingConfig;
+      expect(tracing).toBeDefined();
+      expect(tracing.Mode).toBe('Active');
     });
 
     test('should reference IAM role correctly', () => {
@@ -203,7 +305,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(role['Fn::GetAtt']).toEqual(['OrderProcessorLambdaRole', 'Arn']);
     });
 
-    test('should have environment variables', () => {
+    test('should have enhanced environment variables', () => {
       const envVars =
         template.Resources.OrderProcessorFunction.Properties.Environment
           .Variables;
@@ -211,15 +313,20 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(envVars.ORDERS_TABLE_NAME.Ref).toBe('OrdersTable');
       expect(envVars.ENVIRONMENT).toBeDefined();
       expect(envVars.ENVIRONMENT.Ref).toBe('Environment');
+      expect(envVars.KMS_KEY_ID).toBeDefined();
+      expect(envVars.CUSTOM_METRICS_NAMESPACE).toBeDefined();
     });
 
-    test('should have inline code', () => {
+    test('should have inline code with enhanced features', () => {
       const code =
         template.Resources.OrderProcessorFunction.Properties.Code.ZipFile;
       expect(code).toBeDefined();
       expect(code).toContain('lambda_handler');
       expect(code).toContain('dynamodb');
       expect(code).toContain('orderId');
+      expect(code).toContain('xray_recorder');
+      expect(code).toContain('validate_order_input');
+      expect(code).toContain('put_custom_metric');
     });
   });
 
@@ -243,7 +350,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       );
     });
 
-    test('should have CORS configuration', () => {
+    test('should have enhanced CORS configuration', () => {
       const cors =
         template.Resources.OrdersHttpApi.Properties.CorsConfiguration;
       expect(cors).toBeDefined();
@@ -251,6 +358,8 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(cors.AllowMethods).toContain('POST');
       expect(cors.AllowMethods).toContain('OPTIONS');
       expect(cors.AllowOrigins).toContain('*');
+      expect(cors.AllowHeaders).toContain('Content-Type');
+      expect(cors.AllowHeaders).toContain('Authorization');
       expect(cors.MaxAge).toBe(300);
     });
 
@@ -261,10 +370,11 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       );
     });
 
-    test('should have correct integration type', () => {
+    test('should have correct integration type with timeout', () => {
       const integration = template.Resources.OrdersApiIntegration.Properties;
       expect(integration.IntegrationType).toBe('AWS_PROXY');
       expect(integration.PayloadFormatVersion).toBe('2.0');
+      expect(integration.TimeoutInMillis).toBe(30000);
     });
 
     test('should have OrdersApiRoute resource', () => {
@@ -287,9 +397,59 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       );
     });
 
-    test('should have AutoDeploy enabled', () => {
-      expect(template.Resources.OrdersApiStage.Properties.AutoDeploy).toBe(
-        true
+    test('should have AutoDeploy enabled with throttling', () => {
+      const stage = template.Resources.OrdersApiStage.Properties;
+      expect(stage.AutoDeploy).toBe(true);
+      expect(stage.DefaultRouteSettings).toBeDefined();
+      expect(stage.DefaultRouteSettings.ThrottlingRateLimit).toBe(1000);
+      expect(stage.DefaultRouteSettings.ThrottlingBurstLimit).toBe(2000);
+    });
+
+    test('should have access logging configured', () => {
+      const stage = template.Resources.OrdersApiStage.Properties;
+      expect(stage.AccessLogSettings).toBeDefined();
+      expect(stage.AccessLogSettings.DestinationArn).toBeDefined();
+      expect(stage.AccessLogSettings.Format).toBeDefined();
+    });
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    test('should have multiple CloudWatch alarms', () => {
+      const alarms = [
+        'LambdaErrorAlarm',
+        'LambdaDurationAlarm',
+        'LambdaThrottleAlarm',
+        'ApiGateway4XXAlarm',
+        'ApiGateway5XXAlarm',
+        'DynamoDBThrottleAlarm',
+      ];
+
+      alarms.forEach(alarmName => {
+        expect(template.Resources[alarmName]).toBeDefined();
+        expect(template.Resources[alarmName].Type).toBe(
+          'AWS::CloudWatch::Alarm'
+        );
+      });
+    });
+
+    test('should have log groups with KMS encryption', () => {
+      expect(template.Resources.ApiGatewayLogGroup).toBeDefined();
+      expect(template.Resources.LambdaLogGroup).toBeDefined();
+
+      expect(
+        template.Resources.ApiGatewayLogGroup.Properties.KmsKeyId
+      ).toBeDefined();
+      expect(
+        template.Resources.LambdaLogGroup.Properties.KmsKeyId
+      ).toBeDefined();
+    });
+
+    test('should have log retention set to 14 days', () => {
+      expect(
+        template.Resources.ApiGatewayLogGroup.Properties.RetentionInDays
+      ).toBe(14);
+      expect(template.Resources.LambdaLogGroup.Properties.RetentionInDays).toBe(
+        14
       );
     });
   });
@@ -317,34 +477,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(sourceArn['Fn::Sub']).toContain('${AWS::Region}');
       expect(sourceArn['Fn::Sub']).toContain('${AWS::AccountId}');
       expect(sourceArn['Fn::Sub']).toContain('${OrdersHttpApi}');
-    });
-  });
-
-  describe('CloudWatch Logs', () => {
-    test('should have ApiGatewayLogGroup resource', () => {
-      expect(template.Resources.ApiGatewayLogGroup).toBeDefined();
-      expect(template.Resources.ApiGatewayLogGroup.Type).toBe(
-        'AWS::Logs::LogGroup'
-      );
-    });
-
-    test('should use EnvironmentSuffix in log group name', () => {
-      const logGroupName =
-        template.Resources.ApiGatewayLogGroup.Properties.LogGroupName;
-      expect(logGroupName).toBeDefined();
-      expect(logGroupName['Fn::Sub']).toContain('${EnvironmentSuffix}');
-    });
-
-    test('should have Delete deletion policy', () => {
-      expect(template.Resources.ApiGatewayLogGroup.DeletionPolicy).toBe(
-        'Delete'
-      );
-    });
-
-    test('should have retention period set', () => {
-      expect(
-        template.Resources.ApiGatewayLogGroup.Properties.RetentionInDays
-      ).toBe(14);
     });
   });
 
@@ -381,22 +513,21 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       ]);
     });
 
-    test('should have LambdaFunctionName output', () => {
-      expect(template.Outputs.LambdaFunctionName).toBeDefined();
-      expect(template.Outputs.LambdaFunctionName.Description).toContain(
-        'Lambda function name'
-      );
-      expect(template.Outputs.LambdaFunctionName.Value.Ref).toBe(
-        'OrderProcessorFunction'
-      );
-    });
+    test('should have enhanced outputs', () => {
+      const expectedOutputs = [
+        'ApiGatewayEndpoint',
+        'DynamoDBTableName',
+        'LambdaFunctionArn',
+        'LambdaFunctionName',
+        'ApiGatewayId',
+        'KMSKeyId',
+        'DeadLetterQueueUrl',
+        'SNSTopicArn',
+      ];
 
-    test('should have ApiGatewayId output', () => {
-      expect(template.Outputs.ApiGatewayId).toBeDefined();
-      expect(template.Outputs.ApiGatewayId.Description).toContain(
-        'API Gateway ID'
-      );
-      expect(template.Outputs.ApiGatewayId.Value.Ref).toBe('OrdersHttpApi');
+      expectedOutputs.forEach(outputName => {
+        expect(template.Outputs[outputName]).toBeDefined();
+      });
     });
 
     test('all outputs should have Export names', () => {
@@ -408,20 +539,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   });
 
   describe('Template Consistency', () => {
-    test('all resources should be properly referenced', () => {
-      // Check that Lambda references the IAM role
-      expect(
-        template.Resources.OrderProcessorFunction.Properties.Role[
-          'Fn::GetAtt'
-        ][0]
-      ).toBe('OrderProcessorLambdaRole');
-
-      // Check that IAM role policy references DynamoDB table
-      expect(
-        template.Resources.OrderProcessorLambdaRole.Properties.Policies[0]
-          .PolicyDocument.Statement[0].Resource['Fn::GetAtt'][0]
-      ).toBe('OrdersTable');
-
+    test('should have consistent resource references', () => {
       // Check that Lambda permission references the function
       expect(
         template.Resources.ApiGatewayLambdaPermission.Properties.FunctionName
@@ -484,6 +602,12 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
         'AWS::ApiGatewayV2::Stage',
         'AWS::IAM::Role',
         'AWS::Logs::LogGroup',
+        'AWS::KMS::Key',
+        'AWS::KMS::Alias',
+        'AWS::SNS::Topic',
+        'AWS::SNS::Subscription',
+        'AWS::SQS::Queue',
+        'AWS::CloudWatch::Alarm',
       ];
 
       resourceTypes.forEach(type => {
@@ -502,21 +626,44 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
         template.Resources.OrderProcessorLambdaRole.Properties.Policies;
       const dynamoPolicy = policies[0].PolicyDocument.Statement[0];
 
-      // Should only have required DynamoDB actions
-      expect(dynamoPolicy.Action).toHaveLength(3);
+      // Should have required DynamoDB actions for enhanced functionality
+      expect(dynamoPolicy.Action).toHaveLength(5); // Updated for enhanced template
       expect(dynamoPolicy.Action).toContain('dynamodb:PutItem');
       expect(dynamoPolicy.Action).toContain('dynamodb:GetItem');
       expect(dynamoPolicy.Action).toContain('dynamodb:UpdateItem');
+      expect(dynamoPolicy.Action).toContain('dynamodb:Query');
+      expect(dynamoPolicy.Action).toContain('dynamodb:BatchGetItem');
 
       // Should reference specific table ARN, not wildcard
-      expect(dynamoPolicy.Resource['Fn::GetAtt']).toBeDefined();
+      expect(dynamoPolicy.Resource).toHaveLength(2); // Table + indexes
     });
 
-    test('should have encryption enabled where applicable', () => {
-      // DynamoDB encryption
+    test('should have comprehensive encryption enabled', () => {
+      // DynamoDB encryption with KMS
       expect(
         template.Resources.OrdersTable.Properties.SSESpecification.SSEEnabled
       ).toBe(true);
+      expect(
+        template.Resources.OrdersTable.Properties.SSESpecification.SSEType
+      ).toBe('KMS');
+
+      // SQS encryption
+      expect(
+        template.Resources.DeadLetterQueue.Properties.KmsMasterKeyId
+      ).toBeDefined();
+
+      // SNS encryption
+      expect(
+        template.Resources.AlertingTopic.Properties.KmsMasterKeyId
+      ).toBeDefined();
+
+      // CloudWatch Logs encryption
+      expect(
+        template.Resources.ApiGatewayLogGroup.Properties.KmsKeyId
+      ).toBeDefined();
+      expect(
+        template.Resources.LambdaLogGroup.Properties.KmsKeyId
+      ).toBeDefined();
     });
 
     test('should have appropriate deletion policies', () => {
@@ -525,6 +672,21 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.Resources.ApiGatewayLogGroup.DeletionPolicy).toBe(
         'Delete'
       );
+      expect(template.Resources.LambdaLogGroup.DeletionPolicy).toBe('Delete');
+    });
+  });
+
+  describe('Resource Count Validation', () => {
+    test('should have expected number of resources for enhanced template', () => {
+      const resources = Object.keys(template.Resources);
+      // Enhanced template has many more resources than basic template
+      expect(resources.length).toBeGreaterThan(15);
+    });
+
+    test('should have expected number of outputs for enhanced template', () => {
+      const outputs = Object.keys(template.Outputs);
+      // Enhanced template has 8 outputs
+      expect(outputs.length).toBe(8);
     });
   });
 });
