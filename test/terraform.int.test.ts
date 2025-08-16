@@ -249,16 +249,16 @@ describe('Terraform Integration Tests', () => {
         const command = new GetBucketNotificationConfigurationCommand({ Bucket: bucketName() });
         const response = await s3Client.send(command);
         
-        expect(response.LambdaConfigurations).toBeDefined();
-        expect(response.LambdaConfigurations!.length).toBeGreaterThan(0);
+        expect((response as any).LambdaConfigurations).toBeDefined();
+        expect((response as any).LambdaConfigurations!.length).toBeGreaterThan(0);
         
-        const lambdaConfig = response.LambdaConfigurations![0];
+        const lambdaConfig = (response as any).LambdaConfigurations![0];
         expect(lambdaConfig.Events).toContain('s3:ObjectCreated:*');
         expect(lambdaConfig.Filter?.Key?.FilterRules).toBeDefined();
         
         const filterRules = lambdaConfig.Filter!.Key!.FilterRules!;
-        const prefixRule = filterRules.find(rule => rule.Name === 'prefix');
-        const suffixRule = filterRules.find(rule => rule.Name === 'suffix');
+        const prefixRule = filterRules.find((rule: any) => rule.Name === 'prefix');
+        const suffixRule = filterRules.find((rule: any) => rule.Name === 'suffix');
         
         expect(prefixRule?.Value).toBe('input/');
         expect(suffixRule?.Value).toBe('.json');
@@ -281,7 +281,7 @@ describe('Terraform Integration Tests', () => {
 
       try {
         const command = new GetFunctionCommand({ FunctionName: functionName() });
-        const response = await s3Client.send(command);
+        const response = await lambdaClient.send(command);
         
         expect(response.Configuration).toBeDefined();
         expect(response.Configuration?.FunctionName).toBe(functionName());
