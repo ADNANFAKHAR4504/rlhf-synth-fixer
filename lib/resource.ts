@@ -581,7 +581,7 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
       {
         keyName: `${args.environment}-web-server-key`,
       },
-      { provider: opts?.provider }
+      defaultOpts
     );
 
     // 17. Get latest Amazon Linux 2023 AMI
