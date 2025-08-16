@@ -187,10 +187,8 @@ describe('Terraform Stack Unit Tests', () => {
       expect(stackContent).toMatch(
         /"aws:PrincipalTag\/Environment"\s*=\s*"Production"/
       );
-      expect(stackContent).toMatch(
-        /"s3:ResourceTag\/Environment"\s*=\s*"Production"/
-      );
       expect(stackContent).toMatch(/AllowTagBasedAccess/);
+      expect(stackContent).toMatch(/DenyUntaggedAccess/);
     });
   });
 
