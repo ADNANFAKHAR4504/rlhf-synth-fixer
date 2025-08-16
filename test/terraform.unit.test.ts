@@ -1,5 +1,5 @@
 // Unit tests for Terraform infrastructure
-// No Terraform or AWS API calls - static analysis only
+// No Terraform or AWS API calls - static analysis only 
 
 import fs from "fs";
 import path from "path";
