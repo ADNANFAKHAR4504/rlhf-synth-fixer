@@ -1,14 +1,12 @@
-// Test setup file for Jest
-// This file is referenced by some Jest configurations and provides global test setup
+import { jest } from '@jest/globals';
 
-// Global test configuration
-beforeAll(() => {
-  // Set up any global test configuration here if needed
-});
+// Mock AWS SDK modules that might be used in tests
+jest.mock('@aws-sdk/client-ec2', () => ({
+  EC2Client: jest.fn(),
+  DescribeVpcsCommand: jest.fn(),
+  DescribeSecurityGroupsCommand: jest.fn(),
+  DescribeSubnetsCommand: jest.fn(),
+}));
 
-afterAll(() => {
-  // Clean up any global test resources here if needed
-});
-
-// Export for modules that might need to import this setup
-export {};
+// Set test timeout for integration tests
+jest.setTimeout(180000);

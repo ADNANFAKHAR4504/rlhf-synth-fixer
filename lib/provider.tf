@@ -1,26 +1,18 @@
-# provider.tf
-
 terraform {
-  required_version = ">= 1.4.0"
-
+  required_version = ">= 1.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.0"
+      version = "~> 5.0"
     }
   }
-
-  # Backend configuration is in backend.tf for flexibility
+  
+  backend "s3" {
+    # Backend configuration will be provided via -backend-config flags
+    # during terraform init in the bootstrap script
+  }
 }
 
-# Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
 }
-
-# Random provider for generating unique identifiers
-provider "random" {}
