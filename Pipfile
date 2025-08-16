@@ -14,19 +14,18 @@ pulumi = "==3.109.0"
 pulumi-aws = ">=6.0.0,<7.0.0"
 pytest-cov = "*"
 cfn-lint = "*"
-# TEMPORARY: Moved pylint from dev-packages to fix CI/CD pipeline issue
-# CI/CD runs 'pipenv install' without --dev flag, causing pylint to not be installed
-# This will be reverted after CI/CD passes with: git restore --source=origin/main Pipfile
-pylint = "*"
 
 [dev-packages]
 boto3 = "*"
 moto = "*"
 pytest-testdox = "*"
 pytest-env = "*"
+pytest-cov = "*"
+pylint = "*"
 pytest = "*"
 requests = "*"
-
+cfn-lint = "*"
+cfn-flip = "*"
 
 [requires]
 python_version = "3.12.11"
