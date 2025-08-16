@@ -43,7 +43,17 @@ const loadStackOutputs = () => {
   try {
     const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-    return JSON.parse(outputsContent);
+    const allOutputs = JSON.parse(outputsContent);
+    
+    // Extract the first (and likely only) stack's outputs
+    const stackNames = Object.keys(allOutputs);
+    if (stackNames.length === 0) {
+      throw new Error('No stack outputs found in all-outputs.json');
+    }
+    
+    const stackName = stackNames[0];
+    console.log(`Using outputs from stack: ${stackName}`);
+    return allOutputs[stackName];
   } catch (error) {
     throw new Error(`Failed to load stack outputs: ${error}`);
   }
@@ -147,7 +157,7 @@ describe('TAP Infrastructure Integration Tests', () => {
     });
 
     test('should have public subnets with correct configuration', async () => {
-      const publicSubnetIds = JSON.parse(stackOutputs.publicSubnetIds);
+      const publicSubnetIds = stackOutputs.publicSubnetIds;
       expect(publicSubnetIds).toBeDefined();
       expect(Array.isArray(publicSubnetIds)).toBe(true);
       expect(publicSubnetIds.length).toBeGreaterThanOrEqual(2);
@@ -179,7 +189,7 @@ describe('TAP Infrastructure Integration Tests', () => {
     });
 
     test('should have private subnets with correct configuration', async () => {
-      const privateSubnetIds = JSON.parse(stackOutputs.privateSubnetIds);
+      const privateSubnetIds = stackOutputs.privateSubnetIds;
       expect(privateSubnetIds).toBeDefined();
       expect(Array.isArray(privateSubnetIds)).toBe(true);
       expect(privateSubnetIds.length).toBeGreaterThanOrEqual(2);
@@ -270,7 +280,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(subnetGroup.Subnets!.length).toBeGreaterThanOrEqual(2);
 
       // Verify subnets are private subnets
-      const privateSubnetIds = JSON.parse(stackOutputs.privateSubnetIds);
+      const privateSubnetIds = stackOutputs.privateSubnetIds;
       const subnetIds = subnetGroup.Subnets!.map((subnet: any) => subnet.SubnetIdentifier);
       
       subnetIds.forEach((subnetId: string) => {
@@ -421,8 +431,8 @@ describe('TAP Infrastructure Integration Tests', () => {
 
       // Step 1: Verify VPC connectivity
       const vpcId = stackOutputs.vpcId;
-      const publicSubnetIds = JSON.parse(stackOutputs.publicSubnetIds);
-      const privateSubnetIds = JSON.parse(stackOutputs.privateSubnetIds);
+      const publicSubnetIds = stackOutputs.publicSubnetIds;
+      const privateSubnetIds = stackOutputs.privateSubnetIds;
 
       expect(vpcId).toBeDefined();
       expect(publicSubnetIds.length).toBeGreaterThanOrEqual(2);
@@ -477,7 +487,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(vpcTags.some((tag: Tag) => tag.Key === 'ManagedBy' && tag.Value === 'Pulumi')).toBe(true);
 
       // Check subnet tags
-      const publicSubnetIds = JSON.parse(stackOutputs.publicSubnetIds);
+      const publicSubnetIds = stackOutputs.publicSubnetIds;
       const subnetResponse = await clients.ec2.send(
         new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
       );
@@ -553,7 +563,7 @@ describe('TAP Infrastructure Integration Tests', () => {
   describe('Performance and Reliability Tests', () => {
     test('should have resources distributed across multiple AZs for high availability', async () => {
       // Check public subnets AZ distribution
-      const publicSubnetIds = JSON.parse(stackOutputs.publicSubnetIds);
+      const publicSubnetIds = stackOutputs.publicSubnetIds;
       const publicSubnetsResponse = await clients.ec2.send(
         new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
       );
@@ -562,7 +572,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(publicAzs.size).toBeGreaterThanOrEqual(2);
 
       // Check private subnets AZ distribution
-      const privateSubnetIds = JSON.parse(stackOutputs.privateSubnetIds);
+      const privateSubnetIds = stackOutputs.privateSubnetIds;
       const privateSubnetsResponse = await clients.ec2.send(
         new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
       );
