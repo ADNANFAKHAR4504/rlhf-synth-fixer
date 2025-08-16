@@ -456,15 +456,19 @@ resource "null_resource" "empty_old_cloudtrail_bucket" {
   triggers = {
     always_run = timestamp()
   }
-  # Enhanced cleanup: delete all objects, versions, and delete markers
+  # Final robust cleanup: delete all objects, versions, and delete markers
   provisioner "local-exec" {
     command = <<EOT
-      aws s3 rm s3://secure-multi-account-development-cloudtrail-4185c46d --recursive --quiet || echo 'Bucket not found or already empty'
-      aws s3api list-object-versions --bucket secure-multi-account-development-cloudtrail-4185c46d --output json | jq -r '.Versions[]?,.DeleteMarkers[]? | {Key,VersionId} | "{\"Key\": \"\(.Key)\", \"VersionId\": \"\(.VersionId)\"}"' > objects.json
-      if [ -s objects.json ]; then
-        aws s3api delete-objects --bucket secure-multi-account-development-cloudtrail-4185c46d --delete "$(jq -s '{Objects: .}' objects.json)" --quiet || echo 'No versions to delete'
-      fi
-      rm -f objects.json
+      BUCKET="secure-multi-account-development-cloudtrail-4185c46d"
+      # Remove all objects
+      aws s3 rm s3://$BUCKET --recursive || echo 'Bucket not found or already empty'
+      # Remove all versions and delete markers
+      aws s3api list-object-versions --bucket $BUCKET --output json > versions.json
+      jq -r '.Versions[]? | "aws s3api delete-object --bucket $BUCKET --key \"\(.Key)\" --version-id \"\(.VersionId)\""' versions.json > delete_versions.sh
+      jq -r '.DeleteMarkers[]? | "aws s3api delete-object --bucket $BUCKET --key \"\(.Key)\" --version-id \"\(.VersionId)\""' versions.json >> delete_versions.sh
+      chmod +x delete_versions.sh
+      sh delete_versions.sh || echo 'No versions to delete'
+      rm -f versions.json delete_versions.sh
     EOT
     interpreter = ["/bin/sh", "-c"]
     on_failure  = continue
