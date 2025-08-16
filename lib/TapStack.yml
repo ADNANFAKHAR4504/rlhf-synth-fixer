@@ -20,12 +20,10 @@ Parameters:
     Default: INFO
     Description: 'Log level for Lambda function'
 
-
 Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-serverless-lambda-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
