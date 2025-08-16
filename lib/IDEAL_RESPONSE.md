@@ -949,71 +949,86 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     /**
      * GuardDuty for Threat Detection
      * Enables threat detection and security monitoring
-     * Note: GuardDuty allows only one detector per AWS region per account
+     * Note: GuardDuty allows only one detector per AWS account
+     * Check us-east-1 first, use it if exists, otherwise create in ap-south-1
      */
-    // Check for existing GuardDuty detector first
-    const existingDetectorId = aws.guardduty
-      .getDetector({}, { provider })
+
+    // Create provider for us-east-1 to check for existing GuardDuty detector
+    const usEast1Provider = new aws.Provider(
+      `us-east-1-provider-${args.environment}`,
+      { region: 'us-east-1' },
+      { parent: this }
+    );
+
+    // Check for existing GuardDuty detector in us-east-1
+    const existingDetectorInUsEast1 = aws.guardduty
+      .getDetector({}, { provider: usEast1Provider })
       .then(res => res.id)
       .catch(() => undefined);
 
-    const guardDutyDetector = pulumi.output(existingDetectorId).apply(id => {
-      if (id) {
-        // Use existing detector - import it with a local name but using the actual AWS detector ID
+    const guardDutyDetector = pulumi.output(existingDetectorInUsEast1).apply(usEast1DetectorId => {
+      if (usEast1DetectorId) {
+        // Use existing detector in us-east-1
         return aws.guardduty.Detector.get(
-          `imported-guardduty-detector-${args.environment}`,
-          id,
+          `imported-guardduty-detector-us-east-1-${args.environment}`,
+          usEast1DetectorId,
           {},
+          { provider: usEast1Provider, parent: this }
+        );
+      } else {
+        // Create new detector in ap-south-1 if none exists in us-east-1
+        return new aws.guardduty.Detector(
+          `main-guardduty-detector-${args.environment}`,
+          {
+            enable: true,
+            findingPublishingFrequency: 'FIFTEEN_MINUTES',
+            tags: {
+              ...commonTags,
+              Name: `main-guardduty-detector-${args.environment}`,
+            },
+          },
           { provider, parent: this }
         );
       }
-      // Create new detector if none exists
-      return new aws.guardduty.Detector(
-        `main-guardduty-detector-${args.environment}`,
-        {
-          enable: true,
-          findingPublishingFrequency: 'FIFTEEN_MINUTES',
-          tags: {
-            ...commonTags,
-            Name: `main-guardduty-detector-${args.environment}`,
-          },
-        },
-        { provider, parent: this }
-      );
     });
 
-    // Enable S3 Data Events monitoring
-    void new aws.guardduty.DetectorFeature(
-      `guardduty-s3-data-events-${args.environment}`,
-      {
-        detectorId: guardDutyDetector.id,
-        name: 'S3_DATA_EVENTS',
-        status: 'ENABLED',
-      },
-      { provider, parent: this }
-    );
+    // Create GuardDuty features based on where the detector is located
+    pulumi.output(existingDetectorInUsEast1).apply(usEast1DetectorId => {
+      const featureProvider = usEast1DetectorId ? usEast1Provider : provider;
+      
+      // Enable S3 Data Events monitoring
+      void new aws.guardduty.DetectorFeature(
+        `guardduty-s3-data-events-${args.environment}`,
+        {
+          detectorId: guardDutyDetector.id,
+          name: 'S3_DATA_EVENTS',
+          status: 'ENABLED',
+        },
+        { provider: featureProvider, parent: this }
+      );
 
-    // Enable EKS Audit Logs monitoring
-    void new aws.guardduty.DetectorFeature(
-      `guardduty-eks-audit-logs-${args.environment}`,
-      {
-        detectorId: guardDutyDetector.id,
-        name: 'EKS_AUDIT_LOGS',
-        status: 'ENABLED',
-      },
-      { provider, parent: this }
-    );
+      // Enable EKS Audit Logs monitoring
+      void new aws.guardduty.DetectorFeature(
+        `guardduty-eks-audit-logs-${args.environment}`,
+        {
+          detectorId: guardDutyDetector.id,
+          name: 'EKS_AUDIT_LOGS',
+          status: 'ENABLED',
+        },
+        { provider: featureProvider, parent: this }
+      );
 
-    // Enable Malware Protection
-    void new aws.guardduty.DetectorFeature(
-      `guardduty-malware-protection-${args.environment}`,
-      {
-        detectorId: guardDutyDetector.id,
-        name: 'EBS_MALWARE_PROTECTION',
-        status: 'ENABLED',
-      },
-      { provider, parent: this }
-    );
+      // Enable Malware Protection
+      void new aws.guardduty.DetectorFeature(
+        `guardduty-malware-protection-${args.environment}`,
+        {
+          detectorId: guardDutyDetector.id,
+          name: 'EBS_MALWARE_PROTECTION',
+          status: 'ENABLED',
+        },
+        { provider: featureProvider, parent: this }
+      );
+    });
 
     /**
      * AWS Config for Compliance Monitoring
@@ -1135,45 +1150,50 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     // AWS Config recorder and delivery channel handling
     // AWS Config allows only one recorder per region per account
-    // We'll create them but handle conflicts gracefully
     
-    const configRecorder = new aws.cfg.Recorder(
-      `main-config-recorder-${args.environment}`,
-      {
-        name: `main-config-recorder-${args.environment}`,
-        roleArn: configRole.arn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
+    // Check if we should create Config resources or use existing ones
+    // Set PULUMI_CREATE_CONFIG_RESOURCES=true to create new Config resources
+    const shouldCreateConfigResources = process.env.PULUMI_CREATE_CONFIG_RESOURCES === 'true';
+    
+    let configRecorder: aws.cfg.Recorder;
+    let configDeliveryChannel: aws.cfg.DeliveryChannel;
+    
+    if (shouldCreateConfigResources) {
+      // Create new Config recorder and delivery channel
+      configRecorder = new aws.cfg.Recorder(
+        `config-recorder-${args.environment}`,
+        {
+          name: `config-recorder-${args.environment}`,
+          roleArn: configRole.arn,
+          recordingGroup: {
+            allSupported: true,
+            includeGlobalResourceTypes: true,
+          },
         },
-      },
-      { 
-        provider, 
-        parent: this,
-        // Protect from deletion to avoid conflicts
-        protect: true
-      }
-    );
+        { provider, parent: this }
+      );
 
-    const configDeliveryChannel = new aws.cfg.DeliveryChannel(
-      `main-config-delivery-channel-${args.environment}`,
-      {
-        name: `main-config-delivery-channel-${args.environment}`,
-        s3BucketName: configBucket.bucket,
-        snapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
+      configDeliveryChannel = new aws.cfg.DeliveryChannel(
+        `config-delivery-channel-${args.environment}`,
+        {
+          name: `config-delivery-channel-${args.environment}`,
+          s3BucketName: configBucket.bucket,
+          snapshotDeliveryProperties: {
+            deliveryFrequency: 'TwentyFour_Hours',
+          },
         },
-      },
-      { 
-        provider, 
-        parent: this, 
-        dependsOn: [configRecorder],
-        // Protect from deletion to avoid conflicts
-        protect: true
-      }
-    );
+        { provider, parent: this, dependsOn: [configRecorder] }
+      );
+    } else {
+      // Use existing Config resources (default behavior)
+      // Create placeholder objects for outputs
+      configRecorder = {} as aws.cfg.Recorder;
+      configDeliveryChannel = {
+        name: pulumi.output('existing-config-delivery-channel')
+      } as aws.cfg.DeliveryChannel;
+    }
 
-    // Config rules for compliance
+    // Config rules for compliance (works with both existing and new recorders)
     void new aws.cfg.Rule(
       `encrypted-volumes-rule-${args.environment}`,
       {
@@ -1187,7 +1207,12 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: `encrypted-volumes-rule-${args.environment}`,
         },
       },
-      { provider, parent: this, dependsOn: [configRecorder] }
+      { 
+        provider, 
+        parent: this,
+        // Only depend on configRecorder if we created it
+        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {})
+      }
     );
 
     void new aws.cfg.Rule(
@@ -1203,7 +1228,12 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: `s3-bucket-public-read-prohibited-${args.environment}`,
         },
       },
-      { provider, parent: this, dependsOn: [configRecorder] }
+      { 
+        provider, 
+        parent: this,
+        // Only depend on configRecorder if we created it
+        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {})
+      }
     );
 
     /**

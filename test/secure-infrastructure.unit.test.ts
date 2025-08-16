@@ -763,11 +763,15 @@ describe('SecureInfrastructure Unit Tests', () => {
       expect(aws.guardduty.DetectorFeature).toHaveBeenCalledTimes(3); // S3, EKS, Malware features
     });
 
-    it('should create AWS Config resources', () => {
+    it('should handle AWS Config resources based on environment variable', () => {
       const aws = require('@pulumi/aws');
       
-      expect(aws.cfg.DeliveryChannel).toHaveBeenCalled();
-      expect(aws.cfg.Recorder).toHaveBeenCalled();
+      // By default (without PULUMI_CREATE_CONFIG_RESOURCES=true), 
+      // Config recorder and delivery channel should NOT be created
+      expect(aws.cfg.DeliveryChannel).not.toHaveBeenCalled();
+      expect(aws.cfg.Recorder).not.toHaveBeenCalled();
+      
+      // But Config rules should always be created
       expect(aws.cfg.Rule).toHaveBeenCalledWith(
         'encrypted-volumes-rule-test',
         expect.objectContaining({
