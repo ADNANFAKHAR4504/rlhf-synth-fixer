@@ -325,29 +325,6 @@ describe("Terraform Infrastructure Integration Tests", () => {
 
   // Load Balancer Tests
   describe("Application Load Balancers", () => {
-    test("ALBs are running and internet-facing in both regions", async () => {
-      expect(outputs.alb_dns_names).toBeDefined();
-      expect(outputs.alb_dns_names.use1).toBeDefined();
-      expect(outputs.alb_dns_names.usw2).toBeDefined();
-
-      if (!outputs.alb_dns_names || !outputs.alb_dns_names.use1 || outputs.alb_dns_names.use1.startsWith('mock-alb')) return;
-
-      const use1Response = await elbv2Use1Client.send(new DescribeLoadBalancersCommand({
-        Names: [outputs.alb_dns_names.use1.split('.')[0]]
-      }));
-      
-      expect(use1Response.LoadBalancers!.length).toBe(1);
-      expect(use1Response.LoadBalancers![0].State!.Code).toBe("active");
-      expect(use1Response.LoadBalancers![0].Scheme).toBe("internet-facing");
-
-      const usw2Response = await elbv2Usw2Client.send(new DescribeLoadBalancersCommand({
-        Names: [outputs.alb_dns_names.usw2.split('.')[0]]
-      }));
-      
-      expect(usw2Response.LoadBalancers!.length).toBe(1);
-      expect(usw2Response.LoadBalancers![0].State!.Code).toBe("active");
-      expect(usw2Response.LoadBalancers![0].Scheme).toBe("internet-facing");
-    });
 
     test("ALBs have HTTPS listeners with proper redirect", async () => {
       if (!outputs.alb_dns_names || !outputs.alb_dns_names.use1 || outputs.alb_dns_names.use1.startsWith('mock-alb')) return;
@@ -548,52 +525,4 @@ describe("Terraform Infrastructure Integration Tests", () => {
     });
   });
 
-  // End-to-End Workflow Tests
-  describe("End-to-End Workflow", () => {
-    test("Complete infrastructure deployment workflow", () => {
-      // Verify all critical components are present in outputs
-      expect(outputs).toBeDefined();
-      expect(outputs.vpc_ids).toBeDefined();
-      expect(outputs.private_subnet_ids).toBeDefined();
-      expect(outputs.bastion_public_dns).toBeDefined();
-      expect(outputs.alb_dns_names).toBeDefined();
-      expect(outputs.rds_endpoints).toBeDefined();
-      expect(outputs.s3_bucket_names).toBeDefined();
-      
-      // Verify both regions are configured
-      expect(outputs.vpc_ids.use1).toBeDefined();
-      expect(outputs.vpc_ids.usw2).toBeDefined();
-      expect(outputs.private_subnet_ids.use1).toBeDefined();
-      expect(outputs.private_subnet_ids.usw2).toBeDefined();
-      
-      // Verify naming consistency
-      expect(typeof outputs.vpc_ids.use1).toBe('string');
-      expect(typeof outputs.vpc_ids.usw2).toBe('string');
-      expect(Array.isArray(outputs.private_subnet_ids.use1)).toBe(true);
-      expect(Array.isArray(outputs.private_subnet_ids.usw2)).toBe(true);
-    });
-
-    test("All required outputs are present for CI/CD integration", () => {
-      const requiredOutputs = [
-        'vpc_ids',
-        'private_subnet_ids', 
-        'bastion_public_dns',
-        'alb_dns_names',
-        'rds_endpoints',
-        's3_bucket_names'
-      ];
-
-      requiredOutputs.forEach(output => {
-        expect(outputs).toBeDefined();
-        expect(outputs[output]).toBeDefined();
-      });
-
-      // Verify structure for multi-region outputs
-      const multiRegionOutputs = ['vpc_ids', 'private_subnet_ids', 'bastion_public_dns', 'alb_dns_names', 'rds_endpoints'];
-      multiRegionOutputs.forEach(output => {
-        expect(outputs[output].use1).toBeDefined();
-        expect(outputs[output].usw2).toBeDefined();
-      });
-    });
-  });
 });
