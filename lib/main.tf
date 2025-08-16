@@ -416,6 +416,12 @@ resource "aws_s3_bucket_replication_configuration" "primary_replication" {
     id     = "replicate_all_objects"
     status = "Enabled"
 
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        status = "Enabled"
+      }
+    }
+
     destination {
       bucket        = aws_s3_bucket.replication_destination.arn
       storage_class = "STANDARD"

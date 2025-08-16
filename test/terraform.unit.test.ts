@@ -157,7 +157,9 @@ describe('Terraform Unit Tests', () => {
       expect(mainTfContent).toContain('resource "aws_s3_bucket_replication_configuration" "primary_replication"');
       expect(mainTfContent).toContain('status = "Enabled"');
       expect(mainTfContent).toContain('destination {');
-      expect(mainTfContent).toContain('replica_kms_key_id = "aws/s3"');
+      expect(mainTfContent).toContain('replica_kms_key_id = "arn:${local.partition}:kms:us-west-2:${local.account_id}:alias/aws/s3"');
+      expect(mainTfContent).toContain('source_selection_criteria {');
+      expect(mainTfContent).toContain('sse_kms_encrypted_objects {');
     });
   });
 
