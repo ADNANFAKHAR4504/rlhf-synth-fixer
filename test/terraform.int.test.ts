@@ -63,14 +63,8 @@ describe('Terraform Integration Tests', () => {
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toBeDefined();
       
-      // VPC DNS attributes might not be directly available in describe response
-      // Let's just verify they exist without strict assertions
-      if (vpc.EnableDnsSupport !== undefined) {
-        expect(vpc.EnableDnsSupport).toBe(true);
-      }
-      if (vpc.EnableDnsHostnames !== undefined) {
-        expect(vpc.EnableDnsHostnames).toBe(true);
-      }
+      // VPC DNS attributes are not available in the DescribeVpcs response
+      // They would need to be checked via DescribeVpcAttribute if needed
     });
 
     test('Public and private subnets exist in multiple AZs', async () => {
