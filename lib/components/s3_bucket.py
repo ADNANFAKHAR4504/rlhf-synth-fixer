@@ -19,7 +19,7 @@ class SecureS3Bucket(pulumi.ComponentResource):
     # Create the main S3 bucket
     self.bucket = aws.s3.Bucket(
       f"{name}-bucket",
-      bucket=f"{name}-secure-bucket-{pulumi.get_stack()}",
+      bucket=f"{name}-secure-bucket-{pulumi.get_stack()}".lower(),
       opts=pulumi.ResourceOptions(parent=self)
     )
 

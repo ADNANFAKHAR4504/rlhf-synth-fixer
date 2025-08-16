@@ -26,6 +26,7 @@ class TestSecureS3Bucket(unittest.TestCase):
     self.kms_key_arn = pulumi.Output.from_input("arn:aws:kms:us-east-1:123456789012:key/test-key")
     self.sns_topic_arn = pulumi.Output.from_input("arn:aws:sns:us-east-1:123456789012:test-topic")
 
+  @patch('pulumi.ResourceOptions')
   @patch('pulumi_aws.s3.Bucket')
   @patch('pulumi_aws.s3.BucketVersioningV2')
   @patch('pulumi_aws.s3.BucketServerSideEncryptionConfigurationV2')
@@ -36,7 +37,7 @@ class TestSecureS3Bucket(unittest.TestCase):
     """Test SecureS3Bucket creates all required resources."""
     # Unpack mocks in reverse order (since decorators are applied bottom-up)
     (mock_notification, mock_lifecycle, mock_public_access, 
-     mock_encryption, mock_versioning, mock_bucket) = mocks
+     mock_encryption, mock_versioning, mock_bucket, mock_resource_options) = mocks
     
     # Mock Pulumi stack
     with patch('pulumi.get_stack', return_value='test'):
@@ -55,22 +56,34 @@ class TestSecureS3Bucket(unittest.TestCase):
     mock_public_access.assert_called_once()
     mock_lifecycle.assert_called_once()
     mock_notification.assert_called_once()
+    # ResourceOptions should be called multiple times
+    self.assertGreater(mock_resource_options.call_count, 0)
 
-  def test_bucket_name_generation(self):
+  @patch('pulumi.ResourceOptions')
+  @patch('pulumi_aws.s3.Bucket')
+  @patch('pulumi_aws.s3.BucketVersioningV2')
+  @patch('pulumi_aws.s3.BucketServerSideEncryptionConfigurationV2')
+  @patch('pulumi_aws.s3.BucketPublicAccessBlock')
+  @patch('pulumi_aws.s3.BucketLifecycleConfigurationV2')
+  @patch('pulumi_aws.s3.BucketLoggingV2')
+  @patch('pulumi_aws.s3.BucketNotification')
+  def test_bucket_name_generation(self, *mocks):
     """Test bucket name includes stack name."""
+    # Get the bucket mock (second from the end due to decorator order)
+    mock_bucket = mocks[-2]
+    
     with patch('pulumi.get_stack', return_value='dev'):
-      with patch('pulumi_aws.s3.Bucket') as mock_bucket:
-        SecureS3Bucket(
-          "test",
-          config=SecureS3BucketConfig(
-            kms_key_id=self.kms_key_arn,
-            sns_topic_arn=self.sns_topic_arn
-          )
+      SecureS3Bucket(
+        "test",
+        config=SecureS3BucketConfig(
+          kms_key_id=self.kms_key_arn,
+          sns_topic_arn=self.sns_topic_arn
         )
+      )
 
-        # Check bucket name format
-        call_args = mock_bucket.call_args
-        self.assertIn("test-secure-bucket-dev", str(call_args))
+      # Check bucket name format
+      call_args = mock_bucket.call_args
+      self.assertIn("test-secure-bucket-dev", str(call_args))
 
 
 class TestSNSTopic(unittest.TestCase):
