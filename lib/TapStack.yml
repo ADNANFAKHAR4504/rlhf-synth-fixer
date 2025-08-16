@@ -55,7 +55,7 @@ Parameters:
 
   DBSecretArn:
     Type: String
-    Description: ARN of Secrets Manager secret JSON with keys: username, password
+    Description: ARN of Secrets Manager secret JSON with keys username and password
 
   DBInstanceClass:
     Type: String
