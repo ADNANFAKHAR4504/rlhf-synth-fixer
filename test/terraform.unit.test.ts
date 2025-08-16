@@ -74,7 +74,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
   describe('Per-Region Resource Validation', () => {
     // This test uses Jest's 'each' feature to run the same validation logic for both regions.
     test.each([
-      { region: 'us-east-1', provider: 'aws.us-east-1' },
+      { region: 'us-east-1', provider: 'aws.eu-north-1' },
       { region: 'us-west-2', provider: 'aws.us-west-2' },
     ])(
       'should have correctly configured KMS, S3, and EC2 resources for $region',
@@ -130,7 +130,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
     );
 
     test.each([
-      { region: 'us-east-1', provider: 'aws.us-east-1' },
+      { region: 'us-east-1', provider: 'aws.eu-north-1' },
       { region: 'us-west-2', provider: 'aws.us-west-2' },
     ])(
       'should have a correctly named KMS alias for $region',
@@ -152,7 +152,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
     );
 
     test.each([
-      { region: 'us-east-1', provider: 'aws.us-east-1' },
+      { region: 'us-east-1', provider: 'aws.eu-north-1' },
       { region: 'us-west-2', provider: 'aws.us-west-2' },
     ])(
       'should enforce SSE-KMS encryption on the S3 bucket for $region',

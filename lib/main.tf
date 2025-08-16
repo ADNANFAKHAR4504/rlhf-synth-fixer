@@ -67,11 +67,11 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 # /-----------------------------------------------------------------------------
-# | US-EAST-1 Regional Resources
+# | EU-NORTH-1 Regional Resources
 # |-----------------------------------------------------------------------------
 
 data "aws_ami" "amazon_linux_2_us_east_1" {
-  provider = aws.us-east-1
+  provider = aws.eu-north-1
 
   most_recent = true
   owners      = ["amazon"]
@@ -82,7 +82,7 @@ data "aws_ami" "amazon_linux_2_us_east_1" {
 }
 
 resource "aws_kms_key" "app_key_us_east_1" {
-  provider = aws.us-east-1
+  provider = aws.eu-north-1
 
   description             = "KMS key for Nova (us-east-1)"
   deletion_window_in_days = 10
@@ -90,19 +90,19 @@ resource "aws_kms_key" "app_key_us_east_1" {
 }
 
 resource "aws_kms_alias" "app_key_alias_us_east_1" {
-  provider      = aws.us-east-1
+  provider      = aws.eu-north-1
   name          = "alias/nova-app-key"
   target_key_id = aws_kms_key.app_key_us_east_1.id
 }
 
 resource "aws_s3_bucket" "data_bucket_us_east_1" {
-  provider = aws.us-east-1
+  provider = aws.eu-north-1
   bucket   = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-us-east-1"
   tags     = local.common_tags
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "data_bucket_encryption_us_east_1" {
-  provider = aws.us-east-1
+  provider = aws.eu-north-1
   bucket   = aws_s3_bucket.data_bucket_us_east_1.id
   rule {
     apply_server_side_encryption_by_default {
@@ -113,7 +113,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data_bucket_encry
 }
 
 resource "aws_s3_bucket_public_access_block" "data_bucket_pac_us_east_1" {
-  provider = aws.us-east-1
+  provider = aws.eu-north-1
   bucket   = aws_s3_bucket.data_bucket_us_east_1.id
 
   block_public_acls       = true
@@ -123,7 +123,7 @@ resource "aws_s3_bucket_public_access_block" "data_bucket_pac_us_east_1" {
 }
 
 resource "aws_instance" "app_server_us_east_1" {
-  provider = aws.us-east-1
+  provider = aws.eu-north-1
 
   ami                  = data.aws_ami.amazon_linux_2_us_east_1.id
   instance_type        = "t3.micro"
@@ -140,13 +140,13 @@ resource "aws_instance" "app_server_us_east_1" {
 
 # AWS Config setup for us-east-1
 resource "aws_config_configuration_recorder" "recorder_us_east_1" {
-  provider = aws.us-east-1
+  provider = aws.eu-north-1
   name     = "default" # AWS only allows one recorder per region, named 'default'.
   role_arn = aws_iam_role.config_role.arn
 }
 
 resource "aws_config_config_rule" "s3_encryption_us_east_1" {
-  provider = aws.us-east-1
+  provider = aws.eu-north-1
   name     = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
   source {
     owner             = "AWS"
@@ -156,7 +156,7 @@ resource "aws_config_config_rule" "s3_encryption_us_east_1" {
 }
 
 resource "aws_config_config_rule" "ebs_encryption_us_east_1" {
-  provider = aws.us-east-1
+  provider = aws.eu-north-1
   name     = "ENCRYPTED_VOLUMES"
   source {
     owner             = "AWS"

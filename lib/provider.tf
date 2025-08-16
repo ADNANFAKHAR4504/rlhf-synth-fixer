@@ -18,7 +18,7 @@ terraform {
 variable "aws_region" {
   description = "The default AWS region for provider configuration."
   type        = string
-  default     = "us-west-2"
+  default     = "eu-north-1"
 }
 
 # Default provider configuration for non-regional resources like IAM.
@@ -28,8 +28,8 @@ provider "aws" {
 
 # Provider alias for the US East (N. Virginia) region.
 provider "aws" {
-  alias  = "us-east-1"
-  region = "us-east-1"
+  alias  = "eu-north-1"
+  region = "eu-north-1"
 }
 
 # Provider alias for the US West (Oregon) region.
