@@ -14,14 +14,29 @@ terraform {
   backend "s3" {}
 }
 
-# Primary AWS provider for general resources
+# Primary AWS provider for general resources (us-east-1)
 provider "aws" {
-  region = var.aws_region
+  region = "us-east-1"
 
   default_tags {
     tags = {
-      Project   = "TapStack"
-      ManagedBy = "terraform"
+      Owner       = var.owner
+      Environment = var.environment
+      ManagedBy   = "terraform"
+    }
+  }
+}
+
+# AWS provider for us-west-2 region (for replication)
+provider "aws" {
+  alias  = "us_west_2"
+  region = "us-west-2"
+
+  default_tags {
+    tags = {
+      Owner       = var.owner
+      Environment = var.environment
+      ManagedBy   = "terraform"
     }
   }
 }

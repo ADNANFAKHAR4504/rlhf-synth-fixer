@@ -5,33 +5,16 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "environment_suffix" {
-  description = "Environment suffix for resource naming"
+variable "environment" {
+  description = "Environment name for resource tagging"
   type        = string
-  default     = "v2"
+  default     = "production"
 }
 
-variable "vpc_id" {
-  description = "VPC ID for Lambda deployment (optional for production)"
+variable "owner" {
+  description = "Owner tag for cost allocation"
   type        = string
-  default     = null
-}
-
-variable "subnet_ids" {
-  description = "Subnet IDs for Lambda deployment (required if vpc_id is provided)"
-  type        = list(string)
-  default     = []
-}
-
-variable "lambda_config" {
-  description = "Lambda function configuration"
-  type = object({
-    runtime      = optional(string, "nodejs18.x")
-    timeout      = optional(number, 300)
-    memory_size  = optional(number, 512)
-    architecture = optional(string, "x86_64")
-  })
-  default = {}
+  default     = "platform-team"
 }
 
 # Data sources
@@ -39,197 +22,54 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 data "aws_partition" "current" {}
 
-# Get default VPC if no VPC ID is provided
-data "aws_vpc" "default" {
-  count   = var.vpc_id == null ? 1 : 0
-  default = true
-}
-
-# Get subnets for the VPC
-data "aws_subnets" "vpc_subnets" {
-  filter {
-    name   = "vpc-id"
-    values = [local.vpc_id]
-  }
-  filter {
-    name   = "state"
-    values = ["available"]
-  }
-}
-
 # Locals
 locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
   partition  = data.aws_partition.current.partition
 
-  # Project prefix for consistent naming
-  project_prefix = "projectXYZ-${var.environment_suffix}"
-
-  # VPC configuration
-  vpc_id     = var.vpc_id != null ? var.vpc_id : data.aws_vpc.default[0].id
-  subnet_ids = length(var.subnet_ids) > 0 ? var.subnet_ids : data.aws_subnets.vpc_subnets.ids
-
-  # Common tags
+  # Common tags for cost allocation
   common_tags = {
-    Environment = var.environment_suffix
-    Project     = local.project_prefix
+    owner       = var.owner
+    environment = var.environment
     ManagedBy   = "terraform"
   }
+}
 
-  # Lambda configuration
-  lambda_config = {
-    runtime      = var.lambda_config.runtime
-    timeout      = var.lambda_config.timeout
-    memory_size  = var.lambda_config.memory_size
-    architecture = var.lambda_config.architecture
+# Access Logging Bucket
+resource "aws_s3_bucket" "access_logging" {
+  bucket = "data-secured-${local.account_id}-access-logs"
+
+  tags = merge(local.common_tags, {
+    Name       = "data-secured-${local.account_id}-access-logs"
+    Purpose    = "S3 Access Logging"
+    Compliance = "Required"
+  })
+}
+
+# Access Logging Bucket Versioning
+resource "aws_s3_bucket_versioning" "access_logging_versioning" {
+  bucket = aws_s3_bucket.access_logging.id
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
-# Security Group for Lambda
-resource "aws_security_group" "lambda_sg" {
-  name        = "${local.project_prefix}-lambda-sg"
-  description = "Security group for Lambda data processing function"
-  vpc_id      = local.vpc_id
-
-  egress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTPS outbound for S3/KMS API calls"
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.project_prefix}-lambda-sg"
-  })
-}
-
-# KMS Key for S3 encryption
-resource "aws_kms_key" "s3_kms_key" {
-  description             = "${local.project_prefix} S3 encryption key"
-  enable_key_rotation     = true
-  deletion_window_in_days = 7
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable Key Management"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:${local.partition}:iam::${local.account_id}:root"
-        }
-        Action = [
-          "kms:Create*",
-          "kms:Describe*",
-          "kms:Enable*",
-          "kms:List*",
-          "kms:Put*",
-          "kms:Update*",
-          "kms:Revoke*",
-          "kms:Disable*",
-          "kms:Get*",
-          "kms:Delete*",
-          "kms:TagResource",
-          "kms:UntagResource",
-          "kms:ScheduleKeyDeletion",
-          "kms:CancelKeyDeletion"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow S3 Service Access"
-        Effect = "Allow"
-        Principal = {
-          Service = "s3.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "s3.${local.region}.amazonaws.com"
-          }
-        }
-      },
-      {
-        Sid    = "Allow Lambda Service Access"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-        Action = [
-          "kms:Decrypt"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "s3.${local.region}.amazonaws.com"
-          }
-        }
-      },
-      {
-        Sid    = "Allow CloudWatch Logs Service Access"
-        Effect = "Allow"
-        Principal = {
-          Service = "logs.${local.region}.amazonaws.com"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:${local.partition}:logs:${local.region}:${local.account_id}:log-group:/aws/lambda/${local.project_prefix}-data-processor"
-          }
-        }
-      }
-    ]
-  })
-
-  tags = merge(local.common_tags, {
-    Name = "${local.project_prefix}-s3-kms-key"
-  })
-}
-
-# KMS Key Alias
-resource "aws_kms_alias" "s3_kms_key_alias" {
-  name          = "alias/${local.project_prefix}-s3-encryption"
-  target_key_id = aws_kms_key.s3_kms_key.key_id
-}
-
-# S3 Bucket for data processing
-resource "aws_s3_bucket" "data_bucket" {
-  bucket = "${lower(local.project_prefix)}-data-processing-${local.account_id}"
-
-  tags = merge(local.common_tags, {
-    Name = "${local.project_prefix}-data-processing-bucket"
-  })
-}
-
-# S3 Bucket Server-Side Encryption
-resource "aws_s3_bucket_server_side_encryption_configuration" "data_bucket_encryption" {
-  bucket = aws_s3_bucket.data_bucket.id
+# Access Logging Bucket Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "access_logging_encryption" {
+  bucket = aws_s3_bucket.access_logging.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.s3_kms_key.arn
+      sse_algorithm = "AES256"
     }
     bucket_key_enabled = true
   }
 }
 
-# S3 Bucket Public Access Block
-resource "aws_s3_bucket_public_access_block" "data_bucket_pab" {
-  bucket = aws_s3_bucket.data_bucket.id
+# Access Logging Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "access_logging_pab" {
+  bucket = aws_s3_bucket.access_logging.id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -237,9 +77,434 @@ resource "aws_s3_bucket_public_access_block" "data_bucket_pab" {
   restrict_public_buckets = true
 }
 
-# S3 Bucket Policy
-resource "aws_s3_bucket_policy" "data_bucket_policy" {
-  bucket = aws_s3_bucket.data_bucket.id
+# Access Logging Bucket Policy - Allow S3 service to write logs
+resource "aws_s3_bucket_policy" "access_logging_policy" {
+  bucket = aws_s3_bucket.access_logging.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3ServerAccessLogsPolicy"
+        Effect = "Allow"
+        Principal = {
+          Service = "logging.s3.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.access_logging.arn}/access-logs/*"
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = aws_s3_bucket.primary.arn
+          }
+          StringEquals = {
+            "aws:SourceAccount" = local.account_id
+          }
+        }
+      },
+      {
+        Sid    = "S3ServerAccessLogsDeliveryRootAccess"
+        Effect = "Allow"
+        Principal = {
+          Service = "logging.s3.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.access_logging.arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = local.account_id
+          }
+        }
+      },
+      {
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.access_logging.arn,
+          "${aws_s3_bucket.access_logging.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.access_logging_pab]
+}
+
+# Primary S3 Bucket
+resource "aws_s3_bucket" "primary" {
+  bucket = "data-secured-${local.account_id}"
+
+  tags = merge(local.common_tags, {
+    Name        = "data-secured-${local.account_id}"
+    Purpose     = "Secure Data Storage"
+    Compliance  = "Required"
+    Replication = "Enabled"
+  })
+}
+
+# Primary Bucket Versioning
+resource "aws_s3_bucket_versioning" "primary_versioning" {
+  bucket = aws_s3_bucket.primary.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Primary Bucket Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "primary_encryption" {
+  bucket = aws_s3_bucket.primary.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = "aws/s3"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Primary Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "primary_pab" {
+  bucket = aws_s3_bucket.primary.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Primary Bucket Access Logging
+resource "aws_s3_bucket_logging" "primary_logging" {
+  bucket = aws_s3_bucket.primary.id
+
+  target_bucket = aws_s3_bucket.access_logging.id
+  target_prefix = "access-logs/"
+}
+
+# Primary Bucket Lifecycle Configuration
+resource "aws_s3_bucket_lifecycle_configuration" "primary_lifecycle" {
+  bucket = aws_s3_bucket.primary.id
+
+  rule {
+    id     = "delete_old_objects"
+    status = "Enabled"
+
+    expiration {
+      days = 365
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.primary_versioning]
+}
+
+# Replication Destination Bucket (us-west-2)
+resource "aws_s3_bucket" "replication_destination" {
+  provider = aws.us_west_2
+  bucket   = "data-secured-${local.account_id}-replica"
+
+  tags = merge(local.common_tags, {
+    Name       = "data-secured-${local.account_id}-replica"
+    Purpose    = "Disaster Recovery Replica"
+    Compliance = "Required"
+    Region     = "us-west-2"
+  })
+}
+
+# Replication Destination Bucket Versioning
+resource "aws_s3_bucket_versioning" "replication_destination_versioning" {
+  provider = aws.us_west_2
+  bucket   = aws_s3_bucket.replication_destination.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Replication Destination Bucket Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "replication_destination_encryption" {
+  provider = aws.us_west_2
+  bucket   = aws_s3_bucket.replication_destination.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = "aws/s3"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Replication Destination Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "replication_destination_pab" {
+  provider = aws.us_west_2
+  bucket   = aws_s3_bucket.replication_destination.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Replication Destination Bucket Policy
+resource "aws_s3_bucket_policy" "replication_destination_policy" {
+  provider = aws.us_west_2
+  bucket   = aws_s3_bucket.replication_destination.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ReplicationPolicy"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.replication_role.arn
+        }
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags"
+        ]
+        Resource = "${aws_s3_bucket.replication_destination.arn}/*"
+      },
+      {
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.replication_destination.arn,
+          "${aws_s3_bucket.replication_destination.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      },
+      {
+        Sid       = "RequireSSEKMS"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.replication_destination.arn}/*"
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [
+    aws_s3_bucket_public_access_block.replication_destination_pab,
+    aws_iam_role.replication_role
+  ]
+}
+
+# IAM Role for S3 Replication
+resource "aws_iam_role" "replication_role" {
+  name = "data-secured-${local.account_id}-replication-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name    = "data-secured-${local.account_id}-replication-role"
+    Purpose = "S3 Cross-Region Replication"
+  })
+}
+
+# IAM Policy for S3 Replication
+resource "aws_iam_policy" "replication_policy" {
+  name        = "data-secured-${local.account_id}-replication-policy"
+  description = "Policy for S3 cross-region replication"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectVersionTagging"
+        ]
+        Resource = "${aws_s3_bucket.primary.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketVersioning"
+        ]
+        Resource = aws_s3_bucket.primary.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags"
+        ]
+        Resource = "${aws_s3_bucket.replication_destination.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
+        ]
+        Resource = "arn:${local.partition}:kms:${local.region}:${local.account_id}:key/*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "s3.${local.region}.amazonaws.com"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:GenerateDataKey"
+        ]
+        Resource = "arn:${local.partition}:kms:us-west-2:${local.account_id}:key/*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "s3.us-west-2.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name    = "data-secured-${local.account_id}-replication-policy"
+    Purpose = "S3 Cross-Region Replication"
+  })
+}
+
+# Attach Replication Policy to Role
+resource "aws_iam_role_policy_attachment" "replication_policy_attachment" {
+  role       = aws_iam_role.replication_role.name
+  policy_arn = aws_iam_policy.replication_policy.arn
+}
+
+# S3 Bucket Replication Configuration
+resource "aws_s3_bucket_replication_configuration" "primary_replication" {
+  depends_on = [aws_s3_bucket_versioning.primary_versioning]
+
+  role   = aws_iam_role.replication_role.arn
+  bucket = aws_s3_bucket.primary.id
+
+  rule {
+    id     = "replicate_all_objects"
+    status = "Enabled"
+
+    destination {
+      bucket        = aws_s3_bucket.replication_destination.arn
+      storage_class = "STANDARD"
+
+      encryption_configuration {
+        replica_kms_key_id = "aws/s3"
+      }
+    }
+  }
+}
+
+# IAM Policy for MFA-enforced S3 Access
+resource "aws_iam_policy" "mfa_s3_access_policy" {
+  name        = "data-secured-${local.account_id}-mfa-access-policy"
+  description = "Policy requiring MFA for S3 bucket access"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowListS3BucketWithMFA"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          aws_s3_bucket.primary.arn
+        ]
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+          NumericLessThan = {
+            "aws:MultiFactorAuthAge" = "3600"
+          }
+        }
+      },
+      {
+        Sid    = "AllowS3ObjectAccessWithMFA"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.primary.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+          NumericLessThan = {
+            "aws:MultiFactorAuthAge" = "3600"
+          }
+        }
+      },
+      {
+        Sid    = "DenyS3AccessWithoutMFA"
+        Effect = "Deny"
+        Action = [
+          "s3:*"
+        ]
+        Resource = [
+          aws_s3_bucket.primary.arn,
+          "${aws_s3_bucket.primary.arn}/*"
+        ]
+        Condition = {
+          BoolIfExists = {
+            "aws:MultiFactorAuthPresent" = "false"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name    = "data-secured-${local.account_id}-mfa-access-policy"
+    Purpose = "MFA Enforcement for S3 Access"
+  })
+}
+
+# S3 Bucket Policy for Additional Security
+resource "aws_s3_bucket_policy" "primary_bucket_policy" {
+  bucket = aws_s3_bucket.primary.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -250,8 +515,8 @@ resource "aws_s3_bucket_policy" "data_bucket_policy" {
         Principal = "*"
         Action    = "s3:*"
         Resource = [
-          aws_s3_bucket.data_bucket.arn,
-          "${aws_s3_bucket.data_bucket.arn}/*"
+          aws_s3_bucket.primary.arn,
+          "${aws_s3_bucket.primary.arn}/*"
         ]
         Condition = {
           Bool = {
@@ -260,214 +525,68 @@ resource "aws_s3_bucket_policy" "data_bucket_policy" {
         }
       },
       {
-        Sid       = "DenyUnencryptedObjectUploads"
+        Sid       = "RequireSSEKMS"
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.data_bucket.arn}/*"
+        Resource  = "${aws_s3_bucket.primary.arn}/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
-      }
-    ]
-  })
-}
-
-# Lambda ZIP file
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/lambda"
-  output_path = "${path.module}/.temp-lambda/lambda-function.zip"
-}
-
-# IAM Role for Lambda execution
-resource "aws_iam_role" "lambda_execution_role" {
-  name = "${local.project_prefix}-lambda-execution-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
+      },
       {
-        Action = "sts:AssumeRole"
+        Sid    = "AllowReplicationRole"
         Effect = "Allow"
         Principal = {
-          Service = "lambda.amazonaws.com"
+          AWS = aws_iam_role.replication_role.arn
         }
+        Action = [
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectVersionTagging",
+          "s3:ListBucket",
+          "s3:GetBucketVersioning"
+        ]
+        Resource = [
+          aws_s3_bucket.primary.arn,
+          "${aws_s3_bucket.primary.arn}/*"
+        ]
       }
     ]
   })
 
-  tags = merge(local.common_tags, {
-    Name = "${local.project_prefix}-lambda-execution-role"
-  })
-}
-
-# Attach Lambda VPC execution policy
-resource "aws_iam_role_policy_attachment" "lambda_vpc_execution" {
-  role       = aws_iam_role.lambda_execution_role.name
-  policy_arn = "arn:${local.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
-
-# Custom IAM Policy for S3 and KMS access
-resource "aws_iam_policy" "lambda_s3_kms_policy" {
-  name        = "${local.project_prefix}-lambda-s3-kms-policy"
-  description = "Policy for Lambda to access S3 bucket and KMS key"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:GetObjectVersion"
-        ]
-        Resource = "${aws_s3_bucket.data_bucket.arn}/*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = aws_kms_key.s3_kms_key.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "arn:${local.partition}:logs:${local.region}:${local.account_id}:log-group:/aws/lambda/${local.project_prefix}-*"
-      }
-    ]
-  })
-
-  tags = merge(local.common_tags, {
-    Name = "${local.project_prefix}-lambda-s3-kms-policy"
-  })
-}
-
-# Attach custom policy to Lambda role
-resource "aws_iam_role_policy_attachment" "lambda_s3_kms_attachment" {
-  role       = aws_iam_role.lambda_execution_role.name
-  policy_arn = aws_iam_policy.lambda_s3_kms_policy.arn
-}
-
-# Lambda function for data processing
-resource "aws_lambda_function" "data_processor" {
-  function_name    = "${local.project_prefix}-data-processor"
-  filename         = data.archive_file.lambda_zip.output_path
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  handler          = "index.handler"
-  runtime          = local.lambda_config.runtime
-  role             = aws_iam_role.lambda_execution_role.arn
-  timeout          = local.lambda_config.timeout
-  memory_size      = local.lambda_config.memory_size
-  architectures    = [local.lambda_config.architecture]
-  publish          = var.environment_suffix == "prod"
-
-  vpc_config {
-    subnet_ids         = local.subnet_ids
-    security_group_ids = [aws_security_group.lambda_sg.id]
-  }
-
-  environment {
-    variables = {
-      BUCKET_NAME    = aws_s3_bucket.data_bucket.bucket
-      KMS_KEY_ID     = aws_kms_key.s3_kms_key.key_id
-      PROJECT_PREFIX = local.project_prefix
-    }
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.project_prefix}-data-processor"
-  })
-
-  depends_on = [
-    aws_iam_role_policy_attachment.lambda_vpc_execution,
-    aws_iam_role_policy_attachment.lambda_s3_kms_attachment,
-    aws_cloudwatch_log_group.lambda_log_group
-  ]
-}
-
-# CloudWatch Log Group for Lambda
-resource "aws_cloudwatch_log_group" "lambda_log_group" {
-  name              = "/aws/lambda/${local.project_prefix}-data-processor"
-  retention_in_days = 14
-  kms_key_id        = aws_kms_key.s3_kms_key.arn
-
-  tags = local.common_tags
-}
-
-# Lambda permission for S3 to invoke the function
-resource "aws_lambda_permission" "s3_lambda_permission" {
-  statement_id  = "AllowExecutionFromS3Bucket"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.data_processor.function_name
-  principal     = "s3.amazonaws.com"
-  source_arn    = aws_s3_bucket.data_bucket.arn
-}
-
-# S3 Bucket Notification to trigger Lambda
-resource "aws_s3_bucket_notification" "bucket_notification" {
-  bucket = aws_s3_bucket.data_bucket.id
-
-  lambda_function {
-    lambda_function_arn = aws_lambda_function.data_processor.arn
-    events              = ["s3:ObjectCreated:*"]
-    filter_prefix       = "input/"
-    filter_suffix       = ".json"
-  }
-
-  depends_on = [aws_lambda_permission.s3_lambda_permission]
+  depends_on = [aws_iam_role.replication_role]
 }
 
 # Outputs
-output "bucket_name" {
-  description = "Name of the S3 bucket for data processing"
-  value       = aws_s3_bucket.data_bucket.bucket
+output "source_bucket_name" {
+  description = "Name of the primary secure S3 bucket"
+  value       = aws_s3_bucket.primary.bucket
 }
 
-output "lambda_function_name" {
-  description = "Name of the Lambda function for data processing"
-  value       = aws_lambda_function.data_processor.function_name
+output "destination_bucket_name" {
+  description = "Name of the replication destination bucket in us-west-2"
+  value       = aws_s3_bucket.replication_destination.bucket
 }
 
-output "kms_key_id" {
-  description = "KMS Key ID used for S3 encryption"
-  value       = aws_kms_key.s3_kms_key.key_id
+output "logging_bucket_name" {
+  description = "Name of the access logging bucket"
+  value       = aws_s3_bucket.access_logging.bucket
 }
 
-output "kms_key_arn" {
-  description = "KMS Key ARN used for S3 encryption"
-  value       = aws_kms_key.s3_kms_key.arn
+output "mfa_policy_arn" {
+  description = "ARN of the MFA enforcement policy"
+  value       = aws_iam_policy.mfa_s3_access_policy.arn
 }
 
-output "lambda_role_arn" {
-  description = "ARN of the Lambda execution role"
-  value       = aws_iam_role.lambda_execution_role.arn
-}
-
-output "security_group_id" {
-  description = "ID of the Lambda security group"
-  value       = aws_security_group.lambda_sg.id
-}
-
-output "vpc_id" {
-  description = "VPC ID used for Lambda deployment"
-  value       = local.vpc_id
-}
-
-output "subnet_ids" {
-  description = "Subnet IDs used for Lambda deployment"
-  value       = local.subnet_ids
+output "replication_role_arn" {
+  description = "ARN of the S3 replication IAM role"
+  value       = aws_iam_role.replication_role.arn
 }
 
 output "aws_region" {
-  description = "AWS region where resources are deployed"
+  description = "AWS region where primary resources are deployed"
   value       = local.region
 }
