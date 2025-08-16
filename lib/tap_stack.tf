@@ -134,9 +134,7 @@ resource "aws_kms_key" "main" {
 
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [
-      random_string.deployment_id
-    ]
+    replace_triggered_by = [random_string.deployment_id, local.common_tags["CreatedDate"]]
   }
 }
 
@@ -166,9 +164,7 @@ resource "aws_vpc" "main" {
 
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [
-      random_string.deployment_id
-    ]
+    replace_triggered_by = [random_string.deployment_id, local.common_tags["CreatedDate"]]
   }
 }
 
@@ -320,6 +316,11 @@ resource "aws_iam_role" "vpc_flow_logs" {
   })
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+    replace_triggered_by = [random_string.deployment_id]
+  }
 }
 
 resource "aws_iam_role_policy" "vpc_flow_logs" {
@@ -437,9 +438,8 @@ resource "aws_s3_bucket" "main" {
   tags = local.common_tags
 
   lifecycle {
-    replace_triggered_by = [
-      random_string.deployment_id
-    ]
+    create_before_destroy = true
+    replace_triggered_by = [random_string.deployment_id, local.common_tags["CreatedDate"]]
   }
 }
 
@@ -454,10 +454,8 @@ resource "aws_s3_bucket" "cloudtrail" {
   })
 
   lifecycle {
-    replace_triggered_by = [
-      random_string.deployment_id
-    ]
     create_before_destroy = true
+    replace_triggered_by = [random_string.deployment_id, local.common_tags["CreatedDate"]]
   }
 }
 
@@ -708,6 +706,7 @@ resource "aws_iam_user" "app_user" {
 
   lifecycle {
     create_before_destroy = true
+    replace_triggered_by = [random_string.deployment_id]
   }
 }
 
@@ -756,6 +755,11 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+    replace_triggered_by = [random_string.deployment_id]
+  }
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
