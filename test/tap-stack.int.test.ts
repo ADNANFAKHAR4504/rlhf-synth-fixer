@@ -70,7 +70,8 @@ describe('Secure Infrastructure Integration Tests', () => {
         'VPCId',
         'PublicSubnetId',
         'PrivateSubnetId',
-        'SecurityGroupId'
+        'SecurityGroupId',
+        'PrivateRouteTableId'
       ];
 
       expectedOutputs.forEach(outputKey => {
@@ -386,7 +387,12 @@ describe('Secure Infrastructure Integration Tests', () => {
           'AttachGateway',
           'PublicRouteTable',
           'PublicRoute',
-          'PublicSubnetRouteTableAssociation'
+          'PublicSubnetRouteTableAssociation',
+          'NATGatewayEIP',
+          'NATGateway',
+          'PrivateRouteTable',
+          'PrivateRoute',
+          'PrivateSubnetRouteTableAssociation'
         ];
         
         const actualResourceTypes = response.StackResourceSummaries?.map(r => r.LogicalResourceId);

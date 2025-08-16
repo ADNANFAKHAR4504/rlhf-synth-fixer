@@ -288,9 +288,9 @@ describe('TapStack CloudFormation Template', () => {
       const instance = template.Resources.WebServerInstance;
       expect(instance.Type).toBe('AWS::EC2::Instance');
       
-      // Check instance uses correct AMI mapping
+      // Check instance uses conditional AMI selection
       expect(instance.Properties.ImageId).toEqual({
-        'Fn::FindInMap': ['RegionMap', { Ref: 'AWS::Region' }, 'AMI']
+        'Fn::If': ['UseCustomAMI', { Ref: 'CustomAMIId' }, { 'Fn::FindInMap': ['RegionMap', { Ref: 'AWS::Region' }, 'AMI'] }]
       });
       
       // Check instance type parameter reference
@@ -430,17 +430,17 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(15); // 2 S3 buckets, 2 IAM roles, 1 instance profile, 1 security group, 1 EC2 instance, 1 VPC, 2 subnets, 1 IGW, 1 VPC attachment, 1 route table, 1 route, 1 subnet association
+      expect(resourceCount).toBe(20); // 2 S3 buckets, 2 IAM roles, 1 instance profile, 1 security group, 1 EC2 instance, 1 VPC, 2 subnets, 1 IGW, 1 VPC attachment, 2 route tables, 2 routes, 2 subnet associations, 1 EIP, 1 NAT Gateway
     });
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6); // Environment, Project, Owner, InstanceType, EnvironmentSuffix, KeyPairName
+      expect(parameterCount).toBe(8); // Environment, Project, Owner, InstanceType, EnvironmentSuffix, KeyPairName, CreateNATGateway, CustomAMIId
     });
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(11);
+      expect(outputCount).toBe(13);
     });
   });
 

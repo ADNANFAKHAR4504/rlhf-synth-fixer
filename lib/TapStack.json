@@ -58,6 +58,20 @@
             "Default": "",
             "Description": "Name of an existing EC2 KeyPair to enable SSH access (optional)",
             "ConstraintDescription": "Must be the name of an existing EC2 KeyPair or empty string"
+        },
+        "CreateNATGateway": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Create NAT Gateway for private subnet (incurs additional costs)"
+        },
+        "CustomAMIId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Custom AMI ID to use if region is not in the mapping (optional)"
         }
     },
     "Conditions": {
@@ -72,11 +86,34 @@
                     ]
                 }
             ]
+        },
+        "ShouldCreateNATGateway": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateNATGateway"
+                },
+                "true"
+            ]
+        },
+        "UseCustomAMI": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CustomAMIId"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Mappings": {
         "RegionMap": {
             "us-east-1": {
+                "AMI": "ami-0c02fb55956c7d316"
+            },
+            "us-east-2": {
                 "AMI": "ami-0c02fb55956c7d316"
             },
             "us-west-1": {
@@ -87,6 +124,18 @@
             },
             "eu-west-1": {
                 "AMI": "ami-0a8e758f5e873d1c1"
+            },
+            "eu-west-2": {
+                "AMI": "ami-0a8e758f5e873d1c1"
+            },
+            "eu-central-1": {
+                "AMI": "ami-0a8e758f5e873d1c1"
+            },
+            "ap-southeast-1": {
+                "AMI": "ami-0c02fb55956c7d316"
+            },
+            "ap-southeast-2": {
+                "AMI": "ami-0c02fb55956c7d316"
             }
         }
     },
@@ -178,7 +227,7 @@
                 "CidrBlock": "10.0.2.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
-                        1,
+                        0,
                         {
                             "Fn::GetAZs": ""
                         }
@@ -309,6 +358,139 @@
                 },
                 "RouteTableId": {
                     "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "NATGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "ShouldCreateNATGateway",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-nat-eip-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "NATGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "ShouldCreateNATGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-nat-gateway-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Project}-private-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "ShouldCreateNATGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
                 }
             }
         },
@@ -599,12 +781,20 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
+                    "Fn::If": [
+                        "UseCustomAMI",
                         {
-                            "Ref": "AWS::Region"
+                            "Ref": "CustomAMIId"
                         },
-                        "AMI"
+                        {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "AMI"
+                            ]
+                        }
                     ]
                 },
                 "InstanceType": {
@@ -863,6 +1053,29 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-SecurityGroup"
+                }
+            }
+        },
+        "NATGatewayId": {
+            "Condition": "ShouldCreateNATGateway",
+            "Description": "NAT Gateway ID (if created)",
+            "Value": {
+                "Ref": "NATGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-NATGateway"
+                }
+            }
+        },
+        "PrivateRouteTableId": {
+            "Description": "Private Route Table ID",
+            "Value": {
+                "Ref": "PrivateRouteTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateRouteTable"
                 }
             }
         }
