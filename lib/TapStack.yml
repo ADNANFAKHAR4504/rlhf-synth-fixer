@@ -806,14 +806,22 @@ Resources:
       - AuthMethod
     Properties:
       RestApiId: !Ref RestAPI
+  APIGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
       StageName: !Ref Environment
-      StageDescription:
-        AccessLogSetting:
-          DestinationArn: !GetAtt APIGatewayLogGroup.Arn
-          Format: '$context.requestId $context.requestTime $context.httpMethod $context.resourcePath $context.status $context.responseLength'
-        LoggingLevel: INFO
-        DataTraceEnabled: true
-        MetricsEnabled: true
+      Description: !Sub "Stage for ${Environment}"
+      RestApiId: !Ref RestAPI
+      DeploymentId: !Ref APIGatewayDeployment
+      AccessLogSetting:
+        DestinationArn: !GetAtt APIGatewayLogGroup.Arn
+        Format: '$context.requestId $context.requestTime $context.httpMethod $context.resourcePath $context.status $context.responseLength'
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
 
   APIGatewayLambdaPermission:
     Type: AWS::Lambda::Permission
@@ -880,6 +888,7 @@ Resources:
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: APIGatewayDeployment
     Properties:
       ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${RestAPI}/stages/${Environment}'
       WebACLArn: !GetAtt WebACL.Arn
