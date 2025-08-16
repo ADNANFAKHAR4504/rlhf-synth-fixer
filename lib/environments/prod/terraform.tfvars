@@ -11,7 +11,7 @@ desired_capacity = 3
 # Larger database for production
 db_instance_class    = "db.t3.medium"
 db_allocated_storage = 100
-db_engine_version    = "13.13"
+db_engine_version    = "13.15"
 
 # Production network settings
 vpc_cidr           = "10.2.0.0/16"

@@ -81,7 +81,7 @@ variable "db_allocated_storage" {
 variable "db_engine_version" {
   description = "RDS engine version"
   type        = string
-  default     = "13.13"
+  default     = "13.15"
 }
 
 # Network variables

@@ -11,7 +11,7 @@ desired_capacity = 1
 # Smaller database for dev
 db_instance_class    = "db.t3.micro"
 db_allocated_storage = 20
-db_engine_version    = "13.13"
+db_engine_version    = "13.15"
 
 # Dev network settings
 vpc_cidr           = "10.0.0.0/16"

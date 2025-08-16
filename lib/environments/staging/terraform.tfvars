@@ -11,7 +11,7 @@ desired_capacity = 2
 # Medium database for staging
 db_instance_class    = "db.t3.small"
 db_allocated_storage = 50
-db_engine_version    = "13.13"
+db_engine_version    = "13.15"
 
 # Staging network settings
 vpc_cidr           = "10.1.0.0/16"
