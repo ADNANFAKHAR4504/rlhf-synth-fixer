@@ -54,8 +54,9 @@ describe('Multi-Region HA Infrastructure Integration Tests', () => {
 
   describe('Multi-Region Architecture Validation', () => {
     test('primary and secondary ALBs should be in different regions', () => {
-      const primaryRegion = deploymentOutputs.primary_alb_dns?.split('.')[2];
-      const secondaryRegion = deploymentOutputs.secondary_alb_dns?.split('.')[2];
+      // Extract region from ALB DNS: mrha-synthtrainr861-p-alb-1454636751.us-west-2.elb.amazonaws.com
+      const primaryRegion = deploymentOutputs.primary_alb_dns?.split('.')[1];
+      const secondaryRegion = deploymentOutputs.secondary_alb_dns?.split('.')[1];
       
       expect(primaryRegion).toBeDefined();
       expect(secondaryRegion).toBeDefined();
@@ -73,7 +74,9 @@ describe('Multi-Region HA Infrastructure Integration Tests', () => {
 
   describe('High Availability Configuration', () => {
     test('should have multiple Route53 name servers for redundancy', () => {
-      const nameServers = deploymentOutputs.route53_name_servers?.split(',') || [];
+      // Parse JSON string to get array of name servers
+      const nameServersRaw = deploymentOutputs.route53_name_servers || '[]';
+      const nameServers = JSON.parse(nameServersRaw);
       expect(nameServers.length).toBeGreaterThanOrEqual(4);
       
       // Check that name servers are from different TLDs for redundancy
@@ -213,7 +216,9 @@ describe('Multi-Region HA Infrastructure Integration Tests', () => {
     });
 
     test('should have diverse name servers', () => {
-      const nameServers = deploymentOutputs.route53_name_servers?.split(',') || [];
+      // Parse JSON string to get array of name servers
+      const nameServersRaw = deploymentOutputs.route53_name_servers || '[]';
+      const nameServers = JSON.parse(nameServersRaw);
       
       // Should have at least 4 name servers
       expect(nameServers.length).toBeGreaterThanOrEqual(4);
