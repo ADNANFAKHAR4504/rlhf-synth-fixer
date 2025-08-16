@@ -1,7 +1,7 @@
-import pulumi
-import pulumi_aws as aws
 from typing import Optional
 import json
+import pulumi
+import pulumi_aws as aws
 
 
 def _create_topic_policy(topic_arn: str) -> str:
@@ -48,7 +48,7 @@ class SNSTopic(pulumi.ComponentResource):
     self.topic_policy = aws.sns.TopicPolicy(
       f"{name}-topic-policy",
       arn=self.topic.arn,
-      policy=self.topic.arn.apply(lambda arn: _create_topic_policy(arn)),
+      policy=self.topic.arn,
       opts=pulumi.ResourceOptions(parent=self)
     )
 

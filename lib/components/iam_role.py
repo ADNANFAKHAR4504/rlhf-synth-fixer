@@ -1,7 +1,7 @@
+import json
+from typing import Optional
 import pulumi
 import pulumi_aws as aws
-from typing import Optional
-import json
 
 
 def _create_policy_document(bucket_arn: str, kms_key_arn: str) -> str:

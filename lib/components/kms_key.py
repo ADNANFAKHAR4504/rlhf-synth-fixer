@@ -1,14 +1,13 @@
+from typing import Optional
+import json
 import pulumi
 import pulumi_aws as aws
-from typing import Optional
 
 
 def _get_key_policy() -> str:
-  import json
 
   # Get current AWS account ID and region
   current = aws.get_caller_identity()
-  region = aws.get_region()
 
   policy = {
     "Version": "2012-10-17",

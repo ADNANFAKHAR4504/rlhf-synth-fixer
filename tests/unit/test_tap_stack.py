@@ -5,13 +5,13 @@ Unit tests for the TapStack Pulumi component using moto for AWS mocking
 and Pulumi's testing utilities.
 """
 
+import json
 import unittest
 from unittest.mock import patch, Mock
 import pulumi
-import json
 
 # Import the components we're testing
-from lib.components.s3_bucket import SecureS3Bucket
+from lib.components.s3_bucket import SecureS3Bucket, SecureS3BucketConfig
 from lib.components.sns_topic import SNSTopic
 from lib.components.kms_key import KMSKey
 from lib.components.iam_role import S3IAMRole
@@ -32,16 +32,20 @@ class TestSecureS3Bucket(unittest.TestCase):
   @patch('pulumi_aws.s3.BucketPublicAccessBlock')
   @patch('pulumi_aws.s3.BucketLifecycleConfigurationV2')
   @patch('pulumi_aws.s3.BucketNotification')
-  def test_secure_s3_bucket_creation(self, mock_notification, mock_lifecycle,
-                                     mock_public_access, mock_encryption,
-                                     mock_versioning, mock_bucket):
+  def test_secure_s3_bucket_creation(self, *mocks):  # pylint: disable=too-many-positional-arguments
     """Test SecureS3Bucket creates all required resources."""
+    # Unpack mocks in reverse order (since decorators are applied bottom-up)
+    (mock_notification, mock_lifecycle, mock_public_access, 
+     mock_encryption, mock_versioning, mock_bucket) = mocks
+    
     # Mock Pulumi stack
     with patch('pulumi.get_stack', return_value='test'):
-      bucket = SecureS3Bucket(
+      SecureS3Bucket(
         "test-bucket",
-        kms_key_id=self.kms_key_arn,
-        sns_topic_arn=self.sns_topic_arn
+        config=SecureS3BucketConfig(
+          kms_key_id=self.kms_key_arn,
+          sns_topic_arn=self.sns_topic_arn
+        )
       )
 
     # Verify all resources are created
@@ -56,10 +60,12 @@ class TestSecureS3Bucket(unittest.TestCase):
     """Test bucket name includes stack name."""
     with patch('pulumi.get_stack', return_value='dev'):
       with patch('pulumi_aws.s3.Bucket') as mock_bucket:
-        bucket = SecureS3Bucket(
+        SecureS3Bucket(
           "test",
-          kms_key_id=self.kms_key_arn,
-          sns_topic_arn=self.sns_topic_arn
+          config=SecureS3BucketConfig(
+            kms_key_id=self.kms_key_arn,
+            sns_topic_arn=self.sns_topic_arn
+          )
         )
 
         # Check bucket name format
@@ -78,7 +84,7 @@ class TestSNSTopic(unittest.TestCase):
   @patch('pulumi_aws.sns.TopicPolicy')
   def test_sns_topic_creation(self, mock_policy, mock_topic):
     """Test SNSTopic creates topic and policy."""
-    topic = SNSTopic(
+    SNSTopic(
       "test-topic",
       kms_key_id=self.kms_key_id
     )
@@ -91,7 +97,7 @@ class TestSNSTopic(unittest.TestCase):
   @patch('pulumi_aws.sns.TopicSubscription')
   def test_sns_topic_with_email(self, mock_subscription, mock_policy, mock_topic):
     """Test SNSTopic creates email subscription when provided."""
-    topic = SNSTopic(
+    SNSTopic(
       "test-topic",
       kms_key_id=self.kms_key_id,
       email_endpoint="test@example.com"
@@ -112,7 +118,7 @@ class TestKMSKey(unittest.TestCase):
     """Test KMSKey creates key and alias."""
     mock_caller_id.return_value = Mock(account_id="123456789012")
 
-    key = KMSKey("test-key", "Test KMS key")
+    KMSKey("test-key", "Test KMS key")
 
     mock_key.assert_called_once()
     mock_alias.assert_called_once()
@@ -123,7 +129,7 @@ class TestKMSKey(unittest.TestCase):
     """Test KMS key has rotation enabled."""
     mock_caller_id.return_value = Mock(account_id="123456789012")
 
-    key = KMSKey("test-key")
+    KMSKey("test-key")
 
     call_args = mock_key.call_args[1]
     self.assertTrue(call_args['enable_key_rotation'])
@@ -144,7 +150,7 @@ class TestS3IAMRole(unittest.TestCase):
   def test_iam_role_creation(self, mock_profile, mock_attachment,
                              mock_policy, mock_role):
     """Test S3IAMRole creates all IAM resources."""
-    role = S3IAMRole(
+    S3IAMRole(
       "test-role",
       bucket_arn=self.bucket_arn,
       kms_key_arn=self.kms_key_arn
@@ -158,7 +164,7 @@ class TestS3IAMRole(unittest.TestCase):
   @patch('pulumi_aws.iam.Role')
   def test_assume_role_policy(self, mock_role):
     """Test IAM role has correct assume role policy."""
-    role = S3IAMRole(
+    S3IAMRole(
       "test-role",
       bucket_arn=self.bucket_arn,
       kms_key_arn=self.kms_key_arn
@@ -185,7 +191,7 @@ class TestCloudWatchAlarm(unittest.TestCase):
   @patch('pulumi_aws.cloudwatch.MetricAlarm')
   def test_cloudwatch_alarm_creation(self, mock_alarm):
     """Test CloudWatchAlarm creates both alarms."""
-    alarm = CloudWatchAlarm(
+    CloudWatchAlarm(
       "test-alarm",
       bucket_name=self.bucket_name,
       sns_topic_arn=self.sns_topic_arn
@@ -197,7 +203,7 @@ class TestCloudWatchAlarm(unittest.TestCase):
   @patch('pulumi_aws.cloudwatch.MetricAlarm')
   def test_alarm_parameters(self, mock_alarm):
     """Test CloudWatch alarms have correct parameters."""
-    alarm = CloudWatchAlarm(
+    CloudWatchAlarm(
       "test-alarm",
       bucket_name=self.bucket_name,
       sns_topic_arn=self.sns_topic_arn

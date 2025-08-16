@@ -1,6 +1,6 @@
+from typing import Optional
 import pulumi
 import pulumi_aws as aws
-from typing import Optional
 
 
 class CloudWatchAlarm(pulumi.ComponentResource):
@@ -37,7 +37,7 @@ class CloudWatchAlarm(pulumi.ComponentResource):
     # Create CloudWatch alarm for high request rate
     self.high_request_alarm = aws.cloudwatch.MetricAlarm(
       f"{name}-high-request-alarm",
-      alarm_name=f"{name}-s3-high-requests",
+      name=f"{name}-s3-high-requests",
       alarm_description="Alarm for unusually high S3 request rate",
       metric_name="AllRequests",
       namespace="AWS/S3",
