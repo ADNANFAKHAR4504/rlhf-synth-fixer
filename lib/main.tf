@@ -86,7 +86,7 @@ resource "aws_kms_key" "s3_encryption" {
 }
 
 resource "aws_kms_alias" "s3_encryption" {
-  name          = "alias/${var.project_name}-s3-encryption"
+  name          = "alias/${var.project_name}-s3-encryption-291749"
   target_key_id = aws_kms_key.s3_encryption.key_id
 }
 # VPC Configuration
@@ -170,12 +170,12 @@ resource "aws_flow_log" "vpc_flow_log" {
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/flowlogs"
+  name              = "/aws/vpc/flowlogs-291749"
   retention_in_days = 30
 }
 
 resource "aws_iam_role" "flow_log" {
-  name = "${var.project_name}-flow-log-role"
+  name = "${var.project_name}-flow-log-role-291749"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -366,7 +366,7 @@ resource "aws_s3_bucket_logging" "main" {
 
 # IAM Role for EC2 instances with least privilege
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}-ec2-role"
+  name = "${var.project_name}-ec2-role-291749"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -484,7 +484,7 @@ resource "aws_autoscaling_group" "web" {
 
 # Application Load Balancer
 resource "aws_lb" "web" {
-  name               = "${var.project_name}-web-alb"
+  name               = "${var.project_name}-web-alb-291749"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web.id]
@@ -493,12 +493,12 @@ resource "aws_lb" "web" {
   enable_deletion_protection = false
 
   tags = {
-    Name = "${var.project_name}-web-alb"
+    Name = "${var.project_name}-web-alb-291749"
   }
 }
 
 resource "aws_lb_target_group" "web" {
-  name     = "${var.project_name}-web-tg"
+  name     = "${var.project_name}-web-tg-291749"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -529,11 +529,11 @@ resource "aws_lb_listener" "web" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
+  name       = "${var.project_name}-db-subnet-group-291749"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "${var.project_name}-db-subnet-group"
+    Name = "${var.project_name}-db-subnet-group-291749"
   }
 }
 
@@ -604,7 +604,7 @@ resource "aws_ssm_patch_baseline" "amazon_linux" {
 # Systems Manager Patch Group
 resource "aws_ssm_patch_group" "web_servers" {
   baseline_id = aws_ssm_patch_baseline.amazon_linux.id
-  patch_group = "${var.project_name}-web-servers"
+  patch_group = "${var.project_name}-web-servers-291749"
 }
 
 # Systems Manager Maintenance Window
@@ -661,7 +661,7 @@ resource "aws_ssm_maintenance_window_task" "patch_task" {
 
 # IAM Role for Maintenance Window
 resource "aws_iam_role" "maintenance_window" {
-  name = "${var.project_name}-maintenance-window-role"
+  name = "${var.project_name}-maintenance-window-role-291749"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -684,7 +684,7 @@ resource "aws_iam_role_policy_attachment" "maintenance_window" {
 
 # CloudTrail for API monitoring
 resource "aws_cloudtrail" "main" {
-  name           = "${var.project_name}-cloudtrail-${var.environment}"
+  name           = "${var.project_name}-cloudtrail-${var.environment}-291749"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
   event_selector {
@@ -701,16 +701,16 @@ resource "aws_cloudtrail" "main" {
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 
   tags = {
-    Name = "${var.project_name}-cloudtrail"
+    Name = "${var.project_name}-cloudtrail-291749"
   }
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket        = "${var.project_name}-cloudtrail-${random_string.cloudtrail_suffix.result}"
+  bucket        = "${var.project_name}-cloudtrail-${random_string.cloudtrail_suffix.result}-291749"
   force_destroy = true
 
   tags = {
-    Name = "${var.project_name}-cloudtrail-bucket"
+    Name = "${var.project_name}-cloudtrail-bucket-291749"
   }
 }
 
@@ -776,12 +776,12 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # CloudWatch Alarms for unauthorized API calls
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/${var.project_name}"
+  name              = "/aws/cloudtrail/${var.project_name}-291749"
   retention_in_days = 30
 }
 
 resource "aws_cloudwatch_log_stream" "cloudtrail" {
-  name           = "${var.project_name}-cloudtrail-stream"
+  name           = "${var.project_name}-cloudtrail-stream-291749"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
 }
 
