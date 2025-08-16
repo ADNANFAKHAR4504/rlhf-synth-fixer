@@ -7,6 +7,8 @@ Parameters:
     Type: String
     Default: prod-regional
     Description: Environment name for tagging and resource names
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Use lowercase letters, digits, and hyphens only."
 
   VpcCidr:
     Type: String
@@ -31,11 +33,12 @@ Parameters:
     Default: 10.0.10.0/24,10.0.20.0/24
     Description: CIDRs for private subnets in order of AZs
 
-  # NEW: Optional override. If empty, a unique bucket name is generated.
   S3BucketNameOverride:
     Type: String
     Default: ""
     Description: "Optional. If set, use this as the S3 bucket name. Otherwise a unique name is generated."
+    AllowedPattern: "^$|^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$"
+    ConstraintDescription: "Must be empty or a valid lowercase S3 bucket name (3–63 chars, letters/digits/hyphens)."
 
   EnableS3Replication:
     Type: String
@@ -48,7 +51,6 @@ Parameters:
     Default: ""
     Description: "ARN of destination bucket for S3 replication (optional)"
 
-  # CHANGED: Optional. If empty, the stack creates a secret.
   DBSecretArn:
     Type: String
     Default: ""
@@ -73,9 +75,14 @@ Parameters:
 
   PostgresEngineVersion:
     Type: String
-    Default: "14.11"
-    AllowedPattern: "^(1[0-9]|[0-9])([.][0-9]+){0,2}$"
-    Description: Postgres engine version (pinned to stable 14.x)
+    Default: "14.18"
+    AllowedValues:
+      - "17.5"
+      - "16.9"
+      - "15.13"
+      - "14.18"
+      - "13.21"
+    Description: RDS-supported PostgreSQL minor versions
 
   MySqlEngineVersion:
     Type: String
@@ -138,7 +145,6 @@ Parameters:
     Default: DevOps
     Description: Owner tag
 
-  # NEW: toggle for named IAM (default off)
   UseNamedIam:
     Type: String
     Default: "false"
@@ -784,7 +790,6 @@ Resources:
               - s3:ReplicateTags
             Resource: !Sub "${ReplicationDestinationBucketArn}/*"
 
-  # NEW: Create a DB secret if one isn't provided
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Condition: CreateDBSecret
@@ -970,7 +975,25 @@ Resources:
       BucketName: !If
         - HasBucketOverride
         - !Ref S3BucketNameOverride
-        - !Sub "${EnvironmentName}-${AWS::AccountId}-${AWS::Region}-data-${AWS::StackName}"
+        - !Sub
+          - "${EnvironmentName}-${AWS::AccountId}-data-${P0}${P1}${P2}"
+          - {
+              P0:
+                !Select [
+                  0,
+                  !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]],
+                ],
+              P1:
+                !Select [
+                  1,
+                  !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]],
+                ],
+              P2:
+                !Select [
+                  2,
+                  !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]],
+                ],
+            }
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
