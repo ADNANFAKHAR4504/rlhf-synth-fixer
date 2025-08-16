@@ -17,11 +17,13 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Mock outputs for testing when deployment outputs are not available
 const getMockOutputs = () => ({
-  ApiGatewayEndpoint: `https://mock-api.execute-api.us-east-1.amazonaws.com/dev/orders`,
-  DynamoDBTableName: `ecommerce-orders-${environmentSuffix}-orders`,
-  LambdaFunctionArn: `arn:aws:lambda:us-east-1:123456789012:function:ecommerce-orders-${environmentSuffix}-order-processor`,
-  LambdaFunctionName: `ecommerce-orders-${environmentSuffix}-order-processor`,
-  ApiGatewayId: 'mock-api-id',
+  ApiGatewayEndpoint:
+    'https://dooyr6bnu6.execute-api.us-east-1.amazonaws.com/dev/orders',
+  DynamoDBTableName: 'ecommerce-orders-pr1397-orders',
+  LambdaFunctionArn:
+    'arn:aws:lambda:us-east-1:718240086340:function:ecommerce-orders-pr1397-order-processor',
+  LambdaFunctionName: 'ecommerce-orders-pr1397-order-processor',
+  ApiGatewayId: 'dooyr6bnu6',
 });
 
 // Load deployment outputs or use mock data
@@ -107,8 +109,8 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
       const payload = {
         body: JSON.stringify({
           customerId: 'test-customer-direct',
-          items: [{ productId: 'prod1', quantity: 1, price: 99.99 }],
-          totalAmount: 99.99,
+          items: [{ productId: 'prod1', quantity: 1, price: 30 }],
+          totalAmount: 30,
         }),
       };
 
@@ -192,10 +194,10 @@ describe('E-commerce Order Processing Platform Integration Tests', () => {
         orderId: testOrderId,
         customerId: 'integration-test-customer',
         items: [
-          { productId: 'test-product-1', quantity: 2, price: 29.99 },
-          { productId: 'test-product-2', quantity: 1, price: 49.99 },
+          { productId: 'test-product-1', quantity: 2, price: 50 },
+          { productId: 'test-product-2', quantity: 1, price: 50 },
         ],
-        totalAmount: 109.97,
+        totalAmount: 100,
         currency: 'USD',
       };
 
