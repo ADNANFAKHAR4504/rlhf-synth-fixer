@@ -123,8 +123,12 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
 
   # Determine VPC and subnet to use
-  vpc_id    = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
-  subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnet.first_available[0].id
+  vpc_id = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
+  subnet_id = var.subnet_id != "" ? var.subnet_id : (
+    length(try(data.aws_subnet.first_available, [])) > 0 ? data.aws_subnet.first_available[0].id : (
+      length(try(data.aws_subnet.any_first_available, [])) > 0 ? data.aws_subnet.any_first_available[0].id : null
+    )
+  )
 
   # Determine KMS key to use
   kms_key_arn = var.kms_key_arn != "" ? var.kms_key_arn : data.aws_kms_key.s3[0].arn
@@ -159,6 +163,27 @@ data "aws_subnets" "available" {
     name   = "vpc-id"
     values = [local.vpc_id]
   }
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+  filter {
+    name   = "default-for-az"
+    values = ["true"]
+  }
+}
+
+# Fallback: get any available subnet if no default subnets found
+data "aws_subnets" "any_available" {
+  count = var.subnet_id == "" && length(try(data.aws_subnets.available[0].ids, [])) == 0 ? 1 : 0
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id]
+  }
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
 }
 
 # Get AWS managed S3 KMS key if no custom key provided
@@ -168,8 +193,13 @@ data "aws_kms_key" "s3" {
 }
 
 data "aws_subnet" "first_available" {
-  count = var.subnet_id == "" ? 1 : 0
+  count = var.subnet_id == "" && length(try(data.aws_subnets.available[0].ids, [])) > 0 ? 1 : 0
   id    = data.aws_subnets.available[0].ids[0]
+}
+
+data "aws_subnet" "any_first_available" {
+  count = var.subnet_id == "" && length(try(data.aws_subnets.available[0].ids, [])) == 0 && length(try(data.aws_subnets.any_available[0].ids, [])) > 0 ? 1 : 0
+  id    = data.aws_subnets.any_available[0].ids[0]
 }
 
 # S3 Application Bucket
