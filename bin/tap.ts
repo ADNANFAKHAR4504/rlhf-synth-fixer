@@ -11,6 +11,13 @@ const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
+// Get CloudTrail enabled flag from context (set by CI/CD pipeline) or use false as default
+// Set to true to enable CloudTrail when you have available trail slots
+const enableCloudTrail =
+  app.node.tryGetContext('enableCloudTrail') !== undefined
+    ? app.node.tryGetContext('enableCloudTrail')
+    : false;
+
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
@@ -19,6 +26,7 @@ Tags.of(app).add('Author', commitAuthor);
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
+  enableCloudTrail: enableCloudTrail, // Pass the CloudTrail enabled flag to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,

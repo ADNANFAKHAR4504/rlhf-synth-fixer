@@ -6,17 +6,29 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { SecurityConfig } from '../../config/security-config';
 
+interface CloudTrailConstructProps {
+  encryptionKey: kms.Key;
+  enabled?: boolean;
+}
+
 /**
  * CloudTrail Construct for comprehensive API call logging
  * Records all API calls made to AWS accounts for security auditing
  */
 export class CloudTrailConstruct extends Construct {
-  public readonly trail: cloudtrail.Trail;
-  public readonly logBucket: s3.Bucket;
-  public readonly logGroup: logs.LogGroup;
+  public readonly trail?: cloudtrail.Trail;
+  public readonly logBucket?: s3.Bucket;
+  public readonly logGroup?: logs.LogGroup;
 
-  constructor(scope: Construct, id: string, encryptionKey: kms.Key) {
+  constructor(scope: Construct, id: string, props: CloudTrailConstructProps) {
     super(scope, id);
+
+    const { encryptionKey, enabled = true } = props;
+
+    // Only create CloudTrail resources if enabled
+    if (!enabled) {
+      return;
+    }
 
     // S3 bucket for CloudTrail logs
     this.logBucket = new s3.Bucket(

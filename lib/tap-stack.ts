@@ -1,23 +1,24 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import { Construct } from 'constructs';
 
 // Import existing constructs
-import { VpcConstruct } from './constructs/networking/vpc-construct';
 import { SecurityGroupsConstruct } from './constructs/networking/security-groups-construct';
-import { KmsConstruct } from './constructs/security/kms-construct';
+import { VpcConstruct } from './constructs/networking/vpc-construct';
 import { IamConstruct } from './constructs/security/iam-construct';
+import { KmsConstruct } from './constructs/security/kms-construct';
 import { SecretsConstruct } from './constructs/security/secrets-construct';
 
 // Import new security constructs
 import { CloudTrailConstruct } from './constructs/security/cloudtrail-construct';
 import { ConfigConstruct } from './constructs/security/config-construct';
-import { WafConstruct } from './constructs/security/waf-construct';
 import { MfaConstruct } from './constructs/security/mfa-construct';
+import { WafConstruct } from './constructs/security/waf-construct';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  enableCloudTrail?: boolean;
 }
 
 export class TapStack extends cdk.Stack {
@@ -29,6 +30,14 @@ export class TapStack extends cdk.Stack {
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
+
+    // Get CloudTrail enabled flag from props, context, or use true as default
+    const enableCloudTrail =
+      props?.enableCloudTrail !== undefined
+        ? props.enableCloudTrail
+        : this.node.tryGetContext('enableCloudTrail') !== undefined
+          ? this.node.tryGetContext('enableCloudTrail')
+          : true;
 
     // Create KMS keys first (needed by other constructs)
     const kmsConstruct = new KmsConstruct(this, 'KmsConstruct');
@@ -57,11 +66,14 @@ export class TapStack extends cdk.Stack {
       kmsConstruct.secretsKey
     );
 
-    // Create CloudTrail for API call logging
+    // Create CloudTrail for API call logging (optional)
     const cloudTrailConstruct = new CloudTrailConstruct(
       this,
       'CloudTrailConstruct',
-      kmsConstruct.cloudTrailKey
+      {
+        encryptionKey: kmsConstruct.cloudTrailKey,
+        enabled: enableCloudTrail,
+      }
     );
 
     // Create AWS Config for compliance monitoring
@@ -78,7 +90,9 @@ export class TapStack extends cdk.Stack {
     const mfaConstruct = new MfaConstruct(this, 'MfaConstruct');
 
     // Add explicit dependencies to ensure KMS keys are created first
-    cloudTrailConstruct.node.addDependency(kmsConstruct);
+    if (enableCloudTrail) {
+      cloudTrailConstruct.node.addDependency(kmsConstruct);
+    }
     secretsConstruct.node.addDependency(kmsConstruct);
     configConstruct.node.addDependency(kmsConstruct);
     iamConstruct.node.addDependency(kmsConstruct);
@@ -110,12 +124,14 @@ export class TapStack extends cdk.Stack {
       exportName: `DatabaseSecretArn-${environmentSuffix}`,
     });
 
-    // Add CloudTrail references to outputs
-    new cdk.CfnOutput(this, 'CloudTrailLogGroupName', {
-      value: cloudTrailConstruct.logGroup.logGroupName,
-      description: 'CloudTrail log group name',
-      exportName: `CloudTrailLogGroupName-${environmentSuffix}`,
-    });
+    // Add CloudTrail references to outputs (only if enabled)
+    if (enableCloudTrail && cloudTrailConstruct.logGroup) {
+      new cdk.CfnOutput(this, 'CloudTrailLogGroupName', {
+        value: cloudTrailConstruct.logGroup.logGroupName,
+        description: 'CloudTrail log group name',
+        exportName: `CloudTrailLogGroupName-${environmentSuffix}`,
+      });
+    }
 
     // Add Config references to outputs
     new cdk.CfnOutput(this, 'ConfigBucketName', {
@@ -188,12 +204,14 @@ export class TapStack extends cdk.Stack {
       exportName: `SecretsKmsKeyArn-${environmentSuffix}`,
     });
 
-    // Output CloudTrail information
-    new cdk.CfnOutput(this, 'CloudTrailName', {
-      value: 'SecureApp-CloudTrail',
-      description: 'CloudTrail trail name',
-      exportName: `CloudTrailName-${environmentSuffix}`,
-    });
+    // Output CloudTrail information (only if enabled)
+    if (enableCloudTrail) {
+      new cdk.CfnOutput(this, 'CloudTrailName', {
+        value: 'SecureApp-CloudTrail',
+        description: 'CloudTrail trail name',
+        exportName: `CloudTrailName-${environmentSuffix}`,
+      });
+    }
 
     // Output WAF information
     new cdk.CfnOutput(this, 'WebAclArn', {
@@ -203,9 +221,11 @@ export class TapStack extends cdk.Stack {
     });
 
     // Output security compliance status
+    const cloudTrailStatus = enableCloudTrail
+      ? 'CloudTrail'
+      : 'CloudTrail (disabled)';
     new cdk.CfnOutput(this, 'SecurityComplianceStatus', {
-      value:
-        'All security requirements implemented: MFA, WAF, CloudTrail, Config, Encryption, Least Privilege',
+      value: `All security requirements implemented: MFA, WAF, ${cloudTrailStatus}, Config, Encryption, Least Privilege`,
       description: 'Security compliance status',
       exportName: `SecurityComplianceStatus-${environmentSuffix}`,
     });

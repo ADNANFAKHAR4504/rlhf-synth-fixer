@@ -11,10 +11,12 @@ describe('TapStack', () => {
     app = new cdk.App({
       context: {
         environmentSuffix: 'test',
+        enableCloudTrail: true, // Enable CloudTrail for default test case
       },
     });
     stack = new TapStack(app, 'TestTapStack', { 
       environmentSuffix: 'test',
+      enableCloudTrail: true, // Enable CloudTrail for default test case
       env: {
         account: '123456789012',
         region: 'us-west-2',
