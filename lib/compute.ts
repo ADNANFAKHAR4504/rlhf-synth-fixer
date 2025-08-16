@@ -175,7 +175,7 @@ echo "Setup completed with SSM agent and security hardening" >> /var/log/user-da
       subnetId: subnetId,
       vpcSecurityGroupIds: [securityGroupId],
 
-      userData: Buffer.from(userData).toString('base64'),
+      userData: userData,
 
       // Enable detailed monitoring
       monitoring: true,

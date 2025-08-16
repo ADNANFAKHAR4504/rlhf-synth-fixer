@@ -10,7 +10,7 @@ import * as pulumi from '@pulumi/pulumi';
 export interface SecurityMonitoringResources {
   cloudTrail: aws.cloudtrail.Trail;
   cloudTrailBucket: aws.s3.Bucket;
-  guardDutyDetectorId: Promise<string>;
+  guardDutyDetectorId: pulumi.Output<string>;
   configRecorder: aws.cfg.Recorder;
   configDeliveryChannel: aws.cfg.DeliveryChannel;
 }
@@ -151,43 +151,35 @@ export function createSecurityMonitoring(
     }
   );
 
-  // Attempt to get the existing GuardDuty detector using `getDetector`
-  const existingDetector = aws.guardduty.getDetector({}, { provider })
-    .then(result => {
-      return aws.guardduty.Detector.get("existing-detector", result.id, undefined, { provider });
-    })
-    .catch(() => {
-      // Detector doesn't exist, create one
-      return new aws.guardduty.Detector("main-detector", {
-        enable: true,
-        findingPublishingFrequency: 'FIFTEEN_MINUTES',
-        tags: {
-          Name: `guardduty-${environment}`,
-          Environment: environment,
-          ManagedBy: 'Pulumi',
-        },
-      }, { provider });
-    });
+  // Use a simpler approach to handle existing GuardDuty detector
+  const guardDutyDetector = pulumi.output(
+    aws.guardduty.getDetector({}, { provider })
+      .then(result => {
+        // If detector exists, reference it
+        return aws.guardduty.Detector.get("existing-detector", result.id, undefined, { provider });
+      })
+      .catch(() => {
+        // If detector doesn't exist, create one
+        return new aws.guardduty.Detector("main-detector", {
+          enable: true,
+          findingPublishingFrequency: 'FIFTEEN_MINUTES',
+          tags: {
+            Name: `guardduty-${environment}`,
+            Environment: environment,
+            ManagedBy: 'Pulumi',
+          },
+        }, { provider });
+      })
+  );
 
-  // Convert to promise of string for the interface
-  const guardDutyDetectorId = existingDetector.then(async (detector) => {
-    // Convert Pulumi Output to Promise
-    return new Promise<string>((resolve) => {
-      detector.id.apply(id => {
-        resolve(id);
-        return id;
-      });
-    });
-  }).then(promise => promise);
-
-  // For the detector features, we need to use the detector resource directly
-  const detectorForFeatures = pulumi.output(existingDetector);
+  // Get the detector ID as a Pulumi Output
+  const guardDutyDetectorId = guardDutyDetector.apply(d => d.id);
 
   // Enable S3 protection for GuardDuty
   new aws.guardduty.DetectorFeature(
     `guardduty-s3-protection-${environment}`,
     {
-      detectorId: detectorForFeatures.apply(d => d.id),
+      detectorId: guardDutyDetectorId,
       name: 'S3_DATA_EVENTS',
       status: 'ENABLED',
     },
@@ -198,7 +190,7 @@ export function createSecurityMonitoring(
   new aws.guardduty.DetectorFeature(
     `guardduty-eks-protection-${environment}`,
     {
-      detectorId: detectorForFeatures.apply(d => d.id),
+      detectorId: guardDutyDetectorId,
       name: 'EKS_AUDIT_LOGS',
       status: 'ENABLED',
     },
@@ -209,7 +201,7 @@ export function createSecurityMonitoring(
   new aws.guardduty.DetectorFeature(
     `guardduty-malware-protection-${environment}`,
     {
-      detectorId: detectorForFeatures.apply(d => d.id),
+      detectorId: guardDutyDetectorId,
       name: 'EBS_MALWARE_PROTECTION',
       status: 'ENABLED',
     },

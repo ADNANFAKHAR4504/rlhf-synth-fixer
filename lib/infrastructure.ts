@@ -21,7 +21,7 @@ export interface InfrastructureOutputs {
   ec2InstancePublicIp: pulumi.Output<string>;
   ec2InstancePublicDns: pulumi.Output<string>;
   cloudTrailArn: pulumi.Output<string>;
-  guardDutyDetectorId: Promise<string>;
+  guardDutyDetectorId: pulumi.Output<string>;
 }
 
 export function createInfrastructure(
