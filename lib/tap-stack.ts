@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -27,6 +27,9 @@ export class TapStack extends TerraformStack {
       Application: 'WebApp',
       Owner: 'DevOps Team',
     };
+    // Generate a unique suffix for this deployment to avoid name collisions
+    // FIXED: Replaced the incorrect 'randomId' with 'Fn.uuid()' and truncated it.
+    const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
 
     // --- Provider & State ---
     this.configureAwsProvider(region);
@@ -44,13 +47,14 @@ export class TapStack extends TerraformStack {
     );
     this.createSubnet(vpc.id, '10.0.2.0/24', 'us-east-1b', tags, 'subnet-b');
 
-    const bucket = this.createSecureS3Bucket(tags);
+    const bucket = this.createSecureS3Bucket(tags, uniqueSuffix);
     const securityGroup = this.createWebAppSecurityGroup(vpc.id, tags);
     const instance = this.createEc2Instance(
       subnetA.id,
       securityGroup.id,
       bucket,
-      tags
+      tags,
+      uniqueSuffix
     );
 
     // --- Outputs for Integration Testing ---
@@ -112,9 +116,13 @@ export class TapStack extends TerraformStack {
     });
   }
 
-  private createSecureS3Bucket(tags: { [key: string]: string }): S3Bucket {
+  private createSecureS3Bucket(
+    tags: { [key: string]: string },
+    uniqueSuffix: string
+  ): S3Bucket {
     const bucket = new S3Bucket(this, 'WebAppBucket', {
-      bucket: `webapp-data-bucket-${this.node.addr.substring(0, 8)}`,
+      // FIXED: Added a random suffix to the bucket name to ensure uniqueness.
+      bucket: `webapp-data-bucket-${uniqueSuffix}`,
       tags: { ...tags, Name: 'WebApp-Data-Bucket' },
     });
 
@@ -176,9 +184,10 @@ export class TapStack extends TerraformStack {
     });
   }
 
-  private createIamRoleForEc2(bucket: S3Bucket): IamRole {
+  private createIamRoleForEc2(bucket: S3Bucket, uniqueSuffix: string): IamRole {
     const role = new IamRole(this, 'Ec2S3AccessRole', {
-      name: 'ec2-s3-access-role',
+      // FIXED: Added a random suffix to the role name to ensure uniqueness.
+      name: `ec2-s3-access-role-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -192,7 +201,7 @@ export class TapStack extends TerraformStack {
     });
 
     const policy = new IamPolicy(this, 'Ec2S3AccessPolicy', {
-      name: 'ec2-s3-access-policy',
+      name: `ec2-s3-access-policy-${uniqueSuffix}`,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -218,7 +227,8 @@ export class TapStack extends TerraformStack {
     subnetId: string,
     securityGroupId: string,
     bucket: S3Bucket,
-    tags: { [key: string]: string }
+    tags: { [key: string]: string },
+    uniqueSuffix: string
   ): Instance {
     const ami = new DataAwsAmi(this, 'AmazonLinuxAmi', {
       mostRecent: true,
@@ -229,9 +239,10 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    const role = this.createIamRoleForEc2(bucket);
+    const role = this.createIamRoleForEc2(bucket, uniqueSuffix);
     const instanceProfile = new IamInstanceProfile(this, 'Ec2InstanceProfile', {
-      name: 'ec2-instance-profile',
+      // FIXED: Added a random suffix to the instance profile name.
+      name: `ec2-instance-profile-${uniqueSuffix}`,
       role: role.name,
     });
 
