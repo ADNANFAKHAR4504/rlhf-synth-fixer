@@ -178,8 +178,9 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name           = "main-cloudtrail-${random_id.bucket_suffix.hex}"
-  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
+  name                    = "main-cloudtrail-${random_id.bucket_suffix.hex}"
+  s3_bucket_name          = aws_s3_bucket.cloudtrail.bucket
+  is_multi_region_trail   = false
 
   event_selector {
     read_write_type                 = "All"

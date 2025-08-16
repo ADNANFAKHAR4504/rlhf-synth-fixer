@@ -181,6 +181,10 @@ describe("Terraform Infrastructure Unit Tests", () => {
     test("CloudTrail includes management events", () => {
       expect(stackContent).toMatch(/include_management_events\s*=\s*true/);
     });
+
+    test("CloudTrail is not multi-region", () => {
+      expect(stackContent).toMatch(/is_multi_region_trail\s*=\s*false/);
+    });
   });
 
   describe("IAM Resources", () => {
