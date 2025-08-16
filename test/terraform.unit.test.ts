@@ -144,6 +144,10 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"cloudtrail"\s*{/);
     });
 
+    test("CloudTrail bucket has versioning enabled", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"cloudtrail"\s*{/);
+    });
+
     test("CloudTrail bucket has public access block", () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"cloudtrail"\s*{/);
     });
@@ -156,8 +160,16 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"cloudtrail"\s*{/);
     });
 
+    test("CloudTrail bucket has lifecycle configuration", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"cloudtrail"\s*{/);
+    });
+
     test("declares secure data S3 bucket", () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"secure_data"\s*{/);
+    });
+
+    test("secure data bucket has versioning enabled", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"secure_data"\s*{/);
     });
 
     test("secure data bucket has public access block", () => {
@@ -170,6 +182,10 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("secure data bucket has bucket policy", () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"secure_data"\s*{/);
+    });
+
+    test("secure data bucket has lifecycle configuration", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"secure_data"\s*{/);
     });
   });
 
@@ -184,6 +200,36 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("CloudTrail includes management events", () => {
       expect(stackContent).toMatch(/include_management_events\s*=\s*true/);
+    });
+
+    test("CloudTrail is multi-region", () => {
+      expect(stackContent).toMatch(/is_multi_region_trail\s*=\s*true/);
+    });
+
+    test("CloudTrail has log file validation enabled", () => {
+      expect(stackContent).toMatch(/enable_log_file_validation\s*=\s*true/);
+    });
+
+    test("CloudTrail includes global service events", () => {
+      expect(stackContent).toMatch(/include_global_service_events\s*=\s*true/);
+    });
+  });
+
+  describe("AWS Config", () => {
+    test("declares AWS Config configuration recorder", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_config_configuration_recorder"\s+"main"\s*{/);
+    });
+
+    test("declares AWS Config delivery channel", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_config_delivery_channel"\s+"main"\s*{/);
+    });
+
+    test("declares AWS Config IAM role", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"config_role"\s*{/);
+    });
+
+    test("AWS Config role has policy attachment", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"config_policy"\s*{/);
     });
   });
 
@@ -300,10 +346,14 @@ describe("Terraform Infrastructure Unit Tests", () => {
         'aws_kms_key',
         'aws_kms_alias',
         'aws_s3_bucket',
+        'aws_s3_bucket_versioning',
         'aws_s3_bucket_public_access_block',
         'aws_s3_bucket_server_side_encryption_configuration',
         'aws_s3_bucket_policy',
+        'aws_s3_bucket_lifecycle_configuration',
         'aws_cloudtrail',
+        'aws_config_configuration_recorder',
+        'aws_config_delivery_channel',
         'aws_iam_group',
         'aws_iam_group_policy',
         'aws_security_group',

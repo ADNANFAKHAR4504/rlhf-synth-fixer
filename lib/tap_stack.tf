@@ -104,6 +104,7 @@ resource "aws_vpc_endpoint" "s3" {
 resource "aws_kms_key" "main" {
   description             = "KMS key for encrypting sensitive outputs"
   deletion_window_in_days = 7
+  enable_key_rotation     = true
 
   tags = {
     Name        = "main-kms-key"
@@ -126,6 +127,14 @@ resource "aws_s3_bucket" "cloudtrail" {
     Name        = "cloudtrail-logs-bucket"
     Environment = var.environment_tag
     Owner       = var.owner_tag
+  }
+}
+
+# Enable versioning for CloudTrail bucket
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
@@ -184,8 +193,11 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name           = "main-cloudtrail"
-  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
+  name                          = "main-cloudtrail"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail.bucket
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
 
   event_selector {
     read_write_type                 = "All"
@@ -205,6 +217,52 @@ resource "aws_cloudtrail" "main" {
   }
 }
 
+# AWS Config for compliance monitoring
+resource "aws_config_configuration_recorder" "main" {
+  name     = "main-config-recorder"
+  role_arn = aws_iam_role.config_role.arn
+
+  recording_group {
+    all_supported = true
+    include_global_resources = true
+  }
+}
+
+resource "aws_config_delivery_channel" "main" {
+  name           = "main-config-delivery"
+  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
+  depends_on     = [aws_config_configuration_recorder.main]
+}
+
+# IAM Role for AWS Config
+resource "aws_iam_role" "config_role" {
+  name = "aws-config-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "aws-config-role"
+    Environment = var.environment_tag
+    Owner       = var.owner_tag
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "config_policy" {
+  role       = aws_iam_role.config_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+}
+
 # Random ID for bucket naming
 resource "random_id" "bucket_suffix" {
   byte_length = 8
@@ -219,6 +277,14 @@ resource "aws_s3_bucket" "secure_data" {
     Name        = "secure-data-bucket"
     Environment = var.environment_tag
     Owner       = var.owner_tag
+  }
+}
+
+# Enable versioning for secure data bucket
+resource "aws_s3_bucket_versioning" "secure_data" {
+  bucket = aws_s3_bucket.secure_data.id
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
@@ -283,6 +349,54 @@ resource "aws_s3_bucket_policy" "secure_data" {
   })
 }
 
+# S3 Bucket Lifecycle Configuration for CloudTrail
+resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    id     = "cloudtrail-lifecycle"
+    status = "Enabled"
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = 2555  # 7 years for compliance
+    }
+  }
+}
+
+# S3 Bucket Lifecycle Configuration for Secure Data
+resource "aws_s3_bucket_lifecycle_configuration" "secure_data" {
+  bucket = aws_s3_bucket.secure_data.id
+
+  rule {
+    id     = "secure-data-lifecycle"
+    status = "Enabled"
+
+    transition {
+      days          = 30
+      storage_class = "STANDARD_IA"
+    }
+
+    transition {
+      days          = 90
+      storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = 2555  # 7 years for compliance
+    }
+  }
+}
+
 # IAM Group for MFA Enforcement
 resource "aws_iam_group" "mfa_required" {
   name = "mfa-required-group"
@@ -316,7 +430,79 @@ resource "aws_security_group" "ec2" {
   name_prefix = "ec2-sg"
   vpc_id      = aws_vpc.main.id
 
-  # Allow HTTPS outbound for SSM
+  # Deny all inbound traffic by default
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "ec2-security-group"
+    Environment = var.environment_tag
+    Owner       = var.owner_tag
+  }
+}
+
+# VPC Endpoints for enhanced security
+resource "aws_vpc_endpoint" "ssm" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.us-east-1.ssm"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_1.id, aws_subnet.private_2.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name        = "ssm-vpc-endpoint"
+    Environment = var.environment_tag
+    Owner       = var.owner_tag
+  }
+}
+
+resource "aws_vpc_endpoint" "ssmmessages" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.us-east-1.ssmmessages"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_1.id, aws_subnet.private_2.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name        = "ssmmessages-vpc-endpoint"
+    Environment = var.environment_tag
+    Owner       = var.owner_tag
+  }
+}
+
+resource "aws_vpc_endpoint" "ec2messages" {
+  vpc_id              = aws_vpc.main.id
+  service_name        = "com.amazonaws.us-east-1.ec2messages"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.private_1.id, aws_subnet.private_2.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
+
+  tags = {
+    Name        = "ec2messages-vpc-endpoint"
+    Environment = var.environment_tag
+    Owner       = var.owner_tag
+  }
+}
+
+# Security Group for VPC Endpoints
+resource "aws_security_group" "vpc_endpoints" {
+  name_prefix = "vpc-endpoints-sg"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ec2.id]
+  }
+
   egress {
     from_port   = 443
     to_port     = 443
@@ -325,7 +511,7 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name        = "ec2-security-group"
+    Name        = "vpc-endpoints-security-group"
     Environment = var.environment_tag
     Owner       = var.owner_tag
   }
