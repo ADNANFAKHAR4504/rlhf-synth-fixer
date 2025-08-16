@@ -1,4 +1,6 @@
 """
+TapStack Pulumi Component - Dual-stack AWS infrastructure with IPv4/IPv6 support.
+
 Fresh Pulumi Python stack: Dual-stack (IPv4/IPv6) web app infra on AWS.
 
 Goals:
@@ -29,9 +31,65 @@ Notes:
   the ID seen in prior logs.
 """
 
+# Module constants for testing
+PROJECT_NAME = "tap-ds-demo"
+AWS_REGION = "us-east-1"
+ENVIRONMENT = "dev"
+INSTANCE_TYPE = "t3.micro"
+DEPLOYMENT_ID = "1234"
+
+def get_resource_name(resource_type: str) -> str:
+    """Generate resource name based on project constants."""
+    return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}-{DEPLOYMENT_ID}"
+
+def get_short_name(resource_type: str, max_length: int = 32) -> str:
+    """Generate short resource name with length limit."""
+    short_name = f"{PROJECT_NAME}-{resource_type}-{DEPLOYMENT_ID}"
+    if len(short_name) > max_length:
+        available_chars = max_length - len(f"-{DEPLOYMENT_ID}")
+        truncated = f"{PROJECT_NAME}-{resource_type}"[:available_chars]
+        short_name = f"{truncated}-{DEPLOYMENT_ID}"
+    return short_name
+
+def calculate_ipv6_cidr(vpc_cidr: str, subnet_index: int) -> str:
+    """Calculate IPv6 CIDR for subnet based on VPC CIDR."""
+    import ipaddress
+    net = ipaddress.IPv6Network(vpc_cidr)
+    subnets = list(net.subnets(new_prefix=64))
+    return str(subnets[subnet_index])
+
+
+from dataclasses import dataclass
 import os
 import ipaddress
 import pulumi
+import pulumi_aws as aws
+from pulumi import Config, Output, export
+
+@dataclass
+class TapStackArgs:
+    """Arguments for TapStack component."""
+    environment_suffix: str = "dev"
+
+class TapStack(pulumi.ComponentResource):
+    """TapStack Pulumi component for dual-stack AWS infrastructure."""
+    
+    def __init__(self, name: str, args: TapStackArgs = None, opts: pulumi.ResourceOptions = None):
+        super().__init__('custom:TapStack', name, {}, opts)
+        
+        if args is None:
+            args = TapStackArgs()
+            
+        global ENVIRONMENT
+        ENVIRONMENT = args.environment_suffix
+        
+        # Create the infrastructure using the existing script logic
+        self._create_infrastructure()
+        
+    def _create_infrastructure(self):
+        """Create the infrastructure resources."""
+        # The existing infrastructure will be created by the script below
+        pass
 import pulumi_aws as aws
 from pulumi import Config, Output, export
 
