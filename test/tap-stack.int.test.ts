@@ -110,16 +110,15 @@ describe('TapStack Infrastructure Integration Tests', () => {
         new DescribeSubnetsCommand({ SubnetIds: publicSubnets })
       );
       const uniquePublicAZs = new Set<string>();
-      publicResponse.Subnets!.forEach((subnet: Ec2Subnet) => {
+      const publicSubnetsList = (publicResponse.Subnets ?? []) as Ec2Subnet[];
+      publicSubnetsList.forEach((subnet) => {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
         expect(subnet.CidrBlock).toMatch(/^10\.0\.[12]\.0\/24$/);
         uniquePublicAZs.add(subnet.AvailabilityZone as string);
-
-        // Check subnet tags
         const tierTag = subnet.Tags?.find((t) => t.Key === 'Tier');
         expect(tierTag?.Value).toBe('public');
-      });
+    });
       expect(uniquePublicAZs.size).toBeGreaterThanOrEqual(2);
 
       // Test private subnets configuration
@@ -127,13 +126,12 @@ describe('TapStack Infrastructure Integration Tests', () => {
         new DescribeSubnetsCommand({ SubnetIds: privateSubnets })
       );
       const uniquePrivateAZs = new Set<string>();
-      privateResponse.Subnets!.forEach((subnet: Ec2Subnet) => {
+      const privateSubnetsList = (privateResponse.Subnets ?? []) as Ec2Subnet[];
+        privateSubnetsList.forEach((subnet) => {
         expect(subnet.State).toBe('available');
-        // Private subnets should not auto-assign public IPs
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(subnet.CidrBlock).toMatch(/^10\.0\.[12]0\.0\/24$/);
         uniquePrivateAZs.add(subnet.AvailabilityZone as string);
-
         const tierTag = subnet.Tags?.find((t) => t.Key === 'Tier');
         expect(tierTag?.Value).toBe('private');
       });
