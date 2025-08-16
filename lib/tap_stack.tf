@@ -1205,16 +1205,6 @@ resource "aws_iam_instance_profile" "app_usw2" {
   })
 }
 
-# Data Sources - AMI
-data "aws_ssm_parameter" "al2_ami_use1" {
-  provider = aws.use1
-  name     = "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
-}
-
-data "aws_ssm_parameter" "al2_ami_usw2" {
-  provider = aws.usw2
-  name     = "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
-}
 
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "use1_bastion" {
