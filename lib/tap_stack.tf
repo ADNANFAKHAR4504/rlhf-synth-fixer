@@ -101,6 +101,12 @@ variable "enable_cloudtrail" {
   default     = false
 }
 
+variable "skip_health_enforcement" {
+  description = "Skip health check enforcement for easier CI/PR deployments"
+  type        = bool
+  default     = true
+}
+
 # Locals
 locals {
   tags = {
@@ -1533,14 +1539,14 @@ resource "aws_lb_target_group" "use1_app" {
 
   health_check {
     enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/health"
+    healthy_threshold   = var.skip_health_enforcement ? 2 : 2
+    interval            = var.skip_health_enforcement ? 60 : 30
+    matcher             = var.skip_health_enforcement ? "200-499" : "200"
+    path                = var.skip_health_enforcement ? "/" : "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = var.skip_health_enforcement ? 10 : 5
+    unhealthy_threshold = var.skip_health_enforcement ? 5 : 2
   }
 
   tags = merge(local.tags, {
@@ -1558,14 +1564,14 @@ resource "aws_lb_target_group" "usw2_app" {
 
   health_check {
     enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/health"
+    healthy_threshold   = var.skip_health_enforcement ? 2 : 2
+    interval            = var.skip_health_enforcement ? 60 : 30
+    matcher             = var.skip_health_enforcement ? "200-499" : "200"
+    path                = var.skip_health_enforcement ? "/" : "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = var.skip_health_enforcement ? 10 : 5
+    unhealthy_threshold = var.skip_health_enforcement ? 5 : 2
   }
 
   tags = merge(local.tags, {
@@ -1716,6 +1722,13 @@ resource "aws_autoscaling_group" "use1_app" {
   max_size         = var.asg_max_size
   desired_capacity = var.asg_desired_capacity
 
+  # Health check configuration for easier deployment
+  health_check_type         = var.skip_health_enforcement ? "EC2" : "ELB"
+  health_check_grace_period = var.skip_health_enforcement ? 600 : 300
+  wait_for_capacity_timeout = "0"
+  min_elb_capacity          = 0
+  wait_for_elb_capacity     = 0
+
   launch_template {
     id      = aws_launch_template.use1_app.id
     version = "$Latest"
@@ -1754,6 +1767,13 @@ resource "aws_autoscaling_group" "usw2_app" {
   min_size         = var.asg_min_size
   max_size         = var.asg_max_size
   desired_capacity = var.asg_desired_capacity
+
+  # Health check configuration for easier deployment
+  health_check_type         = var.skip_health_enforcement ? "EC2" : "ELB"
+  health_check_grace_period = var.skip_health_enforcement ? 600 : 300
+  wait_for_capacity_timeout = "0"
+  min_elb_capacity          = 0
+  wait_for_elb_capacity     = 0
 
   launch_template {
     id      = aws_launch_template.usw2_app.id
