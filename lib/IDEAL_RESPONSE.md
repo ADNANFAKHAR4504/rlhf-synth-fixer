@@ -131,7 +131,7 @@ Resources:
       SSESpecification:
         SSEEnabled: true
         KMSMasterKeyId: !Ref OrderProcessingKMSKey
-      DeletionProtectionEnabled: false  # Set to true for production
+      DeletionProtectionEnabled: false # Set to true for production
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       TimeToLiveSpecification:
@@ -172,7 +172,7 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:Query
                   - dynamodb:Scan
-                Resource: 
+                Resource:
                   - !GetAtt OrdersTable.Arn
                   - !Sub '${OrdersTable.Arn}/index/*'
         - PolicyName: KMSAccess
@@ -414,7 +414,7 @@ Resources:
     Properties:
       QueueName: !Sub '${ProjectName}-${EnvironmentSuffix}-dlq'
       KmsMasterKeyId: !Ref OrderProcessingKMSKey
-      MessageRetentionPeriod: 1209600  # 14 days
+      MessageRetentionPeriod: 1209600 # 14 days
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -513,7 +513,7 @@ Resources:
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${OrderProcessingAPI}/*'
 
   # CloudWatch Alarms
-  
+
   # Lambda function error alarm
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -545,7 +545,7 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 3
-      Threshold: 25000  # 25 seconds
+      Threshold: 25000 # 25 seconds
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
@@ -662,6 +662,7 @@ Outputs:
 ## Key Features and Enhancements
 
 ### Security Enhancements
+
 - **Customer-managed KMS encryption** for all data at rest and CloudWatch Logs
 - **Least privilege IAM policies** with specific resource ARNs
 - **Input validation** in Lambda function code
@@ -669,6 +670,7 @@ Outputs:
 - **Dead Letter Queue** for failed Lambda invocations
 
 ### Monitoring and Observability
+
 - **Comprehensive CloudWatch alarms** for all critical metrics
 - **X-Ray tracing** enabled for performance analysis
 - **Custom business metrics** sent to CloudWatch
@@ -676,6 +678,7 @@ Outputs:
 - **SNS notifications** for all alerts
 
 ### Performance Optimizations
+
 - **Reserved concurrency** (100) to prevent cold starts
 - **API Gateway throttling** configured (500 RPS, 1000 burst)
 - **DynamoDB Global Secondary Index** for customer queries
@@ -683,6 +686,7 @@ Outputs:
 - **Contributor Insights** for DynamoDB performance monitoring
 
 ### Reliability Features
+
 - **Point-in-time recovery** enabled for DynamoDB
 - **DynamoDB Streams** for change data capture
 - **Dead Letter Queue** for failed processing
@@ -690,6 +694,7 @@ Outputs:
 - **Multi-AZ deployment** across all services
 
 ### Scalability Capabilities
+
 - **On-demand billing** for DynamoDB auto-scaling
 - **Lambda concurrent execution** limits configured
 - **API Gateway rate limiting** to handle traffic spikes
@@ -698,8 +703,10 @@ Outputs:
 ## Testing Instructions
 
 ### Manual Testing
+
 1. **Deploy the CloudFormation template** with appropriate parameters
 2. **Send a POST request** to the API Gateway endpoint:
+
    ```bash
    curl -X POST https://{api-id}.execute-api.{region}.amazonaws.com/orders \
      -H "Content-Type: application/json" \
@@ -725,6 +732,7 @@ Outputs:
 6. **Validate CloudWatch metrics** are being collected
 
 ### Automated Testing
+
 - **Unit tests** should validate Lambda function logic with various input scenarios
 - **Integration tests** should verify end-to-end functionality using actual AWS resources
 - **Load testing** should confirm the system can handle 1000 RPS as specified
@@ -733,11 +741,13 @@ Outputs:
 ## Deployment Considerations
 
 ### Prerequisites
+
 - AWS CLI configured with CloudFormation deployment permissions
 - Valid email address for alarm notifications
 - Appropriate AWS service limits for Lambda, DynamoDB, and API Gateway
 
 ### Production Readiness
+
 - Set `DeletionProtectionEnabled: true` for DynamoDB table in production
 - Configure custom domain name for API Gateway
 - Implement API authentication/authorization as needed
