@@ -13,6 +13,7 @@ variable "aws_region" {
 variable "kms_key_arn" {
   description = "KMS key ARN for S3 SSE-KMS encryption"
   type        = string
+  default     = "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012"
   nullable    = false
   validation {
     condition     = can(regex("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+$", var.kms_key_arn))
@@ -34,6 +35,7 @@ variable "allowed_cidr" {
 variable "app_bucket_name" {
   description = "S3 bucket name for application data with tag-restricted access"
   type        = string
+  default     = "production-app-bucket-default"
   nullable    = false
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.app_bucket_name)) && length(var.app_bucket_name) >= 3 && length(var.app_bucket_name) <= 63
@@ -44,6 +46,7 @@ variable "app_bucket_name" {
 variable "trail_bucket_name" {
   description = "S3 bucket name dedicated for CloudTrail logs"
   type        = string
+  default     = "production-trail-bucket-default"
   nullable    = false
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", var.trail_bucket_name)) && length(var.trail_bucket_name) >= 3 && length(var.trail_bucket_name) <= 63
@@ -54,6 +57,7 @@ variable "trail_bucket_name" {
 variable "ec2_ami_id" {
   description = "AMI ID to use for EC2 instance"
   type        = string
+  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI in us-west-2
   nullable    = false
   validation {
     condition     = can(regex("^ami-[a-f0-9]{8,17}$", var.ec2_ami_id))
@@ -75,6 +79,7 @@ variable "ec2_instance_type" {
 variable "iam_user_name" {
   description = "IAM user name for minimal-privilege deployment tasks"
   type        = string
+  default     = "production-deployer"
   nullable    = false
   validation {
     condition     = can(regex("^[a-zA-Z0-9+=,.@_-]+$", var.iam_user_name)) && length(var.iam_user_name) >= 1 && length(var.iam_user_name) <= 64
@@ -85,6 +90,7 @@ variable "iam_user_name" {
 variable "vpc_id" {
   description = "VPC ID for EC2 instance deployment"
   type        = string
+  default     = "vpc-12345678" # Default VPC placeholder
   nullable    = false
   validation {
     condition     = can(regex("^vpc-[a-f0-9]{8,17}$", var.vpc_id))
@@ -95,6 +101,7 @@ variable "vpc_id" {
 variable "subnet_id" {
   description = "Subnet ID for EC2 instance deployment"
   type        = string
+  default     = "subnet-12345678" # Default subnet placeholder
   nullable    = false
   validation {
     condition     = can(regex("^subnet-[a-f0-9]{8,17}$", var.subnet_id))

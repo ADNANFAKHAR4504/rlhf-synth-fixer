@@ -14,6 +14,7 @@ error_message = "AWS region must be in format like us-west-2."
 variable "kms_key_arn" {
 description = "KMS key ARN for S3 SSE-KMS encryption"
 type = string
+default = "arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012"
 nullable = false
 validation {
 condition = can(regex("^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[a-f0-9-]+$", var.kms_key_arn))
@@ -35,6 +36,7 @@ error_message = "Allowed CIDR must be a valid CIDR block."
 variable "app_bucket_name" {
 description = "S3 bucket name for application data with tag-restricted access"
 type = string
+default = "production-app-bucket-default"
 nullable = false
 validation {
 condition = can(regex("^[a-z0-9][a-z0-9-]\*[a-z0-9]$", var.app_bucket_name)) && length(var.app_bucket_name) >= 3 && length(var.app_bucket_name) <= 63
@@ -45,6 +47,7 @@ error_message = "S3 bucket name must be 3-63 characters, lowercase, start/end wi
 variable "trail_bucket_name" {
 description = "S3 bucket name dedicated for CloudTrail logs"
 type = string
+default = "production-trail-bucket-default"
 nullable = false
 validation {
 condition = can(regex("^[a-z0-9][a-z0-9-]\*[a-z0-9]$", var.trail_bucket_name)) && length(var.trail_bucket_name) >= 3 && length(var.trail_bucket_name) <= 63
@@ -55,6 +58,7 @@ error_message = "S3 bucket name must be 3-63 characters, lowercase, start/end wi
 variable "ec2_ami_id" {
 description = "AMI ID to use for EC2 instance"
 type = string
+default = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI in us-west-2
 nullable = false
 validation {
 condition = can(regex("^ami-[a-f0-9]{8,17}$", var.ec2_ami_id))
@@ -76,6 +80,7 @@ error_message = "Instance type must be valid EC2 instance type format."
 variable "iam*user_name" {
 description = "IAM user name for minimal-privilege deployment tasks"
 type = string
+default = "production-deployer"
 nullable = false
 validation {
 condition = can(regex("^[a-zA-Z0-9+=,.@*-]+$", var.iam*user_name)) && length(var.iam_user_name) >= 1 && length(var.iam_user_name) <= 64
@@ -86,6 +91,7 @@ error_message = "IAM user name must be 1-64 characters and contain only alphanum
 variable "vpc_id" {
 description = "VPC ID for EC2 instance deployment"
 type = string
+default = "vpc-12345678" # Default VPC placeholder
 nullable = false
 validation {
 condition = can(regex("^vpc-[a-f0-9]{8,17}$", var.vpc_id))
@@ -96,6 +102,7 @@ error_message = "VPC ID must be in format vpc-xxxxxxxx."
 variable "subnet_id" {
 description = "Subnet ID for EC2 instance deployment"
 type = string
+default = "subnet-12345678" # Default subnet placeholder
 nullable = false
 validation {
 condition = can(regex("^subnet-[a-f0-9]{8,17}$", var.subnet_id))
