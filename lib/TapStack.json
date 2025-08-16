@@ -628,7 +628,7 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${SecureDataBucket}/*"
+                                            "Fn::Sub": "${SecureDataBucket.Arn}/*"
                                         }
                                     ]
                                 },
@@ -651,7 +651,7 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${LogsBucket}/*"
+                                            "Fn::Sub": "${LogsBucket.Arn}/*"
                                         }
                                     ]
                                 },
@@ -894,7 +894,7 @@
                                             ]
                                         },
                                         {
-                                            "Fn::Sub": "${SecureDataBucket}/*"
+                                            "Fn::Sub": "${SecureDataBucket.Arn}/*"
                                         }
                                     ]
                                 }

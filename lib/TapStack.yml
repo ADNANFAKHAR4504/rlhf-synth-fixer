@@ -318,7 +318,7 @@ Resources:
                   - 's3:GetObject'
                   - 's3:PutObject'
                 Resource:
-                  - !Sub '${SecureDataBucket}/*'
+                  - !Sub '${SecureDataBucket.Arn}/*'
               - Effect: 'Allow'
                 Action:
                   - 's3:ListBucket'
@@ -327,7 +327,7 @@ Resources:
                 Action:
                   - 's3:PutObject'
                 Resource:
-                  - !Sub '${LogsBucket}/*'
+                  - !Sub '${LogsBucket.Arn}/*'
               - Effect: 'Allow'
                 Action:
                   - 's3:ListBucket'
@@ -442,7 +442,7 @@ Resources:
                   - 's3:ListBucket'
                 Resource:
                   - !GetAtt SecureDataBucket.Arn
-                  - !Sub '${SecureDataBucket}/*'
+                  - !Sub '${SecureDataBucket.Arn}/*'
       Tags:
         - Key: 'Environment'
           Value: !Ref Environment
