@@ -10,26 +10,6 @@ terraform {
 # Variables
 #######################
 
-variable "author" {
-  description = "Author of the project"
-  type        = string
-}
-
-variable "created_date" {
-  description = "Creation date"
-  type        = string
-}
-
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-}
-
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-}
-
 variable "aws_region" {
   description = "The AWS region where resources will be created"
   type        = string
@@ -113,13 +93,14 @@ variable "region" {
 variable "use_existing_vpc" {
   description = "Use existing VPC instead of creating new one (recommended to avoid VPC limits)"
   type        = bool
-  default     = false
+  default     = false # Set to false to create a new VPC by default
 }
 
 variable "existing_vpc_id" {
   description = "ID of existing VPC to use (required if use_existing_vpc is true)"
   type        = string
   default     = ""
+
   validation {
     condition     = var.use_existing_vpc == false || (var.use_existing_vpc == true && var.existing_vpc_id != "")
     error_message = "existing_vpc_id must be provided when use_existing_vpc is true."
@@ -130,6 +111,7 @@ variable "existing_public_subnet_ids" {
   description = "IDs of existing public subnets (required if use_existing_vpc is true)"
   type        = list(string)
   default     = []
+
   validation {
     condition     = var.use_existing_vpc == false || (var.use_existing_vpc == true && length(var.existing_public_subnet_ids) >= 2)
     error_message = "At least 2 existing_public_subnet_ids must be provided when use_existing_vpc is true."
@@ -140,25 +122,11 @@ variable "existing_private_subnet_ids" {
   description = "IDs of existing private subnets (required if use_existing_vpc is true)"
   type        = list(string)
   default     = []
+
   validation {
     condition     = var.use_existing_vpc == false || (var.use_existing_vpc == true && length(var.existing_private_subnet_ids) >= 2)
     error_message = "At least 2 existing_private_subnet_ids must be provided when use_existing_vpc is true."
   }
-}
-
-#######################
-# Random string for unique naming
-#######################
-resource "random_string" "short" {
-  length  = 6
-  upper   = false
-  special = false
-}
-
-resource "random_string" "bucket_suffix" {
-  length  = 8
-  special = false
-  upper   = false
 }
 
 #######################
@@ -180,52 +148,62 @@ locals {
   public_subnet_ids   = var.use_existing_vpc ? var.existing_public_subnet_ids : aws_subnet.public[*].id
   private_subnet_ids  = var.use_existing_vpc ? var.existing_private_subnet_ids : aws_subnet.private[*].id
   database_subnet_ids = var.use_existing_vpc ? var.existing_private_subnet_ids : aws_subnet.database[*].id
-
-  # Shortened names for ALB and target group (always <=32 chars)
-  alb_name = "${substr(local.name_prefix, 0, 18)}-alb-${random_string.short.result}"
-  tg_name  = "${substr(local.name_prefix, 0, 17)}-tg-${random_string.short.result}"
 }
 
 #######################
 # Data Sources
 #######################
 
+# Get current AWS account information
 data "aws_caller_identity" "current" {}
 
+# Get current AWS region information
 data "aws_region" "current" {}
 
+# Get available availability zones
 data "aws_availability_zones" "available" {
   state = "available"
+
   filter {
     name   = "opt-in-status"
     values = ["opt-in-not-required"]
   }
 }
 
+# Get latest Amazon Linux 2 AMI (trusted source)
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
+
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
+
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
   }
+
   filter {
     name   = "state"
     values = ["available"]
   }
 }
 
+# Get current partition for ARN construction
 data "aws_partition" "current" {}
 
+# Get the ELB service account for the current region
+data "aws_elb_service_account" "main" {}
+
+# Get existing VPC information if using existing infrastructure
 data "aws_vpc" "existing" {
   count = var.use_existing_vpc ? 1 : 0
   id    = var.existing_vpc_id
 }
 
+# Get existing subnet information
 data "aws_subnet" "existing_public" {
   count = var.use_existing_vpc ? length(var.existing_public_subnet_ids) : 0
   id    = var.existing_public_subnet_ids[count.index]
@@ -309,6 +287,86 @@ resource "aws_subnet" "database" {
     Type = "database-subnet"
     Tier = "database"
   })
+}
+
+# Route table for public subnets
+resource "aws_route_table" "public" {
+  count  = var.use_existing_vpc ? 0 : 1
+  vpc_id = aws_vpc.main[0].id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main[0].id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-rt"
+    Type = "networking"
+  })
+}
+
+# Associate public subnets with public route table
+resource "aws_route_table_association" "public" {
+  count          = var.use_existing_vpc ? 0 : 2
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public[0].id
+}
+
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  count  = var.use_existing_vpc ? 0 : 2
+  domain = "vpc"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
+    Type = "networking"
+  })
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# NAT Gateways for private subnet internet access
+resource "aws_nat_gateway" "main" {
+  count         = var.use_existing_vpc ? 0 : 2
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-${count.index + 1}"
+    Type = "networking"
+  })
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Route tables for private subnets
+resource "aws_route_table" "private" {
+  count  = var.use_existing_vpc ? 0 : 2
+  vpc_id = aws_vpc.main[0].id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-rt-${count.index + 1}"
+    Type = "networking"
+  })
+}
+
+# Associate private subnets with private route tables
+resource "aws_route_table_association" "private" {
+  count          = var.use_existing_vpc ? 0 : 2
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
+# Associate database subnets with private route tables
+resource "aws_route_table_association" "database" {
+  count          = var.use_existing_vpc ? 0 : 2
+  subnet_id      = aws_subnet.database[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
 }
 
 #######################
@@ -427,6 +485,240 @@ resource "aws_kms_key" "ebs_key" {
 resource "aws_kms_alias" "ebs_key" {
   name          = "alias/${local.name_prefix}-ebs-key"
   target_key_id = aws_kms_key.ebs_key.key_id
+}
+
+#######################
+# S3 Buckets (moved up to resolve dependencies)
+#######################
+
+# Random string for bucket naming
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# S3 bucket for application data
+resource "aws_s3_bucket" "app_data" {
+  bucket = "${local.name_prefix}-app-data-${random_string.bucket_suffix.result}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-data-bucket"
+    Type = "storage"
+  })
+}
+
+# S3 bucket for ALB access logs
+resource "aws_s3_bucket" "alb_logs" {
+  bucket = "${local.name_prefix}-alb-logs-${random_string.bucket_suffix.result}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-logs-bucket"
+    Type = "storage"
+  })
+}
+
+# S3 bucket versioning
+resource "aws_s3_bucket_versioning" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 bucket encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.s3_key.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# S3 bucket encryption for ALB logs
+resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.s3_key.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# S3 Bucket public access block for app data
+resource "aws_s3_bucket_public_access_block" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 Bucket public access block for ALB logs
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Fixed S3 bucket policy for ALB logs
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConsoleStatement-1"
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+      },
+      {
+        Sid    = "AWSLogDeliveryCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
+      },
+      {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
+}
+
+# S3 Bucket policy for app data (restrictive)
+resource "aws_s3_bucket_policy" "app_data" {
+  bucket = aws_s3_bucket.app_data.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.app_data.arn,
+          "${aws_s3_bucket.app_data.arn}/*",
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.app_data]
+}
+
+#######################
+# Application Load Balancer
+#######################
+
+resource "aws_lb" "main" {
+  name               = "${local.name_prefix}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = local.public_subnet_ids
+
+  enable_deletion_protection = var.environment == "prod" ? var.enable_deletion_protection : false
+
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.id
+    prefix  = "alb-logs"
+    enabled = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb"
+    Type = "load-balancer"
+  })
+
+  depends_on = [aws_s3_bucket_policy.alb_logs]
+}
+
+# Target group for EC2 instances
+resource "aws_lb_target_group" "app" {
+  name     = "${local.name_prefix}-app-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = local.vpc_id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/health"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 2
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-target-group"
+    Type = "load-balancer"
+  })
+}
+
+# ALB Listener
+resource "aws_lb_listener" "app" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-listener"
+    Type = "load-balancer"
+  })
 }
 
 ########################
@@ -569,73 +861,6 @@ resource "aws_security_group" "lambda" {
 }
 
 #######################
-# Application Load Balancer
-#######################
-
-resource "aws_lb" "main" {
-  name               = local.alb_name
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = local.public_subnet_ids
-
-  enable_deletion_protection = var.environment == "prod" ? var.enable_deletion_protection : false
-
-  access_logs {
-    bucket  = aws_s3_bucket.alb_logs.id
-    prefix  = "alb-logs"
-    enabled = true
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-alb"
-    Type = "load-balancer"
-  })
-}
-
-# Target group for EC2 instances
-resource "aws_lb_target_group" "app" {
-  name     = local.tg_name
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = local.vpc_id
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/health"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-target-group"
-    Type = "load-balancer"
-  })
-}
-
-# ALB Listener
-resource "aws_lb_listener" "app" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-alb-listener"
-    Type = "load-balancer"
-  })
-}
-
-#######################
 # IAM Roles and Policies
 #######################
 
@@ -761,6 +986,51 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
+########################
+# Monitoring
+########################
+
+# CloudWatch Log Group for EC2 instances
+resource "aws_cloudwatch_log_group" "ec2_logs" {
+  name              = "/aws/ec2/${var.project_name}-${var.environment}"
+  retention_in_days = 14
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-${var.environment}-ec2-logs"
+    Type = "Logging"
+  })
+}
+
+# CloudWatch Log Group for Lambda functions
+resource "aws_cloudwatch_log_group" "lambda_logs" {
+  name              = "/aws/lambda/${var.project_name}-${var.environment}"
+  retention_in_days = 14
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-${var.environment}-lambda-logs"
+    Type = "Logging"
+  })
+}
+
+# SNS Topic for notifications
+resource "aws_sns_topic" "alerts" {
+  name = "${var.project_name}-${var.environment}-alerts"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-${var.environment}-alerts"
+    Type = "Notification"
+  })
+}
+
+# SNS Topic Subscription - Only create if email is provided
+resource "aws_sns_topic_subscription" "email_alerts" {
+  count = var.notification_email != "" && var.notification_email != null ? 1 : 0
+
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.notification_email
+}
+
 #######################
 # EC2 Instances
 #######################
@@ -788,11 +1058,28 @@ resource "aws_launch_template" "app" {
     }
   }
 
-  # User data script with CloudWatch logging
+  # Enhanced user data script with better error handling and CloudWatch logging
   user_data = base64encode(<<-EOF
     #!/bin/bash
+    
+    # Update system
     yum update -y
+    
+    # Install CloudWatch agent
     yum install -y amazon-cloudwatch-agent
+    
+    # Install and start httpd
+    yum install -y httpd
+    systemctl start httpd
+    systemctl enable httpd
+    
+    # Create health check endpoint
+    echo "OK" > /var/www/html/health
+    echo "<h1>Hello from ${var.project_name} ${var.environment}</h1>" > /var/www/html/index.html
+    
+    # Set proper permissions
+    chown apache:apache /var/www/html/health
+    chown apache:apache /var/www/html/index.html
     
     # Configure CloudWatch agent
     cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOL
@@ -805,6 +1092,16 @@ resource "aws_launch_template" "app" {
                 "file_path": "/var/log/messages",
                 "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
                 "log_stream_name": "{instance_id}/messages"
+              },
+              {
+                "file_path": "/var/log/httpd/access_log",
+                "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
+                "log_stream_name": "{instance_id}/httpd-access"
+              },
+              {
+                "file_path": "/var/log/httpd/error_log",
+                "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
+                "log_stream_name": "{instance_id}/httpd-error"
               }
             ]
           }
@@ -819,14 +1116,9 @@ resource "aws_launch_template" "app" {
       -m ec2 \
       -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
       -s
-      
-    # Install and start a simple web server for health checks
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
     
-    # Create health check endpoint
-    echo "OK" > /var/www/html/health
+    # Signal that the instance is ready
+    echo "Instance setup completed at $(date)" >> /var/log/user-data.log
     EOF
   )
 
@@ -858,6 +1150,7 @@ resource "aws_autoscaling_group" "app" {
   vpc_zone_identifier = local.private_subnet_ids
   target_group_arns   = [aws_lb_target_group.app.arn]
   health_check_type   = "ELB"
+  health_check_grace_period = 300
 
   min_size         = 1
   max_size         = 4
@@ -882,6 +1175,9 @@ resource "aws_autoscaling_group" "app" {
       propagate_at_launch = true
     }
   }
+
+  # Wait for the instances to be ready before considering the ASG deployment complete
+  wait_for_capacity_timeout = "10m"
 }
 
 #######################
@@ -938,116 +1234,6 @@ resource "aws_db_instance" "main" {
     Name = "${local.name_prefix}-database"
     Type = "database"
   })
-}
-
-#######################
-# S3 Buckets
-#######################
-
-# S3 bucket for application data
-resource "aws_s3_bucket" "app_data" {
-  bucket = "${local.name_prefix}-app-data-${random_string.bucket_suffix.result}"
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-data-bucket"
-    Type = "storage"
-  })
-}
-
-# S3 bucket for ALB access logs
-resource "aws_s3_bucket" "alb_logs" {
-  bucket = "${local.name_prefix}-alb-logs-${random_string.bucket_suffix.result}"
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-alb-logs-bucket"
-    Type = "storage"
-  })
-}
-
-# S3 bucket versioning
-resource "aws_s3_bucket_versioning" "app_data" {
-  bucket = aws_s3_bucket.app_data.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_versioning" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# S3 bucket encryption
-resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
-  bucket = aws_s3_bucket.app_data.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.s3_key.arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
-}
-
-# S3 bucket encryption for ALB logs
-resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.s3_key.arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
-}
-
-########################
-# Monitoring
-########################
-
-# CloudWatch Log Group for EC2 instances
-resource "aws_cloudwatch_log_group" "ec2_logs" {
-  name              = "/aws/ec2/${var.project_name}-${var.environment}"
-  retention_in_days = 14
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-ec2-logs"
-    Type = "Logging"
-  })
-}
-
-# CloudWatch Log Group for Lambda functions
-resource "aws_cloudwatch_log_group" "lambda_logs" {
-  name              = "/aws/lambda/${var.project_name}-${var.environment}"
-  retention_in_days = 14
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-lambda-logs"
-    Type = "Logging"
-  })
-}
-
-# SNS Topic for notifications
-resource "aws_sns_topic" "alerts" {
-  name = "${var.project_name}-${var.environment}-alerts"
-
-  tags = merge(local.common_tags, {
-    Name = "${var.project_name}-${var.environment}-alerts"
-    Type = "Notification"
-  })
-}
-
-# SNS Topic Subscription - Only create if email is provided
-resource "aws_sns_topic_subscription" "email_alerts" {
-  count = var.notification_email != "" && var.notification_email != null ? 1 : 0
-
-  topic_arn = aws_sns_topic.alerts.arn
-  protocol  = "email"
-  endpoint  = var.notification_email
 }
 
 # CloudWatch Alarm for EC2 CPU utilization
@@ -1187,104 +1373,6 @@ def handler(event, context):
 EOF
     filename = "index.py"
   }
-}
-
-########################
-# S3 Additional Configuration
-########################
-
-# S3 Bucket public access block for app data
-resource "aws_s3_bucket_public_access_block" "app_data" {
-  bucket = aws_s3_bucket.app_data.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# S3 Bucket public access block for ALB logs
-resource "aws_s3_bucket_public_access_block" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# S3 Bucket policy for app data (restrictive)
-resource "aws_s3_bucket_policy" "app_data" {
-  bucket = aws_s3_bucket.app_data.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.app_data.arn,
-          "${aws_s3_bucket.app_data.arn}/*",
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      }
-    ]
-  })
-
-  depends_on = [aws_s3_bucket_public_access_block.app_data]
-}
-
-# S3 Bucket policy for ALB logs (FIXED - allows ALB service to write logs)
-resource "aws_s3_bucket_policy" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "AWSLoadBalancerWrite"
-        Effect    = "Allow"
-        Principal = {
-          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
-        }
-        Action = [
-          "s3:PutObject"
-        ]
-        Resource = [
-          "${aws_s3_bucket.alb_logs.arn}/*"
-        ]
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      },
-      {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.alb_logs.arn,
-          "${aws_s3_bucket.alb_logs.arn}/*",
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      }
-    ]
-  })
-
-  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
 }
 
 # S3 Bucket lifecycle configuration for app data
