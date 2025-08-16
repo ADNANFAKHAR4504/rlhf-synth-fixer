@@ -38,6 +38,7 @@ class TestTapStackIntegration(unittest.TestCase):
       'team': self.test_team,
       'project': self.test_project
     }.get(key, default)
+    mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
     mock_config.return_value = mock_config_instance
 
     # Mock availability zones
@@ -114,6 +115,7 @@ class TestTapStackIntegration(unittest.TestCase):
         'team': custom_team,
         'project': custom_project
       }.get(key, default)
+      mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
       mock_config.return_value = mock_config_instance
 
       # Mock availability zones
@@ -175,6 +177,7 @@ class TestTapStackIntegration(unittest.TestCase):
       'team': 'platform',
       'project': 'tap'
     }.get(key, default)
+    mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
     mock_config.return_value = mock_config_instance
 
     # Mock availability zones
@@ -239,6 +242,7 @@ class TestTapStackIntegration(unittest.TestCase):
       'team': 'platform',
       'project': 'tap'
     }.get(key, default)
+    mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
     mock_config.return_value = mock_config_instance
 
     # Mock availability zones
