@@ -128,11 +128,10 @@ account_id = data.aws_caller_identity.current.account_id
 # Determine VPC and subnet to use
 
 vpc_id = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
-subnet_id = var.subnet_id != "" ? var.subnet_id : (
-length(try(data.aws_subnets.available[0].ids, [])) > 0 ?
-data.aws_subnets.available[0].ids[0] :
-data.aws_subnets.any_available[0].ids[0]
-)
+
+# Simplified subnet discovery - get first available subnet in VPC
+
+subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnets.all_available[0].ids[0]
 
 # Determine KMS key to use
 
@@ -165,27 +164,9 @@ count = var.vpc_id != "" ? 1 : 0
 id = var.vpc_id
 }
 
-# Get first available subnet in the VPC if no subnet ID provided
+# Get all available subnets in the VPC
 
-data "aws_subnets" "available" {
-count = var.subnet_id == "" ? 1 : 0
-filter {
-name = "vpc-id"
-values = [local.vpc_id]
-}
-filter {
-name = "state"
-values = ["available"]
-}
-filter {
-name = "default-for-az"
-values = ["true"]
-}
-}
-
-# Fallback: get any available subnet if no default subnets found
-
-data "aws_subnets" "any_available" {
+data "aws_subnets" "all_available" {
 count = var.subnet_id == "" ? 1 : 0
 filter {
 name = "vpc-id"
