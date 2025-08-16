@@ -38,7 +38,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-VPC"
+          Value: prod-env-vpc
 
   ProdEnvPrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -48,7 +48,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-Private-Subnet1"
+          Value: prod-env-private-subnet1
 
   ProdEnvPrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -58,7 +58,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-Private-Subnet2"
+          Value: prod-env-private-subnet2
 
   ProdEnvPrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -66,7 +66,7 @@ Resources:
       VpcId: !Ref ProdEnvVPC
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-Private-RouteTable"
+          Value: prod-env-private-rt
 
   ProdEnvSubnetAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -125,21 +125,21 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-SG"
+          Value: prod-env-sg
 
-  # Key Pair (automatic naming)
+  # Key Pair
   ProdEnvKeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
-      KeyName: !Sub "${AWS::StackName}-KeyPair"
+      KeyName: prod-env-keypair
 
-  # S3 Bucket with Encryption and Versioning
+  # S3 Bucket
   ProdEnvDataBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub "${AWS::StackName}-data-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "prod-env-data-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -202,7 +202,7 @@ Resources:
       IamInstanceProfile: !Ref ProdEnvInstanceProfile
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-Instance1"
+          Value: instance1
 
   ProdEnvInstance2:
     Type: AWS::EC2::Instance
@@ -216,13 +216,13 @@ Resources:
       IamInstanceProfile: !Ref ProdEnvInstanceProfile
       Tags:
         - Key: Name
-          Value: !Sub "${AWS::StackName}-Instance2"
+          Value: instance2
 
   # SNS Topic
   ProdEnvCpuAlertTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "${AWS::StackName}-CpuAlertTopic"
+      TopicName: prod-env-cpualert-topic
 
   ProdEnvEmailSubscription:
     Type: AWS::SNS::Subscription
@@ -236,7 +236,7 @@ Resources:
   ProdEnvInstance1CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${AWS::StackName}-Instance1-HighCPU"
+      AlarmName: instance1-highcpu
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
@@ -254,7 +254,7 @@ Resources:
   ProdEnvInstance2CPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${AWS::StackName}-Instance2-HighCPU"
+      AlarmName: instance2-highcpu
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average

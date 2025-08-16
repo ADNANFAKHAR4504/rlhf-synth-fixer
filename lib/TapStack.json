@@ -47,9 +47,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-VPC"
-                        }
+                        "Value": "prod-env-vpc"
                     }
                 ]
             }
@@ -72,9 +70,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-Private-Subnet1"
-                        }
+                        "Value": "prod-env-private-subnet1"
                     }
                 ]
             }
@@ -97,9 +93,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-Private-Subnet2"
-                        }
+                        "Value": "prod-env-private-subnet2"
                     }
                 ]
             }
@@ -113,9 +107,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-Private-RouteTable"
-                        }
+                        "Value": "prod-env-private-rt"
                     }
                 ]
             }
@@ -219,9 +211,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-SG"
-                        }
+                        "Value": "prod-env-sg"
                     }
                 ]
             }
@@ -229,9 +219,7 @@
         "ProdEnvKeyPair": {
             "Type": "AWS::EC2::KeyPair",
             "Properties": {
-                "KeyName": {
-                    "Fn::Sub": "${AWS::StackName}-KeyPair"
-                }
+                "KeyName": "prod-env-keypair"
             }
         },
         "ProdEnvDataBucket": {
@@ -240,7 +228,7 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-data-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "prod-env-data-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -353,9 +341,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-Instance1"
-                        }
+                        "Value": "instance1"
                     }
                 ]
             }
@@ -386,9 +372,7 @@
                 "Tags": [
                     {
                         "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-Instance2"
-                        }
+                        "Value": "instance2"
                     }
                 ]
             }
@@ -396,9 +380,7 @@
         "ProdEnvCpuAlertTopic": {
             "Type": "AWS::SNS::Topic",
             "Properties": {
-                "TopicName": {
-                    "Fn::Sub": "${AWS::StackName}-CpuAlertTopic"
-                }
+                "TopicName": "prod-env-cpualert-topic"
             }
         },
         "ProdEnvEmailSubscription": {
@@ -417,9 +399,7 @@
         "ProdEnvInstance1CPUAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": "${AWS::StackName}-Instance1-HighCPU"
-                },
+                "AlarmName": "instance1-highcpu",
                 "MetricName": "CPUUtilization",
                 "Namespace": "AWS/EC2",
                 "Statistic": "Average",
@@ -446,9 +426,7 @@
         "ProdEnvInstance2CPUAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
-                "AlarmName": {
-                    "Fn::Sub": "${AWS::StackName}-Instance2-HighCPU"
-                },
+                "AlarmName": "instance2-highcpu",
                 "MetricName": "CPUUtilization",
                 "Namespace": "AWS/EC2",
                 "Statistic": "Average",
