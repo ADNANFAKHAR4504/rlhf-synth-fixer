@@ -867,6 +867,30 @@ export class Infrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    // RDS Enhanced Monitoring Role
+    const rdsMonitoringRole = new aws.iam.Role(
+      createResourceName('rds-monitoring-role', region, environment),
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'monitoring.rds.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
+        ],
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
     // RDS Instance - Use AWS Secrets Manager for password
     const dbSecret = new aws.secretsmanager.Secret(
       createResourceName('db-secret', region, environment),
@@ -930,6 +954,7 @@ export class Infrastructure extends pulumi.ComponentResource {
 
         // Monitoring and logging
         monitoringInterval: 60,
+        monitoringRoleArn: rdsMonitoringRole.arn,
         performanceInsightsEnabled: true,
         performanceInsightsKmsKeyId: kmsKey.arn,
         performanceInsightsRetentionPeriod: 7,
