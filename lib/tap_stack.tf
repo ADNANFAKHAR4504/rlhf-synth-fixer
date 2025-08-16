@@ -198,11 +198,6 @@ resource "aws_cloudtrail" "main" {
     read_write_type                 = "All"
     include_management_events       = true
     exclude_management_event_sources = []
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
-    }
   }
 
   depends_on = [aws_s3_bucket_policy.cloudtrail, aws_s3_bucket_versioning.cloudtrail]

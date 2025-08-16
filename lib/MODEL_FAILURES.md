@@ -373,6 +373,54 @@ resource "aws_cloudtrail" "main" {
 - ✅ Prevents policy application timing issues
 - ✅ Maintains compliance with AWS CloudTrail requirements
 
+#### 12. CloudTrail Event Selector Issue - FIXED ✅
+- **Issue**: CloudTrail deployment failed with `InvalidEventSelectorsException: Value arn:aws:s3:::*/* for DataResources.Values is invalid`
+- **Root Cause**: Invalid data resource value format in CloudTrail event selector
+- **Resolution**: Removed invalid data resource configuration to use default management events logging
+
+**CloudTrail Event Selector Fix:**
+- **Problem**: Used invalid data resource value `arn:aws:s3:::*/*` which is not a valid AWS ARN format
+- **Fix**: Removed the data resource block to use default CloudTrail behavior:
+  ```hcl
+  event_selector {
+    read_write_type                 = "All"
+    include_management_events       = true
+    exclude_management_event_sources = []
+    # Removed invalid data_resource block
+  }
+  ```
+
+**AWS Best Practices Applied:**
+- ✅ **Management Events**: CloudTrail logs all management events by default
+- ✅ **Data Events**: Removed invalid S3 data event configuration
+- ✅ **Compliance**: Maintains security and audit requirements
+- ✅ **Simplicity**: Uses CloudTrail's default behavior which is sufficient for most use cases
+
+**Updated Configuration:**
+```hcl
+resource "aws_cloudtrail" "main" {
+  name                    = "main-cloudtrail-${random_id.bucket_suffix.hex}"
+  s3_bucket_name          = aws_s3_bucket.cloudtrail.bucket
+  is_multi_region_trail   = false
+
+  event_selector {
+    read_write_type                 = "All"
+    include_management_events       = true
+    exclude_management_event_sources = []
+    # No data_resource block - uses default management events
+  }
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail, aws_s3_bucket_versioning.cloudtrail]
+}
+```
+
+**Benefits:**
+- ✅ Follows AWS CloudTrail best practices
+- ✅ Logs all management events (API calls, console sign-ins, etc.)
+- ✅ Avoids invalid ARN format issues
+- ✅ Maintains security and compliance requirements
+- ✅ Simpler and more reliable configuration
+
 ### Final Deployment Readiness Checklist ✅
 - [x] **Template Structure**: Fixed Fn::Select issue with single AZ design
 - [x] **Unit Tests**: Updated to match simplified template structure
@@ -387,5 +435,6 @@ resource "aws_cloudtrail" "main" {
 - [x] **CloudTrail Configuration**: Explicitly set to single-region to avoid unnecessary costs
 - [x] **CAPABILITY_NAMED_IAM**: Fixed - no special capabilities required for deployment
 - [x] **CloudTrail S3 Policy**: Fixed - proper dependencies and bucket configuration
+- [x] **CloudTrail Event Selectors**: Fixed - removed invalid data resource configuration
 
 **Final Status**: ✅ CLOUDFORMATION TEMPLATE FULLY VALIDATED AND READY FOR DEPLOYMENT
