@@ -1,5 +1,5 @@
 ############################################
-# tap_stack.tf — Single-file stack with embedded Lambda code
+# tap_stack.tf — Single-file stack with embedded Lambda code 
 ############################################
 
 # terraform {
