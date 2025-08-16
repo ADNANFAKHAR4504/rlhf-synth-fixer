@@ -104,8 +104,30 @@ describe("Terraform Infrastructure Integration Tests", () => {
     try {
       if (fs.existsSync(outputsPath)) {
         const outputContent = fs.readFileSync(outputsPath, "utf8");
-        outputs = JSON.parse(outputContent);
-        console.log("✅ Using actual deployment outputs");
+        const rawOutputs = JSON.parse(outputContent);
+        
+        // Handle Terraform output format: extract .value from each output
+        // Terraform outputs have structure: { "output_name": { "value": actual_value, "type": "..." } }
+        if (rawOutputs && typeof rawOutputs === 'object') {
+          const hasValueProperty = Object.values(rawOutputs).some((output: any) => 
+            output && typeof output === 'object' && 'value' in output
+          );
+          
+          if (hasValueProperty) {
+            // Transform Terraform format to expected format
+            outputs = {};
+            for (const [key, output] of Object.entries(rawOutputs)) {
+              outputs[key] = (output as any)?.value;
+            }
+            console.log("✅ Using actual Terraform deployment outputs (transformed)");
+          } else {
+            // Already in expected format (likely from mock or other source)
+            outputs = rawOutputs;
+            console.log("✅ Using actual deployment outputs (direct format)");
+          }
+        } else {
+          throw new Error("Invalid output format");
+        }
       } else {
         outputs = MOCK_OUTPUTS;
         console.log("⚠️  Using mock outputs - no deployment found at cfn-outputs/all-outputs.json");
