@@ -2571,7 +2571,7 @@ resource "aws_s3_bucket_policy" "use1_logs" {
         Principal = {
           AWS = "arn:aws:iam::127311923021:root" # ELB service account for us-east-1
         }
-        Action   = "s3:PutObject"
+        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
         Resource = "${aws_s3_bucket.use1_logs.arn}/alb/AWSLogs/*"
       },
       {
@@ -2579,7 +2579,7 @@ resource "aws_s3_bucket_policy" "use1_logs" {
         Principal = {
           AWS = "arn:aws:iam::127311923021:root" # ELB service account for us-east-1
         }
-        Action   = "s3:GetBucketAcl"
+        Action   = ["s3:GetBucketAcl", "s3:ListBucket"]
         Resource = aws_s3_bucket.use1_logs.arn
       },
       {
@@ -2587,11 +2587,15 @@ resource "aws_s3_bucket_policy" "use1_logs" {
         Principal = {
           Service = "logdelivery.elasticloadbalancing.amazonaws.com"
         }
-        Action   = "s3:PutObject"
+        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
         Resource = "${aws_s3_bucket.use1_logs.arn}/alb/AWSLogs/*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+          ArnLike = {
+            "aws:SourceArn" = aws_lb.use1.arn
           }
         }
       },
@@ -2600,7 +2604,7 @@ resource "aws_s3_bucket_policy" "use1_logs" {
         Principal = {
           Service = "logdelivery.elasticloadbalancing.amazonaws.com"
         }
-        Action   = "s3:GetBucketAcl"
+        Action   = ["s3:GetBucketAcl", "s3:ListBucket"]
         Resource = aws_s3_bucket.use1_logs.arn
         Condition = {
           StringEquals = {
@@ -2613,7 +2617,7 @@ resource "aws_s3_bucket_policy" "use1_logs" {
         Principal = {
           Service = "delivery.logs.amazonaws.com"
         }
-        Action   = "s3:PutObject"
+        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
         Resource = "${aws_s3_bucket.use1_logs.arn}/alb/AWSLogs/*"
         Condition = {
           StringEquals = {
@@ -2626,7 +2630,7 @@ resource "aws_s3_bucket_policy" "use1_logs" {
         Principal = {
           Service = "delivery.logs.amazonaws.com"
         }
-        Action   = "s3:GetBucketAcl"
+        Action   = ["s3:GetBucketAcl", "s3:ListBucket"]
         Resource = aws_s3_bucket.use1_logs.arn
       }
     ]
@@ -2650,7 +2654,7 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
         Principal = {
           AWS = "arn:aws:iam::797873946194:root" # ELB service account for us-west-2
         }
-        Action   = "s3:PutObject"
+        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
         Resource = "${aws_s3_bucket.usw2_logs.arn}/alb/AWSLogs/*"
       },
       {
@@ -2658,7 +2662,7 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
         Principal = {
           AWS = "arn:aws:iam::797873946194:root" # ELB service account for us-west-2
         }
-        Action   = "s3:GetBucketAcl"
+        Action   = ["s3:GetBucketAcl", "s3:ListBucket"]
         Resource = aws_s3_bucket.usw2_logs.arn
       },
       {
@@ -2666,11 +2670,15 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
         Principal = {
           Service = "logdelivery.elasticloadbalancing.amazonaws.com"
         }
-        Action   = "s3:PutObject"
+        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
         Resource = "${aws_s3_bucket.usw2_logs.arn}/alb/AWSLogs/*"
         Condition = {
           StringEquals = {
             "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+          ArnLike = {
+            "aws:SourceArn" = aws_lb.usw2.arn
           }
         }
       },
@@ -2679,7 +2687,7 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
         Principal = {
           Service = "logdelivery.elasticloadbalancing.amazonaws.com"
         }
-        Action   = "s3:GetBucketAcl"
+        Action   = ["s3:GetBucketAcl", "s3:ListBucket"]
         Resource = aws_s3_bucket.usw2_logs.arn
         Condition = {
           StringEquals = {
@@ -2692,7 +2700,7 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
         Principal = {
           Service = "delivery.logs.amazonaws.com"
         }
-        Action   = "s3:PutObject"
+        Action   = ["s3:PutObject", "s3:PutObjectAcl"]
         Resource = "${aws_s3_bucket.usw2_logs.arn}/alb/AWSLogs/*"
         Condition = {
           StringEquals = {
@@ -2705,7 +2713,7 @@ resource "aws_s3_bucket_policy" "usw2_logs" {
         Principal = {
           Service = "delivery.logs.amazonaws.com"
         }
-        Action   = "s3:GetBucketAcl"
+        Action   = ["s3:GetBucketAcl", "s3:ListBucket"]
         Resource = aws_s3_bucket.usw2_logs.arn
       }
     ]
