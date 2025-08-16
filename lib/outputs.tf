@@ -187,3 +187,65 @@ output "kms_alias_secondary_name" {
   description = "Name of KMS alias in secondary region"
   value       = aws_kms_alias.financial_app_secondary.name
 }
+
+# Application Monitoring Outputs
+output "app_metrics_log_group_primary" {
+  description = "Application metrics log group in primary region"
+  value       = aws_cloudwatch_log_group.app_metrics_primary.name
+}
+
+output "app_metrics_log_group_secondary" {
+  description = "Application metrics log group in secondary region"
+  value       = aws_cloudwatch_log_group.app_metrics_secondary.name
+}
+
+# Monitoring Alarm Outputs
+output "app_response_time_alarm_primary" {
+  description = "Application response time alarm in primary region"
+  value       = aws_cloudwatch_metric_alarm.app_response_time_primary.alarm_name
+}
+
+output "app_response_time_alarm_secondary" {
+  description = "Application response time alarm in secondary region"
+  value       = aws_cloudwatch_metric_alarm.app_response_time_secondary.alarm_name
+}
+
+output "app_error_rate_alarm_primary" {
+  description = "Application error rate alarm in primary region"
+  value       = aws_cloudwatch_metric_alarm.app_error_rate_primary.alarm_name
+}
+
+output "app_error_rate_alarm_secondary" {
+  description = "Application error rate alarm in secondary region"
+  value       = aws_cloudwatch_metric_alarm.app_error_rate_secondary.alarm_name
+}
+
+output "transaction_volume_alarm_primary" {
+  description = "Transaction volume alarm in primary region"
+  value       = aws_cloudwatch_metric_alarm.transaction_volume_primary.alarm_name
+}
+
+output "transaction_volume_alarm_secondary" {
+  description = "Transaction volume alarm in secondary region"
+  value       = aws_cloudwatch_metric_alarm.transaction_volume_secondary.alarm_name
+}
+
+output "memory_utilization_alarm_primary" {
+  description = "Memory utilization alarm in primary region"
+  value       = aws_cloudwatch_metric_alarm.memory_utilization_primary.alarm_name
+}
+
+output "memory_utilization_alarm_secondary" {
+  description = "Memory utilization alarm in secondary region"
+  value       = aws_cloudwatch_metric_alarm.memory_utilization_secondary.alarm_name
+}
+
+output "app_health_check_alarm_primary" {
+  description = "Application health check alarm in primary region"
+  value       = aws_cloudwatch_metric_alarm.app_health_check_primary.alarm_name
+}
+
+output "app_health_check_alarm_secondary" {
+  description = "Application health check alarm in secondary region"
+  value       = aws_cloudwatch_metric_alarm.app_health_check_secondary.alarm_name
+}

@@ -622,3 +622,276 @@ resource "aws_security_group" "financial_app_secondary" {
     Environment = local.environment_suffix
   }
 }
+
+# Additional Application-Level Monitoring
+
+# Custom CloudWatch Log Groups for Application Metrics
+resource "aws_cloudwatch_log_group" "app_metrics_primary" {
+  provider          = aws.primary
+  name              = "/aws/${local.name_prefix}/application-metrics/primary"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.financial_app_primary.arn
+
+  tags = {
+    Name        = "${local.name_prefix}-app-metrics-primary"
+    Environment = local.environment_suffix
+  }
+}
+
+resource "aws_cloudwatch_log_group" "app_metrics_secondary" {
+  provider          = aws.secondary
+  name              = "/aws/${local.name_prefix}/application-metrics/secondary"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.financial_app_secondary.arn
+
+  tags = {
+    Name        = "${local.name_prefix}-app-metrics-secondary"
+    Environment = local.environment_suffix
+  }
+}
+
+# Application Performance Monitoring - Response Time
+resource "aws_cloudwatch_metric_alarm" "app_response_time_primary" {
+  provider            = aws.primary
+  alarm_name          = "${local.name_prefix}-app-response-time-primary"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "3"
+  metric_name         = "ResponseTime"
+  namespace           = "Financial/Application"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "2000"
+  alarm_description   = "This alarm monitors application response time"
+  alarm_actions       = [aws_sns_topic.alerts_primary.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-response-time-alarm-primary"
+    Environment = local.environment_suffix
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "app_response_time_secondary" {
+  provider            = aws.secondary
+  alarm_name          = "${local.name_prefix}-app-response-time-secondary"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "3"
+  metric_name         = "ResponseTime"
+  namespace           = "Financial/Application"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "2000"
+  alarm_description   = "This alarm monitors application response time"
+  alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-response-time-alarm-secondary"
+    Environment = local.environment_suffix
+  }
+}
+
+# Application Error Rate Monitoring
+resource "aws_cloudwatch_metric_alarm" "app_error_rate_primary" {
+  provider            = aws.primary
+  alarm_name          = "${local.name_prefix}-app-error-rate-primary"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "ErrorRate"
+  namespace           = "Financial/Application"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "5"
+  alarm_description   = "This alarm monitors application error rate percentage"
+  alarm_actions       = [aws_sns_topic.alerts_primary.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-error-rate-alarm-primary"
+    Environment = local.environment_suffix
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "app_error_rate_secondary" {
+  provider            = aws.secondary
+  alarm_name          = "${local.name_prefix}-app-error-rate-secondary"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "ErrorRate"
+  namespace           = "Financial/Application"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "5"
+  alarm_description   = "This alarm monitors application error rate percentage"
+  alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-error-rate-alarm-secondary"
+    Environment = local.environment_suffix
+  }
+}
+
+# Business Transaction Volume Monitoring
+resource "aws_cloudwatch_metric_alarm" "transaction_volume_primary" {
+  provider            = aws.primary
+  alarm_name          = "${local.name_prefix}-transaction-volume-primary"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "5"
+  metric_name         = "TransactionVolume"
+  namespace           = "Financial/Business"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "100"
+  alarm_description   = "This alarm monitors business transaction volume drop"
+  alarm_actions       = [aws_sns_topic.alerts_primary.arn]
+  treat_missing_data  = "breaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-transaction-volume-alarm-primary"
+    Environment = local.environment_suffix
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "transaction_volume_secondary" {
+  provider            = aws.secondary
+  alarm_name          = "${local.name_prefix}-transaction-volume-secondary"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "5"
+  metric_name         = "TransactionVolume"
+  namespace           = "Financial/Business"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "100"
+  alarm_description   = "This alarm monitors business transaction volume drop"
+  alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
+  treat_missing_data  = "breaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-transaction-volume-alarm-secondary"
+    Environment = local.environment_suffix
+  }
+}
+
+# Database Connection Pool Monitoring
+resource "aws_cloudwatch_metric_alarm" "db_connection_primary" {
+  provider            = aws.primary
+  alarm_name          = "${local.name_prefix}-db-connections-primary"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "DatabaseConnections"
+  namespace           = "Financial/Database"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This alarm monitors database connection pool utilization"
+  alarm_actions       = [aws_sns_topic.alerts_primary.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-db-connections-alarm-primary"
+    Environment = local.environment_suffix
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "db_connection_secondary" {
+  provider            = aws.secondary
+  alarm_name          = "${local.name_prefix}-db-connections-secondary"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "DatabaseConnections"
+  namespace           = "Financial/Database"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This alarm monitors database connection pool utilization"
+  alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-db-connections-alarm-secondary"
+    Environment = local.environment_suffix
+  }
+}
+
+# Memory Utilization Monitoring
+resource "aws_cloudwatch_metric_alarm" "memory_utilization_primary" {
+  provider            = aws.primary
+  alarm_name          = "${local.name_prefix}-memory-utilization-primary"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "3"
+  metric_name         = "MemoryUtilization"
+  namespace           = "CWAgent"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "85"
+  alarm_description   = "This alarm monitors memory utilization"
+  alarm_actions       = [aws_sns_topic.alerts_primary.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-memory-utilization-alarm-primary"
+    Environment = local.environment_suffix
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "memory_utilization_secondary" {
+  provider            = aws.secondary
+  alarm_name          = "${local.name_prefix}-memory-utilization-secondary"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "3"
+  metric_name         = "MemoryUtilization"
+  namespace           = "CWAgent"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "85"
+  alarm_description   = "This alarm monitors memory utilization"
+  alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
+  treat_missing_data  = "notBreaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-memory-utilization-alarm-secondary"
+    Environment = local.environment_suffix
+  }
+}
+
+# Application Health Check Monitoring
+resource "aws_cloudwatch_metric_alarm" "app_health_check_primary" {
+  provider            = aws.primary
+  alarm_name          = "${local.name_prefix}-app-health-primary"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HealthCheck"
+  namespace           = "Financial/Application"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "This alarm monitors application health check status"
+  alarm_actions       = [aws_sns_topic.alerts_primary.arn]
+  treat_missing_data  = "breaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-app-health-alarm-primary"
+    Environment = local.environment_suffix
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "app_health_check_secondary" {
+  provider            = aws.secondary
+  alarm_name          = "${local.name_prefix}-app-health-secondary"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HealthCheck"
+  namespace           = "Financial/Application"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "1"
+  alarm_description   = "This alarm monitors application health check status"
+  alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
+  treat_missing_data  = "breaching"
+
+  tags = {
+    Name        = "${local.name_prefix}-app-health-alarm-secondary"
+    Environment = local.environment_suffix
+  }
+}

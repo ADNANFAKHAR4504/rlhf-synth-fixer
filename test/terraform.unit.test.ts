@@ -341,6 +341,21 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(outputsContent).toMatch(/output\s+"cloudwatch_alarm_primary_name"/);
     });
 
+    test("declares application monitoring outputs", () => {
+      expect(outputsContent).toMatch(/output\s+"app_metrics_log_group_primary"/);
+      expect(outputsContent).toMatch(/output\s+"app_metrics_log_group_secondary"/);
+      expect(outputsContent).toMatch(/output\s+"app_response_time_alarm_primary"/);
+      expect(outputsContent).toMatch(/output\s+"app_response_time_alarm_secondary"/);
+      expect(outputsContent).toMatch(/output\s+"app_error_rate_alarm_primary"/);
+      expect(outputsContent).toMatch(/output\s+"app_error_rate_alarm_secondary"/);
+      expect(outputsContent).toMatch(/output\s+"transaction_volume_alarm_primary"/);
+      expect(outputsContent).toMatch(/output\s+"transaction_volume_alarm_secondary"/);
+      expect(outputsContent).toMatch(/output\s+"memory_utilization_alarm_primary"/);
+      expect(outputsContent).toMatch(/output\s+"memory_utilization_alarm_secondary"/);
+      expect(outputsContent).toMatch(/output\s+"app_health_check_alarm_primary"/);
+      expect(outputsContent).toMatch(/output\s+"app_health_check_alarm_secondary"/);
+    });
+
     test("includes region outputs", () => {
       expect(outputsContent).toMatch(/output\s+"primary_region"/);
       expect(outputsContent).toMatch(/output\s+"secondary_region"/);
@@ -414,13 +429,78 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("both regions have complete infrastructure", () => {
-      // Each region should have VPC, IGW, subnets, NAT, route tables
+      // Each region should have VPC, IGW, subnets, NAT, route tables, and monitoring
       const primaryProviderMatches = stackContent.match(/provider\s*=\s*aws\.primary/g) || [];
       const secondaryProviderMatches = stackContent.match(/provider\s*=\s*aws\.secondary/g) || [];
       
-      expect(primaryProviderMatches.length).toBeGreaterThan(10);
-      expect(secondaryProviderMatches.length).toBeGreaterThan(10);
+      expect(primaryProviderMatches.length).toBeGreaterThan(15); // Updated to account for additional monitoring resources
+      expect(secondaryProviderMatches.length).toBeGreaterThan(15);
       expect(primaryProviderMatches.length).toBe(secondaryProviderMatches.length);
+    });
+  });
+
+  describe("Application Monitoring Tests", () => {
+    test("declares custom application metrics log groups", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"app_metrics_primary"/);
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"app_metrics_secondary"/);
+      expect(stackContent).toMatch(/\/aws\/\$\{local\.name_prefix\}\/application-metrics/);
+    });
+
+    test("declares application response time monitoring", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"app_response_time_primary"/);
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"app_response_time_secondary"/);
+      expect(stackContent).toMatch(/namespace\s*=\s*"Financial\/Application"/);
+      expect(stackContent).toMatch(/metric_name\s*=\s*"ResponseTime"/);
+    });
+
+    test("declares application error rate monitoring", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"app_error_rate_primary"/);
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"app_error_rate_secondary"/);
+      expect(stackContent).toMatch(/metric_name\s*=\s*"ErrorRate"/);
+    });
+
+    test("declares business transaction volume monitoring", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"transaction_volume_primary"/);
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"transaction_volume_secondary"/);
+      expect(stackContent).toMatch(/namespace\s*=\s*"Financial\/Business"/);
+      expect(stackContent).toMatch(/metric_name\s*=\s*"TransactionVolume"/);
+    });
+
+    test("declares database connection monitoring", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"db_connection_primary"/);
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"db_connection_secondary"/);
+      expect(stackContent).toMatch(/namespace\s*=\s*"Financial\/Database"/);
+      expect(stackContent).toMatch(/metric_name\s*=\s*"DatabaseConnections"/);
+    });
+
+    test("declares memory utilization monitoring", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"memory_utilization_primary"/);
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"memory_utilization_secondary"/);
+      expect(stackContent).toMatch(/namespace\s*=\s*"CWAgent"/);
+      expect(stackContent).toMatch(/metric_name\s*=\s*"MemoryUtilization"/);
+    });
+
+    test("declares application health check monitoring", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"app_health_check_primary"/);
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"app_health_check_secondary"/);
+      expect(stackContent).toMatch(/metric_name\s*=\s*"HealthCheck"/);
+    });
+
+    test("all monitoring alarms use environment suffix in naming", () => {
+      expect(stackContent).toMatch(/alarm_name\s*=\s*"\$\{local\.name_prefix\}-app-response-time-primary"/);
+      expect(stackContent).toMatch(/alarm_name\s*=\s*"\$\{local\.name_prefix\}-app-error-rate-primary"/);
+      expect(stackContent).toMatch(/alarm_name\s*=\s*"\$\{local\.name_prefix\}-transaction-volume-primary"/);
+      expect(stackContent).toMatch(/alarm_name\s*=\s*"\$\{local\.name_prefix\}-db-connections-primary"/);
+    });
+
+    test("monitoring alarms have proper alarm actions configured", () => {
+      expect(stackContent).toMatch(/alarm_actions\s*=\s*\[aws_sns_topic\.alerts_primary\.arn\]/);
+      expect(stackContent).toMatch(/alarm_actions\s*=\s*\[aws_sns_topic\.alerts_secondary\.arn\]/);
+    });
+
+    test("custom log groups use KMS encryption", () => {
+      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.financial_app_primary\.arn/);
+      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.financial_app_secondary\.arn/);
     });
   });
 });

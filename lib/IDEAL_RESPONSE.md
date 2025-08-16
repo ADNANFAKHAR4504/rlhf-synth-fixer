@@ -47,7 +47,10 @@ This document represents the perfect solution for creating a comprehensive, secu
 
 ### Monitoring & Compliance
 - **CloudWatch log groups** with KMS encryption in both regions
-- **CloudWatch alarms** for CPU utilization monitoring
+- **Infrastructure monitoring** with CPU utilization alarms
+- **Application-level monitoring** including response times, error rates, and health checks
+- **Business metrics monitoring** for transaction volume and database connections
+- **Memory utilization tracking** with CloudWatch Agent integration
 - **SNS topics** for alert notifications with KMS encryption
 - **Comprehensive tagging** for resource management and cost allocation
 
