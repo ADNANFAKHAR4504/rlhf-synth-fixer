@@ -30,6 +30,8 @@ import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import * as fs from 'fs';
 import * as path from 'path';
 
+const stackName = 'TapStack' + process.env.ENVIRONMENT_SUFFIX;
+
 // Load stack outputs from cfn-outputs/all-outputs.json
 const loadStackOutputs = () => {
   const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
