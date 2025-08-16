@@ -9,17 +9,17 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name (production, staging, development)"
   type        = string
-  default     = "ultrafresh20250816"
+  default     = "reset20250816203000"
   validation {
-    condition     = contains(["production", "staging", "development", "freshdeploy", "newenv20250815", "cleanstate20250815", "ultrafresh20250816"], var.environment)
-    error_message = "Environment must be one of: production, staging, development, freshdeploy, newenv20250815, cleanstate20250815, ultrafresh20250816."
+    condition     = contains(["production", "staging", "development", "freshdeploy", "newenv20250815", "cleanstate20250815", "ultrafresh20250816", "reset20250816203000"], var.environment)
+    error_message = "Environment must be one of: production, staging, development, freshdeploy, newenv20250815, cleanstate20250815, ultrafresh20250816, reset20250816203000."
   }
 }
 
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "megafresh-deploy-v3"
+  default     = "fresh-clean-deploy-v4"
 }
 
 variable "vpc_cidr" {
@@ -71,9 +71,10 @@ locals {
     Project      = var.project_name
     ManagedBy    = "Terraform"
     CreatedDate  = timestamp()
+    DeploymentId = random_string.deployment_id.result
   }
   
-  name_prefix = "${var.project_name}-${var.environment}"
+  name_prefix = "${var.project_name}-${var.environment}-${random_string.deployment_id.result}"
 }
 
 # Data sources
@@ -94,6 +95,16 @@ resource "random_string" "unique_suffix" {
   length  = 8
   upper   = false
   special = false
+}
+
+# Additional random string for complete state reset
+resource "random_string" "deployment_id" {
+  length  = 12
+  upper   = false
+  special = false
+  keepers = {
+    deployment = "reset20250816203000"
+  }
 }
 
 # KMS Key for encryption
@@ -118,12 +129,24 @@ resource "aws_kms_key" "main" {
   })
 
   tags = local.common_tags
+
+  lifecycle {
+    replace_triggered_by = [
+      random_string.deployment_id
+    ]
+  }
 }
 
 resource "aws_kms_alias" "main" {
   name          = "alias/${local.name_prefix}-key"
   target_key_id = aws_kms_key.main.key_id
   depends_on    = [aws_kms_key.main]
+
+  lifecycle {
+    replace_triggered_by = [
+      random_string.deployment_id
+    ]
+  }
 }
 
 # VPC resources are defined inline below
@@ -136,6 +159,12 @@ resource "aws_vpc" "main" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
   })
+
+  lifecycle {
+    replace_triggered_by = [
+      random_string.deployment_id
+    ]
+  }
 }
 
 # Internet Gateway
@@ -391,6 +420,12 @@ resource "aws_s3_bucket" "main" {
   force_destroy = true
 
   tags = local.common_tags
+
+  lifecycle {
+    replace_triggered_by = [
+      random_string.deployment_id
+    ]
+  }
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
@@ -402,6 +437,12 @@ resource "aws_s3_bucket" "cloudtrail" {
   tags = merge(local.common_tags, {
     Purpose = "CloudTrail Logs"
   })
+
+  lifecycle {
+    replace_triggered_by = [
+      random_string.deployment_id
+    ]
+  }
 }
 
 resource "random_id" "bucket_suffix" {
