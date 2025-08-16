@@ -25,23 +25,22 @@ data "aws_partition" "current" {}
 # Locals
 locals {
   account_id = data.aws_caller_identity.current.account_id
-  region     = data.aws_region.current.name
+  region     = data.aws_region.current.id
   partition  = data.aws_partition.current.partition
 
   # Common tags for cost allocation
   common_tags = {
     owner       = var.owner
     environment = var.environment
-    ManagedBy   = "terraform"
   }
 }
 
 # Access Logging Bucket
 resource "aws_s3_bucket" "access_logging" {
-  bucket = "data-secured-${local.account_id}-access-logs"
+  bucket = "data-secured-${local.account_id}-access-logs-v2"
 
   tags = merge(local.common_tags, {
-    Name       = "data-secured-${local.account_id}-access-logs"
+    Name       = "data-secured-${local.account_id}-access-logs-v2"
     Purpose    = "S3 Access Logging"
     Compliance = "Required"
   })
@@ -138,10 +137,10 @@ resource "aws_s3_bucket_policy" "access_logging_policy" {
 
 # Primary S3 Bucket
 resource "aws_s3_bucket" "primary" {
-  bucket = "data-secured-${local.account_id}"
+  bucket = "data-secured-${local.account_id}-v2"
 
   tags = merge(local.common_tags, {
-    Name        = "data-secured-${local.account_id}"
+    Name        = "data-secured-${local.account_id}-v2"
     Purpose     = "Secure Data Storage"
     Compliance  = "Required"
     Replication = "Enabled"
@@ -195,6 +194,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "primary_lifecycle" {
     id     = "delete_old_objects"
     status = "Enabled"
 
+    filter {}
+
     expiration {
       days = 365
     }
@@ -210,10 +211,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "primary_lifecycle" {
 # Replication Destination Bucket (us-west-2)
 resource "aws_s3_bucket" "replication_destination" {
   provider = aws.us_west_2
-  bucket   = "data-secured-${local.account_id}-replica"
+  bucket   = "data-secured-${local.account_id}-replica-v2"
 
   tags = merge(local.common_tags, {
-    Name       = "data-secured-${local.account_id}-replica"
+    Name       = "data-secured-${local.account_id}-replica-v2"
     Purpose    = "Disaster Recovery Replica"
     Compliance = "Required"
     Region     = "us-west-2"
@@ -313,7 +314,7 @@ resource "aws_s3_bucket_policy" "replication_destination_policy" {
 
 # IAM Role for S3 Replication
 resource "aws_iam_role" "replication_role" {
-  name = "data-secured-${local.account_id}-replication-role"
+  name = "data-secured-${local.account_id}-replication-role-v2"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -329,14 +330,14 @@ resource "aws_iam_role" "replication_role" {
   })
 
   tags = merge(local.common_tags, {
-    Name    = "data-secured-${local.account_id}-replication-role"
+    Name    = "data-secured-${local.account_id}-replication-role-v2"
     Purpose = "S3 Cross-Region Replication"
   })
 }
 
 # IAM Policy for S3 Replication
 resource "aws_iam_policy" "replication_policy" {
-  name        = "data-secured-${local.account_id}-replication-policy"
+  name        = "data-secured-${local.account_id}-replication-policy-v2"
   description = "Policy for S3 cross-region replication"
 
   policy = jsonencode({
@@ -396,7 +397,7 @@ resource "aws_iam_policy" "replication_policy" {
   })
 
   tags = merge(local.common_tags, {
-    Name    = "data-secured-${local.account_id}-replication-policy"
+    Name    = "data-secured-${local.account_id}-replication-policy-v2"
     Purpose = "S3 Cross-Region Replication"
   })
 }
@@ -431,7 +432,7 @@ resource "aws_s3_bucket_replication_configuration" "primary_replication" {
 
 # IAM Policy for MFA-enforced S3 Access
 resource "aws_iam_policy" "mfa_s3_access_policy" {
-  name        = "data-secured-${local.account_id}-mfa-access-policy"
+  name        = "data-secured-${local.account_id}-mfa-access-policy-v2"
   description = "Policy requiring MFA for S3 bucket access"
 
   policy = jsonencode({
@@ -497,7 +498,7 @@ resource "aws_iam_policy" "mfa_s3_access_policy" {
   })
 
   tags = merge(local.common_tags, {
-    Name    = "data-secured-${local.account_id}-mfa-access-policy"
+    Name    = "data-secured-${local.account_id}-mfa-access-policy-v2"
     Purpose = "MFA Enforcement for S3 Access"
   })
 }
