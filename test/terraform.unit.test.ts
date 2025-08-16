@@ -23,7 +23,6 @@ describe('Terraform Configuration', () => {
     const mainTfPath = path.join(libDir, 'main.tf');
     const content = fs.readFileSync(mainTfPath, 'utf8');
     
-    // Basic syntax checks
     expect(content).toContain('resource');
     expect(content).toContain('data');
     expect(content.match(/resource\s+"[^"]+"\s+"[^"]+"\s*{/)).toBeTruthy();
@@ -44,7 +43,6 @@ describe('Terraform Configuration', () => {
       if (fs.existsSync(filePath)) {
         const content = fs.readFileSync(filePath, 'utf8');
         
-        // Check for consistent naming with random suffix
         if (content.includes('random_id.bucket_suffix.hex')) {
           expect(content).toMatch(/\${[^}]*random_id\.bucket_suffix\.hex[^}]*}/);
         }
