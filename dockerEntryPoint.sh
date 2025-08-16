@@ -281,7 +281,7 @@ if [ "$REPORT" != "1" ]; then
 fi
 
 # Report results
-if [ "$DEBUG_MODE" = "1" ] && [ ${#FAILED_STEPS[@]} -gt 0 ]; then
+if [ ${#FAILED_STEPS[@]} -gt 0 ]; then
     if [ "$REPORT" = "1" ]; then
         update_status "Fail" "$FAILED_STEP"
         printf "\n"
