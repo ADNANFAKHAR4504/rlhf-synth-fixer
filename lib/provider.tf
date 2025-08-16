@@ -5,10 +5,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.4"
-    }
   }
 }
 
@@ -56,28 +52,4 @@ variable "environment" {
   description = "Environment name"
   type        = string
   default     = "production"
-}
-
-variable "environment_suffix" {
-  description = "Environment suffix for resource naming to avoid conflicts"
-  type        = string
-  default     = ""
-}
-
-variable "aws_region" {
-  description = "AWS region for deployment"
-  type        = string
-  default     = "us-east-1"
-}
-
-# Random string for unique resource naming
-resource "random_string" "suffix" {
-  length  = 6
-  special = false
-  upper   = false
-}
-
-locals {
-  environment_suffix = var.environment_suffix != "" ? var.environment_suffix : "dev"
-  name_prefix        = "financial-app-${local.environment_suffix}-${random_string.suffix.result}"
 }
