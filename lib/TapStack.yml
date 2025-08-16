@@ -161,7 +161,7 @@ Resources:
     Properties:
       FunctionName: !Sub '${AWS::StackName}-items-function'
       Description: 'Lambda function for handling items operations'
-      CodeUri: ./src/items-function
+      CodeUri: lib/src/items-function
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
@@ -188,7 +188,7 @@ Resources:
     Properties:
       FunctionName: !Sub '${AWS::StackName}-users-function'
       Description: 'Lambda function for handling users operations'
-      CodeUri: ./src/users-function
+      CodeUri: lib/src/users-function
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
@@ -215,7 +215,7 @@ Resources:
     Properties:
       FunctionName: !Sub '${AWS::StackName}-orders-function'
       Description: 'Lambda function for handling orders operations'
-      CodeUri: ./src/orders-function
+      CodeUri: lib/src/orders-function
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Environment:
