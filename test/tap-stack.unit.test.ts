@@ -34,7 +34,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Mappings).toBeDefined();
       expect(template.Mappings.RegionMap).toBeDefined();
       expect(template.Mappings.RegionMap['us-west-2']).toBeDefined();
-      expect(template.Mappings.RegionMap['us-west-2'].AMI).toBe('ami-0c2d3e23b7e8d8b5a');
+      expect(template.Mappings.RegionMap['us-west-2'].AMI).toBe('ami-008fe2fc65df48dac');
     });
   });
 
@@ -183,15 +183,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
       
       // Check inline policies
-      expect(role.Properties.Policies).toHaveLength(1);
+      expect(role.Properties.Policies).toHaveLength(2);
       expect(role.Properties.Policies[0].PolicyName).toBe('S3AccessPolicy');
+      expect(role.Properties.Policies[1].PolicyName).toBe('CloudWatchLogsPolicy');
     });
 
     test('EC2InstanceRole should have specific S3 permissions only', () => {
       const role = template.Resources.EC2InstanceRole;
       const policy = role.Properties.Policies[0].PolicyDocument;
       
-      expect(policy.Statement).toHaveLength(3);
+      expect(policy.Statement).toHaveLength(4);
       
       // Check first statement - GetObject and PutObject on SecureDataBucket
       expect(policy.Statement[0].Effect).toBe('Allow');
@@ -278,7 +279,7 @@ describe('TapStack CloudFormation Template', () => {
       // SSH should be restricted to private networks
       const sshRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 22);
       expect(sshRule).toBeDefined();
-      expect(sshRule.CidrIp).toBe('10.0.0.0/8');
+      expect(sshRule.CidrIp).toBe('10.0.0.0/16');
       
       // HTTP and HTTPS should be open
       const httpRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 80);
@@ -437,17 +438,17 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(7); // 2 S3 buckets, 2 IAM roles, 1 instance profile, 1 security group, 1 EC2 instance
+      expect(resourceCount).toBe(15); // 2 S3 buckets, 2 IAM roles, 1 instance profile, 1 security group, 1 EC2 instance, 1 VPC, 2 subnets, 1 IGW, 1 VPC attachment, 1 route table, 1 route, 1 subnet association
     });
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5); // Environment, Project, Owner, InstanceType, EnvironmentSuffix
+      expect(parameterCount).toBe(6); // Environment, Project, Owner, InstanceType, EnvironmentSuffix, KeyPairName
     });
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7);
+      expect(outputCount).toBe(11);
     });
   });
 
@@ -497,7 +498,7 @@ describe('TapStack CloudFormation Template', () => {
       const sg = template.Resources.EC2SecurityGroup;
       const sshRule = sg.Properties.SecurityGroupIngress.find((rule: any) => rule.FromPort === 22);
       expect(sshRule.CidrIp).not.toBe('0.0.0.0/0');
-      expect(sshRule.CidrIp).toBe('10.0.0.0/8');
+      expect(sshRule.CidrIp).toBe('10.0.0.0/16');
     });
   });
 
