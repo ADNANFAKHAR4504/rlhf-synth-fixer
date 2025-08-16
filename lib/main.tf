@@ -1512,3 +1512,33 @@ output "vpc_peering_connection_id" {
   description = "The ID of the VPC peering connection between regions."
   value       = aws_vpc_peering_connection.nova_peering.id
 }
+
+output "primary_region_vpc_id" {
+  description = "The ID of the VPC in the primary region (us-east-1)."
+  value       = aws_vpc.useast1.id
+}
+
+output "primary_data_bucket_name" {
+  description = "The name of the primary S3 data bucket."
+  value       = aws_s3_bucket.primary_data.bucket
+}
+
+output "primary_rds_instance_identifier" {
+  description = "The identifier for the RDS instance in the primary region."
+  value       = aws_db_instance.rds_useast1.id
+}
+
+output "primary_ec2_security_group_id" {
+  description = "The ID of the security group for EC2 instances in the primary region."
+  value       = aws_security_group.ec2_useast1.id
+}
+
+output "primary_rds_security_group_id" {
+  description = "The ID of the security group for the RDS instance in the primary region."
+  value       = aws_security_group.rds_useast1.id
+}
+
+output "rds_password_secret_arn" {
+  description = "The ARN of the Secrets Manager secret for the RDS password."
+  value       = aws_secretsmanager_secret.rds_password.arn
+}
