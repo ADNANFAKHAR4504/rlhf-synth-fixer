@@ -12,7 +12,7 @@ infrastructure using Pulumi in Python. The stack provisions:
 - KMS key and alias for encryption,
 - Security groups for web, database, EKS nodes, and ALB,
 - RDS PostgreSQL instance in private subnets with secure password from SSM,
-- EKS cluster with node group in private subnets,
+- EKS cluster (v1.29) with managed node group in private subnets,
 - Application Load Balancer routing to EKS nodes,
 - CodePipeline for GitHub-based CI/CD deployments to EKS,
 - Lambda function for health monitoring with scheduled invocations.
@@ -612,7 +612,7 @@ def create_eks_cluster(
   cluster = aws.eks.Cluster(
       "corp-eks-cluster",
       name="corp-eks-cluster",  # Explicit cluster name
-      version="1.33",
+      version="1.29",  # Match current cluster version for compatibility
       role_arn=eks_role.arn,
       vpc_config=aws.eks.ClusterVpcConfigArgs(
           subnet_ids=subnet_ids,
@@ -636,7 +636,7 @@ def create_eks_cluster(
 
 def create_eks_node_group(
     cluster: aws.eks.Cluster,
-    private_subnets: List[aws.ec2.Subnet],  
+    private_subnets: List[aws.ec2.Subnet],
     tags: Dict[str, str],
     provider: aws.Provider,
 ) -> aws.eks.NodeGroup:
@@ -676,6 +676,52 @@ def create_eks_node_group(
         opts=ResourceOptions(provider=provider)
     )
 
+  # Add custom IAM policy for enhanced EKS node operations
+  # This provides additional permissions needed for proper cluster
+  # functionality
+  node_custom_policy = aws.iam.RolePolicy(
+      "corp-eks-node-custom-policy",
+      role=node_role.name,
+      policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [
+              {
+                  "Effect": "Allow",
+                  "Action": [
+                      # EKS cluster access
+                      "eks:DescribeCluster",
+                      "eks:ListClusters",
+                      # EC2 operations needed for node management
+                      "ec2:DescribeInstances",
+                      "ec2:DescribeRouteTables",
+                      "ec2:DescribeSecurityGroups",
+                      "ec2:DescribeSubnets",
+                      "ec2:DescribeVolumes",
+                      "ec2:DescribeVolumesModifications",
+                      "ec2:DescribeVpcs",
+                      # ECR access for container images
+                      "ecr:GetAuthorizationToken",
+                      "ecr:BatchCheckLayerAvailability",
+                      "ecr:GetDownloadUrlForLayer",
+                      "ecr:BatchGetImage",
+                      # CloudWatch for logging and monitoring
+                      "logs:CreateLogGroup",
+                      "logs:CreateLogStream",
+                      "logs:PutLogEvents",
+                      "logs:DescribeLogGroups",
+                      "logs:DescribeLogStreams",
+                      # KMS for encryption operations
+                      "kms:Decrypt",
+                      "kms:GenerateDataKey",
+                      "kms:DescribeKey"
+                  ],
+                  "Resource": "*"
+              }
+          ]
+      }),
+      opts=ResourceOptions(provider=provider)
+  )
+
   # Create managed node group using aws.eks.NodeGroup
   # This automatically handles bootstrap, AMI selection, and cluster joining
   node_group = aws.eks.NodeGroup(
@@ -690,7 +736,7 @@ def create_eks_node_group(
           min_size=1,
           max_size=3
       ),
-      # Use AL2_x86_64 for compatibility with EKS 1.33
+      # Use AL2_x86_64 for compatibility with EKS 1.29
       ami_type="AL2_x86_64",
       # Enable cluster autoscaler
       tags={
