@@ -414,7 +414,7 @@ resource "aws_security_group" "database" {
 
 # S3 Buckets
 resource "aws_s3_bucket" "main" {
-  bucket = "${local.name_prefix}-main-bucket-${random_string.unique_suffix.result}"
+  bucket = "${local.name_prefix}-main-bucket-${random_string.unique_suffix.result}-${formatdate("YYYYMMDD-HHmmss", timestamp())}"
 
   # Force delete bucket even if not empty
   force_destroy = true
@@ -425,11 +425,14 @@ resource "aws_s3_bucket" "main" {
     replace_triggered_by = [
       random_string.deployment_id
     ]
+    ignore_changes = [
+      bucket  # Ignore changes to bucket name to prevent recreation on timestamp change
+    ]
   }
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${local.name_prefix}-cloudtrail-${random_string.unique_suffix.result}"
+  bucket = "${local.name_prefix}-cloudtrail-${random_string.unique_suffix.result}-${formatdate("YYYYMMDD-HHmmss", timestamp())}"
 
   # Force delete bucket even if not empty
   force_destroy = true
@@ -441,6 +444,9 @@ resource "aws_s3_bucket" "cloudtrail" {
   lifecycle {
     replace_triggered_by = [
       random_string.deployment_id
+    ]
+    ignore_changes = [
+      bucket  # Ignore changes to bucket name to prevent recreation on timestamp change
     ]
   }
 }
@@ -486,6 +492,51 @@ resource "aws_s3_bucket_versioning" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
   versioning_configuration {
     status = "Enabled"
+  }
+}
+
+# S3 Bucket Lifecycle Configuration to auto-delete objects
+resource "aws_s3_bucket_lifecycle_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+  depends_on = [aws_s3_bucket_versioning.main]
+
+  rule {
+    id     = "delete_all_objects"
+    status = "Enabled"
+
+    expiration {
+      days = 1
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  depends_on = [aws_s3_bucket_versioning.cloudtrail]
+
+  rule {
+    id     = "delete_all_objects"
+    status = "Enabled"
+
+    expiration {
+      days = 1
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
   }
 }
 
