@@ -62,23 +62,21 @@ resource "aws_sns_topic" "alerts" {
   tags = local.common_tags
 }
 
-# GuardDuty
+# GuardDuty - Use existing detector
+data "aws_guardduty_detector" "existing" {}
+
+# Optional: Create GuardDuty detector only if one doesn't exist
 resource "aws_guardduty_detector" "main" {
+  count                        = length(data.aws_guardduty_detector.existing.id) > 0 ? 0 : 1
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
 
   tags = local.common_tags
 }
 
-# Config Configuration Recorder
-resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
-  is_enabled = true
-  depends_on = [aws_config_delivery_channel.main]
-}
-
+# Simplified Config setup - Create with unique names to avoid conflicts
 resource "aws_config_delivery_channel" "main" {
-  name           = "${local.project_prefix}-config-delivery-channel"
+  name           = "${local.project_prefix}-delivery-channel-${random_id.bucket_suffix.hex}"
   s3_bucket_name = aws_s3_bucket.config.bucket
   s3_key_prefix  = "config"
 
@@ -88,13 +86,20 @@ resource "aws_config_delivery_channel" "main" {
 }
 
 resource "aws_config_configuration_recorder" "main" {
-  name     = "${local.project_prefix}-config-recorder"
+  name     = "${local.project_prefix}-recorder-${random_id.bucket_suffix.hex}"
   role_arn = aws_iam_role.config.arn
 
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
   }
+}
+
+# Config Configuration Recorder Status
+resource "aws_config_configuration_recorder_status" "main" {
+  name       = aws_config_configuration_recorder.main.name
+  is_enabled = true
+  depends_on = [aws_config_delivery_channel.main]
 }
 
 # S3 Bucket for Config

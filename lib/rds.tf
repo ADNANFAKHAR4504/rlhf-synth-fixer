@@ -12,7 +12,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_rds_cluster" "main" {
   cluster_identifier          = "${local.project_prefix}-aurora-cluster"
   engine                      = "aurora-mysql"
-  engine_version              = "8.0.mysql_aurora.3.02.0"
+  engine_version              = "8.0.mysql_aurora.3.07.0"
   database_name               = replace(local.project_prefix, "-", "")
   master_username             = "admin"
   manage_master_user_password = true

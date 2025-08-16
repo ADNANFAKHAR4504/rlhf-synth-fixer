@@ -46,7 +46,7 @@ output "kms_key_id" {
 
 output "guardduty_detector_id" {
   description = "GuardDuty detector ID"
-  value       = aws_guardduty_detector.main.id
+  value       = length(aws_guardduty_detector.main) > 0 ? aws_guardduty_detector.main[0].id : data.aws_guardduty_detector.existing.id
 }
 
 output "waf_web_acl_arn" {
