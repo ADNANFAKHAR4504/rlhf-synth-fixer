@@ -891,11 +891,3 @@ class TapStack:
 # stack = TapStack("TapStack", args=stack_args)
 
 # Remove the if __name__ == "__main__": guard and replace with this:
-
-
-# Simplified initialization - just use whatever ENVIRONMENT_SUFFIX is provided
-print("🔧 Using ENVIRONMENT_SUFFIX:", os.environ.get('ENVIRONMENT_SUFFIX', 'NOT SET'))
-
-# Create stack with the suffix directly from environment
-stack_args = TapStackArgs(environment_suffix=os.environ.get('ENVIRONMENT_SUFFIX'))
-stack = TapStack("TapStack", args=stack_args)
