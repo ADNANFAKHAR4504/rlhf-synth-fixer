@@ -23,6 +23,7 @@ variable "kms_key_arn" {
 variable "allowed_cidr" {
   description = "CIDR block allowed for SSH and HTTPS ingress"
   type        = string
+  default     = "10.0.0.0/8"
   nullable    = false
   validation {
     condition     = can(cidrhost(var.allowed_cidr, 0))
@@ -408,6 +409,13 @@ resource "aws_instance" "main" {
   root_block_device {
     encrypted = true
     tags      = local.common_tags
+  }
+
+  # Add timeouts for long-running operations
+  timeouts {
+    create = "10m"
+    update = "10m"
+    delete = "10m"
   }
 }
 
