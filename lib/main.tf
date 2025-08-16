@@ -5,47 +5,61 @@
 # All variables, logic, and outputs in one file.
 ###########################################################
 
-# Usage:
-# terraform init
-# terraform plan
-# terraform apply
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
+  }
+}
 
 ########################
 # Variables
 ########################
 
 variable "aws_region" {
-  description = "AWS region to deploy resources (used in provider.tf)"
+  description = "AWS region where resources will be deployed. Used by provider configuration."
   type        = string
   default     = "us-west-2"
+  
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
+    error_message = "AWS region must be in valid format (e.g., us-west-2, eu-central-1)."
+  }
 }
 
 variable "vpc_id" {
-  description = "VPC ID where the security group will be created (leave empty to use default VPC)"
+  description = "VPC ID where the security group will be created. Must be provided - no default for security compliance."
   type        = string
-  default     = ""
+  # NO DEFAULT - must be provided as per compliance requirements
   
   validation {
-    condition     = var.vpc_id == "" || can(regex("^vpc-[a-z0-9]{8,17}$", var.vpc_id))
-    error_message = "VPC ID must be empty (for auto-detection) or a valid AWS VPC identifier (vpc-xxxxxxxx)."
+    condition     = can(regex("^vpc-[a-z0-9]{8,17}$", var.vpc_id))
+    error_message = "VPC ID must be a valid AWS VPC identifier (vpc-xxxxxxxx)."
   }
 }
 
 variable "allowed_ipv4_cidrs" {
-  description = "List of allowed IPv4 CIDRs for HTTP/HTTPS inbound traffic"
+  description = "List of IPv4 CIDR blocks allowed for HTTP/HTTPS inbound traffic. Use specific networks, avoid 0.0.0.0/0 in production."
   type        = list(string)
-  default     = ["10.0.0.0/8"]  # Private network only - secure default
+  default     = []  # Empty by default for security - forces explicit configuration
   
   validation {
-    condition = length(var.allowed_ipv4_cidrs) > 0 && alltrue([
+    condition = alltrue([
       for cidr in var.allowed_ipv4_cidrs : can(cidrhost(cidr, 0))
     ])
-    error_message = "At least one valid IPv4 CIDR must be provided (e.g., 10.0.0.0/16, 192.168.1.0/24)."
+    error_message = "All IPv4 CIDRs must be valid CIDR notation (e.g., 10.0.0.0/16, 192.168.1.0/24)."
   }
 }
 
 variable "allowed_ipv6_cidrs" {
-  description = "List of allowed IPv6 CIDRs for HTTP/HTTPS inbound traffic"
+  description = "List of IPv6 CIDR blocks allowed for HTTP/HTTPS inbound traffic. Use specific networks for security."
   type        = list(string)
   default     = []
   
@@ -58,25 +72,35 @@ variable "allowed_ipv6_cidrs" {
 }
 
 variable "allow_all_outbound" {
-  description = "Allow all outbound traffic if true; otherwise restrict egress"
+  description = "Whether to allow all outbound traffic. Set to false for restricted egress (recommended for production)."
   type        = bool
   default     = true
 }
 
-variable "security_group_name" {
-  description = "Name of the security group"
+variable "security_group_name_prefix" {
+  description = "Prefix for the security group name. A random suffix will be added to ensure uniqueness."
   type        = string
   default     = "app-http-https-sg"
+  
+  validation {
+    condition     = length(var.security_group_name_prefix) > 0 && length(var.security_group_name_prefix) <= 240
+    error_message = "Security group name prefix must be between 1 and 240 characters to allow for suffix."
+  }
 }
 
 variable "security_group_description" {
-  description = "Description of the security group"
+  description = "Description for the security group explaining its purpose and allowed traffic."
   type        = string
   default     = "Security group allowing only HTTP/HTTPS inbound traffic from specified CIDRs"
+  
+  validation {
+    condition     = length(var.security_group_description) > 0 && length(var.security_group_description) <= 255
+    error_message = "Security group description must be between 1 and 255 characters."
+  }
 }
 
 variable "tags" {
-  description = "Tags to apply to resources"
+  description = "Key-value pairs of tags to apply to all resources for organization and cost tracking."
   type        = map(string)
   default = {
     Owner       = "devops"
@@ -87,25 +111,43 @@ variable "tags" {
 }
 
 ########################
-# Locals and Data Sources
+# Random Resources for Unique Naming
 ########################
 
-# Find default VPC if vpc_id not specified
-data "aws_vpc" "default" {
-  count   = var.vpc_id == "" ? 1 : 0
-  default = true
+resource "random_id" "suffix" {
+  byte_length = 4
 }
 
-# Get specified VPC
-data "aws_vpc" "specified" {
-  count = var.vpc_id != "" ? 1 : 0
-  id    = var.vpc_id
-}
+########################
+# Locals and Validation
+########################
 
 locals {
-  # Use specified VPC or default VPC
-  vpc_id = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
-  vpc_cidr = var.vpc_id != "" ? data.aws_vpc.specified[0].cidr_block : data.aws_vpc.default[0].cidr_block
+  # Validation: fail if both IPv4 and IPv6 CIDR lists are empty
+  has_cidrs = length(var.allowed_ipv4_cidrs) > 0 || length(var.allowed_ipv6_cidrs) > 0
+  
+  # Dynamic security group name with random suffix
+  security_group_name = "${var.security_group_name_prefix}-${random_id.suffix.hex}"
+}
+
+# Custom validation to ensure at least one CIDR list is provided
+resource "null_resource" "validate_cidrs" {
+  count = local.has_cidrs ? 0 : 1
+  
+  lifecycle {
+    precondition {
+      condition     = local.has_cidrs
+      error_message = "ERROR: Both allowed_ipv4_cidrs and allowed_ipv6_cidrs are empty. At least one CIDR list must contain values to define allowed traffic sources."
+    }
+  }
+}
+
+########################
+# Data Sources
+########################
+
+data "aws_vpc" "selected" {
+  id = var.vpc_id
 }
 
 ########################
@@ -113,10 +155,13 @@ locals {
 ########################
 
 resource "aws_security_group" "app_sg" {
-  name        = var.security_group_name
+  name        = local.security_group_name
   description = var.security_group_description
-  vpc_id      = local.vpc_id
-  tags        = merge(var.tags, { Name = var.security_group_name })
+  vpc_id      = var.vpc_id
+  tags        = merge(var.tags, { 
+    Name = local.security_group_name
+    CreatedBy = "terraform-${random_id.suffix.hex}"
+  })
 
   # IPv4 HTTP
   dynamic "ingress" {
@@ -166,7 +211,7 @@ resource "aws_security_group" "app_sg" {
     }
   }
 
-  # Egress rules
+  # Egress rules - Allow all outbound
   dynamic "egress" {
     for_each = var.allow_all_outbound ? [1] : []
     content {
@@ -179,11 +224,11 @@ resource "aws_security_group" "app_sg" {
     }
   }
 
-  # Restricted egress (when allow_all_outbound is false)
+  # Restricted egress rules - Only HTTP/HTTPS outbound for updates
   dynamic "egress" {
     for_each = var.allow_all_outbound ? [] : [1]
     content {
-      description = "Allow HTTPS outbound for package updates"
+      description = "Allow HTTPS outbound for package updates and API calls"
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"
@@ -194,13 +239,27 @@ resource "aws_security_group" "app_sg" {
   dynamic "egress" {
     for_each = var.allow_all_outbound ? [] : [1]
     content {
-      description = "Allow HTTP outbound for package updates"
+      description = "Allow HTTP outbound for package repositories"
       from_port   = 80
       to_port     = 80
       protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
     }
   }
+
+  # DNS egress for name resolution (required for most applications)
+  dynamic "egress" {
+    for_each = var.allow_all_outbound ? [] : [1]
+    content {
+      description = "Allow DNS outbound for name resolution"
+      from_port   = 53
+      to_port     = 53
+      protocol    = "udp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  depends_on = [null_resource.validate_cidrs]
 }
 
 ########################
@@ -208,32 +267,32 @@ resource "aws_security_group" "app_sg" {
 ########################
 
 output "vpc_id" {
-  description = "The ID of the VPC"
-  value       = local.vpc_id
+  description = "The ID of the VPC where the security group was created"
+  value       = data.aws_vpc.selected.id
 }
 
 output "vpc_cidr_block" {
   description = "The CIDR block of the VPC"
-  value       = local.vpc_cidr
+  value       = data.aws_vpc.selected.cidr_block
 }
 
 output "security_group_id" {
-  description = "The ID of the security group"
+  description = "The ID of the created security group"
   value       = aws_security_group.app_sg.id
 }
 
 output "security_group_arn" {
-  description = "The ARN of the security group"
+  description = "The ARN of the created security group"
   value       = aws_security_group.app_sg.arn
 }
 
 output "security_group_name" {
-  description = "The name of the security group"
+  description = "The name of the created security group"
   value       = aws_security_group.app_sg.name
 }
 
 output "ingress_rules_summary" {
-  description = "Summary of ingress rules"
+  description = "Summary of all ingress rules configured on the security group"
   value = {
     total_rules = length(aws_security_group.app_sg.ingress)
     rules = [
@@ -248,6 +307,11 @@ output "ingress_rules_summary" {
 }
 
 output "aws_region" {
-  description = "AWS region where resources are deployed"
+  description = "AWS region where resources were deployed"
   value       = var.aws_region
+}
+
+output "random_suffix" {
+  description = "Random suffix used for resource naming"
+  value       = random_id.suffix.hex
 }
