@@ -4,8 +4,8 @@ data "aws_region" "current" {}
 
 # Local variables for resource naming
 locals {
-  suffix      = var.environment_suffix != "" ? var.environment_suffix : ""
-  name_prefix = local.suffix != "" ? "${var.project_name}-${local.suffix}" : var.project_name
+  suffix      = var.environment_suffix != "" ? var.environment_suffix : random_id.bucket_suffix.hex
+  name_prefix = "${var.project_name}-${local.suffix}"
 }
 
 # KMS Key for S3 encryption
@@ -122,7 +122,7 @@ resource "aws_s3_bucket_public_access_block" "access_logs_pab" {
 
 # IAM Role for S3 access
 resource "aws_iam_role" "corp_s3_role" {
-  name = "${local.name_prefix}-s3-access-role"
+  name = "${local.name_prefix}-s3-access-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -146,7 +146,7 @@ resource "aws_iam_role" "corp_s3_role" {
 
 # IAM Policy for S3 least privilege access
 resource "aws_iam_policy" "corp_s3_policy" {
-  name        = "${local.name_prefix}-s3-access-policy"
+  name        = "${local.name_prefix}-s3-access-policy-${random_id.bucket_suffix.hex}"
   description = "Least privilege policy for S3 access"
 
   policy = jsonencode({
@@ -206,7 +206,7 @@ resource "aws_sns_topic_subscription" "security_alerts_email" {
 
 # CloudWatch Log Group for CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail_logs" {
-  name              = "/aws/cloudtrail/${local.name_prefix}"
+  name              = "/aws/cloudtrail/${local.name_prefix}-${random_id.bucket_suffix.hex}"
   retention_in_days = 90
 
   tags = {
@@ -218,7 +218,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail_logs" {
 
 # IAM Role for CloudTrail
 resource "aws_iam_role" "cloudtrail_role" {
-  name = "${local.name_prefix}-cloudtrail-role"
+  name = "${local.name_prefix}-cloudtrail-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -235,7 +235,7 @@ resource "aws_iam_role" "cloudtrail_role" {
 }
 
 resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
-  name = "${local.name_prefix}-cloudtrail-logs-policy"
+  name = "${local.name_prefix}-cloudtrail-logs-policy-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.cloudtrail_role.id
 
   policy = jsonencode({

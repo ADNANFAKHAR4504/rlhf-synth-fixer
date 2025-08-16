@@ -25,7 +25,7 @@ variable "notification_email" {
 variable "enable_macie" {
   description = "Enable Amazon Macie for data discovery"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_shield_advanced" {
