@@ -40,12 +40,7 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
-      const expectedParameters = [
-        'EnvironmentSuffix',
-        'Environment',
-        'DeploymentRegion',
-        'CrossRegionEndpoint',
-      ];
+      const expectedParameters = ['EnvironmentSuffix', 'Environment'];
 
       expectedParameters.forEach(paramName => {
         expect(template.Parameters[paramName]).toBeDefined();
@@ -72,43 +67,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(envParam.Description).toBe(
         'Environment name for resource tagging'
       );
-    });
-
-    test('DeploymentRegion parameter should have correct properties', () => {
-      const regionParam = template.Parameters.DeploymentRegion;
-      expect(regionParam.Type).toBe('String');
-      expect(regionParam.Default).toBe('us-east-1');
-      expect(regionParam.AllowedValues).toEqual(['us-east-1', 'us-west-2']);
-      expect(regionParam.Description).toBe('Target deployment region');
-    });
-
-    test('CrossRegionEndpoint parameter should have correct properties', () => {
-      const crossRegionParam = template.Parameters.CrossRegionEndpoint;
-      expect(crossRegionParam.Type).toBe('String');
-      expect(crossRegionParam.Default).toBe('');
-      expect(crossRegionParam.Description).toBe(
-        'API Gateway endpoint from the other region (for cross-region setup)'
-      );
-    });
-  });
-
-  describe('Mappings', () => {
-    test('should have RegionMap mapping', () => {
-      expect(template.Mappings.RegionMap).toBeDefined();
-    });
-
-    test('RegionMap should have correct region configurations', () => {
-      const regionMap = template.Mappings.RegionMap;
-
-      expect(regionMap['us-east-1']).toEqual({
-        RegionName: 'east',
-        PrimaryRegion: true,
-      });
-
-      expect(regionMap['us-west-2']).toEqual({
-        RegionName: 'west',
-        PrimaryRegion: false,
-      });
     });
   });
 
@@ -563,7 +521,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters).not.toBeNull();
       expect(template.Resources).not.toBeNull();
       expect(template.Outputs).not.toBeNull();
-      expect(template.Mappings).not.toBeNull();
     });
 
     test('should have multiple resources for serverless architecture', () => {
@@ -573,18 +530,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have all required parameters for deployment', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4); // EnvironmentSuffix, Environment, DeploymentRegion, CrossRegionEndpoint
+      expect(parameterCount).toBe(2); // EnvironmentSuffix, Environment
     });
 
     test('should have comprehensive outputs for serverless architecture', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBeGreaterThan(8); // Multiple outputs for API, Lambda functions, etc.
-    });
-
-    test('should have region mappings for multi-region deployment', () => {
-      expect(template.Mappings.RegionMap).toBeDefined();
-      expect(Object.keys(template.Mappings.RegionMap)).toContain('us-east-1');
-      expect(Object.keys(template.Mappings.RegionMap)).toContain('us-west-2');
     });
 
     test('should have proper resource dependencies', () => {
