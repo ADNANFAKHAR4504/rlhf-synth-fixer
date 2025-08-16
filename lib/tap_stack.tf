@@ -107,7 +107,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/main-key"
+  name          = "alias/main-key-${random_id.bucket_suffix.hex}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -259,21 +259,6 @@ resource "aws_s3_bucket_policy" "secure_data" {
         }
       },
       {
-        Sid    = "DenyAccessNotFromVPCEndpoint"
-        Effect = "Deny"
-        Principal = "*"
-        Action = "s3:*"
-        Resource = [
-          aws_s3_bucket.secure_data.arn,
-          "${aws_s3_bucket.secure_data.arn}/*"
-        ]
-        Condition = {
-          StringNotEquals = {
-            "aws:sourceVpce" = aws_vpc_endpoint.s3.id
-          }
-        }
-      },
-      {
         Sid    = "AllowVPCEndpointAccess"
         Effect = "Allow"
         Principal = "*"
@@ -294,7 +279,7 @@ resource "aws_s3_bucket_policy" "secure_data" {
 
 # IAM Group for MFA Enforcement
 resource "aws_iam_group" "mfa_required" {
-  name = "mfa-required-group"
+  name = "mfa-required-group-${random_id.bucket_suffix.hex}"
 }
 
 # IAM Group Policy for MFA Enforcement
