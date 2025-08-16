@@ -1,15 +1,40 @@
-Need to set up a production AWS environment with Terraform. We're looking at a standard web app infrastructure setup - the usual suspects: VPC, EC2 instances, load balancer, S3 storage, security groups.
+# Terraform HTTP/HTTPS Security Group Infrastructure
 
-This needs to be solid prod-level stuff, so we're talking us-east-1 region (client requirement), everything prefixed with "prod-" for naming consistency.
+Need to set up a secure AWS networking foundation with Terraform for web applications. This is focused on creating a bulletproof security group setup that allows only HTTP/HTTPS traffic, with flexible VPC management.
 
-What we need:
-- Use Terraform v0.12+ (nothing older)
-- Everything goes in us-east-1, no exceptions
-- Naming convention: "prod-" prefix on all resources
-- Tag everything with Environment = Production
-- Split configs properly - variables.tf for inputs, main.tf for the actual infrastructure
-- S3 buckets need versioning enabled (learned this the hard way before)
-- Load balancer should handle both HTTP and HTTPS
-- High availability setup - spread across multiple AZs in us-east-1
+This needs to be solid infrastructure-as-code, production-ready with proper validation and security controls.
 
-Basically need main.tf and variables.tf files that will actually deploy without issues and follow all the naming/tagging rules. Should be bulletproof for production use.
+## Requirements:
+- Use Terraform v1.0+ (modern version)
+- Flexible region deployment (defaults to us-west-2, configurable)
+- Smart VPC handling - create new VPC or use existing one
+- Security-first approach - only HTTP (80) and HTTPS (443) inbound traffic
+- Comprehensive validation for all inputs
+- Support for both IPv4 and IPv6 CIDR blocks
+- Configurable egress rules (unrestricted or locked-down for production)
+- Unique resource naming with random suffixes
+- Complete tagging strategy for all resources
+
+## What it creates:
+- **Conditional VPC**: Creates new VPC with full networking stack when needed, or uses existing VPC
+- **Security Group**: HTTP/HTTPS-only ingress rules with flexible CIDR configuration
+- **Networking Components** (when creating VPC): Internet Gateway, Route Tables, Public Subnet
+- **Validation**: Comprehensive input validation and error handling
+- **Outputs**: Complete infrastructure details for integration with other systems
+
+## Security Features:
+- Only allows HTTP (80) and HTTPS (443) inbound traffic
+- Configurable source CIDR blocks (avoid 0.0.0.0/0 in production)
+- Two egress modes: unrestricted (dev) or locked-down (production)
+- Input validation prevents misconfiguration
+- Unique naming prevents resource conflicts
+
+## Production-Ready Features:
+- Proper error handling and validation
+- Comprehensive tagging strategy
+- Random suffixes for unique resource naming
+- Conditional resource creation based on requirements
+- Multi-AZ subnet placement when creating VPC
+- DNS resolution enabled for created VPCs
+
+Basically need main.tf that will deploy a secure networking foundation without issues, following security best practices and providing flexible VPC management. Should be bulletproof for production web application deployments.

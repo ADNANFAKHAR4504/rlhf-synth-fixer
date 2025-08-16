@@ -1,281 +1,431 @@
-# Production-Ready AWS Infrastructure with Terraform
+###########################################################
+# main.tf
+# Terraform stack: Secure HTTP/HTTPS-only Security Group
+# Creates VPC if not provided, uses existing VPC otherwise
+# All variables, logic, and outputs in one file.
+###########################################################
 
-This solution provides a complete, production-ready AWS infrastructure implementation using Terraform that meets all requirements while following best practices for security, high availability, and maintainability.
-
-## File Structure
-
-### `provider.tf`
-```hcl
 terraform {
-  required_version = ">= 1.4.0"
+  required_version = ">= 1.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = "~> 5.0"
     }
     random = {
       source  = "hashicorp/random"
-      version = ">= 3.0"
+      version = "~> 3.1"
     }
   }
-  # Backend configuration is in backend.tf for flexibility
 }
-# Primary AWS provider for general resources
-provider "aws" {
-  region = var.aws_region
-}
-# Random provider for generating unique identifiers
-provider "random" {}
-```
 
-### `backend.tf` (for S3 backend in production)
-```hcl
-terraform {
-  backend "s3" {
-    # These values are injected at terraform init time
-    # bucket = "terraform-state-bucket"
-    # key    = "prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
-    # region = "us-east-1"
-    # encrypt = true
-    # use_lockfile = true
-  }
-}
-```
-
-### `variables.tf`
-```hcl
 ########################
 # Variables
 ########################
+
 variable "aws_region" {
-  description = "AWS region for resources"
+  description = "AWS region where resources will be deployed. Used by provider configuration."
   type        = string
-  default     = "us-east-1"
-}
-variable "environment_suffix" {
-  description = "Suffix to append to resource names to avoid conflicts"
-  type        = string
-  default     = ""
-}
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "Production"
-}
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
-}
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.20.0/24"]
-}
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t3.micro"
-}
-variable "min_size" {
-  description = "Minimum number of instances in ASG"
-  type        = number
-  default     = 2
-}
-variable "max_size" {
-  description = "Maximum number of instances in ASG"
-  type        = number
-  default     = 4
-}
-variable "desired_capacity" {
-  description = "Desired number of instances in ASG"
-  type        = number
-  default     = 2
-}
-locals {
-  # Ensure environment suffix is properly formatted
-  env_suffix = var.environment_suffix != "" ? "-${var.environment_suffix}" : ""
+  default     = "us-west-2"
   
-  # Common tags for all resources
-  common_tags = {
-    Environment = var.environment
-    ManagedBy   = "terraform"
-    Suffix      = var.environment_suffix != "" ? var.environment_suffix : "default"
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
+    error_message = "AWS region must be in valid format (e.g., us-west-2, eu-central-1)."
   }
 }
-```
 
-### `main.tf` (Complete Infrastructure)
+variable "vpc_id" {
+  description = "VPC ID where the security group will be created. Leave empty to create a new VPC."
+  type        = string
+  default     = ""  # Empty means create new VPC
+  
+  validation {
+    condition     = var.vpc_id == "" || can(regex("^vpc-[a-z0-9]{8,17}$", var.vpc_id))
+    error_message = "VPC ID must be empty (to create new VPC) or a valid AWS VPC identifier (vpc-xxxxxxxx)."
+  }
+}
 
-The main.tf file contains the complete infrastructure implementation with:
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC (only used when creating a new VPC)."
+  type        = string
+  default     = "10.0.0.0/16"
+  
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0))
+    error_message = "VPC CIDR must be a valid CIDR notation (e.g., 10.0.0.0/16)."
+  }
+}
 
-- **VPC and Networking**: Complete VPC setup with public/private subnets across multiple AZs
-- **NAT Gateways**: One per AZ for high availability
-- **Security Groups**: Separate groups for ALB and EC2 with restrictive rules
-- **Application Load Balancer**: Configured for HTTP traffic (HTTPS removed for test environment)
-- **Auto Scaling Group**: With health checks and proper scaling configuration
-- **S3 Buckets**: Separate buckets for data and logs with versioning, encryption, and intelligent lifecycle policies
-- **Enhanced Security**: IMDSv2 enforcement on EC2 instances
-- **CloudWatch Monitoring**: Comprehensive alarms for ALB target health, ASG instance health, and response time monitoring
+variable "allowed_ipv4_cidrs" {
+  description = "List of IPv4 CIDR blocks allowed for HTTP/HTTPS inbound traffic. Use specific networks, avoid 0.0.0.0/0 in production."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]  # Default for testing - override in production
+  
+  validation {
+    condition = length(var.allowed_ipv4_cidrs) > 0 && alltrue([
+      for cidr in var.allowed_ipv4_cidrs : can(cidrhost(cidr, 0))
+    ])
+    error_message = "At least one valid IPv4 CIDR must be provided (e.g., 10.0.0.0/16, 192.168.1.0/24)."
+  }
+}
 
-### `outputs.tf`
-```hcl
+variable "allowed_ipv6_cidrs" {
+  description = "List of IPv6 CIDR blocks allowed for HTTP/HTTPS inbound traffic. Use specific networks for security."
+  type        = list(string)
+  default     = []
+  
+  validation {
+    condition = alltrue([
+      for cidr in var.allowed_ipv6_cidrs : can(cidrhost(cidr, 0))
+    ])
+    error_message = "All IPv6 CIDRs must be valid CIDR notation (e.g., 2001:db8::/32)."
+  }
+}
+
+variable "allow_all_outbound" {
+  description = "Whether to allow all outbound traffic. Set to false for restricted egress (recommended for production)."
+  type        = bool
+  default     = true
+}
+
+variable "security_group_name_prefix" {
+  description = "Prefix for the security group name. A random suffix will be added to ensure uniqueness."
+  type        = string
+  default     = "app-http-https-sg"
+  
+  validation {
+    condition     = length(var.security_group_name_prefix) > 0 && length(var.security_group_name_prefix) <= 240
+    error_message = "Security group name prefix must be between 1 and 240 characters to allow for suffix."
+  }
+}
+
+variable "security_group_description" {
+  description = "Description for the security group explaining its purpose and allowed traffic."
+  type        = string
+  default     = "Security group allowing only HTTP/HTTPS inbound traffic from specified CIDRs"
+  
+  validation {
+    condition     = length(var.security_group_description) > 0 && length(var.security_group_description) <= 255
+    error_message = "Security group description must be between 1 and 255 characters."
+  }
+}
+
+variable "tags" {
+  description = "Key-value pairs of tags to apply to all resources for organization and cost tracking."
+  type        = map(string)
+  default = {
+    Owner       = "devops"
+    Environment = "dev"
+    Project     = "iac-test-automations"
+    ManagedBy   = "terraform"
+  }
+}
+
+########################
+# Random Resources for Unique Naming
+########################
+
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
+########################
+# Locals and Validation
+########################
+
+locals {
+  # Determine whether to create VPC (when vpc_id is empty)
+  should_create_vpc = var.vpc_id == ""
+  
+  # Determine which VPC to use
+  vpc_id = local.should_create_vpc ? aws_vpc.main[0].id : var.vpc_id
+  
+  # Dynamic security group name with random suffix
+  security_group_name = "${var.security_group_name_prefix}-${random_id.suffix.hex}"
+  
+  # Validation: fail if both IPv4 and IPv6 CIDR lists are empty
+  has_cidrs = length(var.allowed_ipv4_cidrs) > 0 || length(var.allowed_ipv6_cidrs) > 0
+}
+
+########################
+# VPC Creation (Optional)
+########################
+
+# Create VPC when vpc_id is not provided
+resource "aws_vpc" "main" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
+  tags = merge(var.tags, {
+    Name = "vpc-${random_id.suffix.hex}"
+    Purpose = "Created for security group testing"
+    CreatedBy = "terraform-${random_id.suffix.hex}"
+  })
+}
+
+# Internet Gateway for the VPC
+resource "aws_internet_gateway" "main" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  vpc_id = aws_vpc.main[0].id
+  
+  tags = merge(var.tags, {
+    Name = "igw-${random_id.suffix.hex}"
+    Purpose = "Internet access for VPC"
+  })
+}
+
+# Default route table with internet access
+resource "aws_route_table" "main" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  vpc_id = aws_vpc.main[0].id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main[0].id
+  }
+  
+  tags = merge(var.tags, {
+    Name = "rt-main-${random_id.suffix.hex}"
+    Purpose = "Main route table with internet access"
+  })
+}
+
+# Public subnet (optional, for completeness)
+resource "aws_subnet" "public" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  vpc_id                  = aws_vpc.main[0].id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = true
+  
+  tags = merge(var.tags, {
+    Name = "subnet-public-${random_id.suffix.hex}"
+    Type = "Public"
+  })
+}
+
+# Associate route table with subnet
+resource "aws_route_table_association" "public" {
+  count = local.should_create_vpc ? 1 : 0
+  
+  subnet_id      = aws_subnet.public[0].id
+  route_table_id = aws_route_table.main[0].id
+}
+
+########################
+# Data Sources
+########################
+
+# Get availability zones
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+# Get existing VPC data when using provided VPC ID
+data "aws_vpc" "selected" {
+  count = local.should_create_vpc ? 0 : 1
+  id    = var.vpc_id
+}
+
+########################
+# Validation
+########################
+
+# Custom validation to ensure at least one CIDR list is provided
+resource "null_resource" "validate_cidrs" {
+  count = local.has_cidrs ? 0 : 1
+  
+  lifecycle {
+    precondition {
+      condition     = local.has_cidrs
+      error_message = "ERROR: Both allowed_ipv4_cidrs and allowed_ipv6_cidrs are empty. At least one CIDR list must contain values to define allowed traffic sources."
+    }
+  }
+}
+
+########################
+# Security Group
+########################
+
+resource "aws_security_group" "app_sg" {
+  name        = local.security_group_name
+  description = var.security_group_description
+  vpc_id      = local.vpc_id
+  tags        = merge(var.tags, { 
+    Name = local.security_group_name
+    CreatedBy = "terraform-${random_id.suffix.hex}"
+  })
+
+  # IPv4 HTTP
+  dynamic "ingress" {
+    for_each = var.allowed_ipv4_cidrs
+    content {
+      description = "Allow HTTP from IPv4 ${ingress.value}"
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = [ingress.value]
+    }
+  }
+
+  # IPv4 HTTPS
+  dynamic "ingress" {
+    for_each = var.allowed_ipv4_cidrs
+    content {
+      description = "Allow HTTPS from IPv4 ${ingress.value}"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = [ingress.value]
+    }
+  }
+
+  # IPv6 HTTP
+  dynamic "ingress" {
+    for_each = var.allowed_ipv6_cidrs
+    content {
+      description      = "Allow HTTP from IPv6 ${ingress.value}"
+      from_port        = 80
+      to_port          = 80
+      protocol         = "tcp"
+      ipv6_cidr_blocks = [ingress.value]
+    }
+  }
+
+  # IPv6 HTTPS
+  dynamic "ingress" {
+    for_each = var.allowed_ipv6_cidrs
+    content {
+      description      = "Allow HTTPS from IPv6 ${ingress.value}"
+      from_port        = 443
+      to_port          = 443
+      protocol         = "tcp"
+      ipv6_cidr_blocks = [ingress.value]
+    }
+  }
+
+  # Egress rules - Allow all outbound
+  dynamic "egress" {
+    for_each = var.allow_all_outbound ? [1] : []
+    content {
+      description      = "Allow all outbound traffic"
+      from_port        = 0
+      to_port          = 0
+      protocol         = "-1"
+      cidr_blocks      = ["0.0.0.0/0"]
+      ipv6_cidr_blocks = ["::/0"]
+    }
+  }
+
+  # Restricted egress rules - Only HTTP/HTTPS outbound for updates
+  dynamic "egress" {
+    for_each = var.allow_all_outbound ? [] : [1]
+    content {
+      description = "Allow HTTPS outbound for package updates and API calls"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  dynamic "egress" {
+    for_each = var.allow_all_outbound ? [] : [1]
+    content {
+      description = "Allow HTTP outbound for package repositories"
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  # DNS egress for name resolution (required for most applications)
+  dynamic "egress" {
+    for_each = var.allow_all_outbound ? [] : [1]
+    content {
+      description = "Allow DNS outbound for name resolution"
+      from_port   = 53
+      to_port     = 53
+      protocol    = "udp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  depends_on = [null_resource.validate_cidrs]
+}
+
 ########################
 # Outputs
 ########################
+
 output "vpc_id" {
-  description = "ID of the VPC"
-  value       = aws_vpc.prod_vpc.id
+  description = "The ID of the VPC where the security group was created"
+  value       = local.vpc_id
 }
-output "load_balancer_dns" {
-  description = "DNS name of the load balancer"
-  value       = aws_lb.prod_alb.dns_name
-}
-output "load_balancer_url_http" {
-  description = "HTTP URL of the load balancer"
-  value       = "http://${aws_lb.prod_alb.dns_name}"
-}
-output "load_balancer_url_https" {
-  description = "HTTPS URL of the load balancer"
-  value       = "https://${aws_lb.prod_alb.dns_name}"
-}
-output "data_bucket_name" {
-  description = "Name of the application data S3 bucket"
-  value       = aws_s3_bucket.prod_data_bucket.id
-}
-output "logs_bucket_name" {
-  description = "Name of the logs S3 bucket"
-  value       = aws_s3_bucket.prod_logs_bucket.id
-}
-output "public_subnet_ids" {
-  description = "IDs of the public subnets"
-  value       = aws_subnet.prod_public_subnets[*].id
-}
-output "private_subnet_ids" {
-  description = "IDs of the private subnets"
-  value       = aws_subnet.prod_private_subnets[*].id
-}
-output "alb_security_group_id" {
-  description = "ID of the ALB security group"
-  value       = aws_security_group.prod_alb_sg.id
-}
-output "ec2_security_group_id" {
-  description = "ID of the EC2 security group"
-  value       = aws_security_group.prod_ec2_sg.id
-}
-output "autoscaling_group_name" {
-  description = "Name of the Auto Scaling group"
-  value       = aws_autoscaling_group.prod_asg.name
-}
-output "target_group_arn" {
-  description = "ARN of the target group"
-  value       = aws_lb_target_group.prod_tg.arn
-}
-output "nat_gateway_ids" {
-  description = "IDs of the NAT gateways"
-  value       = aws_nat_gateway.prod_nat_gateways[*].id
-}
-output "elastic_ip_addresses" {
-  description = "Elastic IP addresses for NAT gateways"
-  value       = aws_eip.prod_nat_eips[*].public_ip
-}
-# Certificate removed for test environment - no HTTPS listener configured
-output "environment_suffix" {
-  description = "Environment suffix used for resource naming"
-  value       = var.environment_suffix
-}
-output "cloudwatch_alarm_alb_target_health" {
-  description = "CloudWatch alarm for ALB target health"
-  value       = aws_cloudwatch_metric_alarm.alb_target_health.arn
-}
-output "cloudwatch_alarm_asg_instance_health" {
-  description = "CloudWatch alarm for ASG instance health"
-  value       = aws_cloudwatch_metric_alarm.asg_instance_health.arn
-}
-output "cloudwatch_alarm_alb_response_time" {
-  description = "CloudWatch alarm for ALB response time"
-  value       = aws_cloudwatch_metric_alarm.alb_response_time.arn
-}
-```
 
-## Key Features
+output "vpc_cidr_block" {
+  description = "The CIDR block of the VPC"
+  value       = local.should_create_vpc ? aws_vpc.main[0].cidr_block : data.aws_vpc.selected[0].cidr_block
+}
 
-### ✅ Complete Infrastructure Implementation
-- **VPC with Multi-AZ Architecture**: Deployed across multiple availability zones for high availability
-- **Public and Private Subnets**: Proper network segmentation with public subnets for load balancers and private subnets for EC2 instances
-- **NAT Gateways**: One per availability zone for redundancy and high availability
-- **Application Load Balancer**: Configured for HTTP traffic (HTTPS removed for test environment)
-- **Auto Scaling Group**: Ensures application availability and scalability
-- **S3 Buckets**: Separate buckets for application data and logs with versioning enabled and intelligent lifecycle policies for cost optimization
+output "vpc_created" {
+  description = "Whether a new VPC was created by this module"
+  value       = local.should_create_vpc
+}
 
-### ✅ Security Best Practices
-- **Security Groups**: Restrictive ingress rules following least privilege principle
-- **Private Subnets**: EC2 instances deployed in private subnets, not directly accessible from internet
-- **S3 Bucket Security**: Public access blocked, server-side encryption enabled
-- **SSH Access**: Restricted to VPC CIDR only
-- **IMDSv2 Enforcement**: Enhanced security for EC2 instance metadata service to prevent SSRF attacks
+output "internet_gateway_id" {
+  description = "The ID of the Internet Gateway (only when VPC is created)"
+  value       = local.should_create_vpc ? aws_internet_gateway.main[0].id : null
+}
 
-### ✅ High Availability & Scalability
-- **Multi-AZ Deployment**: Resources spread across multiple availability zones
-- **Auto Scaling**: Dynamic scaling based on demand with minimum 2 instances
-- **Health Checks**: ELB health checks for automatic instance replacement
-- **Redundant NAT Gateways**: One per AZ to avoid single point of failure
+output "public_subnet_id" {
+  description = "The ID of the public subnet (only when VPC is created)"
+  value       = local.should_create_vpc ? aws_subnet.public[0].id : null
+}
 
-### ✅ Monitoring & Observability
-- **CloudWatch Alarms**: Three comprehensive alarms for proactive monitoring:
-  - ALB Target Health: Monitors healthy target count
-  - ASG Instance Health: Monitors in-service instance count
-  - ALB Response Time: Monitors average response time performance
-- **Cost Optimization**: Intelligent S3 lifecycle policies for automatic storage tiering
+output "security_group_id" {
+  description = "The ID of the created security group"
+  value       = aws_security_group.app_sg.id
+}
 
-### ✅ Requirements Compliance
-- **Region**: All resources deployed in us-east-1
-- **Naming Convention**: All resources use "prod-" prefix
-- **Environment Tagging**: Consistent Environment = Production tag
-- **S3 Versioning**: Enabled to prevent accidental data loss
-- **HTTP Support**: HTTP protocol configured on the load balancer (HTTPS removed for test environment)
-- **Environment Suffix**: Supports multiple deployments without conflicts
+output "security_group_arn" {
+  description = "The ARN of the created security group"
+  value       = aws_security_group.app_sg.arn
+}
 
-### ✅ Maintainability
-- **Modular Variables**: All configuration values parameterized
-- **Consistent Tagging**: Common tags applied to all resources using merge()
-- **Clear Outputs**: All important resource IDs and endpoints exposed
-- **Environment Isolation**: Environment suffix prevents resource naming conflicts
-- **Backend Flexibility**: Supports both local and S3 backends
+output "security_group_name" {
+  description = "The name of the created security group"
+  value       = aws_security_group.app_sg.name
+}
 
-## Deployment Instructions
+output "ingress_rules_summary" {
+  description = "Summary of all ingress rules configured on the security group"
+  value = {
+    total_rules = length(aws_security_group.app_sg.ingress)
+    rules = [
+      for rule in aws_security_group.app_sg.ingress : {
+        port        = "${rule.from_port}-${rule.to_port}"
+        protocol    = rule.protocol
+        description = rule.description
+        cidrs       = coalescelist(rule.cidr_blocks, rule.ipv6_cidr_blocks)
+      }
+    ]
+  }
+}
 
-1. **Initialize Terraform**:
-```bash
-export ENVIRONMENT_SUFFIX=pr1092  # or any unique identifier
-terraform init \
-  -backend-config="bucket=terraform-state-bucket" \
-  -backend-config="key=prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate" \
-  -backend-config="region=us-east-1"
-```
+output "aws_region" {
+  description = "AWS region where resources were deployed"
+  value       = var.aws_region
+}
 
-2. **Plan the deployment**:
-```bash
-terraform plan -var="environment_suffix=${ENVIRONMENT_SUFFIX}" -out=tfplan
-```
-
-3. **Apply the configuration**:
-```bash
-terraform apply tfplan
-```
-
-4. **Access the application**:
-- Use the load balancer DNS from outputs
-- HTTP endpoint available (HTTPS removed for test environment)
-
-5. **Destroy resources** (when no longer needed):
-```bash
-terraform destroy -var="environment_suffix=${ENVIRONMENT_SUFFIX}"
-```
-
-This implementation provides a production-ready, secure, and highly available AWS infrastructure that fully meets all specified requirements while following Terraform and AWS best practices.
+output "random_suffix" {
+  description = "Random suffix used for resource naming"
+  value       = random_id.suffix.hex
+}
