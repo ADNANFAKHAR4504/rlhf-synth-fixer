@@ -1,4 +1,4 @@
-I'll create a secure and efficient AWS cloud environment using Pulumi with TypeScript. Here's the production-ready implementation:
+A secure and efficient AWS cloud environment using Pulumi with TypeScript. Here's the production-ready implementation:
 
 ## Project Structure
 
@@ -8,24 +8,8 @@ I'll create a secure and efficient AWS cloud environment using Pulumi with TypeS
 │   ├── vpc.ts
 │   ├── security.ts
 │   ├── compute.ts
-│   └── security-monitoring.ts
-├── test/
-│   ├── tap-stack.unit.test.ts
-│   └── tap-stack.int.test.ts
-├── Pulumi.yaml
-└── package.json
+│── └── security-monitoring.ts
 ```
-
-## Configuration Files
-
-**Pulumi.yaml**
-```yaml
-name: iac-test-automations
-runtime: nodejs
-description: Secure AWS infrastructure with VPC, subnets, EC2 instance, and security monitoring
-```
-
-## Core Infrastructure Code
 
 **lib/infrastructure.ts**
 ```typescript
@@ -1199,17 +1183,3 @@ pulumi stack output ec2InstancePublicIp
 pulumi stack output vpcId
 pulumi stack output securityGroupId
 ```
-
-## Configuration Example
-
-Create a `Pulumi.dev.yaml` file for environment-specific configuration:
-
-```yaml
-config:
-  aws:region: ap-south-1
-  iac-test-automations:allowedSshCidrs:
-    - "203.26.56.90/32"
-  iac-test-automations:instanceType: t3.micro
-```
-
-This implementation provides a complete, secure, and production-ready AWS infrastructure that follows all requirements from PROMPT.md, includes comprehensive security monitoring beyond the basic requirements, and has extensive test coverage with both unit and integration tests. The infrastructure is modular, well-documented, and follows AWS security best practices.

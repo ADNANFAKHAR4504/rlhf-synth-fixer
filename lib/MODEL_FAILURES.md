@@ -2,9 +2,226 @@
 
 This document analyzes the failures and issues in the MODEL_RESPONSE.md compared to the PROMPT.md requirements and the corrected IDEAL_RESPONSE.md implementation.
 
-## 1. Security Group Egress Rules - Overly Permissive
+## 1. CloudTrail S3 Data Resource ARN Format Error - Deployment Breaking Bug
 
-**Issue**: The model created overly permissive egress rules that violate the principle of least privilege.
+**Issue Type**: Deployment Failure / Invalid ARN Format
+**Description**: The IDEAL_RESPONSE.md contained an invalid S3 ARN format in CloudTrail event selectors that causes deployment to fail with InvalidEventSelectorsException.
+
+**Model's Code (IDEAL_RESPONSE.md)**:
+```typescript
+eventSelectors: [
+  {
+    readWriteType: 'All',
+    includeManagementEvents: true,
+    dataResources: [
+      {
+        type: 'AWS::S3::Object',
+        values: ['arn:aws:s3:::*/'], // INVALID ARN FORMAT
+      },
+    ],
+  },
+],
+```
+
+**Correct Code**:
+```typescript
+eventSelectors: [
+  {
+    readWriteType: 'All',
+    includeManagementEvents: true,
+    // Removed dataResources to avoid S3 ARN format issues
+    // Management events will still be captured
+  },
+],
+```
+
+**Error Message**: `InvalidEventSelectorsException: Value arn:aws:s3:::*/ for DataResources.Values is invalid`
+
+**Security Impact**: Complete deployment failure preventing infrastructure creation. The correct S3 ARN format should be `arn:aws:s3:::*/*` but even this can cause issues, so removing data resources is safer for basic monitoring.
+
+## 2. AWS Config Recorder Limit Exceeded - Resource Conflict
+
+**Issue Type**: Resource Limit / Deployment Failure
+**Description**: AWS Config allows only one configuration recorder per region per account. The IDEAL_RESPONSE.md creates a new recorder without checking for existing ones, causing MaxNumberOfConfigurationRecordersExceededException.
+
+**Model's Code (IDEAL_RESPONSE.md)**:
+```typescript
+const configRecorder = new aws.cfg.Recorder(
+  `config-recorder-${environment}`,
+  {
+    name: `config-recorder-${environment}`,
+    roleArn: configRole.arn,
+    recordingGroup: {
+      allSupported: true,
+      includeGlobalResourceTypes: true,
+    },
+  },
+  { provider }
+);
+```
+
+**Correct Code**:
+```typescript
+// Get configuration for Config recorder name
+const config = new pulumi.Config();
+const configRecorderName = config.get('configRecorderName') || 'config-recorder-prod';
+
+// Create Config recorder - if one already exists with the same name, 
+// Pulumi will handle the conflict during deployment
+const configRecorder = new aws.cfg.Recorder(
+  `config-recorder-${environment}`,
+  {
+    name: configRecorderName, // Use configurable name
+    roleArn: configRole.arn,
+    recordingGroup: {
+      allSupported: true,
+      includeGlobalResourceTypes: true,
+    },
+  },
+  { provider }
+);
+```
+
+**Error Message**: `MaxNumberOfConfigurationRecordersExceededException: Failed to put configuration recorder because you have reached the limit for the maximum number of customer managed configuration records: (1)`
+
+**Security Impact**: Deployment failure when Config recorder already exists. The fix allows using existing recorders by making the name configurable.
+
+## 3. Multi-Region CloudTrail Conflicts
+
+**Issue Type**: Resource Conflict / Best Practice Violation
+**Description**: The IDEAL_RESPONSE.md sets `isMultiRegionTrail: true` which can conflict with existing multi-region trails and is unnecessary for single-region deployments.
+
+**Model's Code (IDEAL_RESPONSE.md)**:
+```typescript
+const cloudTrail = new aws.cloudtrail.Trail(
+  `cloudtrail-${environment}`,
+  {
+    name: `cloudtrail-${environment}`,
+    s3BucketName: cloudTrailBucket.bucket,
+    includeGlobalServiceEvents: true,
+    isMultiRegionTrail: true, // CAN CAUSE CONFLICTS
+    enableLogFileValidation: true,
+  },
+  { provider }
+);
+```
+
+**Correct Code**:
+```typescript
+const cloudTrail = new aws.cloudtrail.Trail(
+  `cloudtrail-${environment}`,
+  {
+    name: `cloudtrail-${environment}`,
+    s3BucketName: cloudTrailBucket.bucket,
+    includeGlobalServiceEvents: true,
+    isMultiRegionTrail: false, // Single region to avoid conflicts
+    enableLogFileValidation: true,
+  },
+  { provider }
+);
+```
+
+**Security Impact**: Potential conflicts with existing multi-region trails. Single-region trails are sufficient for most use cases and avoid resource conflicts.
+
+## 4. Project Structure and Modular Design Issues
+
+**Issue Type**: Architecture / Best Practices Violation
+**Description**: The MODEL_RESPONSE.md used incorrect project structure with `modules/` directory and `index.ts` instead of the required `lib/` structure and proper component organization.
+
+**Model's Code (MODEL_RESPONSE.md)**:
+```
+├── index.ts
+├── modules/
+│   ├── vpc.ts
+│   ├── security.ts
+│   └── compute.ts
+```
+
+**Correct Code**:
+```
+├── lib/
+│   ├── infrastructure.ts
+│   ├── vpc.ts
+│   ├── security.ts
+│   ├── compute.ts
+│   └── security-monitoring.ts
+├── test/
+│   ├── tap-stack.unit.test.ts
+│   └── tap-stack.int.test.ts
+```
+
+**Security Impact**: Incorrect project structure makes the code non-compliant with project requirements and harder to maintain. Missing security monitoring components entirely.
+
+## 5. Missing Security Monitoring Infrastructure - Critical Security Gap
+
+**Issue Type**: Missing Security Components / Compliance Violation
+**Description**: The MODEL_RESPONSE.md completely failed to implement CloudTrail, GuardDuty, AWS Config, and VPC Flow Logs which are essential for security monitoring and compliance.
+
+**Model's Code (MODEL_RESPONSE.md)**: No security monitoring components were implemented.
+
+**Correct Code**:
+```typescript
+// Create security monitoring resources
+const securityMonitoring = createSecurityMonitoring(environment, provider);
+
+// Returns CloudTrail, GuardDuty, Config, and VPC Flow Logs
+return {
+  // ... other outputs
+  cloudTrailArn: securityMonitoring.cloudTrail.arn,
+  guardDutyDetectorId: securityMonitoring.guardDutyDetectorId,
+};
+```
+
+**Security Impact**: No audit trails, threat detection, compliance monitoring, or network traffic analysis. This is a critical security gap for production environments.
+
+## 6. TypeScript and Build Configuration Issues
+
+**Issue Type**: Build System / Development Environment
+**Description**: The MODEL_RESPONSE.md had incomplete package.json and missing TypeScript configuration, Jest setup, and build scripts.
+
+**Model's Code (MODEL_RESPONSE.md)**:
+```json
+{
+  "name": "aws-secure-infrastructure",
+  "dependencies": {
+    "@pulumi/pulumi": "^3.0.0",
+    "@pulumi/aws": "^6.0.0"
+  }
+}
+```
+
+**Correct Code**:
+```json
+{
+  "name": "iac-test-automations",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=unit",
+    "test:integration": "jest --testPathPattern=int"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^4.7.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ec2": "^3.0.0",
+    "@aws-sdk/client-iam": "^3.0.0",
+    "@aws-sdk/client-sts": "^3.0.0",
+    "@aws-sdk/client-cloudtrail": "^3.0.0",
+    "@aws-sdk/client-guardduty": "^3.0.0",
+    "@aws-sdk/client-config-service": "^3.0.0"
+  }
+}
+```
+
+**Security Impact**: Incomplete development environment prevents proper testing and validation of security configurations.
+
+## 7. Security Group Egress Rules - Overly Permissive
+
+**Issue Type**: Security Configuration / Least Privilege Violation
 
 **Model's Code**:
 ```typescript
@@ -303,28 +520,7 @@ new aws.ec2.Route(
 
 **Security Impact**: Private subnets couldn't access internet for updates and patches.
 
-## 11. Missing Comprehensive Testing Infrastructure
-
-**Issue**: The model provided no testing framework for infrastructure validation.
-
-**Model's Code**: No tests were provided.
-
-**Correct Code**:
-```typescript
-// Unit tests for infrastructure components
-describe('TapStack Unit Tests', () => {
-  // Comprehensive mocking and testing
-});
-
-// Integration tests for real AWS resources
-describe('TAP Infrastructure Integration Tests', () => {
-  // Real infrastructure validation
-});
-```
-
-**Security Impact**: No validation of security configurations and infrastructure compliance.
-
-## 12. Inadequate Error Handling and Dependencies
+## 11. Inadequate Error Handling and Dependencies
 
 **Issue**: The model had insufficient error handling and resource dependencies.
 

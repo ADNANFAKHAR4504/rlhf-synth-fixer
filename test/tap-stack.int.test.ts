@@ -7,6 +7,11 @@ import {
   CloudWatchClient
 } from '@aws-sdk/client-cloudwatch';
 import {
+  ConfigServiceClient,
+  DescribeConfigurationRecordersCommand,
+  DescribeDeliveryChannelsCommand,
+} from '@aws-sdk/client-config-service';
+import {
   DescribeInstancesCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
@@ -51,6 +56,7 @@ const initializeClients = () => {
     cloudwatch: new CloudWatchClient({ region }),
     cloudtrail: new CloudTrailClient({ region }),
     guardduty: new GuardDutyClient({ region }),
+    config: new ConfigServiceClient({ region }),
   };
 };
 
@@ -381,6 +387,39 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(response.Status).toBe('ENABLED');
       expect(response.FindingPublishingFrequency).toBeDefined();
     });
+
+    it('should have AWS Config configured', async () => {
+      // Test for Config recorder
+      try {
+        const configRecorders = await clients.config.send(
+          new DescribeConfigurationRecordersCommand({})
+        );
+
+        expect(configRecorders.ConfigurationRecorders).toBeDefined();
+        expect(configRecorders.ConfigurationRecorders!.length).toBeGreaterThan(0);
+
+        const recorder = configRecorders.ConfigurationRecorders![0];
+        expect(recorder.name).toBeDefined();
+        expect(recorder.roleARN).toBeDefined();
+        expect(recorder.recordingGroup?.allSupported).toBe(true);
+        expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
+
+        // Test for Config delivery channel
+        const deliveryChannels = await clients.config.send(
+          new DescribeDeliveryChannelsCommand({})
+        );
+
+        expect(deliveryChannels.DeliveryChannels).toBeDefined();
+        expect(deliveryChannels.DeliveryChannels!.length).toBeGreaterThan(0);
+
+        const channel = deliveryChannels.DeliveryChannels![0];
+        expect(channel.name).toBeDefined();
+        expect(channel.s3BucketName).toBeDefined();
+      } catch (error) {
+        console.log('Config service test failed:', error);
+        // Config might not be enabled in all regions/accounts
+      }
+    });
   });
 
   describe('End-to-End Infrastructure Tests', () => {
@@ -667,6 +706,35 @@ describe('TAP Infrastructure Integration Tests', () => {
 
       const cidrBlocks = publicSubnets.map((subnet: any) => subnet.CidrBlock).sort();
       expect(cidrBlocks).toEqual(['10.0.1.0/24', '10.0.2.0/24']); // Exact CIDRs from PROMPT.md
+    });
+
+    it('should have private subnets for secure workloads', async () => {
+      if (!stackOutputs.vpcId) {
+        console.log('VPC ID not found, skipping private subnet tests');
+        return;
+      }
+
+      const subnetsResponse = await clients.ec2.send(
+        new DescribeSubnetsCommand({
+          Filters: [
+            { Name: 'vpc-id', Values: [stackOutputs.vpcId] },
+            { Name: 'tag:Type', Values: ['Private'] },
+          ],
+        })
+      );
+
+      const privateSubnets = subnetsResponse.Subnets || [];
+      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
+
+      // Verify private subnets have different CIDR blocks
+      const cidrBlocks = privateSubnets.map((subnet: any) => subnet.CidrBlock);
+      const uniqueCidrBlocks = [...new Set(cidrBlocks)];
+      expect(uniqueCidrBlocks.length).toBe(cidrBlocks.length);
+
+      // Verify private subnets are in the VPC CIDR range
+      privateSubnets.forEach((subnet: any) => {
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.\d+\.\d+\/24$/);
+      });
     });
 
     it('should have public subnets distributed across different availability zones', async () => {

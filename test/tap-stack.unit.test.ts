@@ -1,16 +1,18 @@
 // Mock Pulumi before importing
+const mockRegisterOutputs = jest.fn();
+const mockComponentResource = jest.fn().mockImplementation(function(this: any, type: string, name: string, args: any, opts?: any) {
+  this.registerOutputs = mockRegisterOutputs;
+  this.type = type;
+  this.name = name;
+  this.args = args;
+  this.opts = opts;
+});
+
 jest.mock('@pulumi/pulumi', () => ({
   runtime: {
     setMocks: jest.fn(),
   },
-  ComponentResource: class MockComponentResource {
-    constructor(type: string, name: string, args: any, opts?: any) {
-      // Mock implementation
-    }
-    registerOutputs(outputs: any) {
-      // Mock implementation
-    }
-  },
+  ComponentResource: mockComponentResource,
   all: jest.fn().mockImplementation(values => Promise.resolve(values)),
   Output: jest.fn().mockImplementation(value => ({
     promise: () => Promise.resolve(value),
@@ -23,6 +25,8 @@ jest.mock('@pulumi/pulumi', () => ({
           return 't3.micro';
         case 'aws:region':
           return 'ap-south-1';
+        case 'configRecorderName':
+          return 'config-recorder-prod';
         default:
           return undefined;
       }
@@ -378,12 +382,8 @@ describe('TapStack Unit Tests', () => {
 
   describe('Component Resource Behavior', () => {
     it('should register outputs correctly', () => {
-      const mockRegisterOutputs = jest.fn();
-      
-      // Mock the ComponentResource to capture registerOutputs calls
-      require('@pulumi/pulumi').ComponentResource.mockImplementation(function(this: any) {
-        this.registerOutputs = mockRegisterOutputs;
-      });
+      // Clear previous calls
+      mockRegisterOutputs.mockClear();
       
       stack = new TapStack('test-stack', { environmentSuffix: 'test' });
       
@@ -402,7 +402,8 @@ describe('TapStack Unit Tests', () => {
     });
 
     it('should be created with correct resource type and name', () => {
-      const mockComponentResource = require('@pulumi/pulumi').ComponentResource;
+      // Clear previous calls
+      mockComponentResource.mockClear();
       
       stack = new TapStack('test-stack-name', { environmentSuffix: 'test' });
       
@@ -520,7 +521,7 @@ describe('TapStack Unit Tests', () => {
 
       expect(stackWithTags).toBeDefined();
       // Tags should be passed to the ComponentResource
-      expect(require('@pulumi/pulumi').ComponentResource).toHaveBeenCalledWith(
+      expect(mockComponentResource).toHaveBeenCalledWith(
         'tap:stack:TapStack',
         'test-stack-tags',
         expect.objectContaining({
@@ -638,7 +639,7 @@ describe('TapStack Unit Tests', () => {
       
       expect(stack).toBeDefined();
       // Tags are passed to the ComponentResource constructor
-      expect(require('@pulumi/pulumi').ComponentResource).toHaveBeenCalledWith(
+      expect(mockComponentResource).toHaveBeenCalledWith(
         'tap:stack:TapStack',
         'test-stack',
         {
