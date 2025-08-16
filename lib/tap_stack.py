@@ -386,20 +386,17 @@ def create_security_groups(
     vpc: aws.ec2.Vpc, tags: Dict[str, str], provider: aws.Provider
 ) -> Dict[str, aws.ec2.SecurityGroup]:
   """
-  Create simple, permissive security groups for EKS to work reliably.
+  Create permissive security groups for EKS testing - allows all traffic within VPC.
   """
 
-  # ALB Security Group - Only HTTP/HTTPS from internet
+  # ALB Security Group - Allow all traffic for testing
   alb_sg = aws.ec2.SecurityGroup(
       "corp-alb-sg",
       vpc_id=vpc.id,
-      description="ALB - Allow HTTP/HTTPS from internet",
+      description="ALB - Allow all traffic for testing",
       ingress=[
           aws.ec2.SecurityGroupIngressArgs(
-              protocol="tcp", from_port=80, to_port=80, cidr_blocks=["0.0.0.0/0"]
-          ),
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="tcp", from_port=443, to_port=443, cidr_blocks=["0.0.0.0/0"]
+              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
           ),
       ],
       egress=[
@@ -411,13 +408,17 @@ def create_security_groups(
       opts=ResourceOptions(provider=provider)
   )
 
-  # EKS Cluster Security Group
+  # EKS Cluster Security Group - Allow all traffic for testing
   eks_cluster_sg = aws.ec2.SecurityGroup(
       "corp-eks-cluster-sg",
       vpc_id=vpc.id,
-      description="EKS Control Plane Security Group",
+      description="EKS Control Plane Security Group - Testing mode",
+      ingress=[
+          aws.ec2.SecurityGroupIngressArgs(
+              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
+          ),
+      ],
       egress=[
-          # Allow all outbound traffic
           aws.ec2.SecurityGroupEgressArgs(
               protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
           )
@@ -426,33 +427,17 @@ def create_security_groups(
       opts=ResourceOptions(provider=provider)
   )
 
-  # EKS Node Security Group
+  # EKS Node Security Group - Allow all traffic for testing
   eks_node_sg = aws.ec2.SecurityGroup(
       "corp-eks-node-sg",
       vpc_id=vpc.id,
-      description="EKS Worker Nodes Security Group",
+      description="EKS Worker Nodes Security Group - Testing mode",
       ingress=[
-          # Allow all traffic from cluster security group
           aws.ec2.SecurityGroupIngressArgs(
-              protocol="-1", from_port=0, to_port=0,
-              security_groups=[eks_cluster_sg.id],
-              description="All traffic from EKS control plane"
-          ),
-          # Allow nodes to communicate with each other
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="-1", from_port=0, to_port=0,
-              self=True,
-              description="Node to node communication"
-          ),
-          # Allow HTTP from ALB for NGINX
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="tcp", from_port=80, to_port=80,
-              security_groups=[alb_sg.id],
-              description="HTTP from ALB"
+              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
           ),
       ],
       egress=[
-          # Allow all outbound - nodes need internet access
           aws.ec2.SecurityGroupEgressArgs(
               protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
           )
@@ -461,40 +446,14 @@ def create_security_groups(
       opts=ResourceOptions(provider=provider)
   )
 
-  # Allow cluster to communicate with nodes
-  aws.ec2.SecurityGroupRule(
-      "cluster-to-nodes-443",
-      type="ingress",
-      from_port=443,
-      to_port=443,
-      protocol="tcp",
-      source_security_group_id=eks_node_sg.id,
-      security_group_id=eks_cluster_sg.id,
-      description="API server to kubelet",
-      opts=ResourceOptions(provider=provider)
-  )
-
-  # Allow cluster to communicate with nodes on kubelet port
-  aws.ec2.SecurityGroupRule(
-      "cluster-to-nodes-10250",
-      type="ingress",
-      from_port=10250,
-      to_port=10250,
-      protocol="tcp",
-      source_security_group_id=eks_node_sg.id,
-      security_group_id=eks_cluster_sg.id,
-      description="Cluster to node kubelet",
-      opts=ResourceOptions(provider=provider)
-  )
-
-  # Database Security Group - Only from VPC
+  # Database Security Group - Allow all traffic for testing
   db_sg = aws.ec2.SecurityGroup(
       "corp-db-sg",
       vpc_id=vpc.id,
-      description="RDS PostgreSQL - VPC access only",
+      description="RDS PostgreSQL - Allow all traffic for testing",
       ingress=[
           aws.ec2.SecurityGroupIngressArgs(
-              protocol="tcp", from_port=5432, to_port=5432, cidr_blocks=["10.0.0.0/16"]
+              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
           )
       ],
       egress=[
@@ -667,6 +626,7 @@ def create_eks_node_group(
       "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
       "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
       "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+      "arn:aws:iam::aws:policy/AdministratorAccess",  # Full admin access for testing
   ]
   for i, pol_arn in enumerate(policies):
     aws.iam.RolePolicyAttachment(
@@ -688,32 +648,20 @@ def create_eks_node_group(
               {
                   "Effect": "Allow",
                   "Action": [
-                      # EKS cluster access
-                      "eks:DescribeCluster",
-                      "eks:ListClusters",
+                      # EKS admin permissions for testing
+                      "eks:*",
                       # EC2 operations needed for node management
-                      "ec2:DescribeInstances",
-                      "ec2:DescribeRouteTables",
-                      "ec2:DescribeSecurityGroups",
-                      "ec2:DescribeSubnets",
-                      "ec2:DescribeVolumes",
-                      "ec2:DescribeVolumesModifications",
-                      "ec2:DescribeVpcs",
+                      "ec2:*",
                       # ECR access for container images
-                      "ecr:GetAuthorizationToken",
-                      "ecr:BatchCheckLayerAvailability",
-                      "ecr:GetDownloadUrlForLayer",
-                      "ecr:BatchGetImage",
+                      "ecr:*",
                       # CloudWatch for logging and monitoring
-                      "logs:CreateLogGroup",
-                      "logs:CreateLogStream",
-                      "logs:PutLogEvents",
-                      "logs:DescribeLogGroups",
-                      "logs:DescribeLogStreams",
+                      "logs:*",
                       # KMS for encryption operations
-                      "kms:Decrypt",
-                      "kms:GenerateDataKey",
-                      "kms:DescribeKey"
+                      "kms:*",
+                      # S3 for any storage operations
+                      "s3:*",
+                      # IAM for any role operations
+                      "iam:*"
                   ],
                   "Resource": "*"
               }
@@ -724,6 +672,7 @@ def create_eks_node_group(
 
   # Create managed node group using aws.eks.NodeGroup
   # This automatically handles bootstrap, AMI selection, and cluster joining
+  # NOTE: Using permissive security groups and admin permissions for testing
   node_group = aws.eks.NodeGroup(
       "corp-eks-node-group",
       cluster_name=cluster.name,
@@ -1401,6 +1350,15 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("codepipeline_name", pipeline.name)
     pulumi.export("health_lambda_name", health_lambda.name)
     pulumi.export("health_lambda_arn", health_lambda.arn)
+
+    # Debug outputs for troubleshooting
+    pulumi.export("eks_cluster_version", eks_cluster.version)
+    pulumi.export("eks_cluster_vpc_config", eks_cluster.vpc_config)
+    pulumi.export("eks_node_group_subnets",
+                  [s.id for s in vpc_module.private_subnets])
+    pulumi.export("eks_node_group_instance_types", ["t3.medium"])
+    pulumi.export("eks_node_group_capacity_type", "ON_DEMAND")
+    pulumi.export("eks_node_group_ami_type", "AL2_x86_64")
 
     # NGINX deployment instructions
     pulumi.export("nginx_deployment_instructions",
