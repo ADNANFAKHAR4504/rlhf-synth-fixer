@@ -1,3 +1,0 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
-
-exports[`TapStack Unit Tests synthesizes to a consistent Terraform plan 1`] = `"/var/folders/7g/gd4fpn0s1y15chsl1zt09f6h0000gn/T/cdktf.outdir.5iXB6c"`;
