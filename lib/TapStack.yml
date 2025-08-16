@@ -42,7 +42,7 @@ Resources:
         - AttributeName: orderId
           KeyType: HASH
       # On-Demand billing mode for automatic scaling
-      BillingMode: ON_DEMAND
+      BillingMode: PAY_PER_REQUEST #  On-demand capacity mode
       # Enable point-in-time recovery for data protection
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true

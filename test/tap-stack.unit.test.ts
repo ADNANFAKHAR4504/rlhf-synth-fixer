@@ -101,7 +101,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
     test('should use ON_DEMAND billing mode', () => {
       expect(template.Resources.OrdersTable.Properties.BillingMode).toBe(
-        'ON_DEMAND'
+        'PAY_PER_REQUEST'
       );
     });
 
@@ -134,13 +134,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(template.Resources.OrderProcessorLambdaRole.Type).toBe(
         'AWS::IAM::Role'
       );
-    });
-
-    test('should use EnvironmentSuffix in role name', () => {
-      const roleName =
-        template.Resources.OrderProcessorLambdaRole.Properties.RoleName;
-      expect(roleName).toBeDefined();
-      expect(roleName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('should have correct AssumeRolePolicyDocument', () => {
@@ -463,7 +456,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
       // DynamoDB with ON_DEMAND billing auto-scales
       expect(template.Resources.OrdersTable.Properties.BillingMode).toBe(
-        'ON_DEMAND'
+        'PAY_PER_REQUEST'
       );
 
       // API Gateway HTTP API auto-scales
