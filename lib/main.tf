@@ -254,6 +254,8 @@ resource "aws_cloudtrail" "main" {
   is_multi_region_trail         = true
   include_global_service_events = true
   tags                          = local.common_tags
+
+  depends_on = [aws_s3_bucket_policy.logs]
 }
 
 # RDS Password Management with Secrets Manager
@@ -479,7 +481,7 @@ resource "aws_db_instance" "rds_useast1" {
   allocated_storage       = 20
   storage_type            = "gp2"
   engine                  = "postgres"
-  engine_version          = "14.5"
+  engine_version          = "14.11"
   instance_class          = "db.t3.micro"
   db_name                 = "novadb"
   username                = "novaadmin"
@@ -822,7 +824,7 @@ resource "aws_db_instance" "rds_uswest2" {
   allocated_storage       = 20
   storage_type            = "gp2"
   engine                  = "postgres"
-  engine_version          = "14.5"
+  engine_version          = "14.11"
   instance_class          = "db.t3.micro"
   db_name                 = "novadb"
   username                = "novaadmin"
@@ -844,6 +846,14 @@ resource "aws_s3_bucket" "backup_data" {
   provider = aws.uswest2
   bucket   = "${local.project_name}-${local.environment}-backup-data-${data.aws_caller_identity.current.account_id}"
   tags     = local.common_tags
+}
+
+resource "aws_s3_bucket_versioning" "backup_data" {
+  provider = aws.uswest2
+  bucket   = aws_s3_bucket.backup_data.id
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "backup_data" {
