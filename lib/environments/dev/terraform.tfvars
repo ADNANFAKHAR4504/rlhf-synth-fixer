@@ -30,3 +30,11 @@ backup_window           = "02:00-03:00"
 # Tags
 owner       = "dev-team"
 cost_center = "development"
+
+# Availability zones for us-west-2
+availability_zones = ["us-west-2a", "us-west-2b", "us-west-2c"]
+
+# Secrets configuration
+db_master_username_secret_name = "tap-stack/db/master-username"
+db_master_password_secret_name = "tap-stack/db/master-password"
+api_key_secret_name            = "tap-stack/api-key"
