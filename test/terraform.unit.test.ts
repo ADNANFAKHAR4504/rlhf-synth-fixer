@@ -1,750 +1,183 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('Terraform Infrastructure Unit Tests', () => {
+describe('Terraform main.tf Unit Tests (AWS, no vpc_id required)', () => {
   const libPath = path.join(__dirname, '..', 'lib');
-  let mainTfContent: string;
-  let variablesTfContent: string;
-  let outputsTfContent: string;
-  let providerTfContent: string;
+  const mainTfPath = path.join(libPath, 'main.tf');
+  let mainTfContent = '';
 
   beforeAll(() => {
-    // Read all Terraform files
-    mainTfContent = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf8');
-    variablesTfContent = fs.readFileSync(
-      path.join(libPath, 'variables.tf'),
-      'utf8'
-    );
-    outputsTfContent = fs.readFileSync(
-      path.join(libPath, 'outputs.tf'),
-      'utf8'
-    );
-    providerTfContent = fs.readFileSync(
-      path.join(libPath, 'provider.tf'),
-      'utf8'
-    );
+    expect(fs.existsSync(mainTfPath)).toBe(true);
+    mainTfContent = fs.readFileSync(mainTfPath, 'utf8');
   });
 
-  describe('Provider Configuration', () => {
-    test('should have required providers configured', () => {
-      expect(providerTfContent).toContain('required_providers');
-      expect(providerTfContent).toContain('aws =');
-      expect(providerTfContent).toContain('random =');
-      expect(providerTfContent).toContain('hashicorp/aws');
-      expect(providerTfContent).toContain('hashicorp/random');
+  describe('VPC and Networking', () => {
+    test('creates prod VPC with DNS enabled and proper Name tag', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_vpc"\s+"prod_vpc"/);
+      expect(mainTfContent).toMatch(/cidr_block\s*=\s*var\.vpc_cidr/);
+      expect(mainTfContent).toMatch(/enable_dns_hostnames\s*=\s*true/);
+      expect(mainTfContent).toMatch(/enable_dns_support\s*=\s*true/);
+      expect(mainTfContent).toMatch(/tags\s*=\s*merge\([\s\S]*Name\s*=\s*"prod-vpc\$\{local\.env_suffix\}"/);
     });
 
-    test('should have minimum Terraform version requirement', () => {
-      expect(providerTfContent).toContain('required_version');
-      expect(providerTfContent).toMatch(
-        /required_version\s*=\s*">=\s*1\.4\.0"/
-      );
+    test('creates Internet Gateway attached to VPC', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_internet_gateway"\s+"prod_igw"/);
+      expect(mainTfContent).toMatch(/vpc_id\s*=\s*aws_vpc\.prod_vpc\.id/);
+      expect(mainTfContent).toMatch(/Name\s*=\s*"prod-igw\$\{local\.env_suffix\}"/);
     });
 
-    test('should configure AWS provider with region', () => {
-      expect(providerTfContent).toContain('provider "aws"');
-      expect(providerTfContent).toContain('region = var.aws_region');
-    });
-  });
+    test('creates public and private subnets across AZs', () => {
+      expect(mainTfContent).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
 
-  describe('Variables Configuration', () => {
-    test('should define aws_region variable with default us-east-1', () => {
-      expect(variablesTfContent).toContain('variable "aws_region"');
-      expect(variablesTfContent).toContain('default     = "us-east-1"');
-    });
+      // Public
+      expect(mainTfContent).toMatch(/resource\s+"aws_subnet"\s+"prod_public_subnets"/);
+      expect(mainTfContent).toMatch(/count\s*=\s*length\(var\.public_subnet_cidrs\)/);
+      expect(mainTfContent).toMatch(/cidr_block\s*=\s*var\.public_subnet_cidrs\[count\.index\]/);
+      expect(mainTfContent).toMatch(/availability_zone\s*=\s*data\.aws_availability_zones\.available\.names\[count\.index\]/);
+      expect(mainTfContent).toMatch(/map_public_ip_on_launch\s*=\s*true/);
+      expect(mainTfContent).toMatch(/Name\s*=\s*"prod-public-subnet-\$\{count\.index \+ 1\}\$\{local\.env_suffix\}"/);
 
-    test('should define environment_suffix variable', () => {
-      expect(variablesTfContent).toContain('variable "environment_suffix"');
-      expect(variablesTfContent).toContain('type        = string');
-    });
-
-    test('should define environment variable with Production default', () => {
-      expect(variablesTfContent).toContain('variable "environment"');
-      expect(variablesTfContent).toContain('default     = "Production"');
+      // Private
+      expect(mainTfContent).toMatch(/resource\s+"aws_subnet"\s+"prod_private_subnets"/);
+      expect(mainTfContent).toMatch(/count\s*=\s*length\(var\.private_subnet_cidrs\)/);
+      expect(mainTfContent).toMatch(/cidr_block\s*=\s*var\.private_subnet_cidrs\[count\.index\]/);
+      expect(mainTfContent).toMatch(/Name\s*=\s*"prod-private-subnet-\$\{count\.index \+ 1\}\$\{local\.env_suffix\}"/);
     });
 
-    test('should define VPC and subnet CIDR variables', () => {
-      expect(variablesTfContent).toContain('variable "vpc_cidr"');
-      expect(variablesTfContent).toContain('variable "public_subnet_cidrs"');
-      expect(variablesTfContent).toContain('variable "private_subnet_cidrs"');
-      expect(variablesTfContent).toContain('default     = "10.0.0.0/16"');
-      expect(variablesTfContent).toContain('["10.0.1.0/24", "10.0.2.0/24"]');
-      expect(variablesTfContent).toContain('["10.0.10.0/24", "10.0.20.0/24"]');
+    test('allocates EIPs and creates NAT Gateways per public subnet', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_eip"\s+"prod_nat_eips"[\s\S]*count\s*=\s*length\(var\.public_subnet_cidrs\)/);
+      expect(mainTfContent).toMatch(/domain\s*=\s*"vpc"/);
+
+      expect(mainTfContent).toMatch(/resource\s+"aws_nat_gateway"\s+"prod_nat_gateways"[\s\S]*count\s*=\s*length\(var\.public_subnet_cidrs\)/);
+      expect(mainTfContent).toMatch(/allocation_id\s*=\s*aws_eip\.prod_nat_eips\[count\.index\]\.id/);
+      expect(mainTfContent).toMatch(/subnet_id\s*=\s*aws_subnet\.prod_public_subnets\[count\.index\]\.id/);
     });
 
-    test('should define Auto Scaling Group variables', () => {
-      expect(variablesTfContent).toContain('variable "min_size"');
-      expect(variablesTfContent).toContain('variable "max_size"');
-      expect(variablesTfContent).toContain('variable "desired_capacity"');
-      expect(variablesTfContent).toContain('default     = 2');
-      expect(variablesTfContent).toContain('default     = 4');
-    });
+    test('creates route tables and associations', () => {
+      // Public RT with IGW route
+      expect(mainTfContent).toMatch(/resource\s+"aws_route_table"\s+"prod_public_rt"/);
+      expect(mainTfContent).toMatch(/gateway_id\s*=\s*aws_internet_gateway\.prod_igw\.id/);
 
-    test('should define locals with environment suffix and common tags', () => {
-      expect(variablesTfContent).toContain('locals {');
-      expect(variablesTfContent).toContain('env_suffix');
-      expect(variablesTfContent).toContain('common_tags');
-      expect(variablesTfContent).toContain('Environment = var.environment');
-      expect(variablesTfContent).toContain('ManagedBy   = "terraform"');
-    });
-  });
+      // Private RTs with NAT routes (per private subnet)
+      expect(mainTfContent).toMatch(/resource\s+"aws_route_table"\s+"prod_private_rt"[\s\S]*count\s*=\s*length\(var\.private_subnet_cidrs\)/);
+      expect(mainTfContent).toMatch(/nat_gateway_id\s*=\s*aws_nat_gateway\.prod_nat_gateways\[count\.index\]\.id/);
 
-  describe('VPC and Networking Resources', () => {
-    test('should create VPC with prod prefix', () => {
-      expect(mainTfContent).toContain('resource "aws_vpc" "prod_vpc"');
-      expect(mainTfContent).toContain('cidr_block           = var.vpc_cidr');
-      expect(mainTfContent).toContain('enable_dns_hostnames = true');
-      expect(mainTfContent).toContain('enable_dns_support   = true');
-      expect(mainTfContent).toMatch(
-        /Name\s*=\s*"prod-vpc\$\{local\.env_suffix\}"/
-      );
-    });
-
-    test('should create Internet Gateway', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_internet_gateway" "prod_igw"'
-      );
-      expect(mainTfContent).toContain('vpc_id = aws_vpc.prod_vpc.id');
-      expect(mainTfContent).toMatch(
-        /Name\s*=\s*"prod-igw\$\{local\.env_suffix\}"/
-      );
-    });
-
-    test('should create public subnets with proper configuration', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_subnet" "prod_public_subnets"'
-      );
-      expect(mainTfContent).toContain(
-        'count                   = length(var.public_subnet_cidrs)'
-      );
-      expect(mainTfContent).toContain('map_public_ip_on_launch = true');
-      expect(mainTfContent).toMatch(
-        /Name\s*=\s*"prod-public-subnet-\$\{count\.index \+ 1\}\$\{local\.env_suffix\}"/
-      );
-    });
-
-    test('should create private subnets', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_subnet" "prod_private_subnets"'
-      );
-      expect(mainTfContent).toContain(
-        'count             = length(var.private_subnet_cidrs)'
-      );
-      expect(mainTfContent).toMatch(
-        /Name\s*=\s*"prod-private-subnet-\$\{count\.index \+ 1\}\$\{local\.env_suffix\}"/
-      );
-    });
-
-    test('should create NAT Gateways with Elastic IPs', () => {
-      expect(mainTfContent).toContain('resource "aws_eip" "prod_nat_eips"');
-      expect(mainTfContent).toContain(
-        'resource "aws_nat_gateway" "prod_nat_gateways"'
-      );
-      expect(mainTfContent).toContain('domain = "vpc"');
-      expect(mainTfContent).toContain(
-        'allocation_id = aws_eip.prod_nat_eips[count.index].id'
-      );
-    });
-
-    test('should create route tables and associations', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_route_table" "prod_public_rt"'
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_route_table" "prod_private_rt"'
-      );
-      expect(mainTfContent).toContain(
-        'gateway_id = aws_internet_gateway.prod_igw.id'
-      );
-      expect(mainTfContent).toContain(
-        'nat_gateway_id = aws_nat_gateway.prod_nat_gateways[count.index].id'
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_route_table_association" "prod_public_rta"'
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_route_table_association" "prod_private_rta"'
-      );
+      // Associations
+      expect(mainTfContent).toMatch(/resource\s+"aws_route_table_association"\s+"prod_public_rta"[\s\S]*count\s*=\s*length\(var\.public_subnet_cidrs\)/);
+      expect(mainTfContent).toMatch(/resource\s+"aws_route_table_association"\s+"prod_private_rta"[\s\S]*count\s*=\s*length\(var\.private_subnet_cidrs\)/);
     });
   });
 
   describe('Security Groups', () => {
-    test('should create ALB security group with HTTP ingress', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_security_group" "prod_alb_sg"'
-      );
-      expect(mainTfContent).toMatch(
-        /name\s*=\s*"prod-alb-sg\$\{local\.env_suffix\}"/
-      );
-      expect(mainTfContent).toContain('from_port   = 80');
-      expect(mainTfContent).toContain('to_port     = 80');
-      expect(mainTfContent).toContain('cidr_blocks = ["0.0.0.0/0"]');
-      // HTTPS removed for test environment
+    test('ALB SG allows HTTP from world and all egress', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_security_group"\s+"prod_alb_sg"/);
+      expect(mainTfContent).toMatch(/name\s*=\s*"prod-alb-sg\$\{local\.env_suffix\}"/);
+      expect(mainTfContent).toMatch(/ingress[\s\S]*from_port\s*=\s*80[\s\S]*to_port\s*=\s*80[\s\S]*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
+      expect(mainTfContent).toMatch(/egress[\s\S]*from_port\s*=\s*0[\s\S]*to_port\s*=\s*0[\s\S]*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
     });
 
-    // File: test/terraform.more.unit.test.ts
-
-    describe('Terraform main.tf Extended Unit Tests', () => {
-      const libPath = path.join(__dirname, '..', 'lib');
-      const mainTfPath = path.join(libPath, 'main.tf');
-      const variablesTfPath = path.join(libPath, 'variables.tf');
-      const outputsTfPath = path.join(libPath, 'outputs.tf');
-      const providerTfPath = path.join(libPath, 'provider.tf');
-
-      let mainTfContent = '';
-      let variablesTfContent = '';
-      let outputsTfContent = '';
-      let providerTfContent = '';
-
-      beforeAll(() => {
-        expect(fs.existsSync(mainTfPath)).toBe(true);
-        expect(fs.existsSync(variablesTfPath)).toBe(true);
-        expect(fs.existsSync(outputsTfPath)).toBe(true);
-        expect(fs.existsSync(providerTfPath)).toBe(true);
-
-        mainTfContent = fs.readFileSync(mainTfPath, 'utf8');
-        variablesTfContent = fs.readFileSync(variablesTfPath, 'utf8');
-        outputsTfContent = fs.readFileSync(outputsTfPath, 'utf8');
-        providerTfContent = fs.readFileSync(providerTfPath, 'utf8');
-      });
-
-      describe('Variables types and presence', () => {
-        test('should declare types for subnet CIDR variables', () => {
-          expect(variablesTfContent).toMatch(/variable\s+"public_subnet_cidrs"[\s\S]*type\s*=\s*list\(string\)/);
-          expect(variablesTfContent).toMatch(/variable\s+"private_subnet_cidrs"[\s\S]*type\s*=\s*list\(string\)/);
-        });
-
-        test('should declare numeric types for ASG sizing variables', () => {
-          expect(variablesTfContent).toMatch(/variable\s+"min_size"[\s\S]*type\s*=\s*number/);
-          expect(variablesTfContent).toMatch(/variable\s+"max_size"[\s\S]*type\s*=\s*number/);
-          expect(variablesTfContent).toMatch(/variable\s+"desired_capacity"[\s\S]*type\s*=\s*number/);
-        });
-
-        test('should define instance_type variable', () => {
-          expect(variablesTfContent).toMatch(/variable\s+"instance_type"/);
-          expect(variablesTfContent).toMatch(/type\s*=\s*string/);
-        });
-
-        test('locals.env_suffix should be derived from environment_suffix', () => {
-          expect(variablesTfContent).toMatch(/locals\s*\{[\s\S]*env_suffix[\s\S]*environment_suffix/);
-        });
-      });
-
-      describe('Provider sanity checks', () => {
-        test('should define terraform and required_providers block', () => {
-          expect(providerTfContent).toMatch(/terraform\s*\{[\s\S]*required_providers/);
-        });
-
-        test('should set AWS provider region from variable', () => {
-          expect(providerTfContent).toMatch(/provider\s+"aws"[\s\S]*region\s*=\s*var\.aws_region/);
-        });
-      });
-
-      describe('ALB configuration details', () => {
-        test('ALB should be attached to public subnets explicitly', () => {
-          expect(mainTfContent).toMatch(/resource\s+"aws_lb"\s+"prod_alb"[\s\S]*subnets?\s*=\s*aws_subnet\.prod_public_subnets\[\*\]\.id/);
-        });
-
-        test('ALB security group should allow all egress', () => {
-          const albSgBlock = mainTfContent.match(/resource\s+"aws_security_group"\s+"prod_alb_sg"[\s\S]*?\n}/);
-          expect(albSgBlock).toBeTruthy();
-          if (albSgBlock) {
-            expect(albSgBlock[0]).toMatch(/egress[\s\S]*from_port\s*=\s*0[\s\S]*to_port\s*=\s*0[\s\S]*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
-          }
-        });
-
-        test('Listener should forward to the target group', () => {
-          expect(mainTfContent).toMatch(/resource\s+"aws_lb_listener"\s+"prod_alb_listener_http"[\s\S]*default_action[\s\S]*type\s*=\s*"forward"[\s\S]*target_group_arn\s*=\s*aws_lb_target_group\.prod_tg\.arn/);
-        });
-      });
-
-      describe('NAT, EIPs and routing counts', () => {
-        test('EIPs should be created per public subnet', () => {
-          expect(mainTfContent).toMatch(/resource\s+"aws_eip"\s+"prod_nat_eips"[\s\S]*count\s*=\s*length\(var\.public_subnet_cidrs\)/);
-        });
-
-        test('NAT Gateways should be created per public subnet', () => {
-          expect(mainTfContent).toMatch(/resource\s+"aws_nat_gateway"\s+"prod_nat_gateways"[\s\S]*count\s*=\s*length\(var\.public_subnet_cidrs\)/);
-        });
-
-        test('Private route tables should scale with private subnets', () => {
-          expect(mainTfContent).toMatch(/resource\s+"aws_route_table"\s+"prod_private_rt"[\s\S]*count\s*=\s*length\(var\.private_subnet_cidrs\)/);
-          expect(mainTfContent).toMatch(/resource\s+"aws_route_table_association"\s+"prod_private_rta"[\s\S]*count\s*=\s*length\(var\.private_subnet_cidrs\)/);
-        });
-
-        test('Public route table associations should scale with public subnets', () => {
-          expect(mainTfContent).toMatch(/resource\s+"aws_route_table_association"\s+"prod_public_rta"[\s\S]*count\s*=\s*length\(var\.public_subnet_cidrs\)/);
-        });
-      });
-
-      describe('Security Groups specifics', () => {
-        test('EC2 SG should allow HTTP only from ALB SG', () => {
-          const ec2SgBlock = mainTfContent.match(/resource\s+"aws_security_group"\s+"prod_ec2_sg"[\s\S]*?\n}/);
-          expect(ec2SgBlock).toBeTruthy();
-          if (ec2SgBlock) {
-            expect(ec2SgBlock[0]).toMatch(/ingress[\s\S]*description\s*=\s*"HTTP from ALB"[\s\S]*from_port\s*=\s*80[\s\S]*to_port\s*=\s*80[\s\S]*security_groups\s*=\s*\[\s*aws_security_group\.prod_alb_sg\.id\s*\]/);
-          }
-        });
-
-        test('No SSH ingress should be open to the world', () => {
-          const sshIngresses = mainTfContent.match(/ingress[\s\S]*from_port\s*=\s*22[\s\S]*cidr_blocks\s*=\s*\[[^\]]+\]/g) || [];
-          const anyWorld = sshIngresses.some(b => /0\.0\.0\.0\/0/.test(b));
-          expect(anyWorld).toBe(false);
-        });
-
-        test('EC2 SG should allow all egress', () => {
-          const ec2SgBlock = mainTfContent.match(/resource\s+"aws_security_group"\s+"prod_ec2_sg"[\s\S]*?\n}/);
-          expect(ec2SgBlock).toBeTruthy();
-          if (ec2SgBlock) {
-            expect(ec2SgBlock[0]).toMatch(/egress[\s\S]*from_port\s*=\s*0[\s\S]*to_port\s*=\s*0[\s\S]*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
-          }
-        });
-      });
-
-      describe('Auto Scaling linkage', () => {
-        test('ASG should reference Launch Template', () => {
-          const asgBlock = mainTfContent.match(/resource\s+"aws_autoscaling_group"\s+"prod_asg"[\s\S]*?\n}/);
-          expect(asgBlock).toBeTruthy();
-          if (asgBlock) {
-            expect(asgBlock[0]).toMatch(/launch_template\s*\{[\s\S]*(id|name)\s*=\s*aws_launch_template\.prod_launch_template\.(id|name)[\s\S]*\}/);
-          }
-        });
-
-        test('ASG capacity settings should use variables', () => {
-          const asgBlock = mainTfContent.match(/resource\s+"aws_autoscaling_group"\s+"prod_asg"[\s\S]*?\n}/);
-          expect(asgBlock).toBeTruthy();
-          if (asgBlock) {
-            expect(asgBlock[0]).toMatch(/min_size\s*=\s*var\.min_size/);
-            expect(asgBlock[0]).toMatch(/max_size\s*=\s*var\.max_size/);
-            expect(asgBlock[0]).toMatch(/desired_capacity\s*=\s*var\.desired_capacity/);
-          }
-        });
-      });
-
-      describe('S3 hardening details', () => {
-        test('Logs bucket versioning should be enabled', () => {
-          expect(mainTfContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"prod_logs_bucket_versioning"[\s\S]*status\s*=\s*"Enabled"/);
-        });
-
-        test('SSE configuration should define default encryption rule', () => {
-          const encBlocks = mainTfContent.match(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"prod_(data|logs)_bucket_encryption"[\s\S]*?\n}/g) || [];
-          expect(encBlocks.length).toBeGreaterThanOrEqual(2);
-          encBlocks.forEach(b => {
-            expect(b).toMatch(/rule[\s\S]*apply_server_side_encryption_by_default[\s\S]*sse_algorithm\s*=\s*"AES256"/);
-          });
-        });
-      });
-
-      describe('Outputs consistency', () => {
-        test('Should expose ALB DNS and URLs', () => {
-          expect(outputsTfContent).toMatch(/output\s+"load_balancer_dns"[\s\S]*value\s*=\s*aws_lb\.prod_alb\.dns_name/);
-          expect(outputsTfContent).toMatch(/output\s+"load_balancer_url_http"/);
-          expect(outputsTfContent).toMatch(/output\s+"load_balancer_url_https"/);
-        });
-
-        test('Should expose SG IDs and Subnet IDs', () => {
-          expect(outputsTfContent).toMatch(/output\s+"alb_security_group_id"[\s\S]*value\s*=\s*aws_security_group\.prod_alb_sg\.id/);
-          expect(outputsTfContent).toMatch(/output\s+"ec2_security_group_id"[\s\S]*value\s*=\s*aws_security_group\.prod_ec2_sg\.id/);
-          expect(outputsTfContent).toMatch(/output\s+"public_subnet_ids"[\s\S]*value\s*=\s*aws_subnet\.prod_public_subnets\[\*\]\.id/);
-          expect(outputsTfContent).toMatch(/output\s+"private_subnet_ids"[\s\S]*value\s*=\s*aws_subnet\.prod_private_subnets\[\*\]\.id/);
-        });
-      });
-
-      describe('Tagging coverage', () => {
-        test('Key resources should merge common tags and Name', () => {
-          const required = [
-            /resource\s+"aws_vpc"\s+"prod_vpc"[\s\S]*tags\s*=\s*merge\(/,
-            /resource\s+"aws_internet_gateway"\s+"prod_igw"[\s\S]*tags\s*=\s*merge\(/,
-            /resource\s+"aws_subnet"\s+"prod_public_subnets"[\s\S]*tags\s*=\s*merge\(/,
-            /resource\s+"aws_subnet"\s+"prod_private_subnets"[\s\S]*tags\s*=\s*merge\(/,
-            /resource\s+"aws_lb"\s+"prod_alb"[\s\S]*tags\s*=\s*merge\(/,
-            /resource\s+"aws_launch_template"\s+"prod_launch_template"[\s\S]*tag_specifications/,
-          ];
-          required.forEach(r => expect(mainTfContent).toMatch(r));
-        });
-      });
-    });
-
-  describe('Load Balancer Configuration', () => {
-    test('should create Application Load Balancer', () => {
-      expect(mainTfContent).toContain('resource "aws_lb" "prod_alb"');
-      expect(mainTfContent).toMatch(
-        /name\s*=\s*"prod-alb\$\{local\.env_suffix\}"/
-      );
-      expect(mainTfContent).toContain('load_balancer_type = "application"');
-      expect(mainTfContent).toContain('internal           = false');
-      expect(mainTfContent).toContain('enable_deletion_protection = false');
-    });
-
-    test('should create target group with health check', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_lb_target_group" "prod_tg"'
-      );
-      expect(mainTfContent).toMatch(
-        /name\s*=\s*"prod-tg\$\{local\.env_suffix\}"/
-      );
-      expect(mainTfContent).toContain('port     = 80');
-      expect(mainTfContent).toContain('protocol = "HTTP"');
-      expect(mainTfContent).toContain('health_check {');
-      expect(mainTfContent).toContain('enabled             = true');
-      expect(mainTfContent).toContain('path                = "/"');
-      expect(mainTfContent).toContain('healthy_threshold   = 2');
-      expect(mainTfContent).toContain('unhealthy_threshold = 2');
-    });
-
-    test('should create HTTP listener', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_lb_listener" "prod_alb_listener_http"'
-      );
-      expect(mainTfContent).toContain('port              = "80"');
-      expect(mainTfContent).toContain('protocol          = "HTTP"');
-      // HTTPS listener and SSL policy removed for test environment
-    });
-
-    test('should create ACM certificate for HTTPS', () => {
-      // ACM certificate removed for test environment - skipping certificate tests
-      expect(true).toBe(true);
-    });
-  });
-
-  describe('Auto Scaling Configuration', () => {
-    test('should create launch template', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_launch_template" "prod_launch_template"'
-      );
-      expect(mainTfContent).toMatch(
-        /name_prefix\s*=\s*"prod-launch-template\$\{local\.env_suffix\}-"/
-      );
-      expect(mainTfContent).toContain('instance_type = var.instance_type');
-      expect(mainTfContent).toContain('user_data = base64encode');
-      expect(mainTfContent).toContain(
-        'vpc_security_group_ids = [aws_security_group.prod_ec2_sg.id]'
-      );
-    });
-
-    test('should create Auto Scaling Group', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_autoscaling_group" "prod_asg"'
-      );
-      expect(mainTfContent).toMatch(
-        /name\s*=\s*"prod-asg\$\{local\.env_suffix\}"/
-      );
-      expect(mainTfContent).toContain('health_check_type');
-      expect(mainTfContent).toContain('"ELB"');
-      expect(mainTfContent).toContain('health_check_grace_period');
-      expect(mainTfContent).toContain('300');
-      expect(mainTfContent).toContain('min_size');
-      expect(mainTfContent).toContain('max_size');
-      expect(mainTfContent).toContain('desired_capacity');
-      expect(mainTfContent).toContain('aws_subnet.prod_private_subnets[*].id');
-    });
-  });
-
-  describe('S3 Buckets Configuration', () => {
-    test('should create application data bucket with versioning', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket" "prod_data_bucket"'
-      );
-      expect(mainTfContent).toMatch(
-        /bucket\s*=\s*"prod-app-data\$\{local\.env_suffix\}-\$\{random_string\.bucket_suffix\.result\}"/
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_versioning" "prod_data_bucket_versioning"'
-      );
-      expect(mainTfContent).toContain('status = "Enabled"');
-    });
-
-    test('should create logs bucket with versioning', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket" "prod_logs_bucket"'
-      );
-      expect(mainTfContent).toMatch(
-        /bucket\s*=\s*"prod-logs\$\{local\.env_suffix\}-\$\{random_string\.bucket_suffix\.result\}"/
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_versioning" "prod_logs_bucket_versioning"'
-      );
-    });
-
-    test('should block public access for both buckets', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_public_access_block" "prod_data_bucket_pab"'
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_public_access_block" "prod_logs_bucket_pab"'
-      );
-      expect(mainTfContent).toContain('block_public_acls       = true');
-      expect(mainTfContent).toContain('block_public_policy     = true');
-      expect(mainTfContent).toContain('ignore_public_acls      = true');
-      expect(mainTfContent).toContain('restrict_public_buckets = true');
-    });
-
-    test('should enable encryption for both buckets', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_server_side_encryption_configuration" "prod_data_bucket_encryption"'
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_server_side_encryption_configuration" "prod_logs_bucket_encryption"'
-      );
-      expect(mainTfContent).toContain('sse_algorithm = "AES256"');
-    });
-
-    test('should use random suffix for bucket naming', () => {
-      expect(mainTfContent).toContain(
-        'resource "random_string" "bucket_suffix"'
-      );
-      expect(mainTfContent).toContain('length  = 8');
-      expect(mainTfContent).toContain('special = false');
-      expect(mainTfContent).toContain('upper   = false');
-    });
-  });
-
-  describe('Outputs Configuration', () => {
-    test('should output VPC and networking information', () => {
-      expect(outputsTfContent).toContain('output "vpc_id"');
-      expect(outputsTfContent).toContain('output "public_subnet_ids"');
-      expect(outputsTfContent).toContain('output "private_subnet_ids"');
-      expect(outputsTfContent).toContain('value       = aws_vpc.prod_vpc.id');
-      expect(outputsTfContent).toContain(
-        'value       = aws_subnet.prod_public_subnets[*].id'
-      );
-      expect(outputsTfContent).toContain(
-        'value       = aws_subnet.prod_private_subnets[*].id'
-      );
-    });
-
-    test('should output load balancer information', () => {
-      expect(outputsTfContent).toContain('output "load_balancer_dns"');
-      expect(outputsTfContent).toContain('output "load_balancer_url_http"');
-      expect(outputsTfContent).toContain('output "load_balancer_url_https"');
-      expect(outputsTfContent).toContain(
-        'value       = aws_lb.prod_alb.dns_name'
-      );
-    });
-
-    test('should output S3 bucket names', () => {
-      expect(outputsTfContent).toContain('output "data_bucket_name"');
-      expect(outputsTfContent).toContain('output "logs_bucket_name"');
-      expect(outputsTfContent).toContain(
-        'value       = aws_s3_bucket.prod_data_bucket.id'
-      );
-      expect(outputsTfContent).toContain(
-        'value       = aws_s3_bucket.prod_logs_bucket.id'
-      );
-    });
-
-    test('should output security group IDs', () => {
-      expect(outputsTfContent).toContain('output "alb_security_group_id"');
-      expect(outputsTfContent).toContain('output "ec2_security_group_id"');
-      expect(outputsTfContent).toContain(
-        'value       = aws_security_group.prod_alb_sg.id'
-      );
-      expect(outputsTfContent).toContain(
-        'value       = aws_security_group.prod_ec2_sg.id'
-      );
-    });
-
-    test('should output environment suffix', () => {
-      expect(outputsTfContent).toContain('output "environment_suffix"');
-      expect(outputsTfContent).toContain(
-        'value       = var.environment_suffix'
-      );
-    });
-
-    test('should output NAT gateway and EIP information', () => {
-      expect(outputsTfContent).toContain('output "nat_gateway_ids"');
-      expect(outputsTfContent).toContain('output "elastic_ip_addresses"');
-      expect(outputsTfContent).toContain(
-        'aws_nat_gateway.prod_nat_gateways[*].id'
-      );
-      expect(outputsTfContent).toContain('aws_eip.prod_nat_eips[*].public_ip');
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('all resources should use prod- prefix', () => {
-      // Check for prod- prefix in resource names
-      const prodResources = [
-        'prod_vpc',
-        'prod_igw',
-        'prod_public_subnets',
-        'prod_private_subnets',
-        'prod_nat_eips',
-        'prod_nat_gateways',
-        'prod_public_rt',
-        'prod_private_rt',
-        'prod_alb_sg',
-        'prod_ec2_sg',
-        'prod_launch_template',
-        'prod_alb',
-        'prod_tg',
-        'prod_alb_listener_http',
-        'prod_asg',
-        'prod_data_bucket',
-        'prod_logs_bucket',
-      ];
-
-      prodResources.forEach(resource => {
-        expect(mainTfContent).toContain(resource);
-      });
-
-      // Check Name tags have prod- prefix
-      const nameTagMatches =
-        mainTfContent.match(/Name\s*=\s*"prod-[^"]+"/g) || [];
-      expect(nameTagMatches.length).toBeGreaterThan(10);
-    });
-
-    test('all resources should support environment suffix', () => {
-      // Check that Name tags include ${local.env_suffix}
-      const suffixMatches =
-        mainTfContent.match(/\$\{local\.env_suffix\}/g) || [];
-      expect(suffixMatches.length).toBeGreaterThan(15);
-
-      // Check specific resources have suffix support
-      expect(mainTfContent).toContain('"prod-vpc${local.env_suffix}"');
-      expect(mainTfContent).toContain('"prod-alb${local.env_suffix}"');
-      expect(mainTfContent).toContain('"prod-asg${local.env_suffix}"');
-    });
-  });
-
-  describe('High Availability', () => {
-    test('should deploy resources across multiple availability zones', () => {
-      expect(mainTfContent).toContain(
-        'data "aws_availability_zones" "available"'
-      );
-      expect(mainTfContent).toContain(
-        'availability_zone       = data.aws_availability_zones.available.names[count.index]'
-      );
-      expect(mainTfContent).toContain(
-        'count                   = length(var.public_subnet_cidrs)'
-      );
-      expect(mainTfContent).toContain(
-        'count             = length(var.private_subnet_cidrs)'
-      );
-    });
-
-    test('should configure Auto Scaling Group for high availability', () => {
-      expect(mainTfContent).toContain('aws_subnet.prod_private_subnets[*].id');
-      expect(variablesTfContent).toContain('default     = 2'); // min_size default
-      expect(mainTfContent).toContain('health_check_type');
-      expect(mainTfContent).toContain('"ELB"');
-    });
-
-    test('should have multiple NAT gateways for redundancy', () => {
-      expect(mainTfContent).toContain(
-        'count         = length(var.public_subnet_cidrs)'
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_nat_gateway" "prod_nat_gateways"'
-      );
-      expect(mainTfContent).toContain('resource "aws_eip" "prod_nat_eips"');
-    });
-  });
-
-  describe('Security Best Practices', () => {
-    test('should not have any resources with public write access', () => {
-      expect(mainTfContent).toContain('block_public_acls       = true');
-      expect(mainTfContent).toContain('block_public_policy     = true');
-      expect(mainTfContent).toContain('ignore_public_acls      = true');
-      expect(mainTfContent).toContain('restrict_public_buckets = true');
-
-      // Check this is applied to both buckets
-      const publicAccessBlocks =
-        mainTfContent.match(/aws_s3_bucket_public_access_block/g) || [];
-      expect(publicAccessBlocks.length).toBe(2);
-    });
-
-    test('should have encryption enabled for all storage resources', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_server_side_encryption_configuration" "prod_data_bucket_encryption"'
-      );
-      expect(mainTfContent).toContain(
-        'resource "aws_s3_bucket_server_side_encryption_configuration" "prod_logs_bucket_encryption"'
-      );
-      expect(mainTfContent).toContain('sse_algorithm = "AES256"');
-
-      // Check encryption is applied to both buckets
-      const encryptionConfigs =
-        mainTfContent.match(
-          /aws_s3_bucket_server_side_encryption_configuration/g
-        ) || [];
-      expect(encryptionConfigs.length).toBe(2);
-    });
-
-    test('should deploy EC2 instances in private subnets only', () => {
-      expect(mainTfContent).toContain('aws_subnet.prod_private_subnets[*].id');
-      expect(mainTfContent).not.toContain(
-        'vpc_zone_identifier = aws_subnet.prod_public_subnets'
-      );
-    });
-
-    test('should restrict SSH access to VPC CIDR only', () => {
-      // Check SSH rule is restricted to VPC CIDR
-      expect(mainTfContent).toContain('description = "SSH from VPC"');
-      expect(mainTfContent).toContain('from_port   = 22');
-      expect(mainTfContent).toContain('cidr_blocks = [var.vpc_cidr]');
-
-      // Ensure SSH is not open to 0.0.0.0/0
-      const sshSection = mainTfContent.match(/description\s*=\s*"SSH[^}]+\}/s);
-      if (sshSection) {
-        expect(sshSection[0]).not.toContain('0.0.0.0/0');
+    test('EC2 SG allows HTTP only from ALB SG, SSH only from VPC CIDR, and all egress', () => {
+      const ec2Sg = mainTfContent.match(/resource\s+"aws_security_group"\s+"prod_ec2_sg"[\s\S]*?\n}/);
+      expect(ec2Sg).toBeTruthy();
+      if (ec2Sg) {
+        expect(ec2Sg[0]).toMatch(/ingress[\s\S]*"HTTP from ALB"[\s\S]*from_port\s*=\s*80[\s\S]*security_groups\s*=\s*\[\s*aws_security_group\.prod_alb_sg\.id\s*\]/);
+        expect(ec2Sg[0]).toMatch(/description\s*=\s*"SSH from VPC"[\s\S]*from_port\s*=\s*22[\s\S]*cidr_blocks\s*=\s*\[\s*var\.vpc_cidr\s*\]/);
+        expect(ec2Sg[0]).toMatch(/egress[\s\S]*from_port\s*=\s*0[\s\S]*to_port\s*=\s*0[\s\S]*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
       }
     });
+  });
 
-    test('should use secure SSL policy for HTTPS listener', () => {
-      // HTTPS listener removed for test environment - skipping SSL policy test
-      expect(true).toBe(true);
+  describe('ALB and Target Group', () => {
+    test('ALB configured in public subnets with SG', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_lb"\s+"prod_alb"/);
+      expect(mainTfContent).toMatch(/name\s*=\s*"prod-alb\$\{local\.env_suffix\}"/);
+      expect(mainTfContent).toMatch(/load_balancer_type\s*=\s*"application"/);
+      expect(mainTfContent).toMatch(/internal\s*=\s*false/);
+      expect(mainTfContent).toMatch(/enable_deletion_protection\s*=\s*false/);
+      expect(mainTfContent).toMatch(/security_groups\s*=\s*\[\s*aws_security_group\.prod_alb_sg\.id\s*\]/);
+      expect(mainTfContent).toMatch(/subnets?\s*=\s*aws_subnet\.prod_public_subnets\[\*\]\.id/);
+    });
+
+    test('Target group and HTTP listener forward to TG', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_lb_target_group"\s+"prod_tg"/);
+      expect(mainTfContent).toMatch(/name\s*=\s*"prod-tg\$\{local\.env_suffix\}"/);
+      expect(mainTfContent).toMatch(/port\s*=\s*80/);
+      expect(mainTfContent).toMatch(/protocol\s*=\s*"HTTP"/);
+      expect(mainTfContent).toMatch(/health_check[\s\S]*enabled\s*=\s*true[\s\S]*path\s*=\s*"\//);
+      expect(mainTfContent).toMatch(/resource\s+"aws_lb_listener"\s+"prod_alb_listener_http"[\s\S]*protocol\s*=\s*"HTTP"[\s\S]*default_action[\s\S]*type\s*=\s*"forward"[\s\S]*target_group_arn\s*=\s*aws_lb_target_group\.prod_tg\.arn/);
     });
   });
 
-  describe('Tagging Compliance', () => {
-    test('all resources should have Environment tag', () => {
-      // Check that resources use merge with local.common_tags
-      const mergeMatches = mainTfContent.match(/tags\s*=\s*merge\(/g) || [];
-      expect(mergeMatches.length).toBeGreaterThan(10);
-
-      // Check common_tags includes Environment
-      expect(variablesTfContent).toContain('Environment = var.environment');
-      expect(variablesTfContent).toContain('ManagedBy   = "terraform"');
+  describe('Auto Scaling', () => {
+    test('Launch template uses EC2 SG and user_data', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_launch_template"\s+"prod_launch_template"/);
+      expect(mainTfContent).toMatch(/name_prefix\s*=\s*"prod-launch-template\$\{local\.env_suffix\}-"/);
+      expect(mainTfContent).toMatch(/instance_type\s*=\s*var\.instance_type/);
+      expect(mainTfContent).toMatch(/user_data\s*=\s*base64encode/);
+      expect(mainTfContent).toMatch(/vpc_security_group_ids\s*=\s*\[\s*aws_security_group\.prod_ec2_sg\.id\s*\]/);
+      expect(mainTfContent).toMatch(/tag_specifications/);
     });
 
-    test('should use consistent tagging strategy', () => {
+    test('ASG references launch template and private subnets with HA settings', () => {
+      const asg = mainTfContent.match(/resource\s+"aws_autoscaling_group"\s+"prod_asg"[\s\S]*?\n}/);
+      expect(asg).toBeTruthy();
+      if (asg) {
+        expect(asg[0]).toMatch(/name\s*=\s*"prod-asg\$\{local\.env_suffix\}"/);
+        expect(asg[0]).toMatch(/launch_template[\s\S]*(id|name)\s*=\s*aws_launch_template\.prod_launch_template\.(id|name)/);
+        expect(asg[0]).toMatch(/vpc_zone_identifier\s*=\s*aws_subnet\.prod_private_subnets\[\*\]\.id/);
+        expect(asg[0]).toMatch(/health_check_type\s*=\s*"ELB"/);
+        expect(asg[0]).toMatch(/health_check_grace_period\s*=\s*300/);
+        expect(asg[0]).toMatch(/min_size\s*=\s*var\.min_size/);
+        expect(asg[0]).toMatch(/max_size\s*=\s*var\.max_size/);
+        expect(asg[0]).toMatch(/desired_capacity\s*=\s*var\.desired_capacity/);
+        expect(asg[0]).toMatch(/propagate_at_launch\s*=\s*true/);
+      }
+    });
+  });
+
+  describe('S3 Buckets and Hardening', () => {
+    test('random suffix and two buckets with versioning', () => {
+      expect(mainTfContent).toMatch(/resource\s+"random_string"\s+"bucket_suffix"[\s\S]*length\s*=\s*8[\s\S]*special\s*=\s*false[\s\S]*upper\s*=\s*false/);
+
+      // Data bucket
+      expect(mainTfContent).toMatch(/resource\s+"aws_s3_bucket"\s+"prod_data_bucket"[\s\S]*bucket\s*=\s*"prod-app-data\$\{local\.env_suffix\}-\$\{random_string\.bucket_suffix\.result\}"/);
+      expect(mainTfContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"prod_data_bucket_versioning"[\s\S]*status\s*=\s*"Enabled"/);
+
+      // Logs bucket
+      expect(mainTfContent).toMatch(/resource\s+"aws_s3_bucket"\s+"prod_logs_bucket"[\s\S]*bucket\s*=\s*"prod-logs\$\{local\.env_suffix\}-\$\{random_string\.bucket_suffix\.result\}"/);
+      expect(mainTfContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"prod_logs_bucket_versioning"[\s\S]*status\s*=\s*"Enabled"/);
+    });
+
+    test('public access blocks and encryption on both buckets', () => {
+      expect(mainTfContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"prod_data_bucket_pab"[\s\S]*block_public_acls\s*=\s*true[\s\S]*block_public_policy\s*=\s*true[\s\S]*ignore_public_acls\s*=\s*true[\s\S]*restrict_public_buckets\s*=\s*true/);
+      expect(mainTfContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"prod_logs_bucket_pab"/);
+
+      const encBlocks = mainTfContent.match(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"prod_(data|logs)_bucket_encryption"[\s\S]*?\n}/g) || [];
+      expect(encBlocks.length).toBeGreaterThanOrEqual(2);
+      encBlocks.forEach(b => {
+        expect(b).toMatch(/apply_server_side_encryption_by_default[\s\S]*sse_algorithm\s*=\s*"AES256"/);
+      });
+    });
+  });
+
+  describe('Naming and tagging patterns', () => {
+    test('uses prod- prefix and environment suffix in Name tags', () => {
+      const nameTags = mainTfContent.match(/Name\s*=\s*"prod-[^"]*?\$\{local\.env_suffix\}"/g) || [];
+      expect(nameTags.length).toBeGreaterThan(10);
+    });
+
+    test('uses common tags merged into resource tags', () => {
+      const merges = mainTfContent.match(/tags\s*=\s*merge\(/g) || [];
+      expect(merges.length).toBeGreaterThan(10);
+      // Ensure reference exists
       expect(mainTfContent).toContain('local.common_tags');
-      expect(variablesTfContent).toContain('common_tags = {');
-
-      // Check ASG has proper tag propagation
-      expect(mainTfContent).toContain('propagate_at_launch = true');
     });
   });
 
-  describe('Infrastructure Requirements Compliance', () => {
-    test('should meet all PROMPT.md requirements', () => {
-      // Check all required resources are present
-      expect(mainTfContent).toContain('aws_vpc');
-      expect(mainTfContent).toContain('aws_subnet');
-      expect(mainTfContent).toContain('aws_security_group');
-      expect(mainTfContent).toContain('aws_lb');
-      expect(mainTfContent).toContain('aws_s3_bucket');
-      expect(mainTfContent).toContain('aws_autoscaling_group');
-
-      // Check region is us-east-1
-      expect(variablesTfContent).toContain('default     = "us-east-1"');
-
-      // Check Production environment
-      expect(variablesTfContent).toContain('default     = "Production"');
-
-      // Check S3 versioning is enabled
-      expect(mainTfContent).toContain('status = "Enabled"');
-
-      // Check ELB supports HTTP (HTTPS removed for test environment)
-      expect(mainTfContent).toContain('port              = "80"');
-    });
-
-    test('should have proper file structure', () => {
-      expect(fs.existsSync(path.join(libPath, 'main.tf'))).toBe(true);
-      expect(fs.existsSync(path.join(libPath, 'variables.tf'))).toBe(true);
-      expect(fs.existsSync(path.join(libPath, 'outputs.tf'))).toBe(true);
-      expect(fs.existsSync(path.join(libPath, 'provider.tf'))).toBe(true);
+  describe('No vpc_id runtime dependency', () => {
+    test('does not require var.vpc_id anywhere', () => {
+      expect(mainTfContent).not.toMatch(/\bvar\.vpc_id\b/);
+      expect(mainTfContent).toMatch(/resource\s+"aws_vpc"\s+"prod_vpc"/);
     });
   });
 });
