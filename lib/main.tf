@@ -248,7 +248,7 @@ resource "aws_iam_role_policy_attachment" "s3_replication_attach" {
 data "aws_caller_identity" "current" {}
 
 resource "aws_cloudtrail" "main" {
-  provider                      = aws.useast1
+  provider                      = aws.uswest2
   name                          = "${local.project_name}-${local.environment}-audit-trail"
   s3_bucket_name                = aws_s3_bucket.logs.id
   is_multi_region_trail         = true
@@ -481,7 +481,7 @@ resource "aws_db_instance" "rds_useast1" {
   allocated_storage       = 20
   storage_type            = "gp2"
   engine                  = "postgres"
-  engine_version          = "14.11"
+  engine_version          = "16.10"
   instance_class          = "db.t3.micro"
   db_name                 = "novadb"
   username                = "novaadmin"
@@ -824,7 +824,7 @@ resource "aws_db_instance" "rds_uswest2" {
   allocated_storage       = 20
   storage_type            = "gp2"
   engine                  = "postgres"
-  engine_version          = "14.11"
+  engine_version          = "16.10"
   instance_class          = "db.t3.micro"
   db_name                 = "novadb"
   username                = "novaadmin"
