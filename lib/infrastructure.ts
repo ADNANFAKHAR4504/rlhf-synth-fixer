@@ -1,0 +1,928 @@
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+
+export interface InfrastructureConfig {
+  region: string;
+  availabilityZones: string[];
+  vpcCidr: string;
+  publicSubnetCidrs: string[];
+  privateSubnetCidrs: string[];
+  rdsConfig: {
+    instanceClass: string;
+    allocatedStorage: number;
+    engine: string;
+    engineVersion: string;
+    dbName: string;
+    username: string;
+  };
+  s3Config: {
+    lifecyclePolicies: {
+      transitionToIa: number;
+      transitionToGlacier: number;
+      expiration: number;
+    };
+  };
+  tags: Record<string, string>;
+}
+
+export function createResourceName(
+  baseName: string,
+  region: string,
+  environment: string
+): string {
+  return `${baseName}-${environment}-${region}`;
+}
+
+export function createTags(
+  baseTags: Record<string, string>,
+  region: string
+): Record<string, string> {
+  return {
+    ...baseTags,
+    Region: region,
+    ManagedBy: 'Pulumi',
+  };
+}
+
+export class Infrastructure extends pulumi.ComponentResource {
+  public readonly vpcId: pulumi.Output<string>;
+  public readonly publicSubnetIds: pulumi.Output<string>[];
+  public readonly privateSubnetIds: pulumi.Output<string>[];
+  public readonly rdsEndpoint: pulumi.Output<string>;
+  public readonly s3BucketName: pulumi.Output<string>;
+  public readonly applicationRoleArn: pulumi.Output<string>;
+  public readonly kmsKeyId: pulumi.Output<string>;
+  public readonly instanceProfileArn: pulumi.Output<string>;
+
+  constructor(
+    name: string,
+    config: InfrastructureConfig,
+    environment: string,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('custom:infrastructure:Infrastructure', name, {}, opts);
+
+    const { region } = config;
+    const resourceTags = createTags(config.tags, region);
+
+    // Create region-specific provider
+    const provider = new aws.Provider('regional-provider', {
+      region: region,
+      defaultTags: {
+        tags: resourceTags,
+      },
+    });
+
+    // KMS Key for encryption
+    const kmsKey = new aws.kms.Key(
+      createResourceName('app-key', region, environment),
+      {
+        description: `KMS key for ${environment} environment in ${region}`,
+        enableKeyRotation: true,
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // CloudWatch Log Group for application logs
+    const logGroup = new aws.cloudwatch.LogGroup(
+      createResourceName('app-logs', region, environment),
+      {
+        name: `/aws/application/${environment}`,
+        retentionInDays: 30,
+        kmsKeyId: kmsKey.arn,
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // VPC Flow Logs for network monitoring
+    const vpcFlowLogRole = new aws.iam.Role(
+      createResourceName('vpc-flow-log-role', region, environment),
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'vpc-flow-logs.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    const vpcFlowLogPolicy = new aws.iam.Policy(
+      createResourceName('vpc-flow-log-policy', region, environment),
+      {
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      createResourceName('vpc-flow-log-policy-attachment', region, environment),
+      {
+        role: vpcFlowLogRole.name,
+        policyArn: vpcFlowLogPolicy.arn,
+      },
+      { provider, parent: this }
+    );
+
+    const vpcFlowLogGroup = new aws.cloudwatch.LogGroup(
+      createResourceName('vpc-flow-logs', region, environment),
+      {
+        name: `/aws/vpc/flowlogs/${environment}`,
+        retentionInDays: 14,
+        kmsKeyId: kmsKey.arn,
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+    // VPC
+    const vpc = new aws.ec2.Vpc(
+      createResourceName('vpc', region, environment),
+      {
+        cidrBlock: config.vpcCidr,
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('vpc', region, environment),
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // VPC Flow Logs (now that VPC is created)
+    new aws.ec2.FlowLog(
+      createResourceName('vpc-flow-log', region, environment),
+      {
+        iamRoleArn: vpcFlowLogRole.arn,
+        logDestination: vpcFlowLogGroup.arn,
+        vpcId: vpc.id,
+        trafficType: 'ALL',
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // Internet Gateway
+    const internetGateway = new aws.ec2.InternetGateway(
+      createResourceName('igw', region, environment),
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('igw', region, environment),
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // Public Subnets
+    const publicSubnets = config.publicSubnetCidrs.map((cidr, index) => {
+      return new aws.ec2.Subnet(
+        createResourceName(`public-subnet-${index + 1}`, region, environment),
+        {
+          vpcId: vpc.id,
+          cidrBlock: cidr,
+          availabilityZone: config.availabilityZones[index],
+          mapPublicIpOnLaunch: true,
+          tags: {
+            ...resourceTags,
+            Name: createResourceName(
+              `public-subnet-${index + 1}`,
+              region,
+              environment
+            ),
+            Type: 'Public',
+          },
+        },
+        { provider, parent: this }
+      );
+    });
+
+    // Private Subnets
+    const privateSubnets = config.privateSubnetCidrs.map((cidr, index) => {
+      return new aws.ec2.Subnet(
+        createResourceName(`private-subnet-${index + 1}`, region, environment),
+        {
+          vpcId: vpc.id,
+          cidrBlock: cidr,
+          availabilityZone: config.availabilityZones[index],
+          tags: {
+            ...resourceTags,
+            Name: createResourceName(
+              `private-subnet-${index + 1}`,
+              region,
+              environment
+            ),
+            Type: 'Private',
+          },
+        },
+        { provider, parent: this }
+      );
+    });
+
+    // NAT Gateways
+    const eips = publicSubnets.map((_, index) => {
+      return new aws.ec2.Eip(
+        createResourceName(`nat-eip-${index + 1}`, region, environment),
+        {
+          domain: 'vpc',
+          tags: {
+            ...resourceTags,
+            Name: createResourceName(
+              `nat-eip-${index + 1}`,
+              region,
+              environment
+            ),
+          },
+        },
+        { provider, parent: this, dependsOn: [internetGateway] }
+      );
+    });
+
+    const natGateways = publicSubnets.map((subnet, index) => {
+      return new aws.ec2.NatGateway(
+        createResourceName(`nat-gateway-${index + 1}`, region, environment),
+        {
+          allocationId: eips[index].id,
+          subnetId: subnet.id,
+          tags: {
+            ...resourceTags,
+            Name: createResourceName(
+              `nat-gateway-${index + 1}`,
+              region,
+              environment
+            ),
+          },
+        },
+        { provider, parent: this, dependsOn: [internetGateway] }
+      );
+    });
+
+    // Route Tables
+    const publicRouteTable = new aws.ec2.RouteTable(
+      createResourceName('public-rt', region, environment),
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('public-rt', region, environment),
+        },
+      },
+      { provider, parent: this }
+    );
+
+    new aws.ec2.Route(
+      createResourceName('public-route', region, environment),
+      {
+        routeTableId: publicRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        gatewayId: internetGateway.id,
+      },
+      { provider, parent: this }
+    );
+
+    // Associate public subnets with public route table
+    publicSubnets.forEach((subnet, index) => {
+      new aws.ec2.RouteTableAssociation(
+        createResourceName(`public-rta-${index + 1}`, region, environment),
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        },
+        { provider, parent: this }
+      );
+    });
+
+    // Private Route Tables
+    privateSubnets.forEach((subnet, index) => {
+      const routeTable = new aws.ec2.RouteTable(
+        createResourceName(`private-rt-${index + 1}`, region, environment),
+        {
+          vpcId: vpc.id,
+          tags: {
+            ...resourceTags,
+            Name: createResourceName(
+              `private-rt-${index + 1}`,
+              region,
+              environment
+            ),
+          },
+        },
+        { provider, parent: this }
+      );
+
+      new aws.ec2.Route(
+        createResourceName(`private-route-${index + 1}`, region, environment),
+        {
+          routeTableId: routeTable.id,
+          destinationCidrBlock: '0.0.0.0/0',
+          natGatewayId: natGateways[index].id,
+        },
+        { provider, parent: this }
+      );
+
+      new aws.ec2.RouteTableAssociation(
+        createResourceName(`private-rta-${index + 1}`, region, environment),
+        {
+          subnetId: subnet.id,
+          routeTableId: routeTable.id,
+        },
+        { provider, parent: this }
+      );
+    });
+
+    // Network ACLs for additional security
+    const privateNetworkAcl = new aws.ec2.NetworkAcl(
+      createResourceName('private-nacl', region, environment),
+      {
+        vpcId: vpc.id,
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('private-nacl', region, environment),
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // Allow inbound traffic from VPC CIDR
+    new aws.ec2.NetworkAclRule(
+      createResourceName('private-nacl-inbound', region, environment),
+      {
+        networkAclId: privateNetworkAcl.id,
+        ruleNumber: 100,
+        protocol: '-1',
+        ruleAction: 'allow',
+        cidrBlock: config.vpcCidr,
+      },
+      { provider, parent: this }
+    );
+
+    // Allow outbound traffic
+    new aws.ec2.NetworkAclRule(
+      createResourceName('private-nacl-outbound', region, environment),
+      {
+        networkAclId: privateNetworkAcl.id,
+        ruleNumber: 100,
+        protocol: '-1',
+        ruleAction: 'allow',
+        cidrBlock: '0.0.0.0/0',
+        egress: true,
+      },
+      { provider, parent: this }
+    );
+
+    // Associate private subnets with private NACL
+    privateSubnets.forEach((subnet, index) => {
+      new aws.ec2.NetworkAclAssociation(
+        createResourceName(
+          `private-nacl-assoc-${index + 1}`,
+          region,
+          environment
+        ),
+        {
+          networkAclId: privateNetworkAcl.id,
+          subnetId: subnet.id,
+        },
+        { provider, parent: this }
+      );
+    });
+    // DB Subnet Group
+    const dbSubnetGroup = new aws.rds.SubnetGroup(
+      createResourceName('db-subnet-group', region, environment),
+      {
+        subnetIds: privateSubnets.map(subnet => subnet.id),
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('db-subnet-group', region, environment),
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // S3 Bucket Access Logging
+    const accessLogsBucket = new aws.s3.Bucket(
+      createResourceName('access-logs', region, environment),
+      {
+        bucket: createResourceName('access-logs', region, environment),
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.s3.BucketPublicAccessBlock(
+      createResourceName('access-logs-pab', region, environment),
+      {
+        bucket: accessLogsBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.s3.BucketServerSideEncryptionConfiguration(
+      createResourceName('access-logs-encryption', region, environment),
+      {
+        bucket: accessLogsBucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: kmsKey.keyId,
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      },
+      { provider, parent: this }
+    );
+
+    // S3 Bucket with enhanced security
+    const bucketName = createResourceName('app-logs', region, environment);
+    const bucket = new aws.s3.Bucket(
+      bucketName,
+      {
+        bucket: bucketName,
+        tags: resourceTags,
+        logging: {
+          targetBucket: accessLogsBucket.bucket,
+          targetPrefix: 'access-logs/',
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // Remove the S3 bucket notification as it's not properly supported in this format
+    // S3 Bucket Notification would need to be configured separately
+
+    new aws.s3.BucketPublicAccessBlock(
+      createResourceName('bucket-pab', region, environment),
+      {
+        bucket: bucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.s3.BucketServerSideEncryptionConfiguration(
+      createResourceName('bucket-encryption', region, environment),
+      {
+        bucket: bucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: kmsKey.keyId,
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      },
+      { provider, parent: this }
+    );
+
+    new aws.s3.BucketLifecycleConfiguration(
+      createResourceName('bucket-lifecycle', region, environment),
+      {
+        bucket: bucket.id,
+        rules: [
+          {
+            id: 'log-lifecycle',
+            status: 'Enabled',
+            transitions: [
+              {
+                days: config.s3Config.lifecyclePolicies.transitionToIa,
+                storageClass: 'STANDARD_IA',
+              },
+              {
+                days: config.s3Config.lifecyclePolicies.transitionToGlacier,
+                storageClass: 'GLACIER',
+              },
+            ],
+            expiration: {
+              days: config.s3Config.lifecyclePolicies.expiration,
+            },
+          },
+        ],
+      },
+      { provider, parent: this }
+    );
+
+    // S3 Bucket Versioning
+    new aws.s3.BucketVersioning(
+      createResourceName('bucket-versioning', region, environment),
+      {
+        bucket: bucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // S3 Bucket Policy for additional security
+    new aws.s3.BucketPolicy(
+      createResourceName('bucket-policy', region, environment),
+      {
+        bucket: bucket.id,
+        policy: pulumi.all([bucket.arn]).apply(([bucketArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'DenyInsecureConnections',
+                Effect: 'Deny',
+                Principal: '*',
+                Action: 's3:*',
+                Resource: [bucketArn, `${bucketArn}/*`],
+                Condition: {
+                  Bool: {
+                    'aws:SecureTransport': 'false',
+                  },
+                },
+              },
+              {
+                Sid: 'DenyUnencryptedObjectUploads',
+                Effect: 'Deny',
+                Principal: '*',
+                Action: 's3:PutObject',
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                  StringNotEquals: {
+                    's3:x-amz-server-side-encryption': 'aws:kms',
+                  },
+                },
+              },
+            ],
+          })
+        ),
+      },
+      { provider, parent: this }
+    );
+
+    // RDS Security Group
+    const rdsSecurityGroup = new aws.ec2.SecurityGroup(
+      createResourceName('rds-sg', region, environment),
+      {
+        namePrefix: createResourceName('rds-sg', region, environment),
+        vpcId: vpc.id,
+        description: 'Security group for RDS instance',
+        ingress: [
+          {
+            fromPort: 3306,
+            toPort: 3306,
+            protocol: 'tcp',
+            cidrBlocks: [config.vpcCidr],
+            description: 'MySQL access from VPC',
+          },
+        ],
+        egress: [
+          {
+            fromPort: 0,
+            toPort: 0,
+            protocol: '-1',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'All outbound traffic',
+          },
+        ],
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('rds-sg', region, environment),
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // RDS Parameter Group for optimization
+    const dbParameterGroup = new aws.rds.ParameterGroup(
+      createResourceName('db-params', region, environment),
+      {
+        family: `${config.rdsConfig.engine}${config.rdsConfig.engineVersion.split('.')[0]}.${
+          config.rdsConfig.engineVersion.split('.')[1]
+        }`,
+        description: `Parameter group for ${config.rdsConfig.engine}`,
+        parameters: [
+          {
+            name: 'innodb_buffer_pool_size',
+            value: '{DBInstanceClassMemory*3/4}',
+          },
+          {
+            name: 'slow_query_log',
+            value: '1',
+          },
+          {
+            name: 'general_log',
+            value: '1',
+          },
+          {
+            name: 'log_queries_not_using_indexes',
+            value: '1',
+          },
+        ],
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // RDS Instance - Generate a secure password
+    const randomPassword = 'TempPassword123!';
+
+    const rdsInstance = new aws.rds.Instance(
+      createResourceName('db-instance', region, environment),
+      {
+        identifier: createResourceName('db-instance', region, environment),
+        engine: config.rdsConfig.engine,
+        engineVersion: config.rdsConfig.engineVersion,
+        instanceClass: config.rdsConfig.instanceClass,
+        allocatedStorage: config.rdsConfig.allocatedStorage,
+        maxAllocatedStorage: config.rdsConfig.allocatedStorage * 2, // Auto-scaling
+        storageType: 'gp3',
+        storageEncrypted: true,
+        kmsKeyId: kmsKey.keyId,
+        dbName: config.rdsConfig.dbName,
+        username: config.rdsConfig.username,
+        password: randomPassword,
+        dbSubnetGroupName: dbSubnetGroup.name,
+        vpcSecurityGroupIds: [rdsSecurityGroup.id],
+        parameterGroupName: dbParameterGroup.name,
+
+        // Enhanced backup configuration
+        backupRetentionPeriod: 30, // Extended retention
+        backupWindow: '03:00-04:00',
+        copyTagsToSnapshot: true,
+
+        // Maintenance and updates
+        maintenanceWindow: 'sun:04:00-sun:05:00',
+        autoMinorVersionUpgrade: true,
+
+        // Security
+        deletionProtection: true,
+        skipFinalSnapshot: false,
+        finalSnapshotIdentifier: pulumi.interpolate`${createResourceName(
+          'db-final-snapshot',
+          region,
+          environment
+        )}-${Date.now()}`,
+
+        // Monitoring and logging
+        monitoringInterval: 60,
+        performanceInsightsEnabled: true,
+        performanceInsightsKmsKeyId: kmsKey.keyId,
+        performanceInsightsRetentionPeriod: 7,
+        enabledCloudwatchLogsExports: ['error', 'general', 'slow-query'],
+
+        // Multi-AZ for high availability
+        multiAz: true,
+
+        tags: {
+          ...resourceTags,
+          Name: createResourceName('db-instance', region, environment),
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // IAM Role
+    const applicationRole = new aws.iam.Role(
+      createResourceName('app-role', region, environment),
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'ec2.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // Enhanced IAM policies with least privilege
+    const s3Policy = new aws.iam.Policy(
+      createResourceName('s3-access-policy', region, environment),
+      {
+        policy: pulumi.all([bucket.arn]).apply(([bucketArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'S3ObjectAccess',
+                Effect: 'Allow',
+                Action: [
+                  's3:GetObject',
+                  's3:PutObject',
+                  's3:DeleteObject',
+                  's3:GetObjectVersion',
+                ],
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                  StringEquals: {
+                    's3:x-amz-server-side-encryption': 'aws:kms',
+                  },
+                },
+              },
+              {
+                Sid: 'S3BucketAccess',
+                Effect: 'Allow',
+                Action: [
+                  's3:ListBucket',
+                  's3:GetBucketLocation',
+                  's3:GetBucketVersioning',
+                ],
+                Resource: bucketArn,
+              },
+            ],
+          })
+        ),
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    const kmsPolicy = new aws.iam.Policy(
+      createResourceName('kms-access-policy', region, environment),
+      {
+        policy: pulumi.all([kmsKey.arn]).apply(([keyArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'KMSAccess',
+                Effect: 'Allow',
+                Action: [
+                  'kms:Decrypt',
+                  'kms:DescribeKey',
+                  'kms:Encrypt',
+                  'kms:GenerateDataKey',
+                  'kms:ReEncrypt*',
+                ],
+                Resource: keyArn,
+              },
+            ],
+          })
+        ),
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    const cloudWatchPolicy = new aws.iam.Policy(
+      createResourceName('cloudwatch-policy', region, environment),
+      {
+        policy: pulumi.all([logGroup.arn]).apply(([logGroupArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'CloudWatchLogsAccess',
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogStreams',
+                ],
+                Resource: `${logGroupArn}:*`,
+              },
+              {
+                Sid: 'CloudWatchMetrics',
+                Effect: 'Allow',
+                Action: [
+                  'cloudwatch:PutMetricData',
+                  'cloudwatch:GetMetricStatistics',
+                  'cloudwatch:ListMetrics',
+                ],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'cloudwatch:namespace': `Application/${environment}`,
+                  },
+                },
+              },
+            ],
+          })
+        ),
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    const rdsPolicy = new aws.iam.Policy(
+      createResourceName('rds-access-policy', region, environment),
+      {
+        policy: pulumi.all([rdsInstance.arn]).apply(([rdsArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'RDSConnect',
+                Effect: 'Allow',
+                Action: ['rds-db:connect'],
+                Resource: `${rdsArn}/*`,
+                Condition: {
+                  StringEquals: {
+                    'rds-db:db-user-name': config.rdsConfig.username,
+                  },
+                },
+              },
+            ],
+          })
+        ),
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // Attach policies to role
+    new aws.iam.RolePolicyAttachment(
+      createResourceName('s3-policy-attachment', region, environment),
+      {
+        role: applicationRole.name,
+        policyArn: s3Policy.arn,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      createResourceName('kms-policy-attachment', region, environment),
+      {
+        role: applicationRole.name,
+        policyArn: kmsPolicy.arn,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      createResourceName('cloudwatch-policy-attachment', region, environment),
+      {
+        role: applicationRole.name,
+        policyArn: cloudWatchPolicy.arn,
+      },
+      { provider, parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      createResourceName('rds-policy-attachment', region, environment),
+      {
+        role: applicationRole.name,
+        policyArn: rdsPolicy.arn,
+      },
+      { provider, parent: this }
+    );
+
+    // Instance Profile for EC2 instances
+    const instanceProfile = new aws.iam.InstanceProfile(
+      createResourceName('app-instance-profile', region, environment),
+      {
+        role: applicationRole.name,
+        tags: resourceTags,
+      },
+      { provider, parent: this }
+    );
+
+    // Exports
+    this.vpcId = vpc.id;
+    this.publicSubnetIds = publicSubnets.map(subnet => subnet.id);
+    this.privateSubnetIds = privateSubnets.map(subnet => subnet.id);
+    this.rdsEndpoint = rdsInstance.endpoint;
+    this.s3BucketName = bucket.bucket;
+    this.applicationRoleArn = applicationRole.arn;
+    this.kmsKeyId = kmsKey.keyId;
+    this.instanceProfileArn = instanceProfile.arn;
+  }
+}
