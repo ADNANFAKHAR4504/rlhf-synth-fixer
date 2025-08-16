@@ -80,7 +80,7 @@ describe('Enhanced E-commerce Order Processing Platform Integration Tests', () =
 
       try {
         const command = new DescribeKeyCommand({ KeyId: outputs.KMSKeyId });
-        const response = await kmsClient.send(command);
+        const response: any = await kmsClient.send(command);
 
         expect(response.KeyMetadata).toBeDefined();
         expect(response.KeyMetadata.Enabled).toBe(true);
@@ -126,7 +126,7 @@ describe('Enhanced E-commerce Order Processing Platform Integration Tests', () =
 
       try {
         const command = new GetApiCommand({ ApiId: outputs.ApiGatewayId });
-        const response = await apiGatewayClient.send(command);
+        const response: any = await apiGatewayClient.send(command);
 
         expect(response.ProtocolType).toBe('HTTP');
         expect(response.Name).toMatch(/ecommerce-orders-.*-orders-api/);
