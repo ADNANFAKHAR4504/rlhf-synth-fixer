@@ -163,7 +163,7 @@ chown trainer:trainer /home/trainer
 echo '%wheel ALL=(ALL) ALL' > /etc/sudoers.d/wheel
 
 echo "Setup completed with SSM agent and security hardening" >> /var/log/user-data.log
-`;`
+`;
 
   // Create EC2 instance
   const instance = new aws.ec2.Instance(

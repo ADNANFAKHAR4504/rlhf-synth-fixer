@@ -11,7 +11,7 @@ export interface SecurityMonitoringResources {
   cloudTrail: aws.cloudtrail.Trail;
   cloudTrailBucket: aws.s3.Bucket;
   guardDutyDetector: aws.guardduty.Detector;
-  configRecorder: aws.cfg.ConfigurationRecorder;
+  configRecorder: aws.cfg.Recorder;
   configDeliveryChannel: aws.cfg.DeliveryChannel;
 }
 
@@ -245,7 +245,7 @@ export function createSecurityMonitoring(
   );
 
   // Config configuration recorder
-  const configRecorder = new aws.cfg.ConfigurationRecorder(
+  const configRecorder = new aws.cfg.Recorder(
     `config-recorder-${environment}`,
     {
       name: `config-recorder-${environment}`,

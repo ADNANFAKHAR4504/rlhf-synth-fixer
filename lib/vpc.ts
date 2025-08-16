@@ -275,8 +275,7 @@ export function createVpcResources(
       iamRoleArn: flowLogRole.arn,
       logDestination: flowLogGroup.arn,
       logDestinationType: 'cloud-watch-logs',
-      resourceId: vpc.id,
-      resourceType: 'VPC',
+      vpcId: vpc.id,
       trafficType: 'ALL',
       tags: {
         Name: `vpc-flow-log-${environment}`,
