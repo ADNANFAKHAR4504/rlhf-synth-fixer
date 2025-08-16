@@ -929,9 +929,8 @@ resource "aws_lb" "main" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
     Type = "load-balancer"
+    s3_policy_id = var.enable_alb_logging ? aws_s3_bucket_policy.alb_logs[0].id : null
   })
-
-  depends_on = var.enable_alb_logging ? [aws_s3_bucket_policy.alb_logs] : []
 }
 
 resource "aws_lb_target_group" "app" {
@@ -1171,7 +1170,7 @@ resource "aws_autoscaling_group" "app" {
   vpc_zone_identifier = local.private_subnet_ids
   target_group_arns   = [aws_lb_target_group.app.arn]
   health_check_type   = "ELB"
-  health_check_grace_period = 600  # 10 minutes for instances to become healthy
+  health_check_grace_period = 900  # 15 minutes for instances to become healthy
 
   min_size         = 1
   max_size         = 4
@@ -1206,8 +1205,8 @@ resource "aws_autoscaling_group" "app" {
     }
   }
 
-  # Increased timeout to 15 minutes
-  wait_for_capacity_timeout = "15m"
+  # Increased timeout to 20 minutes
+  wait_for_capacity_timeout = "20m"
   
   # Enable detailed monitoring
   enabled_metrics = [
