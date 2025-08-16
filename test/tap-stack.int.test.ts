@@ -25,7 +25,107 @@ const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8')) as Record<
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const runE2E = process.env.E2E === 'true';
+// Auto-enable live E2E checks when AWS creds and cfn outputs are present.
+// Respect explicit overrides via E2E=true/false.
+const runE2E = (() => {
+  if (process.env.E2E === 'false') return false;
+  if (process.env.E2E === 'true') return true;
+  const hasCreds = Boolean(
+    process.env.AWS_ACCESS_KEY_ID ||
+      process.env.AWS_PROFILE ||
+      process.env.AWS_SESSION_TOKEN ||
+      process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+  );
+  const hasOutputs = Boolean(
+    outputs?.AlbDnsName &&
+      outputs?.AppBucketName &&
+      outputs?.DynamoTableName &&
+      outputs?.VpcId &&
+      outputs?.BastionInstanceId &&
+      outputs?.DbEndpointAddress
+  );
+  const looksPlaceholder = (() => {
+    const albLooksFake = /alb-?123456/.test(String(outputs?.AlbDnsName || ''));
+    const bucketLooksFake = /appbucket-?123456/.test(
+      String(outputs?.AppBucketName || '')
+    );
+    const vpcLooksFake = /^vpc-0?12345/.test(String(outputs?.VpcId || ''));
+    const bastionLooksFake = /^i-0?12345/.test(
+      String(outputs?.BastionInstanceId || '')
+    );
+    const dbLooksFake = /db-abcdefghijkl/.test(
+      String(outputs?.DbEndpointAddress || '')
+    );
+    const ddbLooksFake = /TapStackAppTable-dev$/.test(
+      String(outputs?.DynamoTableName || '')
+    );
+    return (
+      albLooksFake ||
+      bucketLooksFake ||
+      vpcLooksFake ||
+      bastionLooksFake ||
+      dbLooksFake ||
+      ddbLooksFake
+    );
+  })();
+  return hasCreds && hasOutputs && !looksPlaceholder;
+})();
+
+if (!runE2E) {
+  const reasons: string[] = [];
+  if (process.env.E2E === 'false') reasons.push('E2E=false override');
+  const hasCreds = Boolean(
+    process.env.AWS_ACCESS_KEY_ID ||
+      process.env.AWS_PROFILE ||
+      process.env.AWS_SESSION_TOKEN ||
+      process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+  );
+  if (!hasCreds) reasons.push('no AWS credentials detected in environment');
+  const hasOutputs = Boolean(
+    outputs?.AlbDnsName &&
+      outputs?.AppBucketName &&
+      outputs?.DynamoTableName &&
+      outputs?.VpcId &&
+      outputs?.BastionInstanceId &&
+      outputs?.DbEndpointAddress
+  );
+  if (!hasOutputs)
+    reasons.push(
+      'missing or incomplete CFN outputs at cfn-outputs/flat-outputs.json'
+    );
+  const looksPlaceholder = (() => {
+    const albLooksFake = /alb-?123456/.test(String(outputs?.AlbDnsName || ''));
+    const bucketLooksFake = /appbucket-?123456/.test(
+      String(outputs?.AppBucketName || '')
+    );
+    const vpcLooksFake = /^vpc-0?12345/.test(String(outputs?.VpcId || ''));
+    const bastionLooksFake = /^i-0?12345/.test(
+      String(outputs?.BastionInstanceId || '')
+    );
+    const dbLooksFake = /db-abcdefghijkl/.test(
+      String(outputs?.DbEndpointAddress || '')
+    );
+    const ddbLooksFake = /TapStackAppTable-dev$/.test(
+      String(outputs?.DynamoTableName || '')
+    );
+    return (
+      albLooksFake ||
+      bucketLooksFake ||
+      vpcLooksFake ||
+      bastionLooksFake ||
+      dbLooksFake ||
+      ddbLooksFake
+    );
+  })();
+  if (hasOutputs && looksPlaceholder)
+    reasons.push(
+      'CFN outputs appear to be placeholders; deploy real stack or set E2E=false'
+    );
+  // eslint-disable-next-line no-console
+  console.warn(
+    `Skipping live E2E AWS checks: ${reasons.join('; ')}. Set E2E=true to force-enable.`
+  );
+}
 const region = process.env.AWS_REGION || 'us-east-1';
 
 describe('TapStack Integration Outputs', () => {
