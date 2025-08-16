@@ -184,7 +184,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       }));
       
       expect(use1Response.InternetGateways!.length).toBeGreaterThanOrEqual(1);
-      expect(use1Response.InternetGateways![0].State).toBe("available");
+      expect(use1Response.InternetGateways![0].Attachments![0].State).toBe("available");
 
       const usw2Response = await ec2Usw2Client.send(new DescribeInternetGatewaysCommand({
         Filters: [
@@ -193,7 +193,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       }));
       
       expect(usw2Response.InternetGateways!.length).toBeGreaterThanOrEqual(1);
-      expect(usw2Response.InternetGateways![0].State).toBe("available");
+      expect(usw2Response.InternetGateways![0].Attachments![0].State).toBe("available");
     });
 
     test("NAT gateways are available for private subnet internet access", async () => {
