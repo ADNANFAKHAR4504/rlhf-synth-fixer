@@ -176,7 +176,7 @@ export class TapStack extends TerraformStack {
       sensitive: false,
     });
 
-    new TerraformOutput(this, 'vpc-id', {
+    new TerraformOutput(this, 'vpcid', {
       value: vpcId.stringValue,
       description: 'VPC ID where resources are deployed',
       sensitive: false,
