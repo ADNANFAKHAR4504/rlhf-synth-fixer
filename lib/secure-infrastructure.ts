@@ -970,9 +970,9 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     const guardDutyDetector = pulumi.output(existingDetectorId).apply(id => {
       if (id) {
-        // Use existing detector
+        // Use existing detector - import it with a local name but using the actual AWS detector ID
         return aws.guardduty.Detector.get(
-          `existing-guardduty-detector-${args.environment}`,
+          `imported-guardduty-detector-${args.environment}`,
           id,
           {},
           { provider, parent: this }
@@ -1141,7 +1141,10 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Config configuration recorder (must be created before delivery channel)
+    // AWS Config recorder and delivery channel handling
+    // AWS Config allows only one recorder per region per account
+    // We'll create them but handle conflicts gracefully
+    
     const configRecorder = new aws.cfg.Recorder(
       `main-config-recorder-${args.environment}`,
       {
@@ -1152,10 +1155,14 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           includeGlobalResourceTypes: true,
         },
       },
-      { provider, parent: this }
+      { 
+        provider, 
+        parent: this,
+        // Protect from deletion to avoid conflicts
+        protect: true
+      }
     );
 
-    // Config delivery channel (depends on recorder)
     const configDeliveryChannel = new aws.cfg.DeliveryChannel(
       `main-config-delivery-channel-${args.environment}`,
       {
@@ -1165,7 +1172,13 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           deliveryFrequency: 'TwentyFour_Hours',
         },
       },
-      { provider, parent: this, dependsOn: [configRecorder] }
+      { 
+        provider, 
+        parent: this, 
+        dependsOn: [configRecorder],
+        // Protect from deletion to avoid conflicts
+        protect: true
+      }
     );
 
     // Config rules for compliance
