@@ -602,12 +602,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(policies).toHaveLength(2);
       
       // S3 access policy
-      const s3Policy = policies.find(p => p.PolicyName === 's3-access');
+      const s3Policy = (policies as any[]).find((p: any) => p.PolicyName === 's3-access');
       expect(s3Policy).toBeDefined();
       expect(s3Policy.PolicyDocument.Statement).toHaveLength(2);
 
       // Secrets Manager policy
-      const secretsPolicy = policies.find(p => p.PolicyName === 'secretsmanager-read-db');
+      const secretsPolicy = (policies as any[]).find((p: any) => p.PolicyName === 'secretsmanager-read-db');
       expect(secretsPolicy).toBeDefined();
       expect(secretsPolicy.PolicyDocument.Statement[0].Action).toEqual(['secretsmanager:GetSecretValue']);
     });
