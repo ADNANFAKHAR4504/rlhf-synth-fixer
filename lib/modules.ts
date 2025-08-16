@@ -11,6 +11,7 @@ import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group
 import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 
 /**
  * Configuration interface for Lambda function module
@@ -179,11 +180,6 @@ export class LambdaModule extends Construct {
         },
       },
 
-      // Enable dead letter queue for failed invocations (optional)
-      deadLetterConfig: {
-        targetArn: '', // Should be configured with SQS queue in production
-      },
-
       tags: {
         Environment: 'production',
         Service: 'serverless-image-processing',
@@ -210,11 +206,6 @@ export class S3Module extends Construct {
     this.bucket = new S3Bucket(this, 'bucket', {
       bucket: `corp-${config.bucketName}`,
 
-      // Security and compliance settings
-      versioning: {
-        enabled: true, // Enable versioning for data protection
-      },
-
       tags: {
         Environment: 'production',
         Service: 'serverless-image-processing',
@@ -229,6 +220,14 @@ export class S3Module extends Construct {
       blockPublicPolicy: true,
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
+    });
+
+    // Enable versioning for the S3 bucket
+    new S3BucketVersioningA(this, 'bucket-versioning', {
+      bucket: this.bucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
     });
 
     // Server-side encryption for data at rest
