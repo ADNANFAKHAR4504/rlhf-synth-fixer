@@ -41,7 +41,6 @@ data "aws_ami" "amazon_linux" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# KMS Key for S3 encryption
 resource "aws_kms_key" "s3_encryption" {
   description             = "KMS key for S3 bucket encryption"
   deletion_window_in_days = 7
@@ -51,7 +50,7 @@ resource "aws_kms_key" "s3_encryption" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "Enable IAM User Permissions"
+        Sid    = "Enable IAM Admin Access"
         Effect = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
@@ -60,14 +59,17 @@ resource "aws_kms_key" "s3_encryption" {
         Resource = "*"
       },
       {
-        Sid    = "Allow S3 Service"
+        Sid    = "Allow S3 Usage"
         Effect = "Allow"
         Principal = {
           Service = "s3.amazonaws.com"
         }
         Action = [
+          "kms:Encrypt",
           "kms:Decrypt",
-          "kms:GenerateDataKey"
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
       }
@@ -78,6 +80,7 @@ resource "aws_kms_key" "s3_encryption" {
     Name = "${var.project_name}-s3-encryption-key"
   }
 }
+
 
 resource "aws_kms_alias" "s3_encryption" {
   name          = "alias/${var.project_name}-${random_id.s3_encryption_suffix.hex}"
@@ -164,12 +167,12 @@ resource "aws_flow_log" "vpc_flow_log" {
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/flowlogs-291749"
+  name              = "/aws/vpc/flowlogs-${random_id.suffix.hex}"
   retention_in_days = 30
 }
 
 resource "aws_iam_role" "flow_log" {
-  name = "${var.project_name}-flow-log-role-291749"
+  name = "${var.project_name}-${random_id.flow_log_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -186,7 +189,7 @@ resource "aws_iam_role" "flow_log" {
 }
 
 resource "aws_iam_role_policy" "flow_log" {
-  name = "${var.project_name}-flow-log-policy"
+  name = "${var.project_name}-${random_id.flow_log_suffix.hex}"
   role = aws_iam_role.flow_log.id
 
   policy = jsonencode({
@@ -360,7 +363,7 @@ resource "aws_s3_bucket_logging" "main" {
 
 # IAM Role for EC2 instances with least privilege
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}-ec2-role-291749"
+  name = "${var.project_name}-${random_id.ec2_role_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -377,7 +380,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
-  name = "${var.project_name}-ec2-policy"
+  name = "${var.project_name}-${random_id.ec2_policy_suffix.hex}"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -415,7 +418,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-ec2-291749"
+  name = "${var.project_name}-${random_id.ec2_profile_suffix.hex}"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -427,7 +430,7 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
 
 # EC2 Launch Template with latest AMI
 resource "aws_launch_template" "web" {
-  name_prefix   = "${var.project_name}-web-"
+  name_prefix   = "${var.project_name}-${random_id.web_suffix.hex}"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = "t3.micro"
 
@@ -445,7 +448,7 @@ resource "aws_launch_template" "web" {
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name = "${var.project_name}-web-server"
+      Name = "${var.project_name}-web-instance"
     }
   }
 
@@ -456,7 +459,7 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                = "${var.project_name}-web-asg"
+  name                = "${var.project_name}-${random_id.web.hex}"
   vpc_zone_identifier = aws_subnet.public[*].id
   target_group_arns   = [aws_lb_target_group.web.arn]
   health_check_type   = "ELB"
@@ -471,14 +474,14 @@ resource "aws_autoscaling_group" "web" {
 
   tag {
     key                 = "Name"
-    value               = "${var.project_name}-web-asg"
+    value               = "${var.project_name}-${random_id.web.hex}"
     propagate_at_launch = false
   }
 }
 
 # Application Load Balancer
 resource "aws_lb" "web" {
-  name               = "${var.project_name}-web-291749"
+  name               = "${var.project_name}-${random_id.web_suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web.id]
@@ -487,12 +490,12 @@ resource "aws_lb" "web" {
   enable_deletion_protection = false
 
   tags = {
-    Name = "${var.project_name}-web-291749"
+    Name = "${var.project_name}-${random_id.web_suffix.hex}"
   }
 }
 
 resource "aws_lb_target_group" "web" {
-  name     = "${var.project_name}-web-291749"
+  name     = "${var.project_name}-web-tg-${random_id.web_suffix.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -523,17 +526,17 @@ resource "aws_lb_listener" "web" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-291749"
+  name       = "${var.project_name}-${random_id.main.hex}"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "${var.project_name}-db-subnet-291749"
+    Name = "${var.project_name}-db-subnet-${random_id.main.hex}"
   }
 }
 
 # RDS Instance with Multi-AZ
 resource "aws_db_instance" "main" {
-  identifier     = "${var.project_name}-data-291749"
+  identifier     = "${var.project_name}-data-${random_id.main.hex}"
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = "db.t3.micro"
@@ -544,9 +547,9 @@ resource "aws_db_instance" "main" {
   storage_encrypted     = true
   kms_key_id            = aws_kms_key.s3_encryption.arn
 
-  db_name              = "appdb"
-  username             = "admin"
-  password             = random_password.db_password.result
+  db_name  = "appdb"
+  username = "admin"
+  password = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.database.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -598,7 +601,7 @@ resource "aws_ssm_patch_baseline" "amazon_linux" {
 # Systems Manager Patch Group
 resource "aws_ssm_patch_group" "web_servers" {
   baseline_id = aws_ssm_patch_baseline.amazon_linux.id
-  patch_group = "${var.project_name}-web-servers-291749"
+  patch_group = "${var.project_name}-web-servers-${random_id.web_servers.hex}"
 }
 
 # Systems Manager Maintenance Window
@@ -629,7 +632,7 @@ resource "aws_ssm_maintenance_window_target" "web_servers" {
 
 resource "aws_ssm_maintenance_window_task" "patch_task" {
   window_id        = aws_ssm_maintenance_window.patching.id
-  name             = "${var.project_name}-patch-task"
+  name             = "${var.project_name}-patch-task-${random_id.patch_task.hex}"
   description      = "Patch task for web servers"
   task_type        = "RUN_COMMAND"
   task_arn         = "AWS-RunPatchBaseline"
@@ -655,7 +658,7 @@ resource "aws_ssm_maintenance_window_task" "patch_task" {
 
 # IAM Role for Maintenance Window
 resource "aws_iam_role" "maintenance_window" {
-  name = "${var.project_name}-maintenance-window-role-291749"
+  name = "${var.project_name}-${random_id.maintenance_window.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -678,7 +681,7 @@ resource "aws_iam_role_policy_attachment" "maintenance_window" {
 
 # CloudTrail for API monitoring
 resource "aws_cloudtrail" "main" {
-  name           = "${var.project_name}-cloudtrail-291749"
+  name           = "${var.project_name}-${random_id.cloudtrail.hex}"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
   event_selector {
@@ -695,16 +698,16 @@ resource "aws_cloudtrail" "main" {
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 
   tags = {
-    Name = "${var.project_name}-cloudtrail-291749"
+    Name = "${var.project_name}-${random_id.cloudtrail.hex}"
   }
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket        = "${var.project_name}-cloudtrail-${random_string.cloudtrail_suffix.result}-291749"
+  bucket        = "${var.project_name}-${random_string.cloudtrail_suffix.result}"
   force_destroy = true
 
   tags = {
-    Name = "${var.project_name}-cloudtrail-bucket-291749"
+    Name = "${var.project_name}-${random_string.cloudtrail_suffix.result}"
   }
 }
 
@@ -770,17 +773,17 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # CloudWatch Alarms for unauthorized API calls
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/${var.project_name}-291749"
+  name              = "/aws/cloudtrail/${var.project_name}-${random_id.cloudtrail.hex}"
   retention_in_days = 30
 }
 
 resource "aws_cloudwatch_log_stream" "cloudtrail" {
-  name           = "${var.project_name}-cloudtrail-stream-291749"
+  name           = "${var.project_name}-${random_id.cloudtrail.hex}"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
 }
 
 resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
-  name           = "${var.project_name}-unauthorized-api-calls"
+  name           = "${var.project_name}-${random_id.unauthorized.hex}"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
   pattern        = "[version, account, time, region, source, user!=root, ...]"
 
@@ -792,7 +795,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
-  alarm_name          = "${var.project_name}-unauthorized-api-calls"
+  alarm_name          = "${var.project_name}-${random_id.unauthorized.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "UnauthorizedAPICalls"
@@ -803,7 +806,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   alarm_description   = "This metric monitors unauthorized API calls"
 
   tags = {
-    Name = "${var.project_name}-unauthorized-api-calls-alarm"
+    Name = "${var.project_name}-${random_id.unauthorized.hex}-alarm"
   }
 }
 
