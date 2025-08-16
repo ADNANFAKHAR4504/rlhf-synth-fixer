@@ -82,9 +82,11 @@ variable "allowed_ssh_cidrs" {
 
 # Random strings for database credentials
 resource "random_string" "db_username" {
-  length  = 16
+  length  = 8
   special = false
   upper   = false
+  numeric = true
+  lower   = true
 }
 
 resource "random_string" "db_password" {
@@ -487,28 +489,25 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type = "redirect"
-
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
-  }
-}
-
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate.main.arn
-
-  default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
 }
+
+# HTTPS listener commented out due to certificate validation issues
+# Uncomment and configure a valid domain when deploying to production
+# resource "aws_lb_listener" "https" {
+#   load_balancer_arn = aws_lb.main.arn
+#   port              = "443"
+#   protocol          = "HTTPS"
+#   ssl_policy        = "ELBSecurityPolicy-2016-08"
+#   certificate_arn   = aws_acm_certificate.main.arn
+#
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.main.arn
+#   }
+# }
 
 resource "aws_lb_target_group" "main" {
   name     = "${local.short_name_prefix}-tg"
@@ -735,7 +734,7 @@ resource "aws_db_instance" "main" {
   storage_encrypted     = true
 
   db_name  = "enterprise_app"
-  username = random_string.db_username.result
+  username = "dbadmin"
   password = random_string.db_password.result
 
   vpc_security_group_ids = [aws_security_group.database.id]
@@ -792,17 +791,18 @@ resource "aws_cloudwatch_log_group" "application" {
 # SSL/TLS CERTIFICATE
 # =============================================================================
 
-# ACM Certificate for HTTPS
-resource "aws_acm_certificate" "main" {
-  domain_name       = "*.${local.name_prefix}.com"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = local.common_tags
-}
+# ACM Certificate for HTTPS (commented out due to domain validation issues)
+# Uncomment and configure a valid domain when deploying to production
+# resource "aws_acm_certificate" "main" {
+#   domain_name       = "*.${local.name_prefix}.com"
+#   validation_method = "DNS"
+#
+#   lifecycle {
+#     create_before_destroy = true
+#   }
+#
+#   tags = local.common_tags
+# }
 
 # =============================================================================
 # OUTPUTS
