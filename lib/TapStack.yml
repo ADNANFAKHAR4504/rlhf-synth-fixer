@@ -77,7 +77,6 @@ Resources:
       KeySchema:
         - AttributeName: itemId
           KeyType: HASH
-    Description: 'DynamoDB table for storing items data'
 
   UsersTable:
     Type: AWS::DynamoDB::Table
@@ -90,7 +89,6 @@ Resources:
       KeySchema:
         - AttributeName: userId
           KeyType: HASH
-    Description: 'DynamoDB table for storing users data'
 
   OrdersTable:
     Type: AWS::DynamoDB::Table
@@ -103,7 +101,6 @@ Resources:
       KeySchema:
         - AttributeName: orderId
           KeyType: HASH
-    Description: 'DynamoDB table for storing orders data'
 
   # Lambda Functions with Inline Code
   ItemsFunction:
