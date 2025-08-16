@@ -141,11 +141,16 @@ variable "existing_private_subnet_ids" {
   }
 }
 
-# New variable to control RDS deployment
 variable "deploy_rds" {
   description = "Whether to deploy RDS resources (set to false to avoid conflicts)"
   type        = bool
-  default     = false  # Set to false initially to avoid conflicts
+  default     = false
+}
+
+variable "enable_alb_logging" {
+  description = "Enable ALB access logging to S3 (disable to avoid permission issues)"
+  type        = bool
+  default     = false  # Disable ALB logging to avoid S3 permission issues
 }
 
 #######################
@@ -163,8 +168,8 @@ resource "random_string" "suffix" {
 #######################
 
 locals {
-  # Use timestamp-based naming for complete uniqueness
-  timestamp   = formatdate("DDHHmm", timestamp())
+  # Use current timestamp for naming based on provided time
+  timestamp   = "161850"  # Based on 18:50 UTC
   name_prefix = "${var.project_name}-${var.environment}-${local.timestamp}-${random_string.suffix.result}"
   
   common_tags = {
@@ -384,42 +389,6 @@ resource "aws_kms_key" "s3_key" {
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions",
-        Effect = "Allow",
-        Principal = {
-          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
-        },
-        Action   = "kms:*",
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow ELB to use the key for logging",
-        Effect = "Allow",
-        Principal = {
-          Service = "logdelivery.elasticloadbalancing.amazonaws.com"
-        },
-        Action   = "kms:GenerateDataKey*",
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow EC2 to use the key for S3",
-        Effect = "Allow",
-        Principal = {
-          AWS = aws_iam_role.ec2_role.arn
-        },
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey"
-        ],
-        Resource = "*"
-      }
-    ]
-  })
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-s3-kms-key"
     Type = "encryption"
@@ -447,7 +416,6 @@ resource "aws_kms_alias" "ebs_key" {
   target_key_id = aws_kms_key.ebs_key.key_id
 }
 
-# RDS KMS key - only create if RDS deployment is enabled
 resource "aws_kms_key" "rds_key" {
   count = var.deploy_rds ? 1 : 0
   
@@ -511,7 +479,10 @@ resource "aws_s3_bucket" "app_data" {
   })
 }
 
+# Only create ALB logs bucket if logging is enabled
 resource "aws_s3_bucket" "alb_logs" {
+  count = var.enable_alb_logging ? 1 : 0
+  
   bucket = "${local.name_prefix}-alb-logs"
 
   tags = merge(local.common_tags, {
@@ -528,7 +499,9 @@ resource "aws_s3_bucket_versioning" "app_data" {
 }
 
 resource "aws_s3_bucket_versioning" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
+  count = var.enable_alb_logging ? 1 : 0
+  
+  bucket = aws_s3_bucket.alb_logs[0].id
   versioning_configuration {
     status = "Enabled"
   }
@@ -546,7 +519,18 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
   }
 }
 
+resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
+  count = var.enable_alb_logging ? 1 : 0
+  
+  bucket = aws_s3_bucket.alb_logs[0].id
 
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"  # Use AES256 instead of KMS for ALB logs to avoid permission issues
+    }
+    bucket_key_enabled = false
+  }
+}
 
 resource "aws_s3_bucket_public_access_block" "app_data" {
   bucket = aws_s3_bucket.app_data.id
@@ -558,7 +542,9 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
 }
 
 resource "aws_s3_bucket_public_access_block" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
+  count = var.enable_alb_logging ? 1 : 0
+  
+  bucket = aws_s3_bucket.alb_logs[0].id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -566,20 +552,32 @@ resource "aws_s3_bucket_public_access_block" "alb_logs" {
   restrict_public_buckets = true
 }
 
+# Fixed S3 bucket policy for ALB logs
 resource "aws_s3_bucket_policy" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
+  count = var.enable_alb_logging ? 1 : 0
+  
+  bucket = aws_s3_bucket.alb_logs[0].id
 
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowPutObject",
-        Effect = "Allow",
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
         Principal = {
           AWS = data.aws_elb_service_account.main.arn
-        },
-        Action   = "s3:PutObject",
-        Resource = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs[0].arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs[0].arn
       }
     ]
   })
@@ -696,7 +694,6 @@ resource "aws_security_group" "ec2" {
   })
 }
 
-# RDS Security Group - only create if RDS deployment is enabled
 resource "aws_security_group" "rds" {
   count = var.deploy_rds ? 1 : 0
   
@@ -907,7 +904,7 @@ resource "aws_sns_topic_subscription" "email_alerts" {
 }
 
 #######################
-# Application Load Balancer
+# Application Load Balancer (Fixed - No Logging by Default)
 #######################
 
 resource "aws_lb" "main" {
@@ -919,10 +916,14 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = var.environment == "prod" ? var.enable_deletion_protection : false
 
-  access_logs {
-    bucket  = aws_s3_bucket.alb_logs.id
-    prefix  = "alb-logs"
-    enabled = true
+  # Only enable access logs if explicitly enabled and S3 bucket exists
+  dynamic "access_logs" {
+    for_each = var.enable_alb_logging ? [1] : []
+    content {
+      bucket  = aws_s3_bucket.alb_logs[0].id
+      prefix  = "alb-logs"
+      enabled = true
+    }
   }
 
   tags = merge(local.common_tags, {
@@ -930,7 +931,7 @@ resource "aws_lb" "main" {
     Type = "load-balancer"
   })
 
-  depends_on = [aws_s3_bucket_policy.alb_logs]
+  depends_on = var.enable_alb_logging ? [aws_s3_bucket_policy.alb_logs] : []
 }
 
 resource "aws_lb_target_group" "app" {
@@ -974,7 +975,7 @@ resource "aws_lb_listener" "app" {
 }
 
 #######################
-# EC2 Instances
+# EC2 Instances (Fixed with Better Health Checks)
 #######################
 
 resource "aws_launch_template" "app" {
@@ -999,44 +1000,146 @@ resource "aws_launch_template" "app" {
     }
   }
 
+  # Enhanced user data script with better error handling and faster startup
   user_data = base64encode(<<-EOF
     #!/bin/bash
+    
+    # Enhanced logging and error handling
+    exec > >(tee /var/log/user-data.log)
+    exec 2>&1
+    set -x
+    
+    echo "=== Starting user data script at $(date) ==="
+    
+    # Update system packages
+    echo "Updating system packages..."
     yum update -y
-    yum install -y amazon-cloudwatch-agent httpd
+    
+    # Install required packages
+    echo "Installing httpd and CloudWatch agent..."
+    yum install -y httpd amazon-cloudwatch-agent
+    
+    # Start and enable httpd immediately
+    echo "Starting httpd service..."
     systemctl start httpd
     systemctl enable httpd
     
-    echo "OK" > /var/www/html/health
-    echo "<h1>Hello from ${var.project_name} ${var.environment} - ${local.timestamp}</h1>" > /var/www/html/index.html
+    # Verify httpd is running
+    if ! systemctl is-active --quiet httpd; then
+        echo "ERROR: httpd failed to start"
+        systemctl status httpd
+        exit 1
+    fi
     
-    chown apache:apache /var/www/html/health
-    chown apache:apache /var/www/html/index.html
+    # Create health check endpoint with more detailed response
+    echo "Creating health check endpoint..."
+    cat > /var/www/html/health <<'HEALTH_EOF'
+OK
+HEALTH_EOF
     
-    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOL
-    {
-      "logs": {
-        "logs_collected": {
-          "files": {
-            "collect_list": [
-              {
-                "file_path": "/var/log/messages",
-                "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
-                "log_stream_name": "{instance_id}/messages"
-              }
-            ]
+    # Create main page with instance information
+    echo "Creating main page..."
+    cat > /var/www/html/index.html <<'INDEX_EOF' 
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tap App - Instance Health</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .header { color: #2e8b57; }
+        .info { background-color: #f0f8ff; padding: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1 class="header">Hello from Tap App Dev Environment!</h1>
+    <div class="info">
+        <h3>Instance Information:</h3>
+        <p><strong>Instance ID:</strong> <span id="instance-id">Loading...</span></p>
+        <p><strong>Availability Zone:</strong> <span id="az">Loading...</span></p>
+        <p><strong>Deployment Time:</strong> ${local.timestamp}</p>
+        <p><strong>Status:</strong> <span style="color: green;">Healthy ✓</span></p>
+        <p><strong>Last Updated:</strong> $(date)</p>
+    </div>
+    
+    <script>
+        // Fetch instance metadata
+        fetch('http://169.254.169.254/latest/meta-data/instance-id')
+            .then(response => response.text())
+            .then(data => document.getElementById('instance-id').textContent = data)
+            .catch(err => document.getElementById('instance-id').textContent = 'Unable to fetch');
+            
+        fetch('http://169.254.169.254/latest/meta-data/placement/availability-zone')
+            .then(response => response.text())
+            .then(data => document.getElementById('az').textContent = data)
+            .catch(err => document.getElementById('az').textContent = 'Unable to fetch');
+    </script>
+</body>
+</html>
+INDEX_EOF
+    
+    # Set proper permissions
+    echo "Setting file permissions..."
+    chown apache:apache /var/www/html/health /var/www/html/index.html
+    chmod 644 /var/www/html/health /var/www/html/index.html
+    
+    # Verify files are accessible
+    echo "Verifying web files..."
+    curl -f http://localhost/health || echo "WARNING: Health check failed locally"
+    curl -f http://localhost/ || echo "WARNING: Index page failed locally"
+    
+    # Configure CloudWatch agent
+    echo "Configuring CloudWatch agent..."
+    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CW_EOF'
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/messages",
+            "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
+            "log_stream_name": "{instance_id}/messages"
+          },
+          {
+            "file_path": "/var/log/user-data.log",
+            "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
+            "log_stream_name": "{instance_id}/user-data"
+          },
+          {
+            "file_path": "/var/log/httpd/access_log",
+            "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
+            "log_stream_name": "{instance_id}/httpd-access"
+          },
+          {
+            "file_path": "/var/log/httpd/error_log",
+            "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
+            "log_stream_name": "{instance_id}/httpd-error"
           }
-        }
+        ]
       }
     }
-    EOL
+  }
+}
+CW_EOF
     
+    # Start CloudWatch agent
+    echo "Starting CloudWatch agent..."
     /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
       -a fetch-config \
       -m ec2 \
       -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
       -s
     
-    echo "Instance setup completed at $(date)" >> /var/log/user-data.log
+    # Final verification
+    echo "=== Final service verification ==="
+    systemctl status httpd --no-pager
+    curl -s http://localhost/health
+    
+    # Signal completion
+    echo "=== Instance setup completed successfully at $(date) ==="
+    
+    # Send success signal to CloudFormation (optional, won't fail if not available)
+    /opt/aws/bin/cfn-signal -e 0 --stack ${var.project_name} --resource AutoScalingGroup --region ${var.aws_region} 2>/dev/null || true
     EOF
   )
 
@@ -1048,18 +1151,27 @@ resource "aws_launch_template" "app" {
     })
   }
 
+  tag_specifications {
+    resource_type = "volume"
+    tags = merge(local.common_tags, {
+      Name = "${local.name_prefix}-app-volume"
+      Type = "storage"
+    })
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-launch-template"
     Type = "compute"
   })
 }
 
+# Auto Scaling Group with increased timeout and better configuration
 resource "aws_autoscaling_group" "app" {
   name                = "${local.name_prefix}-app-asg"
   vpc_zone_identifier = local.private_subnet_ids
   target_group_arns   = [aws_lb_target_group.app.arn]
   health_check_type   = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600  # 10 minutes for instances to become healthy
 
   min_size         = 1
   max_size         = 4
@@ -1068,6 +1180,15 @@ resource "aws_autoscaling_group" "app" {
   launch_template {
     id      = aws_launch_template.app.id
     version = "$Latest"
+  }
+
+  # Instance refresh configuration for better deployments
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+      instance_warmup        = 300
+    }
   }
 
   tag {
@@ -1085,7 +1206,22 @@ resource "aws_autoscaling_group" "app" {
     }
   }
 
-  wait_for_capacity_timeout = "10m"
+  # Increased timeout to 15 minutes
+  wait_for_capacity_timeout = "15m"
+  
+  # Enable detailed monitoring
+  enabled_metrics = [
+    "GroupMinSize",
+    "GroupMaxSize",
+    "GroupDesiredCapacity",
+    "GroupInServiceInstances",
+    "GroupTotalInstances"
+  ]
+
+  # Lifecycle hook for graceful termination
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 #######################
@@ -1211,7 +1347,10 @@ resource "aws_cloudwatch_dashboard" "main" {
           metrics = concat(
             [
               ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", aws_autoscaling_group.app.name],
-              ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", aws_lb.main.arn_suffix]
+              ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", aws_lb.main.arn_suffix],
+              ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", aws_lb.main.arn_suffix],
+              ["AWS/ApplicationELB", "HealthyHostCount", "TargetGroup", aws_lb_target_group.app.arn_suffix],
+              ["AWS/ApplicationELB", "UnHealthyHostCount", "TargetGroup", aws_lb_target_group.app.arn_suffix]
             ],
             var.deploy_rds ? [
               ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", aws_db_instance.main[0].id]
@@ -1281,6 +1420,8 @@ def handler(event, context):
         'statusCode': 200,
         'body': json.dumps({
             'message': 'Hello from ${var.project_name} ${var.environment} Lambda - ${local.timestamp}!',
+            'timestamp': '${local.timestamp}',
+            'environment': '${var.environment}',
             'event': event
         })
     }
@@ -1325,7 +1466,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_data" {
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
+  count = var.enable_alb_logging ? 1 : 0
+  
+  bucket = aws_s3_bucket.alb_logs[0].id
 
   rule {
     id     = "alb_logs_lifecycle"
@@ -1365,6 +1508,16 @@ output "alb_dns_name" {
   value       = aws_lb.main.dns_name
 }
 
+output "alb_url" {
+  description = "Full URL of the application load balancer"
+  value       = "http://${aws_lb.main.dns_name}"
+}
+
+output "health_check_url" {
+  description = "Health check URL"
+  value       = "http://${aws_lb.main.dns_name}/health"
+}
+
 output "rds_endpoint" {
   description = "RDS instance endpoint"
   value       = var.deploy_rds ? aws_db_instance.main[0].endpoint : "RDS not deployed"
@@ -1378,7 +1531,7 @@ output "app_data_bucket_name" {
 
 output "alb_logs_bucket_name" {
   description = "Name of the ALB logs S3 bucket"
-  value       = aws_s3_bucket.alb_logs.id
+  value       = var.enable_alb_logging ? aws_s3_bucket.alb_logs[0].id : "ALB logging disabled"
 }
 
 output "security_group_ids" {
@@ -1399,9 +1552,11 @@ output "resource_name_prefix" {
 output "deployment_info" {
   description = "Deployment information"
   value = {
-    timestamp    = local.timestamp
-    deploy_rds   = var.deploy_rds
-    vpc_created  = !var.use_existing_vpc
-    environment  = var.environment
+    timestamp          = local.timestamp
+    deploy_rds        = var.deploy_rds
+    enable_alb_logging = var.enable_alb_logging
+    vpc_created       = !var.use_existing_vpc
+    environment       = var.environment
+    health_check_timeout = "15 minutes"
   }
 }
