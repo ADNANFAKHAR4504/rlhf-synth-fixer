@@ -34,7 +34,7 @@ describe("Terraform plan.json structure", () => {
       (r: any) => r.type === "aws_vpc" && r.name === "main"
     );
     expect(vpc).toBeDefined();
-    expect(vpc.change.after.cidr_block).toBe("10.0.0.0/16");
+    expect(vpc.change.after.cidr_block).toBe("172.31.0.0/16");
   });
 
   test("Public subnet should have correct CIDR", () => {
@@ -43,7 +43,7 @@ describe("Terraform plan.json structure", () => {
       (r: any) => r.type === "aws_subnet" && r.name === "public"
     );
     expect(pubSubnet).toBeDefined();
-    expect(pubSubnet.change.after.cidr_block).toBe("10.0.1.0/24");
+    expect(pubSubnet.change.after.cidr_block).toBe("172.31.0.0/20");
   });
 
   test("Private subnet should have correct CIDR", () => {
@@ -52,7 +52,7 @@ describe("Terraform plan.json structure", () => {
       (r: any) => r.type === "aws_subnet" && r.name === "private"
     );
     expect(privSubnet).toBeDefined();
-    expect(privSubnet.change.after.cidr_block).toBe("10.0.2.0/24");
+    expect(privSubnet.change.after.cidr_block).toBe("172.31.16.0/20");
   });
 
   test("Bastion host should have IAM instance profile", () => {
