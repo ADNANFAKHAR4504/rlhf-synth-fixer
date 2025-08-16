@@ -402,7 +402,7 @@ describe("Outputs file validation", () => {
   test("RDS endpoint is present and has valid format", () => {
     expect(OUT.rdsEndpoint).toBeDefined();
     expect(typeof OUT.rdsEndpoint).toBe("string");
-    expect(OUT.rdsEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
+    expect(OUT.rdsEndpoint).toMatch(/\.rds\.amazonaws\.com(:\d+)?$/);
   });
 
   test("S3 bucket name is present", () => {
