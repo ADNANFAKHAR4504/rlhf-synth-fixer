@@ -194,7 +194,7 @@ echo "Setup completed with SSM agent and security hardening" >> /var/log/user-da
       // Root block device configuration
       rootBlockDevice: {
         volumeType: 'gp3',
-        volumeSize: 20,
+        volumeSize: 30,
         encrypted: true,
         deleteOnTermination: true,
         tags: {
