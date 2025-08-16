@@ -333,7 +333,7 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       Object.keys(expectedExports).forEach(outputKey => {
         const output = template.Outputs[outputKey];
         expect(output.Export.Name).toEqual({
-          'Fn::Sub': expectedExports[outputKey],
+          'Fn::Sub': expectedExports[outputKey as keyof typeof expectedExports],
         });
       });
     });
