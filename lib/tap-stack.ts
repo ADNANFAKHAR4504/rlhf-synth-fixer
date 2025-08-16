@@ -116,7 +116,8 @@ export class TapStack extends TerraformStack {
     // Instantiate Lambda module with VPC integration
     const lambdaModule = new LambdaModule(this, 'image-processor-lambda', {
       functionName: lambdaFunctionName.stringValue,
-      s3BucketName: s3BucketName.stringValue,
+      s3BucketName: 'corp-image-uploads',
+      s3Key: 'lambda-deployment.zip',
       vpcId: vpcId.stringValue,
       runtime: 'python3.9', // Using Python 3.9 for image processing capabilities
       timeout: lambdaTimeout.numberValue,
