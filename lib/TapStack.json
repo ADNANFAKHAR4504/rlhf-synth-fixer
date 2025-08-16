@@ -9,7 +9,7 @@
       "MemorySize": 128,
       "Environment": {
         "Variables": {
-          "AWS_NODEJS_CONNECTION_REUSE_ENABLED": 1
+          "AWS_NODEJS_CONNECTION_REUSE_ENABLED": "1"
         }
       }
     }
