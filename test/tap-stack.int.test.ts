@@ -113,7 +113,6 @@ describe('TapStack Integration Tests', () => {
       resourceIds = extractResourceIds(outputs);
       clients = initializeClients();
 
-      // Get account ID for validation
       const identity = await clients.sts.send(new GetCallerIdentityCommand({}));
       accountId = identity.Account!;
     } catch (error) {
