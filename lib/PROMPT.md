@@ -6,7 +6,7 @@ The main requirements are as follows: \n1. Each environment must be implemented 
  \n6. Use different instance types in the environments to optimize costs: t2.micro for dev, t3.medium for staging, and m5.large for production. 
  \n7. Define input variables to control environment details, such as CIDR block sizes. 
  \n8. Consistent IAM roles and policies must be applied across environments to ensure secure access. 
-
+ \n9. And the major requirement is to have only single state file for all the three environments. 
 
 I want to put complete code in tap_stack.tf file which must have all variables declarations, existing values and logic and outputs as well. I already have provider.tf file which has providewr information. 
 2. I am using aws_region variable to pass region value in provider.tf file so manage this variable declaration accordingly in tap_stack.tf 
