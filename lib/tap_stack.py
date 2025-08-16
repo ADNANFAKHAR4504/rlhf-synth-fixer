@@ -105,7 +105,8 @@ class TapStack(pulumi.ComponentResource):
       SecureS3BucketConfig(
         kms_key_id=kms_key.key.key_id,
         sns_topic_arn=sns_topic.topic.arn,
-        access_logging_bucket=logging_bucket.bucket.apply(lambda b: f"{b}")
+        access_logging_bucket=logging_bucket.bucket.apply(lambda b: f"{b}"),
+        sns_topic_component=sns_topic  # Pass the full SNS topic component for dependency
       )
     )
 

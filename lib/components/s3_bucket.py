@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 import dataclasses
 import random
 import string
@@ -13,6 +13,8 @@ class SecureS3BucketConfig:
   access_logging_bucket: Optional[str] = None
   enable_mfa_delete: bool = False
   tags: Optional[dict] = None
+  # Optional SNS topic component for proper dependency management
+  sns_topic_component: Optional[Any] = None
 
 
 class SecureS3Bucket(pulumi.ComponentResource):
@@ -128,6 +130,11 @@ class SecureS3Bucket(pulumi.ComponentResource):
       )
 
     # Configure SNS notifications
+    # Note: SNS topic policy must be created before bucket notification
+    notification_depends_on = [self.bucket]
+    if config.sns_topic_component:
+      notification_depends_on.append(config.sns_topic_component)
+    
     self.notification = aws.s3.BucketNotification(
       f"{name}-notification",
       bucket=self.bucket.id,
@@ -140,7 +147,13 @@ class SecureS3Bucket(pulumi.ComponentResource):
           ]
         )
       ],
-      opts=pulumi.ResourceOptions(parent=self, depends_on=[self.bucket])
+      opts=pulumi.ResourceOptions(
+        parent=self, 
+        depends_on=notification_depends_on,
+        # Ensure topic policy is created first by adding explicit dependency
+        # The SNS topic and its policy must exist before S3 can validate the notification
+        delete_before_replace=True
+      )
     )
 
     self.register_outputs({
