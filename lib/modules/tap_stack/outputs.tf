@@ -128,3 +128,33 @@ output "availability_zones" {
   description = "Availability zones used"
   value       = var.availability_zones
 }
+
+# VPC ARN output
+output "vpc_arn" {
+  description = "ARN of the VPC"
+  value       = aws_vpc.main.arn
+}
+
+# Secret name outputs for integration tests
+output "db_username_secret_name" {
+  description = "Name of the database username secret"
+  value       = aws_secretsmanager_secret.db_master_username.name
+}
+
+output "db_password_secret_name" {
+  description = "Name of the database password secret"
+  value       = aws_secretsmanager_secret.db_master_password.name
+  sensitive   = true
+}
+
+output "api_key_secret_name" {
+  description = "Name of the API key secret"
+  value       = aws_secretsmanager_secret.api_key.name
+  sensitive   = true
+}
+
+# Environment suffix output
+output "environment_suffix" {
+  description = "Environment suffix used for unique naming"
+  value       = var.environment_suffix
+}

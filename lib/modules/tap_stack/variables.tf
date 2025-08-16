@@ -4,6 +4,12 @@ variable "environment" {
   type        = string
 }
 
+variable "environment_suffix" {
+  description = "Unique suffix for resource naming to avoid conflicts"
+  type        = string
+  default     = ""
+}
+
 variable "project_name" {
   description = "Name of the project"
   type        = string

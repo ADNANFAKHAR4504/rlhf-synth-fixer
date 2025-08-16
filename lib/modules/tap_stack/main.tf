@@ -1,16 +1,18 @@
 # Local values for computed configurations
 locals {
-  name_prefix = "${var.project_name}-${var.environment}"
+  # Use environment_suffix for unique naming
+  name_prefix = var.environment_suffix != "" ? "${var.project_name}-${var.environment}-${var.environment_suffix}" : "${var.project_name}-${var.environment}"
 
   # Environment-specific configurations
   is_production = var.environment == "prod"
 
   common_tags = {
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "Terraform"
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Environment       = var.environment
+    Project           = var.project_name
+    ManagedBy         = "Terraform"
+    Owner             = var.owner
+    CostCenter        = var.cost_center
+    EnvironmentSuffix = var.environment_suffix
   }
 }
 

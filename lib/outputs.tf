@@ -107,6 +107,33 @@ output "aws_region" {
   value       = module.tap_stack.aws_region
 }
 
+output "vpc_arn" {
+  description = "ARN of the VPC"
+  value       = module.tap_stack.vpc_arn
+}
+
+output "db_username_secret_name" {
+  description = "Name of the database username secret"
+  value       = module.tap_stack.db_username_secret_name
+}
+
+output "db_password_secret_name" {
+  description = "Name of the database password secret"
+  value       = module.tap_stack.db_password_secret_name
+  sensitive   = true
+}
+
+output "api_key_secret_name" {
+  description = "Name of the API key secret"
+  value       = module.tap_stack.api_key_secret_name
+  sensitive   = true
+}
+
+output "environment_suffix" {
+  description = "Environment suffix used for unique naming"
+  value       = module.tap_stack.environment_suffix
+}
+
 output "availability_zones" {
   description = "Availability zones used"
   value       = module.tap_stack.availability_zones
