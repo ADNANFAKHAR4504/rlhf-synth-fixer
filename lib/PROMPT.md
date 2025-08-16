@@ -66,7 +66,7 @@ Write tests in /test folder for validating security settings (e.g., S3 encryptio
 
 Output:
 
-Provide only the TypeScript code for bin/tap.ts, lib/tapstack.ts, and sample tests under /test.
+Provide only the TypeScript code for bin/tap.ts, lib/tapstack.ts, & sample tests under /test.
 
 Ensure the generated stack deploys in us-east-1.
 
