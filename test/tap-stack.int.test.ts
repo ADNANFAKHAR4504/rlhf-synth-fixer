@@ -1,8 +1,11 @@
+import {
+  DeleteItemCommand,
+  DynamoDBClient,
+  PutItemCommand,
+} from '@aws-sdk/client-dynamodb';
+import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DynamoDBClient, PutItemCommand, GetItemCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import axios from 'axios';
 
 describe('TapStack Integration Tests', () => {
   let outputs: any;
@@ -14,23 +17,32 @@ describe('TapStack Integration Tests', () => {
 
   beforeAll(() => {
     // Load deployment outputs
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+    const outputsPath = path.join(
+      __dirname,
+      '..',
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
     if (!fs.existsSync(outputsPath)) {
-      throw new Error('cfn-outputs/flat-outputs.json not found. Please deploy the stack first.');
+      throw new Error(
+        'cfn-outputs/flat-outputs.json not found. Please deploy the stack first.'
+      );
     }
-    
+
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
     outputs = JSON.parse(outputsContent);
-    
+
     // Extract outputs
     apiUrl = outputs.ApiGatewayUrl;
     itemsTableName = outputs.ItemsTableName;
     usersTableName = outputs.UsersTableName;
     ordersTableName = outputs.OrdersTableName;
-    
+
     // Initialize AWS clients
-    dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
-    
+    dynamoClient = new DynamoDBClient({
+      region: process.env.AWS_REGION || 'us-east-1',
+    });
+
     // Validate outputs exist
     expect(apiUrl).toBeDefined();
     expect(itemsTableName).toBeDefined();
@@ -45,23 +57,26 @@ describe('TapStack Integration Tests', () => {
         itemId: testItemId,
         name: 'Test Item',
         description: 'Integration test item',
-        price: 99.99
+        price: 99.99,
       };
 
       test('should create an item via POST /items', async () => {
         const response = await axios.post(`${apiUrl}/items`, testItem, {
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         });
-        
+
         expect(response.status).toBe(201);
-        expect(response.data).toHaveProperty('message', 'Item created successfully');
+        expect(response.data).toHaveProperty(
+          'message',
+          'Item created successfully'
+        );
       });
 
       test('should retrieve an item via GET /items', async () => {
         const response = await axios.get(`${apiUrl}/items`, {
-          params: { itemId: testItemId }
+          params: { itemId: testItemId },
         });
-        
+
         expect(response.status).toBe(200);
         expect(response.data).toHaveProperty('itemId', testItemId);
         expect(response.data).toHaveProperty('name', testItem.name);
@@ -70,11 +85,14 @@ describe('TapStack Integration Tests', () => {
       test('should return 404 for non-existent item', async () => {
         try {
           await axios.get(`${apiUrl}/items`, {
-            params: { itemId: 'non-existent-item' }
+            params: { itemId: 'non-existent-item' },
           });
         } catch (error: any) {
           expect(error.response.status).toBe(404);
-          expect(error.response.data).toHaveProperty('message', 'Item not found');
+          expect(error.response.data).toHaveProperty(
+            'message',
+            'Item not found'
+          );
         }
       });
 
@@ -83,21 +101,10 @@ describe('TapStack Integration Tests', () => {
           await axios.get(`${apiUrl}/items`);
         } catch (error: any) {
           expect(error.response.status).toBe(400);
-          expect(error.response.data).toHaveProperty('message', 'Missing itemId query parameter');
-        }
-      });
-
-      afterAll(async () => {
-        // Cleanup: Delete test item from DynamoDB
-        try {
-          await dynamoClient.send(new DeleteItemCommand({
-            TableName: itemsTableName,
-            Key: {
-              itemId: { S: testItemId }
-            }
-          }));
-        } catch (error) {
-          console.log('Cleanup error (items):', error);
+          expect(error.response.data).toHaveProperty(
+            'message',
+            'Missing itemId query parameter'
+          );
         }
       });
     });
@@ -108,23 +115,26 @@ describe('TapStack Integration Tests', () => {
         userId: testUserId,
         username: 'testuser',
         email: 'test@example.com',
-        fullName: 'Test User'
+        fullName: 'Test User',
       };
 
       test('should create a user via POST /users', async () => {
         const response = await axios.post(`${apiUrl}/users`, testUser, {
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         });
-        
+
         expect(response.status).toBe(201);
-        expect(response.data).toHaveProperty('message', 'User created successfully');
+        expect(response.data).toHaveProperty(
+          'message',
+          'User created successfully'
+        );
       });
 
       test('should retrieve a user via GET /users', async () => {
         const response = await axios.get(`${apiUrl}/users`, {
-          params: { userId: testUserId }
+          params: { userId: testUserId },
         });
-        
+
         expect(response.status).toBe(200);
         expect(response.data).toHaveProperty('userId', testUserId);
         expect(response.data).toHaveProperty('username', testUser.username);
@@ -133,11 +143,14 @@ describe('TapStack Integration Tests', () => {
       test('should return 404 for non-existent user', async () => {
         try {
           await axios.get(`${apiUrl}/users`, {
-            params: { userId: 'non-existent-user' }
+            params: { userId: 'non-existent-user' },
           });
         } catch (error: any) {
           expect(error.response.status).toBe(404);
-          expect(error.response.data).toHaveProperty('message', 'User not found');
+          expect(error.response.data).toHaveProperty(
+            'message',
+            'User not found'
+          );
         }
       });
 
@@ -146,21 +159,10 @@ describe('TapStack Integration Tests', () => {
           await axios.get(`${apiUrl}/users`);
         } catch (error: any) {
           expect(error.response.status).toBe(400);
-          expect(error.response.data).toHaveProperty('message', 'Missing userId query parameter');
-        }
-      });
-
-      afterAll(async () => {
-        // Cleanup: Delete test user from DynamoDB
-        try {
-          await dynamoClient.send(new DeleteItemCommand({
-            TableName: usersTableName,
-            Key: {
-              userId: { S: testUserId }
-            }
-          }));
-        } catch (error) {
-          console.log('Cleanup error (users):', error);
+          expect(error.response.data).toHaveProperty(
+            'message',
+            'Missing userId query parameter'
+          );
         }
       });
     });
@@ -171,24 +173,27 @@ describe('TapStack Integration Tests', () => {
         orderId: testOrderId,
         userId: 'test-user-123',
         items: ['item1', 'item2'],
-        totalAmount: 150.00,
-        status: 'pending'
+        totalAmount: 150.0,
+        status: 'pending',
       };
 
       test('should create an order via POST /orders', async () => {
         const response = await axios.post(`${apiUrl}/orders`, testOrder, {
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         });
-        
+
         expect(response.status).toBe(201);
-        expect(response.data).toHaveProperty('message', 'Order created successfully');
+        expect(response.data).toHaveProperty(
+          'message',
+          'Order created successfully'
+        );
       });
 
       test('should retrieve an order via GET /orders', async () => {
         const response = await axios.get(`${apiUrl}/orders`, {
-          params: { orderId: testOrderId }
+          params: { orderId: testOrderId },
         });
-        
+
         expect(response.status).toBe(200);
         expect(response.data).toHaveProperty('orderId', testOrderId);
         expect(response.data).toHaveProperty('userId', testOrder.userId);
@@ -197,11 +202,14 @@ describe('TapStack Integration Tests', () => {
       test('should return 404 for non-existent order', async () => {
         try {
           await axios.get(`${apiUrl}/orders`, {
-            params: { orderId: 'non-existent-order' }
+            params: { orderId: 'non-existent-order' },
           });
         } catch (error: any) {
           expect(error.response.status).toBe(404);
-          expect(error.response.data).toHaveProperty('message', 'Order not found');
+          expect(error.response.data).toHaveProperty(
+            'message',
+            'Order not found'
+          );
         }
       });
 
@@ -210,21 +218,10 @@ describe('TapStack Integration Tests', () => {
           await axios.get(`${apiUrl}/orders`);
         } catch (error: any) {
           expect(error.response.status).toBe(400);
-          expect(error.response.data).toHaveProperty('message', 'Missing orderId query parameter');
-        }
-      });
-
-      afterAll(async () => {
-        // Cleanup: Delete test order from DynamoDB
-        try {
-          await dynamoClient.send(new DeleteItemCommand({
-            TableName: ordersTableName,
-            Key: {
-              orderId: { S: testOrderId }
-            }
-          }));
-        } catch (error) {
-          console.log('Cleanup error (orders):', error);
+          expect(error.response.data).toHaveProperty(
+            'message',
+            'Missing orderId query parameter'
+          );
         }
       });
     });
@@ -235,79 +232,91 @@ describe('TapStack Integration Tests', () => {
       const testItem = {
         itemId: { S: `direct-test-item-${Date.now()}` },
         name: { S: 'Direct Test Item' },
-        price: { N: '49.99' }
+        price: { N: '49.99' },
       };
 
-      const putResponse = await dynamoClient.send(new PutItemCommand({
-        TableName: itemsTableName,
-        Item: testItem
-      }));
-      
+      const putResponse = await dynamoClient.send(
+        new PutItemCommand({
+          TableName: itemsTableName,
+          Item: testItem,
+        })
+      );
+
       expect(putResponse.$metadata.httpStatusCode).toBe(200);
 
       // Cleanup
-      await dynamoClient.send(new DeleteItemCommand({
-        TableName: itemsTableName,
-        Key: { itemId: testItem.itemId }
-      }));
+      await dynamoClient.send(
+        new DeleteItemCommand({
+          TableName: itemsTableName,
+          Key: { itemId: testItem.itemId },
+        })
+      );
     });
 
     test('should be able to write to UsersTable directly', async () => {
       const testUser = {
         userId: { S: `direct-test-user-${Date.now()}` },
         username: { S: 'directuser' },
-        email: { S: 'direct@test.com' }
+        email: { S: 'direct@test.com' },
       };
 
-      const putResponse = await dynamoClient.send(new PutItemCommand({
-        TableName: usersTableName,
-        Item: testUser
-      }));
-      
+      const putResponse = await dynamoClient.send(
+        new PutItemCommand({
+          TableName: usersTableName,
+          Item: testUser,
+        })
+      );
+
       expect(putResponse.$metadata.httpStatusCode).toBe(200);
 
       // Cleanup
-      await dynamoClient.send(new DeleteItemCommand({
-        TableName: usersTableName,
-        Key: { userId: testUser.userId }
-      }));
+      await dynamoClient.send(
+        new DeleteItemCommand({
+          TableName: usersTableName,
+          Key: { userId: testUser.userId },
+        })
+      );
     });
 
     test('should be able to write to OrdersTable directly', async () => {
       const testOrder = {
         orderId: { S: `direct-test-order-${Date.now()}` },
         userId: { S: 'user123' },
-        totalAmount: { N: '299.99' }
+        totalAmount: { N: '299.99' },
       };
 
-      const putResponse = await dynamoClient.send(new PutItemCommand({
-        TableName: ordersTableName,
-        Item: testOrder
-      }));
-      
+      const putResponse = await dynamoClient.send(
+        new PutItemCommand({
+          TableName: ordersTableName,
+          Item: testOrder,
+        })
+      );
+
       expect(putResponse.$metadata.httpStatusCode).toBe(200);
 
       // Cleanup
-      await dynamoClient.send(new DeleteItemCommand({
-        TableName: ordersTableName,
-        Key: { orderId: testOrder.orderId }
-      }));
+      await dynamoClient.send(
+        new DeleteItemCommand({
+          TableName: ordersTableName,
+          Key: { orderId: testOrder.orderId },
+        })
+      );
     });
   });
 
   describe('End-to-End Workflow', () => {
     test('should support complete order workflow', async () => {
       const timestamp = Date.now();
-      
+
       // 1. Create a user
       const user = {
         userId: `workflow-user-${timestamp}`,
         username: 'workflowuser',
-        email: 'workflow@test.com'
+        email: 'workflow@test.com',
       };
-      
+
       const userResponse = await axios.post(`${apiUrl}/users`, user, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       expect(userResponse.status).toBe(201);
 
@@ -315,22 +324,22 @@ describe('TapStack Integration Tests', () => {
       const item1 = {
         itemId: `workflow-item1-${timestamp}`,
         name: 'Product 1',
-        price: 50.00
+        price: 50.0,
       };
-      
+
       const item2 = {
         itemId: `workflow-item2-${timestamp}`,
         name: 'Product 2',
-        price: 75.00
+        price: 75.0,
       };
-      
+
       const item1Response = await axios.post(`${apiUrl}/items`, item1, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       expect(item1Response.status).toBe(201);
-      
+
       const item2Response = await axios.post(`${apiUrl}/items`, item2, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       expect(item2Response.status).toBe(201);
 
@@ -339,50 +348,58 @@ describe('TapStack Integration Tests', () => {
         orderId: `workflow-order-${timestamp}`,
         userId: user.userId,
         items: [item1.itemId, item2.itemId],
-        totalAmount: 125.00
+        totalAmount: 125.0,
       };
-      
+
       const orderResponse = await axios.post(`${apiUrl}/orders`, order, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       expect(orderResponse.status).toBe(201);
 
       // 4. Verify we can retrieve all created entities
       const getUserResponse = await axios.get(`${apiUrl}/users`, {
-        params: { userId: user.userId }
+        params: { userId: user.userId },
       });
       expect(getUserResponse.status).toBe(200);
       expect(getUserResponse.data.userId).toBe(user.userId);
 
       const getItem1Response = await axios.get(`${apiUrl}/items`, {
-        params: { itemId: item1.itemId }
+        params: { itemId: item1.itemId },
       });
       expect(getItem1Response.status).toBe(200);
       expect(getItem1Response.data.itemId).toBe(item1.itemId);
 
       const getOrderResponse = await axios.get(`${apiUrl}/orders`, {
-        params: { orderId: order.orderId }
+        params: { orderId: order.orderId },
       });
       expect(getOrderResponse.status).toBe(200);
       expect(getOrderResponse.data.orderId).toBe(order.orderId);
 
       // Cleanup
-      await dynamoClient.send(new DeleteItemCommand({
-        TableName: ordersTableName,
-        Key: { orderId: { S: order.orderId } }
-      }));
-      await dynamoClient.send(new DeleteItemCommand({
-        TableName: itemsTableName,
-        Key: { itemId: { S: item1.itemId } }
-      }));
-      await dynamoClient.send(new DeleteItemCommand({
-        TableName: itemsTableName,
-        Key: { itemId: { S: item2.itemId } }
-      }));
-      await dynamoClient.send(new DeleteItemCommand({
-        TableName: usersTableName,
-        Key: { userId: { S: user.userId } }
-      }));
+      await dynamoClient.send(
+        new DeleteItemCommand({
+          TableName: ordersTableName,
+          Key: { orderId: { S: order.orderId } },
+        })
+      );
+      await dynamoClient.send(
+        new DeleteItemCommand({
+          TableName: itemsTableName,
+          Key: { itemId: { S: item1.itemId } },
+        })
+      );
+      await dynamoClient.send(
+        new DeleteItemCommand({
+          TableName: itemsTableName,
+          Key: { itemId: { S: item2.itemId } },
+        })
+      );
+      await dynamoClient.send(
+        new DeleteItemCommand({
+          TableName: usersTableName,
+          Key: { userId: { S: user.userId } },
+        })
+      );
     });
   });
 
@@ -390,7 +407,7 @@ describe('TapStack Integration Tests', () => {
     test('should handle malformed JSON in POST request', async () => {
       try {
         await axios.post(`${apiUrl}/items`, 'invalid-json', {
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
         });
       } catch (error: any) {
         expect(error.response.status).toBe(500);
@@ -408,7 +425,9 @@ describe('TapStack Integration Tests', () => {
 
   describe('Infrastructure Validation', () => {
     test('API Gateway URL should be properly formatted', () => {
-      expect(apiUrl).toMatch(/^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/Prod$/);
+      expect(apiUrl).toMatch(
+        /^https:\/\/[a-z0-9]+\.execute-api\.[a-z0-9-]+\.amazonaws\.com\/Prod$/
+      );
     });
 
     test('DynamoDB table names should include environment suffix', () => {
@@ -423,7 +442,7 @@ describe('TapStack Integration Tests', () => {
     test('all table names should have consistent naming pattern', () => {
       const tables = [itemsTableName, usersTableName, ordersTableName];
       const pattern = /^TapStack[a-zA-Z0-9]+-[a-z]+-table-[a-zA-Z0-9]+$/;
-      
+
       tables.forEach(tableName => {
         expect(tableName).toMatch(pattern);
       });
