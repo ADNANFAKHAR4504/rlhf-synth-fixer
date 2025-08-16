@@ -416,6 +416,7 @@ Resources:
   # ==========================================
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
+    Condition: ValidRegion
     Properties:
       Name: !Sub "${ApplicationName}-build-${EnvironmentSuffix}"
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
@@ -886,6 +887,7 @@ Resources:
   # Permission for EventBridge to invoke the Lambda function
   PipelineTriggerPermission:
     Type: AWS::Lambda::Permission
+    Condition: ValidRegion
     Properties:
       FunctionName: !Ref PipelineTriggerFunction
       Action: lambda:InvokeFunction
@@ -932,6 +934,7 @@ Outputs:
       Name: !Sub "${AWS::StackName}-ArtifactsBucketName"
 
   CodeBuildProjectName:
+    Condition: ValidRegion
     Description: "Name of the CodeBuild project"
     Value: !Ref CodeBuildProject
     Export:
@@ -944,6 +947,7 @@ Outputs:
       Name: !Sub "${AWS::StackName}-CodeDeployApplicationName"
 
   PipelineTriggerFunctionArn:
+    Condition: ValidRegion
     Description: "ARN of the pipeline trigger Lambda function"
     Value: !GetAtt PipelineTriggerFunction.Arn
     Export:
