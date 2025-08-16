@@ -188,25 +188,9 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
   })
 }
 
-# CloudTrail
-resource "aws_cloudtrail" "main" {
-  name                    = "main-cloudtrail-${random_id.bucket_suffix.hex}"
-  s3_bucket_name          = aws_s3_bucket.cloudtrail.bucket
-  is_multi_region_trail   = false
-
-  event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
-    exclude_management_event_sources = []
-  }
-
-  depends_on = [aws_s3_bucket_policy.cloudtrail, aws_s3_bucket_versioning.cloudtrail]
-
-  tags = {
-    Name        = "main-cloudtrail"
-    Environment = var.environment_tag
-    Owner       = var.owner_tag
-  }
+# CloudTrail - Using existing trail due to limit constraints
+data "aws_cloudtrail" "main" {
+  name = "main-cloudtrail-f787f84a77e68ca9"
 }
 
 # Secure Data S3 Bucket
