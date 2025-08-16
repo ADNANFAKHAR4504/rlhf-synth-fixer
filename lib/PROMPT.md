@@ -1,14 +1,13 @@
-As an AWS Solutions Architect, your goal is to design and deploy a robust disaster recovery setup in AWS (specifically in us-west-2). The infrastructure should be highly available, secure, and ready to handle failures automatically.
+We're building an e-commerce platform and need AWS infrastructure in us-west-2 that's bulletproof. Can't have downtime during Black Friday, you know?
 
-Here’s what we’re looking for:
+The main thing is redundancy - if one availability zone craps out, everything should keep running smoothly. We've had outages before where the whole site went down because some critical piece was only in one zone. Never again.
 
-- Everything should run across multiple AZs so we don’t have a single point of failure.
-- Security is key: IAM roles and policies should be tightly scoped (least privilege), and all data should be encrypted at rest using KMS.
-- If something goes wrong during deployment, the system should roll back changes automatically.
-- We need a solid backup plan: critical data should be regularly backed up to S3, with lifecycle rules and encryption.
-- If a service or resource fails, Lambda should kick in and restore it without manual intervention.
-- Monitoring matters: set up CloudWatch alarms for things like CPU, memory, and service health, and build a dashboard so we can see everything at a glance.
-- For global users, traffic should be routed securely using CloudFront.
-- Logging and auditing should be thorough—every service (CloudFront, S3, Lambda, CloudWatch) needs to be covered, and audit logs should go to an encrypted S3 bucket that’s locked down.
+Database needs to be rock solid too. Probably RDS with multi-AZ, maybe Aurora if the budget allows. Customer data can't get lost, period. And speaking of data, everything needs encryption - at rest, in transit, the works. Compliance is breathing down our necks about this stuff.
 
-When you’re done, please provide a Python AWS CDK project (in app.py) that’s ready to deploy. The code should reflect all these requirements in a practical, real
+For the network setup, thinking VPC with the usual public/private subnet split. Security groups locked down tight - only what's absolutely necessary gets through. We've been burned by overly permissive rules before.
+
+The ops team is stretched thin, so automation is crucial. When something breaks at 2am, we want Lambda functions fixing it before anyone even notices. CloudWatch alarms, auto-scaling, health checks - the full monitoring stack.
+
+Oh, and this needs to work for dev and staging environments too, not just production. Developers are always spinning up new instances and we need consistent deployments.
+
+Can you put together the CDK code? Python works best for our team. Just need something we can actually deploy and iterate on.
