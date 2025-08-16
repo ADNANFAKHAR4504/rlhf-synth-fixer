@@ -31,8 +31,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
         console.warn('No provider content available, skipping test');
         return;
       }
-      // S3 backend removed to use local state for simplified deployment
-      expect(providerContent).not.toContain('backend "s3"');
+      // S3 backend configured for remote state management
+      expect(providerContent).toContain('backend "s3"');
     });
     
     test('should require Terraform version >= 1.4.0', () => {
