@@ -23,5 +23,11 @@
     "IAM",
     "SSM",
     "VPCEndpoint"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chtarun32",
+  "dockerS3Location": ""
 }
