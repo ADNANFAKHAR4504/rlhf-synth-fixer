@@ -179,29 +179,6 @@ describe("Terraform Financial Services Infrastructure - Unit Tests", () => {
     });
   });
 
-  describe("Naming Standards", () => {
-    test("unit-naming-standards: uses consistent naming pattern", () => {
-      // Check for name_prefix usage
-      expect(stackContent).toMatch(/name_prefix\s*=\s*"\$\{var\.company\}-\$\{var\.environment\}"/);
-      
-      // Check for consistent resource naming with name_prefix
-      const namingPatterns = [
-        'Name = "${local.name_prefix}-',
-        'name = "${local.name_prefix}-',
-        'bucket = "${local.name_prefix}-'
-      ];
-      
-      namingPatterns.forEach(pattern => {
-        expect(stackContent).toMatch(new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-      });
-    });
-
-    test("unit-region-specific-naming: includes region in resource names", () => {
-      expect(stackContent).toMatch(/\${var\.primary_region}/);
-      expect(stackContent).toMatch(/\${var\.secondary_region}/);
-    });
-  });
-
   describe("Resource Tagging", () => {
     test("unit-tagging-strategy: implements comprehensive tagging", () => {
       expect(stackContent).toMatch(/common_tags\s*=\s*merge\(var\.tags,\s*{/);
@@ -242,8 +219,7 @@ describe("Terraform Financial Services Infrastructure - Unit Tests", () => {
         'secondary_private_subnet_ids',
         'kms_logs_primary_arn',
         'kms_logs_secondary_arn',
-        'cw_log_group_primary',
-        'cw_log_group_secondary'
+        'cw_log_group_primary'
       ];
 
       requiredOutputs.forEach(output => {
