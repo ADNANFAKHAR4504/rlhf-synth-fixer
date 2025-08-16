@@ -4,34 +4,25 @@ import * as path from "path";
 type Environment = "dev" | "staging" | "production";
 const environments: Environment[] = ["dev", "staging", "production"];
 
-const outputPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
+const outputPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
 
-let rawOutputs: any;
+let outputsRaw: any;
 try {
-  rawOutputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
+  outputsRaw = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
 } catch (error) {
-  throw new Error("Cannot load Terraform raw outputs for integration tests");
+  throw new Error("Cannot load flattened outputs JSON");
 }
 
-// Helper function to strip .value wrapper transitively for testing
-function flattenOutputs(raw: any): any {
-  if (typeof raw !== "object" || raw === null) {
-    // primitive value
-    return raw;
+// Your flat-outputs.json has JSON strings as values, so parse each now:
+const outputs: Record<string, any> = {};
+for (const [key, val] of Object.entries(outputsRaw)) {
+  try {
+    outputs[key] = JSON.parse(val as string);
+  } catch {
+    // fallback: If parsing fails, keep original
+    outputs[key] = val;
   }
-  if ("value" in raw && Object.keys(raw).length === 3 && "type" in raw && "sensitive" in raw) {
-    // Assume this is a Terraform output object, extract .value and recursively flatten
-    return flattenOutputs(raw.value);
-  }
-  // Otherwise recursively flatten each property
-  const result: any = {};
-  for (const [k, v] of Object.entries(raw)) {
-    result[k] = flattenOutputs(v);
-  }
-  return result;
 }
-
-const outputs = flattenOutputs(rawOutputs);
 
 function isNonEmptyString(value: any): boolean {
   return typeof value === "string" && value.trim().length > 0;
@@ -45,8 +36,8 @@ function getSubnetIds(env: Environment, type: "public" | "private"): string[] {
     .map(([, val]) => val as string);
 }
 
-describe("Terraform Outputs Integration Tests with transient flattening", () => {
-  it("should contain all required outputs", () => {
+describe("Flattened JSON Outputs Integration Tests", () => {
+  it("should contain all required output keys", () => {
     const requiredKeys = [
       "ec2_instance_ids",
       "ec2_private_ips",
@@ -67,7 +58,7 @@ describe("Terraform Outputs Integration Tests with transient flattening", () => 
   });
 
   environments.forEach(env => {
-    describe(`Env: ${env}`, () => {
+    describe(`Environment: ${env}`, () => {
       const envData = {
         vpcId: outputs.vpc_ids[env],
         vpcCidr: outputs.vpc_cidrs[env],
@@ -95,7 +86,7 @@ describe("Terraform Outputs Integration Tests with transient flattening", () => 
         envData.privateSubnetIds.forEach(id => expect(isNonEmptyString(id)).toBe(true));
       });
 
-      it("should have non-empty EC2 instance ID and summary matching", () => {
+      it("should have non-empty EC2 instance ID and matching summary info", () => {
         expect(isNonEmptyString(envData.instanceId)).toBe(true);
         expect(isNonEmptyString(envData.summary.instance_id)).toBe(true);
         expect(isNonEmptyString(envData.summary.instance_type)).toBe(true);
@@ -117,7 +108,7 @@ describe("Terraform Outputs Integration Tests with transient flattening", () => 
         expect(isNonEmptyString(envData.sgId)).toBe(true);
       });
 
-      it("should have non-empty IGW and NAT Gateway IDs", () => {
+      it("should have non-empty IGW and NAT gateway IDs", () => {
         expect(isNonEmptyString(envData.igwId)).toBe(true);
         expect(isNonEmptyString(envData.natGwId)).toBe(true);
       });
@@ -125,9 +116,12 @@ describe("Terraform Outputs Integration Tests with transient flattening", () => 
   });
 
   describe("Cross-environment uniqueness and standards", () => {
-    it("should have unique VPC IDs, instance IDs, subnet IDs, and CIDRs", () => {
-      expect(new Set(environments.map(env => outputs.vpc_ids[env])).size).toBe(environments.length);
-      expect(new Set(environments.map(env => outputs.ec2_instance_ids[env])).size).toBe(environments.length);
+    it("should have unique VPC and instance IDs, unique subnet IDs and CIDRs", () => {
+      const vpcs = environments.map(env => outputs.vpc_ids[env]);
+      expect(new Set(vpcs).size).toBe(vpcs.length);
+
+      const instances = environments.map(env => outputs.ec2_instance_ids[env]);
+      expect(new Set(instances).size).toBe(instances.length);
 
       const allPublicSubnets = Object.values(outputs.public_subnet_ids);
       const allPrivateSubnets = Object.values(outputs.private_subnet_ids);
@@ -135,10 +129,10 @@ describe("Terraform Outputs Integration Tests with transient flattening", () => 
       expect(new Set(allSubnets).size).toBe(allSubnets.length);
 
       const cidrs = environments.map(env => outputs.vpc_cidrs[env]);
-      expect(new Set(cidrs).size).toBe(environments.length);
+      expect(new Set(cidrs).size).toBe(cidrs.length);
     });
 
-    it("should have correct IAM role naming and HA subnets", () => {
+    it("should have consistent IAM role naming and correct subnet counts", () => {
       environments.forEach(env => {
         expect(outputs.iam_role_arns[env]).toContain(`ec2-role-${env}`);
         expect(getSubnetIds(env, "public").length).toBe(2);
