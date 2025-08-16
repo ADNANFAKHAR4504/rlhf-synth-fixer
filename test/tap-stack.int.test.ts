@@ -16,6 +16,8 @@ import {
 } from '@aws-sdk/client-s3';
 import axios from 'axios';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 const outputsPath = 'cfn-outputs/flat-outputs.json';
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8')) as Record<
@@ -30,11 +32,19 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const runE2E = (() => {
   if (process.env.E2E === 'false') return false;
   if (process.env.E2E === 'true') return true;
+  const homeDir = os.homedir();
+  const credFile = path.join(homeDir, '.aws', 'credentials');
+  const configFile = path.join(homeDir, '.aws', 'config');
   const hasCreds = Boolean(
     process.env.AWS_ACCESS_KEY_ID ||
       process.env.AWS_PROFILE ||
       process.env.AWS_SESSION_TOKEN ||
-      process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+      process.env.AWS_WEB_IDENTITY_TOKEN_FILE ||
+      process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
+      process.env.AWS_EC2_METADATA_SERVICE_ENDPOINT ||
+      process.env.GITHUB_ACTIONS ||
+      fs.existsSync(credFile) ||
+      fs.existsSync(configFile)
   );
   const hasOutputs = Boolean(
     outputs?.AlbDnsName &&
@@ -74,13 +84,24 @@ const runE2E = (() => {
 if (!runE2E) {
   const reasons: string[] = [];
   if (process.env.E2E === 'false') reasons.push('E2E=false override');
+  const homeDir = os.homedir();
+  const credFile = path.join(homeDir, '.aws', 'credentials');
+  const configFile = path.join(homeDir, '.aws', 'config');
   const hasCreds = Boolean(
     process.env.AWS_ACCESS_KEY_ID ||
       process.env.AWS_PROFILE ||
       process.env.AWS_SESSION_TOKEN ||
-      process.env.AWS_WEB_IDENTITY_TOKEN_FILE
+      process.env.AWS_WEB_IDENTITY_TOKEN_FILE ||
+      process.env.AWS_CONTAINER_CREDENTIALS_RELATIVE_URI ||
+      process.env.AWS_EC2_METADATA_SERVICE_ENDPOINT ||
+      process.env.GITHUB_ACTIONS ||
+      fs.existsSync(credFile) ||
+      fs.existsSync(configFile)
   );
-  if (!hasCreds) reasons.push('no AWS credentials detected in environment');
+  if (!hasCreds)
+    reasons.push(
+      'no AWS credentials detected (env or ~/.aws/{credentials,config})'
+    );
   const hasOutputs = Boolean(
     outputs?.AlbDnsName &&
       outputs?.AppBucketName &&
