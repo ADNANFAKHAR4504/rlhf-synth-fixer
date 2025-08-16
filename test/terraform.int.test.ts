@@ -45,11 +45,11 @@ describe('Terraform Integration Tests', () => {
       
       // Mock outputs for development/testing
       outputs = {
-        source_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012' },
-        destination_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-replica' },
-        logging_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-access-logs' },
-        mfa_policy_arn: { sensitive: false, type: 'string', value: 'arn:aws:iam::123456789012:policy/data-secured-123456789012-mfa-access-policy' },
-        replication_role_arn: { sensitive: false, type: 'string', value: 'arn:aws:iam::123456789012:role/data-secured-123456789012-replication-role' },
+        source_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-v3' },
+        destination_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-replica-v3' },
+        logging_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-access-logs-v3' },
+        mfa_policy_arn: { sensitive: false, type: 'string', value: 'arn:aws:iam::123456789012:policy/data-secured-123456789012-mfa-access-policy-v3' },
+        replication_role_arn: { sensitive: false, type: 'string', value: 'arn:aws:iam::123456789012:role/data-secured-123456789012-replication-role-v3' },
         aws_region: { sensitive: false, type: 'string', value: 'us-east-1' }
       };
     }
@@ -80,11 +80,11 @@ describe('Terraform Integration Tests', () => {
     });
 
     test('should have sensible output values', () => {
-      expect(outputs.source_bucket_name.value).toMatch(/^data-secured-\d{12}$/);
-      expect(outputs.destination_bucket_name.value).toMatch(/^data-secured-\d{12}-replica$/);
-      expect(outputs.logging_bucket_name.value).toMatch(/^data-secured-\d{12}-access-logs$/);
-      expect(outputs.mfa_policy_arn.value).toMatch(/^arn:aws:iam::\d{12}:policy\/data-secured-\d{12}-mfa-access-policy$/);
-      expect(outputs.replication_role_arn.value).toMatch(/^arn:aws:iam::\d{12}:role\/data-secured-\d{12}-replication-role$/);
+      expect(outputs.source_bucket_name.value).toMatch(/^data-secured-\d{12}-v3$/);
+      expect(outputs.destination_bucket_name.value).toMatch(/^data-secured-\d{12}-replica-v3$/);
+      expect(outputs.logging_bucket_name.value).toMatch(/^data-secured-\d{12}-access-logs-v3$/);
+      expect(outputs.mfa_policy_arn.value).toMatch(/^arn:aws:iam::\d{12}:policy\/data-secured-\d{12}-mfa-access-policy-v3$/);
+      expect(outputs.replication_role_arn.value).toMatch(/^arn:aws:iam::\d{12}:role\/data-secured-\d{12}-replication-role-v3$/);
     });
   });
 
@@ -221,7 +221,7 @@ describe('Terraform Integration Tests', () => {
       
       const rule = response.ReplicationConfiguration?.Rules?.[0];
       expect(rule?.Status).toBe('Enabled');
-      expect(rule?.Destination?.Bucket).toContain('replica');
+      expect(rule?.Destination?.Bucket).toContain('replica-v3');
     });
   });
 
@@ -311,7 +311,7 @@ describe('Terraform Integration Tests', () => {
       const command = new GetPolicyCommand({ PolicyArn: policyArn });
       
       const response = await iamClient.send(command);
-      expect(response.Policy?.PolicyName).toContain('mfa-access-policy');
+      expect(response.Policy?.PolicyName).toContain('mfa-access-policy-v3');
       expect(response.Policy?.Description).toContain('MFA');
     });
 
@@ -327,7 +327,7 @@ describe('Terraform Integration Tests', () => {
       const command = new GetRoleCommand({ RoleName: roleName! });
       
       const response = await iamClient.send(command);
-      expect(response.Role?.RoleName).toContain('replication-role');
+      expect(response.Role?.RoleName).toContain('replication-role-v3');
       
       const assumeRolePolicy = JSON.parse(decodeURIComponent(response.Role?.AssumeRolePolicyDocument!));
       expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('s3.amazonaws.com');
@@ -340,9 +340,9 @@ describe('Terraform Integration Tests', () => {
       const destBucket = outputs.destination_bucket_name.value;
       const loggingBucket = outputs.logging_bucket_name.value;
       
-      expect(sourceBucket).toMatch(/^data-secured-\d{12}$/);
-      expect(destBucket).toMatch(/^data-secured-\d{12}-replica$/);
-      expect(loggingBucket).toMatch(/^data-secured-\d{12}-access-logs$/);
+      expect(sourceBucket).toMatch(/^data-secured-\d{12}-v3$/);
+      expect(destBucket).toMatch(/^data-secured-\d{12}-replica-v3$/);
+      expect(loggingBucket).toMatch(/^data-secured-\d{12}-access-logs-v3$/);
       
       console.log('✅ All buckets follow the correct naming convention');
     });

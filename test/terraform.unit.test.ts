@@ -29,12 +29,12 @@ describe("Terraform single-file stack: main.tf", () => {
     expect(content).toMatch(/variable\s+"aws_region"\s*{/);
   });
 
-  test("follows correct bucket naming pattern without -v2 suffix", () => {
+  test("follows correct bucket naming pattern with -v3 suffix", () => {
     const content = fs.readFileSync(stackPath, "utf8");
-    // Should match data-secured-${local.account_id} pattern
-    expect(content).toMatch(/bucket\s*=\s*"data-secured-\$\{local\.account_id\}"/);
-    // Should NOT contain -v2 suffix
-    expect(content).not.toMatch(/bucket\s*=\s*"data-secured-\$\{local\.account_id\}-v2"/);
+    // Should match data-secured-${local.account_id}-${local.unique_suffix} pattern
+    expect(content).toMatch(/bucket\s*=\s*"data-secured-\$\{local\.account_id\}-\$\{local\.unique_suffix\}"/);
+    // Should contain unique_suffix variable
+    expect(content).toMatch(/unique_suffix\s*=\s*"v3"/);
   });
 
   test("includes all required resource types", () => {
