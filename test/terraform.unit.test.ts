@@ -533,8 +533,8 @@ describe("Terraform Infrastructure Files", () => {
     });
 
     test("should use random password for RDS", () => {
-      const dataContent = parseTerraformFile("data.tf");
-      expect(dataContent).toMatch(/resource\s+"random_password"\s+"db_password"/);
+      const rdsContent = parseTerraformFile("rds.tf");
+      expect(rdsContent).toMatch(/resource\s+"random_password"\s+"db_password"/);
     });
 
     test("should have private subnets for compute resources", () => {

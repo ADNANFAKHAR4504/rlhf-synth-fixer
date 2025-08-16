@@ -1,14 +1,20 @@
+# Random suffix for unique resource naming
+resource "random_id" "secret_suffix" {
+  byte_length = 4
+}
+
 # Random password for RDS
 resource "random_password" "db_password" {
   length  = 16
   special = true
 }
 
-# Store password in AWS Secrets Manager
+# Store password in AWS Secrets Manager with unique naming and immediate deletion
 resource "aws_secretsmanager_secret" "db_password" {
-  provider    = aws.primary
-  name        = "${local.resource_prefix}-db-password"
-  description = "Database password for multi-region setup"
+  provider                = aws.primary
+  name                    = "${local.resource_prefix}-db-password-${random_id.secret_suffix.hex}"
+  description             = "Database password for multi-region setup"
+  recovery_window_in_days = 0
 
   tags = local.common_tags
 }
@@ -22,26 +28,31 @@ resource "aws_secretsmanager_secret_version" "db_password" {
   })
 }
 
-# DB Subnet Group - Primary Region
+# DB Subnet Groups with unique naming to avoid quota issues
+# We'll use a timestamp-based suffix to ensure uniqueness and avoid conflicts
+
 resource "aws_db_subnet_group" "primary" {
   provider   = aws.primary
-  name       = "${local.resource_prefix}-primary-db-subnet-group"
+  name       = "${local.resource_prefix}-primary-${random_id.secret_suffix.hex}"
   subnet_ids = aws_subnet.primary_private[*].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-primary-db-subnet-group"
+    Name = "${local.resource_prefix}-primary-${random_id.secret_suffix.hex}"
   })
+
+  depends_on = [random_id.secret_suffix]
 }
 
-# DB Subnet Group - Secondary Region
 resource "aws_db_subnet_group" "secondary" {
   provider   = aws.secondary
-  name       = "${local.resource_prefix}-secondary-db-subnet-group"
+  name       = "${local.resource_prefix}-secondary-${random_id.secret_suffix.hex}"
   subnet_ids = aws_subnet.secondary_private[*].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.resource_prefix}-secondary-db-subnet-group"
+    Name = "${local.resource_prefix}-secondary-${random_id.secret_suffix.hex}"
   })
+
+  depends_on = [random_id.secret_suffix]
 }
 
 # Primary RDS Instance with Multi-AZ
@@ -126,7 +137,7 @@ resource "aws_db_instance" "secondary_replica" {
 
 # IAM Role for RDS Enhanced Monitoring
 resource "aws_iam_role" "rds_enhanced_monitoring" {
-  name = "${var.project_name}-rds-monitoring-role"
+  name = "${local.resource_prefix}-rds-monitoring-${random_id.secret_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
