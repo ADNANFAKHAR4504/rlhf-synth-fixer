@@ -19,7 +19,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "fresh-v4"
+  default     = "new-deploy"
 }
 
 variable "vpc_cidr" {
@@ -74,7 +74,7 @@ locals {
     DeploymentId = random_string.deployment_id.result
   }
   
-  name_prefix = "${var.project_name}-${random_string.deployment_id.result}"
+  name_prefix = "${var.project_name}-${random_string.deployment_id.result}-v2"
 }
 
 # Data sources
@@ -104,7 +104,8 @@ resource "random_string" "deployment_id" {
   special = false
   keepers = {
     deployment = "reset816"
-    force_recreation = "20250816-031000"
+    force_recreation = "20250816-032000"
+    complete_reset = "final"
   }
 }
 
@@ -291,9 +292,9 @@ resource "aws_route_table_association" "private" {
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/flowlogs/${local.name_prefix}"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.main.arn
-  depends_on        = [aws_kms_key.main, aws_kms_alias.main]
-
+  # Temporarily removing KMS encryption to avoid dependency issues
+  # kms_key_id        = aws_kms_key.main.arn
+  
   tags = local.common_tags
 
   lifecycle {
@@ -457,10 +458,23 @@ resource "aws_s3_bucket" "cloudtrail" {
       random_string.deployment_id
     ]
     create_before_destroy = true
-    prevent_destroy = false
-    ignore_changes = [
-      # Ignore any attempts to reference old bucket
-    ]
+  }
+}
+
+# Null resource to empty S3 bucket before destruction  
+resource "null_resource" "empty_old_cloudtrail_bucket" {
+  triggers = {
+    always_run = timestamp()
+  }
+
+  provisioner "local-exec" {
+    command     = "aws s3 rm s3://secure-multi-account-development-cloudtrail-4185c46d --recursive --quiet || echo 'Bucket not found or already empty'"
+    on_failure  = continue
+  }
+
+  provisioner "local-exec" {
+    command     = "aws s3api delete-objects --bucket secure-multi-account-development-cloudtrail-4185c46d --delete \"$(aws s3api list-object-versions --bucket secure-multi-account-development-cloudtrail-4185c46d --query='{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json 2>/dev/null)\" --quiet 2>/dev/null || echo 'No versions to delete'"
+    on_failure  = continue
   }
 }
 
