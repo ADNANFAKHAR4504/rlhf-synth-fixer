@@ -551,9 +551,9 @@ resource "aws_db_instance" "main" {
   storage_encrypted     = true
   kms_key_id            = aws_kms_key.s3_encryption.arn
 
-  db_name  = "appdb"
-  username = "admin"
-  password = random_password.db_password.result
+  db_name              = "appdb"
+  username             = "admin"
+  password             = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.database.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -571,12 +571,11 @@ resource "aws_db_instance" "main" {
     Name = "${var.project_name}-database"
   }
 }
-
 resource "random_password" "db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?" # Avoid disallowed chars like / @ " space
 }
-
 # Systems Manager Patch Baseline
 resource "aws_ssm_patch_baseline" "amazon_linux" {
   name             = "${var.project_name}-amazon-linux-baseline"
@@ -589,7 +588,7 @@ resource "aws_ssm_patch_baseline" "amazon_linux" {
 
     patch_filter {
       key    = "CLASSIFICATION"
-      values = ["Security", "Bugfix"]   # Removed invalid "Critical"
+      values = ["Security", "Bugfix"] # Removed invalid "Critical"
     }
 
     patch_filter {
@@ -686,7 +685,7 @@ resource "aws_iam_role_policy_attachment" "maintenance_window" {
 
 # CloudTrail for API monitoring
 resource "aws_cloudtrail" "main" {
-  name = "${var.project_name}-cloudtrail-${var.environment}"
+  name           = "${var.project_name}-cloudtrail-${var.environment}"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
   event_selector {
@@ -809,7 +808,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   statistic           = "Sum"
   threshold           = "0"
   alarm_description   = "This metric monitors unauthorized API calls"
-  
+
   tags = {
     Name = "${var.project_name}-unauthorized-api-calls-alarm"
   }
