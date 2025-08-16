@@ -421,7 +421,7 @@ resource "aws_s3_bucket_replication_configuration" "primary_replication" {
       storage_class = "STANDARD"
 
       encryption_configuration {
-        replica_kms_key_id = "aws/s3"
+        replica_kms_key_id = "arn:${local.partition}:kms:us-west-2:${local.account_id}:alias/aws/s3"
       }
     }
   }
