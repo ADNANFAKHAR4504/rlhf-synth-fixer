@@ -14,11 +14,11 @@ import pulumi
 from pulumi import ResourceOptions
 import pulumi_aws as aws
 
-from lib.components.cloudwatch_alarm import CloudWatchAlarm
-from lib.components.iam_role import S3IAMRole
-from lib.components.kms_key import KMSKey
+from lib.components.cloudwatch_alarm import CloudWatchAlarm, CloudWatchAlarmConfig
+from lib.components.iam_role import S3IAMRole, S3IAMRoleConfig
+from lib.components.kms_key import KMSKey, KMSKeyConfig
 from lib.components.s3_bucket import SecureS3Bucket, SecureS3BucketConfig
-from lib.components.sns_topic import SNSTopic
+from lib.components.sns_topic import SNSTopic, SNSTopicConfig
 
 # Configuration
 config = pulumi.Config()
@@ -85,14 +85,18 @@ class TapStack(pulumi.ComponentResource):
     # Create KMS key for encryption
     kms_key = KMSKey(
       f"{project_name}-kms",
-      description="KMS key for S3 bucket encryption and SNS topic"
+      KMSKeyConfig(
+        description="KMS key for S3 bucket encryption and SNS topic"
+      )
     )
 
     # Create SNS topic for notifications
     sns_topic = SNSTopic(
       f"{project_name}-sns",
-      kms_key_id=kms_key.key.key_id,
-      email_endpoint=email_endpoint
+      SNSTopicConfig(
+        kms_key_id=kms_key.key.key_id,
+        email_endpoint=email_endpoint
+      )
     )
 
     # Create the secure S3 bucket
@@ -108,15 +112,19 @@ class TapStack(pulumi.ComponentResource):
     # Create IAM role with least privilege access
     iam_role = S3IAMRole(
       f"{project_name}-iam",
-      bucket_arn=s3_bucket.bucket.arn,
-      kms_key_arn=kms_key.key.arn
+      S3IAMRoleConfig(
+        bucket_arn=s3_bucket.bucket.arn,
+        kms_key_arn=kms_key.key.arn
+      )
     )
 
     # Create CloudWatch alarms
     CloudWatchAlarm(
       f"{project_name}-cw",
-      bucket_name=s3_bucket.bucket.bucket,
-      sns_topic_arn=sns_topic.topic.arn
+      CloudWatchAlarmConfig(
+        bucket_name=s3_bucket.bucket.bucket,
+        sns_topic_arn=sns_topic.topic.arn
+      )
     )
 
     # Export important values
