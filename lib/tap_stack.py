@@ -104,7 +104,7 @@ vpc = aws.ec2.Vpc(
     enable_dns_support=True,
     enable_dns_hostnames=True,
     tags={"Name": name("vpc"), "Project": project_name, "Env": environment},
-    opts=pulumi.ResourceOptions(provider=provider),
+    opts=pulumi.ResourceOptions(provider=provider, protect=True),
 )
 
 igw = aws.ec2.InternetGateway(
