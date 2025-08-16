@@ -2,7 +2,6 @@
 
 ## Common Model Failures for Serverless Infrastructure Design
 
-```yaml
 This document captures potential failure modes and edge cases when AI models attempt to solve the serverless infrastructure design challenge.
 
 ### 1. Security Implementation Failures
@@ -152,4 +151,3 @@ A successful model response should:
 - Include comprehensive monitoring and logging
 - Follow AWS best practices and naming conventions
 - Be production-ready and maintainable
-```
