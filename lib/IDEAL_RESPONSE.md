@@ -1,5 +1,3 @@
-I'll create a comprehensive, secure AWS infrastructure using Pulumi with TypeScript that implements defense-in-depth security, follows the principle of least privilege, and includes modern S3 security configurations. Here's the complete implementation:
-
 ## Core Infrastructure Code
 
 ```typescript

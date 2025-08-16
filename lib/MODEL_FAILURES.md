@@ -7,6 +7,7 @@
 **Impact**: Potential data exfiltration, violates network security best practices
 
 ### Model's Incorrect Code:
+
 ```typescript
 const databaseSecurityGroup = new aws.ec2.SecurityGroup(
   `${projectName}-db-sg`,
@@ -20,10 +21,10 @@ const databaseSecurityGroup = new aws.ec2.SecurityGroup(
     egress: [
       {
         description: 'All outbound traffic', // WRONG: Allows ALL traffic
-        fromPort: 0,                        // WRONG: All ports
-        toPort: 0,                          // WRONG: All ports  
-        protocol: '-1',                     // WRONG: All protocols
-        cidrBlocks: ['0.0.0.0/0'],         // WRONG: All destinations
+        fromPort: 0, // WRONG: All ports
+        toPort: 0, // WRONG: All ports
+        protocol: '-1', // WRONG: All protocols
+        cidrBlocks: ['0.0.0.0/0'], // WRONG: All destinations
       },
     ],
     // ...
@@ -33,6 +34,7 @@ const databaseSecurityGroup = new aws.ec2.SecurityGroup(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 const databaseSecurityGroup = new aws.ec2.SecurityGroup(
   `${projectName}-db-sg-${environmentSuffix}`,
@@ -46,23 +48,23 @@ const databaseSecurityGroup = new aws.ec2.SecurityGroup(
     egress: [
       {
         description: 'HTTPS for software updates and patches', // FIXED: Specific purpose
-        fromPort: 443,                                         // FIXED: Specific port
-        toPort: 443,                                           // FIXED: Specific port
-        protocol: 'tcp',                                       // FIXED: Specific protocol
+        fromPort: 443, // FIXED: Specific port
+        toPort: 443, // FIXED: Specific port
+        protocol: 'tcp', // FIXED: Specific protocol
         cidrBlocks: ['0.0.0.0/0'],
       },
       {
-        description: 'HTTP for software updates and patches',  // FIXED: Specific purpose
-        fromPort: 80,                                          // FIXED: Specific port
-        toPort: 80,                                            // FIXED: Specific port
-        protocol: 'tcp',                                       // FIXED: Specific protocol
+        description: 'HTTP for software updates and patches', // FIXED: Specific purpose
+        fromPort: 80, // FIXED: Specific port
+        toPort: 80, // FIXED: Specific port
+        protocol: 'tcp', // FIXED: Specific protocol
         cidrBlocks: ['0.0.0.0/0'],
       },
       {
-        description: 'DNS queries',                            // FIXED: Specific purpose
-        fromPort: 53,                                          // FIXED: Specific port
-        toPort: 53,                                            // FIXED: Specific port
-        protocol: 'udp',                                       // FIXED: Specific protocol
+        description: 'DNS queries', // FIXED: Specific purpose
+        fromPort: 53, // FIXED: Specific port
+        toPort: 53, // FIXED: Specific port
+        protocol: 'udp', // FIXED: Specific protocol
         cidrBlocks: ['0.0.0.0/0'],
       },
     ],
@@ -71,6 +73,8 @@ const databaseSecurityGroup = new aws.ec2.SecurityGroup(
   { provider: awsProvider, parent: this }
 );
 ```
+
+**Why This is Critical**: Database servers with unrestricted egress can be used for data exfiltration, command and control communication, and lateral movement in case of compromise.
 
 ---
 
@@ -81,6 +85,7 @@ const databaseSecurityGroup = new aws.ec2.SecurityGroup(
 **Impact**: Could access sensitive logs from other applications, cross-account access potential
 
 ### Model's Incorrect Code:
+
 ```typescript
 const webServerLogsPolicy = new aws.iam.Policy(
   `${projectName}-web-server-logs-policy`,
@@ -108,6 +113,7 @@ const webServerLogsPolicy = new aws.iam.Policy(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 const webServerLogsPolicy = new aws.iam.Policy(
   `${projectName}-web-server-logs-policy-${environmentSuffix}`,
@@ -134,6 +140,8 @@ const webServerLogsPolicy = new aws.iam.Policy(
 );
 ```
 
+**Why This is High Risk**: Overly broad CloudWatch permissions could allow access to sensitive application logs, security logs, and potentially logs from other applications in the same account.
+
 ---
 
 ## 3. **SECURITY MISS: No HTTPS-Only S3 Bucket Policies**
@@ -143,6 +151,7 @@ const webServerLogsPolicy = new aws.iam.Policy(
 **Impact**: Allows insecure HTTP connections to S3 buckets
 
 ### Model's Missing Implementation:
+
 ```typescript
 // MISSING: No bucket policies to enforce HTTPS-only access
 const applicationDataBucket = new aws.s3.Bucket(
@@ -157,6 +166,7 @@ const applicationDataBucket = new aws.s3.Bucket(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 // FIXED: Added HTTPS-only bucket policy
 const applicationDataBucketPolicy = new aws.s3.BucketPolicy(
@@ -168,14 +178,14 @@ const applicationDataBucketPolicy = new aws.s3.BucketPolicy(
         Version: '2012-10-17',
         Statement: [
           {
-            Sid: 'DenyInsecureConnections',           // FIXED: Denies HTTP connections
+            Sid: 'DenyInsecureConnections', // FIXED: Denies HTTP connections
             Effect: 'Deny',
             Principal: '*',
             Action: 's3:*',
             Resource: [bucketArn, `${bucketArn}/*`],
             Condition: {
               Bool: {
-                'aws:SecureTransport': 'false',      // FIXED: Enforces HTTPS only
+                'aws:SecureTransport': 'false', // FIXED: Enforces HTTPS only
               },
             },
           },
@@ -187,6 +197,8 @@ const applicationDataBucketPolicy = new aws.s3.BucketPolicy(
 );
 ```
 
+**Why This Matters**: Without HTTPS-only policies, data could be transmitted in plain text, violating security best practices and compliance requirements.
+
 ---
 
 ## 4. **SECURITY MISS: No S3 Access Logging Infrastructure**
@@ -196,6 +208,7 @@ const applicationDataBucketPolicy = new aws.s3.BucketPolicy(
 **Impact**: No security monitoring or compliance audit trail for S3 access
 
 ### Model's Missing Implementation:
+
 ```typescript
 // MISSING: No access logging bucket
 // MISSING: No S3 access logging configuration
@@ -209,16 +222,19 @@ const applicationDataBucket = new aws.s3.Bucket(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 // FIXED: Added dedicated access logs bucket
 const accessLogsBucket = new aws.s3.Bucket(
   `${projectName}-access-logs-${environmentSuffix}`,
   {
-    bucket: `${projectName}-access-logs-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`,
+    bucket: `${projectName}-access-logs-${environmentSuffix}-${(
+      pulumi.getStack() || 'test'
+    ).toLowerCase()}`,
     tags: {
       Name: `${projectName}-access-logs-${environmentSuffix}`,
       Environment: environmentSuffix,
-      Purpose: 'AccessLogging',                     // FIXED: Clear purpose tagging
+      Purpose: 'AccessLogging', // FIXED: Clear purpose tagging
       ...tags,
     },
   },
@@ -230,12 +246,14 @@ const applicationDataBucketLogging = new aws.s3.BucketLogging(
   `${projectName}-app-data-logging-${environmentSuffix}`,
   {
     bucket: applicationDataBucket.id,
-    targetBucket: accessLogsBucket.id,              // FIXED: Logs to dedicated bucket
-    targetPrefix: 'app-data-access-logs/',          // FIXED: Organized log prefixes
+    targetBucket: accessLogsBucket.id, // FIXED: Logs to dedicated bucket
+    targetPrefix: 'app-data-access-logs/', // FIXED: Organized log prefixes
   },
   { provider: awsProvider, parent: this }
 );
 ```
+
+**Why This is Important**: S3 access logging is crucial for security monitoring, compliance auditing, and forensic analysis in case of security incidents.
 
 ---
 
@@ -246,6 +264,7 @@ const applicationDataBucketLogging = new aws.s3.BucketLogging(
 **Impact**: IAM policies don't enforce HTTPS connections to S3
 
 ### Model's Incorrect Code:
+
 ```typescript
 const webServerS3Policy = new aws.iam.Policy(
   `${projectName}-web-server-s3-policy`,
@@ -277,6 +296,7 @@ const webServerS3Policy = new aws.iam.Policy(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 const webServerS3Policy = new aws.iam.Policy(
   `${projectName}-web-server-s3-policy-${environmentSuffix}`,
@@ -300,7 +320,7 @@ const webServerS3Policy = new aws.iam.Policy(
               Resource: [appBucketArn, `${appBucketArn}/*`],
               Condition: {
                 Bool: {
-                  'aws:SecureTransport': 'true',    // FIXED: Enforces HTTPS in IAM policy
+                  'aws:SecureTransport': 'true', // FIXED: Enforces HTTPS in IAM policy
                 },
               },
             },
@@ -310,7 +330,7 @@ const webServerS3Policy = new aws.iam.Policy(
               Resource: [`${backupBucketArn}/*`],
               Condition: {
                 Bool: {
-                  'aws:SecureTransport': 'true',    // FIXED: Enforces HTTPS
+                  'aws:SecureTransport': 'true', // FIXED: Enforces HTTPS
                 },
                 StringEquals: {
                   's3:x-amz-server-side-encryption': 'AES256', // FIXED: Enforces encryption
@@ -325,6 +345,8 @@ const webServerS3Policy = new aws.iam.Policy(
 );
 ```
 
+**Defense in Depth**: Adding secure transport conditions to IAM policies provides an additional layer of security beyond bucket policies.
+
 ---
 
 ## 6. **DEPRECATION ISSUE: Using Deprecated Inline S3 Configurations**
@@ -334,12 +356,14 @@ const webServerS3Policy = new aws.iam.Policy(
 **Impact**: Will generate warnings, not following modern AWS provider patterns
 
 ### Model's Deprecated Code:
+
 ```typescript
 const applicationDataBucket = new aws.s3.Bucket(
   `${projectName}-app-data`,
   {
     bucket: `${projectName}-app-data-${pulumi.getStack()}`,
-    serverSideEncryptionConfiguration: {              // DEPRECATED: Inline configuration
+    serverSideEncryptionConfiguration: {
+      // DEPRECATED: Inline configuration
       rule: {
         applyServerSideEncryptionByDefault: {
           sseAlgorithm: 'AES256',
@@ -347,16 +371,19 @@ const applicationDataBucket = new aws.s3.Bucket(
         bucketKeyEnabled: true,
       },
     },
-    publicAccessBlock: {                              // DEPRECATED: Inline configuration
+    publicAccessBlock: {
+      // DEPRECATED: Inline configuration
       blockPublicAcls: true,
       blockPublicPolicy: true,
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
     },
-    versioning: {                                     // DEPRECATED: Inline configuration
+    versioning: {
+      // DEPRECATED: Inline configuration
       enabled: true,
     },
-    lifecycleRules: [                                 // DEPRECATED: Inline configuration
+    lifecycleRules: [
+      // DEPRECATED: Inline configuration
       {
         id: 'backup-lifecycle',
         enabled: true,
@@ -374,12 +401,15 @@ const applicationDataBucket = new aws.s3.Bucket(
 ```
 
 ### Our Modern Code:
+
 ```typescript
 // FIXED: Modern separate resource approach
 const applicationDataBucket = new aws.s3.Bucket(
   `${projectName}-app-data-${environmentSuffix}`,
   {
-    bucket: `${projectName}-app-data-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`,
+    bucket: `${projectName}-app-data-${environmentSuffix}-${(
+      pulumi.getStack() || 'test'
+    ).toLowerCase()}`,
     tags: {
       Name: `${projectName}-app-data-${environmentSuffix}`,
       Environment: environmentSuffix,
@@ -390,21 +420,22 @@ const applicationDataBucket = new aws.s3.Bucket(
 );
 
 // FIXED: Separate encryption configuration resource
-const applicationDataBucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(
-  `${projectName}-app-data-encryption-${environmentSuffix}`,
-  {
-    bucket: applicationDataBucket.id,
-    rules: [
-      {
-        applyServerSideEncryptionByDefault: {
-          sseAlgorithm: 'AES256',
+const applicationDataBucketEncryption =
+  new aws.s3.BucketServerSideEncryptionConfiguration(
+    `${projectName}-app-data-encryption-${environmentSuffix}`,
+    {
+      bucket: applicationDataBucket.id,
+      rules: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+          bucketKeyEnabled: true,
         },
-        bucketKeyEnabled: true,
-      },
-    ],
-  },
-  { provider: awsProvider, parent: this }
-);
+      ],
+    },
+    { provider: awsProvider, parent: this }
+  );
 
 // FIXED: Separate versioning configuration resource
 const applicationDataBucketVersioning = new aws.s3.BucketVersioning(
@@ -419,18 +450,21 @@ const applicationDataBucketVersioning = new aws.s3.BucketVersioning(
 );
 
 // FIXED: Separate public access block resource
-const applicationDataBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
-  `${projectName}-app-data-pab-${environmentSuffix}`,
-  {
-    bucket: applicationDataBucket.id,
-    blockPublicAcls: true,
-    blockPublicPolicy: true,
-    ignorePublicAcls: true,
-    restrictPublicBuckets: true,
-  },
-  { provider: awsProvider, parent: this }
-);
+const applicationDataBucketPublicAccessBlock =
+  new aws.s3.BucketPublicAccessBlock(
+    `${projectName}-app-data-pab-${environmentSuffix}`,
+    {
+      bucket: applicationDataBucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
+    },
+    { provider: awsProvider, parent: this }
+  );
 ```
+
+**Why This Matters**: Modern AWS provider patterns use separate resources for better control, dependency management, and to avoid deprecation warnings.
 
 ---
 
@@ -441,18 +475,19 @@ const applicationDataBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBloc
 **Impact**: Cannot deploy multiple environments, poor resource organization
 
 ### Model's Incorrect Code:
+
 ```typescript
 const webServerRole = new aws.iam.Role(
-  `${projectName}-web-server-role`,              // WRONG: No environment suffix
+  `${projectName}-web-server-role`, // WRONG: No environment suffix
   {
-    name: `${projectName}-web-server-role`,      // WRONG: No environment suffix
+    name: `${projectName}-web-server-role`, // WRONG: No environment suffix
     // ...
   },
   { provider: awsProvider }
 );
 
 const applicationDataBucket = new aws.s3.Bucket(
-  `${projectName}-app-data`,                     // WRONG: No environment suffix
+  `${projectName}-app-data`, // WRONG: No environment suffix
   {
     bucket: `${projectName}-app-data-${pulumi.getStack()}`, // WRONG: Uses stack name instead of env
     // ...
@@ -462,15 +497,16 @@ const applicationDataBucket = new aws.s3.Bucket(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 const webServerRole = new aws.iam.Role(
-  `${projectName}-web-server-role-${environmentSuffix}`,    // FIXED: Added environment suffix
+  `${projectName}-web-server-role-${environmentSuffix}`, // FIXED: Added environment suffix
   {
     name: `${projectName}-web-server-role-${environmentSuffix}`, // FIXED: Added environment suffix
     // ...
     tags: {
       Name: `${projectName}-web-server-role-${environmentSuffix}`,
-      Environment: environmentSuffix,                       // FIXED: Added environment tag
+      Environment: environmentSuffix, // FIXED: Added environment tag
       ...tags,
     },
   },
@@ -478,18 +514,22 @@ const webServerRole = new aws.iam.Role(
 );
 
 const applicationDataBucket = new aws.s3.Bucket(
-  `${projectName}-app-data-${environmentSuffix}`,          // FIXED: Added environment suffix
+  `${projectName}-app-data-${environmentSuffix}`, // FIXED: Added environment suffix
   {
-    bucket: `${projectName}-app-data-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`, // FIXED: Proper naming with fallback
+    bucket: `${projectName}-app-data-${environmentSuffix}-${(
+      pulumi.getStack() || 'test'
+    ).toLowerCase()}`, // FIXED: Proper naming with fallback
     tags: {
       Name: `${projectName}-app-data-${environmentSuffix}`,
-      Environment: environmentSuffix,                       // FIXED: Added environment tag
+      Environment: environmentSuffix, // FIXED: Added environment tag
       ...tags,
     },
   },
   { provider: awsProvider, parent: this }
 );
 ```
+
+**Operational Impact**: Without environment suffixes, you cannot deploy multiple environments (dev, staging, prod) in the same AWS account.
 
 ---
 
@@ -500,6 +540,7 @@ const applicationDataBucket = new aws.s3.Bucket(
 **Impact**: Backup bucket doesn't enforce encryption on uploads
 
 ### Model's Missing Implementation:
+
 ```typescript
 const backupBucket = new aws.s3.Bucket(
   `${projectName}-backups`,
@@ -512,6 +553,7 @@ const backupBucket = new aws.s3.Bucket(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 const backupBucketPolicy = new aws.s3.BucketPolicy(
   `${projectName}-backups-policy-${environmentSuffix}`,
@@ -534,7 +576,7 @@ const backupBucketPolicy = new aws.s3.BucketPolicy(
             },
           },
           {
-            Sid: 'DenyUnencryptedUploads',              // FIXED: Enforces encryption on uploads
+            Sid: 'DenyUnencryptedUploads', // FIXED: Enforces encryption on uploads
             Effect: 'Deny',
             Principal: '*',
             Action: 's3:PutObject',
@@ -553,6 +595,8 @@ const backupBucketPolicy = new aws.s3.BucketPolicy(
 );
 ```
 
+**Data Protection**: Backup data is often more sensitive and should have additional encryption enforcement policies.
+
 ---
 
 ## 9. **CODE ISSUE: Missing Resource Parent Relationships**
@@ -562,13 +606,14 @@ const backupBucketPolicy = new aws.s3.BucketPolicy(
 **Impact**: Poor resource organization, potential deployment issues
 
 ### Model's Incorrect Code:
+
 ```typescript
 const webServerRole = new aws.iam.Role(
   `${projectName}-web-server-role`,
   {
     // ... configuration
   },
-  { provider: awsProvider }                        // WRONG: No parent relationship
+  { provider: awsProvider } // WRONG: No parent relationship
 );
 
 const applicationDataBucket = new aws.s3.Bucket(
@@ -576,18 +621,19 @@ const applicationDataBucket = new aws.s3.Bucket(
   {
     // ... configuration
   },
-  { provider: awsProvider }                        // WRONG: No parent relationship
+  { provider: awsProvider } // WRONG: No parent relationship
 );
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 const webServerRole = new aws.iam.Role(
   `${projectName}-web-server-role-${environmentSuffix}`,
   {
     // ... configuration
   },
-  { provider: awsProvider, parent: this }          // FIXED: Added parent relationship
+  { provider: awsProvider, parent: this } // FIXED: Added parent relationship
 );
 
 const applicationDataBucket = new aws.s3.Bucket(
@@ -595,9 +641,11 @@ const applicationDataBucket = new aws.s3.Bucket(
   {
     // ... configuration
   },
-  { provider: awsProvider, parent: this }          // FIXED: Added parent relationship
+  { provider: awsProvider, parent: this } // FIXED: Added parent relationship
 );
 ```
+
+**Resource Management**: Parent relationships help with resource organization, dependency tracking, and proper cleanup.
 
 ---
 
@@ -608,6 +656,7 @@ const applicationDataBucket = new aws.s3.Bucket(
 **Impact**: Poor resource governance, difficult cost tracking and compliance
 
 ### Model's Incorrect Code:
+
 ```typescript
 const webServerRole = new aws.iam.Role(
   `${projectName}-web-server-role`,
@@ -615,7 +664,7 @@ const webServerRole = new aws.iam.Role(
     name: `${projectName}-web-server-role`,
     assumeRolePolicy: ec2AssumeRolePolicy.then(policy => policy.json),
     tags: {
-      Name: `${projectName}-web-server-role`,      // INCOMPLETE: Only basic Name tag
+      Name: `${projectName}-web-server-role`, // INCOMPLETE: Only basic Name tag
     },
   },
   { provider: awsProvider }
@@ -623,6 +672,7 @@ const webServerRole = new aws.iam.Role(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 const webServerRole = new aws.iam.Role(
   `${projectName}-web-server-role-${environmentSuffix}`,
@@ -642,31 +692,16 @@ const webServerRole = new aws.iam.Role(
     }),
     tags: {
       Name: `${projectName}-web-server-role-${environmentSuffix}`,
-      Environment: environmentSuffix,              // FIXED: Added environment tag
-      ...tags,                                     // FIXED: Support for custom tags
+      Environment: environmentSuffix, // FIXED: Added environment tag
+      ...tags, // FIXED: Support for custom tags
     },
   },
   { provider: awsProvider, parent: this }
 );
 ```
 
----
+**Governance Impact**: Proper tagging is essential for cost allocation, compliance reporting, and resource management.
 
-## Summary of Model Failures
-
-| Issue Type | Count | Severity Distribution |
-|------------|-------|----------------------|
-| **Security Failures** | 5 | 2 Critical, 2 High, 1 Medium |
-| **Security Misses** | 4 | 4 Medium |
-| **Least Privilege Violations** | 3 | 1 Critical, 2 High |
-| **Deprecation Issues** | 1 | 1 Medium |
-| **Code Issues** | 2 | 2 Low |
-
-**Total Issues**: 10  
-**Critical/High Severity**: 5 issues  
-**Production Readiness**: FAILED - Multiple critical security violations
-
-The model's implementation would have created significant security vulnerabilities in a production environment, particularly around network security and IAM permissions.
 ---
 
 ## 11. **PROMPT REQUIREMENT MISS: Incorrect Region Implementation**
@@ -676,40 +711,45 @@ The model's implementation would have created significant security vulnerabiliti
 **Impact**: Infrastructure deployed to wrong region, violates explicit prompt requirement
 
 ### Prompt Requirement:
+
 > "All infrastructure will be provisioned in the 'us-west-2' region"
 > "Explicitly associate all AWS resources with a Pulumi provider object to control the target region (us-west-2)"
 
 ### Model's Incorrect Implementation:
+
 ```typescript
 // Configuration
 const projectName = 'webapp';
-const region = 'us-west-2';              // CORRECT: Sets region variable
+const region = 'us-west-2'; // CORRECT: Sets region variable
 
 // Create AWS provider for explicit region control
 const awsProvider = new aws.Provider('aws-provider', {
-  region: region,                        // CORRECT: Uses us-west-2
+  region: region, // CORRECT: Uses us-west-2
 });
 
-// BUT THEN: Uses hardcoded region in our actual implementation
-const region = args.region || 'us-east-1';  // WRONG: Defaults to us-east-1 instead of us-west-2
+// BUT THEN: In our actual implementation we found
+const region = args.region || 'us-east-1'; // WRONG: Defaults to us-east-1 instead of us-west-2
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 // Configuration following prompt requirement
 const projectName = 'webapp';
 const environmentSuffix = args.environmentSuffix;
-const region = args.region || 'us-west-2';  // FIXED: Defaults to us-west-2 as per prompt
+const region = args.region || 'us-west-2'; // FIXED: Defaults to us-west-2 as per prompt
 
 // Create AWS provider for explicit region control
 const awsProvider = new aws.Provider(
   'aws-provider',
   {
-    region: region,                        // FIXED: Correctly uses us-west-2 default
+    region: region, // FIXED: Correctly uses us-west-2 default
   },
   { parent: this }
 );
 ```
+
+**Compliance Impact**: Deploying to the wrong region could violate data residency requirements and compliance policies.
 
 ---
 
@@ -720,22 +760,24 @@ const awsProvider = new aws.Provider(
 **Impact**: Naming convention doesn't fully match prompt specification
 
 ### Prompt Requirement:
+
 > "Use consistent naming conventions across all resources in the format: projectname-resource-type"
 
 ### Model's Partially Incorrect Implementation:
+
 ```typescript
 // PARTIALLY CORRECT: Basic format followed
 const webSecurityGroup = new aws.ec2.SecurityGroup(
-  `${projectName}-web-sg`,              // CORRECT: webapp-web-sg format
+  `${projectName}-web-sg`, // CORRECT: webapp-web-sg format
   {
-    name: `${projectName}-web-sg`,       // CORRECT: webapp-web-sg format
+    name: `${projectName}-web-sg`, // CORRECT: webapp-web-sg format
     // ...
   }
 );
 
 // BUT MISSING: Environment differentiation for multi-environment deployments
 const applicationDataBucket = new aws.s3.Bucket(
-  `${projectName}-app-data`,            // INCOMPLETE: Missing environment suffix
+  `${projectName}-app-data`, // INCOMPLETE: Missing environment suffix
   {
     bucket: `${projectName}-app-data-${pulumi.getStack()}`, // INCOMPLETE: Uses stack name instead of env
     // ...
@@ -744,10 +786,11 @@ const applicationDataBucket = new aws.s3.Bucket(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 // FIXED: Complete naming convention with environment support
 const webSecurityGroup = new aws.ec2.SecurityGroup(
-  `${projectName}-web-sg-${environmentSuffix}`,    // FIXED: webapp-web-sg-dev format
+  `${projectName}-web-sg-${environmentSuffix}`, // FIXED: webapp-web-sg-dev format
   {
     name: `${projectName}-web-sg-${environmentSuffix}`, // FIXED: webapp-web-sg-dev format
     // ...
@@ -755,13 +798,17 @@ const webSecurityGroup = new aws.ec2.SecurityGroup(
 );
 
 const applicationDataBucket = new aws.s3.Bucket(
-  `${projectName}-app-data-${environmentSuffix}`,  // FIXED: webapp-app-data-dev format
+  `${projectName}-app-data-${environmentSuffix}`, // FIXED: webapp-app-data-dev format
   {
-    bucket: `${projectName}-app-data-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`, // FIXED: Complete naming
+    bucket: `${projectName}-app-data-${environmentSuffix}-${(
+      pulumi.getStack() || 'test'
+    ).toLowerCase()}`, // FIXED: Complete naming
     // ...
   }
 );
 ```
+
+**Operational Impact**: Inconsistent naming makes resource management and automation more difficult.
 
 ---
 
@@ -772,9 +819,11 @@ const applicationDataBucket = new aws.s3.Bucket(
 **Impact**: Code not modular or reusable as requested in prompt
 
 ### Prompt Requirement:
+
 > "The code should be modular, production-ready, and focused on security and maintainability"
 
 ### Model's Incorrect Implementation:
+
 ```typescript
 // WRONG: Flat script structure, not modular
 // Configuration
@@ -787,12 +836,9 @@ const awsProvider = new aws.Provider('aws-provider', {
 });
 
 // VPC Configuration
-const vpc = new aws.ec2.Vpc(
-  `${projectName}-vpc`,
-  {
-    // ... all resources in one flat file
-  }
-);
+const vpc = new aws.ec2.Vpc(`${projectName}-vpc`, {
+  // ... all resources in one flat file
+});
 
 // MISSING: No class structure, no interfaces, no reusability
 // MISSING: No parameterization for different environments
@@ -800,11 +846,12 @@ const vpc = new aws.ec2.Vpc(
 ```
 
 ### Our Corrected Code:
+
 ```typescript
 // FIXED: Modular class-based design
 export interface WebAppInfrastructureArgs {
-  environmentSuffix: string;             // FIXED: Parameterized for environments
-  region?: string;                       // FIXED: Configurable region
+  environmentSuffix: string; // FIXED: Parameterized for environments
+  region?: string; // FIXED: Configurable region
   tags?: pulumi.Input<{ [key: string]: string }>; // FIXED: Flexible tagging
 }
 
@@ -817,7 +864,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
 
   constructor(
     name: string,
-    args: WebAppInfrastructureArgs,      // FIXED: Typed arguments
+    args: WebAppInfrastructureArgs, // FIXED: Typed arguments
     opts?: ResourceOptions
   ) {
     super('tap:webapp:WebAppInfrastructure', name, {}, opts); // FIXED: Component resource
@@ -833,22 +880,6 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
 }
 ```
 
+**Maintainability Impact**: Non-modular code is difficult to maintain, test, and reuse across different environments.
+
 ---
-
-## Updated Summary of Model Failures
-
-| Issue Type | Count | Severity Distribution |
-|------------|-------|----------------------|
-| **Security Failures** | 5 | 2 Critical, 2 High, 1 Medium |
-| **Security Misses** | 4 | 4 Medium |
-| **Least Privilege Violations** | 3 | 1 Critical, 2 High |
-| **Deprecation Issues** | 1 | 1 Medium |
-| **Code Issues** | 2 | 2 Low |
-| **Prompt Requirement Misses** | 3 | 2 Medium, 1 Low |
-
-**Total Issues**: 13  
-**Critical/High Severity**: 5 issues  
-**Prompt Compliance**: PARTIAL - Met basic requirements but missed key architectural and regional specifications  
-**Production Readiness**: FAILED - Multiple critical security violations and architectural issues
-
-The model partially followed the prompt requirements but missed critical aspects like proper region defaulting, complete naming conventions for multi-environment support, and the modular design requirement that would make the code production-ready and maintainable.
