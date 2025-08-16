@@ -14,7 +14,16 @@ def _get_key_policy() -> str:
     "Version": "2012-10-17",
     "Statement": [
       {
-        "Sid": "Enable IAM User Permissions",
+        "Sid": "Enable IAM Root User Permissions",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": f"arn:aws:iam::{current.account_id}:root"
+        },
+        "Action": "kms:*",
+        "Resource": "*"
+      },
+      {
+        "Sid": "Allow Use of the Key for S3 and SNS",
         "Effect": "Allow",
         "Principal": {
           "AWS": f"arn:aws:iam::{current.account_id}:root"
@@ -39,6 +48,18 @@ def _get_key_policy() -> str:
         "Effect": "Allow",
         "Principal": {
           "Service": "s3.amazonaws.com"
+        },
+        "Action": [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ],
+        "Resource": "*"
+      },
+      {
+        "Sid": "Allow SNS Service",
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "sns.amazonaws.com"
         },
         "Action": [
           "kms:Decrypt",
