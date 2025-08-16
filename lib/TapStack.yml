@@ -1,14 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
 
-Description: 'SAM template for a serverless application with three Lambda functions (items, users, orders), DynamoDB tables, and API Gateway endpoints'
+Description: 'CloudFormation template for a serverless application with three Lambda functions (items, users, orders), DynamoDB tables, and API Gateway endpoints'
 
-# Global configuration to reduce redundancy across Lambda functions
-Globals:
-  Function:
-    Runtime: nodejs20.x
-    Timeout: 30
-    MemorySize: 128
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming'
 
 Resources:
   # IAM Role for all Lambda functions with least privilege permissions
@@ -45,7 +43,7 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:Query
                   - dynamodb:Scan
-                Resource: !GetAtt ItemsTable.Arn
+                Resource: !GetAtt [ItemsTable, Arn]
               # Granular permissions for Users table
               - Effect: Allow
                 Action:
@@ -54,7 +52,7 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:Query
                   - dynamodb:Scan
-                Resource: !GetAtt UsersTable.Arn
+                Resource: !GetAtt [UsersTable, Arn]
               # Granular permissions for Orders table
               - Effect: Allow
                 Action:
@@ -63,13 +61,13 @@ Resources:
                   - dynamodb:UpdateItem
                   - dynamodb:Query
                   - dynamodb:Scan
-                Resource: !GetAtt OrdersTable.Arn
+                Resource: !GetAtt [OrdersTable, Arn]
 
   # DynamoDB Tables with on-demand capacity
   ItemsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${AWS::StackName}-items-table'
+      TableName: !Sub '${AWS::StackName}-items-table-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: itemId
@@ -81,7 +79,7 @@ Resources:
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${AWS::StackName}-users-table'
+      TableName: !Sub '${AWS::StackName}-users-table-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: userId
@@ -93,7 +91,7 @@ Resources:
   OrdersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub '${AWS::StackName}-orders-table'
+      TableName: !Sub '${AWS::StackName}-orders-table-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: orderId
@@ -104,11 +102,15 @@ Resources:
 
   # Lambda Functions with Inline Code
   ItemsFunction:
-    Type: AWS::Serverless::Function
+    Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-items-function'
-      # Inline code for Items function
-      InlineCode: |
+      FunctionName: !Sub '${AWS::StackName}-items-function-${EnvironmentSuffix}'
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 128
+      Code:
+        ZipFile: |
         const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
         const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
         const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -168,26 +170,22 @@ Resources:
             };
           }
         };
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !GetAtt [LambdaExecutionRole, Arn]
       Environment:
         Variables:
           ITEMS_TABLE_NAME: !Ref ItemsTable
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /items
-            Method: ANY
     Description: 'Lambda function for handling items operations'
 
   UsersFunction:
-    Type: AWS::Serverless::Function
+    Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-users-function'
-      # Inline code for Users function
-      InlineCode: |
+      FunctionName: !Sub '${AWS::StackName}-users-function-${EnvironmentSuffix}'
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 128
+      Code:
+        ZipFile: |
         const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
         const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
         const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -247,26 +245,22 @@ Resources:
             };
           }
         };
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !GetAtt [LambdaExecutionRole, Arn]
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersTable
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /users
-            Method: ANY
     Description: 'Lambda function for handling users operations'
 
   OrdersFunction:
-    Type: AWS::Serverless::Function
+    Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-orders-function'
-      # Inline code for Orders function
-      InlineCode: |
+      FunctionName: !Sub '${AWS::StackName}-orders-function-${EnvironmentSuffix}'
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 128
+      Code:
+        ZipFile: |
         const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
         const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
         const ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
@@ -326,55 +320,91 @@ Resources:
             };
           }
         };
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !GetAtt [LambdaExecutionRole, Arn]
       Environment:
         Variables:
           ORDERS_TABLE_NAME: !Ref OrdersTable
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /orders
-            Method: ANY
     Description: 'Lambda function for handling orders operations'
 
   # API Gateway REST API
   ApiGateway:
-    Type: AWS::Serverless::Api
+    Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub '${AWS::StackName}-api'
+      Name: !Sub '${AWS::StackName}-api-${EnvironmentSuffix}'
+      Description: 'API Gateway REST API with endpoints for items, users, and orders'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway Resources
+  ItemsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt [ApiGateway, RootResourceId]
+      PathPart: items
+
+  UsersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt [ApiGateway, RootResourceId]
+      PathPart: users
+
+  OrdersResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt [ApiGateway, RootResourceId]
+      PathPart: orders
+
+  # API Gateway Methods
+  ItemsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ItemsResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ItemsFunction.Arn}/invocations'
+
+  UsersMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref UsersResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersFunction.Arn}/invocations'
+
+  OrdersMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref OrdersResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OrdersFunction.Arn}/invocations'
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ItemsMethod
+      - UsersMethod
+      - OrdersMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
       StageName: Prod
-      Cors:
-        AllowMethods: "'*'"
-        AllowHeaders: "'*'"
-        AllowOrigin: "'*'"
-      DefinitionBody:
-        swagger: '2.0'
-        info:
-          title: !Sub '${AWS::StackName} API'
-          version: '1.0'
-        paths:
-          /items:
-            x-amazon-apigateway-any-method:
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ItemsFunction.Arn}/invocations'
-          /users:
-            x-amazon-apigateway-any-method:
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UsersFunction.Arn}/invocations'
-          /orders:
-            x-amazon-apigateway-any-method:
-              x-amazon-apigateway-integration:
-                type: aws_proxy
-                httpMethod: POST
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OrdersFunction.Arn}/invocations'
-    Description: 'API Gateway REST API with endpoints for items, users, and orders'
 
   # Lambda permissions for API Gateway to invoke functions
   ItemsFunctionPermission:
@@ -407,22 +437,22 @@ Outputs:
     Description: 'URL of the deployed API Gateway'
     Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod'
     Export:
-      Name: !Sub '${AWS::StackName}-api-url'
+      Name: !Sub '${AWS::StackName}-api-url-${EnvironmentSuffix}'
 
   ItemsTableName:
     Description: 'Name of the Items DynamoDB table'
     Value: !Ref ItemsTable
     Export:
-      Name: !Sub '${AWS::StackName}-items-table'
+      Name: !Sub '${AWS::StackName}-items-table-${EnvironmentSuffix}'
 
   UsersTableName:
     Description: 'Name of the Users DynamoDB table'
     Value: !Ref UsersTable
     Export:
-      Name: !Sub '${AWS::StackName}-users-table'
+      Name: !Sub '${AWS::StackName}-users-table-${EnvironmentSuffix}'
 
   OrdersTableName:
     Description: 'Name of the Orders DynamoDB table'
     Value: !Ref OrdersTable
     Export:
-      Name: !Sub '${AWS::StackName}-orders-table'
+      Name: !Sub '${AWS::StackName}-orders-table-${EnvironmentSuffix}'
