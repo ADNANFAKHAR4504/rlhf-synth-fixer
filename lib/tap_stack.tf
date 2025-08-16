@@ -1136,9 +1136,6 @@ CW_EOF
     
     # Signal completion
     echo "=== Instance setup completed successfully at $(date) ==="
-    
-    # Send success signal to CloudFormation (optional, won't fail if not available)
-    /opt/aws/bin/cfn-signal -e 0 --stack ${var.project_name} --resource AutoScalingGroup --region ${var.aws_region} 2>/dev/null || true
     EOF
   )
 
@@ -1489,6 +1486,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
 
     expiration {
       days = 90
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
     }
   }
 }
