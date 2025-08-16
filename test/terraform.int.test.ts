@@ -1,24 +1,24 @@
 /**
- * terraform.int.test.ts — 30 discrete integration test cases
+ * terraform.int.test.ts — Enhanced integration test cases for serverless infrastructure
  *
- * Source of truth for outputs:
- *  1) ./cfn-outputs/flat-outputs.json   (real pipeline)
- *  2) ./default output                        (local fallback for dev/demo)
+ * Tests the complete end-to-end workflow:
+ * - Lambda function 1: writes data to DynamoDB table
+ * - Lambda function 2: reads data from DynamoDB table
+ * - Direct DynamoDB verification using AWS SDK v3 client
  *
- * Each test:
- *  - Invokes lambda1 to write an item (unique id)
- *  - Invokes lambda2 to read the same item
- *  - Verifies the item exists directly in DynamoDB
+ * Source of truth for deployment outputs:
+ *  1) ./cfn-outputs/flat-outputs.json   (CI/CD pipeline outputs)
+ *  2) ./lib/flat-outputs.json          (local development fallback)
  *
- * Notes:
- *  - We generate EXACTLY 30 test cases via Jest `test.each`.
- *  - Tests share AWS clients created in beforeAll.
- *  - Timeout increased for network I/O.
+ * Test Architecture:
+ * - 30 discrete test cases with unique identifiers
+ * - Real AWS service integration (no mocking)
+ * - Comprehensive workflow validation
+ * - Proper timeout handling for network operations
  */
 
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
-import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 import fs from 'fs';
 import path from 'path';
 
@@ -40,103 +40,142 @@ const getOut = (key: string): any => {
 
 let region: string = process.env.AWS_REGION || 'us-east-1';
 let lambdaClient: LambdaClient | undefined;
-let ddb: DynamoDBClient | undefined;
-let doc: DynamoDBDocumentClient | undefined;
+let dynamoDBClient: DynamoDBClient | undefined;
 
 /**
- * Provided snippet (real pipeline), with a local fallback
+ * Setup test environment with deployment outputs and AWS clients
  */
 beforeAll(() => {
-  // Read deployment outputs
-  const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
-  if (fs.existsSync(outputsPath)) {
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+  // Read deployment outputs from CI/CD pipeline or local fallback
+  const pipelineOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+  if (fs.existsSync(pipelineOutputsPath)) {
+    outputs = JSON.parse(fs.readFileSync(pipelineOutputsPath, 'utf-8'));
+    console.log('Using CI/CD pipeline deployment outputs');
   } else {
-    // Fallback to local default output for dev
-    const alt = path.join(__dirname, '../lib/flat-outputs.json');
-    if (fs.existsSync(alt)) {
-      outputs = JSON.parse(fs.readFileSync(alt, 'utf-8'));
-      console.warn('Using local default output as outputs fallback');
+    // Fallback to local development outputs
+    const localOutputsPath = path.join(__dirname, '../lib/flat-outputs.json');
+    if (fs.existsSync(localOutputsPath)) {
+      outputs = JSON.parse(fs.readFileSync(localOutputsPath, 'utf-8'));
+      console.warn('Using local development outputs as fallback');
     } else {
-      // Skip tests if no outputs found
-      console.warn('No deployment outputs found, skipping integration tests');
+      // Skip integration tests if no deployment outputs available
+      console.warn('No deployment outputs found - skipping integration tests');
       SKIP = true;
       return;
     }
   }
 
-  // Configure region and clients
+  // Initialize AWS clients with proper region configuration
   region = (getOut('region') as string) || region;
   lambdaClient = new LambdaClient({ region });
-  ddb = new DynamoDBClient({ region });
-  doc = DynamoDBDocumentClient.from(ddb);
+  dynamoDBClient = new DynamoDBClient({ region });
+  console.log(`Initialized AWS clients for region: ${region}`);
 });
 
 const describeIf = (cond: boolean) => (cond ? describe : describe.skip);
 
-// Build 30 unique test ids
-const CASES: string[] = Array.from({ length: 30 }, (_, i) => `case-${Date.now()}-${i}`);
+// Generate 30 unique test identifiers for comprehensive testing
+const TEST_CASES: string[] = Array.from({ length: 30 }, (_, index) => 
+  `integration-test-${Date.now()}-${String(index).padStart(2, '0')}`
+);
 
-describeIf(!SKIP)('serverless baseline — 30 test cases', () => {
-  test('sanity: outputs present', () => {
-    const required = [
+describeIf(!SKIP)('Terraform Serverless Infrastructure - End-to-End Integration Tests', () => {
+  
+  test('Deployment Outputs Validation - Required infrastructure components present', () => {
+    const requiredOutputs = [
       'lambda1_name',
-      'lambda2_name',
+      'lambda2_name', 
       'dynamodb_table_name',
       'region',
     ];
-    const missing = required.filter((k) => !getOut(k));
-    if (missing.length) throw new Error(`Missing required outputs: ${missing.join(', ')}`);
+    const missingOutputs = requiredOutputs.filter((outputKey) => !getOut(outputKey));
+    
+    if (missingOutputs.length > 0) {
+      throw new Error(`Missing required deployment outputs: ${missingOutputs.join(', ')}`);
+    }
+    
+    console.log('✅ All required infrastructure outputs are present');
   });
 
-  test.each(CASES)('e2e #%# — write/read/get id=%s', async (id) => {
-    if (!lambdaClient || !doc) throw new Error('AWS clients not initialised');
+  test.each(TEST_CASES)(
+    'Serverless Workflow Integration Test #%# - Complete Lambda-DynamoDB workflow for record: %s',
+    async (testRecordId) => {
+      if (!lambdaClient || !dynamoDBClient) {
+        throw new Error('AWS clients not properly initialized');
+      }
 
-    const lambda1 = String(getOut('lambda1_name'));
-    const lambda2 = String(getOut('lambda2_name'));
-    const tableName = String(getOut('dynamodb_table_name'));
+      const writerLambdaName = String(getOut('lambda1_name'));
+      const readerLambdaName = String(getOut('lambda2_name')); 
+      const dynamoTableName = String(getOut('dynamodb_table_name'));
 
-    // 1) write via lambda1
-    const invoke1 = await lambdaClient.send(
-      new InvokeCommand({
-        FunctionName: lambda1,
-        Payload: Buffer.from(JSON.stringify({ id }), 'utf-8'),
-      })
-    );
-    expect(invoke1.StatusCode && invoke1.StatusCode >= 200 && invoke1.StatusCode < 300).toBe(true);
-    const payload1 = invoke1.Payload ? Buffer.from(invoke1.Payload).toString('utf-8') : '{}';
-    const resp1 = safeJson(payload1);
-    const body1 = typeof resp1?.body === 'string' ? safeJson(resp1.body) : resp1?.body;
-    expect(body1).toBeTruthy();
-    expect(body1?.written?.id ?? body1?.id).toBe(id);
+      // Step 1: Write data to DynamoDB via Lambda Function 1
+      const writerInvocation = await lambdaClient.send(
+        new InvokeCommand({
+          FunctionName: writerLambdaName,
+          Payload: Buffer.from(JSON.stringify({ id: testRecordId }), 'utf-8'),
+        })
+      );
+      
+      expect(writerInvocation.StatusCode).toBeGreaterThanOrEqual(200);
+      expect(writerInvocation.StatusCode).toBeLessThan(300);
+      
+      const writerPayload = writerInvocation.Payload 
+        ? Buffer.from(writerInvocation.Payload).toString('utf-8') 
+        : '{}';
+      const writerResponse = parseJsonSafely(writerPayload);
+      const writerResponseBody = typeof writerResponse?.body === 'string' 
+        ? parseJsonSafely(writerResponse.body) 
+        : writerResponse?.body;
+      
+      expect(writerResponseBody).toBeTruthy();
+      expect(writerResponseBody?.written?.id ?? writerResponseBody?.id).toBe(testRecordId);
 
-    // 2) read via lambda2
-    const invoke2 = await lambdaClient.send(
-      new InvokeCommand({
-        FunctionName: lambda2,
-        Payload: Buffer.from(JSON.stringify({ id }), 'utf-8'),
-      })
-    );
-    expect(invoke2.StatusCode && invoke2.StatusCode >= 200 && invoke2.StatusCode < 300).toBe(true);
-    const payload2 = invoke2.Payload ? Buffer.from(invoke2.Payload).toString('utf-8') : '{}';
-    const resp2 = safeJson(payload2);
-    const body2 = typeof resp2?.body === 'string' ? safeJson(resp2.body) : resp2?.body;
-    expect(body2).toBeTruthy();
-    expect(body2?.id ?? body2?.written?.id).toBe(id);
+      // Step 2: Read data from DynamoDB via Lambda Function 2
+      const readerInvocation = await lambdaClient.send(
+        new InvokeCommand({
+          FunctionName: readerLambdaName,
+          Payload: Buffer.from(JSON.stringify({ id: testRecordId }), 'utf-8'),
+        })
+      );
+      
+      expect(readerInvocation.StatusCode).toBeGreaterThanOrEqual(200);
+      expect(readerInvocation.StatusCode).toBeLessThan(300);
+      
+      const readerPayload = readerInvocation.Payload 
+        ? Buffer.from(readerInvocation.Payload).toString('utf-8') 
+        : '{}';
+      const readerResponse = parseJsonSafely(readerPayload);
+      const readerResponseBody = typeof readerResponse?.body === 'string' 
+        ? parseJsonSafely(readerResponse.body) 
+        : readerResponse?.body;
+      
+      expect(readerResponseBody).toBeTruthy();
+      expect(readerResponseBody?.id ?? readerResponseBody?.written?.id).toBe(testRecordId);
 
-    // 3) read directly from DynamoDB
-    const getResp = await doc.send(
-      new GetCommand({ TableName: tableName, Key: { id } })
-    );
-    expect(getResp.Item).toBeTruthy();
-    expect(getResp.Item?.id).toBe(id);
-  });
+      // Step 3: Direct DynamoDB verification using AWS SDK
+      const dynamoGetResponse = await dynamoDBClient.send(
+        new GetItemCommand({
+          TableName: dynamoTableName,
+          Key: { 
+            id: { S: testRecordId } 
+          }
+        })
+      );
+      
+      expect(dynamoGetResponse.Item).toBeTruthy();
+      expect(dynamoGetResponse.Item?.id?.S).toBe(testRecordId);
+    }
+  );
 });
 
-function safeJson(s: string) {
+/**
+ * Safely parse JSON string with error handling
+ */
+function parseJsonSafely(jsonString: string) {
   try {
-    return JSON.parse(s);
-  } catch {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.warn(`Failed to parse JSON: ${jsonString}`);
     return undefined;
   }
 }
