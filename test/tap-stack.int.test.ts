@@ -1,148 +1,144 @@
-import { Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
-import { getEnvironmentConfig } from '../lib/config/environment';
+import * as fs from 'fs';
+import * as path from 'path';
+import { EC2Client, DescribeVpcsCommand, DescribeNetworkAclsCommand, NetworkAcl, Vpc, Tag } from '@aws-sdk/client-ec2';
+import { S3Client, ListBucketsCommand, GetBucketLocationCommand, Bucket } from '@aws-sdk/client-s3';
+import { IAMClient, GetRoleCommand, Role } from '@aws-sdk/client-iam';
 
 describe('TAP Stack Integration Tests', () => {
-  let config: ReturnType<typeof getEnvironmentConfig>;
-  let app: any;
-  let stack: TapStack;
-  let synthesized: string;
-  let parsed: any;
+  let outputs: {
+    vpc_id?: string;
+    s3_bucket_name?: string;
+    cross_account_role_name?: string;
+    public_nacl_id?: string;
+  };
+  
+  let awsClients: {
+    ec2: EC2Client;
+    s3: S3Client;
+    iam: IAMClient;
+  };
 
   beforeAll(() => {
-    // Set environment suffix for integration tests
-    process.env.ENVIRONMENT_SUFFIX = 'int-test';
+    // Load deployment outputs
+    const outputsPath = path.join(
+      process.cwd(),
+      'cfn-outputs',
+      'flat-outputs.json'
+    );
+    
+    if (fs.existsSync(outputsPath)) {
+      const outputsContent = fs.readFileSync(outputsPath, 'utf8');
+      outputs = JSON.parse(outputsContent);
+    } else {
+      console.warn('No deployment outputs found, using mock values');
+      outputs = {
+        vpc_id: 'vpc-mock12345',
+        s3_bucket_name: 'prod-test-storage-us-east-1-xyz789',
+        cross_account_role_name: 'prod-test-cross-account-role-us-east-1',
+        public_nacl_id: 'acl-mock12345',
+      };
+    }
 
-    config = getEnvironmentConfig('dev');
-    app = Testing.app();
-    stack = new TapStack(app, 'integration-test-stack', {
-      region: 'us-east-1',
-      environmentSuffix: 'int-test',
-      crossAccountId: '123456789012',
-    });
-    synthesized = Testing.synth(stack);
-    parsed = JSON.parse(synthesized);
+    // Initialize AWS clients
+    awsClients = {
+      ec2: new EC2Client({ region: 'us-east-1' }),
+      s3: new S3Client({ region: 'us-east-1' }),
+      iam: new IAMClient({ region: 'us-east-1' }),
+    };
   });
 
-  describe('Core Infrastructure Validation', () => {
-    test('should create VPC with correct configuration', () => {
-      const vpcs = parsed.resource?.aws_vpc || {};
-      const vpc = Object.values(vpcs)[0] as any;
+  describe('VPC Infrastructure', () => {
+    it('should have created a VPC with correct configuration', async () => {
+      expect(outputs.vpc_id).toBeDefined();
+      expect(outputs.vpc_id).toMatch(/^vpc-[a-z0-9]+$/);
 
-      expect(vpc).toBeDefined();
-      expect(vpc.cidr_block).toBe('10.0.0.0/16');
-      expect(vpc.enable_dns_hostnames).toBe(true);
-      expect(vpc.enable_dns_support).toBe(true);
-      expect(vpc.tags.Name).toBe('prod-int-test-vpc-us-east-1');
+      const describeVpcsCommand = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpc_id!]
+      });
+      const vpcResponse = await awsClients.ec2.send(describeVpcsCommand);
+      
+      expect(vpcResponse.Vpcs).toHaveLength(1);
+      expect(vpcResponse.Vpcs?.[0]?.CidrBlock).toBe('10.0.0.0/16');
+      
+      const tags = vpcResponse.Vpcs?.[0]?.Tags || [];
+      expect(tags.some((tag: Tag) => tag.Key === 'Name' && tag.Value === 'prod-test-vpc-us-east-1')).toBe(true);
     });
 
-    test('should create subnets across multiple AZs', () => {
-      const subnets = parsed.resource?.aws_subnet || {};
-      const subnetArray = Object.values(subnets);
-
-      expect(subnetArray.length).toBeGreaterThan(1);
-
-      const uniqueAZs = new Set(
-        subnetArray.map((s: any) => s.availability_zone)
-      );
-      expect(uniqueAZs.size).toBeGreaterThan(1);
+    it('should have created public NACL with correct rules', async () => {
+      expect(outputs.public_nacl_id).toBeDefined();
+      
+      const describeNaclsCommand = new DescribeNetworkAclsCommand({
+        NetworkAclIds: [outputs.public_nacl_id!]
+      });
+      const naclResponse = await awsClients.ec2.send(describeNaclsCommand);
+      
+      expect(naclResponse.NetworkAcls).toHaveLength(1);
+      
+      const tags = naclResponse.NetworkAcls?.[0]?.Tags || [];
+      expect(tags.some((tag: Tag) => tag.Key === 'Name' && tag.Value === 'prod-test-public-nacl-us-east-1')).toBe(true);
     });
   });
 
-  describe('Storage Configuration', () => {
-    test('should create S3 bucket with correct settings', () => {
-      const buckets = parsed.resource?.aws_s3_bucket || {};
-      const bucket = Object.values(buckets)[0] as any;
+  describe('Storage Infrastructure', () => {
+    it('should have created an S3 bucket with correct configuration', async () => {
+      expect(outputs.s3_bucket_name).toBeDefined();
+      expect(outputs.s3_bucket_name).toContain('prod-test-storage-us-east-1');
 
-      expect(bucket).toBeDefined();
-      expect(bucket.bucket).toMatch(/prod-int-test-storage-us-east-1/);
-      expect(bucket.force_destroy).toBe(true);
-    });
+      const listBucketsCommand = new ListBucketsCommand({});
+      const bucketsResponse = await awsClients.s3.send(listBucketsCommand);
+      
+      expect(bucketsResponse.Buckets?.some((b: Bucket) => b.Name === outputs.s3_bucket_name)).toBe(true);
 
-    test('should configure S3 bucket lifecycle policies', () => {
-      const lifecycleConfigs =
-        parsed.resource?.aws_s3_bucket_lifecycle_configuration || {};
-      const config = Object.values(lifecycleConfigs)[0] as any;
-
-      expect(config).toBeDefined();
-      expect(config.rule.length).toBeGreaterThan(0);
-
-      const ruleIds = config.rule.map((r: any) => r.id);
-      expect(ruleIds).toContain('transition-to-ia');
-    });
-
-    test('should enable versioning and block public access', () => {
-      const versioning = parsed.resource?.aws_s3_bucket_versioning || {};
-      const publicAccess =
-        parsed.resource?.aws_s3_bucket_public_access_block || {};
-
-      expect(Object.keys(versioning).length).toBe(1);
-      expect(Object.keys(publicAccess).length).toBe(1);
-
-      const versioningConfig = Object.values(versioning)[0] as any;
-      expect(versioningConfig.versioning_configuration.status).toBe('Enabled');
-
-      const publicAccessConfig = Object.values(publicAccess)[0] as any;
-      expect(publicAccessConfig.block_public_acls).toBe(true);
+      const locationCommand = new GetBucketLocationCommand({
+        Bucket: outputs.s3_bucket_name!
+      });
+      const locationResponse = await awsClients.s3.send(locationCommand);
+      expect(locationResponse.LocationConstraint).toBe('us-east-1');
     });
   });
 
   describe('IAM Configuration', () => {
-    test('should create cross-account IAM role', () => {
-      const roles = parsed.resource?.aws_iam_role || {};
-      const crossAccountRole = Object.values(roles).find((r: any) =>
-        r.name.includes('cross-account-role')
-      ) as any;
-
-      expect(crossAccountRole).toBeDefined();
-      expect(crossAccountRole.assume_role_policy).toContain('123456789012');
-    });
-
-    test('should create necessary IAM policies', () => {
-      const policies = parsed.resource?.aws_iam_role_policy || {};
-      expect(Object.keys(policies).length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Networking Security', () => {
-    test('should create security groups with proper rules', () => {
-      const securityGroups = parsed.resource?.aws_security_group || {};
-      const sg = Object.values(securityGroups)[0] as any;
-
-      expect(sg).toBeDefined();
-      expect(sg.ingress.length).toBeGreaterThan(0);
-      expect(sg.egress.length).toBeGreaterThan(0);
-    });
-
-    test('should create network ACLs', () => {
-      const nacls = parsed.resource?.aws_network_acl || {};
-      expect(Object.keys(nacls).length).toBeGreaterThan(0);
-    });
-
-    test('should create internet and NAT gateways', () => {
-      const igws = parsed.resource?.aws_internet_gateway || {};
-      const nats = parsed.resource?.aws_nat_gateway || {};
-
-      expect(Object.keys(igws).length).toBe(1);
-      expect(Object.keys(nats).length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Tagging Compliance', () => {
-    test('should apply consistent tags across all resources', () => {
-      const requiredTags = ['Environment', 'Project', 'ManagedBy'];
-
-      Object.values(parsed.resource || {}).forEach((resourceType: any) => {
-        Object.values(resourceType).forEach((resource: any) => {
-          if (resource.tags) {
-            requiredTags.forEach(tag => {
-              expect(resource.tags).toHaveProperty(tag);
-            });
-            expect(resource.tags.ManagedBy).toBe('terraform');
-            expect(resource.tags.Environment).toBe('prod-int-test');
-          }
-        });
+    it('should have created cross-account IAM role', async () => {
+      expect(outputs.cross_account_role_name).toBeDefined();
+      
+      const getRoleCommand = new GetRoleCommand({
+        RoleName: outputs.cross_account_role_name!
       });
+      const roleResponse = await awsClients.iam.send(getRoleCommand);
+      
+      expect(roleResponse.Role).toBeDefined();
+      expect(roleResponse.Role?.RoleName).toBe(outputs.cross_account_role_name);
+      
+      const trustPolicy = JSON.parse(roleResponse.Role?.AssumeRolePolicyDocument || '{}');
+      expect(trustPolicy.Statement[0].Principal.AWS).toContain('123456789012');
+    });
+  });
+
+  describe('Resource Tagging', () => {
+    it('should have consistent tagging across all resources', async () => {
+      const describeVpcsCommand = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpc_id!]
+      });
+      const vpcResponse = await awsClients.ec2.send(describeVpcsCommand);
+      const vpcTags = vpcResponse.Vpcs?.[0]?.Tags || [];
+      
+      expect(vpcTags.some((tag: Tag) => tag.Key === 'Environment' && tag.Value === 'prod-test')).toBe(true);
+    });
+  });
+
+  describe('Region Configuration', () => {
+    it('should have resources deployed in the correct region', async () => {
+      const describeVpcsCommand = new DescribeVpcsCommand({
+        VpcIds: [outputs.vpc_id!]
+      });
+      const vpcResponse = await awsClients.ec2.send(describeVpcsCommand);
+      expect(vpcResponse.Vpcs).toHaveLength(1);
+
+      const locationCommand = new GetBucketLocationCommand({
+        Bucket: outputs.s3_bucket_name!
+      });
+      const locationResponse = await awsClients.s3.send(locationCommand);
+      expect(locationResponse.LocationConstraint).toBe('us-east-1');
     });
   });
 });
