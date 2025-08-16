@@ -9,11 +9,6 @@ Metadata:
         Parameters:
           - EnvironmentSuffix
           - Environment
-      - Label:
-          default: 'Deployment Configuration'
-        Parameters:
-          - DeploymentRegion
-          - CrossRegionEndpoint
 
 Parameters:
   EnvironmentSuffix:
@@ -28,27 +23,7 @@ Parameters:
     Default: Production
     Description: Environment name for resource tagging
 
-  DeploymentRegion:
-    Type: String
-    Default: us-east-1
-    AllowedValues:
-      - us-east-1
-      - us-west-2
-    Description: Target deployment region
 
-  CrossRegionEndpoint:
-    Type: String
-    Default: ''
-    Description: API Gateway endpoint from the other region (for cross-region setup)
-
-Mappings:
-  RegionMap:
-    us-east-1:
-      RegionName: 'east'
-      PrimaryRegion: true
-    us-west-2:
-      RegionName: 'west'
-      PrimaryRegion: false
 
 Resources:
   TurnAroundPromptTable:
@@ -528,7 +503,6 @@ Resources:
     Properties:
       RestApiId: !Ref TAPServerlessApi
       StageName: prod
-      StageDescription: Production stage
       Description: TAP Production deployment
 
   # CloudWatch Alarms for monitoring
