@@ -56,7 +56,7 @@ export class Infrastructure extends pulumi.ComponentResource {
   public readonly webSecurityGroupId: pulumi.Output<string>;
   public readonly appSecurityGroupId: pulumi.Output<string>;
   public readonly securityAlertsTopicArn: pulumi.Output<string>;
-  public readonly webAclArn: pulumi.Output<string>;
+  // public readonly webAclArn: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -68,6 +68,9 @@ export class Infrastructure extends pulumi.ComponentResource {
 
     const { region } = config;
     const resourceTags = createTags(config.tags, region);
+
+    // Get current AWS account ID
+    const current = aws.getCallerIdentity();
 
     // Create region-specific provider
     const provider = new aws.Provider('regional-provider', {
@@ -83,6 +86,67 @@ export class Infrastructure extends pulumi.ComponentResource {
       {
         description: `KMS key for ${environment} environment in ${region}`,
         enableKeyRotation: true,
+        policy: current.then(account =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${account.accountId}:root`,
+                },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow CloudWatch Logs',
+                Effect: 'Allow',
+                Principal: {
+                  Service: `logs.${region}.amazonaws.com`,
+                },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow CloudTrail to encrypt logs',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'cloudtrail.amazonaws.com',
+                },
+                Action: [
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                  'kms:Encrypt',
+                  'kms:ReEncrypt*',
+                  'kms:Decrypt',
+                ],
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow SNS service',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'sns.amazonaws.com',
+                },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+              },
+            ],
+          })
+        ),
         tags: resourceTags,
       },
       { provider, parent: this }
@@ -755,11 +819,6 @@ export class Infrastructure extends pulumi.ComponentResource {
                   },
                   Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
                   Resource: `${bucketArn}/*`,
-                  Condition: {
-                    StringEquals: {
-                      's3:x-amz-server-side-encryption': 'aws:kms',
-                    },
-                  },
                 },
                 {
                   Sid: 'AllowApplicationRoleBucketAccess',
@@ -1139,81 +1198,81 @@ export class Infrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // WAF Web ACL for additional protection
-    const webAcl = new aws.wafv2.WebAcl(
-      createResourceName('web-acl', region, environment),
-      {
-        name: createResourceName('web-acl', region, environment),
-        description: 'WAF rules for application protection',
-        scope: 'REGIONAL',
-        defaultAction: {
-          allow: {},
-        },
-        rules: [
-          {
-            name: 'AWSManagedRulesCommonRuleSet',
-            priority: 1,
-            overrideAction: {
-              none: {},
-            },
-            statement: {
-              managedRuleGroupStatement: {
-                name: 'AWSManagedRulesCommonRuleSet',
-                vendorName: 'AWS',
-              },
-            },
-            visibilityConfig: {
-              sampledRequestsEnabled: true,
-              cloudwatchMetricsEnabled: true,
-              metricName: 'CommonRuleSetMetric',
-            },
-          },
-          {
-            name: 'AWSManagedRulesKnownBadInputsRuleSet',
-            priority: 2,
-            overrideAction: {
-              none: {},
-            },
-            statement: {
-              managedRuleGroupStatement: {
-                name: 'AWSManagedRulesKnownBadInputsRuleSet',
-                vendorName: 'AWS',
-              },
-            },
-            visibilityConfig: {
-              sampledRequestsEnabled: true,
-              cloudwatchMetricsEnabled: true,
-              metricName: 'KnownBadInputsMetric',
-            },
-          },
-          {
-            name: 'RateLimitRule',
-            priority: 3,
-            action: {
-              block: {},
-            },
-            statement: {
-              rateBasedStatement: {
-                limit: 2000,
-                aggregateKeyType: 'IP',
-              },
-            },
-            visibilityConfig: {
-              sampledRequestsEnabled: true,
-              cloudwatchMetricsEnabled: true,
-              metricName: 'RateLimitMetric',
-            },
-          },
-        ],
-        visibilityConfig: {
-          sampledRequestsEnabled: true,
-          cloudwatchMetricsEnabled: true,
-          metricName: createResourceName('web-acl-metric', region, environment),
-        },
-        tags: resourceTags,
-      },
-      { provider, parent: this }
-    );
+    // WAF Web ACL for additional protection (commented out for initial deployment)
+    // const webAcl = new aws.wafv2.WebAcl(
+    //   createResourceName('web-acl', region, environment),
+    //   {
+    //     name: createResourceName('web-acl', region, environment),
+    //     description: 'WAF rules for application protection',
+    //     scope: 'REGIONAL',
+    //     defaultAction: {
+    //       allow: {},
+    //     },
+    //     rules: [
+    //       {
+    //         name: 'AWSManagedRulesCommonRuleSet',
+    //         priority: 1,
+    //         overrideAction: {
+    //           none: {},
+    //         },
+    //         statement: {
+    //           managedRuleGroupStatement: {
+    //             name: 'AWSManagedRulesCommonRuleSet',
+    //             vendorName: 'AWS',
+    //           },
+    //         },
+    //         visibilityConfig: {
+    //           sampledRequestsEnabled: true,
+    //           cloudwatchMetricsEnabled: true,
+    //           metricName: 'CommonRuleSetMetric',
+    //         },
+    //       },
+    //       {
+    //         name: 'AWSManagedRulesKnownBadInputsRuleSet',
+    //         priority: 2,
+    //         overrideAction: {
+    //           none: {},
+    //         },
+    //         statement: {
+    //           managedRuleGroupStatement: {
+    //             name: 'AWSManagedRulesKnownBadInputsRuleSet',
+    //             vendorName: 'AWS',
+    //           },
+    //         },
+    //         visibilityConfig: {
+    //           sampledRequestsEnabled: true,
+    //           cloudwatchMetricsEnabled: true,
+    //           metricName: 'KnownBadInputsMetric',
+    //         },
+    //       },
+    //       {
+    //         name: 'RateLimitRule',
+    //         priority: 3,
+    //         action: {
+    //           block: {},
+    //         },
+    //         statement: {
+    //           rateBasedStatement: {
+    //             limit: 2000,
+    //             aggregateKeyType: 'IP',
+    //           },
+    //         },
+    //         visibilityConfig: {
+    //           sampledRequestsEnabled: true,
+    //           cloudwatchMetricsEnabled: true,
+    //           metricName: 'RateLimitMetric',
+    //         },
+    //       },
+    //     ],
+    //     visibilityConfig: {
+    //       sampledRequestsEnabled: true,
+    //       cloudwatchMetricsEnabled: true,
+    //       metricName: createResourceName('web-acl-metric', region, environment),
+    //     },
+    //     tags: resourceTags,
+    //   },
+    //   { provider, parent: this }
+    // );
 
     // Exports
     this.vpcId = vpc.id;
@@ -1227,6 +1286,6 @@ export class Infrastructure extends pulumi.ComponentResource {
     this.webSecurityGroupId = webSecurityGroup.id;
     this.appSecurityGroupId = appSecurityGroup.id;
     this.securityAlertsTopicArn = securityAlertsTopic.arn;
-    this.webAclArn = webAcl.arn;
+    // this.webAclArn = webAcl.arn;
   }
 }
