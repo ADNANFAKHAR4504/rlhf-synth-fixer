@@ -484,7 +484,7 @@ resource "aws_autoscaling_group" "web" {
 
 # Application Load Balancer
 resource "aws_lb" "web" {
-  name               = "${var.project_name}-web-alb-291749"
+  name               = "${var.project_name}-web-291749"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web.id]
@@ -493,12 +493,12 @@ resource "aws_lb" "web" {
   enable_deletion_protection = false
 
   tags = {
-    Name = "${var.project_name}-web-alb-291749"
+    Name = "${var.project_name}-web-291749"
   }
 }
 
 resource "aws_lb_target_group" "web" {
-  name     = "${var.project_name}-web-tg-291749"
+  name     = "${var.project_name}-web-291749"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -529,11 +529,11 @@ resource "aws_lb_listener" "web" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group-291749"
+  name       = "${var.project_name}-db-subnet-291749"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "${var.project_name}-db-subnet-group-291749"
+    Name = "${var.project_name}-db-subnet-291749"
   }
 }
 
