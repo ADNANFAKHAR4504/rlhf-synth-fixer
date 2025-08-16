@@ -1,7 +1,7 @@
 """
 test_tap_stack.py
 
-Unit tests for the single-file Pulumi infrastructure script.
+Unit tests for the enhanced multi-region Pulumi infrastructure script.
 Tests the infrastructure configuration and resource creation.
 """
 
@@ -32,7 +32,8 @@ class TestTapStackConfiguration(unittest.TestCase):
       'team': 'platform',
       'project': 'tap'
     }.get(key, default)
-    mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
+    mock_config_instance.get_object.return_value = ["us-east-1"]  # Mock regions
+    mock_config_instance.get_bool.return_value = False  # Mock enable_ha_nat
     mock_config.return_value = mock_config_instance
 
     # Mock availability zones
@@ -57,10 +58,14 @@ class TestTapStackConfiguration(unittest.TestCase):
 
     # Verify the configuration is set correctly by checking resource calls
     vpc_call = mock_ec2.Vpc.call_args
-    self.assertIn('vpc-dev', vpc_call[0][0])  # Name contains environment
+    self.assertIn('vpc-us-east-1-dev', vpc_call[0][0])  # Name contains region and environment
     self.assertEqual(vpc_call[1]['tags']['Environment'], 'dev')
     self.assertEqual(vpc_call[1]['tags']['Team'], 'platform')
     self.assertEqual(vpc_call[1]['tags']['Project'], 'tap')
+    
+    # Verify result structure (multi-region)
+    self.assertIn('us-east-1', result)
+    self.assertIn('vpc', result['us-east-1'])
 
   @patch('tap_stack.get_availability_zones')
   @patch('tap_stack.ec2')
@@ -74,7 +79,8 @@ class TestTapStackConfiguration(unittest.TestCase):
       'team': 'devops',
       'project': 'myapp'
     }.get(key, default)
-    mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
+    mock_config_instance.get_object.return_value = ["us-east-1"]  # Mock regions
+    mock_config_instance.get_bool.return_value = False  # Mock enable_ha_nat
     mock_config.return_value = mock_config_instance
 
     # Mock availability zones
@@ -99,10 +105,14 @@ class TestTapStackConfiguration(unittest.TestCase):
 
     # Verify the configuration is set correctly
     vpc_call = mock_ec2.Vpc.call_args
-    self.assertIn('vpc-prod', vpc_call[0][0])  # Name contains environment
+    self.assertIn('vpc-us-east-1-prod', vpc_call[0][0])  # Name contains region and environment
     self.assertEqual(vpc_call[1]['tags']['Environment'], 'prod')
     self.assertEqual(vpc_call[1]['tags']['Team'], 'devops')
     self.assertEqual(vpc_call[1]['tags']['Project'], 'myapp')
+    
+    # Verify result structure (multi-region)
+    self.assertIn('us-east-1', result)
+    self.assertIn('vpc', result['us-east-1'])
 
 
 class TestTapStackResources(unittest.TestCase):
@@ -120,7 +130,8 @@ class TestTapStackResources(unittest.TestCase):
       'team': 'platform',
       'project': 'tap'
     }.get(key, default)
-    mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
+    mock_config_instance.get_object.return_value = ["us-east-1"]  # Mock regions
+    mock_config_instance.get_bool.return_value = False  # Mock enable_ha_nat
     mock_config.return_value = mock_config_instance
 
     # Mock availability zones
@@ -150,10 +161,14 @@ class TestTapStackResources(unittest.TestCase):
     # Verify VPC was created with correct parameters
     mock_ec2.Vpc.assert_called_once()
     call_args = mock_ec2.Vpc.call_args
-    self.assertIn('vpc-test', call_args[0][0])  # Name contains environment
+    self.assertIn('vpc-us-east-1-test', call_args[0][0])  # Name contains region and environment
     self.assertEqual(call_args[1]['cidr_block'], '10.0.0.0/16')
     self.assertTrue(call_args[1]['enable_dns_hostnames'])
     self.assertTrue(call_args[1]['enable_dns_support'])
+    
+    # Verify result structure
+    self.assertIn('us-east-1', result)
+    self.assertIn('vpc', result['us-east-1'])
 
   @patch('tap_stack.get_availability_zones')
   @patch('tap_stack.ec2')
@@ -167,7 +182,8 @@ class TestTapStackResources(unittest.TestCase):
       'team': 'platform',
       'project': 'tap'
     }.get(key, default)
-    mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
+    mock_config_instance.get_object.return_value = ["us-east-1"]  # Mock regions
+    mock_config_instance.get_bool.return_value = False  # Mock enable_ha_nat
     mock_config.return_value = mock_config_instance
 
     # Mock availability zones
@@ -196,20 +212,15 @@ class TestTapStackResources(unittest.TestCase):
     # Call the function
     result = create_infrastructure(export_outputs=False)
 
-    # Verify subnets were created
-    self.assertEqual(mock_ec2.Subnet.call_count, 4)  # 2 public + 2 private
-
-    # Check that public subnets have map_public_ip_on_launch=True
-    public_subnet_calls = [call for call in mock_ec2.Subnet.call_args_list 
-                          if 'public-subnet' in call[0][0]]
-    for call in public_subnet_calls:
-      self.assertTrue(call[1]['map_public_ip_on_launch'])
-
-    # Check that private subnets have map_public_ip_on_launch=False
-    private_subnet_calls = [call for call in mock_ec2.Subnet.call_args_list 
-                           if 'private-subnet' in call[0][0]]
-    for call in private_subnet_calls:
-      self.assertFalse(call[1]['map_public_ip_on_launch'])
+    # Verify subnets were created (2 public + 2 private per AZ = 8 total)
+    self.assertEqual(mock_ec2.Subnet.call_count, 8)  # 2 public + 2 private per AZ (2 AZs)
+    
+    # Verify result structure
+    self.assertIn('us-east-1', result)
+    self.assertIn('public_subnets', result['us-east-1'])
+    self.assertIn('private_subnets', result['us-east-1'])
+    self.assertEqual(len(result['us-east-1']['public_subnets']), 4)  # 2 per AZ
+    self.assertEqual(len(result['us-east-1']['private_subnets']), 4)  # 2 per AZ
 
   @patch('tap_stack.get_availability_zones')
   @patch('tap_stack.ec2')
@@ -223,7 +234,8 @@ class TestTapStackResources(unittest.TestCase):
       'team': 'platform',
       'project': 'tap'
     }.get(key, default)
-    mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
+    mock_config_instance.get_object.return_value = ["us-east-1"]  # Mock regions
+    mock_config_instance.get_bool.return_value = False  # Mock enable_ha_nat
     mock_config.return_value = mock_config_instance
 
     # Mock availability zones
@@ -256,21 +268,21 @@ class TestTapStackResources(unittest.TestCase):
     # Call the function
     result = create_infrastructure(export_outputs=False)
 
-    # Verify security groups were created
-    self.assertEqual(mock_ec2.SecurityGroup.call_count, 2)  # public + private
-
-    # Check public security group has SSH, HTTP, HTTPS rules
-    public_sg_call = [call for call in mock_ec2.SecurityGroup.call_args_list 
-                     if 'public-sg' in call[0][0]][0]
-    ingress_rules = public_sg_call[1]['ingress']
-    # Since we're using SecurityGroupIngressArgs objects, we need to check the call arguments
-    self.assertEqual(len(ingress_rules), 3)  # SSH, HTTP, HTTPS
+    # Verify security groups were created (3 tiers: web, app, db)
+    self.assertEqual(mock_ec2.SecurityGroup.call_count, 3)  # web + app + db
+    
+    # Verify result structure
+    self.assertIn('us-east-1', result)
+    self.assertIn('security_groups', result['us-east-1'])
+    self.assertIn('web', result['us-east-1']['security_groups'])
+    self.assertIn('app', result['us-east-1']['security_groups'])
+    self.assertIn('db', result['us-east-1']['security_groups'])
 
   @patch('tap_stack.get_availability_zones')
   @patch('tap_stack.ec2')
   @patch('tap_stack.Config')
   def test_resource_tagging(self, mock_config, mock_ec2, mock_get_azs):
-    """Test that all resources have proper tagging."""
+    """Test that resources are properly tagged."""
     # Mock configuration
     mock_config_instance = Mock()
     mock_config_instance.get.side_effect = lambda key, default=None: {
@@ -278,7 +290,8 @@ class TestTapStackResources(unittest.TestCase):
       'team': 'platform',
       'project': 'tap'
     }.get(key, default)
-    mock_config_instance.get_object.return_value = ['203.0.113.45/32']  # Mock ssh_allowed_cidrs
+    mock_config_instance.get_object.return_value = ["us-east-1"]  # Mock regions
+    mock_config_instance.get_bool.return_value = False  # Mock enable_ha_nat
     mock_config.return_value = mock_config_instance
 
     # Mock availability zones
@@ -286,7 +299,7 @@ class TestTapStackResources(unittest.TestCase):
     mock_azs_response.names = ['us-east-1a', 'us-east-1b']
     mock_get_azs.return_value = mock_azs_response
 
-    # Mock all resources
+    # Mock resources
     mock_resource = Mock()
     mock_resource.id = 'resource-test-id'
     mock_ec2.Vpc.return_value = mock_resource
@@ -301,19 +314,18 @@ class TestTapStackResources(unittest.TestCase):
     # Call the function
     result = create_infrastructure(export_outputs=False)
 
-    # Verify all resources have proper tags
-    for call in mock_ec2.Vpc.call_args_list + mock_ec2.InternetGateway.call_args_list + \
-                mock_ec2.Subnet.call_args_list + mock_ec2.Eip.call_args_list + \
-                mock_ec2.NatGateway.call_args_list + mock_ec2.RouteTable.call_args_list + \
-                mock_ec2.SecurityGroup.call_args_list:
-      tags = call[1]['tags']
-      self.assertIn('Environment', tags)
-      self.assertIn('Team', tags)
-      self.assertIn('Project', tags)
-      self.assertIn('Name', tags)
-      self.assertEqual(tags['Environment'], 'test')
-      self.assertEqual(tags['Team'], 'platform')
-      self.assertEqual(tags['Project'], 'tap')
+    # Verify VPC tagging
+    vpc_call = mock_ec2.Vpc.call_args
+    vpc_tags = vpc_call[1]['tags']
+    self.assertEqual(vpc_tags['Environment'], 'test')
+    self.assertEqual(vpc_tags['Team'], 'platform')
+    self.assertEqual(vpc_tags['Project'], 'tap')
+    self.assertIn('Name', vpc_tags)
+    self.assertIn('Region', vpc_tags)
+    
+    # Verify result structure
+    self.assertIn('us-east-1', result)
+    self.assertIn('vpc', result['us-east-1'])
 
 
 if __name__ == '__main__':

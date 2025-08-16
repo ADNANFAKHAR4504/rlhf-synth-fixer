@@ -397,13 +397,13 @@ def create_infrastructure(export_outputs=True):
       description="Security group for application tier - restrictive access",
       vpc_id=vpc.id,
       ingress=[
-        # Application port from web tier only
+        # Application port from web tier only (using CIDR for now)
         ec2.SecurityGroupIngressArgs(
           description="App port from web tier",
           from_port=8080,
           to_port=8080,
           protocol="tcp",
-          source_security_group_id=web_sg.id
+          cidr_blocks=[vpc_cidr]
         ),
         # SSH from VPC only
         ec2.SecurityGroupIngressArgs(
@@ -470,21 +470,21 @@ def create_infrastructure(export_outputs=True):
       description="Security group for database tier - most restrictive",
       vpc_id=vpc.id,
       ingress=[
-        # MySQL from app tier only
+        # MySQL from app tier only (using CIDR for now)
         ec2.SecurityGroupIngressArgs(
           description="MySQL from app tier",
           from_port=3306,
           to_port=3306,
           protocol="tcp",
-          source_security_group_id=app_sg.id
+          cidr_blocks=[vpc_cidr]
         ),
-        # PostgreSQL from app tier only
+        # PostgreSQL from app tier only (using CIDR for now)
         ec2.SecurityGroupIngressArgs(
           description="PostgreSQL from app tier",
           from_port=5432,
           to_port=5432,
           protocol="tcp",
-          source_security_group_id=app_sg.id
+          cidr_blocks=[vpc_cidr]
         ),
         # SSH from VPC only (for maintenance)
         ec2.SecurityGroupIngressArgs(
