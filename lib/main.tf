@@ -80,7 +80,7 @@ resource "aws_kms_key" "s3_encryption" {
 }
 
 resource "aws_kms_alias" "s3_encryption" {
-  name          = "alias/${var.project_name}-s3-encryption-291749"
+  name          = "alias/${var.project_name}-${random_id.s3_encryption_suffix.hex}"
   target_key_id = aws_kms_key.s3_encryption.key_id
 }
 # VPC Configuration
