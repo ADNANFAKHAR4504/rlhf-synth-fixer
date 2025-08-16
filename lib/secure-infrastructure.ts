@@ -1201,22 +1201,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this, dependsOn: [configRecorder] }
     );
 
-    void new aws.cfg.Rule(
-      `s3-bucket-public-read-prohibited-${args.environment}`,
-      {
-        name: `s3-bucket-public-read-prohibited-${args.environment}`,
-        source: {
-          owner: 'AWS',
-          sourceIdentifier: 'S3_BUCKET_PUBLIC_READ_PROHIBITED',
-        },
-        tags: {
-          ...commonTags,
-          Name: `s3-bucket-public-read-prohibited-${args.environment}`,
-        },
-      },
-      { provider, parent: this }
-    );
-
     /**
      * VPC Endpoints for SSM Session Manager
      * Enables secure access without SSH or public IPs
