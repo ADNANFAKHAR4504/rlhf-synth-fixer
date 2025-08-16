@@ -39,8 +39,6 @@ describe('Unit Tests for TapStack', () => {
     synthesizedJson = JSON.parse(synthesized);
   });
 
-  // FIXED: Removed the snapshot test as requested.
-
   test('Should create a VPC with the correct CIDR block', () => {
     const vpcs = getResource(synthesizedJson, 'aws_vpc');
     expect(resourceHasProperties(vpcs, { cidr_block: '10.0.0.0/16' })).toBe(

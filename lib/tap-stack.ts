@@ -4,6 +4,7 @@ import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+// FIXED: Corrected the import paths for S3 resources. The '-a' suffix was incorrect.
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
@@ -29,7 +30,7 @@ export class TapStack extends TerraformStack {
 
     // --- Provider & State ---
     this.configureAwsProvider(region);
-    // Note: Using local state as per previous request.
+    // NOTE: Using local state as per your request.
     // this.configureRemoteState();
 
     // --- Resource Creation ---
@@ -90,7 +91,6 @@ export class TapStack extends TerraformStack {
     return new Vpc(this, 'WebAppVpc', {
       cidrBlock: '10.0.0.0/16',
       enableDnsSupport: true,
-      // FIXED: Corrected property name to camelCase for CDKTF resource config.
       enableDnsHostnames: true,
       tags: { ...tags, Name: 'WebApp-VPC' },
     });

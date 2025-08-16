@@ -15,15 +15,6 @@ class SecureAwsInfrastructureStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    // Configure remote backend for state management
-    new S3Backend(this, {
-      bucket: 'your-terraform-state-bucket', // Replace with your actual bucket
-      key: 'infrastructure/terraform.tfstate',
-      region: 'us-east-1',
-      encrypt: true,
-      dynamodbTable: 'terraform-state-lock', // For state locking
-    });
-
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: 'us-east-1',
@@ -664,10 +655,5 @@ terraform -chdir=cdktf.out/stacks/secure-aws-infrastructure apply
    - Versioning enabled
    - Server-side encryption
    - Public access blocked
-
-4. **State Management:**
-   - Remote state in S3
-   - State locking with DynamoDB
-   - Encrypted state storage
 
 This solution provides a secure, scalable, and maintainable infrastructure that follows Terraform and AWS best practices while meeting all your specified requirements.

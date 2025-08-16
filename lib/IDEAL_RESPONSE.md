@@ -1,4 +1,4 @@
-import { App, S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { App, TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -11,30 +11,31 @@ import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning-a';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
-import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { DataAwsAccountId } from '@cdktf/provider-aws/lib/data-aws-account-id';
 
 /\*\*
 
-- @interface RegionalInfraProps
-- @description Defines properties for the regional infrastructure construct.
+- @interface AppInfraProps
+- @description Defines properties for the application infrastructure construct.
 - @property {{ [key: string]: string }} tags - Common tags for all resources.
   \*/
-  interface RegionalInfraProps {
+  interface AppInfraProps {
   tags: { [key: string]: string };
   }
 
 /\*\*
 
-- @class RegionalInfraConstruct
-- @description A reusable construct that encapsulates all resources for a single region.
+- @class AppInfraConstruct
+- @description A reusable construct that encapsulates all application resources.
 - This provides modularity within the monolithic file structure.
   \*/
-  class RegionalInfraConstruct extends Construct {
-  constructor(scope: Construct, id: string, props: RegionalInfraProps) {
+  class AppInfraConstruct extends Construct {
+  constructor(scope: Construct, id: string, props: AppInfraProps) {
   super(scope, id);
 
       const { tags } = props;
+      const accountId = new DataAwsAccountId(this, 'CurrentAccount');
 
       // --- Networking ---
       const vpc = new Vpc(this, 'Vpc', {
@@ -43,7 +44,7 @@ import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-p
         tags: { ...tags, Name: 'production-webapp-vpc' },
       });
 
-      new Subnet(this, 'Subnet1', {
+      const subnet1 = new Subnet(this, 'Subnet1', {
         vpcId: vpc.id,
         cidrBlock: '10.0.1.0/24',
         tags: { ...tags, Name: 'production-webapp-subnet-1' },
@@ -57,7 +58,8 @@ import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-p
 
       // --- S3 Bucket ---
       const dataBucket = new S3Bucket(this, 'DataBucket', {
-        bucket: `production-webapp-data-${this.node.addr.substring(0, 8)}`,
+        // Creates a unique bucket name to avoid conflicts
+        bucket: `production-webapp-data-${accountId.accountId}-${Fn.randomid({ byteLength: 4 })}`,
         tags,
       });
 
@@ -141,7 +143,7 @@ import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-p
       });
 
       // --- EC2 Instance ---
-      new Instance(this, 'WebAppInstance', {
+      const instance = new Instance(this, 'WebAppInstance', {
         ami: 'ami-0c55b159cbfafe1f0', // Amazon Linux 2 AMI for us-east-1
         instanceType: 't2.micro',
         subnetId: subnet2.id,
@@ -150,49 +152,21 @@ import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-p
         tags: { ...tags, Name: 'production-webapp-server' },
       });
 
-  }
-  }
-
-/\*\*
-
-- @class BackendStack
-- @description Provisions the S3 bucket and DynamoDB table for Terraform's remote state.
-- This stack must be deployed FIRST and SEPARATELY.
-  \*/
-  class BackendStack extends TerraformStack {
-  constructor(scope: Construct, id: string) {
-  super(scope, id);
-
-      new AwsProvider(this, 'AWS', { region: 'us-east-1' });
-
-      const stateBucket = new S3Bucket(this, 'TerraformStateBucket', {
-        bucket: 'production-webapp-tfstate-bucket',
+      // --- Outputs ---
+      new TerraformOutput(this, 'instance_public_ip', {
+          value: instance.publicIp,
+          description: 'The public IP address of the web server.',
       });
-
-      new S3BucketVersioningA(this, 'StateBucketVersioning', {
-          bucket: stateBucket.id,
-          versioningConfiguration: { status: 'Enabled' },
-      });
-
-      const lockTable = new DynamodbTable(this, 'TerraformLockTable', {
-        name: 'production-webapp-tfstate-lock',
-        billingMode: 'PAY_PER_REQUEST',
-        hashKey: 'LockID',
-        attribute: [{ name: 'LockID', type: 'S' }],
-      });
-
-      new TerraformOutput(this, 'state_bucket_name', { value: stateBucket.bucket });
-      new TerraformOutput(this, 'lock_table_name', { value: lockTable.name });
 
   }
   }
 
 /\*\*
 
-- @class MainStack
-- @description The main stack for the application infrastructure, configured to use the remote backend.
+- @class MonolithicStack
+- @description A single stack that provisions all infrastructure for the application.
   \*/
-  class MainStack extends TerraformStack {
+  class MonolithicStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
   super(scope, id);
 
@@ -202,33 +176,10 @@ import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-p
         Owner: 'DevOps Team',
       };
 
-      // --- REMOTE BACKEND CONFIGURATION ---
-      // IMPORTANT: Deploy the 'backend-stack' first, then replace the placeholder
-      // values below with the outputs from that deployment.
-      new S3Backend(this, {
-        bucket: 'production-webapp-tfstate-bucket', // <-- REPLACE WITH OUTPUT
-        key: 'production/webapp.tfstate',
-        region: 'us-east-1',
-        dynamodbTable: 'production-webapp-tfstate-lock', // <-- REPLACE WITH OUTPUT
-        encrypt: true,
-      });
-
       new AwsProvider(this, 'AWS', { region: 'us-east-1' });
 
-      // Instantiate the regional infrastructure
-      new RegionalInfraConstruct(this, 'us-east-1-infra', { tags: commonTags });
+      // --- Application Infrastructure ---
+      new AppInfraConstruct(this, 'AppInfrastructure', { tags: commonTags });
 
   }
   }
-
-const app = new App();
-
-// --- DEPLOYMENT INSTRUCTIONS ---
-// 1. Deploy the BackendStack first: `cdktf deploy 'backend-stack'`
-// 2. Note the outputs for 'state_bucket_name' and 'lock_table_name'.
-// 3. Update the S3Backend configuration in MainStack with the output values.
-// 4. Deploy the MainStack: `cdktf deploy 'main-stack'`
-new BackendStack(app, 'backend-stack');
-new MainStack(app, 'main-stack');
-
-app.synth();
