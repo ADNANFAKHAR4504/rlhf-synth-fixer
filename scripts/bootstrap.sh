@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# Exit on any error
+set -e
+
+echo "🚀 Bootstrapping infrastructure..."
+
+# Read platform and language from metadata.json
+if [ ! -f "metadata.json" ]; then
+  echo "❌ metadata.json not found, exiting with failure"
+  exit 1
+fi
+
+PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
+LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
+
+echo "Project: platform=$PLATFORM, language=$LANGUAGE"
+
+# Set default environment variables if not provided
+export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
+export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
+export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
+export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
+export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
+export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
+export PULUMI_ORG=${PULUMI_ORG:-organization}
+export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
+
+echo "Environment configuration:"
+echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
+echo "  Repository: $REPOSITORY"
+echo "  Commit author: $COMMIT_AUTHOR"
+
+if [ "$PLATFORM" = "cdk" ]; then
+  echo "✅ CDK project detected, running CDK bootstrap..."
+  npm run cdk:bootstrap
+
+elif [ "$PLATFORM" = "pulumi" ]; then
+  echo "✅ Pulumi project detected, setting up environment..."
+  
+  if [ -z "$PULUMI_BACKEND_URL" ]; then
+    echo "❌ PULUMI_BACKEND_URL environment variable is required for Pulumi projects"
+    exit 1
+  fi
+  
+  echo "Pulumi backend URL: $PULUMI_BACKEND_URL"
+  echo "Pulumi organization: $PULUMI_ORG"
+  
+  # Login to Pulumi S3 backend
+  pipenv run pulumi-login
+  echo "✅ Pulumi bootstrap completed"
+
+elif [ "$PLATFORM" = "tf" ]; then
+  echo "✅ Terraform project detected, setting up environment..."
+  
+  if [ -z "$TERRAFORM_STATE_BUCKET" ]; then
+    echo "❌ TERRAFORM_STATE_BUCKET environment variable is required for Terraform projects"
+    exit 1
+  fi
+  
+  echo "Terraform state bucket: $TERRAFORM_STATE_BUCKET"
+  echo "Terraform state bucket region: $TERRAFORM_STATE_BUCKET_REGION"
+  
+  # Set up PR-specific state management
+  STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
+  echo "Using state key: $STATE_KEY"
+  
+  cd lib
+  
+  # Set up backend configuration with PR-specific settings (no DynamoDB; use lockfile)
+  export TF_INIT_OPTS="-backend-config=bucket=${TERRAFORM_STATE_BUCKET} \
+      -backend-config=key=$STATE_KEY \
+      -backend-config=region=${TERRAFORM_STATE_BUCKET_REGION} \
+      -backend-config=encrypt=true \
+      -backend-config=use_lockfile=true"
+  
+  # Initialize Terraform (no fallback init without backend)
+  echo "Initializing Terraform with PR-specific backend..."
+  echo "TF_INIT_OPTS: $TF_INIT_OPTS"
+  terraform init -reconfigure -upgrade $TF_INIT_OPTS
+  
+  # Check if state file exists
+  echo "Checking if Terraform state file exists..."
+  if aws s3 ls "s3://${TERRAFORM_STATE_BUCKET}/$STATE_KEY" >/dev/null 2>&1; then
+    echo "✅ State file exists"
+  else
+    echo "State file does not exist yet. This is normal for new environments."
+    echo "Creating empty state file..."
+    echo '{"version": 4, "terraform_version": "1.0.0", "serial": 1, "lineage": "", "outputs": {}, "resources": []}' | \
+      aws s3 cp - "s3://${TERRAFORM_STATE_BUCKET}/$STATE_KEY" || \
+      echo "Could not create state file, continuing..."
+  fi
+  
+  # Run terraform plan
+  echo "Running Terraform plan..."
+  if npm run tf:plan; then
+    echo "✅ Terraform plan succeeded"
+  else
+    echo "⚠️ Terraform plan failed, but continuing..."
+  fi
+  
+  # Verify the plan was created
+  if [ -f "tfplan" ]; then
+    echo "✅ Terraform plan file created successfully"
+  else
+    echo "⚠️ Terraform plan file not found, but continuing..."
+  fi
+  
+  cd ..
+  echo "✅ Terraform bootstrap completed"
+
+elif [ "$PLATFORM" = "cdktf" ]; then
+  echo "✅ CDKTF project detected, no specific bootstrap required"
+  echo "ℹ️ CDKTF bootstrapping will be handled during synthesis"
+
+elif [ "$PLATFORM" = "cfn" ]; then
+  echo "✅ CloudFormation project detected, no specific bootstrap required"
+  echo "ℹ️ CloudFormation does not require bootstrapping"
+
+else
+  echo "ℹ️ Unknown or unsupported platform: $PLATFORM. Skipping bootstrap."
+fi
+
+echo "✅ Bootstrap completed successfully"

@@ -30,7 +30,7 @@ another round. The idea of this is to make sure that we are truly finding flaws 
 
 If `tasks.csv` is present in the repository:
 
-1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" from tasks
+1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" or "done" from tasks
 csv. Be aware that, in the csv file there are some rows that take more than 1 line of the file.
 2. Set the status column to in_progress.
 3. Create a new git worktree inside worktree folder. Call the branch IAC-synth-{task_id}.
@@ -47,7 +47,21 @@ instead of the platform+language declared in the task description.
    - Do not add more fields to metadata.json than the ones that are referenced in cli/create-task.ts
    - Set startedAt as current timestamp (execute bash `date -Iseconds` and print it in startedAt)
    - Copy appropriate template from `templates/` directory
-   - Generate `metadata.json` with extracted information. Make sure po_id is set with the task_id value
+   - Generate `metadata.json` with extracted information. Make sure `po_id` field is set with the task_id value. e.g:
+
+   ```json
+    {
+       "platform": "cdk",
+       "language": "ts",
+       "complexity": "hard",
+       "turn_type": "single",
+       "po_id": "trainr97",
+       "team": "synth",
+       "startedAt": "2025-08-12T13:19:10-05:00"
+     }
+
+  ```
+  
    - If the deployment needs to be done in a specific region, create the file `lib/AWS_REGION` with the
    region name. e.g: `echo "us-east-1" > lib/AWS_REGION`
 8. Install inside the worktree. `pipenv install --dev --ignore-pipfile` if language is py, `npm ci` if its not.

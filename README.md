@@ -2,8 +2,6 @@
 
 # Get ready.
 
-# Since now Claude Code is available and ready for attempting to complete TAP tasks.
-
 # Medium: solution in 30 mins
 
 # Hard: 2h
@@ -117,6 +115,7 @@ This command will launch an interactive prompt that guides you through:
 3. **Complexity Level**: Set the task complexity (Medium, Hard, Expert)
 4. **Turn Type**: Choose between Single or Multi-turn interactions
 5. **Task ID**: Enter a unique identifier for the task
+6. **Team Selection**: Choose from team 1-6 or the synth team
 
 The CLI will:
 
