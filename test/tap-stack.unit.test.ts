@@ -121,7 +121,7 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       expect(role.Type).toBe('AWS::IAM::Role');
       
       const props = role.Properties;
-      expect(props.RoleName).toEqual({ 'Fn::Sub': '${Environment}-lambda-execution-role' });
+      expect(props.RoleName).toBeUndefined(); // Role name auto-generated to avoid CAPABILITY_NAMED_IAM requirement
       expect(props.AssumeRolePolicyDocument.Version).toBe('2012-10-17');
       expect(props.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
       expect(props.Policies).toHaveLength(1);
@@ -318,7 +318,7 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       expect(userTable.Properties.TableName).toEqual({ 'Fn::Sub': '${Environment}-users' });
       expect(createUserFunction.Properties.FunctionName).toEqual({ 'Fn::Sub': '${Environment}-create-user' });
       expect(getUserFunction.Properties.FunctionName).toEqual({ 'Fn::Sub': '${Environment}-get-user' });
-      expect(lambdaRole.Properties.RoleName).toEqual({ 'Fn::Sub': '${Environment}-lambda-execution-role' });
+      expect(lambdaRole.Properties.RoleName).toBeUndefined(); // Role name auto-generated to avoid CAPABILITY_NAMED_IAM requirement
       expect(api.Properties.Name).toEqual({ 'Fn::Sub': '${Environment}-user-api' });
     });
 
