@@ -10,6 +10,25 @@ import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import * as fs from 'fs';
+import * as path from 'path';
+import { execSync } from 'child_process';
+
+/**
+ * Utility: Create a temporary ZIP for Lambda deployment
+ * Accepts Python code string and returns a filename for the LambdaFunction
+ */
+function createLambdaZip(lambdaCode: string, lambdaName: string): string {
+  const tempDir = path.resolve(__dirname, 'tmp');
+  if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+  const pyFile = path.join(tempDir, 'lambda_function.py');
+  fs.writeFileSync(pyFile, lambdaCode);
+
+  const zipFile = path.join(tempDir, `${lambdaName}.zip`);
+  execSync(`zip -j ${zipFile} ${pyFile}`); // -j = no folder structure
+  return zipFile;
+}
 
 /**
  * Configuration interface for Lambda function module
@@ -45,27 +64,7 @@ export class LambdaModule extends Construct {
   constructor(scope: Construct, id: string, config: LambdaModuleConfig) {
     super(scope, id);
 
-    // Get VPC data for subnet configuration
-    // const vpc = new DataAwsVpc(this, 'vpc', {
-    //   id: config.vpcId,
-    // });
-
-    // Get private subnets for Lambda VPC configuration
-    const subnets = new DataAwsSubnets(this, 'subnets', {
-      filter: [
-        {
-          name: 'vpc-id',
-          values: [config.vpcId],
-        },
-        {
-          name: 'tag:Type', // Assuming subnets are tagged with Type=private
-          values: ['private'],
-        },
-      ],
-    });
-
-    // CloudWatch Log Group for Lambda function logs
-    // Retention set to 14 days to balance cost and debugging needs
+    // CloudWatch Log Group
     this.logGroup = new CloudwatchLogGroup(this, 'log-group', {
       name: `/aws/lambda/corp-${config.functionName}`,
       retentionInDays: 14,
@@ -75,27 +74,19 @@ export class LambdaModule extends Construct {
       },
     });
 
-    // IAM assume role policy document for Lambda service
-    const assumeRolePolicy = new DataAwsIamPolicyDocument(
-      this,
-      'assume-role-policy',
-      {
-        statement: [
-          {
-            effect: 'Allow',
-            principals: [
-              {
-                type: 'Service',
-                identifiers: ['lambda.amazonaws.com'],
-              },
-            ],
-            actions: ['sts:AssumeRole'],
-          },
-        ],
-      }
-    );
+    // IAM Role for Lambda
+    const assumeRolePolicy = new DataAwsIamPolicyDocument(this, 'assume-role', {
+      statement: [
+        {
+          effect: 'Allow',
+          principals: [
+            { type: 'Service', identifiers: ['lambda.amazonaws.com'] },
+          ],
+          actions: ['sts:AssumeRole'],
+        },
+      ],
+    });
 
-    // IAM role for Lambda function with corporate naming convention
     this.role = new IamRole(this, 'lambda-role', {
       name: `corp-${config.functionName}-role`,
       assumeRolePolicy: assumeRolePolicy.json,
@@ -105,92 +96,67 @@ export class LambdaModule extends Construct {
       },
     });
 
-    // Custom IAM policy for S3 bucket access and CloudWatch logging
-    const lambdaPolicy = new DataAwsIamPolicyDocument(this, 'lambda-policy', {
+    // Attach S3 read & CloudWatch log policies
+    const policyDoc = new DataAwsIamPolicyDocument(this, 'lambda-policy', {
       statement: [
         {
-          // S3 read permissions for the specific bucket
           effect: 'Allow',
           actions: ['s3:GetObject', 's3:GetObjectVersion'],
           resources: [`arn:aws:s3:::corp-${config.s3BucketName}/*`],
         },
         {
-          // CloudWatch Logs permissions for function logging
           effect: 'Allow',
           actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
           resources: [`${this.logGroup.arn}:*`],
         },
-        {
-          // VPC permissions required for Lambda VPC integration
-          effect: 'Allow',
-          actions: [
-            'ec2:CreateNetworkInterface',
-            'ec2:DescribeNetworkInterfaces',
-            'ec2:DeleteNetworkInterface',
-            'ec2:AttachNetworkInterface',
-            'ec2:DetachNetworkInterface',
-          ],
-          resources: ['*'],
-        },
       ],
     });
 
-    // Attach custom policy to Lambda role
     new IamRolePolicy(this, 'lambda-policy-attachment', {
       name: `corp-${config.functionName}-policy`,
       role: this.role.id,
-      policy: lambdaPolicy.json,
+      policy: policyDoc.json,
     });
 
-    // Attach AWS managed VPC execution role for Lambda
     new IamRolePolicyAttachment(this, 'vpc-execution-role', {
       role: this.role.name,
       policyArn:
         'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
     });
 
-    // Lambda function with VPC configuration and best practices
+    // Python code inline
+    const lambdaCode = `
+def handler(event, context):
+    print("Received event:", event)
+    return {"statusCode": 200, "body": "Hello from Lambda!"}
+`;
+
+    const zipFile = createLambdaZip(lambdaCode, config.functionName);
+    const subnets = new DataAwsSubnets(this, 'subnets', {
+      filter: [
+        { name: 'vpc-id', values: [config.vpcId] },
+        { name: 'tag:Type', values: ['private'] }, // assuming private subnets are tagged
+      ],
+    });
+
+    // Lambda Function
     this.function = new LambdaFunction(this, 'function', {
       functionName: `corp-${config.functionName}`,
       role: this.role.arn,
-      handler: 'index.handler',
-      runtime: config.runtime || 'python3.9',
-      filename: 'lambda-deployment.zip', // Placeholder - should be provided during deployment
-
-      // Performance and cost optimization settings
-      timeout: config.timeout || 30, // 30 seconds default, sufficient for most image processing
-      memorySize: config.memorySize || 256, // 256MB default, can be adjusted based on workload
-
-      // VPC configuration for secure network access
+      handler: 'lambda_function.handler',
+      runtime: 'python3.9',
+      filename: zipFile,
+      timeout: config.timeout || 30,
+      memorySize: config.memorySize || 256,
+      environment: { variables: { ...config.environment } },
       vpcConfig: {
         subnetIds: subnets.ids,
-        securityGroupIds: [], // Should be provided via variables in production
+        securityGroupIds: [], // add security group IDs here
       },
-
-      // Environment variables for runtime configuration
-      environment: {
-        variables: {
-          LOG_LEVEL: 'INFO',
-          S3_BUCKET: `corp-${config.s3BucketName}`,
-          ...config.environment,
-        },
-      },
-
-      // Enable dead letter queue for failed invocations (optional)
-      deadLetterConfig: {
-        targetArn: '', // Should be configured with SQS queue in production
-      },
-
-      tags: {
-        Environment: 'production',
-        Service: 'serverless-image-processing',
-      },
-
       dependsOn: [this.logGroup],
     });
   }
 }
-
 /**
  * Reusable S3 bucket module with Lambda trigger configuration
  * This module creates an S3 bucket with event notifications to trigger Lambda functions
@@ -212,15 +178,6 @@ export class S3Module extends Construct {
         enabled: true, // Enable versioning for data protection
       },
 
-      // Server-side encryption for data at rest
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: 'AES256',
-          },
-        },
-      },
-
       tags: {
         Environment: 'production',
         Service: 'serverless-image-processing',
@@ -237,6 +194,17 @@ export class S3Module extends Construct {
       restrictPublicBuckets: true,
     });
 
+    // Server-side encryption for data at rest
+    new S3BucketServerSideEncryptionConfigurationA(this, 'bucket-sse', {
+      bucket: this.bucket.id,
+      rule: [
+        {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+        },
+      ],
+    });
     // Lambda permission to allow S3 to invoke the function
     new LambdaPermission(this, 'lambda-permission', {
       statementId: 'AllowExecutionFromS3Bucket',
