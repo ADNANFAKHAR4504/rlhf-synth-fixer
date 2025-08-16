@@ -9,36 +9,42 @@ resource "aws_route53_zone" "main" {
 
 # Route 53 Health Check for Primary ALB
 resource "aws_route53_health_check" "primary_alb" {
-  fqdn                            = aws_lb.primary.dns_name
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/"
-  failure_threshold               = 3
-  request_interval                = 30
-  cloudwatch_alarm_region         = var.aws_region_primary
-  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.primary_alb_health.alarm_name
-  insufficient_data_health_status = "Unhealthy"
+  fqdn                    = aws_lb.primary.dns_name
+  port                    = 80
+  type                    = "HTTP"
+  resource_path           = "/"
+  failure_threshold       = 3
+  request_interval        = 30
+  cloudwatch_alarm_region = var.aws_region_primary
+  cloudwatch_alarm_name   = aws_cloudwatch_metric_alarm.primary_alb_health.alarm_name
 
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-primary-health-check"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Route 53 Health Check for Secondary ALB
 resource "aws_route53_health_check" "secondary_alb" {
-  fqdn                            = aws_lb.secondary.dns_name
-  port                            = 80
-  type                            = "HTTP"
-  resource_path                   = "/"
-  failure_threshold               = 3
-  request_interval                = 30
-  cloudwatch_alarm_region         = var.aws_region_secondary
-  cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.secondary_alb_health.alarm_name
-  insufficient_data_health_status = "Unhealthy"
+  fqdn                    = aws_lb.secondary.dns_name
+  port                    = 80
+  type                    = "HTTP"
+  resource_path           = "/"
+  failure_threshold       = 3
+  request_interval        = 30
+  cloudwatch_alarm_region = var.aws_region_secondary
+  cloudwatch_alarm_name   = aws_cloudwatch_metric_alarm.secondary_alb_health.alarm_name
 
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-secondary-health-check"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # CloudWatch Alarms for Health Checks

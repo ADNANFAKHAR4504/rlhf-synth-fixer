@@ -116,6 +116,9 @@ resource "aws_db_instance" "secondary_replica" {
   # Security and Network for replica
   vpc_security_group_ids = [aws_security_group.secondary_rds.id]
 
+  # Encryption - must match source for cross-region replica
+  storage_encrypted = true
+
   # Performance and Monitoring
   # Disabled for t3.micro - not supported
   performance_insights_enabled = false

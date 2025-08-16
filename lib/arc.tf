@@ -48,24 +48,30 @@ resource "aws_route53recoverycontrolconfig_safety_rule" "assertion" {
 
 # Health Check with Routing Control for Primary
 resource "aws_route53_health_check" "primary_routing_control" {
-  type                            = "RECOVERY_CONTROL"
-  routing_control_arn             = aws_route53recoverycontrolconfig_routing_control.primary.arn
-  insufficient_data_health_status = "Unhealthy"
+  type                = "RECOVERY_CONTROL"
+  routing_control_arn = aws_route53recoverycontrolconfig_routing_control.primary.arn
 
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-primary-routing-control-health"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Health Check with Routing Control for Secondary
 resource "aws_route53_health_check" "secondary_routing_control" {
-  type                            = "RECOVERY_CONTROL"
-  routing_control_arn             = aws_route53recoverycontrolconfig_routing_control.secondary.arn
-  insufficient_data_health_status = "Unhealthy"
+  type                = "RECOVERY_CONTROL"
+  routing_control_arn = aws_route53recoverycontrolconfig_routing_control.secondary.arn
 
   tags = merge(local.common_tags, {
     Name = "${local.resource_prefix}-secondary-routing-control-health"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Recovery Group
