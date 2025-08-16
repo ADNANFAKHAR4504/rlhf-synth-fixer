@@ -22,6 +22,7 @@ export class DatabaseConstruct extends Construct {
       dbName: `${props.environmentSuffix}db`,
       instanceClass: 'db.t3.micro',
       multiAz: true,
+      allocatedStorage: 20,
       vpcSecurityGroupIds: [props.securityGroupId],
       // dbSubnetGroupName: 'your-subnet-group', // Add subnet group if needed
       tags: {

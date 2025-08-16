@@ -27,7 +27,7 @@ export class TapStack extends TerraformStack {
       defaultTags: [props.defaultTags],
     });
 
-    const vpc = new VpcConstruct(this, 'vpc');
+    const vpc = new VpcConstruct(this, 'vpc', props.environmentSuffix);
     const security = new SecurityConstruct(this, 'security', {
       vpcId: vpc.vpcId,
       publicSubnetIds: vpc.publicSubnetIds,

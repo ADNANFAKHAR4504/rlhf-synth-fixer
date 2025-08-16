@@ -17,7 +17,7 @@ export class VpcConstruct extends Construct {
   public readonly publicSubnetIds: string[];
   public readonly privateSubnetIds: string[];
 
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, environmentSuffix: string) {
     super(scope, id);
     // VPC
     const vpc = new Vpc(this, 'vpc', {
@@ -25,8 +25,8 @@ export class VpcConstruct extends Construct {
       enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
-        Name: 'production-vpc',
-        Environment: 'production',
+        Name: `${environmentSuffix}-vpc`,
+        Environment: environmentSuffix,
       },
     });
     this.vpcId = vpc.id;
@@ -35,8 +35,8 @@ export class VpcConstruct extends Construct {
     const igw = new InternetGateway(this, 'igw', {
       vpcId: vpc.id,
       tags: {
-        Name: 'production-igw',
-        Environment: 'production',
+        Name: `${environmentSuffix}-igw`,
+        Environment: environmentSuffix,
       },
     });
 
@@ -48,8 +48,8 @@ export class VpcConstruct extends Construct {
         availabilityZone: 'us-west-2a',
         mapPublicIpOnLaunch: true,
         tags: {
-          Name: 'production-public-subnet-1',
-          Environment: 'production',
+          Name: `${environmentSuffix}-public-subnet-1`,
+          Environment: environmentSuffix,
           Type: 'public',
         },
       }),
@@ -59,8 +59,8 @@ export class VpcConstruct extends Construct {
         availabilityZone: 'us-west-2b',
         mapPublicIpOnLaunch: true,
         tags: {
-          Name: 'production-public-subnet-2',
-          Environment: 'production',
+          Name: `${environmentSuffix}-public-subnet-2`,
+          Environment: environmentSuffix,
           Type: 'public',
         },
       }),
@@ -70,8 +70,8 @@ export class VpcConstruct extends Construct {
         availabilityZone: 'us-west-2c',
         mapPublicIpOnLaunch: true,
         tags: {
-          Name: 'production-public-subnet-3',
-          Environment: 'production',
+          Name: `${environmentSuffix}-public-subnet-3`,
+          Environment: environmentSuffix,
           Type: 'public',
         },
       }),
@@ -84,8 +84,8 @@ export class VpcConstruct extends Construct {
         cidrBlock: '10.0.11.0/24',
         availabilityZone: 'us-west-2a',
         tags: {
-          Name: 'production-private-subnet-1',
-          Environment: 'production',
+          Name: `${environmentSuffix}-private-subnet-1`,
+          Environment: environmentSuffix,
           Type: 'private',
         },
       }),
@@ -94,8 +94,8 @@ export class VpcConstruct extends Construct {
         cidrBlock: '10.0.12.0/24',
         availabilityZone: 'us-west-2b',
         tags: {
-          Name: 'production-private-subnet-2',
-          Environment: 'production',
+          Name: `${environmentSuffix}-private-subnet-2`,
+          Environment: environmentSuffix,
           Type: 'private',
         },
       }),
@@ -104,8 +104,8 @@ export class VpcConstruct extends Construct {
         cidrBlock: '10.0.13.0/24',
         availabilityZone: 'us-west-2c',
         tags: {
-          Name: 'production-private-subnet-3',
-          Environment: 'production',
+          Name: `${environmentSuffix}-private-subnet-3`,
+          Environment: environmentSuffix,
           Type: 'private',
         },
       }),
@@ -120,8 +120,8 @@ export class VpcConstruct extends Construct {
         new Eip(this, `nat-eip-${index + 1}`, {
           domain: 'vpc',
           tags: {
-            Name: `production-nat-eip-${index + 1}`,
-            Environment: 'production',
+            Name: `${environmentSuffix}-nat-eip-${index + 1}`,
+            Environment: environmentSuffix,
           },
         })
     );
@@ -132,8 +132,8 @@ export class VpcConstruct extends Construct {
           allocationId: natEips[index].id,
           subnetId: subnet.id,
           tags: {
-            Name: `production-nat-gateway-${index + 1}`,
-            Environment: 'production',
+            Name: `${environmentSuffix}-nat-gateway-${index + 1}`,
+            Environment: environmentSuffix,
           },
         })
     );
@@ -142,8 +142,8 @@ export class VpcConstruct extends Construct {
     const publicRouteTable = new RouteTable(this, 'public-route-table', {
       vpcId: vpc.id,
       tags: {
-        Name: 'production-public-route-table',
-        Environment: 'production',
+        Name: `${environmentSuffix}-public-route-table`,
+        Environment: environmentSuffix,
       },
     });
 
@@ -169,8 +169,8 @@ export class VpcConstruct extends Construct {
         {
           vpcId: vpc.id,
           tags: {
-            Name: `production-private-route-table-${index + 1}`,
-            Environment: 'production',
+            Name: `${environmentSuffix}-private-route-table-${index + 1}`,
+            Environment: environmentSuffix,
           },
         }
       );
@@ -192,11 +192,11 @@ export class VpcConstruct extends Construct {
     });
 
     // Network ACLs - Only allow ports 443 and 22
-    const networkAcl = new NetworkAcl(this, 'production-nacl', {
+    const networkAcl = new NetworkAcl(this, `${environmentSuffix}-nacl`, {
       vpcId: vpc.id,
       tags: {
-        Name: 'production-nacl',
-        Environment: 'production',
+        Name: `${environmentSuffix}-nacl`,
+        Environment: environmentSuffix,
       },
     });
 
