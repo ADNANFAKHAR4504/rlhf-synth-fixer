@@ -5,21 +5,5 @@
   "turn_type": "single",
   "po_id": "291387",
   "team": "4",
-  "startedAt": "2025-08-15T10:55:39.976Z",
-  "subtask": "Network Infrastructure Design",
-  "subject_labels": [
-    "Network Configuration",
-    "Security Configuration",
-    "General Infrastructure Tooling QA"
-  ],
-  "training_quality": 8,
-  "aws_services": [
-    "EC2",
-    "VPC",
-    "Internet Gateway",
-    "NAT Gateway",
-    "Elastic IP",
-    "Route Table",
-    "Security Group"
-  ]
+  "startedAt": "2025-08-15T10:55:39.976Z"
 }
