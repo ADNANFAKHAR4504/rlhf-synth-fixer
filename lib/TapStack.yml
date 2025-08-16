@@ -25,12 +25,26 @@ Parameters:
     Description: >-
       Name of the SSM Parameter Store parameter containing the database password
     AllowedPattern: '^[a-zA-Z0-9/_-]+$'
+  
+  AZ1:
+    Type: String
+    Default: us-west-2a
+    Description: Primary AZ
+  AZ2:
+    Type: String
+    Default: us-west-2b
+    Description: Secondary AZ (set same as AZ1 if only one AZ is enabled)
 
   Environment:
     Type: String
     Default: 'production'
     Description: 'Environment name for resource naming'
     AllowedValues: ['development', 'staging', 'production']
+
+  DateSuffix:
+    Type: String
+    Description: Short date/timestamp to make bucket names unique
+    AllowedPattern: '^[a-z0-9-]+$'
 
 Resources:
   # Note: SSM Parameter /myapp/database/password must exist before deployment
@@ -73,7 +87,7 @@ Resources:
     Properties:
       VpcId: !Ref MyAppVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Ref AZ1
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -86,7 +100,7 @@ Resources:
     Properties:
       VpcId: !Ref MyAppVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Ref AZ2
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -100,7 +114,7 @@ Resources:
     Properties:
       VpcId: !Ref MyAppVPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Ref AZ1
       Tags:
         - Key: Name
           Value: !Sub 'MyApp-Private-Subnet-1-${Environment}'
@@ -112,7 +126,7 @@ Resources:
     Properties:
       VpcId: !Ref MyAppVPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Ref AZ2
       Tags:
         - Key: Name
           Value: !Sub 'MyApp-Private-Subnet-2-${Environment}'
@@ -257,7 +271,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub >-
-        myapp-access-logs-${Environment}-${AWS::AccountId}-${AWS::Region}
+        myapp-access-logs-${Environment}-${DateSuffix}
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -373,7 +387,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub >-
-        myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}
+        myapp-primary-${Environment}-${DateSuffix}
       VersioningConfiguration:
         Status: Enabled
       LoggingConfiguration:
@@ -403,7 +417,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref MyAppLambdaFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub '${MyAppS3Bucket}/*'
+      SourceArn: !GetAtt MyAppS3Bucket.Arn 
 
   # DB Subnet Group
   DBSubnetGroup:
