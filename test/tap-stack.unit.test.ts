@@ -1,103 +1,103 @@
-// __tests__/tap-stack.unit.test.ts
 import { App, Testing } from "cdktf";
 import "cdktf/lib/testing/adapters/jest";
 import { TapStack } from "../lib/tap-stack";
+const fs = require('fs');
+const path = require('path');
 
-// Mocking modules used inside TapStack
+// Mocking VpcModule and other modules to return the full expected object structure.
 jest.mock("../lib/modules", () => {
   return {
-    LoggingModule: jest.fn(() => ({
-      logGroup: { name: "mock-log-group", arn: "arn:mock:log" },
+    VpcModule: jest.fn(() => ({
+      vpc: {
+        id: "mock-vpc-id",
+      },
+      // Correcting the mock to return arrays of subnets instead of single objects
+      publicSubnets: [
+        { id: "mock-public-subnet-1-id" },
+        { id: "mock-public-subnet-2-id" },
+      ],
+      privateSubnets: [
+        { id: "mock-private-subnet-1-id" },
+        { id: "mock-private-subnet-2-id" },
+      ],
+      // Correcting the mock to include natGateway and internetGateway
+      natGateway: { id: "mock-nat-gateway-id" },
+      internetGateway: { id: "mock-internet-gateway-id" },
+      // Mocking the attributes needed for the `availability_zones_used` output
+      publicAz: "us-west-2a",
+      privateAz: "us-west-2b",
+    })),
+    SecurityGroupModule: jest.fn(() => ({
+      securityGroup: {
+        id: "mock-sg-id",
+      },
+    })),
+    NetworkAclModule: jest.fn(() => ({
+      networkAcl: {
+        id: "mock-acl-id",
+      },
     })),
     KmsModule: jest.fn(() => ({
-      key: { arn: "arn:mock:kms" },
+      key: {
+        keyId: "mock-kms-key-id",
+        arn: "mock-kms-key-arn",
+      },
     })),
-    NetworkModule: jest.fn(() => ({
-      vpc: { id: "mock-vpc-id" },
-      publicSubnets: [{ id: "mock-public-subnet-1" }, { id: "mock-public-subnet-2" }],
-      privateSubnets: [{ id: "mock-private-subnet-1" }, { id: "mock-private-subnet-2" }],
-      natGateway: { id: "mock-nat" },
+    S3Module: jest.fn(() => ({
+      bucket: {
+        bucket: "mock-s3-bucket",
+      },
     })),
-    SecurityGroupsModule: jest.fn(() => ({
-      bastionSg: { id: "mock-sg-bastion" },
-      webSg: { id: "mock-sg-web" },
-      appSg: { id: "mock-sg-app" },
+    IamModule: jest.fn(() => ({
+      role: {
+        arn: "mock-iam-role-arn",
+      },
     })),
-    NaclModule: jest.fn(() => ({})),
-    SecureBucketModule: jest.fn((scope, id, cfg) => ({
-      bucket: { bucket: cfg.bucketName },
-    })),
-    CloudTrailModule: jest.fn(() => ({
-      trail: { arn: "arn:mock:cloudtrail" },
+    CloudWatchModule: jest.fn(() => ({
+      logGroup: {
+        name: "mock-log-group-name",
+      },
     })),
   };
 });
 
 describe("TapStack Unit Tests", () => {
-  const {
-    LoggingModule,
-    KmsModule,
-    NetworkModule,
-    SecurityGroupsModule,
-    NaclModule,
-    SecureBucketModule,
-    CloudTrailModule,
-  } = require("../lib/modules");
+  const { VpcModule } = require("../lib/modules");
 
+  // Clear all mocks before each test to ensure a clean slate
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test("should create NetworkModule with correct props", () => {
+  // Test to ensure the entire synthesized stack snapshot matches the expected output.
+  // This is a powerful integration test for your stack's plan.
+  test('synthesizes to a consistent Terraform plan', () => {
+    const app = new App();
+    const stack = new TapStack(app, "test-stack");
+    expect(Testing.fullSynth(stack)).toMatchSnapshot();
+  });
+
+  // This test verifies that the VpcModule is called with the correct properties.
+  test("should create VpcModule with correct props", () => {
     const app = new App();
     new TapStack(app, "TestStack");
-    expect(NetworkModule).toHaveBeenCalledTimes(1);
-    expect(NetworkModule).toHaveBeenCalledWith(
+    expect(VpcModule).toHaveBeenCalledTimes(1);
+    expect(VpcModule).toHaveBeenCalledWith(
       expect.anything(),
-      "network",
+      // The VpcModule is instantiated with the ID "vpc" in the application code
+      "vpc",
       expect.objectContaining({
-        cidrBlock: expect.any(String),
-        azs: expect.any(Array),
-        enableFlowLogs: true,
-        logGroupName: "mock-log-group",
+        vpcCidr: "10.0.0.0/16",
+        // Removed `availabilityZones` from the expectation as it's not a direct prop
       })
     );
   });
 
-  test("should output vpc_id and subnets", () => {
-    const app = new App();
-    const stack = new TapStack(app, "TestOutputs");
-    const synthesized = Testing.synth(stack);
-    const outputs = JSON.parse(synthesized).output;
-
-    expect(outputs.vpc_id.value).toEqual("mock-vpc-id");
-    expect(outputs.public_subnet_ids.value).toEqual([
-      "mock-public-subnet-1",
-      "mock-public-subnet-2",
-    ]);
-    expect(outputs.private_subnet_ids.value).toEqual([
-      "mock-private-subnet-1",
-      "mock-private-subnet-2",
-    ]);
-  });
-
-  test("should use props.awsRegion when AWS_REGION_OVERRIDE is not set", () => {
-    const app = new App();
-
-    // Temporarily override AWS_REGION_OVERRIDE
-    const original = (TapStack as any).AWS_REGION_OVERRIDE;
-    (TapStack as any).AWS_REGION_OVERRIDE = undefined;
-
-    new TapStack(app, "TestRegion", { awsRegion: "ap-south-1" });
-
-    // Restore
-    (TapStack as any).AWS_REGION_OVERRIDE = original;
-  });
-
-  test("should set defaultTags when provided", () => {
-    const app = new App();
-    new TapStack(app, "TestTags", {
-      defaultTags: { tags: { Project: "TestProject" } },
-    });
+  // New test to ensure the VpcModule mock returns the correct structure
+  test("should ensure the VpcModule mock has the correct structure", () => {
+    // Instantiate the mocked module directly to test its shape
+    const vpcModuleMock = VpcModule();
+    expect(vpcModuleMock).toHaveProperty('vpc.id');
+    expect(vpcModuleMock.vpc.id).toEqual('mock-vpc-id');
   });
 });

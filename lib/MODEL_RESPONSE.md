@@ -1,6 +1,6 @@
-I'll create a secure AWS environment using CDK for Terraform (TypeScript) split into two files as requested. Here are the complete files:
+I'll create a secure AWS environment using CDK for Terraform (TypeScript) split into the two files you requested. Here are the complete files:
 
-## modules.ts
+## `modules.ts`
 
 ```typescript
 import { Construct } from "constructs";
@@ -20,29 +20,32 @@ import {
   NatGateway,
   Eip,
   SecurityGroup,
+  SecurityGroupRule,
   NetworkAcl,
   NetworkAclRule,
+  NetworkAclAssociation,
 } from "@cdktf/provider-aws/lib/vpc";
+import {
+  IamRole,
+  IamRolePolicy,
+  IamRolePolicyAttachment,
+  DataAwsIamPolicyDocument,
+} from "@cdktf/provider-aws/lib/iam";
 import {
   S3Bucket,
   S3BucketEncryption,
   S3BucketPublicAccessBlock,
   S3BucketVersioning,
   S3BucketLogging,
-  S3BucketServerSideEncryptionConfiguration,
+  S3BucketNotification,
 } from "@cdktf/provider-aws/lib/s3";
 import {
   KmsKey,
   KmsAlias,
 } from "@cdktf/provider-aws/lib/kms";
 import {
-  IamRole,
-  IamRolePolicy,
-  IamInstanceProfile,
-  DataAwsIamPolicyDocument,
-} from "@cdktf/provider-aws/lib/iam";
-import {
   CloudwatchLogGroup,
+  CloudwatchLogStream,
 } from "@cdktf/provider-aws/lib/cloudwatch";
 
 // Interface definitions for module configurations
@@ -55,13 +58,6 @@ export interface VpcModuleConfig {
   tags: { [key: string]: string };
 }
 
-export interface S3ModuleConfig {
-  bucketNames: string[];
-  kmsKeyDescription: string;
-  enableVersioning: boolean;
-  tags: { [key: string]: string };
-}
-
 export interface SecurityGroupConfig {
   name: string;
   description: string;
@@ -71,37 +67,39 @@ export interface SecurityGroupConfig {
     toPort: number;
     protocol: string;
     cidrBlocks?: string[];
-    securityGroups?: string[];
+    sourceSecurityGroupId?: string;
   }>;
   egressRules: Array<{
     fromPort: number;
     toPort: number;
     protocol: string;
     cidrBlocks?: string[];
+    destinationSecurityGroupId?: string;
   }>;
+  tags: { [key: string]: string };
+}
+
+export interface S3ModuleConfig {
+  bucketName: string;
+  kmsKeyId: string;
+  enableVersioning: boolean;
+  enableLogging: boolean;
+  logBucketName?: string;
   tags: { [key: string]: string };
 }
 
 export interface IAMModuleConfig {
   roleName: string;
-  policyStatements: Array<{
-    effect: string;
-    actions: string[];
-    resources: string[];
+  assumeRolePolicy: string;
+  policies: Array<{
+    name: string;
+    policy: string;
   }>;
+  managedPolicyArns?: string[];
   tags: { [key: string]: string };
 }
 
-export interface CloudWatchModuleConfig {
-  logGroupNames: string[];
-  retentionInDays: number;
-  tags: { [key: string]: string };
-}
-
-/**
- * VPC Module - Creates a complete VPC infrastructure with public/private subnets,
- * NAT Gateway, Internet Gateway, and proper routing
- */
+// VPC Module - Creates VPC with public/private subnets, NAT gateway, and routing
 export class VpcModule extends Construct {
   public readonly vpc: Vpc;
   public readonly publicSubnets: Subnet[];
@@ -126,7 +124,7 @@ export class VpcModule extends Construct {
       enableDnsSupport: config.enableDnsSupport,
       tags: {
         ...config.tags,
-        Name: `${config.tags.Name || "main"}-vpc`,
+        Name: `${config.tags.Name}-vpc`,
       },
     });
 
@@ -135,7 +133,7 @@ export class VpcModule extends Construct {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
-        Name: `${config.tags.Name || "main"}-igw`,
+        Name: `${config.tags.Name}-igw`,
       },
     });
 
@@ -145,16 +143,16 @@ export class VpcModule extends Construct {
         vpcId: this.vpc.id,
         cidrBlock: cidr,
         availabilityZone: `\${${azs.fqn}.names[${index}]}`,
-        mapPublicIpOnLaunch: true, // Auto-assign public IPs
+        mapPublicIpOnLaunch: true, // Auto-assign public IPs for instances
         tags: {
           ...config.tags,
-          Name: `${config.tags.Name || "main"}-public-subnet-${index + 1}`,
+          Name: `${config.tags.Name}-public-subnet-${index + 1}`,
           Type: "Public",
         },
       });
     });
 
-    // Create private subnets for internal resources
+    // Create private subnets for secure internal resources
     this.privateSubnets = config.privateSubnetCidrs.map((cidr, index) => {
       return new Subnet(this, `private-subnet-${index}`, {
         vpcId: this.vpc.id,
@@ -163,7 +161,7 @@ export class VpcModule extends Construct {
         mapPublicIpOnLaunch: false, // No public IPs for private subnets
         tags: {
           ...config.tags,
-          Name: `${config.tags.Name || "main"}-private-subnet-${index + 1}`,
+          Name: `${config.tags.Name}-private-subnet-${index + 1}`,
           Type: "Private",
         },
       });
@@ -175,7 +173,7 @@ export class VpcModule extends Construct {
       dependsOn: [this.internetGateway],
       tags: {
         ...config.tags,
-        Name: `${config.tags.Name || "main"}-nat-eip`,
+        Name: `${config.tags.Name}-nat-eip`,
       },
     });
 
@@ -185,20 +183,20 @@ export class VpcModule extends Construct {
       subnetId: this.publicSubnets[0].id,
       tags: {
         ...config.tags,
-        Name: `${config.tags.Name || "main"}-nat-gateway`,
+        Name: `${config.tags.Name}-nat-gateway`,
       },
     });
 
-    // Create route table for public subnets
+    // Create route table for public subnets with internet gateway route
     this.publicRouteTable = new RouteTable(this, "public-rt", {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
-        Name: `${config.tags.Name || "main"}-public-rt`,
+        Name: `${config.tags.Name}-public-rt`,
       },
     });
 
-    // Route all traffic to Internet Gateway for public subnets
+    // Add route to internet gateway for public subnet internet access
     new Route(this, "public-route", {
       routeTableId: this.publicRouteTable.id,
       destinationCidrBlock: "0.0.0.0/0",
@@ -213,16 +211,16 @@ export class VpcModule extends Construct {
       });
     });
 
-    // Create route table for private subnets
+    // Create route table for private subnets with NAT gateway route
     this.privateRouteTable = new RouteTable(this, "private-rt", {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
-        Name: `${config.tags.Name || "main"}-private-rt`,
+        Name: `${config.tags.Name}-private-rt`,
       },
     });
 
-    // Route all traffic to NAT Gateway for private subnets
+    // Add route to NAT gateway for private subnet internet access
     new Route(this, "private-route", {
       routeTableId: this.privateRouteTable.id,
       destinationCidrBlock: "0.0.0.0/0",
@@ -239,145 +237,161 @@ export class VpcModule extends Construct {
   }
 }
 
-/**
- * Security Group Module - Creates security groups with configurable ingress/egress rules
- * following the principle of least privilege
- */
+// Security Group Module - Creates security groups with configurable ingress/egress rules
 export class SecurityGroupModule extends Construct {
   public readonly securityGroup: SecurityGroup;
 
   constructor(scope: Construct, id: string, config: SecurityGroupConfig) {
     super(scope, id);
 
-    // Create security group with restrictive default behavior
+    // Create security group with description for identification
     this.securityGroup = new SecurityGroup(this, "sg", {
       name: config.name,
       description: config.description,
       vpcId: config.vpcId,
-      
-      // Configure ingress rules (inbound traffic)
-      ingress: config.ingressRules.map(rule => ({
-        fromPort: rule.fromPort,
-        toPort: rule.toPort,
-        protocol: rule.protocol,
-        cidrBlocks: rule.cidrBlocks,
-        securityGroups: rule.securityGroups,
-      })),
-      
-      // Configure egress rules (outbound traffic)
-      egress: config.egressRules.map(rule => ({
-        fromPort: rule.fromPort,
-        toPort: rule.toPort,
-        protocol: rule.protocol,
-        cidrBlocks: rule.cidrBlocks,
-      })),
-      
       tags: {
         ...config.tags,
         Name: config.name,
       },
     });
+
+    // Create ingress rules for inbound traffic control
+    config.ingressRules.forEach((rule, index) => {
+      new SecurityGroupRule(this, `ingress-rule-${index}`, {
+        type: "ingress",
+        fromPort: rule.fromPort,
+        toPort: rule.toPort,
+        protocol: rule.protocol,
+        cidrBlocks: rule.cidrBlocks,
+        sourceSecurityGroupId: rule.sourceSecurityGroupId,
+        securityGroupId: this.securityGroup.id,
+      });
+    });
+
+    // Create egress rules for outbound traffic control
+    config.egressRules.forEach((rule, index) => {
+      new SecurityGroupRule(this, `egress-rule-${index}`, {
+        type: "egress",
+        fromPort: rule.fromPort,
+        toPort: rule.toPort,
+        protocol: rule.protocol,
+        cidrBlocks: rule.cidrBlocks,
+        sourceSecurityGroupId: rule.destinationSecurityGroupId,
+        securityGroupId: this.securityGroup.id,
+      });
+    });
   }
 }
 
-/**
- * Network ACL Module - Provides subnet-level security as an additional layer
- * beyond security groups for defense in depth
- */
+// Network ACL Module - Creates NACLs for additional subnet-level security
 export class NetworkAclModule extends Construct {
   public readonly networkAcl: NetworkAcl;
 
-  constructor(scope: Construct, id: string, vpcId: string, subnetIds: string[], tags: { [key: string]: string }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    vpcId: string,
+    subnetIds: string[],
+    tags: { [key: string]: string }
+  ) {
     super(scope, id);
 
-    // Create Network ACL for additional subnet-level security
+    // Create Network ACL for subnet-level traffic filtering
     this.networkAcl = new NetworkAcl(this, "nacl", {
       vpcId: vpcId,
-      subnetIds: subnetIds,
       tags: {
         ...tags,
-        Name: `${tags.Name || "main"}-nacl`,
+        Name: `${tags.Name}-nacl`,
       },
     });
 
-    // Allow HTTP inbound traffic
-    new NetworkAclRule(this, "nacl-http-inbound", {
+    // Allow inbound HTTP traffic (port 80)
+    new NetworkAclRule(this, "allow-http-inbound", {
       networkAclId: this.networkAcl.id,
       ruleNumber: 100,
       protocol: "tcp",
       ruleAction: "allow",
+      cidrBlock: "0.0.0.0/0",
       fromPort: 80,
       toPort: 80,
-      cidrBlock: "0.0.0.0/0",
     });
 
-    // Allow HTTPS inbound traffic
-    new NetworkAclRule(this, "nacl-https-inbound", {
+    // Allow inbound HTTPS traffic (port 443)
+    new NetworkAclRule(this, "allow-https-inbound", {
       networkAclId: this.networkAcl.id,
       ruleNumber: 110,
       protocol: "tcp",
       ruleAction: "allow",
+      cidrBlock: "0.0.0.0/0",
       fromPort: 443,
       toPort: 443,
-      cidrBlock: "0.0.0.0/0",
     });
 
-    // Allow SSH inbound traffic (restrict CIDR as needed)
-    new NetworkAclRule(this, "nacl-ssh-inbound", {
+    // Allow inbound SSH traffic (port 22) - restrict CIDR as needed
+    new NetworkAclRule(this, "allow-ssh-inbound", {
       networkAclId: this.networkAcl.id,
       ruleNumber: 120,
       protocol: "tcp",
       ruleAction: "allow",
+      cidrBlock: "0.0.0.0/0", // Consider restricting to specific IP ranges
       fromPort: 22,
       toPort: 22,
-      cidrBlock: "10.0.0.0/8", // Restrict to private networks
     });
 
-    // Allow ephemeral ports for return traffic
-    new NetworkAclRule(this, "nacl-ephemeral-inbound", {
+    // Allow inbound ephemeral ports for return traffic
+    new NetworkAclRule(this, "allow-ephemeral-inbound", {
       networkAclId: this.networkAcl.id,
       ruleNumber: 130,
       protocol: "tcp",
       ruleAction: "allow",
+      cidrBlock: "0.0.0.0/0",
       fromPort: 1024,
       toPort: 65535,
-      cidrBlock: "0.0.0.0/0",
     });
 
-    // Allow all outbound traffic (can be restricted based on requirements)
-    new NetworkAclRule(this, "nacl-all-outbound", {
+    // Allow all outbound traffic
+    new NetworkAclRule(this, "allow-all-outbound", {
       networkAclId: this.networkAcl.id,
       ruleNumber: 100,
-      protocol: "-1",
+      protocol: "-1", // All protocols
       ruleAction: "allow",
       cidrBlock: "0.0.0.0/0",
       egress: true,
     });
+
+    // Associate NACL with provided subnets
+    subnetIds.forEach((subnetId, index) => {
+      new NetworkAclAssociation(this, `nacl-association-${index}`, {
+        networkAclId: this.networkAcl.id,
+        subnetId: subnetId,
+      });
+    });
   }
 }
 
-/**
- * KMS Module - Creates KMS keys for encryption with proper key policies
- * and aliases for easy reference
- */
+// KMS Module - Creates KMS keys for encryption with proper key policies
 export class KmsModule extends Construct {
-  public readonly kmsKey: KmsKey;
-  public readonly kmsAlias: KmsAlias;
+  public readonly key: KmsKey;
+  public readonly alias: KmsAlias;
 
-  constructor(scope: Construct, id: string, description: string, tags: { [key: string]: string }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    keyDescription: string,
+    aliasName: string,
+    tags: { [key: string]: string }
+  ) {
     super(scope, id);
 
-    // Get current AWS account ID and region for key policy
+    // Get current AWS account and region for key policy
     const currentAccount = new DataAwsCallerIdentity(this, "current");
-    const currentRegion = new DataAwsRegion(this, "current-region");
+    const currentRegion = new DataAwsRegion(this, "current");
 
-    // Create KMS key with restrictive policy following least privilege
-    this.kmsKey = new KmsKey(this, "kms-key", {
-      description: description,
+    // Create KMS key with policy allowing root account access and service usage
+    this.key = new KmsKey(this, "key", {
+      description: keyDescription,
       keyUsage: "ENCRYPT_DECRYPT",
       keySpec: "SYMMETRIC_DEFAULT",
-      
-      // Key policy allowing root account access and specific service permissions
       policy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [
@@ -385,295 +399,289 @@ export class KmsModule extends Construct {
             Sid: "Enable IAM User Permissions",
             Effect: "Allow",
             Principal: {
-              AWS: `arn:aws:iam::\${${currentAccount.fqn}.account_id}:root`
+              AWS: `arn:aws:iam::${currentAccount.accountId}:root`,
             },
             Action: "kms:*",
-            Resource: "*"
+            Resource: "*",
           },
           {
-            Sid: "Allow S3 Service",
+            Sid: "Allow use of the key for AWS services",
             Effect: "Allow",
             Principal: {
-              Service: "s3.amazonaws.com"
-            },
-            Action: [
-              "kms:Decrypt",
-              "kms:GenerateDataKey*"
-            ],
-            Resource: "*"
-          },
-          {
-            Sid: "Allow CloudWatch Logs",
-            Effect: "Allow",
-            Principal: {
-              Service: `logs.\${${currentRegion.fqn}.name}.amazonaws.com`
+              Service: ["s3.amazonaws.com", "logs.amazonaws.com"],
             },
             Action: [
               "kms:Encrypt",
               "kms:Decrypt",
               "kms:ReEncrypt*",
               "kms:GenerateDataKey*",
-              "kms:DescribeKey"
+              "kms:DescribeKey",
             ],
-            Resource: "*"
-          }
-        ]
+            Resource: "*",
+          },
+        ],
       }),
-      
       tags: {
         ...tags,
-        Name: `${tags.Name || "main"}-kms-key`,
+        Name: keyDescription,
       },
     });
 
-    // Create alias for easier key reference
-    this.kmsAlias = new KmsAlias(this, "kms-alias", {
-      name: `alias/${tags.Name || "main"}-encryption-key`,
-      targetKeyId: this.kmsKey.keyId,
+    // Create KMS alias for easier key reference
+    this.alias = new KmsAlias(this, "alias", {
+      name: `alias/${aliasName}`,
+      targetKeyId: this.key.keyId,
     });
   }
 }
 
-/**
- * S3 Module - Creates secure S3 buckets with KMS encryption, versioning,
- * and proper access controls
- */
+// S3 Module - Creates S3 buckets with KMS encryption and security configurations
 export class S3Module extends Construct {
-  public readonly buckets: S3Bucket[];
-  public readonly kmsKey: KmsKey;
+  public readonly bucket: S3Bucket;
+  public readonly bucketEncryption: S3BucketEncryption;
+  public readonly bucketVersioning: S3BucketVersioning;
+  public readonly bucketPublicAccessBlock: S3BucketPublicAccessBlock;
 
   constructor(scope: Construct, id: string, config: S3ModuleConfig) {
     super(scope, id);
 
-    // Create KMS key for S3 bucket encryption
-    const kmsModule = new KmsModule(this, "s3-kms", config.kmsKeyDescription, config.tags);
-    this.kmsKey = kmsModule.kmsKey;
+    // Create S3 bucket with proper naming and tags
+    this.bucket = new S3Bucket(this, "bucket", {
+      bucket: config.bucketName,
+      tags: {
+        ...config.tags,
+        Name: config.bucketName,
+      },
+    });
 
-    // Create S3 buckets with security best practices
-    this.buckets = config.bucketNames.map((bucketName, index) => {
-      const bucket = new S3Bucket(this, `bucket-${index}`, {
-        bucket: bucketName,
-        tags: {
-          ...config.tags,
-          Name: bucketName,
-        },
-      });
-
-      // Enable versioning for data protection and compliance
-      new S3BucketVersioning(this, `bucket-versioning-${index}`, {
-        bucket: bucket.id,
-        versioningConfiguration: {
-          status: config.enableVersioning ? "Enabled" : "Suspended",
-        },
-      });
-
-      // Configure server-side encryption with KMS
-      new S3BucketServerSideEncryptionConfiguration(this, `bucket-encryption-${index}`, {
-        bucket: bucket.id,
-        rule: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: "aws:kms",
-              kmsMasterKeyId: this.kmsKey.arn,
-            },
-            bucketKeyEnabled: true, // Reduce KMS costs
+    // Configure KMS encryption for bucket - all objects encrypted by default
+    this.bucketEncryption = new S3BucketEncryption(this, "encryption", {
+      bucket: this.bucket.id,
+      serverSideEncryptionConfiguration: {
+        rule: {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: "aws:kms",
+            kmsMasterKeyId: config.kmsKeyId,
           },
-        ],
-      });
+          bucketKeyEnabled: true, // Reduces KMS costs
+        },
+      },
+    });
 
-      // Block all public access for security
-      new S3BucketPublicAccessBlock(this, `bucket-pab-${index}`, {
-        bucket: bucket.id,
+    // Enable versioning for data protection and compliance
+    if (config.enableVersioning) {
+      this.bucketVersioning = new S3BucketVersioning(this, "versioning", {
+        bucket: this.bucket.id,
+        versioningConfiguration: {
+          status: "Enabled",
+        },
+      });
+    }
+
+    // Block all public access for security
+    this.bucketPublicAccessBlock = new S3BucketPublicAccessBlock(
+      this,
+      "public-access-block",
+      {
+        bucket: this.bucket.id,
         blockPublicAcls: true,
         blockPublicPolicy: true,
         ignorePublicAcls: true,
         restrictPublicBuckets: true,
-      });
+      }
+    );
 
-      return bucket;
-    });
+    // Configure access logging if enabled
+    if (config.enableLogging && config.logBucketName) {
+      new S3BucketLogging(this, "logging", {
+        bucket: this.bucket.id,
+        targetBucket: config.logBucketName,
+        targetPrefix: `${config.bucketName}/`,
+      });
+    }
   }
 }
 
-/**
- * IAM Module - Creates IAM roles and policies following least privilege principle
- */
-export class IAMModule extends Construct {
+// IAM Module - Creates IAM roles with least privilege policies
+export class IamModule extends Construct {
   public readonly role: IamRole;
-  public readonly instanceProfile: IamInstanceProfile;
+  public readonly policies: IamRolePolicy[];
 
   constructor(scope: Construct, id: string, config: IAMModuleConfig) {
     super(scope, id);
 
-    // Create assume role policy document
-    const assumeRolePolicy = new DataAwsIamPolicyDocument(this, "assume-role-policy", {
-      statement: [
-        {
-          actions: ["sts:AssumeRole"],
-          effect: "Allow",
-          principals: [
-            {
-              type: "Service",
-              identifiers: ["ec2.amazonaws.com"],
-            },
-          ],
-        },
-      ],
-    });
-
     // Create IAM role with assume role policy
     this.role = new IamRole(this, "role", {
       name: config.roleName,
-      assumeRolePolicy: assumeRolePolicy.json,
+      assumeRolePolicy: config.assumeRolePolicy,
       tags: {
         ...config.tags,
         Name: config.roleName,
       },
     });
 
-    // Create policy document with specified permissions
-    const policyDocument = new DataAwsIamPolicyDocument(this, "policy-document", {
-      statement: config.policyStatements.map((stmt, index) => ({
-        sid: `Statement${index + 1}`,
-        effect: stmt.effect,
-        actions: stmt.actions,
-        resources: stmt.resources,
-      })),
+    // Create inline policies for the role
+    this.policies = config.policies.map((policyConfig, index) => {
+      return new IamRolePolicy(this, `policy-${index}`, {
+        name: policyConfig.name,
+        role: this.role.id,
+        policy: policyConfig.policy,
+      });
     });
 
-    // Attach inline policy to role
-    new IamRolePolicy(this, "role-policy", {
-      name: `${config.roleName}-policy`,
-      role: this.role.id,
-      policy: policyDocument.json,
-    });
-
-    // Create instance profile for EC2 instances
-    this.instanceProfile = new IamInstanceProfile(this, "instance-profile", {
-      name: `${config.roleName}-instance-profile`,
-      role: this.role.name,
-      tags: {
-        ...config.tags,
-        Name: `${config.roleName}-instance-profile`,
-      },
-    });
+    // Attach managed policies if provided
+    if (config.managedPolicyArns) {
+      config.managedPolicyArns.forEach((arn, index) => {
+        new IamRolePolicyAttachment(this, `managed-policy-${index}`, {
+          role: this.role.name,
+          policyArn: arn,
+        });
+      });
+    }
   }
 }
 
-/**
- * CloudWatch Module - Creates log groups for centralized logging
- * with encryption and retention policies
- */
+// CloudWatch Module - Creates log groups for centralized logging
 export class CloudWatchModule extends Construct {
-  public readonly logGroups: CloudwatchLogGroup[];
+  public readonly logGroup: CloudwatchLogGroup;
+  public readonly logStream: CloudwatchLogStream;
 
-  constructor(scope: Construct, id: string, config: CloudWatchModuleConfig, kmsKeyId?: string) {
+  constructor(
+    scope: Construct,
+    id: string,
+    logGroupName: string,
+    retentionInDays: number,
+    kmsKeyId: string,
+    tags: { [key: string]: string }
+  ) {
     super(scope, id);
 
-    // Create CloudWatch Log Groups for application and system logs
-    this.logGroups = config.logGroupNames.map((logGroupName, index) => {
-      return new CloudwatchLogGroup(this, `log-group-${index}`, {
-        name: logGroupName,
-        retentionInDays: config.retentionInDays,
-        kmsKeyId: kmsKeyId, // Encrypt logs with KMS key
-        tags: {
-          ...config.tags,
-          Name: logGroupName,
-        },
-      });
+    // Create CloudWatch Log Group with KMS encryption and retention policy
+    this.logGroup = new CloudwatchLogGroup(this, "log-group", {
+      name: logGroupName,
+      retentionInDays: retentionInDays,
+      kmsKeyId: kmsKeyId,
+      tags: {
+        ...tags,
+        Name: logGroupName,
+      },
+    });
+
+    // Create initial log stream
+    this.logStream = new CloudwatchLogStream(this, "log-stream", {
+      name: "default-stream",
+      logGroupName: this.logGroup.name,
     });
   }
 }
 ```
 
-## tap-stack.ts
+## `tap-stack.ts`
 
 ```typescript
 import { Construct } from "constructs";
-import { App, TerraformStack, TerraformOutput, TerraformVariable } from "cdktf";
+import { TerraformStack, TerraformOutput, TerraformVariable } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
 import {
   VpcModule,
-  S3Module,
   SecurityGroupModule,
   NetworkAclModule,
-  IAMModule,
-  CloudWatchModule,
   KmsModule,
+  S3Module,
+  IamModule,
+  CloudWatchModule,
+  VpcModuleConfig,
+  SecurityGroupConfig,
+  S3ModuleConfig,
+  IAMModuleConfig,
 } from "./modules";
 
-/**
- * Main TAP Stack - Orchestrates all AWS resources using the modules
- * This stack creates a secure, well-architected AWS environment
- */
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    // Configure AWS Provider for us-east-1 region
-    new AwsProvider(this, "AWS", {
-      region: "us-east-1",
-    });
-
     // Define Terraform variables for configuration flexibility
-    const projectName = new TerraformVariable(this, "project_name", {
-      type: "string",
-      default: "tap-secure-env",
-      description: "Name of the project used for resource naming",
-    });
-
     const environment = new TerraformVariable(this, "environment", {
       type: "string",
-      default: "production",
-      description: "Environment name (dev, staging, production)",
+      description: "Environment name (e.g., dev, staging, prod)",
+      default: "dev",
+    });
+
+    const projectName = new TerraformVariable(this, "project_name", {
+      type: "string",
+      description: "Project name for resource naming",
+      default: "tap-project",
     });
 
     const vpcCidr = new TerraformVariable(this, "vpc_cidr", {
       type: "string",
+      description: "CIDR block for VPC",
       default: "10.0.0.0/16",
-      description: "CIDR block for the VPC",
     });
 
     const publicSubnetCidrs = new TerraformVariable(this, "public_subnet_cidrs", {
       type: "list(string)",
-      default: ["10.0.1.0/24", "10.0.2.0/24"],
       description: "CIDR blocks for public subnets",
+      default: ["10.0.1.0/24", "10.0.2.0/24"],
     });
 
     const privateSubnetCidrs = new TerraformVariable(this, "private_subnet_cidrs", {
       type: "list(string)",
-      default: ["10.0.10.0/24", "10.0.20.0/24"],
       description: "CIDR blocks for private subnets",
+      default: ["10.0.10.0/24", "10.0.20.0/24"],
     });
 
-    const s3BucketNames = new TerraformVariable(this, "s3_bucket_names", {
-      type: "list(string)",
-      default: ["tap-secure-data-bucket", "tap-secure-logs-bucket"],
-      description: "Names of S3 buckets to create",
+    const allowedSshCidr = new TerraformVariable(this, "allowed_ssh_cidr", {
+      type: "string",
+      description: "CIDR block allowed for SSH access",
+      default: "0.0.0.0/0", // Restrict this in production
     });
 
-    const allowedSshCidrs = new TerraformVariable(this, "allowed_ssh_cidrs", {
-      type: "list(string)",
-      default: ["10.0.0.0/16"],
-      description: "CIDR blocks allowed for SSH access",
+    const s3BucketPrefix = new TerraformVariable(this, "s3_bucket_prefix", {
+      type: "string",
+      description: "Prefix for S3 bucket names",
+      default: "tap-secure-bucket",
     });
 
-    const allowedHttpCidrs = new TerraformVariable(this, "allowed_http_cidrs", {
-      type: "list(string)",
-      default: ["0.0.0.0/0"],
-      description: "CIDR blocks allowed for HTTP/HTTPS access",
+    // Configure AWS Provider for us-east-1 region
+    new AwsProvider(this, "aws", {
+      region: "us-east-1",
+      defaultTags: {
+        tags: {
+          Environment: environment.stringValue,
+          Project: projectName.stringValue,
+          ManagedBy: "Terraform-CDK",
+          Region: "us-east-1",
+        },
+      },
     });
 
     // Common tags for all resources
     const commonTags = {
-      Project: projectName.stringValue,
       Environment: environment.stringValue,
-      ManagedBy: "Terraform",
-      CreatedDate: new Date().toISOString().split('T')[0],
+      Project: projectName.stringValue,
+      ManagedBy: "Terraform-CDK",
     };
 
-    // Create VPC infrastructure with public and private subnets
-    const vpcModule = new VpcModule(this, "vpc", {
+    // Create KMS keys for encryption
+    const s3KmsKey = new KmsModule(
+      this,
+      "s3-kms-key",
+      "KMS key for S3 bucket encryption",
+      `${projectName.stringValue}-s3-key`,
+      commonTags
+    );
+
+    const logsKmsKey = new KmsModule(
+      this,
+      "logs-kms-key",
+      "KMS key for CloudWatch Logs encryption",
+      `${projectName.stringValue}-logs-key`,
+      commonTags
+    );
+
+    // Create VPC with public and private subnets
+    const vpcConfig: VpcModuleConfig = {
       vpcCidr: vpcCidr.stringValue,
       publicSubnetCidrs: publicSubnetCidrs.listValue,
       privateSubnetCidrs: privateSubnetCidrs.listValue,
@@ -683,45 +691,27 @@ export class TapStack extends TerraformStack {
         ...commonTags,
         Name: `${projectName.stringValue}-${environment.stringValue}`,
       },
-    });
+    };
 
-    // Create KMS key for general encryption needs
-    const kmsModule = new KmsModule(this, "main-kms", 
-      "Main KMS key for encryption across services", 
-      {
-        ...commonTags,
-        Name: `${projectName.stringValue}-${environment.stringValue}`,
-      }
-    );
+    const vpc = new VpcModule(this, "vpc", vpcConfig);
 
-    // Create secure S3 buckets with KMS encryption
-    const s3Module = new S3Module(this, "s3", {
-      bucketNames: s3BucketNames.listValue,
-      kmsKeyDescription: "S3 bucket encryption key",
-      enableVersioning: true,
-      tags: {
-        ...commonTags,
-        Service: "S3",
-      },
-    });
-
-    // Create security group for web servers (HTTP/HTTPS access)
-    const webSecurityGroup = new SecurityGroupModule(this, "web-sg", {
-      name: `${projectName.stringValue}-${environment.stringValue}-web-sg`,
-      description: "Security group for web servers allowing HTTP/HTTPS traffic",
-      vpcId: vpcModule.vpc.id,
+    // Create Security Group for web servers (HTTP/HTTPS access)
+    const webSecurityGroupConfig: SecurityGroupConfig = {
+      name: `${projectName.stringValue}-web-sg`,
+      description: "Security group for web servers",
+      vpcId: vpc.vpc.id,
       ingressRules: [
         {
           fromPort: 80,
           toPort: 80,
           protocol: "tcp",
-          cidrBlocks: allowedHttpCidrs.listValue,
+          cidrBlocks: ["0.0.0.0/0"],
         },
         {
           fromPort: 443,
           toPort: 443,
           protocol: "tcp",
-          cidrBlocks: allowedHttpCidrs.listValue,
+          cidrBlocks: ["0.0.0.0/0"],
         },
       ],
       egressRules: [
@@ -732,24 +722,26 @@ export class TapStack extends TerraformStack {
           cidrBlocks: ["0.0.0.0/0"],
         },
       ],
-      tags: {
-        ...commonTags,
-        Service: "SecurityGroup",
-        Type: "Web",
-      },
-    });
+      tags: commonTags,
+    };
 
-    // Create security group for SSH access (restricted to specific CIDRs)
-    const sshSecurityGroup = new SecurityGroupModule(this, "ssh-sg", {
-      name: `${projectName.stringValue}-${environment.stringValue}-ssh-sg`,
-      description: "Security group for SSH access with restricted CIDR blocks",
-      vpcId: vpcModule.vpc.id,
+    const webSecurityGroup = new SecurityGroupModule(
+      this,
+      "web-security-group",
+      webSecurityGroupConfig
+    );
+
+    // Create Security Group for SSH access (restricted)
+    const sshSecurityGroupConfig: SecurityGroupConfig = {
+      name: `${projectName.stringValue}-ssh-sg`,
+      description: "Security group for SSH access",
+      vpcId: vpc.vpc.id,
       ingressRules: [
         {
           fromPort: 22,
           toPort: 22,
           protocol: "tcp",
-          cidrBlocks: allowedSshCidrs.listValue,
+          cidrBlocks: [allowedSshCidr.stringValue],
         },
       ],
       egressRules: [
@@ -760,30 +752,32 @@ export class TapStack extends TerraformStack {
           cidrBlocks: ["0.0.0.0/0"],
         },
       ],
-      tags: {
-        ...commonTags,
-        Service: "SecurityGroup",
-        Type: "SSH",
-      },
-    });
+      tags: commonTags,
+    };
 
-    // Create security group for database access (internal only)
-    const dbSecurityGroup = new SecurityGroupModule(this, "db-sg", {
-      name: `${projectName.stringValue}-${environment.stringValue}-db-sg`,
-      description: "Security group for database servers allowing internal access only",
-      vpcId: vpcModule.vpc.id,
+    const sshSecurityGroup = new SecurityGroupModule(
+      this,
+      "ssh-security-group",
+      sshSecurityGroupConfig
+    );
+
+    // Create Security Group for database access (internal only)
+    const dbSecurityGroupConfig: SecurityGroupConfig = {
+      name: `${projectName.stringValue}-db-sg`,
+      description: "Security group for database access",
+      vpcId: vpc.vpc.id,
       ingressRules: [
         {
           fromPort: 3306,
           toPort: 3306,
           protocol: "tcp",
-          securityGroups: [webSecurityGroup.securityGroup.id],
+          sourceSecurityGroupId: webSecurityGroup.securityGroup.id,
         },
         {
           fromPort: 5432,
           toPort: 5432,
           protocol: "tcp",
-          securityGroups: [webSecurityGroup.securityGroup.id],
+          sourceSecurityGroupId: webSecurityGroup.securityGroup.id,
         },
       ],
       egressRules: [
@@ -794,108 +788,145 @@ export class TapStack extends TerraformStack {
           cidrBlocks: ["0.0.0.0/0"],
         },
       ],
-      tags: {
-        ...commonTags,
-        Service: "SecurityGroup",
-        Type: "Database",
-      },
-    });
+      tags: commonTags,
+    };
 
-    // Create Network ACLs for additional subnet-level security
+    const dbSecurityGroup = new SecurityGroupModule(
+      this,
+      "db-security-group",
+      dbSecurityGroupConfig
+    );
+
+    // Create Network ACLs for additional security
     const publicNacl = new NetworkAclModule(
       this,
       "public-nacl",
-      vpcModule.vpc.id,
-      vpcModule.publicSubnets.map(subnet => subnet.id),
+      vpc.vpc.id,
+      vpc.publicSubnets.map((subnet) => subnet.id),
       {
         ...commonTags,
-        Name: `${projectName.stringValue}-${environment.stringValue}-public`,
-        Type: "Public",
+        Name: `${projectName.stringValue}-public`,
       }
     );
 
     const privateNacl = new NetworkAclModule(
       this,
       "private-nacl",
-      vpcModule.vpc.id,
-      vpcModule.privateSubnets.map(subnet => subnet.id),
+      vpc.vpc.id,
+      vpc.privateSubnets.map((subnet) => subnet.id),
       {
         ...commonTags,
-        Name: `${projectName.stringValue}-${environment.stringValue}-private`,
-        Type: "Private",
+        Name: `${projectName.stringValue}-private`,
       }
     );
 
-    // Create IAM role for EC2 instances with minimal required permissions
-    const ec2IamModule = new IAMModule(this, "ec2-iam", {
-      roleName: `${projectName.stringValue}-${environment.stringValue}-ec2-role`,
-      policyStatements: [
+    // Create S3 bucket for application data with KMS encryption
+    const appBucketConfig: S3ModuleConfig = {
+      bucketName: `${s3BucketPrefix.stringValue}-app-data-${environment.stringValue}`,
+      kmsKeyId: s3KmsKey.key.arn,
+      enableVersioning: true,
+      enableLogging: false, // Set to true if you have a separate logging bucket
+      tags: {
+        ...commonTags,
+        Purpose: "Application Data",
+      },
+    };
+
+    const appBucket = new S3Module(this, "app-bucket", appBucketConfig);
+
+    // Create S3 bucket for logs
+    const logsBucketConfig: S3ModuleConfig = {
+      bucketName: `${s3BucketPrefix.stringValue}-logs-${environment.stringValue}`,
+      kmsKeyId: s3KmsKey.key.arn,
+      enableVersioning: true,
+      enableLogging: false,
+      tags: {
+        ...commonTags,
+        Purpose: "Logs Storage",
+      },
+    };
+
+    const logsBucket = new S3Module(this, "logs-bucket", logsBucketConfig);
+
+    // Create IAM role for EC2 instances with S3 access
+    const ec2AssumeRolePolicy = JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
         {
-          effect: "Allow",
-          actions: [
+          Action: "sts:AssumeRole",
+          Effect: "Allow",
+          Principal: {
+            Service: "ec2.amazonaws.com",
+          },
+        },
+      ],
+    });
+
+    const s3AccessPolicy = JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: [
             "s3:GetObject",
             "s3:PutObject",
+            "s3:DeleteObject",
           ],
-          resources: s3Module.buckets.map(bucket => `\${${bucket.fqn}.arn}/*`),
+          Resource: [
+            `${appBucket.bucket.arn}/*`,
+          ],
         },
         {
-          effect: "Allow",
-          actions: [
-            "logs:CreateLogGroup",
-            "logs:CreateLogStream",
-            "logs:PutLogEvents",
-            "logs:DescribeLogStreams",
+          Effect: "Allow",
+          Action: [
+            "s3:ListBucket",
           ],
-          resources: ["arn:aws:logs:us-east-1:*:*"],
+          Resource: [
+            appBucket.bucket.arn,
+          ],
         },
         {
-          effect: "Allow",
-          actions: [
+          Effect: "Allow",
+          Action: [
             "kms:Decrypt",
             "kms:GenerateDataKey",
           ],
-          resources: [kmsModule.kmsKey.arn, s3Module.kmsKey.arn],
+          Resource: [
+            s3KmsKey.key.arn,
+          ],
         },
       ],
-      tags: {
-        ...commonTags,
-        Service: "IAM",
-        Type: "EC2",
-      },
     });
 
-    // Create CloudWatch Log Groups for centralized logging
-    const cloudWatchModule = new CloudWatchModule(
-      this,
-      "cloudwatch",
-      {
-        logGroupNames: [
-          `/aws/ec2/${projectName.stringValue}-${environment.stringValue}/application`,
-          `/aws/ec2/${projectName.stringValue}-${environment.stringValue}/system`,
-          `/aws/vpc/${projectName.stringValue}-${environment.stringValue}/flowlogs`,
-          `/aws/s3/${projectName.stringValue}-${environment.stringValue}/access`,
-        ],
-        retentionInDays: 30,
-        tags: {
-          ...commonTags,
-          Service: "CloudWatch",
+    const ec2RoleConfig: IAMModuleConfig = {
+      roleName: `${projectName.stringValue}-ec2-role`,
+      assumeRolePolicy: ec2AssumeRolePolicy,
+      policies: [
+        {
+          name: "S3AccessPolicy",
+          policy: s3AccessPolicy,
         },
-      },
-      kmsModule.kmsKey.arn
-    );
+      ],
+      managedPolicyArns: [
+        "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+      ],
+      tags: commonTags,
+    };
 
-    // Export important resource information as Terraform outputs
-    new TerraformOutput(this, "vpc_id", {
-      value: vpcModule.vpc.id,
-      description: "ID of the created VPC",
+    const ec2Role = new IamModule(this, "ec2-role", ec2RoleConfig);
+
+    // Create IAM role for Lambda functions
+    const lambdaAssumeRolePolicy = JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Action: "sts:AssumeRole",
+          Effect: "Allow",
+          Principal: {
+            Service: "lambda.amazonaws.com",
+          },
+        },
+      ],
     });
 
-    new TerraformOutput(this, "vpc_cidr_block", {
-      value: vpcModule.vpc.cidrBlock,
-      description: "CIDR block of the VPC",
-    });
-
-    new TerraformOutput(this, "public_subnet_ids", {
-      value: vpcModule.publicSubnets.map(subnet => subnet.id),
-      description: "IDs of the public subnets",
-    })
+    const lambdaRole
