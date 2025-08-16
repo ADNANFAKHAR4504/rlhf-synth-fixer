@@ -86,6 +86,7 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     self.private_nacl = self._create_private_nacl()
     self.flow_logs_role = self._create_flow_logs_role()
     self.flow_logs = self._create_flow_logs()
+    self.vpc_endpoints = self._create_vpc_endpoints()
 
   def _create_vpc(self) -> aws.ec2.Vpc:
     return aws.ec2.Vpc(
@@ -117,7 +118,7 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
                 **self.tags,
                 "Name": f"{self.name_prefix}-public-{i + 1}",
                 "kubernetes.io/role/elb": "1",  # Required for EKS load balancers
-                "kubernetes.io/cluster/corp-eks-cluster": "shared"  # Required for EKS
+                "kubernetes.io/cluster/corp-eks-cluster": "owned"  # Mark as owned by this cluster
             },
             opts=ResourceOptions(provider=self.provider)
         )
@@ -136,7 +137,7 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
                 "Name": f"{self.name_prefix}-private-{i + 1}",
                 # Required for internal EKS load balancers
                 "kubernetes.io/role/internal-elb": "1",
-                "kubernetes.io/cluster/corp-eks-cluster": "shared"  # Required for EKS
+                "kubernetes.io/cluster/corp-eks-cluster": "owned"  # Mark as owned by this cluster
             },
             opts=ResourceOptions(provider=self.provider)
         )
@@ -327,6 +328,62 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
         vpc_id=self.vpc.id,
         traffic_type="ALL",
         tags={**self.tags, "Name": f"{self.name_prefix}-flow-logs"},
+        opts=ResourceOptions(provider=self.provider)
+    )
+
+  def _create_vpc_endpoints(self) -> List[aws.ec2.VpcEndpoint]:
+    """
+    Create VPC endpoints for EKS to communicate with AWS services without going through NAT Gateway.
+    This is critical for EKS node group creation and cluster communication.
+    """
+    endpoints = []
+    
+    # EKS VPC endpoints for cluster communication
+    eks_endpoints = [
+        "com.amazonaws.us-west-2.ec2",
+        "com.amazonaws.us-west-2.ecr.api",
+        "com.amazonaws.us-west-2.ecr.dkr",
+        "com.amazonaws.us-west-2.logs",
+        "com.amazonaws.us-west-2.s3",
+        "com.amazonaws.us-west-2.sts",
+        "com.amazonaws.us-west-2.ec2messages",
+        "com.amazonaws.us-west-2.ssm",
+        "com.amazonaws.us-west-2.ssmmessages"
+    ]
+    
+    for endpoint_service in eks_endpoints:
+        endpoint = aws.ec2.VpcEndpoint(
+            f"{self.name_prefix}-{endpoint_service.split('.')[-1]}-endpoint",
+            vpc_id=self.vpc.id,
+            service_name=endpoint_service,
+            vpc_endpoint_type="Interface",
+            subnet_ids=[s.id for s in self.private_subnets],
+            security_group_ids=[self._create_vpc_endpoint_sg().id],
+            private_dns_enabled=True,
+            tags={**self.tags, "Name": f"{self.name_prefix}-{endpoint_service.split('.')[-1]}-endpoint"},
+            opts=ResourceOptions(provider=self.provider)
+        )
+        endpoints.append(endpoint)
+    
+    return endpoints
+
+  def _create_vpc_endpoint_sg(self) -> aws.ec2.SecurityGroup:
+    """Create security group for VPC endpoints."""
+    return aws.ec2.SecurityGroup(
+        f"{self.name_prefix}-vpc-endpoint-sg",
+        vpc_id=self.vpc.id,
+        description="Security group for VPC endpoints",
+        ingress=[
+            aws.ec2.SecurityGroupIngressArgs(
+                protocol="tcp", from_port=443, to_port=443, cidr_blocks=["10.0.0.0/16"]
+            )
+        ],
+        egress=[
+            aws.ec2.SecurityGroupEgressArgs(
+                protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
+            )
+        ],
+        tags={**self.tags, "Name": f"{self.name_prefix}-vpc-endpoint-sg"},
         opts=ResourceOptions(provider=self.provider)
     )
 
@@ -540,6 +597,7 @@ def create_eks_cluster(
     eks_cluster_sg: aws.ec2.SecurityGroup,
     tags: Dict[str, str],
     provider: aws.Provider,
+    kms_key: aws.kms.Key,
 ) -> aws.eks.Cluster:
   """
   Create EKS cluster with explicit version and logging
@@ -578,8 +636,10 @@ def create_eks_cluster(
           security_group_ids=[eks_cluster_sg.id],
           endpoint_public_access=True,
           endpoint_private_access=True,
+          # Ensure proper DNS resolution
+          cluster_security_group_id=eks_cluster_sg.id,
       ),
-
+      
       enabled_cluster_log_types=[
           "api",
           "audit",
@@ -587,6 +647,13 @@ def create_eks_cluster(
           "controllerManager",
           "scheduler"
       ],
+      # Add encryption configuration
+      encryption_config=aws.eks.ClusterEncryptionConfigArgs(
+          provider=aws.eks.ClusterEncryptionConfigProviderArgs(
+              key_arn=kms_key.arn
+          ),
+          resources=["secrets"]
+      ),
       tags={**tags, "Name": "corp-eks-cluster"},
       opts=ResourceOptions(provider=provider)
   )
@@ -639,7 +706,7 @@ def create_eks_node_group(
   # Add custom IAM policy for enhanced EKS node operations
   # This provides additional permissions needed for proper cluster
   # functionality
-  node_custom_policy = aws.iam.RolePolicy(
+  aws.iam.RolePolicy(
       "corp-eks-node-custom-policy",
       role=node_role.name,
       policy=json.dumps({
@@ -687,12 +754,20 @@ def create_eks_node_group(
       ),
       # Use AL2_x86_64 for compatibility with EKS 1.29
       ami_type="AL2_x86_64",
+      # Force update strategy for better reliability
+      force_update_version=True,
+      # Add cluster security group for proper communication
+      remote_access=aws.eks.NodeGroupRemoteAccessArgs(
+          ec2_ssh_key="",  # No SSH key for testing
+          source_security_group_ids=[],  # Allow all access for testing
+      ),
       # Enable cluster autoscaler
       tags={
           **tags,
           "Name": "corp-eks-nodegroup",
           "kubernetes.io/cluster-autoscaler/enabled": "true",
-          "kubernetes.io/cluster-autoscaler/corp-eks-cluster": "owned"
+          "kubernetes.io/cluster-autoscaler/corp-eks-cluster": "owned",
+          "k8s.io/cluster-autoscaler/node-template/label/node.kubernetes.io/role": "worker"
       },
       opts=ResourceOptions(provider=provider)
   )
@@ -1281,7 +1356,8 @@ class TapStack(pulumi.ComponentResource):
         subnet_ids=all_subnet_ids,
         eks_cluster_sg=eks_cluster_sg,
         tags=tags,
-        provider=provider
+        provider=provider,
+        kms_key=kms_key
     )
 
     # Node group uses PRIVATE subnets with NAT Gateway
