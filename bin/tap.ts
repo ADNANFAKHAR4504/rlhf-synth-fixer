@@ -75,3 +75,11 @@ export const rdsSecretArn = tapStack.secureWebApp.rdsSecret.arn;
 export const sshKeyName = tapStack.secureWebApp.sshKeyPair.keyName;
 export const domainUrl = tapStack.secureWebApp.route53Record?.name;
 export const applicationUrl = pulumi.interpolate`${domainUrl || 'http://'}${tapStack.secureWebApp.alb.dnsName}`;
+
+// Export Parameter Store paths for configuration
+export const parameterStorePaths = {
+  databaseName: `/TapStack${environmentSuffix}/app/database/name`,
+  databasePort: `/TapStack${environmentSuffix}/app/database/port`,
+  environment: `/TapStack${environmentSuffix}/app/environment`,
+  region: `/TapStack${environmentSuffix}/app/region`,
+};

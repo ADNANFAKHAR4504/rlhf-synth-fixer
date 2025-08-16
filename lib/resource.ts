@@ -515,7 +515,9 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
     );
 
     // 14.7. Create the actual secret value with secure password
+    // Use environment variable if available, otherwise generate a secure password
     const rdsPassword =
+      process.env.RDS_PASSWORD ||
       'SecureRDS' + Math.random().toString(36).substring(2, 15) + '!$%^&*()';
 
     new aws.secretsmanager.SecretVersion(
@@ -529,10 +531,32 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
           host: 'localhost',
           port: 3306,
           dbname: 'appdb',
+          // Add additional metadata for better secret management
+          created: new Date().toISOString(),
+          environment: args.environment,
+          rotation: 'manual', // Can be automated later
         }),
       },
       defaultOpts
     );
+
+    // 14.8. Retrieve the secret value for RDS configuration
+    const rdsSecretValue = aws.secretsmanager.getSecretVersionOutput(
+      {
+        secretId: this.rdsSecret.id,
+        versionStage: 'AWSCURRENT',
+      },
+      { provider: opts?.provider }
+    );
+
+    // Parse the secret string to extract username and password
+    const rdsCredentials = rdsSecretValue.secretString.apply(secretString => {
+      const parsed = JSON.parse(secretString);
+      return {
+        username: parsed.username,
+        password: parsed.password,
+      };
+    });
 
     // 15. Create RDS instance using the secret
     this.rdsInstance = new aws.rds.Instance(
@@ -549,24 +573,28 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
         kmsKeyId: this.kmsKey.arn,
 
         dbName: 'appdb',
-        username: 'admin',
-        password: rdsPassword, // Use the generated password from secret
+        username: rdsCredentials.username,
+        password: rdsCredentials.password, // Use password from Secrets Manager
 
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: dbSubnetGroup.name,
         parameterGroupName: dbParameterGroup.name,
         monitoringRoleArn: rdsMonitoringRole.arn,
 
-        backupRetentionPeriod: 7,
+        skipFinalSnapshot: true,
+        deletionProtection: args.environment === 'prod', // Enable deletion protection for production
+        multiAz: args.environment === 'prod' || args.environment === 'staging', // Enable Multi-AZ for production environments
+
+        // Enhanced backup strategy
+        backupRetentionPeriod: args.environment === 'prod' ? 30 : 7, // 30 days for prod, 7 for others
         backupWindow: '03:00-04:00',
         maintenanceWindow: 'sun:04:00-sun:05:00',
 
-        skipFinalSnapshot: true,
-        deletionProtection: false,
-        multiAz: args.environment === 'prod' || args.environment === 'staging', // Enable Multi-AZ for production environments
-
-        monitoringInterval: 60,
-        performanceInsightsEnabled: false,
+        // Enhanced monitoring and performance
+        monitoringInterval: args.environment === 'prod' ? 60 : 0, // Continuous monitoring for prod
+        performanceInsightsEnabled: args.environment === 'prod', // Enable for production
+        performanceInsightsRetentionPeriod:
+          args.environment === 'prod' ? 7 : undefined, // 7 days retention for prod
 
         tags: {
           Name: 'mysql-database',
@@ -1110,6 +1138,49 @@ def handler(event, context):
       },
       defaultOpts
     );
+
+    // 14.8. Create Parameter Store parameters for configuration management
+    const appConfigParams = [
+      {
+        name: `/${args.environment}/app/database/name`,
+        value: 'appdb',
+        type: 'String',
+        description: 'Application database name',
+      },
+      {
+        name: `/${args.environment}/app/database/port`,
+        value: '3306',
+        type: 'String',
+        description: 'Database port',
+      },
+      {
+        name: `/${args.environment}/app/environment`,
+        value: args.environment,
+        type: 'String',
+        description: 'Application environment',
+      },
+      {
+        name: `/${args.environment}/app/region`,
+        value: args.region,
+        type: 'String',
+        description: 'AWS region',
+      },
+    ];
+
+    // Create Parameter Store parameters
+    appConfigParams.forEach((param, index) => {
+      new aws.ssm.Parameter(
+        `app-config-${index}`,
+        {
+          name: param.name,
+          value: param.value,
+          type: param.type,
+          description: param.description,
+          tags: commonTags,
+        },
+        defaultOpts
+      );
+    });
 
     // Register outputs
     this.registerOutputs({
