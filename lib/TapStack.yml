@@ -125,7 +125,7 @@ Resources:
           - Sid: Allow CloudWatch Logs Encryption
             Effect: Allow
             Principal:
-              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+              Service: logs.amazonaws.com
             Action:
               - kms:Encrypt
               - kms:Decrypt

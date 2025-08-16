@@ -204,9 +204,7 @@
                             "Sid": "Allow CloudWatch Logs Encryption",
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": {
-                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
-                                }
+                                "Service": "logs.amazonaws.com"
                             },
                             "Action": [
                                 "kms:Encrypt",
