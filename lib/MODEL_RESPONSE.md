@@ -1,9 +1,10 @@
-I'll create a complete Terraform configuration for a multi-region AWS deployment following DevOps best practices. Here are the two required files:
+I'll create a comprehensive multi-region Terraform setup for the Nova application that follows AWS best practices for security, scalability, and automation.
 
-### File 1: `provider.tf`
+## File 1: `provider.tf`
 
 ```hcl
 terraform {
+  required_version = ">= 1.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -18,10 +19,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+# Default provider
 provider "aws" {
   region = var.aws_region
 }
 
+# Regional provider aliases
 provider "aws" {
   alias  = "us-east-1"
   region = "us-east-1"
@@ -33,35 +36,47 @@ provider "aws" {
 }
 ```
 
-### File 2: `main.tf`
+---
+
+## File 2: `main.tf`
 
 ```hcl
+# Variables
 variable "your_name" {
-  description = "Owner name for resource tagging"
+  description = "Your name for resource tagging"
   type        = string
+  default     = "DevOps-Engineer"
 }
 
 variable "aws_regions" {
-  description = "List of AWS regions for deployment"
+  description = "List of AWS regions to deploy to"
   type        = list(string)
   default     = ["us-east-1", "us-west-2"]
 }
 
+# Get current AWS account ID
+data "aws_caller_identity" "current" {}
+
+# Locals for standardized tagging
 locals {
   common_tags = {
     Owner   = var.your_name
     Purpose = "Nova Application Infrastructure"
+    Project = "Nova"
+  }
+
+  # Map regions to provider aliases for easier reference
+  region_providers = {
+    "us-east-1" = "aws.us-east-1"
+    "us-west-2" = "aws.us-west-2"
   }
 }
 
-# Get current AWS account ID and caller identity
-data "aws_caller_identity" "current" {}
-
-# Regional AMI discovery
+# AMI Discovery - Latest Amazon Linux 2
 data "aws_ami" "amazon_linux" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
+  provider    = aws.us-east-1
   most_recent = true
   owners      = ["amazon"]
 
@@ -76,12 +91,29 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-# KMS Keys for each region
+# Additional AMI data source for us-west-2
+data "aws_ami" "amazon_linux_west" {
+  provider    = aws.us-west-2
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# KMS Keys
 resource "aws_kms_key" "nova_key" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
-  description             = "Nova application KMS key for ${each.value}"
+  provider                = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
+  description             = "KMS key for Nova application in ${each.value}"
   deletion_window_in_days = 10
 
   tags = merge(local.common_tags, {
@@ -90,21 +122,20 @@ resource "aws_kms_key" "nova_key" {
   })
 }
 
-# KMS Key Aliases
 resource "aws_kms_alias" "nova_key_alias" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
+  provider      = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
   name          = "alias/nova-app-key"
   target_key_id = aws_kms_key.nova_key[each.value].key_id
 }
 
-# S3 Buckets for each region
+# S3 Buckets
 resource "aws_s3_bucket" "nova_data" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
-  bucket = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-${each.value}"
+  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
+  bucket   = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-${each.value}"
 
   tags = merge(local.common_tags, {
     Name   = "nova-data-bucket-${each.value}"
@@ -112,27 +143,26 @@ resource "aws_s3_bucket" "nova_data" {
   })
 }
 
-# S3 Bucket Server-Side Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "nova_data_encryption" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
-  bucket = aws_s3_bucket.nova_data[each.value].id
+  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
+  bucket   = aws_s3_bucket.nova_data[each.value].id
 
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.nova_key[each.value].arn
       sse_algorithm     = "aws:kms"
     }
+    bucket_key_enabled = true
   }
 }
 
-# Block public access to S3 buckets
 resource "aws_s3_bucket_public_access_block" "nova_data_pab" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
-  bucket = aws_s3_bucket.nova_data[each.value].id
+  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
+  bucket   = aws_s3_bucket.nova_data[each.value].id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -140,30 +170,7 @@ resource "aws_s3_bucket_public_access_block" "nova_data_pab" {
   restrict_public_buckets = true
 }
 
-# IAM Policy Document for EC2 role
-data "aws_iam_policy_document" "nova_ec2_policy" {
-  statement {
-    effect = "Allow"
-    actions = [
-      "s3:GetObject"
-    ]
-    resources = [
-      for region in var.aws_regions : "${aws_s3_bucket.nova_data[region].arn}/*"
-    ]
-  }
-
-  statement {
-    effect = "Allow"
-    actions = [
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:PutLogEvents"
-    ]
-    resources = ["arn:aws:logs:*:*:*"]
-  }
-}
-
-# IAM Role for EC2 instances
+# IAM Role for EC2
 resource "aws_iam_role" "nova_ec2_role" {
   name = "nova-ec2-role"
 
@@ -183,14 +190,34 @@ resource "aws_iam_role" "nova_ec2_role" {
   tags = local.common_tags
 }
 
-# IAM Role Policy
 resource "aws_iam_role_policy" "nova_ec2_policy" {
-  name   = "nova-ec2-policy"
-  role   = aws_iam_role.nova_ec2_role.id
-  policy = data.aws_iam_policy_document.nova_ec2_policy.json
+  name = "nova-ec2-policy"
+  role = aws_iam_role.nova_ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["s3:GetObject"]
+        Resource = [
+          for region in var.aws_regions : "${aws_s3_bucket.nova_data[region].arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
 }
 
-# IAM Instance Profile
 resource "aws_iam_instance_profile" "nova_ec2_profile" {
   name = "nova-ec2-profile"
   role = aws_iam_role.nova_ec2_role.name
@@ -198,14 +225,15 @@ resource "aws_iam_instance_profile" "nova_ec2_profile" {
   tags = local.common_tags
 }
 
-# EC2 Instances with encrypted volumes
+# EC2 Instances
 resource "aws_instance" "nova_app" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
-  ami                    = data.aws_ami.amazon_linux[each.value].id
-  instance_type          = "t3.micro"
-  iam_instance_profile   = aws_iam_instance_profile.nova_ec2_profile.name
+  provider              = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
+  ami                   = each.value == "us-east-1" ? data.aws_ami.amazon_linux["us-east-1"].id : data.aws_ami.amazon_linux_west.id
+  instance_type         = "t3.micro"
+  iam_instance_profile  = aws_iam_instance_profile.nova_ec2_profile.name
+  associate_public_ip_address = true
 
   root_block_device {
     volume_type           = "gp3"
@@ -215,19 +243,27 @@ resource "aws_instance" "nova_app" {
     delete_on_termination = true
   }
 
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y amazon-cloudwatch-agent
+    echo "Nova application server in ${each.value}" > /var/log/nova-startup.log
+  EOF
+  )
+
   tags = merge(local.common_tags, {
     Name   = "nova-app-${each.value}"
     Region = each.value
   })
 }
 
-# AWS Config Configuration Recorder (required for Config Rules)
+# AWS Config
 resource "aws_config_configuration_recorder" "nova_recorder" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
+  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
   name     = "nova-config-recorder"
-  role_arn = aws_iam_role.config_role[each.value].arn
+  role_arn = aws_iam_role.config_role.arn
 
   recording_group {
     all_supported                 = true
@@ -235,35 +271,16 @@ resource "aws_config_configuration_recorder" "nova_recorder" {
   }
 }
 
-# AWS Config Delivery Channel (required for Config Rules)
 resource "aws_config_delivery_channel" "nova_delivery_channel" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
-  name           = "nova-config-delivery-channel"
-  s3_bucket_name = aws_s3_bucket.config_bucket[each.value].bucket
+  provider       = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
+  name           = "nova-delivery-channel"
+  s3_bucket_name = aws_s3_bucket.nova_data[each.value].bucket
 }
 
-# S3 bucket for Config
-resource "aws_s3_bucket" "config_bucket" {
-  for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
-
-  bucket        = "nova-config-bucket-${data.aws_caller_identity.current.account_id}-${each.value}"
-  force_destroy = true
-
-  tags = merge(local.common_tags, {
-    Name   = "nova-config-bucket-${each.value}"
-    Region = each.value
-  })
-}
-
-# IAM Role for Config
 resource "aws_iam_role" "config_role" {
-  for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
-
-  name = "nova-config-role-${each.value}"
+  name = "nova-config-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -281,21 +298,38 @@ resource "aws_iam_role" "config_role" {
   tags = local.common_tags
 }
 
-# Attach AWS managed policy to Config role
 resource "aws_iam_role_policy_attachment" "config_role_policy" {
-  for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
-
-  role       = aws_iam_role.config_role[each.value].name
+  role       = aws_iam_role.config_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
 }
 
-# AWS Config Rules
+resource "aws_iam_role_policy" "config_s3_policy" {
+  name = "nova-config-s3-policy"
+  role = aws_iam_role.config_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetBucketAcl"]
+        Resource = [
+          for region in var.aws_regions : [
+            aws_s3_bucket.nova_data[region].arn,
+            "${aws_s3_bucket.nova_data[region].arn}/*"
+          ]
+        ]
+      }
+    ]
+  })
+}
+
+# Config Rules
 resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
-  name = "s3-bucket-server-side-encryption-enabled"
+  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
+  name     = "s3-bucket-server-side-encryption-enabled"
 
   source {
     owner             = "AWS"
@@ -304,14 +338,14 @@ resource "aws_config_config_rule" "s3_bucket_server_side_encryption_enabled" {
 
   depends_on = [aws_config_configuration_recorder.nova_recorder]
 
-  tags = local.common_tags
+  tags = merge(local.common_tags, { Region = each.value })
 }
 
 resource "aws_config_config_rule" "encrypted_volumes" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
-  name = "encrypted-volumes"
+  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
+  name     = "encrypted-volumes"
 
   source {
     owner             = "AWS"
@@ -320,23 +354,27 @@ resource "aws_config_config_rule" "encrypted_volumes" {
 
   depends_on = [aws_config_configuration_recorder.nova_recorder]
 
-  tags = local.common_tags
+  tags = merge(local.common_tags, { Region = each.value })
 }
 
 resource "aws_config_config_rule" "iam_role_managed_policy_check" {
   for_each = toset(var.aws_regions)
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
 
-  name = "iam-role-managed-policy-check"
+  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
+  name     = "iam-role-managed-policy-check"
 
   source {
     owner             = "AWS"
     source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
   }
 
+  input_parameters = jsonencode({
+    managedPolicyArns = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  })
+
   depends_on = [aws_config_configuration_recorder.nova_recorder]
 
-  tags = local.common_tags
+  tags = merge(local.common_tags, { Region = each.value })
 }
 
 # Outputs
@@ -348,44 +386,46 @@ output "s3_bucket_names" {
 }
 
 output "ec2_instance_ids" {
-  description = "IDs of the EC2 instances created in each region"
+  description = "EC2 instance IDs in each region"
   value = {
     for region in var.aws_regions : region => aws_instance.nova_app[region].id
   }
 }
 
 output "kms_key_arns" {
-  description = "ARNs of the KMS keys created in each region"
+  description = "KMS key ARNs in each region"
   value = {
     for region in var.aws_regions : region => aws_kms_key.nova_key[region].arn
   }
 }
+
+output "iam_role_arn" {
+  description = "ARN of the IAM role for EC2 instances"
+  value       = aws_iam_role.nova_ec2_role.arn
+}
 ```
 
-### Key Features and Best Practices Implemented:
+---
 
-**Security:**
+## Key Features & Best Practices
 
-  * **Encryption at rest:** All EBS volumes and S3 buckets encrypted with customer-managed KMS keys
-  * **Least privilege IAM:** EC2 role only has necessary S3 and CloudWatch permissions
-  * **S3 public access blocked:** All buckets have public access completely blocked
+### Security
 
-**Multi-Region Architecture:**
+* Encryption at rest with KMS for EBS and S3
+* IAM least privilege (S3 GetObject, CloudWatch logs)
+* S3 public access blocked
+* Compliance with AWS Config
 
-  * **DRY principle:** Uses `for_each` loops to avoid code duplication
-  * **Provider aliases:** Properly configured for multi-region deployment
-  * **Regional resources:** AMI discovery, KMS keys, and all resources are region-specific
+### Scalability & Automation
 
-**Compliance & Monitoring:**
+* DRY with `for_each`
+* Single `terraform apply` for multi-region deploy
+* Regional isolation for critical resources
+* Consistent tagging
 
-  * **AWS Config:** Deployed with three managed rules for compliance monitoring
-  * **Proper tagging:** Consistent tagging strategy across all resources
-  * **CloudWatch integration:** EC2 instances can write logs to CloudWatch
+### Operational Excellence
 
-**Automation Ready:**
-
-  * **Dynamic naming:** Uses account ID and region for globally unique resource names
-  * **Variable-driven:** Easily customizable through variables
-  * **Clean outputs:** Provides essential resource information without exposing secrets
-
-This configuration can be deployed with a single `terraform apply` command and will create a secure, compliant, multi-region infrastructure for the Nova application.
+* Always up-to-date Amazon Linux 2 AMIs
+* EC2 → CloudWatch logging enabled
+* Continuous compliance monitoring
+* Clear outputs for reference

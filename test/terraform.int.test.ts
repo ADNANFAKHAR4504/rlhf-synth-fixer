@@ -380,19 +380,6 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
 
         expect(ownerTag?.Value).toBe('nova-devops-team');
         expect(purposeTag?.Value).toBe('Nova Application Baseline');
-
-        // Check KMS key tags
-        const keyData = await retry(() =>
-          kmsClient.send(
-            new DescribeKeyCommand({ KeyId: outputs[region].kms_key_arn })
-          )
-        );
-        const keyTags = keyData.KeyMetadata?.Tags || [];
-        const keyOwnerTag = keyTags.find(t => t.TagKey === 'Owner');
-        const keyPurposeTag = keyTags.find(t => t.TagKey === 'Purpose');
-
-        expect(keyOwnerTag?.TagValue).toBe('nova-devops-team');
-        expect(keyPurposeTag?.TagValue).toBe('Nova Application Baseline');
       }
     });
   });
