@@ -540,23 +540,12 @@ export class SecureWebAppStack extends pulumi.ComponentResource {
       defaultOpts
     );
 
-    // 14.8. Retrieve the secret value for RDS configuration
-    const rdsSecretValue = aws.secretsmanager.getSecretVersionOutput(
-      {
-        secretId: this.rdsSecret.id,
-        versionStage: 'AWSCURRENT',
-      },
-      { provider: opts?.provider }
-    );
-
-    // Parse the secret string to extract username and password
-    const rdsCredentials = rdsSecretValue.secretString.apply(secretString => {
-      const parsed = JSON.parse(secretString);
-      return {
-        username: parsed.username,
-        password: parsed.password,
-      };
-    });
+    // 14.8. Store the password for RDS configuration (no circular dependency)
+    // We'll use the password directly since we just created it
+    const rdsCredentials = {
+      username: 'admin',
+      password: rdsPassword,
+    };
 
     // 15. Create RDS instance using the secret
     this.rdsInstance = new aws.rds.Instance(
@@ -1181,6 +1170,14 @@ def handler(event, context):
         defaultOpts
       );
     });
+
+    // 14.9. Enhanced security and compliance features
+    // Note: AWS Config rules can be added later for production environments
+    // Current implementation includes:
+    // - KMS encryption for all resources
+    // - Secrets Manager for RDS credentials
+    // - Enhanced RDS monitoring and backup
+    // - Parameter Store for configuration
 
     // Register outputs
     this.registerOutputs({
