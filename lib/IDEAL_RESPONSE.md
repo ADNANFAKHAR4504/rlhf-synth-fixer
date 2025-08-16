@@ -2,7 +2,7 @@
 
 This document presents the ideal implementation of a serverless infrastructure on AWS using Terraform, following security best practices and modern cloud architecture patterns.
 
-## Architecture Overview
+## Architecture Overview 
 
 The solution implements a secure, serverless architecture with the following components:
 - **Two AWS Lambda functions** with 512MB memory allocation
