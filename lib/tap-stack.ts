@@ -146,31 +146,31 @@ export class TapStack extends TerraformStack {
       sensitive: false,
     });
 
-    new TerraformOutput(this, 'lambda-function-name', {
+    new TerraformOutput(this, 'lambdafunction-name', {
       value: lambdaModule.function.functionName,
       description: 'Name of the image processing Lambda function',
       sensitive: false,
     });
 
-    new TerraformOutput(this, 's3-bucket-name', {
+    new TerraformOutput(this, 's3bucket-name', {
       value: s3Module.bucket.bucket,
       description: 'Name of the S3 bucket for image uploads',
       sensitive: false,
     });
 
-    new TerraformOutput(this, 's3-bucket-arn', {
+    new TerraformOutput(this, 's3bucket-arn', {
       value: s3Module.bucket.arn,
       description: 'ARN of the S3 bucket for image uploads',
       sensitive: false,
     });
 
-    new TerraformOutput(this, 'lambda-role-arn', {
+    new TerraformOutput(this, 'lambdarole-arn', {
       value: lambdaModule.role.arn,
       description: 'ARN of the Lambda execution role',
       sensitive: false,
     });
 
-    new TerraformOutput(this, 'cloudwatch-log-group-name', {
+    new TerraformOutput(this, 'cloudwatchlog-group-name', {
       value: lambdaModule.logGroup.name,
       description: 'Name of the CloudWatch log group for Lambda function',
       sensitive: false,
