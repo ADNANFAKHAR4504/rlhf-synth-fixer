@@ -13,22 +13,23 @@ try {
 }
 
 function isValidIP(ip: string): boolean {
-  return /^(?:25[0-5]|2[0-4][0-9]|1\d{2}|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4][0-9]|1\d{2}|[1-9]?\d)){3}$/.test(ip);
+  return /^(?:25[0-5]|2[0-4][0-9]|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4][0-9]|1\d\d|[1-9]?\d)){3}$/.test(ip);
 }
 
 function isValidCIDR(cidr: string): boolean {
-  const cidrRegex = /^(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}\/(?:[0-9]|[1-2]\d|3[0-2])$/;
+  // Matches IPv4 CIDR like "10.0.0.0/16" or "192.168.0.0/24"
+  const cidrRegex = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}\/([0-9]|[12][0-9]|3[0-2])$/;
   return cidrRegex.test(cidr);
 }
 
 function isValidResourceId(id: string, type: string): boolean {
   const patterns: { [key: string]: RegExp } = {
-    vpc: /^vpc-[0-9a-f]{8,17}$/,
-    subnet: /^subnet-[0-9a-f]{8,17}$/,
-    igw: /^igw-[0-9a-f]{8,17}$/,
-    nat: /^nat-[0-9a-f]{8,17}$/,
-    sg: /^sg-[0-9a-f]{8,17}$/,
-    instance: /^i-[0-9a-f]{8,17}$/,
+    vpc: /^vpc-[0-9a-f]{17}$/,
+    subnet: /^subnet-[0-9a-f]{17}$/,
+    igw: /^igw-[0-9a-f]{17}$/,
+    nat: /^nat-[0-9a-f]{17}$/,
+    sg: /^sg-[0-9a-f]{17}$/,
+    instance: /^i-[0-9a-f]{17}$/,
     arn: /^arn:aws:iam::\d{12}:role\/ec2-role-(dev|staging|production)$/
   };
   return patterns[type]?.test(id) || false;
@@ -36,10 +37,14 @@ function isValidResourceId(id: string, type: string): boolean {
 
 function getSubnetIds(env: Environment, type: 'public' | 'private'): string[] {
   const subnetMap = type === 'public' ? outputs.public_subnet_ids : outputs.private_subnet_ids;
+  // Keys in your outputs are like "dev-public-0"
   const prefix = `${env}-${type}`;
-  return Object.entries(subnetMap)
-    .filter(([key]) => key.startsWith(prefix))
-    .map(([, val]) => val as string);
+  const filteredEntries = Object.entries(subnetMap).filter(([key]) => key.startsWith(prefix));
+  const values = filteredEntries.map(([, val]) => val as string);
+  // Debug log to help if tests fail
+  // Uncomment if needed:
+  // console.debug(`Subnets for ${env} ${type}:`, values);
+  return values;
 }
 
 describe("Outputs.json Infrastructure Coverage", () => {
