@@ -483,11 +483,11 @@ resource "aws_s3_bucket" "app_data" {
 resource "aws_s3_bucket" "alb_logs" {
   count = var.enable_alb_logging ? 1 : 0
   
-  bucket = "${local.name_prefix}-alb-logs"
+  bucket = "tap-app-alb-logs-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-alb-logs-bucket"
+    Name = "tap-app-alb-logs"
     Type = "storage"
   })
 }
