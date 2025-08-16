@@ -8,9 +8,9 @@ This solution provides a complete serverless application infrastructure using AW
 
 ### Core Resources
 
-1. **Three Lambda Functions**: 
+1. **Three Lambda Functions**:
    - Items Function: Handles CRUD operations for items catalog
-   - Users Function: Manages user registration and retrieval  
+   - Users Function: Manages user registration and retrieval
    - Orders Function: Processes order creation and queries with enhanced features
 
 2. **Three DynamoDB Tables**:
@@ -268,28 +268,19 @@ This solution provides a complete serverless application infrastructure using AW
     "ItemsFunctionArn": {
       "Description": "ARN of the Items Lambda function",
       "Value": {
-        "Fn::GetAtt": [
-          "ItemsFunction",
-          "Arn"
-        ]
+        "Fn::GetAtt": ["ItemsFunction", "Arn"]
       }
     },
     "UsersFunctionArn": {
       "Description": "ARN of the Users Lambda function",
       "Value": {
-        "Fn::GetAtt": [
-          "UsersFunction",
-          "Arn"
-        ]
+        "Fn::GetAtt": ["UsersFunction", "Arn"]
       }
     },
     "OrdersFunctionArn": {
       "Description": "ARN of the Orders Lambda function",
       "Value": {
-        "Fn::GetAtt": [
-          "OrdersFunction",
-          "Arn"
-        ]
+        "Fn::GetAtt": ["OrdersFunction", "Arn"]
       }
     }
   }
@@ -299,28 +290,33 @@ This solution provides a complete serverless application infrastructure using AW
 ## Key Features
 
 ### SAM Template Benefits
+
 - **Transform Directive**: AWS::Serverless-2016-10-31 enables SAM functionality
 - **Globals Section**: Common Lambda properties defined once and inherited
 - **Simplified Resources**: AWS::Serverless::Function reduces configuration complexity
 - **Automatic API Gateway**: ServerlessRestApi created implicitly through Events
 
 ### Security & IAM
+
 - **SAM Built-in Policies**: DynamoDBCrudPolicy provides least privilege access
 - **Scoped Permissions**: Each function has access only to its specific table
 - **CloudWatch Integration**: Logging permissions automatically included by SAM
 
 ### Scalability
+
 - **On-Demand DynamoDB**: PAY_PER_REQUEST billing mode for automatic scaling
 - **Lambda Optimization**: 30s timeout and 128MB memory configured globally
 - **Connection Reuse**: AWS SDK connection reuse enabled for performance
 
 ### Error Handling
+
 - **Comprehensive HTTP Status Codes**: 200, 201, 400, 404, 405, 500 responses
 - **Input Validation**: Query parameter validation for GET requests
 - **CORS Support**: Cross-origin headers included in all responses
 - **Exception Handling**: Try-catch blocks with detailed error logging
 
 ### Deployment Features
+
 - **Environment Isolation**: EnvironmentSuffix parameter for multi-environment support
 - **Stack Outputs**: API URL, table names, and function ARNs exported
 - **Resource Naming**: Consistent naming with stack name and environment suffix
@@ -329,11 +325,13 @@ This solution provides a complete serverless application infrastructure using AW
 ## API Endpoints
 
 ### POST Operations
+
 - `POST /items` - Create new item with JSON payload
-- `POST /users` - Create new user with JSON payload  
+- `POST /users` - Create new user with JSON payload
 - `POST /orders` - Create new order with auto-generated ID and timestamps
 
 ### GET Operations
+
 - `GET /items?itemId=<id>` - Retrieve specific item by ID
 - `GET /users?userId=<id>` - Retrieve specific user by ID
 - `GET /orders?orderId=<id>` - Retrieve specific order by ID
@@ -341,6 +339,7 @@ This solution provides a complete serverless application infrastructure using AW
 ## Enhanced Orders Function
 
 The Orders function includes additional business logic:
+
 - **Auto-ID Generation**: Creates unique orderId if not provided
 - **Timestamps**: Automatically adds createdAt timestamp
 - **Status Management**: Sets default status to 'PENDING'
@@ -349,18 +348,24 @@ The Orders function includes additional business logic:
 ## Lambda Function Implementation
 
 ### Dependencies
+
 All functions use AWS SDK v3 for modern DynamoDB operations:
+
 - `@aws-sdk/client-dynamodb` for DynamoDB operations
 - `@aws-sdk/util-dynamodb` for data marshalling/unmarshalling
 
 ### CORS Configuration
+
 Every function includes comprehensive CORS headers:
-- Access-Control-Allow-Origin: '*' (configurable)
+
+- Access-Control-Allow-Origin: '\*' (configurable)
 - Access-Control-Allow-Methods: 'GET, POST, OPTIONS'
 - Access-Control-Allow-Headers: 'Content-Type'
 
 ### Environment Variables
+
 Each function receives its table name via environment variables:
+
 - Items Function: ITEMS_TABLE_NAME
 - Users Function: USERS_TABLE_NAME
 - Orders Function: ORDERS_TABLE_NAME
@@ -368,10 +373,12 @@ Each function receives its table name via environment variables:
 ## Deployment Instructions
 
 ### Prerequisites
+
 - AWS CLI configured with appropriate permissions
 - SAM CLI installed (`pip install aws-sam-cli`)
 
 ### Deployment Commands
+
 ```bash
 # Guided deployment (first time)
 sam deploy --guided --template-file TapStack.json
@@ -381,7 +388,9 @@ sam deploy
 ```
 
 ### Parameter Configuration
+
 During guided deployment, specify:
+
 - **Stack Name**: Choose descriptive name for your stack
 - **AWS Region**: Target deployment region
 - **EnvironmentSuffix**: Environment identifier (dev, test, prod)
@@ -389,17 +398,21 @@ During guided deployment, specify:
 ## Monitoring and Debugging
 
 ### CloudWatch Logs
+
 SAM automatically creates log groups:
+
 - `/aws/lambda/{StackName}-items-function-{EnvironmentSuffix}`
 - `/aws/lambda/{StackName}-users-function-{EnvironmentSuffix}`
 - `/aws/lambda/{StackName}-orders-function-{EnvironmentSuffix}`
 
 ### API Gateway Logs
+
 API Gateway automatically logs requests and responses for debugging.
 
 ## Testing the Deployed API
 
 ### Create and Retrieve Items
+
 ```bash
 # Create item
 curl -X POST https://{api-url}/items \
@@ -411,6 +424,7 @@ curl "https://{api-url}/items?itemId=item-001"
 ```
 
 ### Create and Retrieve Users
+
 ```bash
 # Create user
 curl -X POST https://{api-url}/users \
@@ -422,6 +436,7 @@ curl "https://{api-url}/users?userId=user-001"
 ```
 
 ### Create and Retrieve Orders
+
 ```bash
 # Create order (ID auto-generated)
 curl -X POST https://{api-url}/orders \
@@ -435,6 +450,7 @@ curl "https://{api-url}/orders?orderId=order-{timestamp}-{random}"
 ## Cleanup
 
 Remove all resources:
+
 ```bash
 sam delete --stack-name {your-stack-name}
 ```

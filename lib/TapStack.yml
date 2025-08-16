@@ -26,6 +26,7 @@ Resources:
   # DynamoDB Table to store information about items
   ItemsTable:
     Type: AWS::DynamoDB::Table
+    Description: 'DynamoDB table for storing items data with on-demand capacity'
     Properties:
       TableName: !Sub '${AWS::StackName}-items-table-${EnvironmentSuffix}'
       # On-demand billing for automatic scaling with no capacity planning
@@ -40,6 +41,7 @@ Resources:
   # DynamoDB Table to store information about users
   UsersTable:
     Type: AWS::DynamoDB::Table
+    Description: 'DynamoDB table for storing users data with on-demand capacity'
     Properties:
       TableName: !Sub '${AWS::StackName}-users-table-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
@@ -53,6 +55,7 @@ Resources:
   # DynamoDB Table to store information about orders
   OrdersTable:
     Type: AWS::DynamoDB::Table
+    Description: 'DynamoDB table for storing orders data with on-demand capacity'
     Properties:
       TableName: !Sub '${AWS::StackName}-orders-table-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
@@ -66,6 +69,7 @@ Resources:
   # SAM Serverless Function for handling all /items API requests
   ItemsFunction:
     Type: AWS::Serverless::Function
+    Description: 'Lambda function for handling item-related operations (create, retrieve)'
     Properties:
       FunctionName: !Sub '${AWS::StackName}-items-function-${EnvironmentSuffix}'
       Handler: index.handler
@@ -162,6 +166,7 @@ Resources:
   # SAM Serverless Function for handling all /users API requests
   UsersFunction:
     Type: AWS::Serverless::Function
+    Description: 'Lambda function for handling user-related operations (create, retrieve)'
     Properties:
       FunctionName: !Sub '${AWS::StackName}-users-function-${EnvironmentSuffix}'
       Handler: index.handler
@@ -255,6 +260,7 @@ Resources:
   # SAM Serverless Function for handling all /orders API requests
   OrdersFunction:
     Type: AWS::Serverless::Function
+    Description: 'Lambda function for processing and managing e-commerce orders'
     Properties:
       FunctionName: !Sub '${AWS::StackName}-orders-function-${EnvironmentSuffix}'
       Handler: index.handler
@@ -278,7 +284,7 @@ Resources:
             switch (event.httpMethod) {
               case 'POST':
                 const order = JSON.parse(event.body);
-                // Auto-generate orderId if not provided
+                # Auto-generate orderId if not provided
                 if (!order.orderId) {
                   order.orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
                 }

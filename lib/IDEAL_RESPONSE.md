@@ -59,17 +59,20 @@ The EnvironmentSuffix parameter enables multi-environment deployments by allowin
 Three DynamoDB tables are created with identical configuration patterns:
 
 #### Items Table
+
 - **Primary Key**: itemId (String)
 - **Billing Mode**: PAY_PER_REQUEST for automatic scaling
 - **Table Name**: `${AWS::StackName}-items-table-${EnvironmentSuffix}`
 
-#### Users Table  
+#### Users Table
+
 - **Primary Key**: userId (String)
 - **Billing Mode**: PAY_PER_REQUEST for automatic scaling
 - **Table Name**: `${AWS::StackName}-users-table-${EnvironmentSuffix}`
 
 #### Orders Table
-- **Primary Key**: orderId (String)  
+
+- **Primary Key**: orderId (String)
 - **Billing Mode**: PAY_PER_REQUEST for automatic scaling
 - **Table Name**: `${AWS::StackName}-orders-table-${EnvironmentSuffix}`
 
@@ -78,6 +81,7 @@ Three DynamoDB tables are created with identical configuration patterns:
 All three Lambda functions follow a consistent pattern using AWS SAM's `AWS::Serverless::Function` resource type.
 
 #### Common Features
+
 - **Runtime**: nodejs20.x (inherited from Globals)
 - **Handler**: index.handler
 - **Inline Code**: Complete Node.js implementation included
@@ -108,6 +112,7 @@ ItemsFunction:
 ```
 
 **Functionality**:
+
 - Handles POST requests to create new items
 - Handles GET requests with itemId query parameter to retrieve items
 - Returns appropriate HTTP status codes (200, 201, 400, 404, 405, 500)
@@ -116,6 +121,7 @@ ItemsFunction:
 #### Users Function
 
 Similar structure to ItemsFunction but handles user-related operations:
+
 - POST: Create new users
 - GET: Retrieve users by userId query parameter
 - Environment variable: USERS_TABLE_NAME
@@ -124,6 +130,7 @@ Similar structure to ItemsFunction but handles user-related operations:
 #### Orders Function
 
 Enhanced functionality compared to Items and Users functions:
+
 - POST: Create new orders with auto-generated orderId and timestamps
 - GET: Retrieve orders by orderId query parameter
 - Automatic status assignment (defaults to 'PENDING')
@@ -134,33 +141,45 @@ Enhanced functionality compared to Items and Users functions:
 ## Lambda Function Implementation
 
 ### Dependencies
+
 All functions use the AWS SDK v3 for DynamoDB operations:
+
 ```javascript
-const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');
+const {
+  DynamoDBClient,
+  PutItemCommand,
+  GetItemCommand,
+} = require('@aws-sdk/client-dynamodb');
 const { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');
 ```
 
 ### HTTP Method Handling
+
 Each function implements a switch statement to handle different HTTP methods:
+
 - **POST**: Creates new records in DynamoDB
 - **GET**: Retrieves records by ID from query parameters
 - **Default**: Returns 405 Method Not Allowed
 
 ### Error Handling
+
 Comprehensive error handling includes:
+
 - 400 Bad Request for missing required parameters
 - 404 Not Found for non-existent resources
 - 405 Method Not Allowed for unsupported HTTP methods
 - 500 Internal Server Error for unexpected failures
 
 ### CORS Configuration
+
 All functions include CORS headers:
+
 ```javascript
 const headers = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
+  'Access-Control-Allow-Headers': 'Content-Type',
 };
 ```
 
@@ -171,7 +190,7 @@ SAM automatically creates an API Gateway REST API (`ServerlessRestApi`) through 
 - **Base URL**: `https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod`
 - **Endpoints**:
   - `/items` - Routes to ItemsFunction
-  - `/users` - Routes to UsersFunction  
+  - `/users` - Routes to UsersFunction
   - `/orders` - Routes to OrdersFunction
 - **Method**: ANY (supports all HTTP methods)
 - **Stage**: Prod (default SAM stage)
@@ -179,7 +198,9 @@ SAM automatically creates an API Gateway REST API (`ServerlessRestApi`) through 
 ## Security and IAM
 
 ### DynamoDB Permissions
+
 Each Lambda function uses SAM's built-in `DynamoDBCrudPolicy` which provides:
+
 - dynamodb:GetItem
 - dynamodb:PutItem
 - dynamodb:UpdateItem
@@ -190,7 +211,9 @@ Each Lambda function uses SAM's built-in `DynamoDBCrudPolicy` which provides:
 Permissions are scoped to the specific table for each function, following the principle of least privilege.
 
 ### CloudWatch Logs
+
 Lambda functions automatically receive CloudWatch Logs permissions for:
+
 - logs:CreateLogGroup
 - logs:CreateLogStream
 - logs:PutLogEvents
@@ -200,6 +223,7 @@ Lambda functions automatically receive CloudWatch Logs permissions for:
 The template provides comprehensive outputs for integration and monitoring:
 
 ### API Gateway URL
+
 ```yaml
 ApiGatewayUrl:
   Description: 'URL of the deployed API Gateway'
@@ -209,13 +233,17 @@ ApiGatewayUrl:
 ```
 
 ### Table Names
+
 Each DynamoDB table name is exported:
+
 - ItemsTableName
-- UsersTableName  
+- UsersTableName
 - OrdersTableName
 
 ### Function ARNs
+
 Lambda function ARNs are provided for reference:
+
 - ItemsFunctionArn
 - UsersFunctionArn
 - OrdersFunctionArn
@@ -223,22 +251,27 @@ Lambda function ARNs are provided for reference:
 ## Deployment
 
 ### Prerequisites
+
 - AWS CLI configured with appropriate permissions
 - SAM CLI installed
 - Node.js runtime available in target region
 
 ### Deployment Command
+
 ```bash
 sam deploy --guided
 ```
 
 For subsequent deployments:
+
 ```bash
 sam deploy
 ```
 
 ### Parameters
+
 During guided deployment, you can specify:
+
 - **Stack Name**: Choose a descriptive name for your stack
 - **AWS Region**: Target deployment region (defaults to us-east-1)
 - **EnvironmentSuffix**: Environment identifier for resource naming
@@ -246,6 +279,7 @@ During guided deployment, you can specify:
 ## Testing the API
 
 ### Create an Item
+
 ```bash
 curl -X POST https://{api-gateway-url}/items \
   -H "Content-Type: application/json" \
@@ -253,11 +287,13 @@ curl -X POST https://{api-gateway-url}/items \
 ```
 
 ### Retrieve an Item
+
 ```bash
 curl "https://{api-gateway-url}/items?itemId=item-001"
 ```
 
 ### Create a User
+
 ```bash
 curl -X POST https://{api-gateway-url}/users \
   -H "Content-Type: application/json" \
@@ -265,11 +301,13 @@ curl -X POST https://{api-gateway-url}/users \
 ```
 
 ### Retrieve a User
+
 ```bash
 curl "https://{api-gateway-url}/users?userId=user-001"
 ```
 
 ### Create an Order
+
 ```bash
 curl -X POST https://{api-gateway-url}/orders \
   -H "Content-Type: application/json" \
@@ -277,6 +315,7 @@ curl -X POST https://{api-gateway-url}/orders \
 ```
 
 ### Retrieve an Order
+
 ```bash
 curl "https://{api-gateway-url}/orders?orderId=order-{timestamp}-{random}"
 ```
@@ -284,7 +323,9 @@ curl "https://{api-gateway-url}/orders?orderId=order-{timestamp}-{random}"
 ## Advanced Features
 
 ### Environment Suffix Usage
+
 The EnvironmentSuffix parameter enables multiple deployments of the same template:
+
 - **Development**: `EnvironmentSuffix=dev`
 - **Testing**: `EnvironmentSuffix=test`
 - **Production**: `EnvironmentSuffix=prod`
@@ -292,12 +333,15 @@ The EnvironmentSuffix parameter enables multiple deployments of the same templat
 Each deployment creates isolated resources with unique names.
 
 ### Monitoring and Logging
+
 All Lambda functions automatically log to CloudWatch with log groups:
+
 - `/aws/lambda/${AWS::StackName}-items-function-${EnvironmentSuffix}`
 - `/aws/lambda/${AWS::StackName}-users-function-${EnvironmentSuffix}`
 - `/aws/lambda/${AWS::StackName}-orders-function-${EnvironmentSuffix}`
 
 ### Scaling
+
 - **DynamoDB**: Automatic scaling with PAY_PER_REQUEST billing
 - **Lambda**: Automatic concurrency scaling up to account limits
 - **API Gateway**: Handles up to 10,000 requests per second by default
@@ -323,6 +367,7 @@ All Lambda functions automatically log to CloudWatch with log groups:
 ## Cleanup
 
 To remove all resources:
+
 ```bash
 sam delete
 ```

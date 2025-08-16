@@ -9,7 +9,7 @@
       "MemorySize": 128,
       "Environment": {
         "Variables": {
-          "AWS_NODEJS_CONNECTION_REUSE_ENABLED": "1"
+          "AWS_NODEJS_CONNECTION_REUSE_ENABLED": 1
         }
       }
     }
@@ -24,6 +24,7 @@
   "Resources": {
     "ItemsTable": {
       "Type": "AWS::DynamoDB::Table",
+      "Description": "DynamoDB table for storing items data with on-demand capacity",
       "Properties": {
         "TableName": {
           "Fn::Sub": "${AWS::StackName}-items-table-${EnvironmentSuffix}"
@@ -45,6 +46,7 @@
     },
     "UsersTable": {
       "Type": "AWS::DynamoDB::Table",
+      "Description": "DynamoDB table for storing users data with on-demand capacity",
       "Properties": {
         "TableName": {
           "Fn::Sub": "${AWS::StackName}-users-table-${EnvironmentSuffix}"
@@ -66,6 +68,7 @@
     },
     "OrdersTable": {
       "Type": "AWS::DynamoDB::Table",
+      "Description": "DynamoDB table for storing orders data with on-demand capacity",
       "Properties": {
         "TableName": {
           "Fn::Sub": "${AWS::StackName}-orders-table-${EnvironmentSuffix}"
@@ -87,6 +90,7 @@
     },
     "ItemsFunction": {
       "Type": "AWS::Serverless::Function",
+      "Description": "Lambda function for handling item-related operations (create, retrieve)",
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "${AWS::StackName}-items-function-${EnvironmentSuffix}"
@@ -122,6 +126,7 @@
     },
     "UsersFunction": {
       "Type": "AWS::Serverless::Function",
+      "Description": "Lambda function for handling user-related operations (create, retrieve)",
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "${AWS::StackName}-users-function-${EnvironmentSuffix}"
@@ -157,12 +162,13 @@
     },
     "OrdersFunction": {
       "Type": "AWS::Serverless::Function",
+      "Description": "Lambda function for processing and managing e-commerce orders",
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "${AWS::StackName}-orders-function-${EnvironmentSuffix}"
         },
         "Handler": "index.handler",
-        "InlineCode": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const ordersTableName = process.env.ORDERS_TABLE_NAME;\n  \n  const headers = {\n    'Content-Type': 'application/json',\n    'Access-Control-Allow-Origin': '*',\n    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',\n    'Access-Control-Allow-Headers': 'Content-Type'\n  };\n  \n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const order = JSON.parse(event.body);\n        // Auto-generate orderId if not provided\n        if (!order.orderId) {\n          order.orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;\n        }\n        order.createdAt = new Date().toISOString();\n        order.status = order.status || 'PENDING';\n        \n        const putParams = {\n          TableName: ordersTableName,\n          Item: marshall(order)\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return {\n          statusCode: 201,\n          headers,\n          body: JSON.stringify({ \n            message: 'Order created successfully',\n            orderId: order.orderId,\n            status: order.status\n          })\n        };\n      \n      case 'GET':\n        const orderId = event.queryStringParameters?.orderId;\n        if (!orderId) {\n          return {\n            statusCode: 400,\n            headers,\n            body: JSON.stringify({ message: 'Missing orderId query parameter' })\n          };\n        }\n        const getParams = {\n          TableName: ordersTableName,\n          Key: marshall({ orderId })\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return {\n            statusCode: 404,\n            headers,\n            body: JSON.stringify({ message: 'Order not found' })\n          };\n        }\n        return {\n          statusCode: 200,\n          headers,\n          body: JSON.stringify(unmarshall(Item))\n        };\n      \n      default:\n        return {\n          statusCode: 405,\n          headers,\n          body: JSON.stringify({ message: 'Method Not Allowed' })\n        };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return {\n      statusCode: 500,\n      headers,\n      body: JSON.stringify({ message: 'Internal Server Error', error: error.message })\n    };\n  }\n};\n",
+        "InlineCode": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const ordersTableName = process.env.ORDERS_TABLE_NAME;\n  \n  const headers = {\n    'Content-Type': 'application/json',\n    'Access-Control-Allow-Origin': '*',\n    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',\n    'Access-Control-Allow-Headers': 'Content-Type'\n  };\n  \n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const order = JSON.parse(event.body);\n        # Auto-generate orderId if not provided\n        if (!order.orderId) {\n          order.orderId = `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;\n        }\n        order.createdAt = new Date().toISOString();\n        order.status = order.status || 'PENDING';\n        \n        const putParams = {\n          TableName: ordersTableName,\n          Item: marshall(order)\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return {\n          statusCode: 201,\n          headers,\n          body: JSON.stringify({ \n            message: 'Order created successfully',\n            orderId: order.orderId,\n            status: order.status\n          })\n        };\n      \n      case 'GET':\n        const orderId = event.queryStringParameters?.orderId;\n        if (!orderId) {\n          return {\n            statusCode: 400,\n            headers,\n            body: JSON.stringify({ message: 'Missing orderId query parameter' })\n          };\n        }\n        const getParams = {\n          TableName: ordersTableName,\n          Key: marshall({ orderId })\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return {\n            statusCode: 404,\n            headers,\n            body: JSON.stringify({ message: 'Order not found' })\n          };\n        }\n        return {\n          statusCode: 200,\n          headers,\n          body: JSON.stringify(unmarshall(Item))\n        };\n      \n      default:\n        return {\n          statusCode: 405,\n          headers,\n          body: JSON.stringify({ message: 'Method Not Allowed' })\n        };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return {\n      statusCode: 500,\n      headers,\n      body: JSON.stringify({ message: 'Internal Server Error', error: error.message })\n    };\n  }\n};\n",
         "Environment": {
           "Variables": {
             "ORDERS_TABLE_NAME": {
