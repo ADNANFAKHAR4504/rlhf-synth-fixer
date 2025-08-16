@@ -66,7 +66,11 @@ describe('Secure Infrastructure Integration Tests', () => {
         'EC2InstanceRoleArn',
         'ApplicationServiceRoleArn',
         'StackName',
-        'EnvironmentSuffix'
+        'EnvironmentSuffix',
+        'VPCId',
+        'PublicSubnetId',
+        'PrivateSubnetId',
+        'SecurityGroupId'
       ];
 
       expectedOutputs.forEach(outputKey => {
@@ -147,7 +151,7 @@ describe('Secure Infrastructure Integration Tests', () => {
         const lifecycleCommand = new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName });
         const lifecycleResponse = await s3Client.send(lifecycleCommand);
         expect(lifecycleResponse.Rules).toHaveLength(1);
-        expect(lifecycleResponse.Rules![0].ExpirationInDays).toBe(90);
+        expect(lifecycleResponse.Rules![0].Expiration?.Days).toBe(90);
       } catch (error) {
         // If AWS is not configured, validate the bucket name format
         expect(bucketName).toMatch(/^secure-infrastructure-logs-/);
@@ -374,7 +378,15 @@ describe('Secure Infrastructure Integration Tests', () => {
           'ApplicationServiceRole',
           'EC2SecurityGroup',
           'WebServerInstance',
-          'EC2InstanceProfile'
+          'EC2InstanceProfile',
+          'SecureVPC',
+          'PublicSubnet',
+          'PrivateSubnet',
+          'InternetGateway',
+          'AttachGateway',
+          'PublicRouteTable',
+          'PublicRoute',
+          'PublicSubnetRouteTableAssociation'
         ];
         
         const actualResourceTypes = response.StackResourceSummaries?.map(r => r.LogicalResourceId);
