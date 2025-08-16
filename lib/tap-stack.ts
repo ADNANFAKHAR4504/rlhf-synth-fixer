@@ -129,6 +129,7 @@ export class TapStack extends TerraformStack {
     const s3Module = new S3Module(this, 'image-uploads-bucket', {
       bucketName: s3BucketName.stringValue,
       lambdaFunctionArn: lambdaModule.function.arn,
+      lambdaFunction: lambdaModule.function, // pass instance
     });
 
     // Additional CloudWatch log group for application-specific logging

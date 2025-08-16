@@ -33,6 +33,7 @@ export interface LambdaModuleConfig {
 export interface S3ModuleConfig {
   bucketName: string;
   lambdaFunctionArn: string;
+  lambdaFunction: LambdaFunction; // optional: pass instance
 }
 
 /**
@@ -198,6 +199,7 @@ export class LambdaModule extends Construct {
 export class S3Module extends Construct {
   public readonly bucket: S3Bucket;
   public readonly bucketNotification: S3BucketNotification;
+  public readonly lambdaPermission: LambdaPermission;
 
   constructor(scope: Construct, id: string, config: S3ModuleConfig) {
     super(scope, id);
@@ -242,7 +244,7 @@ export class S3Module extends Construct {
       ],
     });
     // Lambda permission to allow S3 to invoke the function
-    new LambdaPermission(this, 'lambda-permission', {
+    this.lambdaPermission = new LambdaPermission(this, 'lambda-permission', {
       statementId: 'AllowExecutionFromS3Bucket',
       action: 'lambda:InvokeFunction',
       functionName: config.lambdaFunctionArn,
@@ -259,10 +261,12 @@ export class S3Module extends Construct {
         lambdaFunction: [
           {
             lambdaFunctionArn: config.lambdaFunctionArn,
-            events: ['s3:ObjectCreated:*'], // Trigger on any object creation event
-            filterPrefix: '', // No prefix filter - process all uploads
-            filterSuffix: '', // No suffix filter - process all file types
+            events: ['s3:ObjectCreated:*'],
           },
+        ],
+        dependsOn: [
+          ...(config.lambdaFunction ? [config.lambdaFunction] : []),
+          this.lambdaPermission,
         ],
       }
     );
