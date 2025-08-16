@@ -633,6 +633,109 @@ class TapStackArgs:
     self.environment_suffix = environment_suffix
 
 
+# class TapStack:
+#   """Main stack class for CI/CD pipeline infrastructure deployment."""
+  
+#   def __init__(self,
+#                name: str,
+#                args: Optional[TapStackArgs] = None,
+#                opts: Optional[pulumi.ResourceOptions] = None):
+#     """Initialize TapStack and deploy CI/CD infrastructure."""
+#     self.name = name
+#     self.args = args or TapStackArgs()
+#     self.opts = opts
+    
+#     # Get suffix from bootstrap script's environment variable or fallback
+#     raw_suffix = (
+#         self.args.environment_suffix or 
+#         os.environ.get('PULUMI_DEPLOYMENT_SUFFIX') or 
+#         os.environ.get('ENVIRONMENT_SUFFIX') or 
+#         str(int(time.time()))
+#     )
+    
+#     # Clean the suffix to be AWS-compliant
+#     self.deployment_suffix = clean_aws_suffix(raw_suffix)
+    
+#     print("=" * 60)
+#     print("🚀 CI/CD DEPLOYMENT STARTING")
+#     print("=" * 60)
+#     print(f"📋 Raw suffix from environment: {raw_suffix}")
+#     print(f"📋 Cleaned AWS-compliant suffix: {self.deployment_suffix}")
+#     print(f"📋 Resources will be created with names like:")
+#     print(f"   • dev-lambda-execution-role-{self.deployment_suffix}")
+#     print(f"   • dev-artifacts-bucket-{self.deployment_suffix}")
+#     print(f"   • prod-cicd-service-role-{self.deployment_suffix}")
+#     print("📋 This ensures no conflicts with other PRs!")
+#     print("=" * 60)
+    
+#     self.infrastructure = self._deploy_infrastructure()
+#     self._export_outputs()
+ 
+  
+ 
+#   def _deploy_infrastructure(self) -> Dict[str, Dict[str, Any]]:
+#     """Deploy the CI/CD infrastructure for dev environment only."""
+#     environments = get_environment_config()
+#     infrastructure = {}
+    
+#     # Always deploy only to 'dev' environment for CI/CD
+#     target_env = 'dev'
+    
+#     print(f"🎯 Target environment: {target_env}")
+#     print(f"🎯 Deployment suffix: {self.deployment_suffix}")
+    
+#     # Only deploy to dev environment
+#     config = environments[target_env]
+#     provider = aws.Provider(
+#         f"{target_env}-provider-{self.deployment_suffix}",
+#         region=config['region'],
+#         default_tags=aws.ProviderDefaultTagsArgs(
+#             tags={
+#                 "Environment": target_env,
+#                 "ManagedBy": "Pulumi",
+#                 "Project": "CI/CD Pipeline",
+#                 "DeploymentId": self.deployment_suffix
+#             }
+#         )
+#     )
+    
+#     opts = pulumi.ResourceOptions(provider=provider)
+#     infrastructure[target_env] = create_environment_infrastructure_with_provider(
+#         target_env, config, opts, self.deployment_suffix
+#     )
+    
+#     print(f"✅ Infrastructure created for environment: {target_env}")
+    
+#     return infrastructure
+  
+#   def _export_outputs(self) -> None:
+#     """Export stack outputs for external consumption."""
+#     for env, resources in self.infrastructure.items():
+#       pulumi.export(
+#         f"{env}_deployment_suffix",
+#         self.deployment_suffix
+#       )
+#       pulumi.export(
+#         f"{env}_artifacts_bucket",
+#         resources['buckets']['artifacts_bucket'].bucket
+#       )
+#       pulumi.export(
+#         f"{env}_deployment_bucket",
+#         resources['buckets']['deployment_bucket'].bucket
+#       )
+#       pulumi.export(
+#         f"{env}_deployment_function",
+#         resources['functions']['deployment_function'].name
+#       )
+#       pulumi.export(
+#         f"{env}_trigger_function",
+#         resources['functions']['trigger_function'].name
+#       )
+#       pulumi.export(f"{env}_lambda_role_arn", resources['roles']['lambda_role'].arn)
+#       pulumi.export(f"{env}_cicd_role_arn", resources['roles']['cicd_role'].arn)
+#       pulumi.export(f"{env}_region", resources['region'])
+
+
 class TapStack:
   """Main stack class for CI/CD pipeline infrastructure deployment."""
   
@@ -645,47 +748,39 @@ class TapStack:
     self.args = args or TapStackArgs()
     self.opts = opts
     
-    # Get suffix from bootstrap script's environment variable or fallback
-    raw_suffix = (
+    # Get suffix directly from environment - no dynamic mapping
+    self.deployment_suffix = clean_aws_suffix(
         self.args.environment_suffix or 
-        os.environ.get('PULUMI_DEPLOYMENT_SUFFIX') or 
         os.environ.get('ENVIRONMENT_SUFFIX') or 
         str(int(time.time()))
     )
     
-    # Clean the suffix to be AWS-compliant
-    self.deployment_suffix = clean_aws_suffix(raw_suffix)
-    
     print("=" * 60)
     print("🚀 CI/CD DEPLOYMENT STARTING")
     print("=" * 60)
-    print(f"📋 Raw suffix from environment: {raw_suffix}")
-    print(f"📋 Cleaned AWS-compliant suffix: {self.deployment_suffix}")
+    print(f"📋 Deployment suffix: {self.deployment_suffix}")
     print(f"📋 Resources will be created with names like:")
     print(f"   • dev-lambda-execution-role-{self.deployment_suffix}")
     print(f"   • dev-artifacts-bucket-{self.deployment_suffix}")
-    print(f"   • prod-cicd-service-role-{self.deployment_suffix}")
     print("📋 This ensures no conflicts with other PRs!")
     print("=" * 60)
     
     self.infrastructure = self._deploy_infrastructure()
     self._export_outputs()
- 
-  
- 
+
   def _deploy_infrastructure(self) -> Dict[str, Dict[str, Any]]:
     """Deploy the CI/CD infrastructure for dev environment only."""
     environments = get_environment_config()
     infrastructure = {}
     
-    # Always deploy only to 'dev' environment for CI/CD
+    # Always use 'dev' environment configuration, but with the provided suffix
     target_env = 'dev'
+    config = environments[target_env]
     
     print(f"🎯 Target environment: {target_env}")
     print(f"🎯 Deployment suffix: {self.deployment_suffix}")
     
-    # Only deploy to dev environment
-    config = environments[target_env]
+    # Create provider with the suffix
     provider = aws.Provider(
         f"{target_env}-provider-{self.deployment_suffix}",
         region=config['region'],
@@ -707,33 +802,6 @@ class TapStack:
     print(f"✅ Infrastructure created for environment: {target_env}")
     
     return infrastructure
-
-
-  
-  # def _deploy_infrastructure(self) -> Dict[str, Dict[str, Any]]:
-  #   """Deploy the complete CI/CD infrastructure."""
-  #   # Always do multi-environment deployment with the correct suffix
-  #   environments = get_environment_config()
-  #   infrastructure = {}
-      
-  #   for env, config in environments.items():
-  #     provider = aws.Provider(
-  #       f"{env}-provider-{self.deployment_suffix}",
-  #       region=config['region'],
-  #       default_tags=aws.ProviderDefaultTagsArgs(
-  #         tags={
-  #           "Environment": env,
-  #           "ManagedBy": "Pulumi",
-  #           "Project": "CI/CD Pipeline",
-  #           "DeploymentId": self.deployment_suffix
-  #         }
-  #       )
-  #     )
-      
-  #     opts = pulumi.ResourceOptions(provider=provider)
-  #     infrastructure[env] = create_environment_infrastructure_with_provider(env, config, opts, self.deployment_suffix)
-    
-  #   return infrastructure
   
   def _export_outputs(self) -> None:
     """Export stack outputs for external consumption."""
@@ -761,6 +829,34 @@ class TapStack:
       pulumi.export(f"{env}_lambda_role_arn", resources['roles']['lambda_role'].arn)
       pulumi.export(f"{env}_cicd_role_arn", resources['roles']['cicd_role'].arn)
       pulumi.export(f"{env}_region", resources['region'])
+
+  
+  # def _deploy_infrastructure(self) -> Dict[str, Dict[str, Any]]:
+  #   """Deploy the complete CI/CD infrastructure."""
+  #   # Always do multi-environment deployment with the correct suffix
+  #   environments = get_environment_config()
+  #   infrastructure = {}
+      
+  #   for env, config in environments.items():
+  #     provider = aws.Provider(
+  #       f"{env}-provider-{self.deployment_suffix}",
+  #       region=config['region'],
+  #       default_tags=aws.ProviderDefaultTagsArgs(
+  #         tags={
+  #           "Environment": env,
+  #           "ManagedBy": "Pulumi",
+  #           "Project": "CI/CD Pipeline",
+  #           "DeploymentId": self.deployment_suffix
+  #         }
+  #       )
+  #     )
+      
+  #     opts = pulumi.ResourceOptions(provider=provider)
+  #     infrastructure[env] = create_environment_infrastructure_with_provider(env, config, opts, self.deployment_suffix)
+    
+  #   return infrastructure
+  
+  
 
 
 # # SINGLE POINT OF EXECUTION - Debug and Initialize
@@ -796,33 +892,10 @@ class TapStack:
 
 # Remove the if __name__ == "__main__": guard and replace with this:
 
-# SINGLE POINT OF EXECUTION - Debug and Initialize
-print("=" * 60)
-print("🔧 ENVIRONMENT VARIABLE DEBUG:")
-print("=" * 60)
-print(f"🔧 ENVIRONMENT_SUFFIX: {os.environ.get('ENVIRONMENT_SUFFIX', 'NOT SET')}")
-print(f"🔧 PULUMI_DEPLOYMENT_SUFFIX: {os.environ.get('PULUMI_DEPLOYMENT_SUFFIX', 'NOT SET')}")
-print(f"🔧 GITHUB_PR_NUMBER: {os.environ.get('GITHUB_PR_NUMBER', 'NOT SET')}")
-print(f"🔧 GITHUB_HEAD_REF: {os.environ.get('GITHUB_HEAD_REF', 'NOT SET')}")
-print(f"🔧 GITHUB_REF_NAME: {os.environ.get('GITHUB_REF_NAME', 'NOT SET')}")
-print(f"🔧 GITHUB_RUN_ID: {os.environ.get('GITHUB_RUN_ID', 'NOT SET')}")
-print(f"🔧 Current working directory: {os.getcwd()}")
-print("=" * 60)
 
-# Get suffix from environment variables with priority order
-raw_suffix = (
-    os.environ.get('PULUMI_DEPLOYMENT_SUFFIX') or 
-    os.environ.get('ENVIRONMENT_SUFFIX') or 
-    str(int(time.time()))
-)
+# Simplified initialization - just use whatever ENVIRONMENT_SUFFIX is provided
+print("🔧 Using ENVIRONMENT_SUFFIX:", os.environ.get('ENVIRONMENT_SUFFIX', 'NOT SET'))
 
-# Clean the suffix
-clean_suffix = clean_aws_suffix(raw_suffix)
-
-print(f"🔧 Raw suffix: {raw_suffix}")
-print(f"🔧 Clean suffix: {clean_suffix}")
-print("=" * 60)
-
-# SINGLE STACK INITIALIZATION - This should be the ONLY place creating a stack
-stack_args = TapStackArgs(environment_suffix=clean_suffix)
+# Create stack with the suffix directly from environment
+stack_args = TapStackArgs(environment_suffix=os.environ.get('ENVIRONMENT_SUFFIX'))
 stack = TapStack("TapStack", args=stack_args)
