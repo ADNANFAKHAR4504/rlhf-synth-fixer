@@ -28,10 +28,10 @@ class TestSecureS3Bucket(unittest.TestCase):
 
   @patch('pulumi.ResourceOptions')
   @patch('pulumi_aws.s3.Bucket')
-  @patch('pulumi_aws.s3.BucketVersioning')
-  @patch('pulumi_aws.s3.BucketServerSideEncryptionConfiguration')
+  @patch('pulumi_aws.s3.BucketVersioningV2')
+  @patch('pulumi_aws.s3.BucketServerSideEncryptionConfigurationV2')
   @patch('pulumi_aws.s3.BucketPublicAccessBlock')
-  @patch('pulumi_aws.s3.BucketLifecycleConfiguration')
+  @patch('pulumi_aws.s3.BucketLifecycleConfigurationV2')
   @patch('pulumi_aws.s3.BucketNotification')
   def test_secure_s3_bucket_creation(self, *mocks):  # pylint: disable=too-many-positional-arguments
     """Test SecureS3Bucket creates all required resources."""
@@ -61,11 +61,11 @@ class TestSecureS3Bucket(unittest.TestCase):
 
   @patch('pulumi.ResourceOptions')
   @patch('pulumi_aws.s3.Bucket')
-  @patch('pulumi_aws.s3.BucketVersioning')
-  @patch('pulumi_aws.s3.BucketServerSideEncryptionConfiguration')
+  @patch('pulumi_aws.s3.BucketVersioningV2')
+  @patch('pulumi_aws.s3.BucketServerSideEncryptionConfigurationV2')
   @patch('pulumi_aws.s3.BucketPublicAccessBlock')
-  @patch('pulumi_aws.s3.BucketLifecycleConfiguration')
-  @patch('pulumi_aws.s3.BucketLogging')
+  @patch('pulumi_aws.s3.BucketLifecycleConfigurationV2')
+  @patch('pulumi_aws.s3.BucketLoggingV2')
   @patch('pulumi_aws.s3.BucketNotification')
   def test_bucket_name_generation(self, *mocks):
     """Test bucket name includes stack name."""

@@ -44,16 +44,16 @@ class SecureS3Bucket(pulumi.ComponentResource):
     )
 
     # Enable versioning with optional MFA delete
-    versioning_config = aws.s3.BucketVersioningVersioningConfigurationArgs(
+    versioning_config = aws.s3.BucketVersioningV2VersioningConfigurationArgs(
       status="Enabled"
     )
     if config.enable_mfa_delete:
-      versioning_config = aws.s3.BucketVersioningVersioningConfigurationArgs(
+      versioning_config = aws.s3.BucketVersioningV2VersioningConfigurationArgs(
         status="Enabled",
         mfa_delete="Enabled"
       )
     
-    self.versioning = aws.s3.BucketVersioning(
+    self.versioning = aws.s3.BucketVersioningV2(
       f"{name}-versioning",
       bucket=self.bucket.id,
       versioning_configuration=versioning_config,
@@ -61,12 +61,12 @@ class SecureS3Bucket(pulumi.ComponentResource):
     )
 
     # Configure server-side encryption
-    self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
+    self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
       f"{name}-encryption",
       bucket=self.bucket.id,
-      rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+      rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
         apply_server_side_encryption_by_default=
-        aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+        aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
           sse_algorithm="aws:kms",
           kms_master_key_id=config.kms_key_id
         ),
@@ -87,31 +87,31 @@ class SecureS3Bucket(pulumi.ComponentResource):
     )
 
     # Configure lifecycle policy
-    self.lifecycle = aws.s3.BucketLifecycleConfiguration(
+    self.lifecycle = aws.s3.BucketLifecycleConfigurationV2(
       f"{name}-lifecycle",
       bucket=self.bucket.id,
       rules=[
-        aws.s3.BucketLifecycleConfigurationRuleArgs(
+        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
           id="delete_old_versions",
           status="Enabled",
           noncurrent_version_expiration=
-          aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs(
+          aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
             noncurrent_days=90
           ),
           abort_incomplete_multipart_upload=
-          aws.s3.BucketLifecycleConfigurationRuleAbortIncompleteMultipartUploadArgs(
+          aws.s3.BucketLifecycleConfigurationV2RuleAbortIncompleteMultipartUploadArgs(
             days_after_initiation=7
           )
         ),
-        aws.s3.BucketLifecycleConfigurationRuleArgs(
+        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
           id="transition_to_ia",
           status="Enabled",
           transitions=[
-            aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
+            aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
               days=30,
               storage_class="STANDARD_IA"
             ),
-            aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
+            aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
               days=90,
               storage_class="GLACIER"
             )
@@ -123,7 +123,7 @@ class SecureS3Bucket(pulumi.ComponentResource):
 
     # Configure access logging if logging bucket is provided
     if config.access_logging_bucket:
-      self.logging = aws.s3.BucketLogging(
+      self.logging = aws.s3.BucketLoggingV2(
         f"{name}-logging",
         bucket=self.bucket.id,
         target_bucket=config.access_logging_bucket,
