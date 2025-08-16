@@ -3,7 +3,7 @@
  *
  * Source of truth for outputs:
  *  1) ./cfn-outputs/flat-outputs.json   (real pipeline)
- *  2) ./abcd.json                        (local fallback for dev/demo)
+ *  2) ./default output                        (local fallback for dev/demo)
  *
  * Each test:
  *  - Invokes lambda1 to write an item (unique id)
@@ -52,11 +52,11 @@ beforeAll(() => {
   if (fs.existsSync(outputsPath)) {
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
   } else {
-    // Fallback to local abcd.json for dev
-    const alt = path.join(__dirname, '../lib/abcd.json');
+    // Fallback to local default output for dev
+    const alt = path.join(__dirname, '../lib/flat-outputs.json');
     if (fs.existsSync(alt)) {
       outputs = JSON.parse(fs.readFileSync(alt, 'utf-8'));
-      console.warn('Using local abcd.json as outputs fallback');
+      console.warn('Using local default output as outputs fallback');
     } else {
       // Skip tests if no outputs found
       console.warn('No deployment outputs found, skipping integration tests');
