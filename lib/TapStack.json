@@ -1,0 +1,357 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless e-commerce order processing platform with Lambda, DynamoDB, and API Gateway",
+  "Parameters": {
+    "ProjectName": {
+      "Type": "String",
+      "Default": "ecommerce-orders",
+      "Description": "Base name for all resources in this stack",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment name (dev, staging, prod)",
+      "AllowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ]
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming to avoid conflicts",
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+    }
+  },
+  "Resources": {
+    "OrdersTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-orders"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "orderId",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "orderId",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "ON_DEMAND",
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "OrderProcessorLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-lambda-role"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "OrdersTable",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "OrderProcessorFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-order-processor"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "OrderProcessorLambdaRole",
+            "Arn"
+          ]
+        },
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "ORDERS_TABLE_NAME": {
+              "Ref": "OrdersTable"
+            },
+            "ENVIRONMENT": {
+              "Ref": "Environment"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nfrom datetime import datetime\n\n# Initialize DynamoDB client\ndynamodb = boto3.resource('dynamodb')\ntable_name = os.environ['ORDERS_TABLE_NAME']\ntable = dynamodb.Table(table_name)\n\ndef lambda_handler(event, context):\n    try:\n        # Parse the incoming request body\n        if 'body' in event:\n            if isinstance(event['body'], str):\n                body = json.loads(event['body'])\n            else:\n                body = event['body']\n        else:\n            body = event\n        \n        # Generate unique order ID if not provided\n        order_id = body.get('orderId', str(uuid.uuid4()))\n        \n        # Prepare order data with timestamp\n        order_data = {\n            'orderId': order_id,\n            'customerId': body.get('customerId', ''),\n            'items': body.get('items', []),\n            'totalAmount': body.get('totalAmount', 0),\n            'currency': body.get('currency', 'USD'),\n            'status': 'PROCESSING',\n            'createdAt': datetime.utcnow().isoformat(),\n            'updatedAt': datetime.utcnow().isoformat()\n        }\n        \n        # Store order in DynamoDB\n        response = table.put_item(Item=order_data)\n        \n        # Return success response\n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'Order processed successfully',\n                'orderId': order_id,\n                'status': 'PROCESSING'\n            })\n        }\n        \n    except Exception as e:\n        print(f\"Error processing order: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'message': str(e)\n            })\n        }\n"
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGatewayLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "OrderProcessorFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${OrdersHttpApi}/*/*"
+        }
+      }
+    },
+    "OrdersHttpApi": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-orders-api"
+        },
+        "Description": "HTTP API for e-commerce order processing",
+        "ProtocolType": "HTTP",
+        "CorsConfiguration": {
+          "AllowCredentials": false,
+          "AllowHeaders": [
+            "Content-Type",
+            "X-Amz-Date",
+            "Authorization",
+            "X-Api-Key"
+          ],
+          "AllowMethods": [
+            "POST",
+            "OPTIONS"
+          ],
+          "AllowOrigins": [
+            "*"
+          ],
+          "MaxAge": 300
+        },
+        "Tags": {
+          "Project": {
+            "Ref": "ProjectName"
+          },
+          "Environment": {
+            "Ref": "Environment"
+          }
+        }
+      }
+    },
+    "OrdersApiIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "OrdersHttpApi"
+        },
+        "Description": "Lambda integration for order processing",
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OrderProcessorFunction.Arn}/invocations"
+        },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+    "OrdersApiRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "OrdersHttpApi"
+        },
+        "RouteKey": "POST /orders",
+        "AuthorizationType": "NONE",
+        "Target": {
+          "Fn::Sub": "integrations/${OrdersApiIntegration}"
+        }
+      }
+    },
+    "OrdersApiStage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "OrdersHttpApi"
+        },
+        "StageName": {
+          "Ref": "Environment"
+        },
+        "Description": {
+          "Fn::Sub": "Deployment stage for ${Environment} environment"
+        },
+        "AutoDeploy": true,
+        "AccessLogSettings": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "ApiGatewayLogGroup",
+              "Arn"
+            ]
+          },
+          "Format": "{\"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"routeKey\":\"$context.routeKey\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\"}"
+        },
+        "Tags": {
+          "Project": {
+            "Ref": "ProjectName"
+          },
+          "Environment": {
+            "Ref": "Environment"
+          }
+        }
+      }
+    },
+    "ApiGatewayLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/apigateway/${ProjectName}-${EnvironmentSuffix}-orders-api"
+        },
+        "RetentionInDays": 14
+      }
+    }
+  },
+  "Outputs": {
+    "ApiGatewayEndpoint": {
+      "Description": "HTTP API Gateway endpoint URL for order submission",
+      "Value": {
+        "Fn::Sub": "https://${OrdersHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/orders"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+        }
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "DynamoDB table name for storing orders",
+      "Value": {
+        "Ref": "OrdersTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-OrdersTable"
+        }
+      }
+    },
+    "LambdaFunctionArn": {
+      "Description": "Lambda function ARN for order processing",
+      "Value": {
+        "Fn::GetAtt": [
+          "OrderProcessorFunction",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaArn"
+        }
+      }
+    },
+    "LambdaFunctionName": {
+      "Description": "Lambda function name",
+      "Value": {
+        "Ref": "OrderProcessorFunction"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaName"
+        }
+      }
+    },
+    "ApiGatewayId": {
+      "Description": "API Gateway ID",
+      "Value": {
+        "Ref": "OrdersHttpApi"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiId"
+        }
+      }
+    }
+  }
+}
