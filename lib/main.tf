@@ -250,7 +250,7 @@ resource "null_resource" "validate_cidrs" {
 }
 
 ########################
-# Security Group
+# Security Groups
 ########################
 
 resource "aws_security_group" "app_sg" {
