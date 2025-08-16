@@ -1,7 +1,30 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure production-ready application environment in AWS'
+Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Environment Configuration"
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
+          default: "Infrastructure Settings"
+        Parameters:
+          - VpcId
+          - SubnetId
+          - InstanceType
+          - IngressCidrSsh
+          - IngressCidrHttps
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+    
   VpcId:
     Type: AWS::EC2::VPC::Id
     Default: vpc-12345abcde
@@ -37,9 +60,29 @@ Parameters:
     Description: 'Latest Amazon Linux 2 AMI ID'
 
 Resources:
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: Production
+
   ApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Delete
     Properties:
+      GroupName: !Sub 'ApplicationSecurityGroup${EnvironmentSuffix}'
       GroupDescription: 'Security group allowing SSH and HTTPS traffic only'
       VpcId: !Ref VpcId
       SecurityGroupIngress:
@@ -60,9 +103,12 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: Name
+          Value: !Sub 'ApplicationSecurityGroup${EnvironmentSuffix}'
 
   ApplicationInstance:
     Type: AWS::EC2::Instance
+    DeletionPolicy: Delete
     Properties:
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
@@ -73,11 +119,13 @@ Resources:
         - Key: Environment
           Value: Production
         - Key: Name
-          Value: ApplicationInstance
+          Value: !Sub 'ApplicationInstance${EnvironmentSuffix}'
 
   ApplicationBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
+      BucketName: !Sub 'application-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -85,20 +133,54 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
+        - Key: Name
+          Value: !Sub 'ApplicationBucket${EnvironmentSuffix}'
 
 Outputs:
+  TurnAroundPromptTableName:
+    Description: 'Name of the DynamoDB table'
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
+
+  TurnAroundPromptTableArn:
+    Description: 'ARN of the DynamoDB table'
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
+
   SecurityGroupId:
     Description: 'ID of the created security group'
     Value: !Ref ApplicationSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
     
   InstanceId:
     Description: 'ID of the created EC2 instance'
     Value: !Ref ApplicationInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceId'
     
   InstancePublicIp:
     Description: 'Public IP address of the EC2 instance'
     Value: !GetAtt ApplicationInstance.PublicIp
+    Export:
+      Name: !Sub '${AWS::StackName}-InstancePublicIp'
     
   BucketName:
     Description: 'Name of the created S3 bucket'
     Value: !Ref ApplicationBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
