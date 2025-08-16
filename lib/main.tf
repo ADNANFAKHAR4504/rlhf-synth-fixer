@@ -273,12 +273,12 @@ output "deployment_summary" {
   value = {
     "us-east-1" = {
       s3_bucket_name  = aws_s3_bucket.data_bucket_us_east_1.id
-      ec2_instance_id = aws_ec2_instance.app_server_us_east_1.id
+      ec2_instance_id = aws_instance.app_server_us_east_1.id
       kms_key_arn     = aws_kms_key.app_key_us_east_1.arn
     }
     "us-west-2" = {
       s3_bucket_name  = aws_s3_bucket.data_bucket_us_west_2.id
-      ec2_instance_id = aws_ec2_instance.app_server_us_west_2.id
+      ec2_instance_id = aws_instance.app_server_us_west_2.id
       kms_key_arn     = aws_kms_key.app_key_us_west_2.arn
     }
   }

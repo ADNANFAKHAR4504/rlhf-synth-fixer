@@ -232,7 +232,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
       );
       // FIX: Change to check for the correct 'aws_instance' resource type.
       expect(normalizedOutput).toContain(
-        'ec2_instance_id = aws_ec2_instance.app_server_us_west_2.id'
+        'ec2_instance_id = aws_instance.app_server_us_west_2.id'
       );
     });
   });
