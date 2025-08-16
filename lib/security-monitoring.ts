@@ -157,28 +157,44 @@ export function createSecurityMonitoring(
     {
       enable: true,
       findingPublishingFrequency: 'FIFTEEN_MINUTES',
-      datasources: {
-        s3Logs: {
-          enable: true,
-        },
-        kubernetes: {
-          auditLogs: {
-            enable: true,
-          },
-        },
-        malwareProtection: {
-          scanEc2InstanceWithFindings: {
-            ebsVolumes: {
-              enable: true,
-            },
-          },
-        },
-      },
       tags: {
         Name: `guardduty-${environment}`,
         Environment: environment,
         ManagedBy: 'Pulumi',
       },
+    },
+    { provider }
+  );
+
+  // Enable S3 protection for GuardDuty
+  new aws.guardduty.DetectorFeature(
+    `guardduty-s3-protection-${environment}`,
+    {
+      detectorId: guardDutyDetector.id,
+      name: 'S3_DATA_EVENTS',
+      status: 'ENABLED',
+    },
+    { provider }
+  );
+
+  // Enable EKS protection for GuardDuty
+  new aws.guardduty.DetectorFeature(
+    `guardduty-eks-protection-${environment}`,
+    {
+      detectorId: guardDutyDetector.id,
+      name: 'EKS_AUDIT_LOGS',
+      status: 'ENABLED',
+    },
+    { provider }
+  );
+
+  // Enable malware protection for GuardDuty
+  new aws.guardduty.DetectorFeature(
+    `guardduty-malware-protection-${environment}`,
+    {
+      detectorId: guardDutyDetector.id,
+      name: 'EBS_MALWARE_PROTECTION',
+      status: 'ENABLED',
     },
     { provider }
   );

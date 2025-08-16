@@ -26,7 +26,7 @@ export function createSecurityGroup(
   const securityGroup = new aws.ec2.SecurityGroup(
     `sg-ssh-${environment}`,
     {
-      name: `sg-ssh-${environment}`,
+      name: `ssh-access-${environment}`,
       description: `Security group for SSH access - ${environment}`,
       vpcId: vpcId,
 
@@ -72,7 +72,7 @@ export function createSecurityGroup(
       ],
 
       tags: {
-        Name: `sg-ssh-${environment}`,
+        Name: `ssh-access-${environment}`,
         Environment: environment,
         Purpose: 'SSH-Access',
         ManagedBy: 'Pulumi',
