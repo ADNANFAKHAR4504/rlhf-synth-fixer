@@ -30,12 +30,11 @@ Parameters:
     Default: 10.0.10.0/24,10.0.20.0/24
     Description: CIDRs for private subnets in order of AZs
 
-  S3BucketName:
+  # NEW: Optional override. If empty, a unique bucket name is generated.
+  S3BucketNameOverride:
     Type: String
-    Description: Globally-unique S3 bucket name
-    AllowedPattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
-    MinLength: 3
-    MaxLength: 63
+    Default: ""
+    Description: "Optional. If set, use this as the S3 bucket name. Otherwise a unique name is generated."
 
   EnableS3Replication:
     Type: String
@@ -48,9 +47,11 @@ Parameters:
     Default: ""
     Description: "ARN of destination bucket for S3 replication (optional)"
 
+  # CHANGED: Optional. If empty, the stack creates a secret.
   DBSecretArn:
     Type: String
-    Description: "ARN of Secrets Manager JSON secret with keys: username, password"
+    Default: ""
+    Description: "Optional. If set, use this Secrets Manager ARN (JSON keys: username, password). Otherwise the stack creates a secret."
 
   DBInstanceClass:
     Type: String
@@ -145,6 +146,9 @@ Conditions:
   UseThreeAZs: !Equals [!Ref AZCount, 3]
   IsPostgres: !Equals [!Ref DBEngine, postgres]
   DeletionProtectionOn: !Equals [!Ref DBDeletionProtection, "true"]
+  HasBucketOverride: !Not [!Equals [!Ref S3BucketNameOverride, ""]]
+  HasDBSecretArn: !Not [!Equals [!Ref DBSecretArn, ""]]
+  CreateDBSecret: !Equals [!Ref DBSecretArn, ""]
 
 Resources:
   VPC:
@@ -674,18 +678,18 @@ Resources:
               - Sid: ObjectsRW
                 Effect: Allow
                 Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
-                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
+                Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
               - Sid: ListBucket
                 Effect: Allow
                 Action: s3:ListBucket
-                Resource: !Sub "arn:aws:s3:::${S3BucketName}"
+                Resource: !Sub "arn:aws:s3:::${S3Bucket}"
         - PolicyName: secretsmanager-read-db
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action: [secretsmanager:GetSecretValue]
-                Resource: !Ref DBSecretArn
+                Resource: !If [HasDBSecretArn, !Ref DBSecretArn, !Ref DBSecret]
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -719,31 +723,50 @@ Resources:
             Principal:
               Service: s3.amazonaws.com
             Action: sts:AssumeRole
-      Policies:
-        - PolicyName: s3-replication
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Sid: SourceRead
-                Effect: Allow
-                Action:
-                  - s3:GetReplicationConfiguration
-                  - s3:ListBucket
-                Resource: !Sub "arn:aws:s3:::${S3BucketName}"
-              - Sid: SourceObjectRead
-                Effect: Allow
-                Action:
-                  - s3:GetObjectVersion
-                  - s3:GetObjectVersionAcl
-                  - s3:GetObjectVersionTagging
-                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
-              - Sid: DestWrite
-                Effect: Allow
-                Action:
-                  - s3:ReplicateObject
-                  - s3:ReplicateDelete
-                  - s3:ReplicateTags
-                Resource: !Sub "${ReplicationDestinationBucketArn}/*"
+
+  S3ReplicationPolicy:
+    Type: AWS::IAM::Policy
+    Condition: EnableReplication
+    Properties:
+      PolicyName: s3-replication
+      Roles:
+        - !Ref S3ReplicationRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: SourceRead
+            Effect: Allow
+            Action:
+              - s3:GetReplicationConfiguration
+              - s3:ListBucket
+            Resource: !Sub "arn:aws:s3:::${S3Bucket}"
+          - Sid: SourceObjectRead
+            Effect: Allow
+            Action:
+              - s3:GetObjectVersion
+              - s3:GetObjectVersionAcl
+              - s3:GetObjectVersionTagging
+            Resource: !Sub "arn:aws:s3:::${S3Bucket}/*"
+          - Sid: DestWrite
+            Effect: Allow
+            Action:
+              - s3:ReplicateObject
+              - s3:ReplicateDelete
+              - s3:ReplicateTags
+            Resource: !Sub "${ReplicationDestinationBucketArn}/*"
+
+  # NEW: Create a DB secret if one isn't provided
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: CreateDBSecret
+    Properties:
+      Name: !Sub "${EnvironmentName}/appdb/credentials"
+      Description: "App DB credentials (created by CloudFormation)"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"appuser"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludePunctuation: true
 
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -891,8 +914,14 @@ Resources:
       MultiAZ: true
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups: [!Ref DatabaseSecurityGroup]
-      MasterUsername: !Sub "{{resolve:secretsmanager:${DBSecretArn}:SecretString:username}}"
-      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecretArn}:SecretString:password}}"
+      MasterUsername: !If
+        - HasDBSecretArn
+        - !Sub "{{resolve:secretsmanager:${DBSecretArn}:SecretString:username}}"
+        - !Sub "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
+      MasterUserPassword: !If
+        - HasDBSecretArn
+        - !Sub "{{resolve:secretsmanager:${DBSecretArn}:SecretString:password}}"
+        - !Sub "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
       DBName: !Ref DBName
       BackupRetentionPeriod: 7
       DeletionProtection: !If [DeletionProtectionOn, true, false]
@@ -909,7 +938,10 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref S3BucketName
+      BucketName: !If
+        - HasBucketOverride
+        - !Ref S3BucketNameOverride
+        - !Sub "${EnvironmentName}-${AWS::AccountId}-${AWS::Region}-data-${AWS::StackName}"
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -1015,7 +1047,7 @@ Outputs:
     Description: Regional S3 bucket name
 
   S3BucketArnOut:
-    Value: !Sub "arn:aws:s3:::${S3BucketName}"
+    Value: !GetAtt S3Bucket.Arn
     Description: Regional S3 bucket ARN
 
   RdsEndpoint:
