@@ -166,13 +166,10 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-igw"
   })
-
-  depends_on = [aws_vpc.main]
-
+  depends_on = [aws_vpc.main, null_resource.empty_old_cloudtrail_bucket]
   lifecycle {
     create_before_destroy = true
   }
@@ -459,14 +456,17 @@ resource "null_resource" "empty_old_cloudtrail_bucket" {
   triggers = {
     always_run = timestamp()
   }
-
+  # Enhanced cleanup: delete all objects, versions, and delete markers
   provisioner "local-exec" {
-    command     = "aws s3 rm s3://secure-multi-account-development-cloudtrail-4185c46d --recursive --quiet || echo 'Bucket not found or already empty'"
-    on_failure  = continue
-  }
-
-  provisioner "local-exec" {
-    command     = "aws s3api delete-objects --bucket secure-multi-account-development-cloudtrail-4185c46d --delete \"$(aws s3api list-object-versions --bucket secure-multi-account-development-cloudtrail-4185c46d --query='{Objects: Versions[].{Key:Key,VersionId:VersionId}}' --output json 2>/dev/null)\" --quiet 2>/dev/null || echo 'No versions to delete'"
+    command = <<EOT
+      aws s3 rm s3://secure-multi-account-development-cloudtrail-4185c46d --recursive --quiet || echo 'Bucket not found or already empty'
+      aws s3api list-object-versions --bucket secure-multi-account-development-cloudtrail-4185c46d --output json | jq -r '.Versions[]?,.DeleteMarkers[]? | {Key,VersionId} | "{\"Key\": \"\(.Key)\", \"VersionId\": \"\(.VersionId)\"}"' > objects.json
+      if [ -s objects.json ]; then
+        aws s3api delete-objects --bucket secure-multi-account-development-cloudtrail-4185c46d --delete "$(jq -s '{Objects: .}' objects.json)" --quiet || echo 'No versions to delete'
+      fi
+      rm -f objects.json
+    EOT
+    interpreter = ["/bin/sh", "-c"]
     on_failure  = continue
   }
 }
