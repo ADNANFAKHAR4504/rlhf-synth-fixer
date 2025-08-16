@@ -23,9 +23,29 @@ try {
   throw new Error("Cannot load Terraform outputs for integration tests");
 }
 
+// Type definitions
+type Environment = "dev" | "staging" | "production";
+type ResourceType = "vpc" | "subnet" | "igw" | "nat" | "sg" | "instance" | "arn";
+
+interface EnvironmentConfig {
+  [key: string]: string;
+}
+
+interface ExpectedInstanceTypes {
+  dev: string;
+  staging: string;
+  production: string;
+}
+
+interface ExpectedCidrs {
+  dev: string;
+  staging: string;
+  production: string;
+}
+
 // Test configuration
 const REGION = process.env.AWS_REGION || "us-west-2"; // Based on your IP ranges
-const environments = ["dev", "staging", "production"];
+const environments: Environment[] = ["dev", "staging", "production"];
 
 // AWS clients
 const ec2Client = new EC2Client({ region: REGION });
@@ -44,8 +64,8 @@ function isValidCIDR(cidr: string): boolean {
 }
 
 // Helper function to validate AWS resource ID format
-function isValidAWSResourceId(id: string, resourceType: string): boolean {
-  const patterns = {
+function isValidAWSResourceId(id: string, resourceType: ResourceType): boolean {
+  const patterns: Record<ResourceType, RegExp> = {
     vpc: /^vpc-[0-9a-f]{8,17}$/,
     subnet: /^subnet-[0-9a-f]{8,17}$/,
     igw: /^igw-[0-9a-f]{8,17}$/,
@@ -259,14 +279,14 @@ describe("Terraform Infrastructure Integration Tests", () => {
           }));
 
           const instance = result.Reservations![0].Instances![0];
-          const expectedTypes = {
+          const expectedTypes: ExpectedInstanceTypes = {
             dev: 't2.micro',
             staging: 't3.medium', 
             production: 'm5.large'
           };
           
-          expect(instance.InstanceType).toBe(expectedTypes[env]);
-          expect(envData.summary.instance_type).toBe(expectedTypes[env]);
+          expect(instance.InstanceType).toBe(expectedTypes[env as keyof ExpectedInstanceTypes]);
+          expect(envData.summary.instance_type).toBe(expectedTypes[env as keyof ExpectedInstanceTypes]);
         });
 
         it("should have correct network configuration", async () => {
@@ -299,12 +319,12 @@ describe("Terraform Infrastructure Integration Tests", () => {
 
       describe("Environment-specific Validations", () => {
         it("should have environment-appropriate CIDR blocks", () => {
-          const expectedCidrs = {
+          const expectedCidrs: ExpectedCidrs = {
             dev: '10.0.0.0/16',
             staging: '10.1.0.0/16',
             production: '10.2.0.0/16'
           };
-          expect(envData.vpcCidr).toBe(expectedCidrs[env]);
+          expect(envData.vpcCidr).toBe(expectedCidrs[env as keyof ExpectedCidrs]);
         });
 
         it("should have private IP in correct CIDR range", () => {
