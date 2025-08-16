@@ -968,7 +968,7 @@ output "primary_region_details" {
     vpc_id                  = aws_vpc.useast1.id
     ec2_instance_id         = aws_instance.app_useast1.id
     ec2_security_group_id   = aws_security_group.ec2_useast1.id
-    rds_instance_identifier = aws_db_instance.rds_useast1.id
+    rds_instance_identifier = aws_db_instance.rds_useast1.identifier
     rds_security_group_id   = aws_security_group.rds_useast1.id
     primary_data_bucket     = aws_s3_bucket.primary_data.bucket
   }
