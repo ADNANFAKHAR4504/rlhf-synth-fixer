@@ -103,6 +103,22 @@ resource "aws_db_instance" "primary" {
   depends_on = [aws_iam_role.rds_enhanced_monitoring]
 }
 
+# KMS Key for secondary region encryption
+resource "aws_kms_key" "secondary_rds" {
+  provider    = aws.secondary
+  description = "KMS key for RDS encryption in secondary region"
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-secondary-rds-key"
+  })
+}
+
+resource "aws_kms_alias" "secondary_rds" {
+  provider      = aws.secondary
+  name          = "alias/${local.resource_prefix}-secondary-rds"
+  target_key_id = aws_kms_key.secondary_rds.key_id
+}
+
 # Cross-region Read Replica in Secondary Region
 resource "aws_db_instance" "secondary_replica" {
   provider            = aws.secondary
@@ -114,10 +130,11 @@ resource "aws_db_instance" "secondary_replica" {
   auto_minor_version_upgrade = false
 
   # Security and Network for replica
-  vpc_security_group_ids = [aws_security_group.secondary_rds.id]
+  db_subnet_group_name = aws_db_subnet_group.secondary.name
 
-  # Encryption - must match source for cross-region replica
+  # Encryption - must specify KMS key for cross-region replica
   storage_encrypted = true
+  kms_key_id       = aws_kms_key.secondary_rds.arn
 
   # Performance and Monitoring
   # Disabled for t3.micro - not supported
@@ -134,7 +151,8 @@ resource "aws_db_instance" "secondary_replica" {
 
   depends_on = [
     aws_db_instance.primary,
-    aws_iam_role.rds_enhanced_monitoring
+    aws_iam_role.rds_enhanced_monitoring,
+    aws_kms_key.secondary_rds
   ]
 }
 
