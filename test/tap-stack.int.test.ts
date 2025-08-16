@@ -59,10 +59,30 @@ const loadStackOutputs = () => {
   }
 };
 
-// Initialize AWS clients
-const initializeClients = () => {
-  const region = process.env.AWS_REGION || 'us-east-1';
+// Extract region from stack outputs
+const extractRegionFromOutputs = (stackOutputs: any): string => {
+  // Try to extract region from RDS endpoint
+  if (stackOutputs.rdsEndpoint) {
+    const match = stackOutputs.rdsEndpoint.match(/\.([a-z0-9-]+)\.rds\.amazonaws\.com/);
+    if (match) {
+      return match[1];
+    }
+  }
+  
+  // Try to extract region from IAM ARN
+  if (stackOutputs.applicationRoleArn) {
+    const match = stackOutputs.applicationRoleArn.match(/app-role-pr\d+-([a-z0-9-]+)-/);
+    if (match) {
+      return match[1];
+    }
+  }
+  
+  // Fallback to environment variable or default
+  return process.env.AWS_REGION || 'us-east-1';
+};
 
+// Initialize AWS clients
+const initializeClients = (region: string) => {
   return {
     ec2: new EC2Client({ region }),
     rds: new RDSClient({ region }),
@@ -99,14 +119,19 @@ describe('TAP Infrastructure Integration Tests', () => {
   let stackOutputs: any;
   let clients: any;
   let accountId: string;
+  let region: string;
 
   beforeAll(async () => {
     // Load stack outputs
     stackOutputs = loadStackOutputs();
     console.log('Loaded stack outputs:', JSON.stringify(stackOutputs, null, 2));
 
-    // Initialize AWS clients
-    clients = initializeClients();
+    // Extract region from stack outputs
+    region = extractRegionFromOutputs(stackOutputs);
+    console.log(`Detected region from stack outputs: ${region}`);
+
+    // Initialize AWS clients with the correct region
+    clients = initializeClients(region);
 
     // Get account ID
     try {
