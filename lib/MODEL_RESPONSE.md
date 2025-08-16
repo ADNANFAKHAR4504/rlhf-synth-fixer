@@ -1,4 +1,4 @@
-I'll create a comprehensive CDKTF configuration that meets all your security and infrastructure requirements. Let me break this down into modular constructs with proper TypeScript interfaces.
+I'll create a comprehensive CDKTF configuration that meets all your security and infrastructure requirements. Let me break this down into monolithic constructs with proper TypeScript interfaces, all code will be there in single file.
 
 ## Configuration Interfaces
 
@@ -43,9 +43,9 @@ export interface AppConfig {
 }
 ```
 
-## Backend Construct
+## Full Code
 
-**constructs/backend-construct.ts**
+** Tap-stack **
 
 ```typescript
 import { Construct } from 'constructs';
@@ -57,6 +57,30 @@ import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
 import { BackendConfig } from '../interfaces/config';
+import { Construct } from 'constructs';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketVersioning } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketServerSideEncryptionConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { StorageConfig } from '../interfaces/config';
+import { Construct } from 'constructs';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { IamUserPolicyAttachment } from '@cdktf/provider-aws/lib/iam-user-policy-attachment';
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { IamConfig } from '../interfaces/config';
+import { App, TerraformStack, S3Backend } from 'cdktf';
+import { Construct } from 'constructs';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { BackendConstruct } from './constructs/backend-construct';
+import { StorageConstruct } from './constructs/storage-construct';
+import { IamConstruct } from './constructs/iam-construct';
+import { AppConfig } from './interfaces/config';
 
 export class BackendConstruct extends Construct {
   public readonly bucket: S3Bucket;
@@ -171,29 +195,13 @@ export class BackendConstruct extends Construct {
 }
 ```
 
-## Storage Construct
-
-**constructs/storage-construct.ts**
-
-```typescript
-import { Construct } from 'constructs';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketVersioning } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketServerSideEncryptionConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { StorageConfig } from '../interfaces/config';
-
 export class StorageConstruct extends Construct {
-  public readonly buckets: S3Bucket[];
-  public readonly kmsKey: KmsKey;
-  public readonly bucketArns: string[];
+public readonly buckets: S3Bucket[];
+public readonly kmsKey: KmsKey;
+public readonly bucketArns: string[];
 
-  constructor(scope: Construct, id: string, config: StorageConfig) {
-    super(scope, id);
+constructor(scope: Construct, id: string, config: StorageConfig) {
+super(scope, id);
 
     // Create KMS key for encryption
     this.kmsKey = new KmsKey(this, 'sensitive-data-kms-key', {
@@ -304,29 +312,16 @@ export class StorageConstruct extends Construct {
     });
 
     this.bucketArns = this.buckets.map(bucket => bucket.arn);
-  }
+
 }
-```
-
-## IAM Construct
-
-**constructs/iam-construct.ts**
-
-```typescript
-import { Construct } from 'constructs';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamUserPolicyAttachment } from '@cdktf/provider-aws/lib/iam-user-policy-attachment';
-import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { IamConfig } from '../interfaces/config';
+}
 
 export class IamConstruct extends Construct {
-  public readonly role: IamRole;
-  public readonly policy: IamPolicy;
+public readonly role: IamRole;
+public readonly policy: IamPolicy;
 
-  constructor(scope: Construct, id: string, config: IamConfig) {
-    super(scope, id);
+constructor(scope: Construct, id: string, config: IamConfig) {
+super(scope, id);
 
     // Trust policy for the IAM role
     const trustPolicyDocument = new DataAwsIamPolicyDocument(
@@ -470,26 +465,13 @@ export class IamConstruct extends Construct {
         policyArn: this.policy.arn,
       });
     });
-  }
+
 }
-```
-
-## Main Application
-
-**main.ts**
-
-```typescript
-import { App, TerraformStack, S3Backend } from 'cdktf';
-import { Construct } from 'constructs';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { BackendConstruct } from './constructs/backend-construct';
-import { StorageConstruct } from './constructs/storage-construct';
-import { IamConstruct } from './constructs/iam-construct';
-import { AppConfig } from './interfaces/config';
+}
 
 class SecureInfraStack extends TerraformStack {
-  constructor(scope: Construct, id: string, config: AppConfig) {
-    super(scope, id);
+constructor(scope: Construct, id: string, config: AppConfig) {
+super(scope, id);
 
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
@@ -524,58 +506,60 @@ class SecureInfraStack extends TerraformStack {
       dynamodbTable: backend.dynamoTable.name,
       encrypt: true,
     });
-  }
+
+}
 }
 
 // Application configuration
 const appConfig: AppConfig = {
-  region: 'us-east-1',
-  tags: {
-    Project: 'SecureInfra',
-    Environment: 'Prod',
-    Owner: 'Akshat Jain',
-  },
-  backend: {
-    bucketName: 'secure-infra-terraform-state-bucket-2024',
-    dynamoTableName: 'secure-infra-terraform-locks',
-    region: 'us-east-1',
-    tags: {
-      Project: 'SecureInfra',
-      Environment: 'Prod',
-      Owner: 'Akshat Jain',
-    },
-  },
-  storage: {
-    bucketNames: [
-      'secure-infra-sensitive-data-primary-2024',
-      'secure-infra-sensitive-data-secondary-2024',
-    ],
-    kmsKeyAlias: 'alias/secure-infra-sensitive-data-key',
-    region: 'us-east-1',
-    tags: {
-      Project: 'SecureInfra',
-      Environment: 'Prod',
-      Owner: 'Akshat Jain',
-    },
-  },
-  iam: {
-    roleName: 'SecureInfraSensitiveDataRole',
-    policyName: 'SecureInfraSensitiveDataPolicy',
-    allowedUsers: ['data-analyst-user', 'backup-service-user'], // Replace with actual usernames
-    bucketArns: [], // Will be populated by storage construct
-    region: 'us-east-1',
-    tags: {
-      Project: 'SecureInfra',
-      Environment: 'Prod',
-      Owner: 'Akshat Jain',
-    },
-  },
+region: 'us-east-1',
+tags: {
+Project: 'SecureInfra',
+Environment: 'Prod',
+Owner: 'Akshat Jain',
+},
+backend: {
+bucketName: 'secure-infra-terraform-state-bucket-2024',
+dynamoTableName: 'secure-infra-terraform-locks',
+region: 'us-east-1',
+tags: {
+Project: 'SecureInfra',
+Environment: 'Prod',
+Owner: 'Akshat Jain',
+},
+},
+storage: {
+bucketNames: [
+'secure-infra-sensitive-data-primary-2024',
+'secure-infra-sensitive-data-secondary-2024',
+],
+kmsKeyAlias: 'alias/secure-infra-sensitive-data-key',
+region: 'us-east-1',
+tags: {
+Project: 'SecureInfra',
+Environment: 'Prod',
+Owner: 'Akshat Jain',
+},
+},
+iam: {
+roleName: 'SecureInfraSensitiveDataRole',
+policyName: 'SecureInfraSensitiveDataPolicy',
+allowedUsers: ['data-analyst-user', 'backup-service-user'], // Replace with actual usernames
+bucketArns: [], // Will be populated by storage construct
+region: 'us-east-1',
+tags: {
+Project: 'SecureInfra',
+Environment: 'Prod',
+Owner: 'Akshat Jain',
+},
+},
 };
 
 const app = new App();
 new SecureInfraStack(app, 'secure-infra', appConfig);
 app.synth();
-```
+
+````
 
 ## CDKTF Configuration
 
@@ -594,7 +578,7 @@ app.synth();
     "allowSepCharsInLogicalIds": "true"
   }
 }
-```
+````
 
 ## Package.json Dependencies
 
@@ -656,36 +640,3 @@ cdktf plan
 ```bash
 cdktf deploy
 ```
-
-## Security Features Implemented
-
-### 🔒 **Least Privilege IAM Policies**
-
-- Specific S3 actions only
-- Regional restrictions
-- Secure transport requirements
-- Explicit deny for unauthorized actions
-
-### 🛡️ **S3 Security**
-
-- Customer-managed KMS encryption
-- Versioning enabled
-- Public access completely blocked
-- Secure transport enforced
-- Encryption requirements in bucket policies
-
-### 🔐 **State Management Security**
-
-- Encrypted S3 backend
-- DynamoDB locking
-- Secure transport policies
-- Point-in-time recovery
-
-### 🏷️ **Governance**
-
-- Consistent tagging across all resources
-- Modular, reusable constructs
-- TypeScript interfaces for type safety
-- Production-ready configuration
-
-This configuration provides enterprise-grade security with proper separation of concerns, making it easy to maintain and extend while ensuring compliance with security best practices.

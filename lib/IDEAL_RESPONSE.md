@@ -1,12 +1,3 @@
-This CDKTF project creates a secure AWS environment using a single, consolidated stack. This approach is designed for simplicity and compatibility with automated CI/CD pipelines that use generic deploy and output commands.
-
-The stack provisions a secure S3 bucket for sensitive data, an IAM role with least-privilege access, and the necessary resources for a Terraform backend (S3 bucket and DynamoDB table). All resources are created with unique names to prevent deployment conflicts and include robust security configurations.
-
-lib/secure-infra-stack.ts
-This single file contains the complete definition for all infrastructure resources.
-
-TypeScript
-
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

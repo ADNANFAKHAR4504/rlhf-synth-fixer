@@ -237,7 +237,7 @@ export class SecureInfraStack extends TerraformStack {
           },
           {
             effect: 'Allow',
-            actions: ['kms:Decrypt', 'kms:Encrypt'],
+            actions: ['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey'],
             resources: [kmsKey.arn],
           },
         ],
