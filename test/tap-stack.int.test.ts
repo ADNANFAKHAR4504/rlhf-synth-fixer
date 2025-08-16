@@ -54,7 +54,7 @@ import * as path from 'path';
 
 const loadStackOutputs = () => {
   try {
-    const outputsPath = path.join(__dirname, '../cdn-outputs/flat-outputs.json');
+    const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
     return JSON.parse(outputsContent);
   } catch (error) {
