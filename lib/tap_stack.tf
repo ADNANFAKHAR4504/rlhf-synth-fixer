@@ -114,7 +114,6 @@ resource "aws_kms_key" "main" {
   description             = "KMS key for ${local.name_prefix}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -129,12 +128,10 @@ resource "aws_kms_key" "main" {
       }
     ]
   })
-
   tags = local.common_tags
-
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id, local.common_tags["CreatedDate"]]
+    replace_triggered_by = [random_string.deployment_id]
   }
 }
 
@@ -157,14 +154,12 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
   })
-
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id, local.common_tags["CreatedDate"]]
+    replace_triggered_by = [random_string.deployment_id]
   }
 }
 
@@ -439,7 +434,7 @@ resource "aws_s3_bucket" "main" {
 
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id, local.common_tags["CreatedDate"]]
+    replace_triggered_by = [random_string.deployment_id]
   }
 }
 
@@ -455,7 +450,7 @@ resource "aws_s3_bucket" "cloudtrail" {
 
   lifecycle {
     create_before_destroy = true
-    replace_triggered_by = [random_string.deployment_id, local.common_tags["CreatedDate"]]
+    replace_triggered_by = [random_string.deployment_id]
   }
 }
 
