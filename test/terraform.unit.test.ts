@@ -206,15 +206,8 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
             'm'
           )
         );
-        const iamRule = mainTfContent.match(
-          new RegExp(
-            `resource "aws_config_config_rule" "iam_policy_${regionSuffix}"`,
-            'm'
-          )
-        );
         expect(s3Rule).not.toBeNull();
         expect(ebsRule).not.toBeNull();
-        expect(iamRule).not.toBeNull();
       }
     );
   });

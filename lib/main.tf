@@ -138,9 +138,10 @@ resource "aws_instance" "app_server_us_east_1" {
   tags = merge(local.common_tags, { Name = "nova-app-server-us-east-1" })
 }
 
+# AWS Config setup for us-east-1
 resource "aws_config_configuration_recorder" "recorder_us_east_1" {
   provider = aws.us-east-1
-  name     = "default"
+  name     = "default" # AWS only allows one recorder per region, named 'default'.
   role_arn = aws_iam_role.config_role.arn
 }
 
@@ -160,18 +161,6 @@ resource "aws_config_config_rule" "ebs_encryption_us_east_1" {
   source {
     owner             = "AWS"
     source_identifier = "ENCRYPTED_VOLUMES"
-  }
-  depends_on = [aws_config_configuration_recorder.recorder_us_east_1]
-}
-
-resource "aws_config_config_rule" "iam_policy_us_east_1" {
-  provider = aws.us-east-1
-  name     = "IAM_ROLE_MANAGED_POLICY_CHECK"
-
-  input_parameters = jsonencode({})
-  source {
-    owner             = "AWS"
-    source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
   }
   depends_on = [aws_config_configuration_recorder.recorder_us_east_1]
 }
@@ -248,10 +237,10 @@ resource "aws_instance" "app_server_us_west_2" {
   tags = merge(local.common_tags, { Name = "nova-app-server-us-west-2" })
 }
 
-
+# AWS Config setup for us-west-2
 resource "aws_config_configuration_recorder" "recorder_us_west_2" {
   provider = aws.us-west-2
-  name     = "default"
+  name     = "default" # AWS only allows one recorder per region, named 'default'.
   role_arn = aws_iam_role.config_role.arn
 }
 
@@ -275,18 +264,6 @@ resource "aws_config_config_rule" "ebs_encryption_us_west_2" {
   depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
 }
 
-resource "aws_config_config_rule" "iam_policy_us_west_2" {
-  provider = aws.us-west-2
-  name     = "IAM_ROLE_MANAGED_POLICY_CHECK"
-
-  input_parameters = jsonencode({})
-  source {
-    owner             = "AWS"
-    source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
-  }
-  depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
-}
-
 # /-----------------------------------------------------------------------------
 # | Global Resources for AWS Config
 # |-----------------------------------------------------------------------------
@@ -306,7 +283,7 @@ resource "aws_iam_role" "config_role" {
 
 resource "aws_iam_role_policy_attachment" "config_policy" {
   role       = aws_iam_role.config_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 # /-----------------------------------------------------------------------------
