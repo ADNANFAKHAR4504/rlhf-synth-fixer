@@ -1,28 +1,29 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure AWS logging infrastructure with S3, Lambda, and RDS",
-    "Parameters": {
-        "DBUsername": {
-            "Type": "String",
-            "Default": "admin",
-            "Description": "Database administrator username",
-            "MinLength": 1,
-            "MaxLength": 16,
-            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
-            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
-        },
-        "DBPassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "Default": "TempPassword123",
-            "Description": "Database administrator password",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "[a-zA-Z0-9]*",
-            "ConstraintDescription": "Must contain only alphanumeric characters"
-        }
-    },
     "Resources": {
+        "DBPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Description": "RDS Database Administrator Password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "Tags": [
+                    {
+                        "Key": "Project",
+                        "Value": "SecurityConfig"
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": "RDS-DB-Password"
+                    }
+                ]
+            }
+        },
         "SecureVPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -377,7 +378,7 @@
                                         "rds-db:connect"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${SecureRDSInstance}/${DBUsername}"
+                                        "Fn::Sub": "arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${SecureRDSInstance}/admin"
                                     }
                                 }
                             ]
@@ -431,9 +432,7 @@
                                 "Endpoint.Address"
                             ]
                         },
-                        "DB_USERNAME": {
-                            "Ref": "DBUsername"
-                        },
+                        "DB_USERNAME": "admin",
                         "S3_BUCKET": {
                             "Ref": "SecureLogsBucket"
                         }
@@ -555,11 +554,9 @@
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
                 "EngineVersion": "8.0.39",
-                "MasterUsername": {
-                    "Ref": "DBUsername"
-                },
+                "MasterUsername": "admin",
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
                 },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
