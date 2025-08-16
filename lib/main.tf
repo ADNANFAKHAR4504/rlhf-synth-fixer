@@ -1,4 +1,10 @@
 # Variables
+variable "project" {
+  description = "Project Name"
+  type =  string
+  default = "IAC-291432-tf"
+}
+
 variable "aws_region" {
   description = "AWS provider region"
   type        = string
@@ -252,7 +258,7 @@ resource "aws_security_group" "private_instance" {
 
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_secrets_role" {
-  name = "production-ec2-secrets-role"
+  name = "${var.project}-ec2-secrets-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -272,7 +278,7 @@ resource "aws_iam_role" "ec2_secrets_role" {
 
 # IAM Policy for reading specific secret
 resource "aws_iam_policy" "ec2_secrets_policy" {
-  name        = "production-ec2-secrets-policy"
+  name        = "${var.project}-production-ec2-secrets-policy"
   description = "Policy to allow EC2 to read specific secrets"
 
   policy = jsonencode({
