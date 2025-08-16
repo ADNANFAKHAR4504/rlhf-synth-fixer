@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 
 Description: 'CloudFormation template for a serverless application with three Lambda functions (items, users, orders), DynamoDB tables, and API Gateway endpoints'
 
