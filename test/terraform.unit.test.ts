@@ -151,7 +151,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
     test('Launch template uses encrypted EBS', () => {
       const content = fs.readFileSync(path.join(libPath, 'compute.tf'), 'utf8');
       expect(content).toMatch(/resource\s+"aws_launch_template"/);
-      expect(content).toMatch(/encrypted\s*=\s*(true|false)/); // Allow both for troubleshooting
+      expect(content).toMatch(/encrypted\s*=\s*true/);
     });
 
     test('Auto Scaling Group is configured', () => {

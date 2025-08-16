@@ -17,8 +17,9 @@ resource "aws_launch_template" "main" {
     device_name = "/dev/xvda"
     ebs {
       volume_type           = "gp3"
-      volume_size           = 8
-      encrypted             = false
+      volume_size           = 20
+      encrypted             = true
+      kms_key_id            = aws_kms_key.main.arn
       delete_on_termination = true
     }
   }
@@ -36,10 +37,14 @@ resource "aws_launch_template" "main" {
   user_data = base64encode(<<-EOF
               #!/bin/bash
               yum update -y
-              yum install -y httpd
+              yum install -y httpd amazon-cloudwatch-agent
               systemctl start httpd
               systemctl enable httpd
-              echo "<html><body><h1>Hello from SecureTF</h1></body></html>" > /var/www/html/index.html
+              echo "<html><body><h1>Hello from SecureTF</h1><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p></body></html>" > /var/www/html/index.html
+              # Configure CloudWatch agent if config exists
+              if [ -f /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json ]; then
+                /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+              fi
               EOF
   )
 
@@ -127,9 +132,9 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 5
-    timeout             = 15
-    interval            = 90
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
     path                = "/"
     matcher             = "200"
   }
@@ -139,10 +144,59 @@ resource "aws_lb_target_group" "main" {
   }
 }
 
+# Self-signed certificate for HTTPS
+resource "tls_private_key" "main" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+resource "tls_self_signed_cert" "main" {
+  private_key_pem = tls_private_key.main.private_key_pem
+
+  subject {
+    common_name  = "securetf.local"
+    organization = "SecureTF"
+  }
+
+  validity_period_hours = 8760 # 1 year
+
+  allowed_uses = [
+    "key_encipherment",
+    "digital_signature",
+    "server_auth",
+  ]
+}
+
+resource "aws_acm_certificate" "main" {
+  private_key      = tls_private_key.main.private_key_pem
+  certificate_body = tls_self_signed_cert.main.cert_pem
+
+  tags = {
+    Name = "${var.resource_prefix}-${var.environment_suffix}-cert"
+  }
+}
+
 resource "aws_lb_listener" "main" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = aws_acm_certificate.main.arn
 
   default_action {
     type             = "forward"
