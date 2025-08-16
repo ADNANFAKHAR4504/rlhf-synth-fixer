@@ -6,10 +6,7 @@ Parameters:
     Type: String
     Default: production
     Description: Environment name
-    AllowedValues:
-      - development
-      - staging
-      - production
+    AllowedValues: [development, staging, production]
 
   ProjectName:
     Type: String
@@ -35,11 +32,16 @@ Parameters:
     Default: /secure-web-app
     Description: SSM Parameter Store prefix for sensitive values
 
+  # NEW: use SSM to resolve the latest Amazon Linux AMI id at deploy time
+  LatestAmi:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'production']
 
 Resources:
-  # KMS Key for encryption
+  # -------------------- KMS --------------------
   ApplicationKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -56,53 +58,37 @@ Resources:
             Effect: Allow
             Principal:
               Service: s3.amazonaws.com
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
+            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
             Resource: '*'
           - Sid: Allow RDS and Secrets Manager
             Effect: Allow
             Principal:
-              Service: 
+              Service:
                 - rds.amazonaws.com
                 - secretsmanager.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-              - kms:ReEncrypt*
-              - kms:CreateGrant
-              - kms:DescribeKey
+            Action: [kms:Decrypt, kms:GenerateDataKey, kms:ReEncrypt*, kms:CreateGrant, kms:DescribeKey]
             Resource: '*'
           - Sid: AllowCloudWatchLogs
             Effect: Allow
             Principal:
               Service: !Sub "logs.${AWS::Region}.amazonaws.com"
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
+            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
             Resource: "*"
             Condition:
               ArnLike:
                 kms:EncryptionContext:aws:logs:arn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   ApplicationKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${ProjectName}-${Environment}'
+      # include StackName to avoid alias name collisions across retries
+      AliasName: !Sub 'alias/${ProjectName}-${Environment}-${AWS::StackName}'
       TargetKeyId: !Ref ApplicationKMSKey
 
-  # VPC Configuration
+  # -------------------- Networking --------------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -110,23 +96,17 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-vpc'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-vpc' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-igw'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-igw' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -142,12 +122,9 @@ Resources:
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-public-subnet-1'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -157,12 +134,9 @@ Resources:
       CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-public-subnet-2'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -171,12 +145,9 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.0.11.0/24
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-subnet-1'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -185,12 +156,9 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: 10.0.12.0/24
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-subnet-2'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-2' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -198,12 +166,9 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-nat-eip-1'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-nat-eip-1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -211,24 +176,18 @@ Resources:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-nat-1'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-nat-1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-public-routes'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-public-routes' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -255,12 +214,9 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-routes-1'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-private-routes-1' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -281,100 +237,63 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable1
       SubnetId: !Ref PrivateSubnet2
 
-  # Security Groups
+  # -------------------- Security Groups (no GroupName to avoid collisions) --------------------
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ProjectName}-alb-sg'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
+        - { IpProtocol: tcp, FromPort: 80,  ToPort: 80,  CidrIp: 0.0.0.0/0 }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0 }
       SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-alb-sg'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-alb-sg' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ProjectName}-ec2-sg'
       GroupDescription: Security group for EC2 instances
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref AllowedCIDR
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, SourceSecurityGroupId: !Ref ALBSecurityGroup }
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref AllowedCIDR }
       SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-ec2-sg'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-ec2-sg' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ProjectName}-lambda-sg'
       GroupDescription: Security group for Lambda functions
       VpcId: !Ref VPC
       SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-lambda-sg'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-lambda-sg' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${ProjectName}-db-sg'
       GroupDescription: Security group for RDS database
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref EC2SecurityGroup
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref EC2SecurityGroup }
+        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref LambdaSecurityGroup }
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-db-sg'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Name, Value: !Sub '${ProjectName}-db-sg' }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
-  # SSM Parameters for sensitive values
+  # -------------------- SSM Parameters --------------------
   DBPasswordParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -382,9 +301,7 @@ Resources:
       Type: String
       Value: ChangeMe123!
       Description: Database password
-      Tags:
-        Environment: !Ref Environment
-        ProjectName: !Ref ProjectName
+      Tags: { Environment: !Ref Environment, ProjectName: !Ref ProjectName }
 
   APIKeyParameter:
     Type: AWS::SSM::Parameter
@@ -393,11 +310,9 @@ Resources:
       Type: String
       Value: api-key-placeholder
       Description: API key for external services
-      Tags:
-        Environment: !Ref Environment
-        ProjectName: !Ref ProjectName
+      Tags: { Environment: !Ref Environment, ProjectName: !Ref ProjectName }
 
-  # S3 Buckets
+  # -------------------- S3 Buckets --------------------
   ApplicationBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -408,18 +323,15 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref ApplicationKMSKey
             BucketKeyEnabled: true
-      VersioningConfiguration:
-        Status: Enabled
+      VersioningConfiguration: { Status: Enabled }
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   ApplicationBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -435,8 +347,7 @@ Resources:
               - !GetAtt ApplicationBucket.Arn
               - !Sub '${ApplicationBucket.Arn}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              Bool: { 'aws:SecureTransport': 'false' }
 
   LogsBucket:
     Type: AWS::S3::Bucket
@@ -448,8 +359,7 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref ApplicationKMSKey
             BucketKeyEnabled: true
-      VersioningConfiguration:
-        Status: Enabled
+      VersioningConfiguration: { Status: Enabled }
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -462,10 +372,8 @@ Resources:
             ExpirationInDays: !If [IsProduction, 2555, 365]
             NoncurrentVersionExpirationInDays: 30
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -481,10 +389,9 @@ Resources:
               - !GetAtt LogsBucket.Arn
               - !Sub '${LogsBucket.Arn}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              Bool: { 'aws:SecureTransport': 'false' }
 
-  # CloudWatch Log Groups (without KMS to avoid IAM requirements)
+  # -------------------- CloudWatch Log Groups (unencrypted to simplify IAM; safe to add KMS later) --------------------
   APIGatewayLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -503,107 +410,29 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${ProjectName}-auth-${Environment}'
       RetentionInDays: !If [IsProduction, 365, 30]
 
-  # SNS Topic (without KMS to avoid IAM requirements)
+  # -------------------- SNS --------------------
   SecurityAlertsTopic:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub '${ProjectName}-security-alerts-${Environment}'
       DisplayName: Security Alerts
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
-  # Note: Lambda functions require IAM roles - create basic execution role manually first
-  # ProcessFileFunction:
-  #   Type: AWS::Lambda::Function
-  #   Properties:
-  #     FunctionName: !Sub '${ProjectName}-process-file-${Environment}'
-  #     Runtime: python3.9
-  #     Handler: index.lambda_handler
-  #     Role: !Sub 'arn:aws:iam::${AWS::AccountId}:role/lambda-execution-role'
-  #     Environment:
-  #       Variables:
-  #         ENVIRONMENT: !Ref Environment
-  #         PROJECT_NAME: !Ref ProjectName
-  #         S3_BUCKET: !Ref ApplicationBucket
-  #         SNS_TOPIC: !Ref SecurityAlertsTopic
-  #     Code:
-  #       ZipFile: |
-  #         import json
-  #         import boto3
-  #         import os
-  #         
-  #         def lambda_handler(event, context):
-  #             print(f"Processing file in {os.environ['ENVIRONMENT']} environment")
-  #             return {
-  #                 'statusCode': 200,
-  #                 'body': json.dumps('File processed successfully')
-  #             }
-
-  # AuthFunction:
-  #   Type: AWS::Lambda::Function
-  #   Properties:
-  #     FunctionName: !Sub '${ProjectName}-auth-${Environment}'
-  #     Runtime: python3.9
-  #     Handler: index.lambda_handler
-  #     Role: !Sub 'arn:aws:iam::${AWS::AccountId}:role/lambda-execution-role'
-  #     Environment:
-  #       Variables:
-  #         ENVIRONMENT: !Ref Environment
-  #         PROJECT_NAME: !Ref ProjectName
-  #         API_KEY_PARAM: !Sub '${SSMParameterPrefix}/api/key'
-  #     Code:
-  #       ZipFile: |
-  #         import json
-  #         import boto3
-  #         import os
-  #         
-  #         ssm = boto3.client('ssm')
-  #         
-  #         def lambda_handler(event, context):
-  #             try:
-  #                 api_key = ssm.get_parameter(
-  #                     Name=os.environ['API_KEY_PARAM']
-  #                 )['Parameter']['Value']
-  #                 
-  #                 return {
-  #                     'statusCode': 200,
-  #                     'body': json.dumps('Authentication successful')
-  #                 }
-  #             except Exception as e:
-  #                 return {
-  #                     'statusCode': 401,
-  #                     'body': json.dumps('Authentication failed')
-  #                 }
-
-  # Lambda Permissions (commented out with Lambda functions)
-  # S3InvokeLambdaPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName: !Ref ProcessFileFunction
-  #     Action: lambda:InvokeFunction
-  #     Principal: s3.amazonaws.com
-  #     SourceAccount: !Ref 'AWS::AccountId'
-  #     SourceArn: !GetAtt ApplicationBucket.Arn
-
-  # RDS Subnet Group
+  # -------------------- RDS --------------------
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${ProjectName}-db-subnet-group-${Environment}'
+      # REMOVED: DBSubnetGroupName to avoid AlreadyExists on retries
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
-  # RDS Instance with AWS-managed master password
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
@@ -612,7 +441,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-db-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.43'
+      # REMOVED EngineVersion to avoid "Cannot find version" drift issues
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -621,33 +450,26 @@ Resources:
       ManageMasterUserPassword: true
       MasterUserSecret:
         KmsKeyId: !Ref ApplicationKMSKey
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
+      VPCSecurityGroups: [!Ref DatabaseSecurityGroup]
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: !If [IsProduction, 7, 1]
       MultiAZ: !If [IsProduction, true, false]
       PubliclyAccessible: false
       DeletionProtection: !If [IsProduction, true, false]
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
-  # API Gateway (simplified without Lambda integration)
+  # -------------------- API Gateway (simple/mock) --------------------
   RestAPI:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub '${ProjectName}-api-${Environment}'
       Description: Secure REST API
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
+      EndpointConfiguration: { Types: [REGIONAL] }
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   AuthResource:
     Type: AWS::ApiGateway::Resource
@@ -678,43 +500,28 @@ Resources:
 
   APIGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn:
-      - AuthMethod
+    DependsOn: [AuthMethod]
     Properties:
       RestApiId: !Ref RestAPI
       StageName: !Ref Environment
 
-  # Note: Lambda permissions commented out with Lambda functions
-  # APIGatewayLambdaPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     FunctionName: !Ref AuthFunction
-  #     Action: lambda:InvokeFunction
-  #     Principal: apigateway.amazonaws.com
-  #     SourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${RestAPI}/stages/${Environment}/POST/auth'
-
-  # Application Load Balancer
+  # -------------------- ALB / EC2 --------------------
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${ProjectName}-alb-${Environment}'
+      # REMOVED Name to avoid collisions across retries
       Scheme: internet-facing
       Type: application
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
+      Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+      SecurityGroups: [!Ref ALBSecurityGroup]
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${ProjectName}-tg-${Environment}'
+      # REMOVED Name to avoid collisions
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -725,10 +532,8 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: ProjectName
-          Value: !Ref ProjectName
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: ProjectName, Value: !Ref ProjectName }
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -740,16 +545,14 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  # Launch Template
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${ProjectName}-lt-${Environment}'
+      # REMOVED LaunchTemplateName to avoid collisions
       LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316
+        ImageId: !Ref LatestAmi
         InstanceType: t3.micro
-        SecurityGroupIds:
-          - !Ref EC2SecurityGroup
+        SecurityGroupIds: [!Ref EC2SecurityGroup]
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -762,43 +565,30 @@ Resources:
         TagSpecifications:
           - ResourceType: instance
             Tags:
-              - Key: Name
-                Value: !Sub '${ProjectName}-instance-${Environment}'
-              - Key: Environment
-                Value: !Ref Environment
-              - Key: ProjectName
-                Value: !Ref ProjectName
+              - { Key: Name, Value: !Sub '${ProjectName}-instance-${Environment}' }
+              - { Key: Environment, Value: !Ref Environment }
+              - { Key: ProjectName, Value: !Ref ProjectName }
 
-  # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${ProjectName}-asg-${Environment}'
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+      # REMOVED AutoScalingGroupName to avoid collisions
+      VPCZoneIdentifier: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: 1
       MaxSize: 3
       DesiredCapacity: 2
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
+      TargetGroupARNs: [!Ref ALBTargetGroup]
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-asg-${Environment}'
-          PropagateAtLaunch: false
-        - Key: Environment
-          Value: !Ref Environment
-          PropagateAtLaunch: true
-        - Key: ProjectName
-          Value: !Ref ProjectName
-          PropagateAtLaunch: true
+        - { Key: Name, Value: !Sub '${ProjectName}-asg-${Environment}', PropagateAtLaunch: false }
+        - { Key: Environment, Value: !Ref Environment, PropagateAtLaunch: true }
+        - { Key: ProjectName, Value: !Ref ProjectName, PropagateAtLaunch: true }
 
-  # Auto Scaling Policies
+  # -------------------- Scaling / Alarms --------------------
   ScaleUpPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -817,7 +607,6 @@ Resources:
       AdjustmentType: ChangeInCapacity
       Cooldown: 300
 
-  # CloudWatch Alarms
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -833,9 +622,7 @@ Resources:
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleUpPolicy
-        - !Ref SecurityAlertsTopic
+      AlarmActions: [!Ref ScaleUpPolicy, !Ref SecurityAlertsTopic]
 
   LowCPUAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -852,8 +639,7 @@ Resources:
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleDownPolicy
+      AlarmActions: [!Ref ScaleDownPolicy]
 
   DatabaseHighConnectionsAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -870,8 +656,7 @@ Resources:
       Dimensions:
         - Name: DBInstanceIdentifier
           Value: !Ref DatabaseInstance
-      AlarmActions:
-        - !Ref SecurityAlertsTopic
+      AlarmActions: [!Ref SecurityAlertsTopic]
 
 Outputs:
   VPCId:
