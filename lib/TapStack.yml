@@ -15,25 +15,17 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
-    Default: '/myapp/database/password'
-    Description: >-
-      SSM Parameter Store parameter name containing the database password
+    Default: 'SecurePassword123!'
+    Description: 'Database password - will be stored in SSM Parameter Store'
+    MinLength: 8
+    MaxLength: 128
 
-  DBPasswordParameterName:
+  EnvironmentSuffix:
     Type: String
-    Default: '/myapp/database/password'
-    Description: >-
-      Name of the SSM Parameter Store parameter containing the database password
-    AllowedPattern: '^[a-zA-Z0-9/_-]+$'
-  
-  AZ1:
-    Type: String
-    Default: us-west-2a
-    Description: Primary AZ
-  AZ2:
-    Type: String
-    Default: us-west-2b
-    Description: Secondary AZ (set same as AZ1 if only one AZ is enabled)
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming to avoid conflicts'
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+    MaxLength: 20
 
   Environment:
     Type: String
@@ -41,16 +33,17 @@ Parameters:
     Description: 'Environment name for resource naming'
     AllowedValues: ['development', 'staging', 'production']
 
-  DateSuffix:
-    Type: String
-    Default: 'production'
-    Description: Short date/timestamp to make bucket names unique
-    AllowedPattern: '^[a-z0-9-]+$'
-
 Resources:
-  # Note: SSM Parameter /myapp/database/password must exist before deployment
-  # Created via: aws ssm put-parameter --name "/myapp/database/password" \
-  #   --value "SecurePassword123!" --type "SecureString" --region us-west-2
+  # SSM Parameter for database password
+  DatabasePasswordParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/myapp-${EnvironmentSuffix}/database/password'
+      Type: SecureString
+      Value: !Ref DBPassword
+      Description: Database password for RDS instance
+      Tags:
+        Environment: !Ref Environment
 
   # VPC Configuration
   MyAppVPC:
@@ -61,7 +54,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-VPC-${Environment}'
+          Value: !Sub 'MyApp-VPC-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -71,7 +64,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-IGW-${Environment}'
+          Value: !Sub 'MyApp-IGW-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -92,7 +85,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-Public-Subnet-1-${Environment}'
+          Value: !Sub 'MyApp-Public-Subnet-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -105,7 +98,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-Public-Subnet-2-${Environment}'
+          Value: !Sub 'MyApp-Public-Subnet-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -118,7 +111,7 @@ Resources:
       AvailabilityZone: !Ref AZ1
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-Private-Subnet-1-${Environment}'
+          Value: !Sub 'MyApp-Private-Subnet-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -130,7 +123,7 @@ Resources:
       AvailabilityZone: !Ref AZ2
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-Private-Subnet-2-${Environment}'
+          Value: !Sub 'MyApp-Private-Subnet-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -142,7 +135,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-NAT-EIP-1-${Environment}'
+          Value: !Sub 'MyApp-NAT-EIP-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -153,7 +146,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-NAT-EIP-2-${Environment}'
+          Value: !Sub 'MyApp-NAT-EIP-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -164,7 +157,7 @@ Resources:
       VpcId: !Ref MyAppVPC
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-Public-RT-${Environment}'
+          Value: !Sub 'MyApp-Public-RT-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -174,7 +167,7 @@ Resources:
       VpcId: !Ref MyAppVPC
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-Private-RT-1-${Environment}'
+          Value: !Sub 'MyApp-Private-RT-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -184,7 +177,7 @@ Resources:
       VpcId: !Ref MyAppVPC
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-Private-RT-2-${Environment}'
+          Value: !Sub 'MyApp-Private-RT-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -224,7 +217,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-NAT-Gateway-1-${Environment}'
+          Value: !Sub 'MyApp-NAT-Gateway-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -238,7 +231,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-NAT-Gateway-2-${Environment}'
+          Value: !Sub 'MyApp-NAT-Gateway-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -268,11 +261,8 @@ Resources:
   # S3 Bucket for Access Logs
   MyAppS3AccessLogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub >-
-        myapp-access-logs-${Environment}-${DateSuffix}
+      BucketName: !Sub 'myapp-${EnvironmentSuffix}-access-logs-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -320,8 +310,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub >-
-                  arn:aws:s3:::myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}/*
+                Resource: !Sub 'arn:aws:s3:::myapp-${EnvironmentSuffix}-primary-${AWS::AccountId}-${AWS::Region}/*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -330,7 +319,7 @@ Resources:
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'MyApp-Lambda-SG-${Environment}'
+      GroupName: !Sub 'MyApp-Lambda-SG-${EnvironmentSuffix}'
       GroupDescription: Security group for Lambda function
       VpcId: !Ref MyAppVPC
       SecurityGroupEgress:
@@ -338,7 +327,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-Lambda-SG-${Environment}'
+          Value: !Sub 'MyApp-Lambda-SG-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -346,7 +335,7 @@ Resources:
   MyAppLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'MyApp-S3-Event-Handler-${Environment}'
+      FunctionName: !Sub 'MyApp-S3-Event-Handler-${EnvironmentSuffix}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -384,11 +373,8 @@ Resources:
   # Primary S3 Bucket with Access Logging
   MyAppS3Bucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub >-
-        myapp-primary-${Environment}-${DateSuffix}
+      BucketName: !Sub 'myapp-${EnvironmentSuffix}-primary-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       LoggingConfiguration:
@@ -424,14 +410,14 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub 'myapp-db-subnet-group-${Environment}'
+      DBSubnetGroupName: !Sub 'myapp-db-subnet-group-${EnvironmentSuffix}'
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-DB-Subnet-Group-${Environment}'
+          Value: !Sub 'MyApp-DB-Subnet-Group-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -439,7 +425,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'MyApp-Database-SG-${Environment}'
+      GroupName: !Sub 'MyApp-Database-SG-${EnvironmentSuffix}'
       GroupDescription: Security group for RDS PostgreSQL database
       VpcId: !Ref MyAppVPC
       SecurityGroupIngress:
@@ -450,22 +436,20 @@ Resources:
           Description: Allow access from Lambda security group
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-Database-SG-${Environment}'
+          Value: !Sub 'MyApp-Database-SG-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
   # RDS PostgreSQL Instance
   MyAppRDSInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      DBInstanceIdentifier: !Sub 'myapp-postgres-db-${Environment}'
+      DBInstanceIdentifier: !Sub 'myapp-postgres-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.medium
       Engine: postgres
       EngineVersion: '13.15'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:ssm-secure:${DBPassword}}}'
+      MasterUserPassword: !Sub '{{resolve:ssm-secure:/myapp-${EnvironmentSuffix}/database/password}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -476,10 +460,10 @@ Resources:
       BackupRetentionPeriod: 7
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Name
-          Value: !Sub 'MyApp-PostgreSQL-DB-${Environment}'
+          Value: !Sub 'MyApp-PostgreSQL-DB-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -516,6 +500,6 @@ Outputs:
 
   DatabasePasswordParameterName:
     Description: 'SSM Parameter Store name for database password'
-    Value: !Ref DBPasswordParameterName
+    Value: !Ref DatabasePasswordParameter
     Export:
       Name: !Sub '${AWS::StackName}-DBPasswordParameterName'
