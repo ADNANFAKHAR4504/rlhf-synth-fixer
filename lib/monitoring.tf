@@ -74,18 +74,9 @@ resource "aws_guardduty_detector" "main" {
   tags = local.common_tags
 }
 
-# Use existing Config delivery channel and recorder if they exist
-data "aws_config_delivery_channel" "existing" {
-  count = 1
-}
-
-data "aws_config_configuration_recorder" "existing" {
-  count = 1
-}
-
-# Only create Config resources if they don't already exist
+# Config delivery channel
 resource "aws_config_delivery_channel" "main" {
-  count          = length(data.aws_config_delivery_channel.existing) == 0 ? 1 : 0
+  count          = 1
   name           = "${local.project_prefix}-delivery-channel-${random_id.bucket_suffix.hex}"
   s3_bucket_name = aws_s3_bucket.config.bucket
   s3_key_prefix  = "config"
@@ -96,7 +87,7 @@ resource "aws_config_delivery_channel" "main" {
 }
 
 resource "aws_config_configuration_recorder" "main" {
-  count    = length(data.aws_config_configuration_recorder.existing) == 0 ? 1 : 0
+  count    = 1
   name     = "${local.project_prefix}-recorder-${random_id.bucket_suffix.hex}"
   role_arn = aws_iam_role.config.arn
 
@@ -108,7 +99,7 @@ resource "aws_config_configuration_recorder" "main" {
 
 # Config Configuration Recorder Status
 resource "aws_config_configuration_recorder_status" "main" {
-  count      = length(data.aws_config_configuration_recorder.existing) == 0 ? 1 : 0
+  count      = 1
   name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.main]
