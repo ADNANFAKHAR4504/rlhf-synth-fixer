@@ -291,6 +291,30 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # S3 Bucket Policy for CloudTrail
+  CorpS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CorpS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
   # CloudWatch Log Group with Encryption
   CorpCloudWatchLogGroup:
     Type: AWS::Logs::LogGroup
@@ -338,6 +362,7 @@ Resources:
   # CloudTrail for Audit Logging
   CorpCloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: CorpS3BucketPolicy
     Properties:
       TrailName: !Sub 'corp-cloudtrail-${EnvironmentSuffix}'
       S3BucketName: !Ref CorpS3Bucket

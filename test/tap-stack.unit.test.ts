@@ -169,6 +169,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const lifecycle = logsBucket.Properties.LifecycleConfiguration;
       expect(lifecycle.Rules[0].ExpirationInDays).toBe(90);
     });
+
   });
 
   describe('Monitoring Resources', () => {
@@ -332,7 +333,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(18);
+      expect(resourceCount).toBe(19);
     });
 
     test('should have correct number of parameters', () => {
