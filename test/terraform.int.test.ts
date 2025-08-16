@@ -1,8 +1,27 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Define interfaces for better type safety
+interface TerraformOutput {
+  value: any;
+  sensitive?: boolean;
+  type?: string;
+}
+
+interface TerraformOutputs {
+  [key: string]: TerraformOutput;
+}
+
+interface MockOutputs {
+  [key: string]: TerraformOutput;
+}
+
+interface ProcessedOutputs {
+  [key: string]: any;
+}
+
 describe('Terraform HTTP/HTTPS Security Group Integration Tests', () => {
-  let outputs: any;
+  let outputs: ProcessedOutputs;
 
   beforeAll(() => {
     // Read the deployment outputs from terraform outputs
@@ -14,7 +33,7 @@ describe('Terraform HTTP/HTTPS Security Group Integration Tests', () => {
 
     if (!fs.existsSync(outputsPath)) {
       // Create mock outputs for testing if real outputs don't exist
-      const mockOutputs = {
+      const mockOutputs: MockOutputs = {
         aws_region: { value: "us-west-2" },
         vpc_id: { value: "vpc-0123456789abcdef0" },
         vpc_cidr_block: { value: "10.0.0.0/16" },
@@ -49,20 +68,20 @@ describe('Terraform HTTP/HTTPS Security Group Integration Tests', () => {
       console.warn('Terraform outputs not found. Using mock data for testing.');
       console.warn('To test with real infrastructure, run: terraform output -json > terraform-outputs.json');
       
-      // Extract values from mock data
+      // Extract values from mock data with proper typing
       outputs = {};
-      Object.keys(mockOutputs).forEach(key => {
+      Object.keys(mockOutputs).forEach((key: string) => {
         outputs[key] = mockOutputs[key].value;
       });
       return;
     }
 
     const outputsContent = fs.readFileSync(outputsPath, 'utf8');
-    const rawOutputs = JSON.parse(outputsContent);
+    const rawOutputs: TerraformOutputs = JSON.parse(outputsContent);
     
-    // Extract values from Terraform output format
+    // Extract values from Terraform output format with proper typing
     outputs = {};
-    Object.keys(rawOutputs).forEach(key => {
+    Object.keys(rawOutputs).forEach((key: string) => {
       outputs[key] = rawOutputs[key].value;
     });
   });
