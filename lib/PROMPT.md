@@ -70,6 +70,6 @@ Provide only the TypeScript code for bin/tap.ts, lib/tapstack.ts, and sample tes
 
 Ensure the generated stack deploys in us-east-1.
 
-Use descriptive  resource naming with the environment name included.
+Use descriptive a resource naming with the environment name included.
 
 Follow Pulumi/HashiCorp AWS provider best practices for CDKTF.
