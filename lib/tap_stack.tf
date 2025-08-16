@@ -1390,7 +1390,7 @@ EOF
 # Application Load Balancer for primary region
 resource "aws_lb" "primary" {
   provider           = aws.primary
-  name               = "${var.project_name}-alb-primary-${random_id.suffix.hex}"
+  name               = "mrapp-alb-pri-${random_id.suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_primary.id]
@@ -1406,7 +1406,7 @@ resource "aws_lb" "primary" {
 # Application Load Balancer for secondary region
 resource "aws_lb" "secondary" {
   provider           = aws.secondary
-  name               = "${var.project_name}-alb-secondary-${random_id.suffix.hex}"
+  name               = "mrapp-alb-sec-${random_id.suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_secondary.id]
@@ -1422,7 +1422,7 @@ resource "aws_lb" "secondary" {
 # Target Group for primary region
 resource "aws_lb_target_group" "web_primary" {
   provider = aws.primary
-  name     = "${var.project_name}-web-primary-${random_id.suffix.hex}"
+  name     = "mrapp-web-pri-${random_id.suffix.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.primary.id
@@ -1447,7 +1447,7 @@ resource "aws_lb_target_group" "web_primary" {
 # Target Group for secondary region
 resource "aws_lb_target_group" "web_secondary" {
   provider = aws.secondary
-  name     = "${var.project_name}-web-secondary-${random_id.suffix.hex}"
+  name     = "mrapp-web-sec-${random_id.suffix.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.secondary.id
