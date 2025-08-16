@@ -247,7 +247,7 @@ export class RDSStack extends pulumi.ComponentResource {
     );
 
     this.endpoint = rdsInstance.endpoint;
-    this.instanceId = rdsInstance.id;
+    this.instanceId = rdsInstance.identifier;
 
     this.registerOutputs({
       endpoint: this.endpoint,
