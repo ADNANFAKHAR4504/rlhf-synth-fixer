@@ -1,9 +1,11 @@
-Imagine you’re an AWS Solutions Architect and you’ve been asked to build a resilient, highly available infrastructure for a big e-commerce platform in us-west-2. The goal is to make sure everything stays up and running—even if something fails—while keeping things secure and easy to manage.
+Hey, so I'm working on this e-commerce infrastructure project and need some help with AWS. The client wants something really robust in us-west-2 that won't fall over if things go sideways.
 
-Here’s what we need: all the main resources (like web servers, databases, and caches) should be spread across multiple availability zones so we don’t have a single point of failure. If something goes wrong, we want automated failover and health checks—think load balancers and smart monitoring.
+Basically, we can't have single points of failure anywhere. Web servers, databases, caching layer - everything needs to be spread across multiple AZs. And when stuff breaks (because it always does), we want it to recover on its own without anyone having to wake up at 3am.
 
-For the database, use RDS or Aurora with cross-AZ replication to keep our data safe. Networking should be solid: a VPC with both public and private subnets, proper routing, NAT gateways, and security groups that follow least privilege.
+The database situation is pretty standard - thinking RDS or Aurora with cross-AZ replication. Nothing fancy, just reliable. Network-wise, we'll need the usual VPC setup with public/private subnets, NAT gateways, security groups locked down tight.
 
-We also want Lambda functions that can jump in automatically if CloudWatch or EventBridge spots a problem. IAM roles and policies should be as minimal as possible—just enough for EC2, RDS, ElastiCache, and Lambda to do their jobs.
+Oh, and automation is huge for them. They want Lambda functions watching CloudWatch and EventBridge, ready to fix problems automatically. IAM permissions should be super minimal - just what each service actually needs to function.
 
-Finally, make sure the setup supports different environments (like dev), and that it’s easy to deploy and manage. When you’re done, please share the Python AWS CDK code (in app.py) that brings all
+One more thing - this has to work across different environments. Dev, staging, prod, the whole deal. And deployment should be straightforward, not some nightmare process.
+
+Can you put together the CDK code for this? Python preferred, and just throw it in app.py. Thanks!
