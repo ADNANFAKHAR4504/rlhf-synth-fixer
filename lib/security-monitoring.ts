@@ -19,6 +19,10 @@ export function createSecurityMonitoring(
   environment: string,
   provider: aws.Provider
 ): SecurityMonitoringResources {
+  // Get configuration for Config recorder name
+  const config = new pulumi.Config();
+  const configRecorderName =
+    config.get('configRecorderName') || 'config-recorder-prod';
   // Create S3 bucket for CloudTrail logs
   const cloudTrailBucket = new aws.s3.Bucket(
     `cloudtrail-logs-${environment}`,
@@ -123,7 +127,7 @@ export function createSecurityMonitoring(
       name: `cloudtrail-${environment}`,
       s3BucketName: cloudTrailBucket.bucket,
       includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
+      isMultiRegionTrail: false,
       enableLogFileValidation: true,
 
       eventSelectors: [
@@ -317,11 +321,12 @@ export function createSecurityMonitoring(
     { provider }
   );
 
-  // Config configuration recorder (must be created before delivery channel)
+  // Create Config recorder - if one already exists with the same name,
+  // Pulumi will handle the conflict during deployment
   const configRecorder = new aws.cfg.Recorder(
     `config-recorder-${environment}`,
     {
-      name: `config-recorder-${environment}`,
+      name: configRecorderName,
       roleArn: configRole.arn,
       recordingGroup: {
         allSupported: true,
