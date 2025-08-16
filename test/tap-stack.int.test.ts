@@ -88,10 +88,11 @@ import {
 } from '@aws-sdk/client-iam';
 
 // Configuration
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1355'
 const environment = process.env.ENVIRONMENT || 'production';
 const projectName = process.env.PROJECT_NAME || 'secure-web-app18';
 const region = process.env.AWS_REGION || 'us-east-1';
-const stackName = `${projectName}-${environment}`;
+const stackName = `TapStack${environmentSuffix}`;
 
 // Initialize AWS SDK clients
 const cloudformation = new CloudFormationClient({ region });
