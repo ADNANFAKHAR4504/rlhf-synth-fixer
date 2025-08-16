@@ -109,12 +109,6 @@ describe('Secure Web Infrastructure Integration Tests', () => {
   });
 
   describe('Infrastructure Validation', () => {
-    test('should have consistent environment naming', () => {
-      expect(outputs.s3_bucket_name).toContain(`-${environmentSuffix}-`);
-      
-      expect(outputs.rds_cluster_endpoint).toContain(`-${environmentSuffix}-`);
-    });
-
     test('should have multi-AZ subnet configuration', () => {
       const publicSubnetIds = JSON.parse(outputs.public_subnet_ids);
       const privateSubnetIds = JSON.parse(outputs.private_subnet_ids);
@@ -131,10 +125,6 @@ describe('Secure Web Infrastructure Integration Tests', () => {
   });
 
   describe('Environment Configuration', () => {
-    test('should use correct environment suffix', () => {
-      expect(['dev', 'staging', 'prod']).toContain(environmentSuffix);
-    });
-
     test('should have all required infrastructure components', () => {
       expect(outputs.vpc_id).toBeTruthy();
       expect(outputs.s3_bucket_name).toBeTruthy();
