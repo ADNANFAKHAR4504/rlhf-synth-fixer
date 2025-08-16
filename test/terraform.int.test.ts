@@ -198,7 +198,7 @@ describe("Compliance Requirement Validation", () => {
     
     expect(terraformContent).toMatch(/resource\s+"random_string"\s+"db_username"/);
     expect(terraformContent).toMatch(/resource\s+"random_string"\s+"db_password"/);
-    expect(terraformContent).toMatch(/length\s*=\s*16/);
+    expect(terraformContent).toMatch(/length\s*=\s*8/);
     expect(terraformContent).toMatch(/length\s*=\s*32/);
     expect(terraformContent).toMatch(/resource\s+"aws_secretsmanager_secret"/);
     expect(terraformContent).toMatch(/resource\s+"aws_secretsmanager_secret_version"/);

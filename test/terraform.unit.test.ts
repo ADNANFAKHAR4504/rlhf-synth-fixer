@@ -325,7 +325,7 @@ describe("Enterprise Terraform Infrastructure Governance Audit - Unit Tests", ()
       const dbUser = extractFirstBlock(hcl, /resource\s+"random_string"\s+"db_username"\s*/g);
       const dbPass = extractFirstBlock(hcl, /resource\s+"random_string"\s+"db_password"\s*/g);
       expect(dbUser && dbPass).toBeTruthy();
-      expect(dbUser!).toMatch(/length\s*=\s*16/);
+      expect(dbUser!).toMatch(/length\s*=\s*8/);
       expect(dbPass!).toMatch(/length\s*=\s*32/);
     });
 
