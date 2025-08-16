@@ -438,7 +438,6 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
             stmt.Principal?.Service?.includes('ec2.amazonaws.com')
           );
           
-          expect(ec2AssumeStatement).toBeDefined();
           expect(ec2AssumeStatement.Effect).toBe('Allow');
           expect(ec2AssumeStatement.Action).toContain('sts:AssumeRole');
         });
