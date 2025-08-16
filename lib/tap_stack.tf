@@ -104,7 +104,7 @@ resource "random_string" "deployment_id" {
   special = false
   keepers = {
     deployment = "reset816"
-    force_recreation = "20250816-025000"
+    force_recreation = "20250816-030000"
   }
 }
 
@@ -431,7 +431,7 @@ resource "aws_s3_bucket" "main" {
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${local.name_prefix}-trail-${random_string.unique_suffix.result}"
+  bucket = "${local.name_prefix}-ct-${random_string.unique_suffix.result}"
 
   # Force delete bucket even if not empty
   force_destroy = true
@@ -444,6 +444,7 @@ resource "aws_s3_bucket" "cloudtrail" {
     replace_triggered_by = [
       random_string.deployment_id
     ]
+    create_before_destroy = true
   }
 }
 
@@ -500,6 +501,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
     id     = "delete_all_objects"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     expiration {
       days = 1
     }
@@ -521,6 +526,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
   rule {
     id     = "delete_all_objects"
     status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
 
     expiration {
       days = 1
