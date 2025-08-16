@@ -178,7 +178,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name           = "main-cloudtrail"
+  name           = "main-cloudtrail-${random_id.bucket_suffix.hex}"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
   event_selector {
@@ -272,6 +272,21 @@ resource "aws_s3_bucket_policy" "secure_data" {
             "aws:sourceVpce" = aws_vpc_endpoint.s3.id
           }
         }
+      },
+      {
+        Sid    = "AllowVPCEndpointAccess"
+        Effect = "Allow"
+        Principal = "*"
+        Action = "s3:*"
+        Resource = [
+          aws_s3_bucket.secure_data.arn,
+          "${aws_s3_bucket.secure_data.arn}/*"
+        ]
+        Condition = {
+          StringEquals = {
+            "aws:sourceVpce" = aws_vpc_endpoint.s3.id
+          }
+        }
       }
     ]
   })
@@ -327,7 +342,7 @@ resource "aws_security_group" "ec2" {
 
 # IAM Role for EC2 Instance
 resource "aws_iam_role" "ec2_role" {
-  name = "ec2-ssm-role"
+  name = "ec2-ssm-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -357,7 +372,7 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_policy" {
 
 # IAM Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2-ssm-profile"
+  name = "ec2-ssm-profile-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.ec2_role.name
 
   tags = {
