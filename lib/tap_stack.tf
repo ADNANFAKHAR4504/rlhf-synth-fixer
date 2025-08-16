@@ -546,17 +546,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
   }
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
 
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.s3_key.arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
-}
 
 resource "aws_s3_bucket_public_access_block" "app_data" {
   bucket = aws_s3_bucket.app_data.id
