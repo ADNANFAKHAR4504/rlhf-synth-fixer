@@ -122,8 +122,7 @@
             "KeyType": "HASH"
           }
         ]
-      },
-      "Description": "DynamoDB table for storing items data"
+      }
     },
     "UsersTable": {
       "Type": "AWS::DynamoDB::Table",
@@ -144,8 +143,7 @@
             "KeyType": "HASH"
           }
         ]
-      },
-      "Description": "DynamoDB table for storing users data"
+      }
     },
     "OrdersTable": {
       "Type": "AWS::DynamoDB::Table",
@@ -166,8 +164,7 @@
             "KeyType": "HASH"
           }
         ]
-      },
-      "Description": "DynamoDB table for storing orders data"
+      }
     },
     "ItemsFunction": {
       "Type": "AWS::Lambda::Function",
@@ -180,7 +177,7 @@
         "Timeout": 30,
         "MemorySize": 128,
         "Code": {
-          "ZipFile": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n\n  const itemsTableName = process.env.ITEMS_TABLE_NAME;\n\n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const item = JSON.parse(event.body);\n        const putParams = {\n          TableName: itemsTableName,\n          Item: marshall(item),\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return {\n          statusCode: 201,\n          body: JSON.stringify({ message: 'Item created successfully' }),\n        };\n      case 'GET':\n        const itemId = event.queryStringParameters?.itemId;\n        if (!itemId) {\n          return {\n            statusCode: 400,\n            body: JSON.stringify({ message: 'Missing itemId query parameter' }),\n          };\n        }\n        const getParams = {\n          TableName: itemsTableName,\n          Key: marshall({ itemId }),\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return {\n            statusCode: 404,\n            body: JSON.stringify({ message: 'Item not found' }),\n          };\n        }\n        return {\n          statusCode: 200,\n          body: JSON.stringify(unmarshall(Item)),\n        };\n      default:\n        return {\n          statusCode: 405,\n          body: JSON.stringify({ message: 'Method Not Allowed' }),\n        };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return {\n      statusCode: 500,\n      body: JSON.stringify({ message: 'Internal Server Error' }),\n    };\n  }\n};"
+          "ZipFile": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const itemsTableName = process.env.ITEMS_TABLE_NAME;\n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const item = JSON.parse(event.body);\n        const putParams = {\n          TableName: itemsTableName,\n          Item: marshall(item),\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return { statusCode: 201, body: JSON.stringify({ message: 'Item created successfully' }), };\n      case 'GET':\n        const itemId = event.queryStringParameters?.itemId;\n        if (!itemId) {\n          return { statusCode: 400, body: JSON.stringify({ message: 'Missing itemId query parameter' }), };\n        }\n        const getParams = {\n          TableName: itemsTableName,\n          Key: marshall({ itemId }),\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return { statusCode: 404, body: JSON.stringify({ message: 'Item not found' }), };\n        }\n        return { statusCode: 200, body: JSON.stringify(unmarshall(Item)), };\n      default:\n        return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }), };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return { statusCode: 500, body: JSON.stringify({ message: 'Internal Server Error' }), };\n  }\n};\n"
         },
         "Role": {
           "Fn::GetAtt": [
@@ -195,8 +192,7 @@
             }
           }
         }
-      },
-      "Description": "Lambda function for handling items operations"
+      }
     },
     "UsersFunction": {
       "Type": "AWS::Lambda::Function",
@@ -209,7 +205,7 @@
         "Timeout": 30,
         "MemorySize": 128,
         "Code": {
-          "ZipFile": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n\n  const usersTableName = process.env.USERS_TABLE_NAME;\n\n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const user = JSON.parse(event.body);\n        const putParams = {\n          TableName: usersTableName,\n          Item: marshall(user),\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return {\n          statusCode: 201,\n          body: JSON.stringify({ message: 'User created successfully' }),\n        };\n      case 'GET':\n        const userId = event.queryStringParameters?.userId;\n        if (!userId) {\n          return {\n            statusCode: 400,\n            body: JSON.stringify({ message: 'Missing userId query parameter' }),\n          };\n        }\n        const getParams = {\n          TableName: usersTableName,\n          Key: marshall({ userId }),\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return {\n            statusCode: 404,\n            body: JSON.stringify({ message: 'User not found' }),\n          };\n        }\n        return {\n          statusCode: 200,\n          body: JSON.stringify(unmarshall(Item)),\n        };\n      default:\n        return {\n          statusCode: 405,\n          body: JSON.stringify({ message: 'Method Not Allowed' }),\n        };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return {\n      statusCode: 500,\n      body: JSON.stringify({ message: 'Internal Server Error' }),\n    };\n  }\n};"
+          "ZipFile": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const usersTableName = process.env.USERS_TABLE_NAME;\n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const user = JSON.parse(event.body);\n        const putParams = {\n          TableName: usersTableName,\n          Item: marshall(user),\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return { statusCode: 201, body: JSON.stringify({ message: 'User created successfully' }), };\n      case 'GET':\n        const userId = event.queryStringParameters?.userId;\n        if (!userId) {\n          return { statusCode: 400, body: JSON.stringify({ message: 'Missing userId query parameter' }), };\n        }\n        const getParams = {\n          TableName: usersTableName,\n          Key: marshall({ userId }),\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return { statusCode: 404, body: JSON.stringify({ message: 'User not found' }), };\n        }\n        return { statusCode: 200, body: JSON.stringify(unmarshall(Item)), };\n      default:\n        return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }), };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return { statusCode: 500, body: JSON.stringify({ message: 'Internal Server Error' }), };\n  }\n};\n"
         },
         "Role": {
           "Fn::GetAtt": [
@@ -224,8 +220,7 @@
             }
           }
         }
-      },
-      "Description": "Lambda function for handling users operations"
+      }
     },
     "OrdersFunction": {
       "Type": "AWS::Lambda::Function",
@@ -238,7 +233,7 @@
         "Timeout": 30,
         "MemorySize": 128,
         "Code": {
-          "ZipFile": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n\n  const ordersTableName = process.env.ORDERS_TABLE_NAME;\n\n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const order = JSON.parse(event.body);\n        const putParams = {\n          TableName: ordersTableName,\n          Item: marshall(order),\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return {\n          statusCode: 201,\n          body: JSON.stringify({ message: 'Order created successfully' }),\n        };\n      case 'GET':\n        const orderId = event.queryStringParameters?.orderId;\n        if (!orderId) {\n          return {\n            statusCode: 400,\n            body: JSON.stringify({ message: 'Missing orderId query parameter' }),\n          };\n        }\n        const getParams = {\n          TableName: ordersTableName,\n          Key: marshall({ orderId }),\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return {\n            statusCode: 404,\n            body: JSON.stringify({ message: 'Order not found' }),\n          };\n        }\n        return {\n          statusCode: 200,\n          body: JSON.stringify(unmarshall(Item)),\n        };\n      default:\n        return {\n          statusCode: 405,\n          body: JSON.stringify({ message: 'Method Not Allowed' }),\n        };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return {\n      statusCode: 500,\n      body: JSON.stringify({ message: 'Internal Server Error' }),\n    };\n  }\n};"
+          "ZipFile": "const { DynamoDBClient, PutItemCommand, GetItemCommand } = require('@aws-sdk/client-dynamodb');\nconst { marshall, unmarshall } = require('@aws-sdk/util-dynamodb');\nconst ddbClient = new DynamoDBClient({ region: process.env.AWS_REGION });\n\nexports.handler = async (event) => {\n  console.log('Received event:', JSON.stringify(event, null, 2));\n  const ordersTableName = process.env.ORDERS_TABLE_NAME;\n  try {\n    switch (event.httpMethod) {\n      case 'POST':\n        const order = JSON.parse(event.body);\n        const putParams = {\n          TableName: ordersTableName,\n          Item: marshall(order),\n        };\n        await ddbClient.send(new PutItemCommand(putParams));\n        return { statusCode: 201, body: JSON.stringify({ message: 'Order created successfully' }), };\n      case 'GET':\n        const orderId = event.queryStringParameters?.orderId;\n        if (!orderId) {\n          return { statusCode: 400, body: JSON.stringify({ message: 'Missing orderId query parameter' }), };\n        }\n        const getParams = {\n          TableName: ordersTableName,\n          Key: marshall({ orderId }),\n        };\n        const { Item } = await ddbClient.send(new GetItemCommand(getParams));\n        if (!Item) {\n          return { statusCode: 404, body: JSON.stringify({ message: 'Order not found' }), };\n        }\n        return { statusCode: 200, body: JSON.stringify(unmarshall(Item)), };\n      default:\n        return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }), };\n    }\n  } catch (error) {\n    console.error('Error:', error);\n    return { statusCode: 500, body: JSON.stringify({ message: 'Internal Server Error' }), };\n  }\n};\n"
         },
         "Role": {
           "Fn::GetAtt": [
@@ -253,8 +248,7 @@
             }
           }
         }
-      },
-      "Description": "Lambda function for handling orders operations"
+      }
     },
     "ApiGateway": {
       "Type": "AWS::ApiGateway::RestApi",
