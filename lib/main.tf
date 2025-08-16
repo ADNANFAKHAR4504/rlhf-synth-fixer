@@ -247,21 +247,11 @@ resource "aws_iam_role_policy_attachment" "s3_replication_attach" {
 # Data source for current AWS Account ID
 data "aws_caller_identity" "current" {}
 
-# Data source to find an existing CloudTrail or create one if missing
-data "aws_cloudtrail" "existing" {
-  provider              = aws.useast1
-  is_multi_region_trail = true
-}
-
-locals {
-  found_trail_arn = try(data.aws_cloudtrail.existing.arn, null)
-}
-
 resource "aws_cloudtrail" "main" {
   provider                      = aws.useast1
   name                          = "${local.project_name}-${local.environment}-audit-trail"
   s3_bucket_name                = aws_s3_bucket.logs.id
-  is_multi_region_trail         = false
+  is_multi_region_trail         = true
   include_global_service_events = true
   tags                          = local.common_tags
 }

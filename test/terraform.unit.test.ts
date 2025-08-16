@@ -24,7 +24,6 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
 
     test('should conditionally create a multi-region CloudTrail', () => {
-      expect(mainTfContent).toContain('data "aws_cloudtrail" "existing"');
       expect(mainTfContent).toContain('resource "aws_cloudtrail" "main"');
     });
 
