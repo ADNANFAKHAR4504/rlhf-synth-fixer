@@ -52,6 +52,8 @@ Compliance-focused mapping to the prompt requirements
    - user_data installs httpd, renders env-specific index.html.
    - adds '/env' and '/health' endpoints (static content).
    - Logs shipped to CloudWatch (awslogs).
+11) Deletion MODE is allowed only in Prod, not in Dev
+12) Follow cost saving rules as well
 
 SECURITY / ZERO DOWNTIME / ROLLBACK markers are included inline below.
 ================================================================================
@@ -175,7 +177,7 @@ class TapStack(ComponentResource):
     # Common consistent tagging across all resources
     tags: Dict[str, str] = {
         "Environment": env,
-        "Project": "TAP Task 4",
+        "Project": "TAP Task 4", # Hard Coded Requirement, so it is okay for self containment
         "ManagedBy": "Pulumi",
         # NOTE: If you leverage provider defaultTags, ensure REGION is a plain string
     }
@@ -442,7 +444,7 @@ class TapStack(ComponentResource):
         publicly_accessible=False,
         multi_az=True,  # HA requirement
         storage_encrypted=True,
-        deletion_protection=cfg["rds_deletion_protection"],
+        deletion_protection=cfg["rds_deletion_protection"], # Note: Deletion is allowed in Dev and not in Prod MOD!
         # True for dev, False for prod
         skip_final_snapshot=not cfg["rds_deletion_protection"],
         final_snapshot_identifier=(

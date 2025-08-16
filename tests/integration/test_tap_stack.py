@@ -12,6 +12,20 @@ REGION = os.getenv("AWS_REGION") or os.getenv(
 # ---- Helpers ---------------------------------------------------------------
 
 
+def safe_get(d, key, default=None):
+  return d.get(key, default) if isinstance(d, dict) else default
+
+
+@pytest.fixture(scope="module")
+def ec2_client():
+  return boto3.client("ec2", region_name=REGION)
+
+
+@pytest.fixture(scope="module")
+def asg_client():
+  return boto3.client("autoscaling", region_name=REGION)
+
+
 def _elb_client():
   return boto3.client("elbv2", region_name=REGION)
 
@@ -178,3 +192,41 @@ def test_sns_topic_exists():
     assert "Owner" in attrs and "Policy" in attrs, "Unexpected SNS topic attributes"
   except (ClientError, BotoCoreError) as e:
     pytest.fail(f"get_topic_attributes failed for {arn}: {e}")
+# --- Security Groups ---
+
+
+def test_alb_security_group_exists(ec2_client):
+  """Ensure ALB security group was created and has ingress rules."""
+  resp = ec2_client.describe_security_groups(
+      Filters=[{"Name": "group-name", "Values": ["dev-alb-sg"]}])
+  sgs = safe_get(resp, "SecurityGroups", [])
+  assert sgs, "ALB Security Group not found"
+  ingress = safe_get(sgs[0], "IpPermissions", [])
+  assert ingress, "ALB SG missing ingress rules"
+
+
+def test_rds_security_group_exists(ec2_client):
+  """Ensure RDS security group was created."""
+  resp = ec2_client.describe_security_groups(
+      Filters=[{"Name": "group-name", "Values": ["dev-rds-sg"]}])
+  sgs = safe_get(resp, "SecurityGroups", [])
+  assert sgs, "RDS Security Group not found"
+
+
+def test_ec2_security_group_exists(ec2_client):
+  """Ensure EC2 security group was created."""
+  resp = ec2_client.describe_security_groups(
+      Filters=[{"Name": "group-name", "Values": ["dev-ec2-sg"]}])
+  sgs = safe_get(resp, "SecurityGroups", [])
+  assert sgs, "EC2 Security Group not found"
+
+
+# --- Scaling Policies ---
+
+def test_autoscaling_policies_exist(asg_client):
+  """Ensure ASG scaling policies are present for scale-up and scale-down."""
+  resp = asg_client.describe_policies(AutoScalingGroupName="dev-asg")
+  policies = safe_get(resp, "ScalingPolicies", [])
+  names = [safe_get(p, "PolicyName", "") for p in policies]
+  assert any("dev-scale-up" in n for n in names), "Scale-up policy missing"
+  assert any("dev-scale-down" in n for n in names), "Scale-down policy missing"
