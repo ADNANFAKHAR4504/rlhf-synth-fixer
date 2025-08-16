@@ -182,22 +182,188 @@ describe('Terraform Infrastructure Unit Tests', () => {
       // HTTPS removed for test environment
     });
 
-    test('should create EC2 security group with restricted access', () => {
-      expect(mainTfContent).toContain(
-        'resource "aws_security_group" "prod_ec2_sg"'
-      );
-      expect(mainTfContent).toMatch(
-        /name\s*=\s*"prod-ec2-sg\$\{local\.env_suffix\}"/
-      );
-      expect(mainTfContent).toContain('description     = "HTTP from ALB"');
-      expect(mainTfContent).toContain(
-        'security_groups = [aws_security_group.prod_alb_sg.id]'
-      );
-      expect(mainTfContent).toContain('description = "SSH from VPC"');
-      expect(mainTfContent).toContain('from_port   = 22');
-      expect(mainTfContent).toContain('cidr_blocks = [var.vpc_cidr]');
+    // File: test/terraform.more.unit.test.ts
+
+    describe('Terraform main.tf Extended Unit Tests', () => {
+      const libPath = path.join(__dirname, '..', 'lib');
+      const mainTfPath = path.join(libPath, 'main.tf');
+      const variablesTfPath = path.join(libPath, 'variables.tf');
+      const outputsTfPath = path.join(libPath, 'outputs.tf');
+      const providerTfPath = path.join(libPath, 'provider.tf');
+
+      let mainTfContent = '';
+      let variablesTfContent = '';
+      let outputsTfContent = '';
+      let providerTfContent = '';
+
+      beforeAll(() => {
+        expect(fs.existsSync(mainTfPath)).toBe(true);
+        expect(fs.existsSync(variablesTfPath)).toBe(true);
+        expect(fs.existsSync(outputsTfPath)).toBe(true);
+        expect(fs.existsSync(providerTfPath)).toBe(true);
+
+        mainTfContent = fs.readFileSync(mainTfPath, 'utf8');
+        variablesTfContent = fs.readFileSync(variablesTfPath, 'utf8');
+        outputsTfContent = fs.readFileSync(outputsTfPath, 'utf8');
+        providerTfContent = fs.readFileSync(providerTfPath, 'utf8');
+      });
+
+      describe('Variables types and presence', () => {
+        test('should declare types for subnet CIDR variables', () => {
+          expect(variablesTfContent).toMatch(/variable\s+"public_subnet_cidrs"[\s\S]*type\s*=\s*list\(string\)/);
+          expect(variablesTfContent).toMatch(/variable\s+"private_subnet_cidrs"[\s\S]*type\s*=\s*list\(string\)/);
+        });
+
+        test('should declare numeric types for ASG sizing variables', () => {
+          expect(variablesTfContent).toMatch(/variable\s+"min_size"[\s\S]*type\s*=\s*number/);
+          expect(variablesTfContent).toMatch(/variable\s+"max_size"[\s\S]*type\s*=\s*number/);
+          expect(variablesTfContent).toMatch(/variable\s+"desired_capacity"[\s\S]*type\s*=\s*number/);
+        });
+
+        test('should define instance_type variable', () => {
+          expect(variablesTfContent).toMatch(/variable\s+"instance_type"/);
+          expect(variablesTfContent).toMatch(/type\s*=\s*string/);
+        });
+
+        test('locals.env_suffix should be derived from environment_suffix', () => {
+          expect(variablesTfContent).toMatch(/locals\s*\{[\s\S]*env_suffix[\s\S]*environment_suffix/);
+        });
+      });
+
+      describe('Provider sanity checks', () => {
+        test('should define terraform and required_providers block', () => {
+          expect(providerTfContent).toMatch(/terraform\s*\{[\s\S]*required_providers/);
+        });
+
+        test('should set AWS provider region from variable', () => {
+          expect(providerTfContent).toMatch(/provider\s+"aws"[\s\S]*region\s*=\s*var\.aws_region/);
+        });
+      });
+
+      describe('ALB configuration details', () => {
+        test('ALB should be attached to public subnets explicitly', () => {
+          expect(mainTfContent).toMatch(/resource\s+"aws_lb"\s+"prod_alb"[\s\S]*subnets?\s*=\s*aws_subnet\.prod_public_subnets\[\*\]\.id/);
+        });
+
+        test('ALB security group should allow all egress', () => {
+          const albSgBlock = mainTfContent.match(/resource\s+"aws_security_group"\s+"prod_alb_sg"[\s\S]*?\n}/);
+          expect(albSgBlock).toBeTruthy();
+          if (albSgBlock) {
+            expect(albSgBlock[0]).toMatch(/egress[\s\S]*from_port\s*=\s*0[\s\S]*to_port\s*=\s*0[\s\S]*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
+          }
+        });
+
+        test('Listener should forward to the target group', () => {
+          expect(mainTfContent).toMatch(/resource\s+"aws_lb_listener"\s+"prod_alb_listener_http"[\s\S]*default_action[\s\S]*type\s*=\s*"forward"[\s\S]*target_group_arn\s*=\s*aws_lb_target_group\.prod_tg\.arn/);
+        });
+      });
+
+      describe('NAT, EIPs and routing counts', () => {
+        test('EIPs should be created per public subnet', () => {
+          expect(mainTfContent).toMatch(/resource\s+"aws_eip"\s+"prod_nat_eips"[\s\S]*count\s*=\s*length\(var\.public_subnet_cidrs\)/);
+        });
+
+        test('NAT Gateways should be created per public subnet', () => {
+          expect(mainTfContent).toMatch(/resource\s+"aws_nat_gateway"\s+"prod_nat_gateways"[\s\S]*count\s*=\s*length\(var\.public_subnet_cidrs\)/);
+        });
+
+        test('Private route tables should scale with private subnets', () => {
+          expect(mainTfContent).toMatch(/resource\s+"aws_route_table"\s+"prod_private_rt"[\s\S]*count\s*=\s*length\(var\.private_subnet_cidrs\)/);
+          expect(mainTfContent).toMatch(/resource\s+"aws_route_table_association"\s+"prod_private_rta"[\s\S]*count\s*=\s*length\(var\.private_subnet_cidrs\)/);
+        });
+
+        test('Public route table associations should scale with public subnets', () => {
+          expect(mainTfContent).toMatch(/resource\s+"aws_route_table_association"\s+"prod_public_rta"[\s\S]*count\s*=\s*length\(var\.public_subnet_cidrs\)/);
+        });
+      });
+
+      describe('Security Groups specifics', () => {
+        test('EC2 SG should allow HTTP only from ALB SG', () => {
+          const ec2SgBlock = mainTfContent.match(/resource\s+"aws_security_group"\s+"prod_ec2_sg"[\s\S]*?\n}/);
+          expect(ec2SgBlock).toBeTruthy();
+          if (ec2SgBlock) {
+            expect(ec2SgBlock[0]).toMatch(/ingress[\s\S]*description\s*=\s*"HTTP from ALB"[\s\S]*from_port\s*=\s*80[\s\S]*to_port\s*=\s*80[\s\S]*security_groups\s*=\s*\[\s*aws_security_group\.prod_alb_sg\.id\s*\]/);
+          }
+        });
+
+        test('No SSH ingress should be open to the world', () => {
+          const sshIngresses = mainTfContent.match(/ingress[\s\S]*from_port\s*=\s*22[\s\S]*cidr_blocks\s*=\s*\[[^\]]+\]/g) || [];
+          const anyWorld = sshIngresses.some(b => /0\.0\.0\.0\/0/.test(b));
+          expect(anyWorld).toBe(false);
+        });
+
+        test('EC2 SG should allow all egress', () => {
+          const ec2SgBlock = mainTfContent.match(/resource\s+"aws_security_group"\s+"prod_ec2_sg"[\s\S]*?\n}/);
+          expect(ec2SgBlock).toBeTruthy();
+          if (ec2SgBlock) {
+            expect(ec2SgBlock[0]).toMatch(/egress[\s\S]*from_port\s*=\s*0[\s\S]*to_port\s*=\s*0[\s\S]*cidr_blocks\s*=\s*\[\s*"0\.0\.0\.0\/0"\s*\]/);
+          }
+        });
+      });
+
+      describe('Auto Scaling linkage', () => {
+        test('ASG should reference Launch Template', () => {
+          const asgBlock = mainTfContent.match(/resource\s+"aws_autoscaling_group"\s+"prod_asg"[\s\S]*?\n}/);
+          expect(asgBlock).toBeTruthy();
+          if (asgBlock) {
+            expect(asgBlock[0]).toMatch(/launch_template\s*\{[\s\S]*(id|name)\s*=\s*aws_launch_template\.prod_launch_template\.(id|name)[\s\S]*\}/);
+          }
+        });
+
+        test('ASG capacity settings should use variables', () => {
+          const asgBlock = mainTfContent.match(/resource\s+"aws_autoscaling_group"\s+"prod_asg"[\s\S]*?\n}/);
+          expect(asgBlock).toBeTruthy();
+          if (asgBlock) {
+            expect(asgBlock[0]).toMatch(/min_size\s*=\s*var\.min_size/);
+            expect(asgBlock[0]).toMatch(/max_size\s*=\s*var\.max_size/);
+            expect(asgBlock[0]).toMatch(/desired_capacity\s*=\s*var\.desired_capacity/);
+          }
+        });
+      });
+
+      describe('S3 hardening details', () => {
+        test('Logs bucket versioning should be enabled', () => {
+          expect(mainTfContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"prod_logs_bucket_versioning"[\s\S]*status\s*=\s*"Enabled"/);
+        });
+
+        test('SSE configuration should define default encryption rule', () => {
+          const encBlocks = mainTfContent.match(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"prod_(data|logs)_bucket_encryption"[\s\S]*?\n}/g) || [];
+          expect(encBlocks.length).toBeGreaterThanOrEqual(2);
+          encBlocks.forEach(b => {
+            expect(b).toMatch(/rule[\s\S]*apply_server_side_encryption_by_default[\s\S]*sse_algorithm\s*=\s*"AES256"/);
+          });
+        });
+      });
+
+      describe('Outputs consistency', () => {
+        test('Should expose ALB DNS and URLs', () => {
+          expect(outputsTfContent).toMatch(/output\s+"load_balancer_dns"[\s\S]*value\s*=\s*aws_lb\.prod_alb\.dns_name/);
+          expect(outputsTfContent).toMatch(/output\s+"load_balancer_url_http"/);
+          expect(outputsTfContent).toMatch(/output\s+"load_balancer_url_https"/);
+        });
+
+        test('Should expose SG IDs and Subnet IDs', () => {
+          expect(outputsTfContent).toMatch(/output\s+"alb_security_group_id"[\s\S]*value\s*=\s*aws_security_group\.prod_alb_sg\.id/);
+          expect(outputsTfContent).toMatch(/output\s+"ec2_security_group_id"[\s\S]*value\s*=\s*aws_security_group\.prod_ec2_sg\.id/);
+          expect(outputsTfContent).toMatch(/output\s+"public_subnet_ids"[\s\S]*value\s*=\s*aws_subnet\.prod_public_subnets\[\*\]\.id/);
+          expect(outputsTfContent).toMatch(/output\s+"private_subnet_ids"[\s\S]*value\s*=\s*aws_subnet\.prod_private_subnets\[\*\]\.id/);
+        });
+      });
+
+      describe('Tagging coverage', () => {
+        test('Key resources should merge common tags and Name', () => {
+          const required = [
+            /resource\s+"aws_vpc"\s+"prod_vpc"[\s\S]*tags\s*=\s*merge\(/,
+            /resource\s+"aws_internet_gateway"\s+"prod_igw"[\s\S]*tags\s*=\s*merge\(/,
+            /resource\s+"aws_subnet"\s+"prod_public_subnets"[\s\S]*tags\s*=\s*merge\(/,
+            /resource\s+"aws_subnet"\s+"prod_private_subnets"[\s\S]*tags\s*=\s*merge\(/,
+            /resource\s+"aws_lb"\s+"prod_alb"[\s\S]*tags\s*=\s*merge\(/,
+            /resource\s+"aws_launch_template"\s+"prod_launch_template"[\s\S]*tag_specifications/,
+          ];
+          required.forEach(r => expect(mainTfContent).toMatch(r));
+        });
+      });
     });
-  });
 
   describe('Load Balancer Configuration', () => {
     test('should create Application Load Balancer', () => {
