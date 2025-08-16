@@ -417,10 +417,10 @@ Statement = [
 Sid = "Enable IAM User Permissions"
 Effect = "Allow"
 Principal = {
-AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws*caller_identity.current.account_id}:root"
 }
-Action = "kms:_"
-Resource = "_"
+Action = "kms:*"
+Resource = "\_"
 },
 {
 Sid = "Allow RDS Service"
@@ -467,10 +467,10 @@ Statement = [
 Sid = "Enable IAM User Permissions"
 Effect = "Allow"
 Principal = {
-AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws*caller_identity.current.account_id}:root"
 }
-Action = "kms:_"
-Resource = "_"
+Action = "kms:*"
+Resource = "\_"
 },
 {
 Sid = "Allow S3 Service"
@@ -998,7 +998,7 @@ policy_arn = aws_iam_policy.ec2_s3_access.arn
 
 # IAM policy for CloudWatch logs
 
-resource "aws_iam_policy" "cloudwatch_logs_policy" {
+resource "aws*iam_policy" "cloudwatch_logs_policy" {
 name = "${local.name_prefix}-cloudwatch-logs-policy"
   description = "Policy for services to write to CloudWatch Logs"
   policy = jsonencode({
@@ -1013,7 +1013,7 @@ name = "${local.name_prefix}-cloudwatch-logs-policy"
         "logs:DescribeLogStreams",
         "logs:DescribeLogGroups"
       ]
-      Resource = "arn:${data.aws_partition.current.partition}:logs:_:_:\*"
+      Resource = "arn:${data.aws_partition.current.partition}:logs:*:\_:\*"
 }]
 })
 }
