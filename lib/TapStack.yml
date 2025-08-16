@@ -118,7 +118,11 @@ Resources:
             Principal:
               AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
-            Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService":
+                  - !Sub "s3.${AWS::Region}.amazonaws.com"
           - Effect: Allow
             Principal:
               Service:
@@ -129,7 +133,13 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
               - kms:DescribeKey
-            Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService":
+                  - !Sub "s3.${AWS::Region}.amazonaws.com"
+                  - !Sub "codepipeline.${AWS::Region}.amazonaws.com"
+                  - !Sub "codebuild.${AWS::Region}.amazonaws.com"
       Tags:
         - Key: Name
           Value: !Sub "${ApplicationName}-s3-encryption-key-${EnvironmentSuffix}"
