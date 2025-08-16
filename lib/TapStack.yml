@@ -1,16 +1,11 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Production-ready single-region environment (VPC, ALB+ASG, RDS Multi-AZ, S3, AWS Config, optional Route53 records). No global resources.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Production-ready single-region environment (VPC, ALB+ASG, RDS Multi-AZ, S3, optional Route53 records). No global resources. No AWS Config.
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: prod-regional
     Description: Environment name for tagging and resource names
-
-  Region:
-    Type: String
-    Default: !Ref AWS::Region
-    Description: Stack region (defaults to current)
 
   VpcCidr:
     Type: String
@@ -38,24 +33,24 @@ Parameters:
   S3BucketName:
     Type: String
     Description: Globally-unique S3 bucket name
-    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+    AllowedPattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
     MinLength: 3
     MaxLength: 63
 
   EnableS3Replication:
     Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
+    Default: "false"
+    AllowedValues: ["true", "false"]
     Description: Enable S3 Cross-Region Replication
 
   ReplicationDestinationBucketArn:
     Type: String
-    Default: ''
-    Description: ARN of destination bucket for S3 replication (optional)
+    Default: ""
+    Description: "ARN of destination bucket for S3 replication (optional)"
 
   DBSecretArn:
     Type: String
-    Description: ARN of Secrets Manager secret JSON with keys username and password
+    Description: "ARN of Secrets Manager JSON secret with keys: username, password"
 
   DBInstanceClass:
     Type: String
@@ -76,20 +71,20 @@ Parameters:
 
   PostgresEngineVersion:
     Type: String
-    Default: '14.11'
-    AllowedPattern: '^(1[0-9]|[0-9])([.][0-9]+){0,2}$'
-    Description: Postgres engine version (default set to a stable 14.x)
+    Default: "14.11"
+    AllowedPattern: "^(1[0-9]|[0-9])([.][0-9]+){0,2}$"
+    Description: Postgres engine version (pinned to stable 14.x)
 
   MySqlEngineVersion:
     Type: String
-    Default: '8.0.35'
-    AllowedPattern: '^[0-9]+([.][0-9]+){1,2}$'
+    Default: "8.0.35"
+    AllowedPattern: "^[0-9]+([.][0-9]+){1,2}$"
     Description: MySQL engine version (8.0 family)
 
   DBDeletionProtection:
     Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
+    Default: "true"
+    AllowedValues: ["true", "false"]
     Description: Enable deletion protection on RDS instance
 
   EC2InstanceType:
@@ -123,12 +118,12 @@ Parameters:
 
   HostedZoneId:
     Type: String
-    Default: ''
+    Default: ""
     Description: Existing Route53 Hosted Zone ID to create ALIAS records (optional)
 
   ACMCertificateArn:
     Type: String
-    Default: ''
+    Default: ""
     Description: Regional ACM certificate ARN for HTTPS on ALB (optional)
 
   Project:
@@ -143,12 +138,13 @@ Parameters:
 
 Conditions:
   EnableReplication: !And
-    - !Equals [!Ref EnableS3Replication, 'true']
-    - !Not [!Equals [!Ref ReplicationDestinationBucketArn, '']]
-  CreateRoute53Records: !Not [!Equals [!Ref HostedZoneId, '']]
-  EnableHTTPS: !Not [!Equals [!Ref ACMCertificateArn, '']]
+    - !Equals [!Ref EnableS3Replication, "true"]
+    - !Not [!Equals [!Ref ReplicationDestinationBucketArn, ""]]
+  CreateRoute53Records: !Not [!Equals [!Ref HostedZoneId, ""]]
+  EnableHTTPS: !Not [!Equals [!Ref ACMCertificateArn, ""]]
   UseThreeAZs: !Equals [!Ref AZCount, 3]
   IsPostgres: !Equals [!Ref DBEngine, postgres]
+  DeletionProtectionOn: !Equals [!Ref DBDeletionProtection, "true"]
 
 Resources:
   VPC:
@@ -159,7 +155,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-vpc'
+          Value: !Sub "${EnvironmentName}-vpc"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -167,14 +163,14 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
         - Key: Region
-          Value: !Ref AWS::Region
+          Value: !Ref "AWS::Region"
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-igw'
+          Value: !Sub "${EnvironmentName}-igw"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -192,12 +188,12 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Select [0, !Ref PublicSubnetCidrs]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-public-az1'
+          Value: !Sub "${EnvironmentName}-public-az1"
         - Key: Tier
           Value: public
         - Key: Environment
@@ -211,12 +207,12 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Select [1, !Ref PublicSubnetCidrs]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-public-az2'
+          Value: !Sub "${EnvironmentName}-public-az2"
         - Key: Tier
           Value: public
         - Key: Environment
@@ -231,12 +227,12 @@ Resources:
     Condition: UseThreeAZs
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [2, !GetAZs '']
+      AvailabilityZone: !Select [2, !GetAZs ""]
       CidrBlock: !Select [2, !Ref PublicSubnetCidrs]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-public-az3'
+          Value: !Sub "${EnvironmentName}-public-az3"
         - Key: Tier
           Value: public
         - Key: Environment
@@ -250,11 +246,11 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       CidrBlock: !Select [0, !Ref PrivateSubnetCidrs]
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-private-az1'
+          Value: !Sub "${EnvironmentName}-private-az1"
         - Key: Tier
           Value: private
         - Key: Environment
@@ -268,11 +264,11 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       CidrBlock: !Select [1, !Ref PrivateSubnetCidrs]
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-private-az2'
+          Value: !Sub "${EnvironmentName}-private-az2"
         - Key: Tier
           Value: private
         - Key: Environment
@@ -287,11 +283,11 @@ Resources:
     Condition: UseThreeAZs
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [2, !GetAZs '']
+      AvailabilityZone: !Select [2, !GetAZs ""]
       CidrBlock: !Select [2, !Ref PrivateSubnetCidrs]
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-private-az3'
+          Value: !Sub "${EnvironmentName}-private-az3"
         - Key: Tier
           Value: private
         - Key: Environment
@@ -308,7 +304,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-nat-eip-az1'
+          Value: !Sub "${EnvironmentName}-nat-eip-az1"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -323,7 +319,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-nat-eip-az2'
+          Value: !Sub "${EnvironmentName}-nat-eip-az2"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -339,7 +335,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-nat-eip-az3'
+          Value: !Sub "${EnvironmentName}-nat-eip-az3"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -354,7 +350,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-nat-az1'
+          Value: !Sub "${EnvironmentName}-nat-az1"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -369,7 +365,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-nat-az2'
+          Value: !Sub "${EnvironmentName}-nat-az2"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -385,7 +381,7 @@ Resources:
       SubnetId: !Ref PublicSubnet3
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-nat-az3'
+          Value: !Sub "${EnvironmentName}-nat-az3"
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
@@ -399,7 +395,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-public-rt'
+          Value: !Sub "${EnvironmentName}-public-rt"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -436,7 +432,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-private-rt-az1'
+          Value: !Sub "${EnvironmentName}-private-rt-az1"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -446,7 +442,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-private-rt-az2'
+          Value: !Sub "${EnvironmentName}-private-rt-az2"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -457,7 +453,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-private-rt-az3'
+          Value: !Sub "${EnvironmentName}-private-rt-az3"
         - Key: Environment
           Value: !Ref EnvironmentName
 
@@ -508,7 +504,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-public-nacl'
+          Value: !Sub "${EnvironmentName}-public-nacl"
 
   PublicNaclInbound:
     Type: AWS::EC2::NetworkAclEntry
@@ -554,7 +550,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-private-nacl'
+          Value: !Sub "${EnvironmentName}-private-nacl"
 
   PrivateNaclInbound:
     Type: AWS::EC2::NetworkAclEntry
@@ -613,7 +609,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-alb-sg'
+          Value: !Sub "${EnvironmentName}-alb-sg"
 
   WebTierSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -638,7 +634,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-web-sg'
+          Value: !Sub "${EnvironmentName}-web-sg"
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -655,14 +651,14 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-db-sg'
+          Value: !Sub "${EnvironmentName}-db-sg"
 
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-ec2-instance-role'
+      RoleName: !Sub "${EnvironmentName}-ec2-instance-role"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -673,41 +669,36 @@ Resources:
       Policies:
         - PolicyName: s3-access
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Sid: ObjectsRW
                 Effect: Allow
                 Action: [s3:GetObject, s3:PutObject, s3:DeleteObject]
-                Resource: !Join ['', [!GetAtt S3Bucket.Arn, '/*']]
+                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
               - Sid: ListBucket
                 Effect: Allow
                 Action: s3:ListBucket
-                Resource: !GetAtt S3Bucket.Arn
+                Resource: !Sub "arn:aws:s3:::${S3BucketName}"
         - PolicyName: secretsmanager-read-db
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action: [secretsmanager:GetSecretValue]
                 Resource: !Ref DBSecretArn
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W28
-            reason: RoleName is intentionally set for cross-reference
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${EnvironmentName}-ec2-instance-profile'
+      InstanceProfileName: !Sub "${EnvironmentName}-ec2-instance-profile"
       Roles: [!Ref EC2InstanceRole]
 
   RDSMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-rds-monitoring-role'
+      RoleName: !Sub "${EnvironmentName}-rds-monitoring-role"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -720,9 +711,9 @@ Resources:
     Type: AWS::IAM::Role
     Condition: EnableReplication
     Properties:
-      RoleName: !Sub '${EnvironmentName}-s3-replication-role'
+      RoleName: !Sub "${EnvironmentName}-s3-replication-role"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -731,35 +722,35 @@ Resources:
       Policies:
         - PolicyName: s3-replication
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Sid: SourceRead
                 Effect: Allow
                 Action:
                   - s3:GetReplicationConfiguration
                   - s3:ListBucket
-                Resource: !GetAtt S3Bucket.Arn
+                Resource: !Sub "arn:aws:s3:::${S3BucketName}"
               - Sid: SourceObjectRead
                 Effect: Allow
                 Action:
                   - s3:GetObjectVersion
                   - s3:GetObjectVersionAcl
                   - s3:GetObjectVersionTagging
-                Resource: !Join ['', [!GetAtt S3Bucket.Arn, '/*']]
+                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
               - Sid: DestWrite
                 Effect: Allow
                 Action:
                   - s3:ReplicateObject
                   - s3:ReplicateDelete
                   - s3:ReplicateTags
-                Resource: !Sub '${ReplicationDestinationBucketArn}/*'
+                Resource: !Sub "${ReplicationDestinationBucketArn}/*"
 
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${EnvironmentName}-lt'
+      LaunchTemplateName: !Sub "${EnvironmentName}-lt"
       LaunchTemplateData:
-        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
         InstanceType: !Ref EC2InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -778,7 +769,7 @@ Resources:
         Monitoring:
           Enabled: true
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             set -euo pipefail
             yum update -y
@@ -789,22 +780,22 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${EnvironmentName}-alb'
+      Name: !Sub "${EnvironmentName}-alb"
       Scheme: internet-facing
       Type: application
       Subnets:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
-        - !If [UseThreeAZs, !Ref PublicSubnet3, !Ref 'AWS::NoValue']
+        - !If [UseThreeAZs, !Ref PublicSubnet3, !Ref "AWS::NoValue"]
       SecurityGroups: [!Ref ALBSecurityGroup]
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-alb'
+          Value: !Sub "${EnvironmentName}-alb"
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${EnvironmentName}-tg'
+      Name: !Sub "${EnvironmentName}-tg"
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -816,7 +807,7 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
-        HttpCode: '200-399'
+        HttpCode: "200-399"
 
   ALBListenerHttp:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -844,11 +835,11 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${EnvironmentName}-asg'
+      AutoScalingGroupName: !Sub "${EnvironmentName}-asg"
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
-        - !If [UseThreeAZs, !Ref PrivateSubnet3, !Ref 'AWS::NoValue']
+        - !If [UseThreeAZs, !Ref PrivateSubnet3, !Ref "AWS::NoValue"]
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -860,7 +851,7 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-asg-instance'
+          Value: !Sub "${EnvironmentName}-asg-instance"
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -879,31 +870,32 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
-        - !If [UseThreeAZs, !Ref PrivateSubnet3, !Ref 'AWS::NoValue']
+        - !If [UseThreeAZs, !Ref PrivateSubnet3, !Ref "AWS::NoValue"]
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-db-subnets'
+          Value: !Sub "${EnvironmentName}-db-subnets"
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-db'
+      DBInstanceIdentifier: !Sub "${EnvironmentName}-db"
       DBInstanceClass: !Ref DBInstanceClass
       Engine: !Ref DBEngine
-      EngineVersion: !If [IsPostgres, !Ref PostgresEngineVersion, !Ref MySqlEngineVersion]
+      EngineVersion:
+        !If [IsPostgres, !Ref PostgresEngineVersion, !Ref MySqlEngineVersion]
       AllocatedStorage: 100
       StorageType: gp3
       StorageEncrypted: true
       MultiAZ: true
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups: [!Ref DatabaseSecurityGroup]
-      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecretArn}:SecretString:username}}'
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecretArn}:SecretString:password}}'
+      MasterUsername: !Sub "{{resolve:secretsmanager:${DBSecretArn}:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecretArn}:SecretString:password}}"
       DBName: !Ref DBName
       BackupRetentionPeriod: 7
-      DeletionProtection: !Equals [!Ref DBDeletionProtection, 'true']
+      DeletionProtection: !If [DeletionProtectionOn, true, false]
       EnablePerformanceInsights: true
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
@@ -912,7 +904,7 @@ Resources:
       CopyTagsToSnapshot: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-db'
+          Value: !Sub "${EnvironmentName}-db"
 
   S3Bucket:
     Type: AWS::S3::Bucket
@@ -937,128 +929,37 @@ Resources:
           - EnableReplication
           - Role: !GetAtt S3ReplicationRole.Arn
             Rules:
-              - Id: !Sub '${EnvironmentName}-crr'
+              - Id: !Sub "${EnvironmentName}-crr"
                 Status: Enabled
                 Filter: {}
                 Destination:
                   Bucket: !Ref ReplicationDestinationBucketArn
                   AccessControlTranslation:
                     Owner: Destination
-          - !Ref AWS::NoValue
+          - !Ref "AWS::NoValue"
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-data-bucket'
+          Value: !Sub "${EnvironmentName}-data-bucket"
         - Key: Environment
           Value: !Ref EnvironmentName
 
-  S3BucketPolicyForConfig:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref S3Bucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSConfigBucketPermissionsCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt S3Bucket.Arn
-          - Sid: AWSConfigBucketDelivery
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Join ['', [!GetAtt S3Bucket.Arn, '/AWSLogs/', !Ref AWS::AccountId, '/Config/*']]
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: default
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: false
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    DependsOn: ConfigRecorder
-    Properties:
-      S3BucketName: !Ref S3Bucket
-
-  ConfigRecorderStatus:
-    Type: AWS::Config::ConfigurationRecorderStatus
-    Properties:
-      Name: !Ref ConfigRecorder
-      Recording: true
-
-  ConfigRuleIamPasswordPolicy:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: iam-password-policy
-      Source:
-        Owner: AWS
-        SourceIdentifier: IAM_PASSWORD_POLICY
-
-  ConfigRuleRdsMultiAz:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: rds-multi-az
-      Source:
-        Owner: AWS
-        SourceIdentifier: RDS_MULTI_AZ_SUPPORT
-
-  ConfigRuleEc2NoPublicIp:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: ec2-no-public-ip
-      Source:
-        Owner: AWS
-        SourceIdentifier: EC2_INSTANCE_NO_PUBLIC_IP
-
-  ConfigRuleS3NoPublicRead:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: s3-no-public-read
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
-
-  ConfigRuleS3NoPublicWrite:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: s3-no-public-write
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED
-
-  ConfigRuleEc2ImdsV2:
-    Type: AWS::Config::ConfigRule
-    Properties:
-      ConfigRuleName: ec2-imdsv2
-      Source:
-        Owner: AWS
-        SourceIdentifier: EC2_IMDSV2_CHECK
-
-  AlbRecordA:
+  ApplicationLoadBalancerRecordA:
     Condition: CreateRoute53Records
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZoneId
-      Name: !Sub 'app.${EnvironmentName}.'
+      Name: !Sub "app.${EnvironmentName}."
       Type: A
       AliasTarget:
         DNSName: !GetAtt ApplicationLoadBalancer.DNSName
         HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
 
-  AlbRecordAAAA:
+  ApplicationLoadBalancerRecordAAAA:
     Condition: CreateRoute53Records
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZoneId
-      Name: !Sub 'app.${EnvironmentName}.'
+      Name: !Sub "app.${EnvironmentName}."
       Type: AAAA
       AliasTarget:
         DNSName: !GetAtt ApplicationLoadBalancer.DNSName
@@ -1068,33 +969,55 @@ Outputs:
   VpcId:
     Value: !Ref VPC
     Description: VPC ID
+
   PublicSubnets:
-    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2, !If [UseThreeAZs, !Ref PublicSubnet3, '']]]
+    Value: !Join
+      - ","
+      - - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+        - !If [UseThreeAZs, !Ref PublicSubnet3, !Ref "AWS::NoValue"]
     Description: Public subnet IDs
+
   PrivateSubnets:
-    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2, !If [UseThreeAZs, !Ref PrivateSubnet3, '']]]
+    Value: !Join
+      - ","
+      - - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !If [UseThreeAZs, !Ref PrivateSubnet3, !Ref "AWS::NoValue"]
     Description: Private subnet IDs
+
   SecurityGroups:
-    Value: !Join [',', [!Ref ALBSecurityGroup, !Ref WebTierSecurityGroup, !Ref DatabaseSecurityGroup]]
+    Value:
+      !Join [
+        ",",
+        [
+          !Ref ALBSecurityGroup,
+          !Ref WebTierSecurityGroup,
+          !Ref DatabaseSecurityGroup,
+        ],
+      ]
     Description: Security group IDs
+
   LaunchTemplateId:
     Value: !Ref LaunchTemplate
     Description: Launch template ID
+
   AsgName:
     Value: !Ref AutoScalingGroup
     Description: Auto Scaling Group name
+
   AlbDnsName:
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Description: ALB DNS name
+
   S3BucketNameOut:
     Value: !Ref S3Bucket
     Description: Regional S3 bucket name
+
   S3BucketArnOut:
-    Value: !GetAtt S3Bucket.Arn
+    Value: !Sub "arn:aws:s3:::${S3BucketName}"
     Description: Regional S3 bucket ARN
+
   RdsEndpoint:
     Value: !GetAtt RDSInstance.Endpoint.Address
     Description: RDS endpoint address
-  AwsConfigStatus:
-    Value: !Ref ConfigRecorderStatus
-    Description: AWS Config recorder status
