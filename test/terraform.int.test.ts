@@ -53,11 +53,11 @@ describe('Terraform Integration Tests', () => {
       
       // Mock outputs for development/testing
       outputs = {
-        source_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012' },
-        destination_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-replica' },
-        logging_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-access-logs' },
-        mfa_policy_arn: { sensitive: false, type: 'string', value: 'arn:aws:iam::123456789012:policy/data-secured-123456789012-mfa-access-policy' },
-        replication_role_arn: { sensitive: false, type: 'string', value: 'arn:aws:iam::123456789012:role/data-secured-123456789012-replication-role' },
+        source_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-v2' },
+        destination_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-replica-v2' },
+        logging_bucket_name: { sensitive: false, type: 'string', value: 'data-secured-123456789012-access-logs-v2' },
+        mfa_policy_arn: { sensitive: false, type: 'string', value: 'arn:aws:iam::123456789012:policy/data-secured-123456789012-mfa-access-policy-v2' },
+        replication_role_arn: { sensitive: false, type: 'string', value: 'arn:aws:iam::123456789012:role/data-secured-123456789012-replication-role-v2' },
         aws_region: { sensitive: false, type: 'string', value: 'us-east-1' }
       };
     }
@@ -430,9 +430,9 @@ describe('Terraform Integration Tests', () => {
       const destBucket = outputs.destination_bucket_name.value;
       const loggingBucket = outputs.logging_bucket_name.value;
       
-      expect(sourceBucket).toMatch(/^data-secured-\d{12}$/);
-      expect(destBucket).toMatch(/^data-secured-\d{12}-replica$/);
-      expect(loggingBucket).toMatch(/^data-secured-\d{12}-access-logs$/);
+      expect(sourceBucket).toMatch(/^data-secured-\d{12}-v2$/);
+      expect(destBucket).toMatch(/^data-secured-\d{12}-replica-v2$/);
+      expect(loggingBucket).toMatch(/^data-secured-\d{12}-access-logs-v2$/);
       
       console.log('✅ All buckets follow the correct naming convention');
     });
