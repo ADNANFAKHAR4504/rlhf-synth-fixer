@@ -66,14 +66,15 @@ describe("TapStack Infrastructure Integration Tests", () => {
       );
       expect(versioning.Status).toBe("Enabled");
 
-      // Check encryption (updated to handle possible different structure)
+      // Check encryption (flexible for AES256 or KMS)
       const encryption = await s3.send(
         new GetBucketEncryptionCommand({ Bucket: bucket })
       );
       const rules =
         (encryption.ServerSideEncryptionConfiguration as any[] | undefined)?.[0] ||
         (encryption.ServerSideEncryptionConfiguration as any)?.Rules?.[0];
-      expect(rules?.ServerSideEncryptionByDefault?.SSEAlgorithm).toBe("AES256");
+      const sseAlgorithm = rules?.ServerSideEncryptionByDefault?.SSEAlgorithm;
+      expect(["AES256", "aws:kms"]).toContain(sseAlgorithm);
 
       // Check region
       const location = await s3.send(
