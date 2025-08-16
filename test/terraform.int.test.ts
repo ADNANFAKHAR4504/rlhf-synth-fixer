@@ -1,36 +1,38 @@
 // Integration tests for Terraform infrastructure
 // Real AWS calls - requires deployment outputs from cfn-outputs/flat-outputs.json
 
-import fs from "fs";
-import path from "path";
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeFlowLogsCommand,
-  DescribeSecurityGroupsCommand,
-} from "@aws-sdk/client-ec2";
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-} from "@aws-sdk/client-s3";
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 import {
-  KMSClient,
+  DescribeFlowLogsCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from "@aws-sdk/client-ec2";
+import {
+  GetPolicyCommand,
+  GetRoleCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
+} from "@aws-sdk/client-iam";
+import {
   DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+  KMSClient,
   ListAliasesCommand,
 } from "@aws-sdk/client-kms";
 import {
-  IAMClient,
-  GetRoleCommand,
-  ListAttachedRolePoliciesCommand,
-  GetPolicyCommand,
-} from "@aws-sdk/client-iam";
+  GetBucketEncryptionCommand,
+  HeadBucketCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import fs from "fs";
+import path from "path";
 
 // Environment requirements
 const AWS_PROFILE = process.env.AWS_PROFILE;
@@ -111,8 +113,10 @@ describe("Terraform Financial Services Infrastructure - Integration Tests", () =
       const primaryVpc = primaryVpcResponse.Vpcs![0];
       expect(primaryVpc.CidrBlock).toBe("10.10.0.0/16");
       expect(primaryVpc.State).toBe("available");
-      expect(primaryVpc.EnableDnsHostnames).toBe(true);
-      expect(primaryVpc.EnableDnsSupport).toBe(true);
+      const dnsHostnamesAttr = await primaryClient.ec2.send(new DescribeVpcAttributeCommand({ VpcId: deploymentOutputs.primary_vpc_id, Attribute: "enableDnsHostnames" }));
+      expect(dnsHostnamesAttr.EnableDnsHostnames?.Value).toBe(true);
+      const dnsSupportAttr = await primaryClient.ec2.send(new DescribeVpcAttributeCommand({ VpcId: deploymentOutputs.primary_vpc_id, Attribute: "enableDnsSupport" }));
+      expect(dnsSupportAttr.EnableDnsSupport?.Value).toBe(true);
 
       // Test secondary VPC
       const secondaryVpcResponse = await secondaryClient.ec2.send(new DescribeVpcsCommand({
@@ -198,7 +202,8 @@ describe("Terraform Financial Services Infrastructure - Integration Tests", () =
       expect(primaryKeyResponse.KeyMetadata).toBeDefined();
       expect(primaryKeyResponse.KeyMetadata!.KeyState).toBe("Enabled");
       expect(primaryKeyResponse.KeyMetadata!.Origin).toBe("AWS_KMS");
-      expect(primaryKeyResponse.KeyMetadata!.KeyRotationStatus).toBe(true);
+      const primaryRotation = await primaryClient.kms.send(new GetKeyRotationStatusCommand({ KeyId: primaryKeyId }));
+      expect(primaryRotation.KeyRotationEnabled).toBe(true);
       
       // Test secondary KMS key
       const secondaryKeyId = deploymentOutputs.kms_logs_secondary_arn.split("/")[1];
@@ -208,7 +213,8 @@ describe("Terraform Financial Services Infrastructure - Integration Tests", () =
       
       expect(secondaryKeyResponse.KeyMetadata).toBeDefined();
       expect(secondaryKeyResponse.KeyMetadata!.KeyState).toBe("Enabled");
-      expect(secondaryKeyResponse.KeyMetadata!.KeyRotationStatus).toBe(true);
+      const secondaryRotation = await secondaryClient.kms.send(new GetKeyRotationStatusCommand({ KeyId: secondaryKeyId }));
+      expect(secondaryRotation.KeyRotationEnabled).toBe(true);
     }, 15000);
 
     test("int-s3-encryption: S3 buckets exist with KMS encryption enabled", async () => {
