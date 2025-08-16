@@ -119,10 +119,11 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
     test('All resources should use environment suffix', () => {
       expect(mainTfContent).toContain('${var.environment_suffix}');
-      // Check key resources have suffix
-      expect(mainTfContent).toMatch(/\$\{var\.project_name\}-\$\{var\.environment_suffix\}-s3bucket/);
-      expect(mainTfContent).toMatch(/\$\{var\.project_name\}-\$\{var\.environment_suffix\}-oac/);
-      expect(mainTfContent).toMatch(/\$\{var\.project_name\}-\$\{var\.environment_suffix\}-ec2-s3-role/);
+      expect(mainTfContent).toContain('${local.base_name}');
+      // Check key resources have proper naming with environment suffix
+      expect(mainTfContent).toMatch(/\$\{lower\(var\.project_name\)\}-\$\{var\.environment_suffix\}-s3bucket/);
+      expect(mainTfContent).toMatch(/\$\{local\.base_name\}-oac/);
+      expect(mainTfContent).toMatch(/\$\{local\.base_name\}-ec2-s3-role/);
     });
   });
 
