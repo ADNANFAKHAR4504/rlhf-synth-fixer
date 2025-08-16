@@ -240,11 +240,6 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
   });
 
   describe('Compliance Resources', () => {
-    test('should have Config service role', () => {
-      expect(template.Resources.CorpConfigServiceRole).toBeDefined();
-      expect(template.Resources.CorpConfigServiceRole.Type).toBe('AWS::IAM::ServiceLinkedRole');
-    });
-
     test('should have Config recorder', () => {
       expect(template.Resources.CorpConfigRecorder).toBeDefined();
       expect(template.Resources.CorpConfigRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
@@ -341,7 +336,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(21);
+      expect(resourceCount).toBe(20);
     });
 
     test('should have correct number of parameters', () => {

@@ -249,9 +249,37 @@ CorpEC2Role:
 - Comprehensive resource tagging
 - Logical output organization
 
+### 19. AWS Config Service-Linked Role Conflict Resolution
+
+**Issue**: The template initially tried to create an explicit AWS Config service-linked role, but the role already existed in the AWS account.
+
+**Original (Causing Conflict)**:
+```yaml
+CorpConfigServiceRole:
+  Type: AWS::IAM::ServiceLinkedRole
+  Properties:
+    AWSServiceName: config.amazonaws.com
+    Description: 'Service-linked role for AWS Config'
+
+CorpConfigRecorder:
+  DependsOn: CorpConfigServiceRole
+```
+
+**Fixed (Reference Existing Role)**:
+```yaml
+# Removed explicit service-linked role creation
+CorpConfigRecorder:
+  Type: AWS::Config::ConfigurationRecorder
+  Properties:
+    RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
+    # Removed DependsOn: CorpConfigServiceRole
+```
+
+**Impact**: This resolves the deployment error "Service role name AWSServiceRoleForConfig has been taken in this account" by referencing the existing service-linked role instead of attempting to create a new one.
+
 ## Summary
 
-The fixes addressed six critical deployment issues while enhancing the infrastructure with comprehensive security controls, testing frameworks, and compliance measures:
+The fixes addressed seven critical deployment issues while enhancing the infrastructure with comprehensive security controls, testing frameworks, and compliance measures:
 
 1. **CloudFormation Validation Errors**: Fixed KMS key properties, S3 notifications, and CloudTrail logging
 2. **Deployment Dependencies**: Eliminated external VPC dependency by creating complete network infrastructure
@@ -259,5 +287,6 @@ The fixes addressed six critical deployment issues while enhancing the infrastru
 4. **Environment Suffixes**: Implemented consistent EnvironmentSuffix usage across all resources
 5. **Network Infrastructure**: Added complete VPC, subnet, and routing configuration
 6. **Self-Sufficient Deployment**: Created template that can deploy independently without external dependencies
+7. **Service-Linked Role Conflicts**: Fixed AWS Config role conflicts by referencing existing roles instead of creating new ones
 
 The ideal response provides a production-ready, secure AWS infrastructure that meets enterprise security standards, CIS compliance requirements, and deployment automation best practices.

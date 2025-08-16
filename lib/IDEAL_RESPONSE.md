@@ -396,13 +396,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Config Service for Compliance Monitoring
-  CorpConfigServiceRole:
-    Type: AWS::IAM::ServiceLinkedRole
-    Properties:
-      AWSServiceName: config.amazonaws.com
-      Description: 'Service-linked role for AWS Config'
-
   # Config Configuration Recorder
   CorpConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
@@ -412,7 +405,6 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-    DependsOn: CorpConfigServiceRole
 
   # Config Delivery Channel
   CorpConfigDeliveryChannel:
