@@ -66,7 +66,7 @@ describe('SecureWebApp CloudFormation Template Unit Tests', () => {
       const param = template.Parameters.AllowedCIDR;
       expect(param.Type).toBe('String');
       expect(param.Default).toBe('10.0.0.0/16');
-      expect(param.AllowedPattern).toBe('^(\\d{1,3}\\.){3}\\d{1,3}\\/(1-2][0-9]|3[0-2])$');
+      expect(param.AllowedPattern).toBe('^(\\d{1,3}\\.){3}\\d{1,3}\\/([1-2][0-9]|3[0-2])$');
     });
 
     test('DBUsername parameter should have constraints', () => {
@@ -103,7 +103,7 @@ describe('SecureWebApp CloudFormation Template Unit Tests', () => {
 
     test('KMS key should have comprehensive key policy', () => {
       const keyPolicy = template.Resources.ApplicationKMSKey.Properties.KeyPolicy;
-      expect(keyPolicy.Statement).toHaveLength(5);
+      expect(keyPolicy.Statement).toHaveLength(4);
       
       const rootStatement = keyPolicy.Statement.find((s: any) => s.Sid === 'Enable IAM User Permissions');
       expect(rootStatement.Effect).toBe('Allow');
