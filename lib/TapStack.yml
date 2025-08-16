@@ -42,6 +42,7 @@ Resources:
   # ==========================================
   SourceCodeBucket:
     Type: AWS::S3::Bucket
+    Condition: ValidRegion
     Properties:
       BucketName: !Sub "${ApplicationName}-source-code-${EnvironmentSuffix}-${AWS::AccountId}"
       VersioningConfiguration:
@@ -698,6 +699,7 @@ Resources:
   # ==========================================
   CodePipelinePipeline:
     Type: AWS::CodePipeline::Pipeline
+    Condition: ValidRegion
     Properties:
       Name: !Sub "${ApplicationName}-pipeline-${EnvironmentSuffix}"
       RoleArn: !GetAtt CodePipelineServiceRole.Arn
