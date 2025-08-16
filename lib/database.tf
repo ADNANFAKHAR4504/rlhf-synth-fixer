@@ -34,7 +34,7 @@ resource "aws_db_instance" "main" {
   storage_encrypted = true
   kms_key_id        = aws_kms_key.rds.arn
 
-  performance_insights_enabled = true
+  performance_insights_enabled = false
   monitoring_interval          = 60
   monitoring_role_arn          = aws_iam_role.rds_monitoring.arn
 

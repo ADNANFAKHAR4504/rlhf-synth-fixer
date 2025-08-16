@@ -45,14 +45,11 @@ resource "aws_securityhub_account" "main" {
   enable_default_standards = true
 }
 
-# Enable Config for compliance monitoring
-resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
-  is_enabled = true
-  depends_on = [aws_config_delivery_channel.main]
-}
+# Enable Config for compliance monitoring - Conditional creation
+# Set var.enable_config to true only if Config is not already enabled in the region
 
 resource "aws_config_configuration_recorder" "main" {
+  count    = var.enable_config ? 1 : 0
   name     = "${local.name_prefix}-config-recorder"
   role_arn = aws_iam_role.config.arn
 
@@ -62,8 +59,16 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
+  count          = var.enable_config ? 1 : 0
   name           = "${local.name_prefix}-config-delivery-channel"
   s3_bucket_name = aws_s3_bucket.config.bucket
+}
+
+resource "aws_config_configuration_recorder_status" "main" {
+  count      = var.enable_config ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
+  is_enabled = true
+  depends_on = [aws_config_delivery_channel.main]
 }
 
 resource "aws_s3_bucket" "config" {

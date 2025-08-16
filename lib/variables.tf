@@ -103,3 +103,9 @@ variable "common_tags" {
     ManagedBy   = "terraform"
   }
 }
+
+variable "enable_config" {
+  description = "Enable AWS Config service. Set to false if Config is already enabled in the region"
+  type        = bool
+  default     = false
+}
