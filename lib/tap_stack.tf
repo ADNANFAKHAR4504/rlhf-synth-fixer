@@ -164,7 +164,7 @@ resource "random_string" "suffix" {
 
 locals {
   # Use timestamp-based naming for complete uniqueness
-  timestamp   = formatdate("YYYYMMDD-HHmm", timestamp())
+  timestamp   = formatdate("DDHHmm", timestamp())
   name_prefix = "${var.project_name}-${var.environment}-${local.timestamp}-${random_string.suffix.result}"
   
   common_tags = {
