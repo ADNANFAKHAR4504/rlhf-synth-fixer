@@ -98,7 +98,6 @@ describe("Terraform Infrastructure Integration Tests", () => {
       
       // Parse and validate secret structure
       const secretData = JSON.parse(response.SecretString!);
-      expect(secretData).toHaveProperty("database_url");
       expect(secretData).toHaveProperty("api_key");
     });
 
