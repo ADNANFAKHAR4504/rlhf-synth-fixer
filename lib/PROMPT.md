@@ -1,4 +1,4 @@
-
+----
 You are an expert in **Infrastructure as Code (IaC)** and **Terraform (v0.14 or higher)**. Your task is to design and implement a **secure, highly available, multi-region AWS infrastructure** following the **project requirements and constraints** outlined below.
 
 ## Infrastructure components
@@ -31,3 +31,4 @@ You are an expert in **Infrastructure as Code (IaC)** and **Terraform (v0.14 or 
 - There's no need for the terraform modular approach, code could be in a single well commented file
 * The **Terraform code should be thoroughly documented** with inline comments explaining design choices, security considerations, and resource configurations.
 
+----
