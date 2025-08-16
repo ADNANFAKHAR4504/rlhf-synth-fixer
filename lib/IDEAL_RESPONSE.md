@@ -501,6 +501,7 @@ resource "aws_s3_bucket" "alb_logs" {
 count = var.enable_alb_logging ? 1 : 0
 
 bucket = "${local.name_prefix}-alb-logs"
+force_destroy = true
 
 tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-alb-logs-bucket"
@@ -1168,9 +1169,6 @@ CW_EOF
     
     # Signal completion
     echo "=== Instance setup completed successfully at $(date) ==="
-    
-    # Send success signal to CloudFormation (optional, won't fail if not available)
-    /opt/aws/bin/cfn-signal -e 0 --stack ${var.project_name} --resource AutoScalingGroup --region ${var.aws_region} 2>/dev/null || true
     EOF
   )
 
@@ -1199,7 +1197,7 @@ Type = "compute"
 # Auto Scaling Group with increased timeout and better configuration
 
 resource "aws_autoscaling_group" "app" {
-name = "${local.name_prefix}-app-asg"
+name_prefix = "${local.name_prefix}-app-asg-"
 vpc_zone_identifier = local.private_subnet_ids
 target_group_arns = [aws_lb_target_group.app.arn]
 health_check_type = "ELB"
@@ -1536,6 +1534,10 @@ status = "Enabled"
 
     expiration {
       days = 90
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
     }
 
 }
