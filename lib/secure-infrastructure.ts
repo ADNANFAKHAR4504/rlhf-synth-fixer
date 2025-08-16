@@ -976,36 +976,38 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       .then(res => res.id)
       .catch(() => undefined);
 
-    const guardDutyDetector = pulumi.output(existingDetectorInUsEast1).apply(usEast1DetectorId => {
-      if (usEast1DetectorId) {
-        // Use existing detector in us-east-1
-        return aws.guardduty.Detector.get(
-          `imported-guardduty-detector-us-east-1-${args.environment}`,
-          usEast1DetectorId,
-          {},
-          { provider: usEast1Provider, parent: this }
-        );
-      } else {
-        // Create new detector in ap-south-1 if none exists in us-east-1
-        return new aws.guardduty.Detector(
-          `main-guardduty-detector-${args.environment}`,
-          {
-            enable: true,
-            findingPublishingFrequency: 'FIFTEEN_MINUTES',
-            tags: {
-              ...commonTags,
-              Name: `main-guardduty-detector-${args.environment}`,
+    const guardDutyDetector = pulumi
+      .output(existingDetectorInUsEast1)
+      .apply(usEast1DetectorId => {
+        if (usEast1DetectorId) {
+          // Use existing detector in us-east-1
+          return aws.guardduty.Detector.get(
+            `imported-guardduty-detector-us-east-1-${args.environment}`,
+            usEast1DetectorId,
+            {},
+            { provider: usEast1Provider, parent: this }
+          );
+        } else {
+          // Create new detector in ap-south-1 if none exists in us-east-1
+          return new aws.guardduty.Detector(
+            `main-guardduty-detector-${args.environment}`,
+            {
+              enable: true,
+              findingPublishingFrequency: 'FIFTEEN_MINUTES',
+              tags: {
+                ...commonTags,
+                Name: `main-guardduty-detector-${args.environment}`,
+              },
             },
-          },
-          { provider, parent: this }
-        );
-      }
-    });
+            { provider, parent: this }
+          );
+        }
+      });
 
     // Create GuardDuty features based on where the detector is located
     pulumi.output(existingDetectorInUsEast1).apply(usEast1DetectorId => {
       const featureProvider = usEast1DetectorId ? usEast1Provider : provider;
-      
+
       // Enable S3 Data Events monitoring
       void new aws.guardduty.DetectorFeature(
         `guardduty-s3-data-events-${args.environment}`,
@@ -1157,14 +1159,15 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     // AWS Config recorder and delivery channel handling
     // AWS Config allows only one recorder per region per account
-    
+
     // Check if we should create Config resources or use existing ones
     // Set PULUMI_CREATE_CONFIG_RESOURCES=true to create new Config resources
-    const shouldCreateConfigResources = process.env.PULUMI_CREATE_CONFIG_RESOURCES === 'true';
-    
+    const shouldCreateConfigResources =
+      process.env.PULUMI_CREATE_CONFIG_RESOURCES === 'true';
+
     let configRecorder: aws.cfg.Recorder;
     let configDeliveryChannel: aws.cfg.DeliveryChannel;
-    
+
     if (shouldCreateConfigResources) {
       // Create new Config recorder and delivery channel
       configRecorder = new aws.cfg.Recorder(
@@ -1196,7 +1199,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       // Create placeholder objects for outputs
       configRecorder = {} as aws.cfg.Recorder;
       configDeliveryChannel = {
-        name: pulumi.output('existing-config-delivery-channel')
+        name: pulumi.output('existing-config-delivery-channel'),
       } as aws.cfg.DeliveryChannel;
     }
 
@@ -1214,11 +1217,11 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: `encrypted-volumes-rule-${args.environment}`,
         },
       },
-      { 
-        provider, 
+      {
+        provider,
         parent: this,
         // Only depend on configRecorder if we created it
-        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {})
+        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {}),
       }
     );
 
@@ -1235,11 +1238,11 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: `s3-bucket-public-read-prohibited-${args.environment}`,
         },
       },
-      { 
-        provider, 
+      {
+        provider,
         parent: this,
         // Only depend on configRecorder if we created it
-        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {})
+        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {}),
       }
     );
 
