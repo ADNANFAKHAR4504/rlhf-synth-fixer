@@ -61,7 +61,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
     // Parse stringified arrays in the outputs (common issue with deployment output flattening)
     for (const [key, value] of Object.entries(outputs)) {
-      if (typeof value === 'string' && key.includes('subnet_ids')) {
+      if (typeof value === 'string' && (key.includes('subnet_ids') || key.includes('gateway_ids'))) {
         try {
           // Try to parse as JSON array if it looks like a stringified array
           if (value.startsWith('[') && value.endsWith(']')) {
