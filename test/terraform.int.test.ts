@@ -226,7 +226,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       const dbInstance = response.DBInstances![0];
       expect(dbInstance.DBInstanceStatus).toBe("available");
       expect(dbInstance.Engine).toBe("postgres");
-      expect(dbInstance.Port).toBe(5432);
+      expect(dbInstance.DbInstancePort).toBe(5432);
       expect(dbInstance.StorageEncrypted).toBe(true);
       expect(dbInstance.VpcSecurityGroups).toBeDefined();
       expect(dbInstance.VpcSecurityGroups!.length).toBeGreaterThan(0);
