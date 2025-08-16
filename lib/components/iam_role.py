@@ -127,7 +127,10 @@ class S3IAMRole(pulumi.ComponentResource):
     self.instance_profile = aws.iam.InstanceProfile(
       f"{name}-instance-profile",
       role=self.role.name,
-      opts=pulumi.ResourceOptions(parent=self)
+      opts=pulumi.ResourceOptions(
+        parent=self,
+        depends_on=[self.role]
+      )
     )
 
     self.register_outputs({

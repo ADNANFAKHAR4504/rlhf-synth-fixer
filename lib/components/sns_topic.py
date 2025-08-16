@@ -66,7 +66,10 @@ class SNSTopic(pulumi.ComponentResource):
       f"{name}-topic-policy",
       arn=self.topic.arn,
       policy=self.topic.arn.apply(_create_topic_policy),
-      opts=pulumi.ResourceOptions(parent=self)
+      opts=pulumi.ResourceOptions(
+        parent=self,
+        depends_on=[self.topic]
+      )
     )
 
     # Create email subscription if email is provided

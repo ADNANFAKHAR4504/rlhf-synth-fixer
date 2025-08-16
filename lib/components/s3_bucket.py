@@ -72,7 +72,10 @@ class SecureS3Bucket(pulumi.ComponentResource):
         ),
         bucket_key_enabled=True
       )],
-      opts=pulumi.ResourceOptions(parent=self)
+      opts=pulumi.ResourceOptions(
+        parent=self,
+        depends_on=[self.bucket]
+      )
     )
 
     # Block public access
@@ -118,7 +121,10 @@ class SecureS3Bucket(pulumi.ComponentResource):
           ]
         )
       ],
-      opts=pulumi.ResourceOptions(parent=self)
+      opts=pulumi.ResourceOptions(
+        parent=self,
+        depends_on=[self.bucket, self.versioning]
+      )
     )
 
     # Configure access logging if logging bucket is provided
@@ -128,14 +134,25 @@ class SecureS3Bucket(pulumi.ComponentResource):
         bucket=self.bucket.id,
         target_bucket=config.access_logging_bucket,
         target_prefix=f"{name}-access-logs/",
-        opts=pulumi.ResourceOptions(parent=self)
+        opts=pulumi.ResourceOptions(
+          parent=self,
+          depends_on=[self.bucket]
+        )
       )
 
     # Configure SNS notifications
     # Note: SNS topic policy must be created before bucket notification
-    notification_depends_on = [self.bucket, self.bucket_encryption, self.versioning, self.public_access_block]
+    notification_depends_on = [self.bucket, self.bucket_encryption, self.versioning, self.public_access_block, self.lifecycle]
+    if config.access_logging_bucket:
+      notification_depends_on.append(self.logging)
     if config.sns_topic_component:
-      notification_depends_on.append(config.sns_topic_component)
+      # Add both the SNS topic and its policy as dependencies
+      notification_depends_on.extend([
+        config.sns_topic_component,
+        config.sns_topic_component.topic_policy if hasattr(config.sns_topic_component, 'topic_policy') else None
+      ])
+      # Remove None values
+      notification_depends_on = [dep for dep in notification_depends_on if dep is not None]
     
     self.notification = aws.s3.BucketNotification(
       f"{name}-notification",

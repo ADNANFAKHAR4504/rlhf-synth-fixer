@@ -7,7 +7,7 @@ and Pulumi's testing utilities.
 
 import json
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch, Mock, MagicMock
 import pulumi
 
 # Import the components we're testing
@@ -16,6 +16,24 @@ from lib.components.sns_topic import SNSTopic, SNSTopicConfig
 from lib.components.kms_key import KMSKey, KMSKeyConfig
 from lib.components.iam_role import S3IAMRole, S3IAMRoleConfig
 from lib.components.cloudwatch_alarm import CloudWatchAlarm, CloudWatchAlarmConfig
+
+
+def create_mock_resource(name="MockResource", **attributes):
+  """Create a mock object that inherits from pulumi.Resource to satisfy depends_on validation."""
+  mock = MagicMock(spec=pulumi.Resource)
+  mock.__class__ = type(name, (pulumi.Resource,), {})
+  
+  # Set common attributes that might be needed
+  mock.arn = pulumi.Output.from_input(f"arn:aws:service::123456789012:resource/{name.lower()}")
+  mock.name = pulumi.Output.from_input(f"{name.lower()}-name")
+  mock.id = pulumi.Output.from_input(f"{name.lower()}-id")
+  mock.key_id = pulumi.Output.from_input(f"{name.lower()}-key-id")
+  
+  # Add any additional attributes passed
+  for attr, value in attributes.items():
+    setattr(mock, attr, value)
+  
+  return mock
 
 
 class TestSecureS3Bucket(unittest.TestCase):
@@ -97,6 +115,9 @@ class TestSNSTopic(unittest.TestCase):
   @patch('pulumi_aws.sns.TopicPolicy')
   def test_sns_topic_creation(self, mock_policy, mock_topic):
     """Test SNSTopic creates topic and policy."""
+    # Mock the topic to return a proper Resource-like object for dependencies
+    mock_topic.return_value = create_mock_resource("Topic")
+    
     SNSTopic(
       "test-topic",
       SNSTopicConfig(kms_key_id=self.kms_key_id)
@@ -110,6 +131,9 @@ class TestSNSTopic(unittest.TestCase):
   @patch('pulumi_aws.sns.TopicSubscription')
   def test_sns_topic_with_email(self, mock_subscription, mock_policy, mock_topic):
     """Test SNSTopic creates email subscription when provided."""
+    # Mock the topic to return a proper Resource-like object for dependencies
+    mock_topic.return_value = create_mock_resource("Topic")
+    
     SNSTopic(
       "test-topic",
       SNSTopicConfig(
@@ -132,6 +156,8 @@ class TestKMSKey(unittest.TestCase):
   def test_kms_key_creation(self, mock_caller_id, mock_alias, mock_key):
     """Test KMSKey creates key and alias."""
     mock_caller_id.return_value = Mock(account_id="123456789012")
+    # Mock the key to return a proper Resource-like object for dependencies
+    mock_key.return_value = create_mock_resource("Key")
 
     KMSKey("test-key", KMSKeyConfig(description="Test KMS key"))
 
@@ -143,6 +169,8 @@ class TestKMSKey(unittest.TestCase):
   def test_kms_key_rotation_enabled(self, mock_caller_id, mock_key):
     """Test KMS key has rotation enabled."""
     mock_caller_id.return_value = Mock(account_id="123456789012")
+    # Mock the key to return a proper Resource-like object for dependencies
+    mock_key.return_value = create_mock_resource("Key")
 
     KMSKey("test-key", KMSKeyConfig())
 
@@ -165,6 +193,9 @@ class TestS3IAMRole(unittest.TestCase):
   def test_iam_role_creation(self, mock_profile, mock_attachment,
                              mock_policy, mock_role):
     """Test S3IAMRole creates all IAM resources."""
+    # Mock the role to return a proper Resource-like object for dependencies
+    mock_role.return_value = create_mock_resource("Role")
+    
     S3IAMRole(
       "test-role",
       S3IAMRoleConfig(
@@ -181,6 +212,9 @@ class TestS3IAMRole(unittest.TestCase):
   @patch('pulumi_aws.iam.Role')
   def test_assume_role_policy(self, mock_role):
     """Test IAM role has correct assume role policy."""
+    # Mock the role to return a proper Resource-like object for dependencies
+    mock_role.return_value = create_mock_resource("Role")
+    
     S3IAMRole(
       "test-role",
       S3IAMRoleConfig(

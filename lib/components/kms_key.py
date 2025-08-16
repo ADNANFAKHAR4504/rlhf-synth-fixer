@@ -111,7 +111,10 @@ class KMSKey(pulumi.ComponentResource):
       f"{name}-alias",
       name=f"alias/{name}-s3-key",
       target_key_id=self.key.key_id,
-      opts=pulumi.ResourceOptions(parent=self)
+      opts=pulumi.ResourceOptions(
+        parent=self,
+        depends_on=[self.key]
+      )
     )
 
     self.register_outputs({
