@@ -8,6 +8,7 @@ import {
   DescribeConfigurationRecorderStatusCommand,
   GetComplianceDetailsByConfigRuleCommand,
 } from '@aws-sdk/client-config-service';
+import type { Subnet as Ec2Subnet, InstanceBlockDeviceMapping } from '@aws-sdk/client-ec2';
 import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
@@ -16,8 +17,6 @@ import {
   DescribeVpcAttributeCommand,
   DescribeVpcsCommand,
   EC2Client,
-  type Subnet as Ec2Subnet,
-  type InstanceBlockDeviceMapping
 } from '@aws-sdk/client-ec2';
 import {
   DescribeLoadBalancersCommand,
@@ -25,11 +24,11 @@ import {
   DescribeTargetHealthCommand,
   ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
+import type { Subnet as RdsSubnet } from '@aws-sdk/client-rds';
 import {
   DescribeDBInstancesCommand,
   DescribeDBSubnetGroupsCommand,
   RDSClient,
-  type Subnet as RdsSubnet,
 } from '@aws-sdk/client-rds';
 import {
   GetBucketEncryptionCommand,
@@ -105,36 +104,38 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
       expect(publicSubnets.length).toBe(privateSubnets.length);
 
-      // Test public subnets configuration
+      // --- Public subnets ---
       const publicResponse = await ec2Client.send(
         new DescribeSubnetsCommand({ SubnetIds: publicSubnets })
       );
       const uniquePublicAZs = new Set<string>();
-      const publicSubnetsList = (publicResponse.Subnets ?? []) as Ec2Subnet[];
-      publicSubnetsList.forEach((subnet) => {
+      const publicSubnetsList = (publicResponse.Subnets ?? []) as readonly Ec2Subnet[];
+      for (const subnet of publicSubnetsList) {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
         expect(subnet.CidrBlock).toMatch(/^10\.0\.[12]\.0\/24$/);
         uniquePublicAZs.add(subnet.AvailabilityZone as string);
+
         const tierTag = subnet.Tags?.find((t) => t.Key === 'Tier');
         expect(tierTag?.Value).toBe('public');
-    });
+      }
       expect(uniquePublicAZs.size).toBeGreaterThanOrEqual(2);
 
-      // Test private subnets configuration
+      // --- Private subnets ---
       const privateResponse = await ec2Client.send(
         new DescribeSubnetsCommand({ SubnetIds: privateSubnets })
       );
       const uniquePrivateAZs = new Set<string>();
-      const privateSubnetsList = (privateResponse.Subnets ?? []) as Ec2Subnet[];
-        privateSubnetsList.forEach((subnet) => {
+      const privateSubnetsList = (privateResponse.Subnets ?? []) as readonly Ec2Subnet[];
+      for (const subnet of privateSubnetsList) {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(subnet.CidrBlock).toMatch(/^10\.0\.[12]0\.0\/24$/);
         uniquePrivateAZs.add(subnet.AvailabilityZone as string);
+
         const tierTag = subnet.Tags?.find((t) => t.Key === 'Tier');
         expect(tierTag?.Value).toBe('private');
-      });
+      }
       expect(uniquePrivateAZs.size).toBeGreaterThanOrEqual(2);
     });
 
@@ -196,7 +197,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(alb!.IpAddressType).toBe('ipv4');
 
       // Verify ALB is deployed in public subnets
-      const publicSubnets = outputs.PublicSubnets.split(',').filter((s: string) => s.length > 0);
       expect(alb!.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
 
       // Check ALB has proper security groups
@@ -306,7 +306,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
             expect(instance.InstanceType).toBe('t3.medium');
             expect(instance.State?.Name).toMatch(/^(running|pending)$/);
 
-            // Gather volumeIds for later DescribeVolumes (Encrypted/VolumeType live on Volumes)
+            // Gather volumeIds for DescribeVolumes (Encrypted/VolumeType live on Volumes)
             const bdms = (instance.BlockDeviceMappings ?? []) as InstanceBlockDeviceMapping[];
             bdms.forEach((device) => {
               if (device.Ebs?.VolumeId) volumeIds.push(device.Ebs.VolumeId);
