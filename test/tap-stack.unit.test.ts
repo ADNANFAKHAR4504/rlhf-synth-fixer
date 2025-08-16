@@ -52,7 +52,8 @@ describe('TapStack', () => {
       const synthesized = Testing.synth(stack);
       const resources = JSON.parse(synthesized).resource;
 
-      const lifecycleConfigs = resources.aws_s3_bucket_lifecycle_configuration || {};
+      const lifecycleConfigs =
+        resources.aws_s3_bucket_lifecycle_configuration || {};
       expect(Object.keys(lifecycleConfigs)).toHaveLength(1);
 
       const lifecycle = Object.values(lifecycleConfigs)[0] as any;
@@ -80,18 +81,18 @@ describe('TapStack', () => {
       expect(assumeRolePolicy.Statement[0].Principal.AWS).toBe(
         'arn:aws:iam::123456789012:root'
       );
-      expect(assumeRolePolicy.Statement[0].Condition.StringEquals['sts:ExternalId']).toBe(
-        'secure-external-id-123'
-      );
+      expect(
+        assumeRolePolicy.Statement[0].Condition.StringEquals['sts:ExternalId']
+      ).toBe('secure-external-id-123');
     });
 
     it('should not create cross-account IAM role when crossAccountId is not provided', () => {
       const app = Testing.app();
       const noCrossAccountStack = new TapStack(app, 'no-cross-account', {
         region: 'us-east-1',
-        environmentSuffix: 'test'
+        environmentSuffix: 'test',
       });
-      
+
       const synthesized = Testing.synth(noCrossAccountStack);
       const resources = JSON.parse(synthesized).resource;
 
@@ -135,10 +136,10 @@ describe('TapStack', () => {
     it('should configure ALB with ignoreChanges for name', () => {
       const synthesized = Testing.synth(stack);
       const resources = JSON.parse(synthesized).resource;
-      
+
       const albs = resources.aws_lb || {};
       const alb = Object.values(albs)[0] as any;
-      
+
       expect(alb.lifecycle).toBeDefined();
       expect(alb.lifecycle.ignore_changes).toEqual(['name']);
     });
@@ -146,10 +147,10 @@ describe('TapStack', () => {
     it('should protect CloudWatch log groups from destruction', () => {
       const synthesized = Testing.synth(stack);
       const resources = JSON.parse(synthesized).resource;
-      
+
       const logGroups = resources.aws_cloudwatch_log_group || {};
       const groups = Object.values(logGroups) as any[];
-      
+
       groups.forEach(group => {
         expect(group.lifecycle).toBeDefined();
         expect(group.lifecycle.prevent_destroy).toBe(true);
@@ -159,10 +160,10 @@ describe('TapStack', () => {
     it('should ignore changes to RDS identifier', () => {
       const synthesized = Testing.synth(stack);
       const resources = JSON.parse(synthesized).resource;
-      
+
       const rdsInstances = resources.aws_db_instance || {};
       const rds = Object.values(rdsInstances)[0] as any;
-      
+
       expect(rds.lifecycle).toBeDefined();
       expect(rds.lifecycle.ignore_changes).toEqual(['identifier']);
     });

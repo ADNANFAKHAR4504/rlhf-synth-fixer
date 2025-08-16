@@ -1,13 +1,11 @@
-Prompt:
-
 I have an existing CDK for Terraform (CDKTF) TypeScript project with the following folder structure:
 
 swift
 Copy
 Edit
-/bin/tap.ts         // entry point for the application  
-/lib/tapstack.ts    // main stack definition file  
-/test/              // test folder for stack/unit tests  
+/bin/tap.ts // entry point for the application  
+/lib/tapstack.ts // main stack definition file  
+/test/ // test folder for stack/unit tests  
 The project name is "IaC - AWS Nova Model Breaking".
 
 I want you to generate TypeScript CDKTF code implementing the following AWS infrastructure in the tapstack.ts file, using bin/tap.ts as the entry point and keeping all the best practices for CDKTF and TypeScript:
