@@ -28,10 +28,6 @@ fi
 [ "$REPORT" != "1" ] && echo "=== Docker Entry Point - Starting CI/CD Pipeline ==="
 
 # Initialize status display for report mode
-if [ "$REPORT" = "1" ]; then
-    echo "TASK_ID | TASK_PATH | STATUS | ERROR"
-    echo "--------|-----------|--------|-------"
-fi
 update_status "Starting..."
 
 # Track failed steps
@@ -122,6 +118,82 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
         # In report mode, just verify silently
         aws sts get-caller-identity >/dev/null 2>&1 || true
     fi
+    
+    # Ensure required S3 buckets exist
+    [ "$REPORT" != "1" ] && echo "Ensuring required S3 buckets exist..."
+    update_status "Creating S3 buckets..."
+    
+    # Define bucket-region pairs
+    declare -A BUCKETS=(
+        ["iac-rlhf-aws-release"]="us-east-1"
+        ["iac-rlhf-cfn-states"]="us-east-1"
+        ["iac-rlhf-cfn-states-ap-northeast-1"]="ap-northeast-1"
+        ["iac-rlhf-cfn-states-ap-south-1"]="ap-south-1"
+        ["iac-rlhf-cfn-states-ap-southeast-1"]="ap-southeast-1"
+        ["iac-rlhf-cfn-states-ap-southeast-2"]="us-east-1"
+        ["iac-rlhf-cfn-states-eu-central-1"]="eu-central-1"
+        ["iac-rlhf-cfn-states-eu-north-1"]="eu-north-1"
+        ["iac-rlhf-cfn-states-eu-west-1"]="us-east-1"
+        ["iac-rlhf-cfn-states-eu-west-2"]="eu-west-2"
+        ["iac-rlhf-cfn-states-eu-west-3"]="eu-west-3"
+        ["iac-rlhf-cfn-states-us-east-1"]="us-east-1"
+        ["iac-rlhf-cfn-states-us-east-2"]="us-east-2"
+        ["iac-rlhf-cfn-states-us-west-1"]="us-east-1"
+        ["iac-rlhf-cfn-states-us-west-2"]="us-west-2"
+        ["iac-rlhf-production"]="us-east-1"
+        ["iac-rlhf-pulumi-states"]="us-east-1"
+        ["iac-rlhf-tf-states"]="us-east-1"
+    )
+    
+    # Buckets that need versioning enabled
+    VERSIONED_BUCKETS=("iac-rlhf-pulumi-states" "iac-rlhf-tf-states")
+    
+    # Create buckets if they don't exist
+    for bucket in "${!BUCKETS[@]}"; do
+        region="${BUCKETS[$bucket]}"
+        
+        # Check if bucket exists
+        if aws s3api head-bucket --bucket "$bucket" --region "$region" >/dev/null 2>&1; then
+            [ "$REPORT" != "1" ] && echo "✅ Bucket $bucket already exists in $region"
+        else
+            [ "$REPORT" != "1" ] && echo "Creating bucket $bucket in region $region..."
+            
+            if [ "$region" = "us-east-1" ]; then
+                # us-east-1 doesn't need LocationConstraint
+                aws s3api create-bucket --bucket "$bucket" --region "$region" >/dev/null 2>&1
+            else
+                # Other regions need LocationConstraint
+                aws s3api create-bucket --bucket "$bucket" --region "$region" --create-bucket-configuration LocationConstraint="$region" >/dev/null 2>&1
+            fi
+            
+            if aws s3api create-bucket --bucket "$bucket" --region "$region" >/dev/null 2>&1; then
+                [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
+            else
+                [ "$REPORT" != "1" ] && echo "❌ Failed to create bucket $bucket in $region"
+                if [ "$DEBUG_MODE" = "0" ]; then
+                    exit 1
+                fi
+            fi
+        fi
+        
+        # Enable versioning for state buckets
+        for versioned_bucket in "${VERSIONED_BUCKETS[@]}"; do
+            if [ "$bucket" = "$versioned_bucket" ]; then
+                [ "$REPORT" != "1" ] && echo "Enabling versioning for $bucket..."
+                if aws s3api put-bucket-versioning --bucket "$bucket" --versioning-configuration Status=Enabled --region "$region" >/dev/null 2>&1; then
+                    [ "$REPORT" != "1" ] && echo "✅ Versioning enabled for $bucket"
+                else
+                    [ "$REPORT" != "1" ] && echo "❌ Failed to enable versioning for $bucket"
+                    if [ "$DEBUG_MODE" = "0" ]; then
+                        exit 1
+                    fi
+                fi
+                break
+            fi
+        done
+    done
+    
+    [ "$REPORT" != "1" ] && echo "S3 bucket setup completed"
 else
     [ "$REPORT" != "1" ] && echo "No AWS credentials found in environment variables"
     [ "$REPORT" != "1" ] && echo "AWS CLI will not be available for use"
