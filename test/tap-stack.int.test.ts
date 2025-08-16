@@ -155,7 +155,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       // Ensure we have valid subnet IDs
-      const validSubnetIds = resourceIds.publicSubnetIds.filter(id => id && typeof id === 'string' && id.startsWith('subnet-'));
+      const validSubnetIds = (resourceIds.publicSubnetIds || []).filter((id: any) => id && typeof id === 'string' && id.startsWith('subnet-'));
       if (validSubnetIds.length === 0) {
         console.warn('No valid public subnet IDs found, skipping test');
         return;
@@ -186,7 +186,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       // Ensure we have valid subnet IDs
-      const validSubnetIds = resourceIds.publicSubnetIds.filter(id => id && typeof id === 'string' && id.startsWith('subnet-'));
+      const validSubnetIds = (resourceIds.publicSubnetIds || []).filter((id: any) => id && typeof id === 'string' && id.startsWith('subnet-'));
       if (validSubnetIds.length === 0) {
         console.warn('No valid public subnet IDs found, skipping test');
         return;
@@ -212,7 +212,7 @@ describe('TapStack Integration Tests', () => {
       }
 
       // Ensure we have valid subnet IDs
-      const validSubnetIds = resourceIds.privateSubnetIds.filter(id => id && typeof id === 'string' && id.startsWith('subnet-'));
+      const validSubnetIds = (resourceIds.privateSubnetIds || []).filter((id: any) => id && typeof id === 'string' && id.startsWith('subnet-'));
       if (validSubnetIds.length === 0) {
         console.warn('No valid private subnet IDs found, skipping test');
         return;
@@ -886,7 +886,7 @@ describe('TapStack Integration Tests', () => {
 
       // 2. Two public subnets with specific CIDRs in separate AZs
       if (resourceIds?.publicSubnetIds && resourceIds.publicSubnetIds.length > 0) {
-        const validSubnetIds = resourceIds.publicSubnetIds.filter(id => id && typeof id === 'string' && id.startsWith('subnet-'));
+        const validSubnetIds = (resourceIds.publicSubnetIds || []).filter((id: any) => id && typeof id === 'string' && id.startsWith('subnet-'));
         if (validSubnetIds.length > 0) {
           const subnetResponse = await clients.ec2.send(
             new DescribeSubnetsCommand({ SubnetIds: validSubnetIds })
