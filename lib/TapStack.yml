@@ -66,7 +66,7 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
-      KeyRotationEnabled: true
+      EnableKeyRotation: true
       Tags:
         - Key: Name
           Value: !Sub 'corp-security-kms-${Environment}'
@@ -86,7 +86,6 @@ Resources:
   CorpEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'corp-ec2-role-${Environment}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -130,7 +129,6 @@ Resources:
   CorpEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'corp-ec2-instance-profile-${Environment}'
       Roles:
         - !Ref CorpEC2Role
 
@@ -138,7 +136,6 @@ Resources:
   CorpLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'corp-lambda-execution-role-${Environment}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -192,11 +189,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref CorpCloudWatchLogGroup
       Tags:
         - Key: Name
           Value: !Sub 'corp-secure-bucket-${Environment}'
@@ -251,7 +243,6 @@ Resources:
   CorpSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'corp-security-group-${Environment}'
       GroupDescription: 'Corporate security group with minimal required access'
       VpcId: !Ref ExistingVPCId
       SecurityGroupIngress:
@@ -287,8 +278,9 @@ Resources:
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
+      IsLogging: true
       KMSKeyId: !Ref CorpSecurityKMSKey
-      CloudWatchLogsLogGroupArn: !Sub '${CorpCloudWatchLogGroup}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt CorpCloudWatchLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CorpCloudTrailRole.Arn
       EventSelectors:
         - ReadWriteType: All
@@ -309,7 +301,6 @@ Resources:
   CorpCloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'corp-cloudtrail-role-${Environment}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
