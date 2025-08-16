@@ -888,6 +888,13 @@ resource "aws_flow_log" "vpc_uswest2" {
   tags                 = merge(local.common_tags, { Name = "${local.project_name}-${local.environment}-flow-log-us-west-2" })
 }
 
+resource "aws_sns_topic" "alarms_uswest2" {
+  provider          = aws.uswest2
+  name              = "${local.project_name}-${local.environment}-alarms"
+  kms_master_key_id = aws_kms_key.uswest2.arn
+  tags              = local.common_tags
+}
+
 resource "aws_cloudwatch_metric_alarm" "ec2_cpu_uswest2" {
   provider            = aws.uswest2
   alarm_name          = "${local.project_name}-${local.environment}-ec2-high-cpu-us-west-2"
@@ -899,6 +906,7 @@ resource "aws_cloudwatch_metric_alarm" "ec2_cpu_uswest2" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors EC2 CPU utilization in us-west-2"
+  alarm_actions       = [aws_sns_topic.alarms_uswest2.arn]
 
   dimensions = {
     InstanceId = aws_instance.app_uswest2.id
@@ -916,6 +924,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_storage_uswest2" {
   statistic           = "Average"
   threshold           = "10000000000" # 10 GB
   alarm_description   = "This metric monitors RDS free storage space in us-west-2"
+  alarm_actions       = [aws_sns_topic.alarms_uswest2.arn]
 
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.rds_uswest2.id
