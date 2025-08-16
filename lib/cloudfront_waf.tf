@@ -9,7 +9,7 @@ resource "aws_cloudfront_origin_access_control" "main" {
 
 # WAF Web ACL (must be in us-east-1 for CloudFront)
 resource "aws_wafv2_web_acl" "main" {
-  provider = aws
+  provider = aws.us_east_1
   name     = "${local.project_prefix}-waf-${random_id.bucket_suffix.hex}"
   scope    = "CLOUDFRONT"
 
@@ -180,6 +180,8 @@ resource "aws_cloudfront_distribution" "main" {
     include_cookies = false
     prefix          = "cloudfront-logs/"
   }
+
+  depends_on = [aws_s3_bucket_policy.logs]
 
   tags = local.common_tags
 }

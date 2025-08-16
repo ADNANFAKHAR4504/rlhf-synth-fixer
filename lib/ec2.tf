@@ -56,7 +56,7 @@ resource "aws_autoscaling_group" "web" {
   max_size                  = 6
   desired_capacity          = 2
   health_check_type         = "ELB"
-  health_check_grace_period = 600
+  health_check_grace_period = 900
 
   launch_template {
     id      = aws_launch_template.web.id
@@ -113,11 +113,11 @@ resource "aws_lb_target_group" "web" {
     healthy_threshold   = 2
     interval            = 30
     matcher             = "200"
-    path                = "/"
+    path                = "/index.html"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = 10
+    unhealthy_threshold = 3
   }
 
   tags = local.common_tags

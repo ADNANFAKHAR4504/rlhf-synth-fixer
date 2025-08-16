@@ -186,3 +186,8 @@ data "aws_region" "current" {}
 
 # Get ELB service account for access logs
 data "aws_elb_service_account" "main" {}
+
+# CloudFront distribution service account ID for logging (varies by region)
+locals {
+  cloudfront_log_delivery_canonical_user_id = "c4c1ede66af53448b93c283ce9448c4ba468c9432aa01d700d3878632f77d2d0"
+}

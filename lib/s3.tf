@@ -175,7 +175,7 @@ resource "aws_s3_bucket_policy" "logs" {
         Sid    = "CloudFrontLogDelivery"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_elb_service_account.main.id}:root"
+          CanonicalUser = local.cloudfront_log_delivery_canonical_user_id
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.logs.arn}/cloudfront-logs/*"
