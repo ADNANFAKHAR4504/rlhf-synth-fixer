@@ -167,10 +167,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
   tags              = local.common_tags
 
   # Optional KMS encryption for logs if kms_key_arn is provided
-  dynamic "kms_key_id" {
-    for_each = var.kms_key_arn != "" ? [1] : []
-    content  = var.kms_key_arn
-  }
+  kms_key_id = var.kms_key_arn != "" ? var.kms_key_arn : null
 }
 
 #################
@@ -194,11 +191,7 @@ resource "aws_lambda_function" "fn" {
   tags             = local.common_tags
 
   # Optional KMS for environment variable encryption
-  dynamic "kms_key_arn" {
-    for_each = var.kms_key_arn != "" ? [1] : []
-    content  = var.kms_key_arn
-  }
-
+  kms_key_arn = var.kms_key_arn != "" ? var.kms_key_arn : null
   environment {
     variables = {
       SECRET_ARN = aws_secretsmanager_secret.config.arn
@@ -256,22 +249,45 @@ resource "aws_cloudwatch_log_group" "apigw_access" {
   retention_in_days = var.log_retention_days
   tags              = local.common_tags
 
-  dynamic "kms_key_id" {
-    for_each = var.kms_key_arn != "" ? [1] : []
-    content  = var.kms_key_arn
-  }
+  kms_key_id = var.kms_key_arn != "" ? var.kms_key_arn : null
 }
 
+# Deployment only (no stage_name here)
 resource "aws_api_gateway_deployment" "deploy" {
   depends_on  = [aws_api_gateway_integration.lambda]
   rest_api_id = aws_api_gateway_rest_api.api.id
-  stage_name  = var.environment
+
+  # Optional but recommended: add a trigger that changes when your API config changes,
+  # so Terraform knows when to redeploy (adjust to your setup).
+  triggers = {
+    redeploy = sha1(jsonencode([
+      aws_api_gateway_rest_api.api.id,
+      aws_api_gateway_integration.lambda.id,
+      aws_api_gateway_method.any.id, # if you have this
+    ]))
+  }
 
   lifecycle { create_before_destroy = true }
 }
 
-resource "aws_api_gateway_stage" "stage" {
+# Stage managed separately
+resource "aws_api_gateway_stage" "current" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  deployment_id = aws_api_gateway_deployment.deploy.id
   stage_name    = var.environment
+
+  # Optional: add settings/logging/etc here
+  # variables = { ENV = var.environment }
+  # xray_tracing_enabled = true
+  # access_log_settings {
+  #   destination_arn = aws_cloudwatch_log_group.apigw_access.arn
+  #   format          = jsonencode({ requestId = "$context.requestId" })
+  # }
+}
+
+
+resource "aws_api_gateway_stage" "stage" {
+  stage_name    = "stage_aws_apigtw"
   rest_api_id   = aws_api_gateway_rest_api.api.id
   deployment_id = aws_api_gateway_deployment.deploy.id
 
