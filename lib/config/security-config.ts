@@ -29,7 +29,7 @@ export class SecurityConfig {
   };
 
   // Region configuration
-  public static readonly PRIMARY_REGION = 'us-west-2';
+  public static readonly PRIMARY_REGION = 'us-east-1';
 
   // Security monitoring
   public static readonly ENABLE_DETAILED_MONITORING = true;

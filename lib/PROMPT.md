@@ -1,6 +1,6 @@
 You are an expert AWS Solutions Architect specializing in Infrastructure as Code with TypeScript and the AWS Cloud Development Kit (CDK). Your mission is to create a highly secure, production-grade infrastructure stack. This requires you to write a complete, modular CDK project in TypeScript that meets the following stringent security and compliance requirements, with a critical focus on the secure communication and interaction between all resources.
 
-1.  **VPC and Networking:** Deploy a Virtual Private Cloud (VPC) in the `us-west-2` region. The VPC must have at least one private subnet where all sensitive resources, including EC2 instances, will be deployed. Enable VPC Flow Logs to monitor and audit network traffic.
+1.  **VPC and Networking:** Deploy a Virtual Private Cloud (VPC) in the `us-east-1` region. The VPC must have at least one private subnet where all sensitive resources, including EC2 instances, will be deployed. Enable VPC Flow Logs to monitor and audit network traffic.
 2.  **Network Security:** Implement security groups with highly restrictive rules. Ensure SSH access is limited to a specific CIDR block, and all other inbound and outbound rules are set to the minimal required ports and protocols. No security group rule should allow traffic from `0.0.0.0/0` except where absolutely necessary for public-facing services (e.g., a load balancer).
 3.  **Data and Secrets Management:**
     - Ensure all S3 buckets are encrypted at rest using AWS Key Management Service (KMS).
