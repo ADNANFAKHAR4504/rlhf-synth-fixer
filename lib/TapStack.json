@@ -1,0 +1,377 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Transform": "AWS::Serverless-2016-10-31",
+    "Description": "Complete serverless application with Lambda functions, DynamoDB tables, and API Gateway for managing items, users, and orders",
+    "Globals": {
+        "Function": {
+            "Runtime": "nodejs20.x",
+            "Timeout": 30,
+            "MemorySize": 128
+        }
+    },
+    "Resources": {
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "Description": "IAM role for Lambda functions with CloudWatch Logs and DynamoDB permissions",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogsPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "DynamoDBPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ItemsTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "UsersTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "OrdersTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ItemsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-items"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "itemId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "itemId",
+                        "KeyType": "HASH"
+                    }
+                ]
+            }
+        },
+        "UsersTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-users"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "userId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "userId",
+                        "KeyType": "HASH"
+                    }
+                ]
+            }
+        },
+        "OrdersTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${AWS::StackName}-orders"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "orderId",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "orderId",
+                        "KeyType": "HASH"
+                    }
+                ]
+            }
+        },
+        "ItemsFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-items-function"
+                },
+                "Description": "Lambda function for handling items operations",
+                "CodeUri": "./src/items-function",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "ITEMS_TABLE_NAME": {
+                            "Ref": "ItemsTable"
+                        }
+                    }
+                },
+                "Events": {
+                    "ItemsApi": {
+                        "Type": "Api",
+                        "Properties": {
+                            "RestApiId": {
+                                "Ref": "ServerlessApi"
+                            },
+                            "Path": "/items",
+                            "Method": "ANY"
+                        }
+                    }
+                }
+            }
+        },
+        "UsersFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-users-function"
+                },
+                "Description": "Lambda function for handling users operations",
+                "CodeUri": "./src/users-function",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "USERS_TABLE_NAME": {
+                            "Ref": "UsersTable"
+                        }
+                    }
+                },
+                "Events": {
+                    "UsersApi": {
+                        "Type": "Api",
+                        "Properties": {
+                            "RestApiId": {
+                                "Ref": "ServerlessApi"
+                            },
+                            "Path": "/users",
+                            "Method": "ANY"
+                        }
+                    }
+                }
+            }
+        },
+        "OrdersFunction": {
+            "Type": "AWS::Serverless::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-orders-function"
+                },
+                "Description": "Lambda function for handling orders operations",
+                "CodeUri": "./src/orders-function",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "ORDERS_TABLE_NAME": {
+                            "Ref": "OrdersTable"
+                        }
+                    }
+                },
+                "Events": {
+                    "OrdersApi": {
+                        "Type": "Api",
+                        "Properties": {
+                            "RestApiId": {
+                                "Ref": "ServerlessApi"
+                            },
+                            "Path": "/orders",
+                            "Method": "ANY"
+                        }
+                    }
+                }
+            }
+        },
+        "ServerlessApi": {
+            "Type": "AWS::Serverless::Api",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-api"
+                },
+                "Description": "REST API Gateway for serverless application with items, users, and orders endpoints",
+                "StageName": "Prod",
+                "Cors": {
+                    "AllowMethods": "'*'",
+                    "AllowHeaders": "'*'",
+                    "AllowOrigin": "'*'"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiGatewayUrl": {
+            "Description": "URL of the deployed API Gateway",
+            "Value": {
+                "Fn::Sub": "https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-api-url"
+                }
+            }
+        },
+        "ItemsTableName": {
+            "Description": "Name of the Items DynamoDB table",
+            "Value": {
+                "Ref": "ItemsTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-items-table"
+                }
+            }
+        },
+        "UsersTableName": {
+            "Description": "Name of the Users DynamoDB table",
+            "Value": {
+                "Ref": "UsersTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-users-table"
+                }
+            }
+        },
+        "OrdersTableName": {
+            "Description": "Name of the Orders DynamoDB table",
+            "Value": {
+                "Ref": "OrdersTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-orders-table"
+                }
+            }
+        },
+        "ItemsFunctionArn": {
+            "Description": "ARN of the Items Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ItemsFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-items-function-arn"
+                }
+            }
+        },
+        "UsersFunctionArn": {
+            "Description": "ARN of the Users Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "UsersFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-users-function-arn"
+                }
+            }
+        },
+        "OrdersFunctionArn": {
+            "Description": "ARN of the Orders Lambda function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "OrdersFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-orders-function-arn"
+                }
+            }
+        }
+    }
+}

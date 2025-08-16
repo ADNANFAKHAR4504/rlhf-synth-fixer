@@ -66,7 +66,6 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub '${AWS::StackName}-items'
-      Description: 'DynamoDB table for storing item information'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: itemId
@@ -80,7 +79,6 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub '${AWS::StackName}-users'
-      Description: 'DynamoDB table for storing user information'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: userId
@@ -94,7 +92,6 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub '${AWS::StackName}-orders'
-      Description: 'DynamoDB table for storing order information'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: orderId

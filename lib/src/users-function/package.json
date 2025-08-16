@@ -1,0 +1,9 @@
+{
+  "name": "users-function",
+  "version": "1.0.0",
+  "description": "Lambda function for handling users operations",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.1692.0"
+  }
+}
