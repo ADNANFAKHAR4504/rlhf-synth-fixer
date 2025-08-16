@@ -99,3 +99,5 @@ output "s3_logs_bucket_name" { description = "Name of the S3 logs bucket" value 
 output "kms_key_id" { description = "ID of the KMS key" value = aws_kms_key.main.key_id }
 
 output "cloudtrail_arn" { description = "ARN of the CloudTrail" value = module.monitoring.cloudtrail_arn }
+
+
