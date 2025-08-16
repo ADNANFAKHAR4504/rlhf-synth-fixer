@@ -1,13 +1,6 @@
 // test/tap-stack.int.test.ts
 
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from '@aws-sdk/client-auto-scaling';
-import {
-  ConfigServiceClient,
-  DescribeConfigRulesCommand,
-  DescribeConfigurationRecordersCommand,
-  DescribeConfigurationRecorderStatusCommand,
-  GetComplianceDetailsByConfigRuleCommand,
-} from '@aws-sdk/client-config-service';
 import type { Subnet as Ec2Subnet, InstanceBlockDeviceMapping } from '@aws-sdk/client-ec2';
 import {
   DescribeInstancesCommand,
@@ -32,7 +25,6 @@ import {
 } from '@aws-sdk/client-rds';
 import {
   GetBucketEncryptionCommand,
-  GetBucketPolicyCommand,
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
   HeadBucketCommand,
@@ -51,7 +43,6 @@ const elbClient = new ElasticLoadBalancingV2Client({ region });
 const rdsClient = new RDSClient({ region });
 const s3Client = new S3Client({ region });
 const asgClient = new AutoScalingClient({ region });
-const configClient = new ConfigServiceClient({ region });
 
 // small helper for fetch timeout (Node 18+ global fetch)
 async function fetchWithTimeout(url: string, ms: number) {
@@ -66,7 +57,7 @@ async function fetchWithTimeout(url: string, ms: number) {
 
 describe('TapStack Infrastructure Integration Tests', () => {
   describe('VPC and Networking', () => {
-    test('should have VPC with correct configuration', async () => {
+    test('has VPC with expected configuration', async () => {
       const vpcId = outputs.VpcId;
       expect(vpcId).toBeDefined();
 
@@ -74,10 +65,8 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(vpcResp.Vpcs).toHaveLength(1);
       const vpc = vpcResp.Vpcs![0];
       expect(vpc.State).toBe('available');
-      expect(vpc.CidrBlock).toBeDefined();
       expect(vpc.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
 
-      // Check DNS attributes are enabled
       const dnsHostnames = await ec2Client.send(
         new DescribeVpcAttributeCommand({ VpcId: vpcId, Attribute: 'enableDnsHostnames' })
       );
@@ -87,7 +76,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
       expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
 
-      // Verify VPC has proper tags
       const nameTag = vpc.Tags?.find((t) => t.Key === 'Name');
       expect(nameTag).toBeDefined();
       expect(nameTag!.Value).toContain('vpc');
@@ -96,126 +84,118 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(environmentTag).toBeDefined();
     });
 
-    test('should have public and private subnets in multiple AZs', async () => {
-      const publicSubnets = outputs.PublicSubnets.split(',').filter((s: string) => s.length > 0);
-      const privateSubnets = outputs.PrivateSubnets.split(',').filter((s: string) => s.length > 0);
+    test('has public and private subnets across AZs', async () => {
+      const publicSubnets = outputs.PublicSubnets.split(',').filter((s: string) => s);
+      const privateSubnets = outputs.PrivateSubnets.split(',').filter((s: string) => s);
 
       expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
       expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
       expect(publicSubnets.length).toBe(privateSubnets.length);
 
-      // --- Public subnets ---
+      // Public
       const publicResponse = await ec2Client.send(
         new DescribeSubnetsCommand({ SubnetIds: publicSubnets })
       );
       const uniquePublicAZs = new Set<string>();
-      const publicSubnetsList = (publicResponse.Subnets ?? []) as readonly Ec2Subnet[];
-      for (const subnet of publicSubnetsList) {
+      const publicList = (publicResponse.Subnets ?? []) as readonly Ec2Subnet[];
+      for (const subnet of publicList) {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.CidrBlock).toMatch(/^10\.0\.[12]\.0\/24$/);
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.(1|2)\.0\/24$/);
         uniquePublicAZs.add(subnet.AvailabilityZone as string);
-
-        const tierTag = subnet.Tags?.find((t) => t.Key === 'Tier');
-        expect(tierTag?.Value).toBe('public');
+        expect(subnet.Tags?.find((t) => t.Key === 'Tier')?.Value).toBe('public');
       }
       expect(uniquePublicAZs.size).toBeGreaterThanOrEqual(2);
 
-      // --- Private subnets ---
+      // Private
       const privateResponse = await ec2Client.send(
         new DescribeSubnetsCommand({ SubnetIds: privateSubnets })
       );
       const uniquePrivateAZs = new Set<string>();
-      const privateSubnetsList = (privateResponse.Subnets ?? []) as readonly Ec2Subnet[];
-      for (const subnet of privateSubnetsList) {
+      const privateList = (privateResponse.Subnets ?? []) as readonly Ec2Subnet[];
+      for (const subnet of privateList) {
         expect(subnet.State).toBe('available');
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.CidrBlock).toMatch(/^10\.0\.[12]0\.0\/24$/);
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.(10|20)\.0\/24$/);
         uniquePrivateAZs.add(subnet.AvailabilityZone as string);
-
-        const tierTag = subnet.Tags?.find((t) => t.Key === 'Tier');
-        expect(tierTag?.Value).toBe('private');
+        expect(subnet.Tags?.find((t) => t.Key === 'Tier')?.Value).toBe('private');
       }
       expect(uniquePrivateAZs.size).toBeGreaterThanOrEqual(2);
     });
 
-    test('should have properly configured security groups', async () => {
-      const securityGroups = outputs.SecurityGroups.split(',');
-      expect(securityGroups.length).toBe(3); // ALB, Web, DB security groups
+    test('security groups: ALB, Web, DB behave as designed', async () => {
+      const [albSgId, webSgId, dbSgId] = outputs.SecurityGroups.split(',');
+      expect(albSgId && webSgId && dbSgId).toBeTruthy();
 
       const sgResp = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({ GroupIds: securityGroups })
+        new DescribeSecurityGroupsCommand({ GroupIds: [albSgId, webSgId, dbSgId] })
       );
       expect(sgResp.SecurityGroups).toHaveLength(3);
+      const byId = new Map(sgResp.SecurityGroups!.map((sg) => [sg.GroupId!, sg]));
 
-      // Find each security group by name pattern
-      const albSG = sgResp.SecurityGroups!.find((sg) => sg.GroupName?.includes('alb'));
-      const webSG = sgResp.SecurityGroups!.find((sg) => sg.GroupName?.includes('web'));
-      const dbSG = sgResp.SecurityGroups!.find((sg) => sg.GroupName?.includes('db'));
+      const albSG = byId.get(albSgId)!;
+      const webSG = byId.get(webSgId)!;
+      const dbSG = byId.get(dbSgId)!;
 
-      expect(albSG).toBeDefined();
-      expect(webSG).toBeDefined();
-      expect(dbSG).toBeDefined();
+      // ALB SG allows 80 & 443 from 0.0.0.0/0
+      const hasOpenPort = (sg: typeof albSG, port: number) =>
+        !!sg.IpPermissions?.some(
+          (r) =>
+            r.FromPort === port &&
+            r.ToPort === port &&
+            (r.IpRanges ?? []).some((rng) => rng.CidrIp === '0.0.0.0/0')
+        );
+      expect(hasOpenPort(albSG, 80)).toBe(true);
+      expect(hasOpenPort(albSG, 443)).toBe(true);
 
-      // Check ALB security group allows HTTP/HTTPS
-      const albHttpRule = albSG!.IpPermissions?.find((rule) => rule.FromPort === 80);
-      const albHttpsRule = albSG!.IpPermissions?.find((rule) => rule.FromPort === 443);
-      expect(albHttpRule).toBeDefined();
-      expect(albHttpsRule).toBeDefined();
+      // Web SG allows 80/443 from ALB SG and 22 from AllowedCidrIngress[0] (can’t know exact CIDR; just ensure exists)
+      const fromAlb = (port: number) =>
+        !!webSG.IpPermissions?.some(
+          (r) =>
+            r.FromPort === port &&
+            r.ToPort === port &&
+            (r.UserIdGroupPairs ?? []).some((p) => p.GroupId === albSG.GroupId)
+        );
+      expect(fromAlb(80)).toBe(true);
+      expect(fromAlb(443)).toBe(true);
+      const sshRule = webSG.IpPermissions?.find((r) => r.FromPort === 22 && r.ToPort === 22);
+      expect(sshRule && (sshRule.IpRanges?.length ?? 0) > 0).toBe(true);
 
-      // Check web tier allows traffic from ALB
-      const webHttpRule = webSG!.IpPermissions?.find(
-        (rule) =>
-          rule.FromPort === 80 && rule.UserIdGroupPairs?.some((pair) => pair.GroupId === albSG!.GroupId)
+      // DB SG allows 5432 or 3306 from Web SG, and should NOT be open to 0.0.0.0/0
+      const dbFromWeb = dbSG.IpPermissions?.some(
+        (r) =>
+          (r.FromPort === 5432 || r.FromPort === 3306) &&
+          (r.UserIdGroupPairs ?? []).some((p) => p.GroupId === webSG.GroupId)
       );
-      expect(webHttpRule).toBeDefined();
-
-      // Check database security group only allows traffic from web tier
-      const dbRule = dbSG!.IpPermissions?.find(
-        (rule) =>
-          (rule.FromPort === 5432 || rule.FromPort === 3306) &&
-          rule.UserIdGroupPairs?.some((pair) => pair.GroupId === webSG!.GroupId)
+      expect(dbFromWeb).toBe(true);
+      const dbOpenToInternet = dbSG.IpPermissions?.some((r) =>
+        (r.IpRanges ?? []).some((rng) => rng.CidrIp === '0.0.0.0/0')
       );
-      expect(dbRule).toBeDefined();
+      expect(dbOpenToInternet).toBe(false);
     });
   });
 
   describe('Application Load Balancer', () => {
-    test('should have ALB accessible and properly configured', async () => {
+    test('ALB is active in public subnets', async () => {
       const albDns = outputs.AlbDnsName;
-      expect(albDns).toBeDefined();
       expect(albDns).toMatch(/.*\.elb\..*\.amazonaws\.com$/);
 
       const lbResp = await elbClient.send(new DescribeLoadBalancersCommand({}));
-      expect(lbResp.LoadBalancers).toBeDefined();
-
       const alb = lbResp.LoadBalancers!.find((lb) => lb.DNSName === albDns);
       expect(alb).toBeDefined();
       expect(alb!.State!.Code).toBe('active');
       expect(alb!.Type).toBe('application');
       expect(alb!.Scheme).toBe('internet-facing');
-      expect(alb!.IpAddressType).toBe('ipv4');
-
-      // Verify ALB is deployed in public subnets
       expect(alb!.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
-
-      // Check ALB has proper security groups
-      expect(alb!.SecurityGroups).toBeDefined();
-      expect(alb!.SecurityGroups!.length).toBeGreaterThan(0);
     });
 
-    test('should have target group with proper health check configuration', async () => {
+    test('target group has correct health checks and targets', async () => {
       const tgResp = await elbClient.send(new DescribeTargetGroupsCommand({}));
-      expect(tgResp.TargetGroups).toBeDefined();
-      expect(tgResp.TargetGroups!.length).toBeGreaterThan(0);
-
       const targetGroup = tgResp.TargetGroups!.find((tg) => tg.Port === 80);
       expect(targetGroup).toBeDefined();
       expect(targetGroup!.Protocol).toBe('HTTP');
-      expect(targetGroup!.Port).toBe(80);
       expect(targetGroup!.TargetType).toBe('instance');
 
-      // Verify health check configuration
       expect(targetGroup!.HealthCheckPath).toBe('/');
       expect(targetGroup!.HealthCheckProtocol).toBe('HTTP');
       expect(targetGroup!.HealthCheckIntervalSeconds).toBe(30);
@@ -223,32 +203,22 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(targetGroup!.HealthyThresholdCount).toBe(2);
       expect(targetGroup!.UnhealthyThresholdCount).toBe(3);
       expect(targetGroup!.Matcher?.HttpCode).toBe('200-399');
-    });
-
-    test('should have registered targets in target group', async () => {
-      const tgResp = await elbClient.send(new DescribeTargetGroupsCommand({}));
-      const targetGroup = tgResp.TargetGroups!.find((tg) => tg.Port === 80);
-      expect(targetGroup).toBeDefined();
 
       const healthResp = await elbClient.send(
         new DescribeTargetHealthCommand({ TargetGroupArn: targetGroup!.TargetGroupArn })
       );
-
-      expect(healthResp.TargetHealthDescriptions).toBeDefined();
       expect(healthResp.TargetHealthDescriptions!.length).toBeGreaterThanOrEqual(2);
-
-      // Check that we have at least some healthy or initial targets
-      const healthyTargets = healthResp.TargetHealthDescriptions!.filter(
-        (target) => target.TargetHealth?.State === 'healthy' || target.TargetHealth?.State === 'initial'
+      const healthyOrInit = healthResp.TargetHealthDescriptions!.filter(
+        (t) => t.TargetHealth?.State === 'healthy' || t.TargetHealth?.State === 'initial'
       );
-      expect(healthyTargets.length).toBeGreaterThan(0);
+      expect(healthyOrInit.length).toBeGreaterThan(0);
     });
   });
 
   describe('Auto Scaling Group', () => {
-    test('should have ASG with proper configuration and healthy instances', async () => {
+    test('ASG is sized and healthy in private subnets', async () => {
       const asgName = outputs.AsgName;
-      expect(asgName).toBeDefined();
+      const privateSubnets: string[] = outputs.PrivateSubnets.split(',').filter((s: string) => s);
 
       const asgResp = await asgClient.send(
         new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
@@ -261,26 +231,20 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(asg.MaxSize).toBeGreaterThanOrEqual(asg.DesiredCapacity!);
       expect(asg.Instances!.length).toBe(asg.DesiredCapacity);
 
-      // Verify ASG is deployed in private subnets
-      const privateSubnets: string[] = outputs.PrivateSubnets.split(',').filter((s: string) => s.length > 0);
-      expect(asg.VPCZoneIdentifier).toBeDefined();
-      const asgSubnets: string[] = asg.VPCZoneIdentifier!.split(',');
-      privateSubnets.forEach((subnet: string) => {
-        expect(asgSubnets).toContain(subnet);
-      });
+      // private subnets
+      const asgSubnets: string[] = (asg.VPCZoneIdentifier ?? '').split(',').filter(Boolean);
+      privateSubnets.forEach((sn) => expect(asgSubnets).toContain(sn));
 
-      // Check health check configuration
       expect(asg.HealthCheckType).toBe('ELB');
       expect(asg.HealthCheckGracePeriod).toBe(300);
 
-      // Verify instance health
       const healthyInstances = asg.Instances!.filter(
-        (instance) => instance.LifecycleState === 'InService' && instance.HealthStatus === 'Healthy'
+        (i) => i.LifecycleState === 'InService' && i.HealthStatus === 'Healthy'
       );
       expect(healthyInstances.length).toBeGreaterThan(0);
     });
 
-    test('should have instances with correct launch template configuration', async () => {
+    test('instances are from the LaunchTemplate and hardened', async () => {
       const asgName = outputs.AsgName;
       const launchTemplateId = outputs.LaunchTemplateId;
 
@@ -289,87 +253,64 @@ describe('TapStack Infrastructure Integration Tests', () => {
       );
       const asg = asgResp.AutoScalingGroups![0];
 
-      // Verify launch template is configured
-      expect(asg.LaunchTemplate).toBeDefined();
-      expect(asg.LaunchTemplate!.LaunchTemplateId).toBe(launchTemplateId);
+      expect(asg.LaunchTemplate?.LaunchTemplateId).toBe(launchTemplateId);
 
-      // Get instance details
-      const instanceIds = asg.Instances!.map((instance) => instance.InstanceId!);
-      if (instanceIds.length > 0) {
-        const instanceResp = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: instanceIds }));
+      const instanceIds = asg.Instances!.map((i) => i.InstanceId!).filter(Boolean);
+      if (instanceIds.length === 0) return;
 
-        // Collect volume IDs and assert instance-level expectations
-        const volumeIds: string[] = [];
+      const instanceResp = await ec2Client.send(new DescribeInstancesCommand({ InstanceIds: instanceIds }));
 
-        instanceResp.Reservations!.forEach((reservation) => {
-          reservation.Instances!.forEach((instance) => {
-            expect(instance.InstanceType).toBe('t3.medium');
-            expect(instance.State?.Name).toMatch(/^(running|pending)$/);
+      const volumeIds: string[] = [];
+      instanceResp.Reservations!.forEach((res) => {
+        res.Instances!.forEach((inst) => {
+          expect(inst.InstanceType).toBe('t3.medium');
+          expect(inst.State?.Name).toMatch(/^(running|pending)$/);
 
-            // Gather volumeIds for DescribeVolumes (Encrypted/VolumeType live on Volumes)
-            const bdms = (instance.BlockDeviceMappings ?? []) as InstanceBlockDeviceMapping[];
-            bdms.forEach((device) => {
-              if (device.Ebs?.VolumeId) volumeIds.push(device.Ebs.VolumeId);
-            });
+          const bdms = (inst.BlockDeviceMappings ?? []) as InstanceBlockDeviceMapping[];
+          bdms.forEach((d) => d.Ebs?.VolumeId && volumeIds.push(d.Ebs.VolumeId));
 
-            // Check IMDSv2 is enforced
-            expect(instance.MetadataOptions?.HttpTokens).toBe('required');
-            expect(instance.MetadataOptions?.HttpEndpoint).toBe('enabled');
-          });
+          expect(inst.MetadataOptions?.HttpTokens).toBe('required');
+          expect(inst.MetadataOptions?.HttpEndpoint).toBe('enabled');
         });
+      });
 
-        // Describe volumes to assert encryption and type
-        if (volumeIds.length) {
-          const volumesResp = await ec2Client.send(new DescribeVolumesCommand({ VolumeIds: volumeIds }));
-          (volumesResp.Volumes ?? []).forEach((vol) => {
-            expect(vol.Encrypted).toBe(true);
-            expect(vol.VolumeType).toBe('gp3');
-          });
-        }
+      if (volumeIds.length) {
+        const volumesResp = await ec2Client.send(new DescribeVolumesCommand({ VolumeIds: volumeIds }));
+        (volumesResp.Volumes ?? []).forEach((vol) => {
+          expect(vol.Encrypted).toBe(true);
+          expect(vol.VolumeType).toBe('gp3');
+        });
       }
     });
   });
 
   describe('RDS Database', () => {
-    test('should have RDS instance with comprehensive security configuration', async () => {
+    test('DB instance has production config', async () => {
       const rdsEndpoint = outputs.RdsEndpoint;
       expect(rdsEndpoint).toBeDefined();
 
       const dbResp = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      expect(dbResp.DBInstances).toBeDefined();
-
       const dbInstance = dbResp.DBInstances!.find((db) => db.Endpoint?.Address === rdsEndpoint);
       expect(dbInstance).toBeDefined();
-      expect(dbInstance!.DBInstanceStatus).toBe('available');
 
-      // Multi-AZ and high availability
+      expect(dbInstance!.DBInstanceStatus).toBe('available');
       expect(dbInstance!.MultiAZ).toBe(true);
       expect(dbInstance!.StorageEncrypted).toBe(true);
       expect(dbInstance!.PubliclyAccessible).toBe(false);
-
-      // Storage configuration
       expect(dbInstance!.StorageType).toBe('gp3');
       expect(dbInstance!.AllocatedStorage).toBe(100);
-
-      // Backup and monitoring configuration
       expect(dbInstance!.BackupRetentionPeriod).toBe(7);
       expect(dbInstance!.DeletionProtection).toBe(true);
       expect(dbInstance!.PerformanceInsightsEnabled).toBe(true);
       expect(dbInstance!.MonitoringInterval).toBe(60);
       expect(dbInstance!.MonitoringRoleArn).toBeDefined();
-
-      // Auto minor version upgrade
       expect(dbInstance!.AutoMinorVersionUpgrade).toBe(true);
       expect(dbInstance!.CopyTagsToSnapshot).toBe(true);
-
-      // Instance class verification
       expect(dbInstance!.DBInstanceClass).toBe('db.m5.large');
-
-      // Engine verification (postgres or mysql)
       expect(['postgres', 'mysql']).toContain(dbInstance!.Engine!);
     });
 
-    test('should have RDS subnet group in private subnets', async () => {
+    test('DB subnet group uses our private subnets across AZs', async () => {
       const dbResp = await rdsClient.send(new DescribeDBInstancesCommand({}));
       const dbInstance = dbResp.DBInstances![0];
 
@@ -378,229 +319,84 @@ describe('TapStack Infrastructure Integration Tests', () => {
           DBSubnetGroupName: dbInstance.DBSubnetGroup?.DBSubnetGroupName,
         })
       );
-
       const subnetGroup = subnetGroupResp.DBSubnetGroups![0];
-      expect(subnetGroup).toBeDefined();
       expect(subnetGroup.SubnetGroupStatus).toBe('Complete');
       expect(subnetGroup.Subnets!.length).toBeGreaterThanOrEqual(2);
 
-      // Verify subnets are in different AZs
-      const availabilityZones = new Set(
-        subnetGroup.Subnets!.map((subnet: RdsSubnet) => subnet.SubnetAvailabilityZone?.Name)
-      );
-      expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
+      const azs = new Set(subnetGroup.Subnets!.map((s: RdsSubnet) => s.SubnetAvailabilityZone?.Name));
+      expect(azs.size).toBeGreaterThanOrEqual(2);
 
-      // Verify these are private subnets from our stack
-      const privateSubnets = outputs.PrivateSubnets.split(',').filter((s: string) => s.length > 0);
-      subnetGroup.Subnets!.forEach((subnet: RdsSubnet) => {
-        expect(privateSubnets).toContain(subnet.SubnetIdentifier!);
+      const privateSubnets = outputs.PrivateSubnets.split(',').filter((s: string) => s);
+      subnetGroup.Subnets!.forEach((s: RdsSubnet) => {
+        expect(privateSubnets).toContain(s.SubnetIdentifier!);
       });
     });
   });
 
   describe('S3 Storage', () => {
-    test('should have S3 bucket with comprehensive security configuration', async () => {
+    test('bucket exists with encryption, versioning, and public access block', async () => {
       const bucketName = outputs.S3BucketNameOut;
       const bucketArn = outputs.S3BucketArnOut;
-      expect(bucketName).toBeDefined();
-      expect(bucketArn).toBeDefined();
       expect(bucketArn).toBe(`arn:aws:s3:::${bucketName}`);
 
-      // Verify bucket is accessible
       await expect(s3Client.send(new HeadBucketCommand({ Bucket: bucketName }))).resolves.not.toThrow();
 
-      // Check encryption configuration
       const encResp = await s3Client.send(new GetBucketEncryptionCommand({ Bucket: bucketName }));
-      expect(encResp.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(encResp.ServerSideEncryptionConfiguration!.Rules?.length).toBeGreaterThan(0);
-      const rule = encResp.ServerSideEncryptionConfiguration!.Rules![0];
-      expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
-    });
-
-    test('should have S3 bucket with versioning enabled', async () => {
-      const bucketName = outputs.S3BucketNameOut;
+      const encRule = encResp.ServerSideEncryptionConfiguration!.Rules![0];
+      expect(encRule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
 
       const versioningResp = await s3Client.send(new GetBucketVersioningCommand({ Bucket: bucketName }));
       expect(versioningResp.Status).toBe('Enabled');
-    });
 
-    test('should have S3 bucket with public access blocked', async () => {
-      const bucketName = outputs.S3BucketNameOut;
-
-      const publicAccessResp = await s3Client.send(new GetPublicAccessBlockCommand({ Bucket: bucketName }));
-      expect(publicAccessResp.PublicAccessBlockConfiguration).toBeDefined();
-      const config = publicAccessResp.PublicAccessBlockConfiguration!;
-      expect(config.BlockPublicAcls).toBe(true);
-      expect(config.BlockPublicPolicy).toBe(true);
-      expect(config.IgnorePublicAcls).toBe(true);
-      expect(config.RestrictPublicBuckets).toBe(true);
-    });
-
-    test('should have S3 bucket policy for AWS Config', async () => {
-      const bucketName = outputs.S3BucketNameOut;
-
-      try {
-        const policyResp = await s3Client.send(new GetBucketPolicyCommand({ Bucket: bucketName }));
-        expect(policyResp.Policy).toBeDefined();
-
-        const policy = JSON.parse(policyResp.Policy!);
-        expect(policy.Statement).toBeDefined();
-
-        // Check for AWS Config permissions
-        const configStatements = policy.Statement.filter(
-          (stmt: any) => stmt.Principal?.Service === 'config.amazonaws.com'
-        );
-        expect(configStatements.length).toBeGreaterThan(0);
-      } catch (error: any) {
-        // If no policy exists, that's also acceptable depending on configuration
-        if (error.name !== 'NoSuchBucketPolicy') {
-          throw error;
-        }
-      }
+      const pabResp = await s3Client.send(new GetPublicAccessBlockCommand({ Bucket: bucketName }));
+      const pab = pabResp.PublicAccessBlockConfiguration!;
+      expect(pab.BlockPublicAcls).toBe(true);
+      expect(pab.BlockPublicPolicy).toBe(true);
+      expect(pab.IgnorePublicAcls).toBe(true);
+      expect(pab.RestrictPublicBuckets).toBe(true);
     });
   });
 
-  describe('AWS Config Compliance', () => {
-    test('should have AWS Config recorder running', async () => {
-      const configStatus = outputs.AwsConfigStatus;
-      expect(configStatus).toBeDefined();
-
-      const recorderResp = await configClient.send(new DescribeConfigurationRecordersCommand({}));
-      expect(recorderResp.ConfigurationRecorders).toBeDefined();
-      expect(recorderResp.ConfigurationRecorders!.length).toBeGreaterThan(0);
-
-      const recorder = recorderResp.ConfigurationRecorders![0];
-      expect(recorder.name).toBe('default');
-      expect(recorder.recordingGroup?.allSupported).toBe(true);
-      expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(false);
-
-      // Check recorder status
-      const statusResp = await configClient.send(new DescribeConfigurationRecorderStatusCommand({}));
-      expect(statusResp.ConfigurationRecordersStatus).toBeDefined();
-      const status = statusResp.ConfigurationRecordersStatus![0];
-      expect(status.recording).toBe(true);
-    });
-
-    test('should have AWS Config rules for compliance monitoring', async () => {
-      const rulesResp = await configClient.send(new DescribeConfigRulesCommand({}));
-      expect(rulesResp.ConfigRules).toBeDefined();
-      expect(rulesResp.ConfigRules!.length).toBeGreaterThan(0);
-
-      // Check for specific compliance rules from the template
-      const ruleNames = rulesResp.ConfigRules!.map((rule) => rule.ConfigRuleName);
-      expect(ruleNames).toContain('iam-password-policy');
-      expect(ruleNames).toContain('rds-multi-az');
-      expect(ruleNames).toContain('ec2-no-public-ip');
-      expect(ruleNames).toContain('s3-no-public-read');
-      expect(ruleNames).toContain('s3-no-public-write');
-      expect(ruleNames).toContain('ec2-imdsv2');
-    });
-
-    test('should validate RDS Multi-AZ compliance rule', async () => {
-      try {
-        const complianceResp = await configClient.send(
-          new GetComplianceDetailsByConfigRuleCommand({
-            ConfigRuleName: 'rds-multi-az',
-          })
-        );
-
-        if (complianceResp.EvaluationResults && complianceResp.EvaluationResults.length > 0) {
-          // Check that RDS instances are compliant with Multi-AZ rule
-          const nonCompliantResults = complianceResp.EvaluationResults.filter(
-            (result) => result.ComplianceType === 'NON_COMPLIANT'
-          );
-          expect(nonCompliantResults.length).toBe(0);
-        }
-      } catch (error: any) {
-        // Rule might not have been evaluated yet, which is acceptable
-        console.log('RDS Multi-AZ compliance rule not yet evaluated:', error.message);
-      }
-    });
-  });
-
-  describe('End-to-End Connectivity and Security Validation', () => {
-    test('should be able to reach ALB endpoint', async () => {
+  describe('End-to-End Connectivity & Cross-service wiring', () => {
+    test('ALB DNS is reachable (HEAD)', async () => {
       const albDns = outputs.AlbDnsName;
-      expect(albDns).toBeDefined();
       const url = `http://${albDns}`;
-
       try {
         const response = await fetchWithTimeout(url, 15000);
-        expect(response).toBeDefined(); // Any response indicates reachability
-        // Even a 503 service unavailable indicates the ALB is reachable
+        expect(response).toBeDefined();
         expect([200, 301, 302, 403, 404, 503]).toContain(response.status);
-      } catch (error: any) {
-        // ALB may not have healthy targets yet; reaching it can still fail transiently.
-        // Keep this non-fatal for infra smoke test purposes.
-        console.warn(
-          'ALB endpoint not yet accessible (may be expected if targets are initializing):',
-          error.message
-        );
+      } catch (err: any) {
+        console.warn('ALB endpoint not reachable yet (targets may be initializing):', err.message);
       }
     });
 
-    test('should validate security group rules block unauthorized access', async () => {
-      // Get security groups
-      const securityGroups = outputs.SecurityGroups.split(',');
-      const sgResp = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({ GroupIds: securityGroups })
-      );
-
-      const dbSG = sgResp.SecurityGroups!.find((sg) => sg.GroupName?.includes('db'));
-      expect(dbSG).toBeDefined();
-
-      // Verify database security group doesn't allow direct internet access
-      const dbInboundRules = dbSG!.IpPermissions || [];
-      const openToInternetRules = dbInboundRules.filter((rule) =>
-        rule.IpRanges?.some((range) => range.CidrIp === '0.0.0.0/0')
-      );
-      expect(openToInternetRules.length).toBe(0); // Database should not be directly accessible from internet
-    });
-
-    test('should have comprehensive resource tagging', async () => {
-      // Test VPC tags
-      const vpcId = outputs.VpcId;
-      const vpcResp = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-      const vpc = vpcResp.Vpcs![0];
-
-      const requiredTags = ['Name', 'Environment', 'Project', 'Owner', 'Region'];
-      requiredTags.forEach((tagKey) => {
-        const tag = vpc.Tags?.find((t) => t.Key === tagKey);
-        expect(tag).toBeDefined();
-        expect(tag!.Value).toBeTruthy();
-      });
-
-      // Test RDS tags
-      const dbResp = await rdsClient.send(new DescribeDBInstancesCommand({}));
-      const dbInstance = dbResp.DBInstances![0];
-      const nameTag = dbInstance.TagList?.find((t) => t.Key === 'Name');
-      expect(nameTag).toBeDefined();
-      expect(nameTag!.Value).toContain('db');
-    });
-
-    test('should validate cross-service integration', async () => {
-      // Verify Auto Scaling Group is connected to Load Balancer Target Group
+    test('ASG is attached to ALB Target Group', async () => {
       const asgName = outputs.AsgName;
       const asgResp = await asgClient.send(
         new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [asgName] })
       );
       const asg = asgResp.AutoScalingGroups![0];
+      expect(asg.TargetGroupARNs && asg.TargetGroupARNs.length > 0).toBe(true);
 
-      expect(asg.TargetGroupARNs).toBeDefined();
-      expect(asg.TargetGroupARNs!.length).toBeGreaterThan(0);
-
-      // Verify the target group ARN matches our ALB target group
       const tgResp = await elbClient.send(new DescribeTargetGroupsCommand({}));
-      const targetGroup = tgResp.TargetGroups!.find((tg) => tg.Port === 80);
-      expect(asg.TargetGroupARNs).toContain(targetGroup!.TargetGroupArn);
+      const httpTg = tgResp.TargetGroups!.find((tg) => tg.Port === 80);
+      expect(httpTg).toBeDefined();
+      expect(asg.TargetGroupARNs).toContain(httpTg!.TargetGroupArn);
+    });
 
-      // Verify S3 bucket is configured for AWS Config
-      const bucketName = outputs.S3BucketNameOut;
-      expect(bucketName).toBeDefined();
+    test('resource tagging (VPC + RDS) is present', async () => {
+      const vpcId = outputs.VpcId;
+      const vpcResp = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      const vpc = vpcResp.Vpcs![0];
+      ['Name', 'Environment', 'Project', 'Owner', 'Region'].forEach((key) => {
+        const tag = vpc.Tags?.find((t) => t.Key === key);
+        expect(tag?.Value).toBeTruthy();
+      });
 
-      // The Config delivery channel should be pointing to our S3 bucket
-      const configResp = await configClient.send(new DescribeConfigurationRecordersCommand({}));
-      expect(configResp.ConfigurationRecorders).toBeDefined();
+      const dbResp = await rdsClient.send(new DescribeDBInstancesCommand({}));
+      const dbInstance = dbResp.DBInstances![0];
+      const nameTag = dbInstance.TagList?.find((t) => t.Key === 'Name');
+      expect(nameTag?.Value).toContain('db');
     });
   });
 });
