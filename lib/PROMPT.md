@@ -9,6 +9,7 @@ Build: Integrate AWS CodeBuild to handle the build process.
 
 Deployment: Use AWS CodeDeploy for application deployment.
 
+
 Source Control: Store project source code in an Amazon S3 bucket with versioning enabled.
 
 IAM: Implement IAM roles with the least privilege principle for each AWS service (CodePipeline, CodeBuild, CodeDeploy, Lambda, S3 access).
