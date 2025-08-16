@@ -262,8 +262,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(providerContent).toMatch(/provider\s+"aws"\s*{/);
     });
 
-    test("provider is configured for us-east-1 region", () => {
-      expect(providerContent).toMatch(/provider\s+"aws"\s*{[^}]*region\s*=\s*"us-east-1"/);
+    test("provider is configured for us-east-2 region", () => {
+      expect(providerContent).toMatch(/provider\s+"aws"\s*{[^}]*region\s*=\s*"us-east-2"/);
     });
 
     test("terraform block has required version", () => {

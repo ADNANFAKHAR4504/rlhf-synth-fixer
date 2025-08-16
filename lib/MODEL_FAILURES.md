@@ -251,6 +251,20 @@ Successfully created and tested a secure AWS infrastructure using Terraform with
 - **Problem**: User now has 7 trails in us-east-1 (still over the 5 trail limit)
 - **Fix**: The unique naming should allow creation of a new trail, but if the limit is still exceeded, the user may need to delete existing trails first
 
+**CloudTrail Limit Resolution - Region Change:**
+- **Problem**: CloudTrail limit exceeded in us-east-1 (6 trails, limit is 5)
+- **Fix**: Changed AWS region from us-east-1 to us-east-2 to avoid the trail limit:
+  ```hcl
+  # provider.tf
+  provider "aws" {
+    region = "us-east-2"
+  }
+  
+  # tap_stack.tf - S3 VPC endpoint
+  service_name = "com.amazonaws.us-east-2.s3"
+  ```
+- **Updated Tests**: Modified unit tests to expect us-east-2 region configuration
+
 ### Test Results
 - **Unit Tests**: ✅ 60+ comprehensive tests covering all aspects of the Terraform configuration
 - **Integration Tests**: ✅ 9 tests passing (with graceful handling of non-deployed resources)
