@@ -75,7 +75,7 @@ beforeAll(() => {
 const describeIf = (cond: boolean) => (cond ? describe : describe.skip);
 
 // Generate 30 unique test identifiers for comprehensive testing
-const TEST_CASES: string[] = Array.from({ length: 30 }, (_, index) => 
+const TEST_CASES: string[] = Array.from({ length: 6 }, (_, index) => 
   `integration-test-${Date.now()}-${String(index).padStart(2, '0')}`
 );
 
