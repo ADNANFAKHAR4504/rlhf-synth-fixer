@@ -41,6 +41,13 @@ variable "allowed_ssh_cidrs" {
   default     = []
 }
 
+# Optional: reuse an existing AWS Config IAM role by name to avoid EntityAlreadyExists
+variable "config_role_name" {
+  description = "Existing IAM role name for AWS Config. If set, the stack will not create a new role."
+  type        = string
+  default     = null
+}
+
 ############################################
 # Providers (single file, multi-region)
 # Assume a default provider is configured in provider.tf.
@@ -65,6 +72,16 @@ locals {
     Environment = var.environment
     Owner       = var.owner
   }
+}
+
+# Lookup existing Config role when provided
+data "aws_iam_role" "existing_config" {
+  count = var.config_role_name != null ? 1 : 0
+  name  = var.config_role_name
+}
+
+locals {
+  config_role_arn_effective = var.config_role_name != null ? data.aws_iam_role.existing_config[0].arn : aws_iam_role.config_role[0].arn
 }
 
 ############################################
@@ -321,7 +338,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data_enc_eu_west_
 # AWS Config: recorder + delivery + rule (both regions)
 ############################################
 resource "aws_iam_role" "config_role" {
-  name = "${local.name_prefix}-config-role"
+  count = var.config_role_name == null ? 1 : 0
+  name  = "${local.name_prefix}-config-role-${random_id.suffix.hex}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -334,7 +352,8 @@ resource "aws_iam_role" "config_role" {
 }
 
 resource "aws_iam_role_policy_attachment" "config_role_attach" {
-  role       = aws_iam_role.config_role.name
+  count      = var.config_role_name == null ? 1 : 0
+  role       = aws_iam_role.config_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
 }
 
@@ -342,7 +361,7 @@ resource "aws_iam_role_policy_attachment" "config_role_attach" {
 resource "aws_config_configuration_recorder" "rec_us_east_1" {
   provider = aws.us_east_1
   name     = "${local.name_prefix}-recorder"
-  role_arn = aws_iam_role.config_role.arn
+  role_arn = local.config_role_arn_effective
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
@@ -378,7 +397,7 @@ resource "aws_config_config_rule" "encrypted_volumes_us_east_1" {
 resource "aws_config_configuration_recorder" "rec_eu_west_1" {
   provider = aws.eu_west_1
   name     = "${local.name_prefix}-recorder"
-  role_arn = aws_iam_role.config_role.arn
+  role_arn = local.config_role_arn_effective
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
