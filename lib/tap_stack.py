@@ -6,10 +6,11 @@ including S3 buckets, EC2 instances, and RDS databases with zero-downtime requir
 """
 
 import json
+from typing import Any, Dict, List, Optional
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import Config, ResourceOptions, Output
-from typing import Dict, List, Optional, Any
+from pulumi import Config, Output, ResourceOptions
 
 
 class TapStackArgs:
@@ -564,6 +565,36 @@ class TapStack(pulumi.ComponentResource):
           dimensions={"DBInstanceIdentifier": self.rds_instance.id},
           opts=ResourceOptions(provider=self.target_provider, parent=self)
       )
+      
+      # Simple dashboard with basic widgets
+      dashboard_body = {
+          "widgets": [
+              {
+                  "type": "metric",
+                  "x": 0,
+                  "y": 0,
+                  "width": 12,
+                  "height": 6,
+                  "properties": {
+                      "metrics": [
+                          ["AWS/EC2", "CPUUtilization", "InstanceId", self.ec2_instances[0].id.apply(lambda x: x)]
+                      ],
+                      "period": 300,
+                      "stat": "Average",
+                      "region": self.target_region,
+                      "title": "EC2 CPU Utilization"
+                  }
+              }
+          ]
+      }
+      
+      self.cloudwatch_dashboard = aws.cloudwatch.Dashboard(
+          f"tap-dashboard-{self.env_suffix}",
+          dashboard_name=f"TAP-Migration-Dashboard-{self.env_suffix}",
+          dashboard_body=json.dumps(dashboard_body),
+          opts=ResourceOptions(provider=self.target_provider, parent=self)
+      )
+
 
 
     
