@@ -965,11 +965,11 @@ resource "aws_autoscaling_group" "app" {
   vpc_zone_identifier = local.private_subnet_ids
   target_group_arns   = [aws_lb_target_group.app.arn]
   health_check_type   = "ELB"
-  health_check_grace_period = 900  # 15 minutes for instances to become healthy
+  health_check_grace_period = 300  # 15 minutes for instances to become healthy
 
   min_size         = 1
   max_size         = 4
-  desired_capacity = 2
+  desired_capacity = 1
 
   launch_template {
     id      = aws_launch_template.app.id
@@ -1000,8 +1000,8 @@ resource "aws_autoscaling_group" "app" {
     }
   }
 
-  # Increased timeout to 60 minutes
-  wait_for_capacity_timeout = "60m"
+  # Increased timeout to 10 minutes
+  wait_for_capacity_timeout = "10m"
   
   # Enable detailed monitoring
   enabled_metrics = [
