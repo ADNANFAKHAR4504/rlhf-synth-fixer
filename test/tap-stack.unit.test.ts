@@ -369,7 +369,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(22);
+      expect(resourceCount).toBe(21);
     });
 
     test('should have correct number of parameters', () => {

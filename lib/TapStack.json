@@ -832,13 +832,6 @@
                 ]
             }
         },
-        "CorpConfigServiceRole": {
-            "Type": "AWS::IAM::ServiceLinkedRole",
-            "Properties": {
-                "AWSServiceName": "config.amazonaws.com",
-                "Description": "Service-linked role for AWS Config"
-            }
-        },
         "CorpConfigRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
             "Properties": {
@@ -852,8 +845,7 @@
                     "AllSupported": true,
                     "IncludeGlobalResourceTypes": true
                 }
-            },
-            "DependsOn": "CorpConfigServiceRole"
+            }
         },
         "CorpConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
