@@ -234,7 +234,7 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
           // 4. Verify instance tags
           const tags = instance?.Tags || [];
           const nameTag = tags.find(t => t.Key === 'Name');
-          expect(nameTag?.Value).toBe(`nova-app-server-${region}`);
+          expect(nameTag?.Value).toBe(`nova-app-server-${region}-291844`);
           const ownerTag = tags.find(t => t.Key === 'Owner');
           expect(ownerTag?.Value).toBe('nova-devops-team');
           const purposeTag = tags.find(t => t.Key === 'Purpose');
