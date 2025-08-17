@@ -530,90 +530,26 @@ class TapStack(pulumi.ComponentResource):
         )
     
     def _setup_monitoring(self):
-      """Setup CloudWatch monitoring for all infrastructure components"""
+      """Setup basic CloudWatch monitoring for infrastructure components"""
       
-      def create_dashboard_body(ec2_instance_1_id, ec2_instance_2_id, rds_instance_id):
-          metrics = [["AWS/EC2", "CPUUtilization", "InstanceId", ec2_instance_1_id]]
-          if ec2_instance_2_id:
-              metrics.append(["...", ec2_instance_2_id])
-          
-          return {
-              "widgets": [
-                  {
-                      "type": "metric",
-                      "x": 0,
-                      "y": 0,
-                      "width": 12,
-                      "height": 6,
-                      "properties": {
-                          "metrics": metrics,
-                          "period": 300,
-                          "stat": "Average",
-                          "region": self.target_region,
-                          "title": "EC2 CPU Utilization"
-                      }
-                  },
-                  {
-                      "type": "metric",
-                      "x": 0,
-                      "y": 6,
-                      "width": 12,
-                      "height": 6,
-                      "properties": {
-                          "metrics": [
-                              ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", rds_instance_id],
-                              [".", "DatabaseConnections", ".", "."],
-                              [".", "FreeableMemory", ".", "."]
-                          ],
-                          "period": 300,
-                          "stat": "Average",
-                          "region": self.target_region,
-                          "title": "RDS Metrics"
-                      }
-                  }
-              ]
-          }
+      # Simple CloudWatch Alarms without complex dashboard
+      if self.ec2_instances and len(self.ec2_instances) > 0:
+          self.ec2_cpu_alarm = aws.cloudwatch.MetricAlarm(
+              f"ec2-cpu-alarm-{self.env_suffix}",
+              name=f"ec2-high-cpu-{self.env_suffix}",
+              comparison_operator="GreaterThanThreshold",
+              evaluation_periods=2,
+              metric_name="CPUUtilization",
+              namespace="AWS/EC2",
+              period=300,
+              statistic="Average",
+              threshold=80,
+              alarm_description="EC2 instance high CPU utilization",
+              dimensions={"InstanceId": self.ec2_instances[0].id},
+              opts=ResourceOptions(provider=self.target_provider, parent=self)
+          )
       
-      # CORRECTED: Access the correct list elements with proper indexing
-      ec2_1_id = self.ec2_instances[0].id  # First instance - index 0
-      if len(self.ec2_instances) > 1:
-          ec2_2_id = self.ec2_instances.id  # Second instance - index 1 (FIXED!)
-      else:
-          ec2_2_id = None
-      
-      dashboard_body = Output.all(
-          ec2_instance_1_id=ec2_1_id,
-          ec2_instance_2_id=ec2_2_id,
-          rds_instance_id=self.rds_instance.id
-      ).apply(lambda args: json.dumps(create_dashboard_body(
-          args["ec2_instance_1_id"],
-          args["ec2_instance_2_id"], 
-          args["rds_instance_id"]
-      )))
-      
-      self.cloudwatch_dashboard = aws.cloudwatch.Dashboard(
-          f"tap-dashboard-{self.env_suffix}",
-          dashboard_name=f"TAP-Migration-Dashboard-{self.env_suffix}",
-          dashboard_body=dashboard_body,
-          opts=ResourceOptions(provider=self.target_provider, parent=self)
-      )
-      
-      # CloudWatch Alarms
-      self.ec2_cpu_alarm = aws.cloudwatch.MetricAlarm(
-          f"ec2-cpu-alarm-{self.env_suffix}",
-          name=f"ec2-high-cpu-{self.env_suffix}",
-          comparison_operator="GreaterThanThreshold",
-          evaluation_periods=2,
-          metric_name="CPUUtilization",
-          namespace="AWS/EC2",
-          period=300,
-          statistic="Average",
-          threshold=80,
-          alarm_description="EC2 instance high CPU utilization",
-          dimensions={"InstanceId": self.ec2_instances[0].id},  # First instance - index 0
-          opts=ResourceOptions(provider=self.target_provider, parent=self)
-      )
-      
+      # RDS alarm
       self.rds_cpu_alarm = aws.cloudwatch.MetricAlarm(
           f"rds-cpu-alarm-{self.env_suffix}",
           name=f"rds-high-cpu-{self.env_suffix}",
@@ -628,6 +564,7 @@ class TapStack(pulumi.ComponentResource):
           dimensions={"DBInstanceIdentifier": self.rds_instance.id},
           opts=ResourceOptions(provider=self.target_provider, parent=self)
       )
+
 
     
     def _setup_backup_strategies(self):
