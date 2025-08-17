@@ -49,12 +49,12 @@ locals {
     Project     = "tap-stack"
     ManagedBy   = "terraform"
   }
-  primary_azs           = ["${var.primary_region}a", "${var.primary_region}b"]
-  secondary_azs         = ["${var.secondary_region}a", "${var.secondary_region}c"]
+  primary_azs            = ["${var.primary_region}a", "${var.primary_region}b"]
+  secondary_azs          = ["${var.secondary_region}a", "${var.secondary_region}c"]
   primary_public_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
-  primary_private_subnets = ["10.0.10.0/24", "10.0.11.0/24"]
+  primary_private_subnets= ["10.0.10.0/24", "10.0.11.0/24"]
   secondary_public_subnets = ["10.1.1.0/24", "10.1.2.0/24"]
-  secondary_private_subnets = ["10.1.10.0/24", "10.1.11.0/24"]
+  secondary_private_subnets= ["10.1.10.0/24", "10.1.11.0/24"]
 }
 
 # = DATA SOURCES =
@@ -67,7 +67,8 @@ data "aws_ami" "amazon_linux" {
   }
 }
 data "aws_ami" "amazon_linux_secondary" {
-  provider    = aws.secondary
+  # use region argument for secondary region
+  region      = var.secondary_region
   most_recent = true
   owners      = ["amazon"]
   filter {
@@ -170,8 +171,8 @@ resource "aws_route_table_association" "primary_private" {
 
 # = SECONDARY REGION RESOURCES =
 resource "aws_vpc" "secondary" {
-  provider             = aws.secondary
-  cidr_block           = var.secondary_vpc_cidr
+  region              = var.secondary_region
+  cidr_block          = var.secondary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
   tags = merge(local.common_tags, {
@@ -180,15 +181,15 @@ resource "aws_vpc" "secondary" {
   })
 }
 resource "aws_internet_gateway" "secondary" {
-  provider = aws.secondary
-  vpc_id   = aws_vpc.secondary.id
+  region  = var.secondary_region
+  vpc_id  = aws_vpc.secondary.id
   tags = merge(local.common_tags, {
     Name = "${var.environment}-secondary-igw"
   })
 }
 resource "aws_subnet" "secondary_public" {
-  provider          = aws.secondary
   count             = 2
+  region            = var.secondary_region
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.secondary_public_subnets[count.index]
   availability_zone = local.secondary_azs[count.index]
@@ -199,8 +200,8 @@ resource "aws_subnet" "secondary_public" {
   })
 }
 resource "aws_subnet" "secondary_private" {
-  provider          = aws.secondary
   count             = 2
+  region            = var.secondary_region
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.secondary_private_subnets[count.index]
   availability_zone = local.secondary_azs[count.index]
@@ -210,26 +211,26 @@ resource "aws_subnet" "secondary_private" {
   })
 }
 resource "aws_eip" "secondary_nat" {
-  provider = aws.secondary
-  count    = 2
-  domain   = "vpc"
+  count  = 2
+  region = var.secondary_region
+  domain = "vpc"
   tags = merge(local.common_tags, {
     Name = "${var.environment}-secondary-nat-eip-${count.index + 1}"
   })
 }
 resource "aws_nat_gateway" "secondary" {
-  provider      = aws.secondary
-  count         = 2
-  allocation_id = aws_eip.secondary_nat[count.index].id
-  subnet_id     = aws_subnet.secondary_public[count.index].id
+  count          = 2
+  region         = var.secondary_region
+  allocation_id  = aws_eip.secondary_nat[count.index].id
+  subnet_id      = aws_subnet.secondary_public[count.index].id
   tags = merge(local.common_tags, {
     Name = "${var.environment}-secondary-nat-${count.index + 1}"
   })
   depends_on = [aws_internet_gateway.secondary]
 }
 resource "aws_route_table" "secondary_public" {
-  provider = aws.secondary
-  vpc_id   = aws_vpc.secondary.id
+  region  = var.secondary_region
+  vpc_id  = aws_vpc.secondary.id
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
@@ -239,9 +240,9 @@ resource "aws_route_table" "secondary_public" {
   })
 }
 resource "aws_route_table" "secondary_private" {
-  provider = aws.secondary
-  count    = 2
-  vpc_id   = aws_vpc.secondary.id
+  count   = 2
+  region  = var.secondary_region
+  vpc_id  = aws_vpc.secondary.id
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary[count.index].id
@@ -251,16 +252,16 @@ resource "aws_route_table" "secondary_private" {
   })
 }
 resource "aws_route_table_association" "secondary_public" {
-  provider       = aws.secondary
-  count          = 2
-  subnet_id      = aws_subnet.secondary_public[count.index].id
-  route_table_id = aws_route_table.secondary_public.id
+  count           = 2
+  region          = var.secondary_region
+  subnet_id       = aws_subnet.secondary_public[count.index].id
+  route_table_id  = aws_route_table.secondary_public.id
 }
 resource "aws_route_table_association" "secondary_private" {
-  provider       = aws.secondary
-  count          = 2
-  subnet_id      = aws_subnet.secondary_private[count.index].id
-  route_table_id = aws_route_table.secondary_private[count.index].id
+  count           = 2
+  region          = var.secondary_region
+  subnet_id       = aws_subnet.secondary_private[count.index].id
+  route_table_id  = aws_route_table.secondary_private[count.index].id
 }
 
 # = VPC PEERING =
@@ -274,9 +275,9 @@ resource "aws_vpc_peering_connection" "primary_to_secondary" {
   })
 }
 resource "aws_vpc_peering_connection_accepter" "secondary" {
-  provider                   = aws.secondary
   vpc_peering_connection_id  = aws_vpc_peering_connection.primary_to_secondary.id
   auto_accept                = true
+  region                    = var.secondary_region
   tags = merge(local.common_tags, {
     Name = "${var.environment}-vpc-peering-accepter"
   })
@@ -293,17 +294,17 @@ resource "aws_route" "primary_private_to_secondary" {
   vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
 }
 resource "aws_route" "secondary_public_to_primary" {
-  provider                  = aws.secondary
   route_table_id            = aws_route_table.secondary_public.id
   destination_cidr_block    = var.primary_vpc_cidr
   vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
+  region                    = var.secondary_region
 }
 resource "aws_route" "secondary_private_to_primary" {
-  provider                  = aws.secondary
   count                     = 2
   route_table_id            = aws_route_table.secondary_private[count.index].id
   destination_cidr_block    = var.primary_vpc_cidr
   vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
+  region                    = var.secondary_region
 }
 
 # = SECURITY GROUPS =
@@ -346,7 +347,6 @@ resource "aws_security_group" "primary_ec2" {
   })
 }
 resource "aws_security_group" "secondary_ec2" {
-  provider    = aws.secondary
   name_prefix = "${var.environment}-secondary-ec2-"
   vpc_id      = aws_vpc.secondary.id
   description = "Security group for secondary EC2 instances"
@@ -384,8 +384,7 @@ resource "aws_security_group" "secondary_ec2" {
     Name = "${var.environment}-secondary-ec2-sg"
   })
 }
-
-# = IAM ROLES AND POLICIES =
+# = IAM AND CLOUDWATCH =
 resource "aws_iam_role" "ec2_role" {
   name = "${var.environment}-ec2-role"
   assume_role_policy = jsonencode({
@@ -444,18 +443,18 @@ resource "aws_kms_alias" "primary" {
   target_key_id = aws_kms_key.primary.key_id
 }
 resource "aws_kms_key" "secondary" {
-  provider                = aws.secondary
-  description             = "KMS key for secondary region encryption"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
+  region                   = var.secondary_region
+  description              = "KMS key for secondary region encryption"
+  deletion_window_in_days  = 7
+  enable_key_rotation      = true
   tags = merge(local.common_tags, {
     Name = "${var.environment}-secondary-kms-key"
   })
 }
 resource "aws_kms_alias" "secondary" {
-  provider      = aws.secondary
-  name          = "alias/${var.environment}-secondary-key"
-  target_key_id = aws_kms_key.secondary.key_id
+  region         = var.secondary_region
+  name           = "alias/${var.environment}-secondary-key"
+  target_key_id  = aws_kms_key.secondary.key_id
 }
 
 # = S3 BUCKET WITH CROSS-REGION REPLICATION =
@@ -466,8 +465,8 @@ resource "aws_s3_bucket" "primary" {
   })
 }
 resource "aws_s3_bucket" "secondary" {
-  provider = aws.secondary
-  bucket   = "${var.environment}-tap-stack-secondary-${random_string.bucket_suffix.result}"
+  region = var.secondary_region
+  bucket = "${var.environment}-tap-stack-secondary-${random_string.bucket_suffix.result}"
   tags = merge(local.common_tags, {
     Name = "${var.environment}-secondary-bucket"
   })
@@ -479,8 +478,8 @@ resource "aws_s3_bucket_versioning" "primary" {
   }
 }
 resource "aws_s3_bucket_versioning" "secondary" {
-  provider = aws.secondary
-  bucket   = aws_s3_bucket.secondary.id
+  region = var.secondary_region
+  bucket = aws_s3_bucket.secondary.id
   versioning_configuration {
     status = "Enabled"
   }
@@ -495,8 +494,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
   }
 }
 resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
-  provider = aws.secondary
-  bucket   = aws_s3_bucket.secondary.id
+  region = var.secondary_region
+  bucket = aws_s3_bucket.secondary.id
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.secondary.arn
@@ -512,8 +511,8 @@ resource "aws_s3_bucket_public_access_block" "primary" {
   restrict_public_buckets = true
 }
 resource "aws_s3_bucket_public_access_block" "secondary" {
-  provider = aws.secondary
-  bucket   = aws_s3_bucket.secondary.id
+  region = var.secondary_region
+  bucket = aws_s3_bucket.secondary.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -661,9 +660,8 @@ resource "aws_instance" "primary" {
     Region = var.primary_region
   })
 }
-
 resource "aws_instance" "secondary" {
-  provider               = aws.secondary
+  region                 = var.secondary_region
   ami                    = data.aws_ami.amazon_linux_secondary.id
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.secondary_private[0].id
@@ -735,8 +733,8 @@ resource "aws_eip" "primary_ec2" {
   })
 }
 resource "aws_eip" "secondary_ec2" {
-  provider = aws.secondary
   instance = aws_instance.secondary.id
+  region   = var.secondary_region
   vpc      = true
   tags = merge(local.common_tags, {
     Name = "${var.environment}-secondary-ec2-eip"
