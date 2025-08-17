@@ -82,20 +82,37 @@
     "Mappings": {
         "RegionMap": {
             "us-east-1": {
-                "AMI": "ami-0c55b159cbfafe1d0"
+                "AMI": "ami-0c02fb55956c7d316"
             },
             "us-west-2": {
-                "AMI": "ami-0d70546e43a941d70"
+                "AMI": "ami-008fe2fc65df48dac"
             },
             "us-west-1": {
-                "AMI": "ami-0827b3b7daf20c616"
+                "AMI": "ami-01154c8b2e9a14885"
             },
             "eu-west-1": {
-                "AMI": "ami-0d71ea30463e0ff8d"
+                "AMI": "ami-0c1c30571d2dae5c9"
             }
         }
     },
     "Resources": {
+        "DBPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-db-password"
+                },
+                "Description": "RDS Master Password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -523,6 +540,7 @@
         },
         "CloudTrailBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-cloudtrail-${AWS::AccountId}"
@@ -672,7 +690,7 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${ApplicationBucket}/*"
+                                            "Fn::Sub": "${ApplicationBucket.Arn}/*"
                                         },
                                         {
                                             "Fn::GetAtt": [
@@ -1069,7 +1087,9 @@
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },
-                "MasterUserPassword": "{{resolve:secretsmanager:your-secret-id:SecretString:password}}",
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
+                },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,

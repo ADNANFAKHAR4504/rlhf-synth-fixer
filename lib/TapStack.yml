@@ -62,15 +62,26 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0c55b159cbfafe1d0  # Updated Amazon Linux 2023 AMI
+      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2023 AMI
     us-west-2:
-      AMI: ami-0d70546e43a941d70  # Updated Amazon Linux 2023 AMI
+      AMI: ami-008fe2fc65df48dac  # Amazon Linux 2023 AMI
     us-west-1:
-      AMI: ami-0827b3b7daf20c616  # Amazon Linux 2023 AMI
+      AMI: ami-01154c8b2e9a14885  # Amazon Linux 2023 AMI
     eu-west-1:
-      AMI: ami-0d71ea30463e0ff8d  # Amazon Linux 2023 AMI
+      AMI: ami-0c1c30571d2dae5c9  # Amazon Linux 2023 AMI
 
 Resources:
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${ProjectName}-${Environment}-db-password'
+      Description: 'RDS Master Password'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -289,6 +300,7 @@ Resources:
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-cloudtrail-${AWS::AccountId}'
       BucketEncryption:
@@ -596,7 +608,7 @@ Resources:
       Engine: mysql
       EngineVersion: '8.0.43'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: '{{resolve:secretsmanager:your-secret-id:SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
