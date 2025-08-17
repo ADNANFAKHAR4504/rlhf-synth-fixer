@@ -1,5 +1,5 @@
 ```
-Your task is to generate IAC code using CLOUDFORMATION YAML. Please make sure that the provided data should remain intact and it should not change in anyway, use the below data to generate the IAC:
+Generate CLOUDFORMATION YAML IAC code. Please make sure that the provided data should remain intact and it should not change in anyway, use the below data to generate the IAC:
 
 Contraints:
 
