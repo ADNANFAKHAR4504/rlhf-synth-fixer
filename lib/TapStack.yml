@@ -156,7 +156,7 @@ Resources:
     Type: AWS::KMS::Alias
     Condition: CreateKMSCloudTrailKey
     Properties:
-      AliasName: !Sub 'alias/cloudtrail-${Environment}'
+      AliasName: !Sub 'alias/cloudtrail-${Environment}-z'
       TargetKeyId: !Ref CloudTrailKMSKey
 
   RDSKMSKey:
@@ -192,7 +192,7 @@ Resources:
     Type: AWS::KMS::Alias
     Condition: CreateKMSRDSKey
     Properties:
-      AliasName: !Sub 'alias/rds-${Environment}'
+      AliasName: !Sub 'alias/rds-${Environment}-z'
       TargetKeyId: !Ref RDSKMSKey
 
   # -----------------------------
