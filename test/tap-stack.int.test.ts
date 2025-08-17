@@ -32,9 +32,13 @@ async function validateSubnet(subnetId: string, vpcId?: string) {
 }
 
 async function validateS3Bucket(bucketName: string) {
-  await expect(
-    s3.headBucket({ Bucket: bucketName }).promise()
-  ).resolves.toBeDefined();
+  try {
+    await s3.headBucket({ Bucket: bucketName }).promise();
+  } catch (err) {
+    throw new Error(
+      `S3 bucket "${bucketName}" does not exist or is not accessible: ${err}`
+    );
+  }
   const versioning = await s3
     .getBucketVersioning({ Bucket: bucketName })
     .promise();
