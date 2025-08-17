@@ -569,7 +569,10 @@ resource "aws_db_instance" "main" {
 
   skip_final_snapshot = true
   deletion_protection = false
-
+  
+  lifecycle {
+    prevent_destroy = false  # ensure it's destroyable in CI/CD
+  }
   tags = {
     Name = "${var.project_name}-database"
   }
