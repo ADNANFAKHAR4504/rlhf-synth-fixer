@@ -7,11 +7,12 @@ import {
 } from '@aws-sdk/client-ec2';
 import {
   GetInstanceProfileCommand,
+  GetRoleCommand,
   GetRolePolicyCommand,
   IAMClient,
   ListAttachedRolePoliciesCommand,
   ListRolePoliciesCommand,
-  ListRolesCommand,
+  ListRolesCommand
 } from '@aws-sdk/client-iam';
 import {
   DescribeDBSubnetGroupsCommand,
@@ -402,19 +403,24 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
         return;
       }
 
-      const rolesResponse = await clients.iam.send(
-        new ListRolesCommand({})
-      );
-
-      const role = rolesResponse.Roles?.find((r: any) => r.RoleName === targetRoleName);
+      let role;
+      try {
+        const roleResponse = await clients.iam.send(
+          new GetRoleCommand({ RoleName: targetRoleName })
+        );
+        role = roleResponse.Role;
+      } catch (err) {
+        console.error(`Failed to fetch role: ${targetRoleName}`, err);
+      }
 
       expect(role).toBeDefined();
+      expect(role!.RoleName).toBe(targetRoleName);
 
       // Validate naming convention
       expect(role!.RoleName).toMatch(/^webapp-.*-role-.*$/);
 
       // Validate AssumeRole policy is for EC2
-      const decodedPolicy = JSON.parse(decodeURIComponent(role!.AssumeRolePolicyDocument));
+      const decodedPolicy = JSON.parse(decodeURIComponent(role!.AssumeRolePolicyDocument!));
       const ec2AssumeStatement = decodedPolicy.Statement?.find((stmt: any) =>
         stmt.Principal?.Service?.includes('ec2.amazonaws.com')
       );
@@ -803,18 +809,25 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
     }, 60000);
 
     test('e2e: should verify resource limits and cost optimization', async () => {
-      // Check we're not creating excessive resources that could impact cost
       const resourceCounts = [];
 
-      // Count S3 buckets - be more flexible with expected count
+      // Expected buckets from stack outputs
+      const expectedBucketNames = [
+        resourceIds.applicationDataBucketName,
+        resourceIds.backupBucketName,
+      ].filter(Boolean);
+
+      // Fetch all buckets and match only by exact name
       const bucketsResponse = await clients.s3.send(new ListBucketsCommand({}));
-      const webappBuckets = bucketsResponse.Buckets?.filter((bucket: any) =>
-        bucket.Name?.includes(`webapp-`) && bucket.Name?.includes(resourceIds.stackName)
+      const matchedBuckets = bucketsResponse.Buckets?.filter((bucket: any) =>
+        expectedBucketNames.includes(bucket.Name)
       ) || [];
-      
-      // Allow for more buckets as infrastructure may include additional buckets
-      // (app-data, backup, access-logs, plus potentially others)
-      resourceCounts.push({ type: 'S3 Buckets', count: webappBuckets.length, expected: 6 }); // Increased from 3 to 6
+
+      resourceCounts.push({
+        type: 'S3 Buckets',
+        count: matchedBuckets.length,
+        expected: expectedBucketNames.length,
+      });
 
       // Count security groups
       if (resourceIds?.vpcId) {
@@ -826,34 +839,45 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
         const webappSgs = sgResponse.SecurityGroups?.filter((sg: any) =>
           sg.GroupName?.includes('webapp')
         ) || [];
-        resourceCounts.push({ type: 'Security Groups', count: webappSgs.length, expected: 3 }); // Allow for additional SGs
+        resourceCounts.push({
+          type: 'Security Groups',
+          count: webappSgs.length,
+          expected: 3,
+        });
       }
 
       // Count subnets
       if (resourceIds?.publicSubnetIds && resourceIds?.privateSubnetIds) {
-        const publicCount = Array.isArray(resourceIds.publicSubnetIds) 
-          ? resourceIds.publicSubnetIds.length 
+        const publicCount = Array.isArray(resourceIds.publicSubnetIds)
+          ? resourceIds.publicSubnetIds.length
           : 1;
-        const privateCount = Array.isArray(resourceIds.privateSubnetIds) 
-          ? resourceIds.privateSubnetIds.length 
+        const privateCount = Array.isArray(resourceIds.privateSubnetIds)
+          ? resourceIds.privateSubnetIds.length
           : 1;
-        
-        resourceCounts.push({ type: 'Public Subnets', count: publicCount, expected: 2 });
-        resourceCounts.push({ type: 'Private Subnets', count: privateCount, expected: 2 });
+
+        resourceCounts.push({
+          type: 'Public Subnets',
+          count: publicCount,
+          expected: 2,
+        });
+
+        resourceCounts.push({
+          type: 'Private Subnets',
+          count: privateCount,
+          expected: 2,
+        });
       }
 
-      // Verify resource counts are reasonable - allow some flexibility
+      // Assert counts
       resourceCounts.forEach((resource: any) => {
-        // Log the actual vs expected for debugging
         console.log(`${resource.type}: ${resource.count}/${resource.expected}`);
-        
         expect(resource.count).toBeLessThanOrEqual(resource.expected);
         expect(resource.count).toBeGreaterThan(0);
       });
 
       console.log('Resource Count Report:');
       resourceCounts.forEach((resource: any) => {
-        console.log(`  ${resource.type}: ${resource.count}/${resource.expected}`);
+        console.log(` ${resource.type}: ${resource.count}/${resource.expected}`);
       });
     }, 45000);
 
