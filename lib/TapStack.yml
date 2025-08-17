@@ -60,9 +60,6 @@ Mappings:
 # ============================================================================
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'production']
-  IsTesting: !Equals [!Ref Environment, 'testing']
-  IsDevelopment: !Equals [!Ref Environment, 'development']
-  IsProductionOrTesting: !Or [!Condition IsProduction, !Condition IsTesting]
 
 # ============================================================================
 # RESOURCES SECTION
@@ -96,7 +93,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
       Tags:
         - Key: Name
           Value: !Sub 'EC2Role-${Environment}-${AWS::Region}'
@@ -443,6 +440,7 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: !If [IsProduction, Snapshot, Delete]
+    UpdateReplacePolicy: !If [IsProduction, Snapshot, Delete]
     Properties:
       DBInstanceIdentifier: !Sub 'database-${Environment}-${AWS::Region}'
       DBInstanceClass: !FindInMap [EnvironmentMap, !Ref Environment, DBInstanceClass]
