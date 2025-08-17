@@ -147,7 +147,7 @@ Resources:
     Properties:
       TrailName: !Sub 'OrganizationTrail-${Environment}-tapstackpr1271'
       S3BucketName: !Ref CloudTrailS3Bucket
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
