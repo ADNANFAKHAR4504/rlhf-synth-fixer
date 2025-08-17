@@ -650,6 +650,20 @@ EOF
       { provider, parent: this }
     );
 
+    // Application Load Balancer logs bucket
+    const albLogsBucket = new aws.s3.Bucket(
+      `${environmentSuffix}-alb-logs-bucket`,
+      {
+        acl: 'private',
+        forceDestroy: false,
+        tags: {
+          Name: `${environmentSuffix}-alb-logs-bucket`,
+          Environment: 'production',
+        },
+      },
+      { provider, parent: this }
+    );
+
     // Application Load Balancer
     const alb = new aws.lb.LoadBalancer(
       `app-alb-${environmentSuffix}`,
@@ -660,7 +674,7 @@ EOF
         subnets: [publicSubnet1.id, publicSubnet2.id],
         enableDeletionProtection: false,
         accessLogs: {
-          bucket: config.require('albLogsBucket'),
+          bucket: albLogsBucket.bucket,
           enabled: true,
           prefix: 'alb-logs',
         },
