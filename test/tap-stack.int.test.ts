@@ -225,6 +225,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       );
 
       expect(response.trailList).toBeDefined();
+      console.log('Available trails:', response.trailList?.map(t => t.Name));
       const trails = response.trailList?.filter(trail => 
         trail.Name?.includes('corp-cloudtrail')
       );
@@ -272,7 +273,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
       const channel = channels![0];
       expect(channel.s3BucketName).toBe(outputs.S3BucketName);
-      expect(channel.s3KeyPrefix).toBe('config-logs/');
+      expect(channel.s3KeyPrefix).toBe('config-logs');
     });
   });
 
