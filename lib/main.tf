@@ -77,7 +77,7 @@ data "aws_vpc" "default_eu_north_1" {
 
 resource "aws_vpc" "nova_vpc_eu_north_1_291844" {
   provider             = aws.eu-north-1
-  cidr_block           = "10.1.0.0/16" # Different CIDR than us-west-2
+  cidr_block           = "10.2.0.0/16" # Unique CIDR
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags                 = merge(local.common_tags, { Name = "nova-vpc-eu-north-1-291844" })
@@ -85,7 +85,7 @@ resource "aws_vpc" "nova_vpc_eu_north_1_291844" {
 
 resource "aws_subnet" "nova_subnet_eu_north_1_291844" {
   provider          = aws.eu-north-1
-  vpc_id            = data.aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
+  vpc_id            = aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
   cidr_block        = "10.1.1.0/24"
   availability_zone = "eu-north-1a" # Example AZ (verify in your AWS account)
   tags              = merge(local.common_tags, { Name = "nova-subnet-eu-north-1-291844" })
@@ -93,13 +93,13 @@ resource "aws_subnet" "nova_subnet_eu_north_1_291844" {
 
 resource "aws_internet_gateway" "nova_igw_eu_north_1_291844" {
   provider = aws.eu-north-1
-  vpc_id   = data.aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
+  vpc_id   = aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
   tags     = merge(local.common_tags, { Name = "nova-igw-eu-north-1-291844" })
 }
 
 resource "aws_route_table" "nova_rt_eu_north_1_291844" {
   provider = aws.eu-north-1
-  vpc_id   = data.aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
+  vpc_id   = aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -190,7 +190,7 @@ resource "aws_security_group" "nova_sg_eu_north_1_291844" {
   provider    = aws.eu-north-1
   name        = "nova-sg-eu-north-1-291844"
   description = "Security group for Nova EU instances"
-  vpc_id      = data.aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
+  vpc_id      = aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
 
   # Example rules (customize as needed)
   ingress {
@@ -255,22 +255,22 @@ resource "aws_vpc" "nova_vpc_291844_us_west_2" {
 
 resource "aws_subnet" "nova_subnet_291844_us_west_2" {
   provider          = aws.us-west-2
-  vpc_id            = data.aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id if creating new VPC
-  cidr_block        = "10.0.1.0/24"                     # Adjust CIDR as needed
-  availability_zone = "us-west-2a"                      # Choose an AZ
+  vpc_id            = aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id if creating new VPC
+  cidr_block        = "10.0.1.0/24"                # Adjust CIDR as needed
+  availability_zone = "us-west-2a"                 # Choose an AZ
   tags              = merge(local.common_tags, { Name = "nova-subnet-291844-us-west-2" })
 }
 
 resource "aws_internet_gateway" "nova_igw_291844_us_west_2" {
   provider = aws.us-west-2
-  vpc_id   = data.aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id
+  vpc_id   = aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id
   tags     = merge(local.common_tags, { Name = "nova-igw-291844-us-west-2" })
 }
 resource "aws_security_group" "nova_sg_291844_us_west_2" {
   provider    = aws.us-west-2
   name        = "nova-sg-291844-us-west-2"
   description = "Security group for Nova instances"
-  vpc_id      = data.aws_vpc.default_us_west_2.id
+  vpc_id      = aws_vpc.default_us_west_2.id
 
   ingress {
     from_port   = 22
@@ -291,7 +291,7 @@ resource "aws_security_group" "nova_sg_291844_us_west_2" {
 
 resource "aws_route_table" "nova_rt_291844_us_west_2" {
   provider = aws.us-west-2
-  vpc_id   = data.aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id
+  vpc_id   = aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id
 
   route {
     cidr_block = "0.0.0.0/0"
