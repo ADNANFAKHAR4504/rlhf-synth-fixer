@@ -590,7 +590,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
   })
 }
 
-resource "aws_security_group" "alb" {" {
+resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb-sg"
   description = "Security group for Application Load Balancer - ${local.name_prefix}"
   vpc_id      = local.vpc_id
