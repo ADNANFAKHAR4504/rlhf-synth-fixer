@@ -1,48 +1,29 @@
 
-Generate a single-file Terraform configuration at ./lib/main.tf that meets the following:
+Hey, I need you to build me a secure S3 setup in Terraform. Everything should go in ./lib/main.tf since I've already got the provider config sorted in provider.tf.
 
-1. **General Requirements**
-   - All variables (including `aws_region`) must be declared in main.tf and referenced by provider.tf.
-   - Include all locals, resource definitions, and outputs in main.tf.
-   - No provider blocks in main.tf; provider.tf already contains AWS provider + S3 backend configuration.
-   - Build all resources directly in main.tf (no external modules).
-   - Apply consistent cost allocation tags: owner, environment, ManagedBy=terraform.
+Here's what I'm looking for:
 
-2. **Region & Naming**
-   - Deploy all resources in the `us-east-1` region.
-   - The S3 bucket name must follow the pattern: `data-secured-<account_id>` using `aws_caller_identity` data source to dynamically fetch account_id (no hardcoded IDs).
+The main bucket needs to be called `data-secured-<account_id>` - use the caller identity data source to grab the account ID dynamically. Deploy everything in us-east-1.
 
-3. **S3 Security Configuration**
-   - Create an S3 bucket with:
-     - Server-side encryption enabled using AWS-managed KMS keys (SSE-S3 or SSE-KMS with aws/s3 key).
-     - Versioning enabled.
-     - Public access completely blocked.
-     - Default encryption for all new objects without requiring SSE in API requests.
-   - Configure logging to capture all access requests to a separate logging bucket.
-   - Apply lifecycle rules to delete objects older than 365 days.
-   - Implement a replication rule to replicate all new objects to a destination bucket in `us-west-2`.
+For security, I want the bucket locked down tight:
+- Turn on encryption with AWS managed keys
+- Enable versioning 
+- Block all public access
+- Set up access logging to a separate bucket
+- Add lifecycle rules to clean up objects after a year
+- Set up cross-region replication to us-west-2
 
-4. **IAM & MFA Enforcement**
-   - Create IAM policy that enforces Multi-Factor Authentication (MFA) for accessing the S3 bucket.
-   - Apply the principle of least privilege to all IAM roles and policies.
+Also need MFA enforcement - create an IAM policy that requires multi-factor auth for bucket access. Keep the permissions minimal.
 
-5. **Replication Setup**
-   - Create a replication destination bucket in `us-west-2` with the same encryption and versioning enabled.
-   - Configure the replication role and policy with least-privilege permissions.
+For the replication, create a destination bucket in us-west-2 with the same security settings and set up the IAM role with just enough permissions to handle the replication.
 
-6. **Outputs**
-   - Output non-sensitive information required for CI/CD and testing:
-     - Source bucket name
-     - Destination bucket name
-     - Logging bucket name
-   - Do not output sensitive values.
+Make sure to include these outputs: source bucket name, destination bucket name, and logging bucket name. Don't output anything sensitive though.
 
-**Constraints:**
-- Terraform version >= 0.15.0
-- No provider blocks in main.tf
-- No hardcoded account IDs
-- No external Terraform modules
-- Must be a brand-new stack with all resources created from scratch
-- Must be valid HCL that passes `terraform validate` and AWS best practices checks
+Some technical notes:
+- Put all variables in main.tf (including aws_region) so provider.tf can reference them
+- Don't add any provider blocks to main.tf
+- No external modules - build everything inline
+- Tag everything with owner, environment, and ManagedBy=terraform for cost tracking
+- This needs to work with Terraform 0.15+ and pass validation
 
-Follow the above instructions and produce the complete ./lib/main.tf in Terraform HCL.
+Just create the complete main.tf file with proper HCL that follows AWS best practices.
