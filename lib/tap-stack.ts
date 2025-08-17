@@ -54,7 +54,6 @@ export class TapStack extends TerraformStack {
     const kmsKey = new KmsKey(this, 'KmsMasterKey', {
       description: 'KMS key for encrypting all application data',
       enableKeyRotation: true,
-      // FIXED: Added a key policy to explicitly allow CloudWatch Logs to use this key.
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -70,11 +69,12 @@ export class TapStack extends TerraformStack {
             Effect: 'Allow',
             Principal: { Service: `logs.${region}.amazonaws.com` },
             Action: [
-              'kms:Encrypt*',
-              'kms:Decrypt*',
+              'kms:CreateGrant',
+              'kms:Encrypt',
+              'kms:Decrypt',
               'kms:ReEncrypt*',
               'kms:GenerateDataKey*',
-              'kms:Describe*',
+              'kms:DescribeKey',
             ],
             Resource: '*',
           },
@@ -301,7 +301,6 @@ export class TapStack extends TerraformStack {
       tags: commonTags,
     });
 
-    // FIXED: Replaced deprecated inline_policy with the modern IamRolePolicy resource.
     new IamRolePolicy(this, 'Ec2AppRolePolicy', {
       name: `S3AndKmsAccessPolicy-${uniqueSuffix}`,
       role: ec2Role.name,
