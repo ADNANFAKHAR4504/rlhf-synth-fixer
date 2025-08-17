@@ -1,10 +1,10 @@
 """
 TAP Stack - Comprehensive multi-region static web application deployment
-Implements enterprise-grade infrastructure with security, monitoring, and compliance features.
+Fixed to handle S3 Block Public Access settings and public bucket policies.
 """
 
 import pulumi
-from pulumi import ResourceOptions, Output, Config
+from pulumi import ResourceOptions, Output
 from pulumi_aws import s3, kms, cloudfront, wafv2, route53, acm, iam, cloudwatch
 from dataclasses import dataclass
 import json
@@ -76,6 +76,7 @@ class TapStack(pulumi.ComponentResource):
         """Create S3 buckets in multiple regions with versioning and encryption."""
         self.buckets = {}
         self.bucket_policies = {}
+        self.bucket_public_access_blocks = {}
         self.logging_bucket = None
         
         # Create centralized logging bucket
@@ -131,7 +132,19 @@ class TapStack(pulumi.ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
             
-            # Create bucket policy for public read access
+            # FIXED: Configure public access block to allow public policies
+            public_access_block = s3.BucketPublicAccessBlock(
+                f'public-access-block-{region}-{self.environment_suffix}',
+                bucket=bucket.id,
+                block_public_acls=False,
+                block_public_policy=False,  # FIXED: Allow public policies
+                ignore_public_acls=False,
+                restrict_public_buckets=False,
+                opts=ResourceOptions(parent=bucket)
+            )
+            self.bucket_public_access_blocks[region] = public_access_block
+            
+            # Create bucket policy for public read access (depends on public access block)
             bucket_policy = s3.BucketPolicy(
                 f'bucket-policy-{region}-{self.environment_suffix}',
                 bucket=bucket.id,
@@ -145,7 +158,7 @@ class TapStack(pulumi.ComponentResource):
                         "Resource": f"{arn}/*"
                     }]
                 })),
-                opts=ResourceOptions(parent=bucket)
+                opts=ResourceOptions(parent=bucket, depends_on=[public_access_block])  # FIXED: Add dependency
             )
             
             self.buckets[region] = bucket
