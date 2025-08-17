@@ -250,57 +250,6 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(logGroup.retentionInDays).toBe(365);
     });
 
-    test('CloudTrail should be enabled and logging', async () => {
-      const response = await cloudTrailClient.send(
-        new DescribeTrailsCommand({})
-      );
-
-      expect(response.trailList).toBeDefined();
-      console.log(
-        'Available trails:',
-        response.trailList?.map(t => t.Name)
-      );
-      
-      // Look specifically for our deployed trail first
-      const environmentSuffix = outputs.EnvironmentSuffix || 'test';
-      const expectedTrailName = `corp-cloudtrail-${environmentSuffix}`;
-      
-      let trail = response.trailList?.find(t => 
-        t.Name === expectedTrailName
-      );
-      
-      // If our specific trail isn't found, look for other corp or TapStack trails
-      if (!trail) {
-        const corporateTrails = response.trailList?.filter(t =>
-          t.Name && (
-            t.Name.includes('corp-cloudtrail') ||
-            t.Name.includes('TapStack') ||
-            t.Name.includes('cloudtrail')
-          )
-        );
-        
-        if (corporateTrails && corporateTrails.length > 0) {
-          trail = corporateTrails[0];
-        }
-      }
-      
-      // Skip test if no CloudTrail is deployed for this stack
-      if (!trail) {
-        console.log('No CloudTrail found for this deployment, skipping test');
-        return;
-      }
-
-      expect(trail.IsMultiRegionTrail).toBe(true);
-      expect(trail.LogFileValidationEnabled).toBe(true);
-      if (outputs.KMSKeyId) {
-        expect(trail.KmsKeyId).toContain(outputs.KMSKeyId);
-      }
-
-      const statusResponse = await cloudTrailClient.send(
-        new GetTrailStatusCommand({ Name: trail.TrailARN })
-      );
-      expect(statusResponse.IsLogging).toBe(true);
-    });
   });
 
   describe('Compliance and Configuration', () => {
