@@ -417,9 +417,15 @@ resource "aws_instance" "web" {
   iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
   associate_public_ip_address = true
 
-  user_data = base64encode(templatefile("${path.module}/templates/user_data.sh", {
-    project_name = var.project_name
-  }))
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<h1>Hello from ${var.project_name} - Instance $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html
+              EOF
+  )
 
   root_block_device {
     volume_size = 20
@@ -611,6 +617,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
   rule {
     id     = "data_lifecycle"
     status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
 
     transition {
       days          = 30
