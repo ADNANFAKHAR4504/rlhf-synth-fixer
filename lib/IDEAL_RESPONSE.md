@@ -1,6 +1,6 @@
-# CloudFormation Template for Secure AWS Environment
+# Secure AWS Infrastructure CloudFormation Template
 
-Below is a comprehensive CloudFormation YAML template that addresses all the specified requirements while maintaining data integrity and implementing robust security controls.
+Below is a comprehensive CloudFormation YAML template that addresses all the specified requirements while maintaining data integrity and implementing robust security controls with proper VPC infrastructure.
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -131,6 +131,17 @@ Resources:
             Effect: Allow
             Principal:
               Service: logs.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow Config Encryption
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -296,7 +307,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # S3 Bucket Policy for CloudTrail
+  # S3 Bucket Policy for CloudTrail and Config
   CorpS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -319,6 +330,34 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/config-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
 
   # CloudWatch Log Group with Encryption
   CorpCloudWatchLogGroup:
@@ -421,13 +460,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Config Service for Compliance Monitoring
-  CorpConfigServiceRole:
-    Type: AWS::IAM::ServiceLinkedRole
-    Properties:
-      AWSServiceName: config.amazonaws.com
-      Description: 'Service-linked role for AWS Config'
-
   # Config Configuration Recorder
   CorpConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
@@ -437,17 +469,17 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-    DependsOn: CorpConfigServiceRole
 
   # Config Delivery Channel
   CorpConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    DependsOn: CorpS3BucketPolicy
     Properties:
       Name: !Sub 'corp-config-delivery-${Environment}'
       S3BucketName: !Ref CorpS3Bucket
-      S3KeyPrefix: 'config-logs/'
+      S3KeyPrefix: 'config-logs'
       ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: Daily
+        DeliveryFrequency: TwentyFour_Hours
 
 Outputs:
   KMSKeyId:
@@ -520,14 +552,12 @@ Outputs:
 ## Key Security Features Implemented
 
 ### 1. IAM Roles and Policies (Least Privilege)
-
 - **EC2 Role**: Minimal permissions for S3 access, KMS decryption, and CloudWatch logging
 - **Lambda Role**: Basic execution permissions with KMS and S3 read access only
 - **CloudTrail Role**: Specific permissions for log delivery to CloudWatch
-- **All roles include region restrictions (us-east-2 only)**
+- **All roles include region restrictions** (us-east-1 only)
 
 ### 2. CIS AWS Foundations Compliance
-
 - **CloudTrail enabled** with multi-region support and log file validation
 - **S3 bucket public access blocked** on all buckets
 - **KMS key rotation enabled** automatically
@@ -536,28 +566,29 @@ Outputs:
 - **Versioning enabled** on S3 buckets
 
 ### 3. Encryption Implementation
-
 - **At Rest**: KMS encryption for S3, CloudWatch Logs, and CloudTrail
 - **In Transit**: Security groups restrict to HTTPS (443) only
-- **Key Management**: Dedicated KMS key with proper key policies
+- **Key Management**: Dedicated KMS key with proper key policies for all services
 
-### 4. Additional Security Controls
-
+### 4. Network Security
+- **VPC with proper CIDR allocation** (10.0.0.0/16)
+- **Public subnet** with internet gateway for controlled access
 - **Security groups** with minimal required ports
+- **Route tables** properly configured for internet access
+
+### 5. Additional Security Controls
 - **S3 access logging** and lifecycle policies
 - **CloudTrail data events** monitoring
 - **Resource tagging** for compliance tracking
+- **Environment-specific naming** with consistent suffix usage
 
-### 5. Naming Conventions
+### 6. Infrastructure Completeness
+- **Complete VPC setup** instead of relying on existing VPC
+- **Proper resource dependencies** with DependsOn attributes
+- **Comprehensive outputs** for integration with other stacks
+- **Environment-specific configuration** with EnvironmentSuffix parameter
 
-- All resources follow the **corp-** prefix requirement as specified
-- Environment suffixes properly applied for multi-environment deployments
+### 7. Naming Conventions
+All resources follow the **corp-** prefix requirement as specified and use consistent environment-based naming patterns.
 
-### 6. Infrastructure Validation
-
-- **Comprehensive unit tests** covering all CloudFormation template components
-- **End-to-end integration tests** validating deployed AWS resources
-- **Security validation** ensuring CIS compliance and encryption standards
-- **Automated testing pipeline** for continuous quality assurance
-
-This template ensures data integrity, implements robust security controls, and maintains compliance with CIS benchmarks while being deployable in the us-east-2 region using existing VPC configurations. The solution has been thoroughly tested with both unit and integration tests to ensure reliability and security.
+This template ensures data integrity, implements robust security controls, maintains compliance with CIS benchmarks, and provides a complete, self-contained infrastructure deployment for the us-east-1 region.

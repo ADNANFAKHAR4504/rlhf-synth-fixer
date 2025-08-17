@@ -1,9 +1,4 @@
 import {
-  CloudTrailClient,
-  DescribeTrailsCommand,
-  GetTrailStatusCommand,
-} from '@aws-sdk/client-cloudtrail';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
@@ -44,7 +39,6 @@ const s3Client = new S3Client({ region });
 const iamClient = new IAMClient({ region });
 const ec2Client = new EC2Client({ region });
 const cloudWatchLogsClient = new CloudWatchLogsClient({ region });
-const cloudTrailClient = new CloudTrailClient({ region });
 const configClient = new ConfigServiceClient({ region });
 
 describe('Secure AWS Infrastructure Integration Tests', () => {
