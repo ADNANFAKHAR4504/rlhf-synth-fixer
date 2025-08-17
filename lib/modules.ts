@@ -1,6 +1,7 @@
 import { Construct } from 'constructs';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
 
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -16,6 +17,7 @@ import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -53,6 +55,7 @@ export interface S3ModuleConfig {
   enableLogging?: boolean;
   loggingTargetBucket?: string;
   loggingTargetPrefix?: string;
+  isCloudTrailBucket?: boolean;
 }
 
 export interface IamRoleModuleConfig {
@@ -279,7 +282,7 @@ export class S3Module extends Construct {
     super(scope, id);
 
     const callerIdentity = new DataAwsCallerIdentity(this, 'current');
-    // const region = new DataAwsRegion(this, 'current');
+    const region = new DataAwsRegion(this, 'current');
 
     // Create KMS key for S3 encryption
     this.kmsKey = new KmsKey(this, 'kms-key', {
@@ -328,6 +331,46 @@ export class S3Module extends Construct {
       },
     });
 
+    // Add CloudTrail bucket policy if this is a CloudTrail bucket
+    if (config.isCloudTrailBucket) {
+      new S3BucketPolicy(this, 'cloudtrail-policy', {
+        bucket: this.bucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: this.bucket.arn,
+              Condition: {
+                StringEquals: {
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${callerIdentity.accountId}:trail/*`,
+                },
+              },
+            },
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${this.bucket.arn}/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${callerIdentity.accountId}:trail/*`,
+                },
+              },
+            },
+          ],
+        }),
+      });
+    }
     // Enable server-side encryption with KMS
     new S3BucketServerSideEncryptionConfigurationA(this, 'encryption', {
       bucket: this.bucket.id,
