@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { DynamodbTable } from '../.gen/providers/aws/dynamodb-table';
+import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { SecurityConstruct } from './security-construct';
 
 interface DynamoDbConstructProps {
@@ -15,14 +15,12 @@ export class DynamoDbConstruct extends Construct {
       const kmsKey = props.security.kmsKeys[region];
       // Import DynamoDBTable from @cdktf/provider-aws
       // Dynamically require to avoid import errors if not used elsewhere
-  new DynamodbTable(this, `${props.prefix}-dynamodb-table-${region}`, {
+      new DynamodbTable(this, `${props.prefix}-dynamodb-table-${region}`, {
         provider: kmsKey.provider,
         name: `${props.prefix}-table-${region}`,
         billingMode: 'PAY_PER_REQUEST',
         hashKey: 'id',
-        attribute: [
-          { name: 'id', type: 'S' },
-        ],
+        attribute: [{ name: 'id', type: 'S' }],
         serverSideEncryption: {
           enabled: true,
           kmsKeyArn: kmsKey.arn,

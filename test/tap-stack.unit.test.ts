@@ -1,4 +1,3 @@
-
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 import { VpcConstruct } from '../lib/vpc-construct';
@@ -97,16 +96,39 @@ describe('TapStack Comprehensive Unit Tests', () => {
 
   test('Synthesized output contains expected resource names', () => {
     const stack = new TapStack(app, 'OutputTestStack');
-    // Add constructs to stack
+    // Add constructs to stack with unique IDs
     new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
-  const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
-  const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
-  new StorageConstruct(stack, 'StorageTest', { prefix: 'test', security });
+    const vpc2 = new VpcConstruct(stack, 'VpcTest2', { prefix: 'test2', regions: ['us-east-1', 'us-west-2'] });
+    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc: vpc2 });
+    new StorageConstruct(stack, 'StorageTest', { prefix: 'test', security });
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('test-us-west-2-vpc');
     expect(synthesized).toContain('test-us-west-2-public-subnet-1');
     expect(synthesized).toContain('test-us-west-2-private-subnet-1');
     expect(synthesized).toContain('test-us-west-2-app-data');
     expect(synthesized).toContain('test-us-west-2-logs');
+    // Additional checks for multi-region and edge cases
+    expect(synthesized).toContain('test2-us-east-1-vpc');
+    expect(synthesized).toContain('test2-us-west-2-vpc');
+    expect(synthesized).toContain('test2-us-east-1-public-subnet-1');
+    expect(synthesized).toContain('test2-us-west-2-public-subnet-1');
+    expect(synthesized).toContain('test2-us-east-1-private-subnet-1');
+    expect(synthesized).toContain('test2-us-west-2-private-subnet-1');
+  });
+
+  test('VpcConstruct handles empty regions array gracefully', () => {
+    const stack = new TapStack(app, 'EmptyRegionStack');
+    const vpc = new VpcConstruct(stack, 'VpcEmpty', { prefix: 'empty', regions: [] });
+    expect(vpc.vpcs).toEqual({});
+    expect(vpc.publicSubnets).toEqual({});
+    expect(vpc.privateSubnets).toEqual({});
+  });
+
+  test('VpcConstruct throws error for missing prefix', () => {
+    const stack = new TapStack(app, 'MissingPrefixStack');
+    expect(() => {
+      // @ts-expect-error
+      new VpcConstruct(stack, 'VpcNoPrefix', { regions: ['us-west-2'] });
+    }).toThrow();
   });
 });

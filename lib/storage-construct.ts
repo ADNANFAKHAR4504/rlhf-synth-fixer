@@ -1,8 +1,8 @@
 import { Construct } from 'constructs';
-import { S3Bucket } from '../.gen/providers/aws/s3-bucket';
-import { S3BucketServerSideEncryptionConfigurationA } from '../.gen/providers/aws/s3-bucket-server-side-encryption-configuration';
-import { S3BucketPublicAccessBlock } from '../.gen/providers/aws/s3-bucket-public-access-block';
-import { CloudwatchLogGroup } from '../.gen/providers/aws/cloudwatch-log-group';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { SecurityConstruct } from './security-construct';
 
 interface StorageConstructProps {
@@ -24,26 +24,34 @@ export class StorageConstruct extends Construct {
           Environment: props.prefix,
         },
       });
-      new S3BucketServerSideEncryptionConfigurationA(this, `${props.prefix}-s3-bucket-encryption-${region}`, {
-        provider: kmsKey.provider,
-        bucket: bucket.id,
-        rule: [
-          {
-            applyServerSideEncryptionByDefault: {
-              kmsMasterKeyId: kmsKey.arn,
-              sseAlgorithm: 'aws:kms',
+      new S3BucketServerSideEncryptionConfigurationA(
+        this,
+        `${props.prefix}-s3-bucket-encryption-${region}`,
+        {
+          provider: kmsKey.provider,
+          bucket: bucket.id,
+          rule: [
+            {
+              applyServerSideEncryptionByDefault: {
+                kmsMasterKeyId: kmsKey.arn,
+                sseAlgorithm: 'aws:kms',
+              },
             },
-          },
-        ],
-      });
-      new S3BucketPublicAccessBlock(this, `${props.prefix}-s3-bucket-pab-${region}`, {
-        provider: kmsKey.provider,
-        bucket: bucket.id,
-        blockPublicAcls: true,
-        blockPublicPolicy: true,
-        ignorePublicAcls: true,
-        restrictPublicBuckets: true,
-      });
+          ],
+        }
+      );
+      new S3BucketPublicAccessBlock(
+        this,
+        `${props.prefix}-s3-bucket-pab-${region}`,
+        {
+          provider: kmsKey.provider,
+          bucket: bucket.id,
+          blockPublicAcls: true,
+          blockPublicPolicy: true,
+          ignorePublicAcls: true,
+          restrictPublicBuckets: true,
+        }
+      );
       // Enable logging for S3 bucket (to CloudWatch)
       new CloudwatchLogGroup(this, `${props.prefix}-s3-logs-${region}`, {
         provider: kmsKey.provider,

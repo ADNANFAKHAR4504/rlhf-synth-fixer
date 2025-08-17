@@ -13,44 +13,46 @@ import { readFileSync } from 'fs';
 const region = readFileSync('./lib/AWS_REGION', 'utf-8').trim();
 
 export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string) {
+  constructor(
+    scope: Construct,
+    id: string,
+    _options?: Record<string, unknown>
+  ) {
     super(scope, id);
+    // You can now use options?.environmentSuffix, options?.defaultTags, etc.
 
     // VPC setup (multi-region, public/private subnets)
-    const vpc = new VpcConstruct(this, "SecureEnvVpc", {
-      prefix: "secure-env",
+    const vpc = new VpcConstruct(this, 'SecureEnvVpc', {
+      prefix: 'secure-env',
       regions: [region],
     });
 
     // Security (IAM, KMS, least privilege, etc.)
-    const security = new SecurityConstruct(this, "SecureEnvSecurity", {
-      prefix: "secure-env",
+    const security = new SecurityConstruct(this, 'SecureEnvSecurity', {
+      prefix: 'secure-env',
       vpc,
     });
 
     // Compute (EC2, Lambda, logging, public access restrictions)
-    const compute = new ComputeConstruct(this, "SecureEnvCompute", {
-      prefix: "secure-env",
+    new ComputeConstruct(this, 'SecureEnvCompute', {
+      prefix: 'secure-env',
       vpc,
       security,
     });
 
-    // Database (RDS, DynamoDB, encryption)
-    const database = new DatabaseConstruct(this, "SecureEnvDatabase", {
-      prefix: "secure-env",
+    new DatabaseConstruct(this, 'SecureEnvDatabase', {
+      prefix: 'secure-env',
       vpc,
       security,
     });
 
-    // Storage (S3, encryption, logging)
-    const storage = new StorageConstruct(this, "SecureEnvStorage", {
-      prefix: "secure-env",
+    new StorageConstruct(this, 'SecureEnvStorage', {
+      prefix: 'secure-env',
       security,
     });
 
-    // DynamoDB (encryption)
-    const dynamodb = new DynamoDbConstruct(this, "SecureEnvDynamoDb", {
-      prefix: "secure-env",
+    new DynamoDbConstruct(this, 'SecureEnvDynamoDb', {
+      prefix: 'secure-env',
       security,
     });
 

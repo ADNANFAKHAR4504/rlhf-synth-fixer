@@ -1,7 +1,7 @@
 import { Construct } from 'constructs';
-import { DbInstance } from '@cdktf/provider-aws/lib/rds'; // Correct import
 import { SecurityConstruct } from './security-construct';
 import { VpcConstruct } from './vpc-construct';
+import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 
 interface DatabaseConstructProps {
   prefix: string;

@@ -1,10 +1,10 @@
 import { Construct } from 'constructs';
 import { SecurityConstruct } from './security-construct';
 import { VpcConstruct } from './vpc-construct';
-import { Instance } from '../.gen/providers/aws/instance';
-import { SecurityGroup } from '../.gen/providers/aws/security-group';
-import { CloudwatchLogGroup } from '../.gen/providers/aws/cloudwatch-log-group';
-import { LambdaFunction } from '../.gen/providers/aws/lambda-function';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 
 interface ComputeConstructProps {
   prefix: string;
@@ -19,26 +19,50 @@ export class ComputeConstruct extends Construct {
     Object.keys(props.vpc.vpcs).forEach(region => {
       const vpc = props.vpc.vpcs[region];
       const kmsKey = props.security.kmsKeys[region];
-  // Import at top-level instead of require
+      // Import at top-level instead of require
       // Security Group for public EC2
-      const publicSg = new SecurityGroup(this, `${props.prefix}-public-sg-${region}`, {
-        provider: vpc.provider,
-        name: `${props.prefix}-public-sg-${region}`,
-        description: 'Allow HTTP/HTTPS from internet, SSH from VPC',
-        vpcId: vpc.id,
-        ingress: [
-          { fromPort: 80, toPort: 80, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] },
-          { fromPort: 443, toPort: 443, protocol: 'tcp', cidrBlocks: ['0.0.0.0/0'] },
-          { fromPort: 22, toPort: 22, protocol: 'tcp', cidrBlocks: [vpc.cidrBlock] },
-        ],
-        egress: [
-          { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
-        ],
-        tags: {
-          Name: `${props.prefix}-public-sg-${region}`,
-          Environment: props.prefix,
-        },
-      });
+      const publicSg = new SecurityGroup(
+        this,
+        `${props.prefix}-public-sg-${region}`,
+        {
+          provider: vpc.provider,
+          name: `${props.prefix}-public-sg-${region}`,
+          description: 'Allow HTTP/HTTPS from internet, SSH from VPC',
+          vpcId: vpc.id,
+          ingress: [
+            {
+              fromPort: 80,
+              toPort: 80,
+              protocol: 'tcp',
+              cidrBlocks: ['0.0.0.0/0'],
+            },
+            {
+              fromPort: 443,
+              toPort: 443,
+              protocol: 'tcp',
+              cidrBlocks: ['0.0.0.0/0'],
+            },
+            {
+              fromPort: 22,
+              toPort: 22,
+              protocol: 'tcp',
+              cidrBlocks: [vpc.cidrBlock],
+            },
+          ],
+          egress: [
+            {
+              fromPort: 0,
+              toPort: 0,
+              protocol: '-1',
+              cidrBlocks: ['0.0.0.0/0'],
+            },
+          ],
+          tags: {
+            Name: `${props.prefix}-public-sg-${region}`,
+            Environment: props.prefix,
+          },
+        }
+      );
       // EC2 Instance in public subnet
       new Instance(this, `${props.prefix}-ec2-public-${region}`, {
         provider: vpc.provider,
@@ -47,40 +71,59 @@ export class ComputeConstruct extends Construct {
         subnetId: props.vpc.publicSubnets[region]?.[0]?.id,
         vpcSecurityGroupIds: [publicSg.id],
         iamInstanceProfile: props.security.iamRoles[region]?.name,
-        userData: '#!/bin/bash\nyum update -y\nyum install -y awslogs\nsystemctl start awslogsd\nsystemctl enable awslogsd\n',
+        userData:
+          '#!/bin/bash\nyum update -y\nyum install -y awslogs\nsystemctl start awslogsd\nsystemctl enable awslogsd\n',
         tags: {
           Name: `${props.prefix}-ec2-public-${region}`,
           Environment: props.prefix,
         },
       });
       // Security Group for Lambda/private EC2
-      const privateSg = new SecurityGroup(this, `${props.prefix}-private-sg-${region}`, {
-        provider: vpc.provider,
-        name: `${props.prefix}-private-sg-${region}`,
-        description: 'Allow all traffic from VPC',
-        vpcId: vpc.id,
-        ingress: [
-          { fromPort: 0, toPort: 65535, protocol: 'tcp', cidrBlocks: [vpc.cidrBlock] },
-        ],
-        egress: [
-          { fromPort: 0, toPort: 0, protocol: '-1', cidrBlocks: ['0.0.0.0/0'] },
-        ],
-        tags: {
-          Name: `${props.prefix}-private-sg-${region}`,
-          Environment: props.prefix,
-        },
-      });
+      const privateSg = new SecurityGroup(
+        this,
+        `${props.prefix}-private-sg-${region}`,
+        {
+          provider: vpc.provider,
+          name: `${props.prefix}-private-sg-${region}`,
+          description: 'Allow all traffic from VPC',
+          vpcId: vpc.id,
+          ingress: [
+            {
+              fromPort: 0,
+              toPort: 65535,
+              protocol: 'tcp',
+              cidrBlocks: [vpc.cidrBlock],
+            },
+          ],
+          egress: [
+            {
+              fromPort: 0,
+              toPort: 0,
+              protocol: '-1',
+              cidrBlocks: ['0.0.0.0/0'],
+            },
+          ],
+          tags: {
+            Name: `${props.prefix}-private-sg-${region}`,
+            Environment: props.prefix,
+          },
+        }
+      );
       // Lambda Log Group
-      const lambdaLogGroup = new CloudwatchLogGroup(this, `${props.prefix}-lambda-logs-${region}`, {
-        provider: vpc.provider,
-        name: `/aws/lambda/${props.prefix}-lambda-${region}`,
-        retentionInDays: 14,
-        kmsKeyId: kmsKey.arn,
-        tags: {
-          Name: `${props.prefix}-lambda-logs-${region}`,
-          Environment: props.prefix,
-        },
-      });
+      const lambdaLogGroup = new CloudwatchLogGroup(
+        this,
+        `${props.prefix}-lambda-logs-${region}`,
+        {
+          provider: vpc.provider,
+          name: `/aws/lambda/${props.prefix}-lambda-${region}`,
+          retentionInDays: 14,
+          kmsKeyId: kmsKey.arn,
+          tags: {
+            Name: `${props.prefix}-lambda-logs-${region}`,
+            Environment: props.prefix,
+          },
+        }
+      );
       // Lambda Function
       new LambdaFunction(this, `${props.prefix}-lambda-${region}`, {
         provider: vpc.provider,
