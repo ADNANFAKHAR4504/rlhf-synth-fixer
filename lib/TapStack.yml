@@ -53,7 +53,11 @@ Parameters:
   # Avoid SSM name collisions (override if it already exists in the account)
   SsmParamName:
     Type: String
-    Default: !Sub "/${ProjectName}/${EnvironmentSuffix}/DB_PASSWORD"
+    Default: ""
+    AllowedPattern: '^$|^((?!aws|ssm)[\w\.\-]+|\/(?!aws|ssm)[\w\.\-]+(\/[\w\.\-]+)*)$'
+    Description: >-
+      Optional explicit SSM parameter name. Leave empty to auto-generate
+      "/${ProjectName}/${EnvironmentSuffix}/DB_PASSWORD".
 
 Conditions:
   CreateSecurityHub: !Equals [!Ref EnableSecurityHub, "true"]
@@ -517,14 +521,19 @@ Resources:
   ############################################
   # SSM Parameter (String; configurable name)
   ############################################
+Resources:
   AppDbPasswordParam:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Ref SsmParamName
+      Name: !If
+        - HasCustomSsmName
+        - !Ref SsmParamName
+        - !Sub "/${ProjectName}/${EnvironmentSuffix}/DB_PASSWORD"
       Type: String
       Tier: Standard
       Value: !Ref DbPassword
       Description: !Sub "DB password for ${ProjectName}-${EnvironmentSuffix} (String)"
+
 
   ############################################
   # Lambda (least-priv) + logs
@@ -551,7 +560,10 @@ Resources:
               - Sid: ReadSpecificParam
                 Effect: Allow
                 Action: [ ssm:GetParameter, ssm:GetParameters, ssm:GetParameterHistory ]
-                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParamName}"
+                Resource: !If
+                  - HasCustomSsmName
+                  - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SsmParamName}"
+                  - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/${EnvironmentSuffix}/DB_PASSWORD"
 
   AppLambdaLogGroup:
     Type: AWS::Logs::LogGroup
@@ -578,10 +590,10 @@ Resources:
               return {"statusCode": 200, "body": json.dumps({"parameter": name, "len": len(p['Parameter']['Value'])})}
       Environment:
         Variables:
-          SSM_PARAM_NAME: !Ref SsmParamName
-      Tags:
-        - { Key: Project,     Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+          SSM_PARAM_NAME: !If
+            - HasCustomSsmName
+            - !Ref SsmParamName
+            - !Sub "/${ProjectName}/${EnvironmentSuffix}/DB_PASSWORD"
 
   ############################################
   # CloudWatch Alarm for Unauthorized Access
