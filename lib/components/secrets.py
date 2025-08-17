@@ -24,11 +24,11 @@ class SecretsComponent(ComponentResource):
     # Application configuration secrets
     self.app_secrets = aws.secretsmanager.Secret(
       f"{name}-app-secrets",
-      name=f"{config.app_name}-{config.environment.value}-app-config",
-      description=f"Application configuration for {config.app_name}-{config.environment.value}",
+      name=f"{config.app_name}-{config.environment}-app-config",
+      description=f"Application configuration for {config.app_name}-{config.environment}",
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-app-config"
+        "Name": f"{config.app_name}-{config.environment}-app-config"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -50,8 +50,8 @@ class SecretsComponent(ComponentResource):
     # Database secrets
     self.db_secrets = aws.secretsmanager.Secret(
       f"{name}-db-secrets",
-      name=f"{config.app_name}-{config.environment.value}-db-config",
-      description=f"Database configuration for {config.app_name}-{config.environment.value}",
+      name=f"{config.app_name}-{config.environment}-db-config",
+      description=f"Database configuration for {config.app_name}-{config.environment}",
       generate_secret_string={
         "length": 32,
         "exclude_characters": '"@/\\',
@@ -59,13 +59,13 @@ class SecretsComponent(ComponentResource):
         "secret_string_template": json.dumps({
           "username": "admin",
           "engine": "mysql",
-          "host": f"{config.app_name}-{config.environment.value}-db.region.rds.amazonaws.com",
+          "host": f"{config.app_name}-{config.environment}-db.region.rds.amazonaws.com",
           "port": 3306,
-          "dbname": f"{config.app_name}_{config.environment.value}".replace("-", "_")
+          "dbname": f"{config.app_name}_{config.environment}".replace("-", "_")
         })
       },
       tags={
-        "Name": f"{config.app_name}-{config.environment.value}-db-config",
+        "Name": f"{config.app_name}-{config.environment}-db-config",
         **config.tags
       },
       opts=ResourceOptions(parent=self)
@@ -75,7 +75,7 @@ class SecretsComponent(ComponentResource):
     # Non-sensitive configuration parameters
     aws.ssm.Parameter(
       f"{name}-app-version",
-      name=f"/{config.app_name}/{config.environment.value}/app/version",
+      name=f"/{config.app_name}/{config.environment}/app/version",
       type="String",
       value="1.0.0",
       description="Application version",
@@ -87,9 +87,9 @@ class SecretsComponent(ComponentResource):
 
     aws.ssm.Parameter(
       f"{name}-app-debug",
-      name=f"/{config.app_name}/{config.environment.value}/app/debug",
+      name=f"/{config.app_name}/{config.environment}/app/debug",
       type="String",
-      value="false" if config.environment.value == "prod" else "true",
+      value="false" if config.environment == "prod" else "true",
       description="Debug mode flag",
       tags={
         **config.tags
@@ -99,9 +99,9 @@ class SecretsComponent(ComponentResource):
 
     aws.ssm.Parameter(
       f"{name}-app-log-level",
-      name=f"/{config.app_name}/{config.environment.value}/app/log_level",
+      name=f"/{config.app_name}/{config.environment}/app/log_level",
       type="String",
-      value="ERROR" if config.environment.value == "prod" else "DEBUG",
+      value="ERROR",
       description="Application log level",
       tags={
         **config.tags

@@ -49,7 +49,7 @@ class SecurityComponent(ComponentResource):
       }),
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-ec2-role"
+        "Name": f"{config.app_name}-{config.environment}-ec2-role"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -83,8 +83,8 @@ class SecurityComponent(ComponentResource):
             "ssm:GetParametersByPath"
           ],
           "Resource": [
-            f"arn:aws:secretsmanager:*:*:secret:{config.app_name}-{config.environment.value}-*",
-            f"arn:aws:ssm:*:*:parameter/{config.app_name}/{config.environment.value}/*"
+            f"arn:aws:secretsmanager:*:*:secret:{config.app_name}-{config.environment}-*",
+            f"arn:aws:ssm:*:*:parameter/{config.app_name}/{config.environment}/*"
           ]
         }]
       }),
@@ -128,7 +128,7 @@ class SecurityComponent(ComponentResource):
       }],
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-alb-sg"
+        "Name": f"{config.app_name}-{config.environment}-alb-sg"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -162,7 +162,7 @@ class SecurityComponent(ComponentResource):
       }],
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-ec2-sg"
+        "Name": f"{config.app_name}-{config.environment}-ec2-sg"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -181,7 +181,7 @@ class SecurityComponent(ComponentResource):
       }],
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-db-sg"
+        "Name": f"{config.app_name}-{config.environment}-db-sg"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -195,7 +195,7 @@ class SecurityComponent(ComponentResource):
       validation_method="DNS",
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-cert"
+        "Name": f"{config.app_name}-{config.environment}-cert"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -242,11 +242,11 @@ class SecurityComponent(ComponentResource):
       ],
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-waf"
+        "Name": f"{config.app_name}-{config.environment}-waf"
       },
       visibility_config={
         "cloudwatch_metrics_enabled": True,
-        "metric_name": f"{config.app_name}-{config.environment.value}-waf",
+        "metric_name": f"{config.app_name}-{config.environment}-waf",
         "sampled_requests_enabled": True
       },
       opts=ResourceOptions(parent=self)
@@ -317,7 +317,7 @@ class SecurityComponent(ComponentResource):
       }),
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-mfa-policy"
+        "Name": f"{config.app_name}-{config.environment}-mfa-policy"
       },
       opts=ResourceOptions(parent=self)
     )

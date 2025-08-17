@@ -21,8 +21,7 @@ class DatabaseComponent(ComponentResource):
     self._create_rds_instance(name, config, dependencies)
 
     # Create read replica for read scaling (optional)
-    if config.environment.value == "prod":
-      self._create_read_replica(name, config)
+    self._create_read_replica(name, config)
 
     self.register_outputs({
       "db_endpoint": self.db_instance.endpoint,
@@ -35,7 +34,7 @@ class DatabaseComponent(ComponentResource):
       subnet_ids=private_subnet_ids,
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-db-subnet-group"
+        "Name": f"{config.app_name}-{config.environment}-db-subnet-group"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -44,7 +43,7 @@ class DatabaseComponent(ComponentResource):
     self.db_parameter_group = aws.rds.ParameterGroup(
       f"{name}-db-params",
       family="mysql8.0",
-      description=f"Parameter group for {config.app_name}-{config.environment.value}",
+      description=f"Parameter group for {config.app_name}-{config.environment}",
       parameters=[
         {
           "name": "innodb_buffer_pool_size",
@@ -61,7 +60,7 @@ class DatabaseComponent(ComponentResource):
       ],
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-db-params"
+        "Name": f"{config.app_name}-{config.environment}-db-params"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -71,14 +70,14 @@ class DatabaseComponent(ComponentResource):
     # Generate random password
     db_password = aws.secretsmanager.Secret(
       f"{name}-db-password",
-      description=f"Database password for {config.app_name}-{config.environment.value}",
+      description=f"Database password for {config.app_name}-{config.environment}",
       generate_secret_string={
         "length": 32,
         "exclude_characters": '"@/\\'
       },
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-db-password"
+        "Name": f"{config.app_name}-{config.environment}-db-password"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -94,7 +93,7 @@ class DatabaseComponent(ComponentResource):
     # RDS instance
     self.db_instance = aws.rds.Instance(
       f"{name}-db",
-      identifier=f"{config.app_name}-{config.environment.value}-db",
+      identifier=f"{config.app_name}-{config.environment}-db",
       engine="mysql",
       engine_version="8.0",
       instance_class=config.database.instance_class,
@@ -104,7 +103,7 @@ class DatabaseComponent(ComponentResource):
       storage_encrypted=True,
 
       # Database configuration
-      db_name=f"{config.app_name}_{config.environment.value}".replace("-", "_"),
+      db_name=f"{config.app_name}_{config.environment}".replace("-", "_"),
       username="admin",
       password=db_password_version.secret_string,
 
@@ -131,7 +130,7 @@ class DatabaseComponent(ComponentResource):
 
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-db"
+        "Name": f"{config.app_name}-{config.environment}-db"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -166,14 +165,14 @@ class DatabaseComponent(ComponentResource):
   def _create_read_replica(self, name: str, config: InfrastructureConfig):
     self.read_replica = aws.rds.Instance(
       f"{name}-db-replica",
-      identifier=f"{config.app_name}-{config.environment.value}-db-replica",
+      identifier=f"{config.app_name}-{config.environment}-db-replica",
       replicate_source_db=self.db_instance.identifier,
       instance_class="db.t3.micro",
       publicly_accessible=False,
       auto_minor_version_upgrade=True,
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-db-replica"
+        "Name": f"{config.app_name}-{config.environment}-db-replica"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -279,7 +278,7 @@ def lambda_handler(event, context):
       timeout=300,
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-backup-lambda"
+        "Name": f"{config.app_name}-{config.environment}-backup-lambda"
       },
       opts=ResourceOptions(parent=self)
     )

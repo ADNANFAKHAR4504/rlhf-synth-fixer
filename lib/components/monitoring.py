@@ -35,11 +35,11 @@ class MonitoringComponent(ComponentResource):
     # Application log group
     self.app_log_group = aws.cloudwatch.LogGroup(
       f"{name}-app-logs",
-      name=f"/aws/ec2/{config.app_name}-{config.environment.value}",
+      name=f"/aws/ec2/{config.app_name}-{config.environment}",
       retention_in_days=config.monitoring.log_retention_days,
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-app-logs"
+        "Name": f"{config.app_name}-{config.environment}-app-logs"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -47,11 +47,11 @@ class MonitoringComponent(ComponentResource):
     # ALB log group
     self.alb_log_group = aws.cloudwatch.LogGroup(
       f"{name}-alb-logs",
-      name=f"/aws/elasticloadbalancing/{config.app_name}-{config.environment.value}",
+      name=f"/aws/elasticloadbalancing/{config.app_name}-{config.environment}",
       retention_in_days=config.monitoring.log_retention_days // 2,
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-alb-logs"
+        "Name": f"{config.app_name}-{config.environment}-alb-logs"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -59,10 +59,10 @@ class MonitoringComponent(ComponentResource):
     # Lambda log group
     self.lambda_log_group = aws.cloudwatch.LogGroup(
       f"{name}-lambda-logs",
-      name=f"/aws/lambda/{config.app_name}-{config.environment.value}",
+      name=f"/aws/lambda/{config.app_name}-{config.environment}",
       retention_in_days=7,
       tags={
-        "Name": f"{config.app_name}-{config.environment.value}-lambda-logs",
+        "Name": f"{config.app_name}-{config.environment}-lambda-logs",
         **config.tags
       },
       opts=ResourceOptions(parent=self)
@@ -72,9 +72,9 @@ class MonitoringComponent(ComponentResource):
     # SNS topic for alerts
     self.alert_topic = aws.sns.Topic(
       f"{name}-alerts",
-      name=f"{config.app_name}-{config.environment.value}-alerts",
+      name=f"{config.app_name}-{config.environment}-alerts",
       tags={
-        "Name": f"{config.app_name}-{config.environment.value}-alerts",
+        "Name": f"{config.app_name}-{config.environment}-alerts",
         **config.tags
       },
       opts=ResourceOptions(parent=self)
@@ -152,7 +152,7 @@ class MonitoringComponent(ComponentResource):
       alarm_description="RDS CPU utilization too high",
       alarm_actions=[self.alert_topic.arn],
       dimensions={
-        "DBInstanceIdentifier": f"{config.app_name}-{config.environment.value}-db"
+        "DBInstanceIdentifier": f"{config.app_name}-{config.environment}-db"
       },
       tags={
         **config.tags
@@ -173,7 +173,7 @@ class MonitoringComponent(ComponentResource):
       alarm_description="Too many database connections",
       alarm_actions=[self.alert_topic.arn],
       dimensions={
-        "DBInstanceIdentifier": f"{config.app_name}-{config.environment.value}-db"
+        "DBInstanceIdentifier": f"{config.app_name}-{config.environment}-db"
       },
       tags={
         **config.tags
@@ -193,7 +193,7 @@ class MonitoringComponent(ComponentResource):
       time_unit="MONTHLY",
       cost_filters={
         "TagKey": ["Environment"],
-        "TagValue": [config.environment.value]
+        "TagValue": [config.environment]
       },
       notifications=[
         {
@@ -274,7 +274,7 @@ class MonitoringComponent(ComponentResource):
 
     self.dashboard = aws.cloudwatch.Dashboard(
       f"{name}-dashboard",
-      dashboard_name=f"{config.app_name}-{config.environment.value}-dashboard",
+      dashboard_name=f"{config.app_name}-{config.environment}-dashboard",
       dashboard_body=dashboard_body,
       opts=ResourceOptions(parent=self)
     )

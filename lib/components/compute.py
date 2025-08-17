@@ -59,17 +59,17 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
                 "collect_list": [
                     {{
                         "file_path": "/var/log/messages",
-                        "log_group_name": "/aws/ec2/{self.config.app_name}-{self.config.environment.value}",
+                        "log_group_name": "/aws/ec2/{self.config.app_name}-{self.config.environment}",
                         "log_stream_name": "{{instance_id}}/messages"
                     }},
                     {{
                         "file_path": "/var/log/secure",
-                        "log_group_name": "/aws/ec2/{self.config.app_name}-{self.config.environment.value}",
+                        "log_group_name": "/aws/ec2/{self.config.app_name}-{self.config.environment}",
                         "log_stream_name": "{{instance_id}}/secure"
                     }},
                     {{
                         "file_path": "/var/log/docker",
-                        "log_group_name": "/aws/ec2/{self.config.app_name}-{self.config.environment.value}",
+                        "log_group_name": "/aws/ec2/{self.config.app_name}-{self.config.environment}",
                         "log_stream_name": "{{instance_id}}/docker"
                     }}
                 ]
@@ -102,12 +102,12 @@ state_file = /var/lib/awslogs/agent-state
 
 [/var/log/messages]
 file = /var/log/messages
-log_group_name = /aws/ec2/{self.config.app_name}-{self.config.environment.value}
+log_group_name = /aws/ec2/{self.config.app_name}-{self.config.environment}
 log_stream_name = {{instance_id}}/messages
 
 [/var/log/secure]
 file = /var/log/secure
-log_group_name = /aws/ec2/{self.config.app_name}-{self.config.environment.value}
+log_group_name = /aws/ec2/{self.config.app_name}-{self.config.environment}
 log_stream_name = {{instance_id}}/secure
 EOF
 
@@ -143,7 +143,7 @@ EOF
 python3 /opt/app/health.py &
 
 # Signal successful completion
-/opt/aws/bin/cfn-signal -e $? --stack {self.config.app_name}-{self.config.environment.value} --resource AutoScalingGroup --region {self.region}
+/opt/aws/bin/cfn-signal -e $? --stack {self.config.app_name}-{self.config.environment} --resource AutoScalingGroup --region {self.region}
 """
 
     user_data = base64.b64encode(user_data_script.encode()).decode()
@@ -175,12 +175,12 @@ python3 /opt/app/health.py &
         "resource_type": "instance",
         "tags": {
           **self.config.tags,
-          "Name": f"{self.config.app_name}-{self.config.environment.value}-instance"
+          "Name": f"{self.config.app_name}-{self.config.environment}-instance"
         }
       }],
       tags={
         **self.config.tags,
-        "Name": f"{self.config.app_name}-{self.config.environment.value}-lt"
+        "Name": f"{self.config.app_name}-{self.config.environment}-lt"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -197,7 +197,7 @@ python3 /opt/app/health.py &
       enable_http2=True,
       tags={
         **self.config.tags,
-        "Name": f"{self.config.app_name}-{self.config.environment.value}-alb"
+        "Name": f"{self.config.app_name}-{self.config.environment}-alb"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -222,7 +222,7 @@ python3 /opt/app/health.py &
       },
       tags={
         **self.config.tags,
-        "Name": f"{self.config.app_name}-{self.config.environment.value}-tg"
+        "Name": f"{self.config.app_name}-{self.config.environment}-tg"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -283,11 +283,11 @@ python3 /opt/app/health.py &
       ],
       tags=[{
         "key": "Name",
-        "value": f"{self.config.app_name}-{self.config.environment.value}-asg",
+        "value": f"{self.config.app_name}-{self.config.environment}-asg",
         "propagate_at_launch": True
       }, {
         "key": "Environment",
-        "value": self.config.environment.value,
+        "value": self.config.environment,
         "propagate_at_launch": True
       }, {
         "key": "Application",

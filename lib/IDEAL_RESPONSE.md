@@ -177,7 +177,7 @@ class TapStack(pulumi.ComponentResource):
 
     # Export important outputs
     pulumi.export("app_name", config.app_name)
-    pulumi.export("environment", config.environment.value)
+    pulumi.export("environment", config.environment)
     pulumi.export("primary_region", config.primary_region)
     pulumi.export("secondary_region", config.secondary_region)
     pulumi.export("primary_alb_dns", outputs[config.primary_region]["alb_dns_name"])

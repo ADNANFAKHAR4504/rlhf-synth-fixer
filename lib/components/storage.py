@@ -25,11 +25,11 @@ class StorageComponent(ComponentResource):
     # Main application S3 bucket
     self.app_bucket = aws.s3.Bucket(
       f"{name}-app-bucket",
-      bucket=f"{config.app_name}-{config.environment.value}-app-"
-             f"{aws.get_caller_identity().account_id}",
+      bucket=f"{config.app_name}-{config.environment}-app-"
+             f"{aws.get_caller_identity().account_id}".lower(),
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-app",
+        "Name": f"{config.app_name}-{config.environment}-app",
         "Purpose": "Application Data"
       },
       opts=ResourceOptions(parent=self)
@@ -97,10 +97,10 @@ class StorageComponent(ComponentResource):
     # Backup S3 bucket
     self.backup_bucket = aws.s3.Bucket(
       f"{name}-backup-bucket",
-      bucket=f"{config.app_name}-{config.environment.value}-backup-"
-             f"{aws.get_caller_identity().account_id}",
+      bucket=f"{config.app_name}-{config.environment}-backup-"
+             f"{aws.get_caller_identity().account_id}".lower(),
       tags={
-        "Name": f"{config.app_name}-{config.environment.value}-backup",
+        "Name": f"{config.app_name}-{config.environment}-backup",
         **config.tags,
         "Purpose": "Database Backups"
       },
@@ -120,9 +120,9 @@ class StorageComponent(ComponentResource):
     # Configure server-side encryption with KMS
     kms_key = aws.kms.Key(
       f"{name}-backup-kms-key",
-      description=f"KMS key for {config.app_name}-{config.environment.value} backup bucket",
+      description=f"KMS key for {config.app_name}-{config.environment} backup bucket",
       tags={
-        "Name": f"{config.app_name}-{config.environment.value}-backup-key",
+        "Name": f"{config.app_name}-{config.environment}-backup-key",
         **config.tags
       },
       opts=ResourceOptions(parent=self)
@@ -130,7 +130,7 @@ class StorageComponent(ComponentResource):
 
     aws.kms.Alias(
       f"{name}-backup-kms-alias",
-      name=f"alias/{config.app_name}-{config.environment.value}-backup",
+      name=f"alias/{config.app_name}-{config.environment}-backup",
       target_key_id=kms_key.key_id,
       opts=ResourceOptions(parent=self)
     )
@@ -163,10 +163,10 @@ class StorageComponent(ComponentResource):
     # ALB logs S3 bucket
     self.logs_bucket = aws.s3.Bucket(
       f"{name}-logs-bucket",
-      bucket=f"{config.app_name}-{config.environment.value}-alb-logs-"
+      bucket=f"{config.app_name}-{config.environment}-alb-logs-"
              f"{aws.get_caller_identity().account_id}",
       tags={
-        "Name": f"{config.app_name}-{config.environment.value}-alb-logs",
+        "Name": f"{config.app_name}-{config.environment}-alb-logs",
         **config.tags,
         "Purpose": "ALB Access Logs"
       },

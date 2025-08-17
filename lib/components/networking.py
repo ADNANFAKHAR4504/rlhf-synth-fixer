@@ -19,7 +19,7 @@ class NetworkingComponent(ComponentResource):
       enable_dns_support=True,
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-vpc",
+        "Name": f"{config.app_name}-{config.environment}-vpc",
         "Region": region
       },
       opts=ResourceOptions(parent=self)
@@ -31,7 +31,7 @@ class NetworkingComponent(ComponentResource):
       vpc_id=self.vpc.id,
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-igw"
+        "Name": f"{config.app_name}-{config.environment}-igw"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -51,7 +51,7 @@ class NetworkingComponent(ComponentResource):
         map_public_ip_on_launch=True,
         tags={
           **config.tags,
-          "Name": f"{config.app_name}-{config.environment.value}-public-subnet-{i + 1}",
+          "Name": f"{config.app_name}-{config.environment}-public-subnet-{i + 1}",
           "Type": "public"
         },
         opts=ResourceOptions(parent=self)
@@ -73,7 +73,7 @@ class NetworkingComponent(ComponentResource):
         availability_zone=azs.names[i],
         tags={
           **config.tags,
-          "Name": f"{config.app_name}-{config.environment.value}-private-subnet-{i + 1}",
+          "Name": f"{config.app_name}-{config.environment}-private-subnet-{i + 1}",
           "Type": "private"
         },
         opts=ResourceOptions(parent=self)
@@ -90,7 +90,7 @@ class NetworkingComponent(ComponentResource):
         domain="vpc",
         tags={
           **config.tags,
-          "Name": f"{config.app_name}-{config.environment.value}-nat-eip-{i + 1}"
+          "Name": f"{config.app_name}-{config.environment}-nat-eip-{i + 1}"
         },
         opts=ResourceOptions(parent=self, depends_on=[self.igw])
       )
@@ -102,7 +102,7 @@ class NetworkingComponent(ComponentResource):
         subnet_id=public_subnet.id,
         tags={
           **config.tags,
-          "Name": f"{config.app_name}-{config.environment.value}-nat-gw-{i + 1}"
+          "Name": f"{config.app_name}-{config.environment}-nat-gw-{i + 1}"
         },
         opts=ResourceOptions(parent=self)
       )
@@ -115,7 +115,7 @@ class NetworkingComponent(ComponentResource):
       vpc_id=self.vpc.id,
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment.value}-public-rt"
+        "Name": f"{config.app_name}-{config.environment}-public-rt"
       },
       opts=ResourceOptions(parent=self)
     )
@@ -145,7 +145,7 @@ class NetworkingComponent(ComponentResource):
         vpc_id=self.vpc.id,
         tags={
           **config.tags,
-          "Name": f"{config.app_name}-{config.environment.value}-private-rt-{i + 1}"
+          "Name": f"{config.app_name}-{config.environment}-private-rt-{i + 1}"
         },
         opts=ResourceOptions(parent=self)
       )
