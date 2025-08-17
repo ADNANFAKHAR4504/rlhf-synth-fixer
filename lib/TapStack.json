@@ -541,8 +541,7 @@
                 "PubliclyAccessible": false,
                 "EnableCloudwatchLogsExports": [
                     "error",
-                    "general",
-                    "slow-query"
+                    "general"
                 ],
                 "MonitoringInterval": 60,
                 "MonitoringRoleArn": {

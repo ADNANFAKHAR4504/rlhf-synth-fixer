@@ -315,7 +315,6 @@ Resources:
       EnableCloudwatchLogsExports:
         - error
         - general
-        - slow-query
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
       DeletionProtection: true
