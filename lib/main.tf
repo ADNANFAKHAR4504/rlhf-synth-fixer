@@ -502,7 +502,7 @@ resource "aws_lb" "web" {
 }
 
 resource "aws_lb_target_group" "web" {
-  name     = "${var.project_name}-web-tg-${random_id.web_suffix.hex}"
+  name     = "web-tg-${random_id.web_suffix.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
