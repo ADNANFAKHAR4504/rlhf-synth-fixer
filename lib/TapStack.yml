@@ -107,7 +107,7 @@ Resources:
                   - logs:PutLogEvents
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
-                Resource: !Sub '${CloudTrailLogGroup}:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/tapstackpr1271-${Environment}:*'
 
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
