@@ -5,5 +5,24 @@
   "turn_type": "single",
   "po_id": "291387",
   "team": "4",
-  "startedAt": "2025-08-15T10:55:39.976Z"
+  "startedAt": "2025-08-15T10:55:39.976Z",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "Network Configuration",
+    "Security Configuration",
+    "IaC Optimization",
+    "General Infrastructure Provisioning"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Table",
+    "Security Group",
+    "Availability Zone"
+  ]
 }
