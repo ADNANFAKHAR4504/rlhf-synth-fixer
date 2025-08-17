@@ -666,8 +666,7 @@ def create_eks_cluster(
               }]
           }),
           managed_policy_arns=[
-              "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
-              "arn:aws:iam::aws:policy/AmazonEKSVPCResourceControllerPolicy"
+              "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
           ],
           tags={**tags, "Name": f"{name_prefix}-eks-cluster-role"},
           opts=ResourceOptions(provider=provider)
