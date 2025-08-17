@@ -533,7 +533,7 @@ export class S3Module extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `arn:aws:s3:::${this.cloudtrailBucket.bucket}/AWSLogs/718240086340/*`,
+            Resource: `arn:aws:s3:::${this.cloudtrailBucket.bucket}/AWSLogs/718240086340/AWSCloudTrail/us-east-1/*`,
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
