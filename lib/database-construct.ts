@@ -2,6 +2,7 @@ import { Construct } from 'constructs';
 import { SecurityConstruct } from './security-construct';
 import { VpcConstruct } from './vpc-construct';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 
 interface DatabaseConstructProps {
   prefix: string;
@@ -16,10 +17,23 @@ export class DatabaseConstruct extends Construct {
     Object.keys(props.vpc.vpcs).forEach(region => {
       const kmsKey = props.security.kmsKeys[region];
       const vpc = props.vpc.vpcs[region];
-
+      const privateSubnets =
+        props.vpc.privateSubnets[region]?.map(subnet => subnet.id) || [];
       // Ensure security group IDs are properly referenced
       const securityGroupIds =
         props.security.securityGroups?.[region]?.map(sg => sg.id) || [];
+
+      // Create DB Subnet Group for RDS
+      const subnetGroupName = `${props.prefix}-rds-subnet-group-${region}`;
+      const dbSubnetGroup = new DbSubnetGroup(this, subnetGroupName, {
+        provider: vpc.provider,
+        name: subnetGroupName,
+        subnetIds: privateSubnets,
+        tags: {
+          Name: subnetGroupName,
+          Environment: props.prefix,
+        },
+      });
 
       new DbInstance(this, `${props.prefix}-rds-instance-${region}`, {
         provider: vpc.provider,
@@ -35,6 +49,7 @@ export class DatabaseConstruct extends Construct {
         storageEncrypted: true,
         kmsKeyId: kmsKey.arn,
         publiclyAccessible: false,
+        dbSubnetGroupName: dbSubnetGroup.name,
         tags: {
           Name: `${props.prefix}-rds-instance-${region}`,
           Environment: props.prefix,

@@ -131,7 +131,7 @@ export class ComputeConstruct extends Construct {
         role: props.security.iamRoles[region]?.arn,
         handler: 'index.handler',
         runtime: 'nodejs18.x',
-        filename: 'lambda.zip', // Replace with actual deployment artifact
+        filename: 'lib/lambda.zip', // use correct path to deployment package
         sourceCodeHash: 'placeholder', // Replace with actual hash
         environment: {
           variables: {
