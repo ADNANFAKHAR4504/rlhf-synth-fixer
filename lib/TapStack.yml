@@ -171,6 +171,16 @@ Resources:
             Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
+          - Sid: 'Allow EC2 to use the key'
+            Effect: Allow
+            Principal: { Service: 'ec2.amazonaws.com' }
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
       Tags:
         - { Key: Project, Value: 'NovaModelBreaking' }
         - { Key: Environment, Value: !Ref EnvironmentSuffix }
