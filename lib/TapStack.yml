@@ -241,7 +241,7 @@ Resources:
       StageName: !Ref EnvironmentSuffix
       Description: !Sub 'TAP API stage for ${EnvironmentSuffix} environment'
       MethodSettings:
-        - ResourcePath: '/*/*'
+        - ResourcePath: '/*'
           HttpMethod: '*'
           LoggingLevel: INFO
           DataTraceEnabled: true

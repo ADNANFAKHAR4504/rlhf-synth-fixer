@@ -351,6 +351,15 @@ describe('TapStack CloudFormation Template', () => {
         expect(stage.Properties.StageName).toEqual({
           Ref: 'EnvironmentSuffix',
         });
+
+        // Verify MethodSettings has correct ResourcePath
+        const methodSettings = stage.Properties.MethodSettings;
+        expect(methodSettings).toHaveLength(1);
+        expect(methodSettings[0].ResourcePath).toBe('/*');
+        expect(methodSettings[0].HttpMethod).toBe('*');
+        expect(methodSettings[0].LoggingLevel).toBe('INFO');
+        expect(methodSettings[0].DataTraceEnabled).toBe(true);
+        expect(methodSettings[0].MetricsEnabled).toBe(true);
       });
     });
 

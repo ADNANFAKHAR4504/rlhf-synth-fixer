@@ -183,7 +183,7 @@
                 "Action": "lambda:InvokeFunction",
                 "Principal": "apigateway.amazonaws.com",
                 "SourceArn": {
-                    "Fn::Sub": "${TapServerlessApi}/*/*"
+                    "Fn::Sub": "arn:aws:execute-api:us-east-1:${AWS::AccountId}:${TapServerlessApi}/*/*"
                 }
             }
         },
@@ -276,7 +276,7 @@
                 },
                 "MethodSettings": [
                     {
-                        "ResourcePath": "/*/*",
+                        "ResourcePath": "/*",
                         "HttpMethod": "*",
                         "LoggingLevel": "INFO",
                         "DataTraceEnabled": true,
