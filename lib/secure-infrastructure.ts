@@ -959,8 +959,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     /**
      * GuardDuty for Threat Detection
      * Enables threat detection and security monitoring
-     * Note: GuardDuty allows only one detector per AWS account
-     * Check us-east-1 first, use it if exists, otherwise create in ap-south-1
      */
 
     // Check for existing GuardDuty detector in us-east-1
