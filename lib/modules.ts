@@ -55,7 +55,6 @@ export interface S3ModuleConfig {
   enableLogging?: boolean;
   loggingTargetBucket?: string;
   loggingTargetPrefix?: string;
-  isCloudTrailBucket?: boolean;
 }
 
 export interface IamRoleModuleConfig {
@@ -281,8 +280,8 @@ export class S3Module extends Construct {
   constructor(scope: Construct, id: string, config: S3ModuleConfig) {
     super(scope, id);
 
-    const callerIdentity = new DataAwsCallerIdentity(this, 'caller-identity');
-    const region = new DataAwsRegion(this, 'current');
+    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
+    // const region = new DataAwsRegion(this, 'current');
 
     // Create KMS key for S3 encryption
     this.kmsKey = new KmsKey(this, 'kms-key', {
@@ -331,46 +330,6 @@ export class S3Module extends Construct {
       },
     });
 
-    // Add CloudTrail bucket policy if this is a CloudTrail bucket
-    if (config.isCloudTrailBucket) {
-      new S3BucketPolicy(this, 'cloudtrail-policy', {
-        bucket: this.bucket.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'AWSCloudTrailAclCheck',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'cloudtrail.amazonaws.com',
-              },
-              Action: 's3:GetBucketAcl',
-              Resource: this.bucket.arn,
-              Condition: {
-                StringEquals: {
-                  'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${callerIdentity.accountId}:trail/*`,
-                },
-              },
-            },
-            {
-              Sid: 'AWSCloudTrailWrite',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'cloudtrail.amazonaws.com',
-              },
-              Action: 's3:PutObject',
-              Resource: `${this.bucket.arn}/*`,
-              Condition: {
-                StringEquals: {
-                  's3:x-amz-acl': 'bucket-owner-full-control',
-                  'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${callerIdentity.accountId}:trail/*`,
-                },
-              },
-            },
-          ],
-        }),
-      });
-    }
     // Enable server-side encryption with KMS
     new S3BucketServerSideEncryptionConfigurationA(this, 'encryption', {
       bucket: this.bucket.id,
@@ -469,9 +428,52 @@ export class IamRoleModule extends Construct {
 export class CloudTrailModule extends Construct {
   public readonly trail: cloudtrail.Cloudtrail;
   public readonly eventDataStore: cloudtrailEventDataStore.CloudtrailEventDataStore;
+  public readonly bucketPolicy: S3BucketPolicy;
 
   constructor(scope: Construct, id: string, config: CloudTrailModuleConfig) {
     super(scope, id);
+
+    const callerIdentity = new DataAwsCallerIdentity(this, 'caller-identity');
+    const region = new DataAwsRegion(this, 'current');
+
+    // Create S3 bucket policy to allow CloudTrail access
+    this.bucketPolicy = new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
+      bucket: config.s3BucketName,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSCloudTrailAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: `arn:aws:s3:::${config.s3BucketName}`,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${callerIdentity.accountId}:trail/${config.name}`,
+              },
+            },
+          },
+          {
+            Sid: 'AWSCloudTrailWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `arn:aws:s3:::${config.s3BucketName}/AWSLogs/${callerIdentity.accountId}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+                'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${callerIdentity.accountId}:trail/${config.name}`,
+              },
+            },
+          },
+        ],
+      }),
+    });
 
     // Create CloudTrail for audit logging
     this.trail = new cloudtrail.Cloudtrail(this, 'trail', {

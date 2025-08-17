@@ -112,7 +112,6 @@ export class TapStack extends TerraformStack {
     const cloudtrailBucket = new S3Module(this, 'cloudtrail-bucket', {
       bucketName: `${projectName}-cloudtrail-logs-${environmentSuffix}`,
       enableVersioning: true,
-      isCloudTrailBucket: true,
     });
 
     // Create S3 bucket for access logs
