@@ -193,7 +193,7 @@ class DatabaseStack(NestedStack):
         self,
         f"Database{props.environment_suffix}",
         engine=rds.DatabaseInstanceEngine.mysql(
-            version=rds.MysqlEngineVersion.VER_8_0_35
+            version=rds.MysqlEngineVersion.VER_8_4_6
         ),
         instance_type=ec2.InstanceType.of(
             ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
