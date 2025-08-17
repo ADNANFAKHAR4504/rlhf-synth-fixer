@@ -60,7 +60,7 @@ class SecretsComponent(ComponentResource):
     )
 
     aws.secretsmanager.SecretVersion(
-      f"{name}-app-secrets-version",
+      f"{name}-db-secrets-version",
       secret_id=self.app_secrets.id,
       secret_string=json.dumps({
         "username": "admin",
