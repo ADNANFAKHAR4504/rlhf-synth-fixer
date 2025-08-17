@@ -425,8 +425,9 @@ resource "aws_iam_role" "config" {
   assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "config.amazonaws.com" } }] })
 }
 resource "aws_iam_role_policy_attachment" "config" {
+  count      = var.enable_config ? 1 : 0
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigServiceRolePolicy"
 }
 variable "enable_config" {
   description = "Whether to enable AWS Config recorder, delivery channel, and rules"
