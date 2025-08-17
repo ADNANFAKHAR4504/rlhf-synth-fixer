@@ -670,9 +670,17 @@
                                         "s3:GetObject",
                                         "s3:PutObject"
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "${ApplicationBucket}/*"
-                                    }
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${ApplicationBucket}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ApplicationBucket",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
                                 }
                             ]
                         }

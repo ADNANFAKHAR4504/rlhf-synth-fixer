@@ -377,7 +377,9 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${ApplicationBucket}/*'
+                Resource: 
+                  - !Sub '${ApplicationBucket}/*'
+                  - !GetAtt ApplicationBucket.Arn
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
