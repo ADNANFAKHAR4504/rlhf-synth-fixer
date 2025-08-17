@@ -24,6 +24,7 @@ It’s not clear how centralization is achieved, cross-region log aggregation in
 No mention who to approve production deployment
 
 ** Flaw 8 ***
+Read replica for production not completed
 
 # Read Replica (Production only)
 resource "aws_db_instance" "replica" {
