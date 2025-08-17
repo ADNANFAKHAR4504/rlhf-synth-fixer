@@ -1,105 +1,168 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from "fs";
+import * as path from "path";
 
-const LIB_DIR = path.resolve(__dirname, '../lib');
-const TAP_STACK_TF = path.join(LIB_DIR, 'tap_stack.tf');
+const LIB_DIR = path.resolve(__dirname, "../lib");
+const TAP_STACK_TF = path.join(LIB_DIR, "tap_stack.tf");
 
-// Load the Terraform file once
-const tf = fs.readFileSync(TAP_STACK_TF, 'utf8');
+// Read the whole terraform file content
+const tf = fs.readFileSync(TAP_STACK_TF, "utf8");
 
-// Helper to check regex matches in the Terraform file
+// Helper function to test regex presence
 const has = (regex: RegExp) => regex.test(tf);
 
-describe('tap_stack.tf static structure', () => {
-  it('exists and has sufficient content', () => {
+describe("tap_stack.tf static verification", () => {
+  it("file exists and has content over 500 chars", () => {
     expect(fs.existsSync(TAP_STACK_TF)).toBe(true);
     expect(tf.length).toBeGreaterThan(500);
   });
 
-  it('declares AWS region variable', () => {
+  // Variables check
+  it("declares aws_region variable with default 'us-west-2'", () => {
     expect(has(/variable\s+"aws_region"/)).toBe(true);
     expect(has(/default\s*=\s*"us-west-2"/)).toBe(true);
   });
 
-  it('declares environments variable with dev, staging, production', () => {
+  it("declares environments variable with staging and production", () => {
     expect(has(/variable\s+"environments"/)).toBe(true);
-    expect(has(/dev\s*=\s*{/)).toBe(true);
     expect(has(/staging\s*=\s*{/)).toBe(true);
     expect(has(/production\s*=\s*{/)).toBe(true);
   });
 
-  it('defines VPC resources for each environment', () => {
-    expect(has(/resource\s+"aws_vpc"\s+"environment_vpc"/)).toBe(true);
+  it("declares common_tags variable", () => {
+    expect(has(/variable\s+"common_tags"/)).toBe(true);
+  });
+
+  it("declares db_username and db_password variables", () => {
+    expect(has(/variable\s+"db_username"/)).toBe(true);
+    expect(has(/variable\s+"db_password"/)).toBe(true);
+    expect(has(/sensitive\s*=\s*true/)).toBe(true); // for password sensitivity
+  });
+
+  // Locals presence
+  it("defines locals block with availability_zones and common_tags", () => {
+    expect(has(/locals\s*{/)).toBe(true);
+    expect(has(/availability_zones\s*=/)).toBe(true);
+    expect(has(/common_tags\s*=/)).toBe(true);
+  });
+
+  // Data source aws_ami
+  it("defines aws_ami data source for Amazon Linux 2", () => {
+    expect(has(/data\s+"aws_ami"\s+"amazon_linux"/)).toBe(true);
+    expect(has(/owners\s*=\s*\["amazon"\]/)).toBe(true);
+  });
+
+  // VPC Resource
+  it("creates aws_vpc resource for each environment", () => {
+    expect(has(/resource\s+"aws_vpc"\s+"main"/)).toBe(true);
     expect(has(/enable_dns_support\s*=\s*true/)).toBe(true);
     expect(has(/enable_dns_hostnames\s*=\s*true/)).toBe(true);
   });
 
-  it('creates public subnets in each environment', () => {
-    expect(has(/resource\s+"aws_subnet"\s+"public_subnets"/)).toBe(true);
-    expect(has(/map_public_ip_on_launch\s*=\s*true/)).toBe(true);
-  });
-
-  it('creates private subnets in each environment', () => {
-    expect(has(/resource\s+"aws_subnet"\s+"private_subnets"/)).toBe(true);
-  });
-
-  it('creates Internet Gateway for each environment', () => {
+  // Internet Gateway Resource
+  it("creates aws_internet_gateway resource for each environment", () => {
     expect(has(/resource\s+"aws_internet_gateway"/)).toBe(true);
   });
 
-  it('creates NAT Gateway for each environment', () => {
+  // Subnets - public and private
+  it("creates public subnets with map_public_ip_on_launch", () => {
+    expect(has(/resource\s+"aws_subnet"\s+"public"/)).toBe(true);
+    expect(has(/map_public_ip_on_launch\s*=\s*true/)).toBe(true);
+  });
+
+  it("creates private subnets", () => {
+    expect(has(/resource\s+"aws_subnet"\s+"private"/)).toBe(true);
+  });
+
+  // NAT Gateway and EIP
+  it("creates aws_eip and aws_nat_gateway resources", () => {
+    expect(has(/resource\s+"aws_eip"\s+"nat"/)).toBe(true);
     expect(has(/resource\s+"aws_nat_gateway"/)).toBe(true);
   });
 
-  it('creates public and private route tables and associates them', () => {
-    expect(has(/resource\s+"aws_route_table"\s+"public_rt"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table"\s+"private_rt"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table_association"\s+"public_rta"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table_association"\s+"private_rta"/)).toBe(true);
+  // Route tables and associations
+  it("creates public and private route tables and associates them with subnets", () => {
+    expect(has(/resource\s+"aws_route_table"\s+"public"/)).toBe(true);
+    expect(has(/resource\s+"aws_route_table"\s+"private"/)).toBe(true);
+    expect(has(/resource\s+"aws_route_table_association"\s+"public"/)).toBe(true);
+    expect(has(/resource\s+"aws_route_table_association"\s+"private"/)).toBe(true);
   });
 
-  it('defines network ACLs to isolate environments', () => {
-    expect(has(/resource\s+"aws_network_acl"\s+"environment_nacl"/)).toBe(true);
-    expect(has(/action\s*=\s*"deny"/)).toBe(true); // Deny cross-env
+  // VPC Peering Connection & Routes
+  it("creates aws_vpc_peering_connection and peering routes", () => {
+    expect(has(/resource\s+"aws_vpc_peering_connection"/)).toBe(true);
+    expect(has(/resource\s+"aws_route"\s+"staging_to_production_public"/)).toBe(true);
+    expect(has(/resource\s+"aws_route"\s+"production_to_staging_public"/)).toBe(true);
   });
 
-  it('defines security group for web servers', () => {
-    expect(has(/resource\s+"aws_security_group"\s+"web_sg"/)).toBe(true);
-    expect(has(/from_port\s*=\s*80/)).toBe(true);
-    expect(has(/from_port\s*=\s*443/)).toBe(true);
-    expect(has(/from_port\s*=\s*22/)).toBe(true);
+  // Security Groups - EC2, ELB, RDS
+  it("defines security groups for EC2 HTTPS, ELB HTTPS, and RDS", () => {
+    expect(has(/resource\s+"aws_security_group"\s+"ec2_https"/)).toBe(true);
+    expect(has(/resource\s+"aws_security_group"\s+"elb_https"/)).toBe(true);
+    expect(has(/resource\s+"aws_security_group"\s+"rds"/)).toBe(true);
+    expect(has(/from_port\s*=\s*443/)).toBe(true); // Check HTTPS port open in SG
+    expect(has(/from_port\s*=\s*22/)).toBe(true);  // SSH port in EC2 SG
   });
 
-  it('defines IAM roles, policies, and instance profiles for EC2', () => {
+  // IAM Roles, Policies, Attachments, Profiles
+  it("defines IAM role, policies, role policy attachments, and instance profile for EC2", () => {
     expect(has(/resource\s+"aws_iam_role"\s+"ec2_role"/)).toBe(true);
     expect(has(/resource\s+"aws_iam_policy"/)).toBe(true);
     expect(has(/resource\s+"aws_iam_role_policy_attachment"/)).toBe(true);
     expect(has(/resource\s+"aws_iam_instance_profile"/)).toBe(true);
   });
 
-  it('defines EC2 instances with correct instance types and subnets', () => {
-    expect(has(/resource\s+"aws_instance"\s+"web_servers"/)).toBe(true);
-    expect(has(/instance_type\s*=\s*each.value.instance_type/)).toBe(true);
-    expect(has(/subnet_id\s*=\s*aws_subnet.public_subnets/)).toBe(true);
-    expect(has(/iam_instance_profile\s*=\s*aws_iam_instance_profile.ec2_profile/)).toBe(true);
+  // EC2 Instances configuration
+  it("defines aws_instance with correct instance_type, subnet, and IAM profile", () => {
+    expect(has(/resource\s+"aws_instance"\s+"web"/)).toBe(true);
+    expect(has(/instance_type\s*=\s*var\.environments\[each\.value\.environment\]\.instance_type/)).toBe(true);
+    expect(has(/subnet_id\s*=\s*aws_subnet\.private/)).toBe(true);
+    expect(has(/iam_instance_profile\s*=\s*aws_iam_instance_profile\.ec2_profile/)).toBe(true);
   });
 
-  it('applies common tags to all resources', () => {
-    expect(has(/tags\s*=\s*merge\(var\.common_tags/)).toBe(true);
+  // ALB and Target Groups
+  it("defines aws_lb and aws_lb_target_group with HTTPS settings", () => {
+    expect(has(/resource\s+"aws_lb"\s+"main"/)).toBe(true);
+    expect(has(/resource\s+"aws_lb_target_group"\s+"main"/)).toBe(true);
+    expect(has(/protocol\s*=\s*"HTTPS"/)).toBe(true);
   });
 
-  it('defines outputs for VPCs, subnets, EC2, SGs, NAT, IGW', () => {
+  // RDS Subnet Group and Instance
+  it("defines aws_db_subnet_group and aws_db_instance for PostgreSQL", () => {
+    expect(has(/resource\s+"aws_db_subnet_group"\s+"main"/)).toBe(true);
+    expect(has(/resource\s+"aws_db_instance"\s+"postgres"/)).toBe(true);
+    expect(has(/engine\s*=\s*"postgres"/)).toBe(true);
+  });
+
+  // CloudWatch Log Groups and Alarms
+  it("defines CloudWatch log groups for EC2 and ALB", () => {
+    expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"ec2_logs"/)).toBe(true);
+    expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"alb_logs"/)).toBe(true);
+  });
+  it("defines CloudWatch metric alarms for EC2, RDS, and ALB", () => {
+    expect(has(/resource\s+"aws_cloudwatch_metric_alarm"\s+"ec2_cpu"/)).toBe(true);
+    expect(has(/resource\s+"aws_cloudwatch_metric_alarm"\s+"rds_cpu"/)).toBe(true);
+    expect(has(/resource\s+"aws_cloudwatch_metric_alarm"\s+"alb_target_health"/)).toBe(true);
+  });
+
+  // Common tagging applied
+  it("applies common tags merged with environment tags across resources", () => {
+    expect(has(/tags\s*=\s*merge\(local\.common_tags/)).toBe(true);
+  });
+
+  // Outputs validity
+  it("defines required outputs for VPCs, subnets, EC2, ALBs, RDS, peering", () => {
     expect(has(/output\s+"vpc_ids"/)).toBe(true);
     expect(has(/output\s+"public_subnet_ids"/)).toBe(true);
     expect(has(/output\s+"private_subnet_ids"/)).toBe(true);
     expect(has(/output\s+"ec2_instance_ids"/)).toBe(true);
-    expect(has(/output\s+"security_group_ids"/)).toBe(true);
-    expect(has(/output\s+"nat_gateway_ids"/)).toBe(true);
-    expect(has(/output\s+"internet_gateway_ids"/)).toBe(true);
+    expect(has(/output\s+"alb_dns_names"/)).toBe(true);
+    expect(has(/output\s+"vpc_peering_connection_id"/)).toBe(true);
+    expect(has(/output\s+"rds_endpoints"/)).toBe(true);
   });
 
-  it('does not contain hardcoded AWS credentials', () => {
-    expect(has(/aws_access_key_id\s*=/)).toBe(false);
-    expect(has(/aws_secret_access_key\s*=/)).toBe(false);
+  // AWS credential exposure check
+  it("does not contain AWS access keys in the file", () => {
+    expect(has(/^\s*aws_access_key_id\s*=/m)).toBe(false);
+    expect(has(/^\s*aws_secret_access_key\s*=/m)).toBe(false);
   });
 });
