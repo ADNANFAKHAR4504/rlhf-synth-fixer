@@ -15,6 +15,7 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
@@ -509,6 +510,37 @@ export class S3Module extends Construct {
   private setupCloudTrailBucketPolicy() {
     // CloudTrail requires specific bucket policy - this would be implemented
     // based on the AWS account ID and CloudTrail service requirements
+    new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
+      bucket: this.cloudtrailBucket.bucket,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSCloudTrailAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: `arn:aws:s3:::${this.cloudtrailBucket.bucket}`,
+          },
+          {
+            Sid: 'AWSCloudTrailWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `arn:aws:s3:::${this.cloudtrailBucket.bucket}/AWSLogs/${process.env.CDKTF_AWS_ACCOUNT_ID}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+        ],
+      }),
+    });
   }
 }
 
