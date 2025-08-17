@@ -80,14 +80,14 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/tapstackpr1271-${Environment}'
+      LogGroupName: !Sub '/aws/cloudtrail/tapstackpr1271-${Environment}-tapstackpr1271'
       RetentionInDays: 365
 
   CloudTrailLogStream:
     Type: AWS::Logs::LogStream
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
-      LogStreamName: !Sub '${AWS::AccountId}_CloudTrail_${AWS::Region}_tapstackpr1271-${Environment}'
+      LogStreamName: !Sub '${AWS::AccountId}_CloudTrail_${AWS::Region}_tapstackpr1271-${Environment}-tapstackpr1271'
 
   CloudTrailLogsRole:
     Type: AWS::IAM::Role
@@ -107,12 +107,12 @@ Resources:
                   - logs:PutLogEvents
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/tapstackpr1271-${Environment}:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/tapstackpr1271-${Environment}-tapstackpr1271:*'
 
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'cloudtrail-logs-tapstackpr1271-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'cloudtrail-logs-tapstackpr1271-${Environment}-tapstackpr1271-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -150,7 +150,7 @@ Resources:
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub 'OrganizationTrail-${Environment}'
+      TrailName: !Sub 'OrganizationTrail-${Environment}-tapstackpr1271'
       S3BucketName: !Ref CloudTrailS3Bucket
       CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup}:*'
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
@@ -204,7 +204,7 @@ Resources:
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/tapstackpr1271-${Environment}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/tapstackpr1271-${Environment}-tapstackpr1271'
       RetentionInDays: 30
 
   VPCFlowLogs:
@@ -218,7 +218,7 @@ Resources:
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
       Tags:
         - Key: Name
-          Value: !Sub 'VPCFlowLogs-${Environment}'
+          Value: !Sub 'VPCFlowLogs-${Environment}-tapstackpr1271'
 
   # ============================================================================
   # SUBNETS
