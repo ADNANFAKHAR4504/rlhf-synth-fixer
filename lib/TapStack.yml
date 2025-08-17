@@ -416,20 +416,22 @@ Resources:
                 "kms:GrantIsForAWSResource": "true"
 
           # IMPORTANT: no !GetAtt TrailLogsBucket here (breaks the cycle)
+          # inside KmsKeyLogs.KeyPolicy.Statement (replace the S3 statement)
           - Sid: AllowS3BucketKeyForTrailLogsBucket
             Effect: Allow
             Principal:
               Service: s3.amazonaws.com
             Action:
+              - kms:Encrypt
               - kms:Decrypt
               - kms:DescribeKey
               - kms:GenerateDataKey*
             Resource: "*"
             Condition:
               StringEquals:
-                "kms:ViaService": !Sub "s3.${AWS::Region}.amazonaws.com"
-                # Compute the bucket ARN via !Sub instead of !GetAtt
-                "kms:EncryptionContext:aws:s3:arn": !Sub "arn:aws:s3:::${ProjectName}-${Environment}-trail-logs-${AWS::AccountId}"
+                kms:ViaService: !Sub "s3.${AWS::Region}.amazonaws.com"
+                # Compute the bucket ARN (no !GetAtt to avoid cycles)
+                kms:EncryptionContext:aws:s3:arn: !Sub "arn:aws:s3:::${ProjectName}-${Environment}-trail-logs-${AWS::AccountId}"
 
           - Sid: AllowCloudWatchLogs
             Effect: Allow
@@ -589,9 +591,6 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt TrailLogsBucket.Arn
-            Condition:
-              StringEquals:
-                aws:SourceArn: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-trail"
 
           - Sid: AWSCloudTrailWrite
             Effect: Allow
@@ -601,10 +600,12 @@ Resources:
             Resource: !Sub "${TrailLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
-                aws:SourceArn: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-trail"
                 s3:x-amz-acl: bucket-owner-full-control
                 s3:x-amz-server-side-encryption: aws:kms
-                s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt KmsKeyLogs.Arn
+                # Accept either the CMK ARN or the CMK key ID (UUID)
+                s3:x-amz-server-side-encryption-aws-kms-key-id:
+                  - !GetAtt KmsKeyLogs.Arn
+                  - !Ref KmsKeyLogs
 
           - Sid: DenyInsecureConnections
             Effect: Deny
@@ -615,7 +616,7 @@ Resources:
               - !Join ["", [!GetAtt TrailLogsBucket.Arn, "/*"]]
             Condition:
               Bool:
-                "aws:SecureTransport": false
+                aws:SecureTransport: false
 
   # --------------------------
   # IAM Roles
