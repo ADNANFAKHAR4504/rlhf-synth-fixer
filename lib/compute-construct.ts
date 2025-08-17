@@ -70,7 +70,7 @@ export class ComputeConstruct extends Construct {
         instanceType: 't3.micro',
         subnetId: props.vpc.publicSubnets[region]?.[0]?.id,
         vpcSecurityGroupIds: [publicSg.id],
-        iamInstanceProfile: props.security.iamRoles[region]?.name,
+        iamInstanceProfile: props.security.iamRoles[`${region}-profile`]?.name,
         userData:
           '#!/bin/bash\nyum update -y\nyum install -y awslogs\nsystemctl start awslogsd\nsystemctl enable awslogsd\n',
         tags: {

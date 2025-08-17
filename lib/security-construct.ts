@@ -3,6 +3,7 @@ import { VpcConstruct } from './vpc-construct';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 
 interface SecurityConstructProps {
   prefix: string;
@@ -13,6 +14,7 @@ export class SecurityConstruct extends Construct {
   public readonly kmsKeys: Record<string, KmsKey> = {};
   public readonly iamRoles: Record<string, IamRole> = {};
   public readonly securityGroups: Record<string, IamRole[]> = {};
+  public readonly instanceProfiles: Record<string, IamInstanceProfile> = {};
 
   constructor(scope: Construct, id: string, props: SecurityConstructProps) {
     super(scope, id);
@@ -20,9 +22,8 @@ export class SecurityConstruct extends Construct {
     // For each region, create KMS key, IAM roles with least privilege, security groups
     Object.keys(props.vpc.vpcs).forEach(region => {
       // KMS Key
-      const accountId =
-        process.env.CDKTF_DEFAULT_ACCOUNT || 'YOUR_AWS_ACCOUNT_ID';
-      const principalArn = accountId ? `arn:aws:iam::${accountId}:root` : '*'; // fallback to allow all if not set (not recommended for production)
+      // Removed unused accountId variable
+      const principalArn = '*'; // fallback to allow all (not recommended for production)
 
       const kmsKeyInstance = new KmsKey(this, `${props.prefix}-kms-${region}`, {
         provider: props.vpc.providers[region],
@@ -155,6 +156,17 @@ export class SecurityConstruct extends Construct {
           ],
         }),
       });
+      // IAM Instance Profile (EC2)
+      const ec2InstanceProfile = new IamInstanceProfile(
+        this,
+        `${props.prefix}-ec2-profile-${region}-${randomSuffix}`,
+        {
+          provider: props.vpc.vpcs[region].provider,
+          name: `${props.prefix}-ec2-profile-${region}-${randomSuffix}`,
+          role: ec2RoleInstance.name,
+        }
+      );
+      this.instanceProfiles[region] = ec2InstanceProfile;
     });
   }
 }
