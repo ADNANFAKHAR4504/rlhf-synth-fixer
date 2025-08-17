@@ -443,6 +443,7 @@ export class CloudTrailModule extends Construct {
     this.region = currentRegion.name;
 
     // Create S3 bucket policy to allow CloudTrail access
+    // Note: We don't reference the CloudTrail ARN here to avoid circular dependency
     this.bucketPolicy = new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
       bucket: config.s3BucketName,
       policy: JSON.stringify({
@@ -458,7 +459,7 @@ export class CloudTrailModule extends Construct {
             Resource: `arn:aws:s3:::${config.s3BucketName}`,
             Condition: {
               StringEquals: {
-                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/${config.name}`,
+                'aws:SourceAccount': this.accountId,
               },
             },
           },
@@ -469,13 +470,22 @@ export class CloudTrailModule extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `arn:aws:s3:::${config.s3BucketName}/AWSLogs/${this.accountId}/*`,
+            Resource: `arn:aws:s3:::${config.s3BucketName}/${config.s3KeyPrefix || ''}AWSLogs/${this.accountId}/*`,
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
-                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/${config.name}`,
+                'aws:SourceAccount': this.accountId,
               },
             },
+          },
+          {
+            Sid: 'AWSCloudTrailDeliveryRolePolicy',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: `arn:aws:s3:::${config.s3BucketName}`,
           },
         ],
       }),
