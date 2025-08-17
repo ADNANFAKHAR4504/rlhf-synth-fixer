@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr866",
+  "team": "synth",
+  "startedAt": "2025-08-15T14:30:00Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "RDS",
+    "Secrets Manager",
+    "CloudWatch",
+    "ACM",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route 53"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}
