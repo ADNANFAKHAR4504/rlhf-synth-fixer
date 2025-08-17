@@ -198,7 +198,7 @@ resource "random_password" "db_password" {
 
 # AWS Secrets Manager for database credentials
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret"
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret-new"
 
   tags = {
     Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret"
@@ -688,18 +688,18 @@ resource "aws_lb_target_group_attachment" "web" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group"
+  name       = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-new"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-new"
   }
 }
 
 # RDS Parameter Group
 resource "aws_db_parameter_group" "main" {
   family = "mysql8.0"
-  name   = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-params"
+  name   = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-params-new"
 
   parameter {
     name  = "character_set_server"
@@ -714,7 +714,7 @@ resource "aws_db_parameter_group" "main" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db"
+  identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-new"
 
   engine         = "mysql"
   engine_version = "8.0"
