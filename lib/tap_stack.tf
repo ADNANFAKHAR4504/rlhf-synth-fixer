@@ -632,7 +632,7 @@ resource "aws_db_instance" "postgres" {
   db_name                = "${each.key}db"
   username               = var.db_username
   password               = var.db_password
-  parameter_group_name   = "default.postgres13"
+  parameter_group_name   = "default.postgres15"
   db_subnet_group_name   = aws_db_subnet_group.main[each.key].name
   vpc_security_group_ids = [aws_security_group.rds[each.key].id]
   
