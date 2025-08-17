@@ -208,8 +208,6 @@ export class TapStack extends TerraformStack {
       retentionInDays: 30,
       kmsKeyId: kmsKey.id,
       tags: commonTags,
-      // FIX: Explicitly depend on the KMS key to prevent a race condition.
-      dependsOn: [kmsKey],
     });
     const flowLogRole = new IamRole(this, 'FlowLogRole', {
       name: `flow-log-role-${uniqueSuffix}`,
@@ -250,6 +248,30 @@ export class TapStack extends TerraformStack {
       role: flowLogRole.name,
       policyArn: flowLogPolicy.arn,
     });
+
+    // ***FIX: Create and attach a policy to allow the FlowLogRole to use the KMS key***
+    const flowLogKmsPolicy = new IamPolicy(this, 'FlowLogKmsPolicy', {
+      name: `flow-log-kms-policy-${uniqueSuffix}`,
+      policy: new DataAwsIamPolicyDocument(this, 'FlowLogKmsPolicyDoc', {
+        statement: [
+          {
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: [kmsKey.arn],
+          },
+        ],
+      }).json,
+    });
+    new IamRolePolicyAttachment(this, 'FlowLogKmsPolicyAttachment', {
+      role: flowLogRole.name,
+      policyArn: flowLogKmsPolicy.arn,
+    });
+
     new FlowLog(this, 'VpcFlowLog', {
       iamRoleArn: flowLogRole.arn,
       logDestination: flowLogGroup.arn,
