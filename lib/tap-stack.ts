@@ -64,20 +64,7 @@ export class TapStack extends TerraformStack {
             Action: 'kms:*',
             Resource: '*',
           },
-          {
-            Sid: 'Allow CloudWatch Logs to use the key',
-            Effect: 'Allow',
-            Principal: { Service: `logs.${region}.amazonaws.com` },
-            Action: [
-              'kms:CreateGrant',
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            Resource: '*',
-          },
+          // REMOVED: Statement allowing CloudWatch logs to use the key is no longer needed.
         ],
       }),
       tags: commonTags,
@@ -206,7 +193,6 @@ export class TapStack extends TerraformStack {
     const flowLogGroup = new CloudwatchLogGroup(this, 'VpcFlowLogGroup', {
       name: `/aws/vpc-flow-logs/secure-vpc-${uniqueSuffix}`,
       retentionInDays: 30,
-      kmsKeyId: kmsKey.id,
       tags: commonTags,
     });
     const flowLogRole = new IamRole(this, 'FlowLogRole', {
@@ -249,28 +235,7 @@ export class TapStack extends TerraformStack {
       policyArn: flowLogPolicy.arn,
     });
 
-    // ***FIX: Create and attach a policy to allow the FlowLogRole to use the KMS key***
-    const flowLogKmsPolicy = new IamPolicy(this, 'FlowLogKmsPolicy', {
-      name: `flow-log-kms-policy-${uniqueSuffix}`,
-      policy: new DataAwsIamPolicyDocument(this, 'FlowLogKmsPolicyDoc', {
-        statement: [
-          {
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: [kmsKey.arn],
-          },
-        ],
-      }).json,
-    });
-    new IamRolePolicyAttachment(this, 'FlowLogKmsPolicyAttachment', {
-      role: flowLogRole.name,
-      policyArn: flowLogKmsPolicy.arn,
-    });
+    // REMOVED: The IAM policy that gave the FlowLogRole KMS permissions.
 
     new FlowLog(this, 'VpcFlowLog', {
       iamRoleArn: flowLogRole.arn,
