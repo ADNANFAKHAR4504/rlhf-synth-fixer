@@ -4,7 +4,7 @@
 variable "aws_region" {
   description = "AWS region for all resources"
   type        = string
-  default     = "ca-central-1"
+  default     = "us-west-2"
 }
 
 variable "environment" {
@@ -111,6 +111,12 @@ variable "s3_logs_retention_days" {
   description = "S3 logs bucket retention in days"
   type        = number
   default     = 1825
+}
+
+variable "enable_api_stage_logging" {
+  description = "Enable API Gateway stage access logging"
+  type        = bool
+  default     = false
 }
 
 ########################
@@ -734,20 +740,23 @@ resource "aws_api_gateway_stage" "main" {
   deployment_id = aws_api_gateway_deployment.main.id
   rest_api_id   = aws_api_gateway_rest_api.main.id
   stage_name    = var.environment
-  access_log_settings {
-    destination_arn = aws_cloudwatch_log_group.api_gateway.arn
-    format = jsonencode({
-      requestId      = "$context.requestId",
-      ip             = "$context.identity.sourceIp",
-      caller         = "$context.identity.caller",
-      user           = "$context.identity.user",
-      requestTime    = "$context.requestTime",
-      httpMethod     = "$context.httpMethod",
-      resourcePath   = "$context.resourcePath",
-      status         = "$context.status",
-      protocol       = "$context.protocol",
-      responseLength = "$context.responseLength"
-    })
+  dynamic "access_log_settings" {
+    for_each = var.enable_api_stage_logging ? [1] : []
+    content {
+      destination_arn = aws_cloudwatch_log_group.api_gateway.arn
+      format = jsonencode({
+        requestId      = "$context.requestId",
+        ip             = "$context.identity.sourceIp",
+        caller         = "$context.identity.caller",
+        user           = "$context.identity.user",
+        requestTime    = "$context.requestTime",
+        httpMethod     = "$context.httpMethod",
+        resourcePath   = "$context.resourcePath",
+        status         = "$context.status",
+        protocol       = "$context.protocol",
+        responseLength = "$context.responseLength"
+      })
+    }
   }
   tags = local.common_tags
 }
