@@ -184,7 +184,7 @@ class TestTapStack(unittest.TestCase):
 
     # Check that all stack resources have required properties
     resources = template.to_json()["Resources"]
-    for resource_key, resource_value in resources.items():
+    for resource_value in resources.items():
       if resource_value.get("Type") == "AWS::CloudFormation::Stack":
         # Should have TemplateURL
         self.assertIn("TemplateURL", resource_value["Properties"])

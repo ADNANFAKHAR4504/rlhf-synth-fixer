@@ -7,6 +7,7 @@ is isolated with separate VPCs and includes S3 buckets, load balancers,
 and RDS instances with proper security configurations.
 """
 
+import hashlib
 from typing import Optional
 
 import aws_cdk as cdk
@@ -72,14 +73,22 @@ class StorageStack(NestedStack):
     super().__init__(scope, construct_id, **kwargs)
 
     # Create S3 bucket with versioning and encryption
+    # Use account ID to ensure global uniqueness while being deterministic
+    account_id = cdk.Aws.ACCOUNT_ID
+    region = cdk.Aws.REGION
+    # Create a short hash for uniqueness
+    unique_hash = hashlib.md5(
+        f"{account_id}-{region}-{props.environment_name}-{props.environment_suffix}".encode()).hexdigest()[:8]
     self.bucket = s3.Bucket(
         self,
         f"Bucket{props.environment_suffix}",
-        bucket_name=f"app-{props.environment_name.lower()}-{props.environment_suffix}".lower(),
+        bucket_name=f"app-{props.environment_name.lower()}-{props.environment_suffix}-{unique_hash}".lower(),
         versioned=True,
         encryption=s3.BucketEncryption.S3_MANAGED,
         removal_policy=(RemovalPolicy.RETAIN if props.environment_name == "Production"
-                        else RemovalPolicy.DESTROY)
+                        else RemovalPolicy.DESTROY),
+        auto_delete_objects=(
+            False if props.environment_name == "Production" else True)
     )
 
 
@@ -153,6 +162,7 @@ class LoadBalancerStack(NestedStack):
         f"TargetGroup{props.environment_suffix}",
         port=80,
         vpc=props.vpc,
+        target_type=elbv2.TargetType.INSTANCE,
         health_check=elbv2.HealthCheck(
             path="/health",
             interval=Duration.seconds(30),
@@ -198,9 +208,16 @@ class DatabaseStack(NestedStack):
         instance_type=ec2.InstanceType.of(
             ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
         vpc=props.vpc,
+        vpc_subnets=ec2.SubnetSelection(
+            subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+        ),
         credentials=rds.Credentials.from_generated_secret("admin"),
-        backup_retention=Duration.days(7),
-        delete_automated_backups=False,
+        backup_retention=Duration.days(
+            1 if props.environment_name != "Production" else 7),
+        delete_automated_backups=(
+            True if props.environment_name != "Production" else False),
+        deletion_protection=(
+            True if props.environment_name == "Production" else False),
         removal_policy=(RemovalPolicy.RETAIN if props.environment_name == "Production"
                         else RemovalPolicy.DESTROY)
     )
@@ -255,6 +272,7 @@ class MultiEnvironmentInfrastructureStack(cdk.Stack):
       lb_stack = LoadBalancerStack(
           self, f"LoadBalancer{env_name}{env_suffix}", props=lb_props
       )
+      lb_stack.add_dependency(network_stack)
 
       # Create database stack
       db_props = DatabaseStackProps(
