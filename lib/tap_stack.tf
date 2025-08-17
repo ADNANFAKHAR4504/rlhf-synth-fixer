@@ -28,9 +28,9 @@ variable "bucket_tags" {
   }
 }
 
-#########################
+########################
 # S3 Bucket
-#########################
+########################
 resource "aws_s3_bucket" "this" {
   bucket = "${var.bucket_name}-${random_id.bucket_suffix.hex}"
   tags   = var.bucket_tags
@@ -55,10 +55,10 @@ resource "aws_s3_bucket_versioning" "this" {
 #########################
 # Outputs
 #########################
-output "bucket_name" {
-  value = aws_s3_bucket.this.bucket
-}
+# output "bucket_name" {
+#   value = aws_s3_bucket.this.bucket
+# }
 
-output "bucket_tags" {
-  value = aws_s3_bucket.this.tags
-}
+# output "bucket_tags" {
+#   value = aws_s3_bucket.this.tags
+# }

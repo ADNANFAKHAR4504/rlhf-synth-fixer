@@ -41,30 +41,34 @@ data "aws_ami" "amazon_linux" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+
 resource "aws_kms_key" "s3_encryption" {
   description             = "KMS key for S3 bucket encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
   policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
-        Sid    = "Enable IAM Admin Access"
-        Effect = "Allow"
+        Sid       = "EnableRootAccountFullAccess"
+        Effect    = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
-        Action   = "kms:*"
+        Action   = [
+          "kms:*",
+          "kms:PutKeyPolicy"
+        ]
         Resource = "*"
       },
       {
-        Sid    = "Allow S3 Usage"
-        Effect = "Allow"
+        Sid       = "AllowS3Usage"
+        Effect    = "Allow"
         Principal = {
           Service = "s3.amazonaws.com"
         }
-        Action = [
+        Action   = [
           "kms:Encrypt",
           "kms:Decrypt",
           "kms:ReEncrypt*",
@@ -80,6 +84,7 @@ resource "aws_kms_key" "s3_encryption" {
     Name = "${var.project_name}-s3-encryption-key"
   }
 }
+
 
 
 resource "aws_kms_alias" "s3_encryption" {
@@ -459,7 +464,8 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                = "${var.project_name}-${random_id.web.hex}"
+  # name              = "${var.project_name}-${random_id.web.hex}"
+  name                = "${var.project_name}-${random_id.web_suffix.hex}"
   vpc_zone_identifier = aws_subnet.public[*].id
   target_group_arns   = [aws_lb_target_group.web.arn]
   health_check_type   = "ELB"
@@ -474,7 +480,8 @@ resource "aws_autoscaling_group" "web" {
 
   tag {
     key                 = "Name"
-    value               = "${var.project_name}-${random_id.web.hex}"
+   value = "${var.project_name}-${random_id.web_suffix.hex}"
+
     propagate_at_launch = false
   }
 }

@@ -12,16 +12,14 @@ terraform {
       version = ">= 3.6"
     }
   }
-  # backend "s3" {
-  #   bucket = "devs3-bucket"
-  #   key    = "prod.tfstate"
-  #   region = "us-west-2"
+  # backend "local" {
+  #   path = "terraform.tfstate"
   # }
  backend "s3" {
-    bucket         = "devs3-bucket"
+    bucket         = "devs3-bucket-291749-nova"
     key            = "terraform.tfstate"
     region         = "us-west-2"  # <-- Correct region
-   // dynamodb_table = "terraform-lock"  # Optional for state locking
+   dynamodb_table = "terraform-lock"  # Optional for state locking
     encrypt        = true
   }
 }
