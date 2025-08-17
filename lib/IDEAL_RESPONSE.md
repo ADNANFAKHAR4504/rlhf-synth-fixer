@@ -150,7 +150,7 @@ variable "db_password" {
 variable "enable_deletion_protection" {
   description = "Enable deletion protection for RDS instance"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_multi_az_nat" {
@@ -483,7 +483,7 @@ resource "aws_instance" "web" {
   iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
   associate_public_ip_address = true
 
-  user_data = base64encode(<<-EOF
+  user_data_base64 = base64encode(<<-EOF
 #!/bin/bash
 # User data script for EC2 instances
 # This script is used to bootstrap EC2 instances with required software and configuration
