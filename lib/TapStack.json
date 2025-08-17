@@ -57,7 +57,8 @@
         },
         "CertificateArn": {
             "Type": "String",
-            "Description": "ACM certificate ARN for HTTPS listener"
+            "Default": "",
+            "Description": "ACM certificate ARN for HTTPS listener (optional - leave empty for HTTP only)"
         }
     },
     "Mappings": {
@@ -112,6 +113,18 @@
                 },
                 {
                     "Condition": "CreatePublicSubnets"
+                }
+            ]
+        },
+        "HasCertificate": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CertificateArn"
+                        },
+                        ""
+                    ]
                 }
             ]
         }
@@ -1010,6 +1023,7 @@
         },
         "ProdHTTPSListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasCertificate",
             "Properties": {
                 "LoadBalancerArn": {
                     "Ref": "ProdALB"
@@ -1043,12 +1057,23 @@
                 "Protocol": "HTTP",
                 "DefaultActions": [
                     {
-                        "Type": "redirect",
-                        "RedirectConfig": {
-                            "Protocol": "HTTPS",
-                            "Port": 443,
-                            "StatusCode": "HTTP_301"
-                        }
+                        "Fn::If": [
+                            "HasCertificate",
+                            {
+                                "Type": "redirect",
+                                "RedirectConfig": {
+                                    "Protocol": "HTTPS",
+                                    "Port": 443,
+                                    "StatusCode": "HTTP_301"
+                                }
+                            },
+                            {
+                                "Type": "forward",
+                                "TargetGroupArn": {
+                                    "Ref": "ProdTargetGroup"
+                                }
+                            }
+                        ]
                     }
                 ]
             }
