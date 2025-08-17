@@ -23,6 +23,14 @@ Parameters:
     Default: 't3.micro'
     AllowedValues: ['t3.micro', 't3.small', 't3.medium']
     Description: 'EC2 instance type'
+  CreateTrail:
+    Type: String
+    Default: "false"   # 👈 Default is now 'false'
+    AllowedValues: ["true", "false"]
+    Description: "Whether to create a new CloudTrail trail. Set to true only if you need to create one."
+
+Conditions:
+  ShouldCreateTrail: !Equals [!Ref CreateTrail, "true"]
 
 Mappings:
   # Environment-specific configurations for isolation
@@ -964,6 +972,7 @@ Resources:
   # CloudTrail for audit logging - Fixed with proper dependencies
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: ShouldCreateTrail
     DependsOn: LoggingBucketPolicy
     Properties:
       TrailName: !Sub '${ProjectName}-cloudtrail-${Environment}'
@@ -1112,6 +1121,7 @@ Outputs:
 
   CloudTrailName:
     Description: 'CloudTrail trail name'
+    Condition: ShouldCreateTrail
     Value: !Ref CloudTrail
     Export:
       Name: !Sub '${ProjectName}-cloudtrail-name-${Environment}'
