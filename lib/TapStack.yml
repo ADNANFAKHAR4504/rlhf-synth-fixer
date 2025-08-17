@@ -51,8 +51,7 @@ Parameters:
     Default: dev
     Description: Optional pipeline suffix (not used by resources).
 
-  # Use a secondary CIDR from the same RFC1918 block as many default VPCs (172.16/12).
-  # Adjust if your org enforces a different policy.
+  # Use a secondary CIDR from the same RFC1918 block (172.16/12) to avoid org restrictions.
   SecondaryVpcCidr:
     Type: String
     Default: 172.20.0.0/16
@@ -146,3 +145,6 @@ Outputs:
   BucketName:
     Description: Name of the S3 bucket with SSE enabled.
     Value: !Ref AppBucket
+  EnvironmentSuffixEcho:
+    Description: Echo of the pipeline-provided EnvironmentSuffix parameter.
+    Value: !Ref EnvironmentSuffix
