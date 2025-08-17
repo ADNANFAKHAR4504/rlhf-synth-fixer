@@ -20,6 +20,8 @@ export class SecurityConstruct extends Construct {
     // For each region, create KMS key, IAM roles with least privilege, security groups
     Object.keys(props.vpc.vpcs).forEach(region => {
       // KMS Key
+      const accountId =
+        process.env.CDKTF_DEFAULT_ACCOUNT || 'YOUR_AWS_ACCOUNT_ID';
       const kmsKeyInstance = new KmsKey(this, `${props.prefix}-kms-${region}`, {
         provider: props.vpc.providers[region],
         description: `KMS key for ${props.prefix} ${region} encryption`,
@@ -30,7 +32,7 @@ export class SecurityConstruct extends Construct {
             {
               Sid: 'Enable IAM User Permissions',
               Effect: 'Allow',
-              Principal: { AWS: 'arn:aws:iam::*:root' },
+              Principal: { AWS: `arn:aws:iam::${accountId}:root` },
               Action: 'kms:*',
               Resource: '*',
             },
@@ -43,12 +45,13 @@ export class SecurityConstruct extends Construct {
       });
       this.kmsKeys[region] = kmsKeyInstance;
       // IAM Role (EC2)
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
       const ec2RoleInstance = new IamRole(
         this,
-        `${props.prefix}-ec2-role-${region}`,
+        `${props.prefix}-ec2-role-${region}-${randomSuffix}`,
         {
           provider: props.vpc.vpcs[region].provider,
-          name: `${props.prefix}-ec2-role-${region}`,
+          name: `${props.prefix}-ec2-role-${region}-${randomSuffix}`,
           assumeRolePolicy: JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -60,7 +63,7 @@ export class SecurityConstruct extends Construct {
             ],
           }),
           tags: {
-            Name: `${props.prefix}-ec2-role-${region}`,
+            Name: `${props.prefix}-ec2-role-${region}-${randomSuffix}`,
             Environment: props.prefix,
           },
         }

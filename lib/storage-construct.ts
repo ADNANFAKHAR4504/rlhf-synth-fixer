@@ -16,14 +16,19 @@ export class StorageConstruct extends Construct {
     // For each region, create S3 bucket with KMS encryption and logging
     Object.keys(props.security.kmsKeys).forEach(region => {
       const kmsKey = props.security.kmsKeys[region];
-      const bucket = new S3Bucket(this, `${props.prefix}-s3-bucket-${region}`, {
-        provider: kmsKey.provider,
-        bucket: `${props.prefix}-bucket-${region}`,
-        tags: {
-          Name: `${props.prefix}-s3-bucket-${region}`,
-          Environment: props.prefix,
-        },
-      });
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const bucket = new S3Bucket(
+        this,
+        `${props.prefix}-s3-bucket-${region}-${randomSuffix}`,
+        {
+          provider: kmsKey.provider,
+          bucket: `${props.prefix}-bucket-${region}-${randomSuffix}`,
+          tags: {
+            Name: `${props.prefix}-s3-bucket-${region}-${randomSuffix}`,
+            Environment: props.prefix,
+          },
+        }
+      );
       new S3BucketServerSideEncryptionConfigurationA(
         this,
         `${props.prefix}-s3-bucket-encryption-${region}`,

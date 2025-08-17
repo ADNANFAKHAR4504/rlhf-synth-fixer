@@ -51,6 +51,8 @@ export class VpcConstruct extends Construct {
       this.vpcs[region] = vpcInstance;
       // All resources imported at top-level
       // Public Subnets
+      // Only valid AZs for us-west-1 are a and c
+      const validAzs = region === 'us-west-1' ? ['a', 'c'] : ['a', 'b'];
       const publicSubnet1 = new Subnet(
         this,
         `${props.prefix}-public-subnet-1-${region}`,
@@ -58,7 +60,7 @@ export class VpcConstruct extends Construct {
           provider: providerInstance,
           vpcId: vpcInstance.id,
           cidrBlock: idx === 0 ? '10.0.1.0/24' : '10.1.1.0/24',
-          availabilityZone: `${region}a`,
+          availabilityZone: `${region}${validAzs[0]}`,
           mapPublicIpOnLaunch: true,
           tags: {
             Name: `${props.prefix}-public-subnet-1-${region}`,
@@ -73,7 +75,7 @@ export class VpcConstruct extends Construct {
           provider: providerInstance,
           vpcId: vpcInstance.id,
           cidrBlock: idx === 0 ? '10.0.2.0/24' : '10.1.2.0/24',
-          availabilityZone: `${region}b`,
+          availabilityZone: `${region}${validAzs[1]}`,
           mapPublicIpOnLaunch: true,
           tags: {
             Name: `${props.prefix}-public-subnet-2-${region}`,
@@ -90,7 +92,7 @@ export class VpcConstruct extends Construct {
           provider: providerInstance,
           vpcId: vpcInstance.id,
           cidrBlock: idx === 0 ? '10.0.3.0/24' : '10.1.3.0/24',
-          availabilityZone: `${region}a`,
+          availabilityZone: `${region}${validAzs[0]}`,
           tags: {
             Name: `${props.prefix}-private-subnet-1-${region}`,
             Environment: props.prefix,
@@ -104,7 +106,7 @@ export class VpcConstruct extends Construct {
           provider: providerInstance,
           vpcId: vpcInstance.id,
           cidrBlock: idx === 0 ? '10.0.4.0/24' : '10.1.4.0/24',
-          availabilityZone: `${region}b`,
+          availabilityZone: `${region}${validAzs[1]}`,
           tags: {
             Name: `${props.prefix}-private-subnet-2-${region}`,
             Environment: props.prefix,
