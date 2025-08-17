@@ -25,13 +25,13 @@ Metadata:
 
 Parameters:
   VpcId:
-    Type: AWS::EC2::VPC::Id
+    Type: String
     Description: 'Use existing VPC ID if available, otherwise leave blank to create a new VPC'
   PublicSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
+    Type: CommaDelimitedList
     Description: 'List of existing public subnets, optional'
   PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
+    Type: CommaDelimitedList
     Description: 'List of existing private subnets, optional'
   CertificateArn:
     Type: String
