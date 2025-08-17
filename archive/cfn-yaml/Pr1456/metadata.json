@@ -22,5 +22,11 @@
     "SecretsManager",
     "CloudWatchLogs",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
