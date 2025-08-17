@@ -70,6 +70,10 @@ provider "aws" {
   region = "eu-west-1"
 }
 
+# Caller/account and partition (for constructing service-linked role ARN)
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
 ############################################
 # Locals
 ############################################
@@ -81,8 +85,14 @@ locals {
   }
 }
 
+locals {
+  # Pre-existing AWS Config service-linked role ARN
+  config_slr_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
+}
+
 # Ensure the AWS Config service-linked role exists and use it for the recorder
 resource "aws_iam_service_linked_role" "config" {
+  count            = 0
   aws_service_name = "config.amazonaws.com"
 }
 
@@ -428,7 +438,7 @@ resource "aws_iam_role_policy_attachment" "config_role_attach" {
 resource "aws_config_configuration_recorder" "rec_us_east_1" {
   provider = aws.us_east_1
   name     = "${local.name_prefix}-recorder"
-  role_arn = aws_iam_service_linked_role.config.arn
+  role_arn = local.config_slr_arn
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
@@ -465,7 +475,7 @@ resource "aws_config_configuration_recorder" "rec_eu_west_1" {
   count    = var.enable_config_eu_west_1 ? 1 : 0
   provider = aws.eu_west_1
   name     = "${local.name_prefix}-recorder"
-  role_arn = aws_iam_service_linked_role.config.arn
+  role_arn = local.config_slr_arn
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
