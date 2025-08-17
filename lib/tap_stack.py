@@ -227,41 +227,50 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(provider=self.source_provider, parent=self)
         )
         
-        # Create custom replication policy
-        replication_policy_document = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObjectVersionForReplication",
-                        "s3:GetObjectVersionAcl",
-                        "s3:GetObjectVersionTagging"
-                    ],
-                    "Resource": f"{self.source_bucket.arn}/*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:ListBucket"
-                    ],
-                    "Resource": self.source_bucket.arn
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:ReplicateObject",
-                        "s3:ReplicateDelete",
-                        "s3:ReplicateTags"
-                    ],
-                    "Resource": f"{self.target_bucket.arn}/*"
-                }
-            ]
-        }
+        # Create custom replication policy using Output.all() to handle Pulumi Outputs
+        def create_replication_policy(source_bucket_arn, target_bucket_arn):
+            return {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObjectVersionForReplication",
+                            "s3:GetObjectVersionAcl",
+                            "s3:GetObjectVersionTagging"
+                        ],
+                        "Resource": f"{source_bucket_arn}/*"
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:ListBucket"
+                        ],
+                        "Resource": source_bucket_arn
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:ReplicateObject",
+                            "s3:ReplicateDelete",
+                            "s3:ReplicateTags"
+                        ],
+                        "Resource": f"{target_bucket_arn}/*"
+                    }
+                ]
+            }
+        
+        replication_policy_doc = Output.all(
+            source_bucket_arn=self.source_bucket.arn,
+            target_bucket_arn=self.target_bucket.arn
+        ).apply(lambda args: json.dumps(create_replication_policy(
+            args["source_bucket_arn"], 
+            args["target_bucket_arn"]
+        )))
         
         replication_policy = aws.iam.Policy(
             f"replication-policy-{self.env_suffix}",
-            policy=json.dumps(replication_policy_document),
+            policy=replication_policy_doc,
             opts=ResourceOptions(provider=self.source_provider, parent=self)
         )
         
@@ -290,7 +299,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(
                 provider=self.source_provider,
                 parent=self,
-                depends_on=[self.source_bucket, self.target_bucket, self.replication_role]
+                depends_on=[self.source_bucket, self.target_bucket, self.replication_role, replication_policy]
             )
         )
     
@@ -523,50 +532,61 @@ class TapStack(pulumi.ComponentResource):
     def _setup_monitoring(self):
         """Setup CloudWatch monitoring for all infrastructure components"""
         # CloudWatch Dashboard
-        dashboard_body = {
-            "widgets": [
-                {
-                    "type": "metric",
-                    "x": 0,
-                    "y": 0,
-                    "width": 12,
-                    "height": 6,
-                    "properties": {
-                        "metrics": [
-                            ["AWS/EC2", "CPUUtilization", "InstanceId", self.ec2_instances[0].id],
-                            ["...", self.ec2_instances[1].id]
-                        ],
-                        "period": 300,
-                        "stat": "Average",
-                        "region": self.target_region,
-                        "title": "EC2 CPU Utilization"
+        def create_dashboard_body(ec2_instance_1_id, ec2_instance_2_id, rds_instance_id):
+            return {
+                "widgets": [
+                    {
+                        "type": "metric",
+                        "x": 0,
+                        "y": 0,
+                        "width": 12,
+                        "height": 6,
+                        "properties": {
+                            "metrics": [
+                                ["AWS/EC2", "CPUUtilization", "InstanceId", ec2_instance_1_id],
+                                ["...", ec2_instance_2_id]
+                            ],
+                            "period": 300,
+                            "stat": "Average",
+                            "region": self.target_region,
+                            "title": "EC2 CPU Utilization"
+                        }
+                    },
+                    {
+                        "type": "metric",
+                        "x": 0,
+                        "y": 6,
+                        "width": 12,
+                        "height": 6,
+                        "properties": {
+                            "metrics": [
+                                ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", rds_instance_id],
+                                [".", "DatabaseConnections", ".", "."],
+                                [".", "FreeableMemory", ".", "."]
+                            ],
+                            "period": 300,
+                            "stat": "Average",
+                            "region": self.target_region,
+                            "title": "RDS Metrics"
+                        }
                     }
-                },
-                {
-                    "type": "metric",
-                    "x": 0,
-                    "y": 6,
-                    "width": 12,
-                    "height": 6,
-                    "properties": {
-                        "metrics": [
-                            ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", self.rds_instance.id],
-                            [".", "DatabaseConnections", ".", "."],
-                            [".", "FreeableMemory", ".", "."]
-                        ],
-                        "period": 300,
-                        "stat": "Average",
-                        "region": self.target_region,
-                        "title": "RDS Metrics"
-                    }
-                }
-            ]
-        }
+                ]
+            }
+        
+        dashboard_body = Output.all(
+            ec2_instance_1_id=self.ec2_instances[0].id,
+            ec2_instance_2_id=self.ec2_instances[1].id,
+            rds_instance_id=self.rds_instance.id
+        ).apply(lambda args: json.dumps(create_dashboard_body(
+            args["ec2_instance_1_id"],
+            args["ec2_instance_2_id"], 
+            args["rds_instance_id"]
+        )))
         
         self.cloudwatch_dashboard = aws.cloudwatch.Dashboard(
             f"tap-dashboard-{self.env_suffix}",
             dashboard_name=f"TAP-Migration-Dashboard-{self.env_suffix}",
-            dashboard_body=Output.from_input(dashboard_body).apply(lambda x: json.dumps(x)),
+            dashboard_body=dashboard_body,
             opts=ResourceOptions(provider=self.target_provider, parent=self)
         )
         
