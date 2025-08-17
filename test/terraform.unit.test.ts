@@ -14,6 +14,35 @@ const VARS_PATH = process.env.TF_VARS_PATH
   ? path.resolve(process.env.TF_VARS_PATH)
   : path.resolve(__dirname, "../lib/vars.tf");
 
+// Helper function to extract locals block content properly handling nested braces
+function extractLocalsBlock(hcl: string): string | null {
+  const localsMatch = hcl.match(/locals\s*{/);
+  if (!localsMatch) return null;
+  
+  const localsStart = localsMatch.index!;
+  const openBraceIndex = hcl.indexOf('{', localsStart);
+  if (openBraceIndex === -1) return null;
+  
+  let braceCount = 1;
+  let currentIndex = openBraceIndex + 1;
+  
+  while (currentIndex < hcl.length && braceCount > 0) {
+    const char = hcl[currentIndex];
+    if (char === '{') {
+      braceCount++;
+    } else if (char === '}') {
+      braceCount--;
+    }
+    currentIndex++;
+  }
+  
+  if (braceCount === 0) {
+    return hcl.substring(openBraceIndex + 1, currentIndex - 1);
+  }
+  
+  return null;
+}
+
 describe("Terraform Multi-Environment Infrastructure (static checks)", () => {
   let hcl: string;
   let varsHcl: string;
@@ -52,9 +81,8 @@ describe("Terraform Multi-Environment Infrastructure (static checks)", () => {
   });
 
   test("defines subnet CIDR calculations in locals", () => {
-    const localsBlock = hcl.match(
-      new RegExp(String.raw`locals\s*{([\s\S]*?)}`, "m")
-    )?.[1];
+    // Use the helper function to properly extract the entire locals block
+    const localsBlock = extractLocalsBlock(hcl);
 
     expect(localsBlock).toBeTruthy();
     
@@ -289,13 +317,16 @@ describe("Terraform Multi-Environment Infrastructure (static checks)", () => {
   });
 
   test("validates CIDR subnet calculations use correct parameters", () => {
-    const localsBlock = hcl.match(/locals\s*{([\s\S]*?)}/m)?.[1];
+    // Use the helper function to properly extract the entire locals block
+    const localsBlock = extractLocalsBlock(hcl);
+    
+    expect(localsBlock).toBeTruthy();
     
     // Verify public subnets start at index 0
-    expect(localsBlock).toMatch(/cidrsubnet\(var\.vpc_cidr,\s*8,\s*i\)/);
+    expect(localsBlock!).toMatch(/cidrsubnet\(var\.vpc_cidr,\s*8,\s*i\)/);
     
     // Verify private subnets start at index 10 (i + 10)
-    expect(localsBlock).toMatch(/cidrsubnet\(var\.vpc_cidr,\s*8,\s*i\s*\+\s*10\)/);
+    expect(localsBlock!).toMatch(/cidrsubnet\(var\.vpc_cidr,\s*8,\s*i\s*\+\s*10\)/);
     
     // Verify both use /8 netmask
     const cidrsubnetMatches = localsBlock!.match(/cidrsubnet\([^,]+,\s*(\d+),/g) || [];
