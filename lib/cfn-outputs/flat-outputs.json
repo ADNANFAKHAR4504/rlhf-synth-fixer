@@ -1,0 +1,7 @@
+{
+  "autoscaling_group_name": "ecommerce-asg-synthtrainr879",
+  "kms_key_arn": "arn:aws:kms:us-west-2:718240086340:key/a4f97c42-e406-4973-9f2d-ff4fd9936198",
+  "load_balancer_dns_name": "ecommerce-alb-synthtrainr879-928633073.us-west-2.elb.amazonaws.com",
+  "rds_endpoint": "ecommerce-db-synthtrainr879.cvs862mo21uy.us-west-2.rds.amazonaws.com:3306",
+  "vpc_id": "vpc-09f7e9b8cf9f7816e"
+}
