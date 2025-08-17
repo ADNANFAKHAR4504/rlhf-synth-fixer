@@ -530,12 +530,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have all required parameters for deployment', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2); // EnvironmentSuffix, Environment
+      expect(parameterCount).toBe(5); // EnvironmentSuffix, Environment, DeploymentRegion, CrossRegionEndpoint, EnableCrossRegionReplication
     });
 
     test('should have comprehensive outputs for serverless architecture', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBeGreaterThan(8); // Multiple outputs for API, Lambda functions, etc.
+      expect(outputCount).toBeGreaterThan(12); // Multiple outputs for API, Lambda functions, multi-region, compliance, etc.
     });
 
     test('should have proper resource dependencies', () => {
