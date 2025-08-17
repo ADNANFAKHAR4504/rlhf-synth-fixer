@@ -78,7 +78,7 @@ class TapStack(pulumi.ComponentResource):
         self.bucket_policies = {}
         self.logging_bucket = None
         
-        # Create centralized logging bucket - FIXED: Removed ACL, added object_ownership
+        # Create centralized logging bucket
         if self.enable_logging:
             self.logging_bucket = s3.Bucket(
                 f'logging-bucket-{self.environment_suffix}',
@@ -96,7 +96,6 @@ class TapStack(pulumi.ComponentResource):
                     id='log-retention',
                     expiration=s3.BucketLifecycleRuleExpirationArgs(days=90)
                 )],
-                object_ownership='BucketOwnerEnforced',  # FIXED: Use BucketOwnerEnforced instead of ACL
                 tags={
                     'Environment': self.environment_suffix,
                     'Purpose': 'AccessLogging',
@@ -105,7 +104,7 @@ class TapStack(pulumi.ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
         
-        # Create static website buckets in each region - FIXED: Removed ACL, added object_ownership
+        # Create static website buckets in each region
         for region in self.regions:
             bucket = s3.Bucket(
                 f'static-web-{region}-{self.environment_suffix}',
@@ -122,7 +121,6 @@ class TapStack(pulumi.ComponentResource):
                     index_document='index.html',
                     error_document='error.html'
                 ),
-                object_ownership='BucketOwnerEnforced',  # FIXED: Use BucketOwnerEnforced instead of ACL
                 tags={
                     'Environment': self.environment_suffix,
                     'Region': region,
@@ -185,7 +183,7 @@ class TapStack(pulumi.ComponentResource):
                 statistic='Sum',
                 threshold=1000,
                 alarm_description=f'High S3 request count for {region}',
-                alarm_actions=[],  # Add SNS topic ARN if needed
+                alarm_actions=[],
                 dimensions={
                     'BucketName': self.buckets[region].id,
                     'StorageType': 'AllStorageTypes'
