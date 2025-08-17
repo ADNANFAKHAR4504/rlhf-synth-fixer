@@ -64,4 +64,15 @@ module "ec2_module" {
 output "lb_domain" {
     value = module.ec2_module.load_balancer_dns_name
 }
-  
+
+output "target_group_arn" {
+    value = module.ec2_module.target_group_arn
+}
+
+output "vpc_id" {
+    value = module.vpc.vpc_id
+}
+
+output "instance_profile_name" {
+    value = module.iam_module.ec2_instance_profile_name
+}
