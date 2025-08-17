@@ -1,6 +1,6 @@
 import AWS from 'aws-sdk';
 import fs from 'fs';
-
+// Load CloudFormation outputs
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
