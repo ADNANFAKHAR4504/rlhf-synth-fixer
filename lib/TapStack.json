@@ -1144,7 +1144,35 @@
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+          "arn:aws:iam::aws:policy/service-role/ConfigRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ConfigPermissions",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "config:Put*",
+                    "config:Get*",
+                    "config:List*",
+                    "config:Describe*",
+                    "config:Delete*",
+                    "s3:GetBucketAcl",
+                    "s3:PutObject",
+                    "s3:PutObjectAcl",
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:DeleteObject",
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
         ],
         "Tags": [
           {
