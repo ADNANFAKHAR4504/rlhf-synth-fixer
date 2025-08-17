@@ -1,3 +1,5 @@
+
+Below were the modle failures in the intitial prompt which have been fixed now
 1. Duplicate Resource Errors
 a. ELBv2 Load Balancer "production-alb" already exists
 Fix:
