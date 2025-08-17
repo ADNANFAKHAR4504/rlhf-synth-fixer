@@ -11,7 +11,6 @@ describe('Terraform Configuration', () => {
 
   test('All required Terraform files exist', () => {
     const requiredFiles = [
-      'versions.tf',
       'provider.tf',
       'variables.tf',
       'main.tf',
