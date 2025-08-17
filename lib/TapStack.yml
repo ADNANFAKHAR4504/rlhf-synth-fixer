@@ -644,10 +644,6 @@ Resources:
             Headers: ['*']
         Enabled: true
         Comment: !Sub '${ProjectName}-${Environment} CloudFront Distribution'
-        Logging:
-          Bucket: !GetAtt CloudFrontLogsBucket.DomainName
-          Prefix: cloudfront-logs/
-          IncludeCookies: false
         PriceClass: PriceClass_100
       Tags:
         - Key: Name
