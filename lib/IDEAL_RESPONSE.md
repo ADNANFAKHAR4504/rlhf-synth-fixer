@@ -130,7 +130,7 @@ Resources:
           - Sid: Allow CloudWatch Logs Encryption
             Effect: Allow
             Principal:
-              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+              Service: logs.amazonaws.com
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -180,7 +180,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource:
-                  - !Sub '${CorpS3Bucket}/*'
+                  - !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -190,7 +190,7 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub '${CorpCloudWatchLogGroup}:*'
+                Resource: !GetAtt CorpCloudWatchLogGroup.Arn
       Tags:
         - Key: Name
           Value: !Sub 'corp-ec2-role-${Environment}'
@@ -233,7 +233,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub '${CorpS3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
       Tags:
         - Key: Name
           Value: !Sub 'corp-lambda-execution-role-${Environment}'
@@ -296,6 +296,30 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # S3 Bucket Policy for CloudTrail
+  CorpS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CorpS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
   # CloudWatch Log Group with Encryption
   CorpCloudWatchLogGroup:
     Type: AWS::Logs::LogGroup
@@ -343,6 +367,7 @@ Resources:
   # CloudTrail for Audit Logging
   CorpCloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: CorpS3BucketPolicy
     Properties:
       TrailName: !Sub 'corp-cloudtrail-${EnvironmentSuffix}'
       S3BucketName: !Ref CorpS3Bucket
@@ -360,7 +385,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${CorpS3Bucket}/*'
+                - !Sub 'arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
       Tags:
         - Key: Name
           Value: !Sub 'corp-cloudtrail-${Environment}'
@@ -389,28 +414,36 @@ Resources:
                 Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub '${CorpCloudWatchLogGroup}:*'
+                Resource: !GetAtt CorpCloudWatchLogGroup.Arn
       Tags:
         - Key: Name
           Value: !Sub 'corp-cloudtrail-role-${Environment}'
         - Key: Environment
           Value: !Ref Environment
 
+  # Config Service for Compliance Monitoring
+  CorpConfigServiceRole:
+    Type: AWS::IAM::ServiceLinkedRole
+    Properties:
+      AWSServiceName: config.amazonaws.com
+      Description: 'Service-linked role for AWS Config'
+
   # Config Configuration Recorder
   CorpConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub 'corp-config-recorder-${EnvironmentSuffix}'
+      Name: !Sub 'corp-config-recorder-${Environment}'
       RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
+    DependsOn: CorpConfigServiceRole
 
   # Config Delivery Channel
   CorpConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub 'corp-config-delivery-${EnvironmentSuffix}'
+      Name: !Sub 'corp-config-delivery-${Environment}'
       S3BucketName: !Ref CorpS3Bucket
       S3KeyPrefix: 'config-logs/'
       ConfigSnapshotDeliveryProperties:
@@ -487,12 +520,14 @@ Outputs:
 ## Key Security Features Implemented
 
 ### 1. IAM Roles and Policies (Least Privilege)
+
 - **EC2 Role**: Minimal permissions for S3 access, KMS decryption, and CloudWatch logging
 - **Lambda Role**: Basic execution permissions with KMS and S3 read access only
 - **CloudTrail Role**: Specific permissions for log delivery to CloudWatch
-- **All roles include region restrictions (us-east-1 only)**
+- **All roles include region restrictions (us-east-2 only)**
 
 ### 2. CIS AWS Foundations Compliance
+
 - **CloudTrail enabled** with multi-region support and log file validation
 - **S3 bucket public access blocked** on all buckets
 - **KMS key rotation enabled** automatically
@@ -501,24 +536,28 @@ Outputs:
 - **Versioning enabled** on S3 buckets
 
 ### 3. Encryption Implementation
+
 - **At Rest**: KMS encryption for S3, CloudWatch Logs, and CloudTrail
 - **In Transit**: Security groups restrict to HTTPS (443) only
 - **Key Management**: Dedicated KMS key with proper key policies
 
 ### 4. Additional Security Controls
+
 - **Security groups** with minimal required ports
 - **S3 access logging** and lifecycle policies
 - **CloudTrail data events** monitoring
 - **Resource tagging** for compliance tracking
 
 ### 5. Naming Conventions
+
 - All resources follow the **corp-** prefix requirement as specified
 - Environment suffixes properly applied for multi-environment deployments
 
 ### 6. Infrastructure Validation
+
 - **Comprehensive unit tests** covering all CloudFormation template components
 - **End-to-end integration tests** validating deployed AWS resources
 - **Security validation** ensuring CIS compliance and encryption standards
 - **Automated testing pipeline** for continuous quality assurance
 
-This template ensures data integrity, implements robust security controls, and maintains compliance with CIS benchmarks while being deployable in the us-east-1 region using existing VPC configurations. The solution has been thoroughly tested with both unit and integration tests to ensure reliability and security.
+This template ensures data integrity, implements robust security controls, and maintains compliance with CIS benchmarks while being deployable in the us-east-2 region using existing VPC configurations. The solution has been thoroughly tested with both unit and integration tests to ensure reliability and security.

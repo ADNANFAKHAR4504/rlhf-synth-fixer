@@ -761,6 +761,44 @@
                     }
                 ]
             }
+        },
+        "CorpConfigServiceRole": {
+            "Type": "AWS::IAM::ServiceLinkedRole",
+            "Properties": {
+                "AWSServiceName": "config.amazonaws.com",
+                "Description": "Service-linked role for AWS Config"
+            }
+        },
+        "CorpConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "corp-config-recorder-${Environment}"
+                },
+                "RoleARN": {
+                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            },
+            "DependsOn": "CorpConfigServiceRole"
+        },
+        "CorpConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "corp-config-delivery-${Environment}"
+                },
+                "S3BucketName": {
+                    "Ref": "CorpS3Bucket"
+                },
+                "S3KeyPrefix": "config-logs/",
+                "ConfigSnapshotDeliveryProperties": {
+                    "DeliveryFrequency": "Daily"
+                }
+            }
         }
     },
     "Outputs": {

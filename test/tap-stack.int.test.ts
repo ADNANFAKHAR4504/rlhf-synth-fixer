@@ -243,7 +243,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
   });
 
   describe('Compliance and Configuration', () => {
-    test.skip('AWS Config should be enabled and recording', async () => {
+    test('AWS Config should be enabled and recording', async () => {
       const recordersResponse = await configClient.send(
         new DescribeConfigurationRecordersCommand({})
       );
@@ -259,7 +259,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
     });
 
-    test.skip('AWS Config delivery channel should be configured', async () => {
+    test('AWS Config delivery channel should be configured', async () => {
       const response = await configClient.send(
         new DescribeDeliveryChannelsCommand({})
       );

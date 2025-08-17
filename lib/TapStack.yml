@@ -416,6 +416,33 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # Config Service for Compliance Monitoring
+  CorpConfigServiceRole:
+    Type: AWS::IAM::ServiceLinkedRole
+    Properties:
+      AWSServiceName: config.amazonaws.com
+      Description: 'Service-linked role for AWS Config'
+
+  # Config Configuration Recorder
+  CorpConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub 'corp-config-recorder-${Environment}'
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+    DependsOn: CorpConfigServiceRole
+
+  # Config Delivery Channel
+  CorpConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub 'corp-config-delivery-${Environment}'
+      S3BucketName: !Ref CorpS3Bucket
+      S3KeyPrefix: 'config-logs/'
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: Daily
 
 Outputs:
   KMSKeyId:

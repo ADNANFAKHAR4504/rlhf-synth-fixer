@@ -32,7 +32,11 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
-      const expectedParams = ['Environment', 'KMSKeyAlias', 'EnvironmentSuffix'];
+      const expectedParams = [
+        'Environment',
+        'KMSKeyAlias',
+        'EnvironmentSuffix',
+      ];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
@@ -79,12 +83,16 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have KMS key alias', () => {
       expect(template.Resources.CorpSecurityKMSKeyAlias).toBeDefined();
-      expect(template.Resources.CorpSecurityKMSKeyAlias.Type).toBe('AWS::KMS::Alias');
+      expect(template.Resources.CorpSecurityKMSKeyAlias.Type).toBe(
+        'AWS::KMS::Alias'
+      );
     });
 
     test('should have CloudTrail for audit logging', () => {
       expect(template.Resources.CorpCloudTrail).toBeDefined();
-      expect(template.Resources.CorpCloudTrail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(template.Resources.CorpCloudTrail.Type).toBe(
+        'AWS::CloudTrail::Trail'
+      );
     });
 
     test('CloudTrail should have proper security settings', () => {
@@ -92,7 +100,9 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       expect(cloudTrail.Properties.IsMultiRegionTrail).toBe(true);
       expect(cloudTrail.Properties.EnableLogFileValidation).toBe(true);
       expect(cloudTrail.Properties.IsLogging).toBe(true);
-      expect(cloudTrail.Properties.KMSKeyId).toEqual({ Ref: 'CorpSecurityKMSKey' });
+      expect(cloudTrail.Properties.KMSKeyId).toEqual({
+        Ref: 'CorpSecurityKMSKey',
+      });
     });
   });
 
@@ -118,7 +128,9 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have Lambda execution role', () => {
       expect(template.Resources.CorpLambdaExecutionRole).toBeDefined();
-      expect(template.Resources.CorpLambdaExecutionRole.Type).toBe('AWS::IAM::Role');
+      expect(template.Resources.CorpLambdaExecutionRole.Type).toBe(
+        'AWS::IAM::Role'
+      );
     });
 
     test('should have CloudTrail role', () => {
@@ -128,7 +140,9 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have EC2 instance profile', () => {
       expect(template.Resources.CorpEC2InstanceProfile).toBeDefined();
-      expect(template.Resources.CorpEC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
+      expect(template.Resources.CorpEC2InstanceProfile.Type).toBe(
+        'AWS::IAM::InstanceProfile'
+      );
     });
   });
 
@@ -141,13 +155,21 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
     test('S3 bucket should have KMS encryption', () => {
       const s3Bucket = template.Resources.CorpS3Bucket;
       const encryption = s3Bucket.Properties.BucketEncryption;
-      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({ Ref: 'CorpSecurityKMSKey' });
+      expect(
+        encryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm
+      ).toBe('aws:kms');
+      expect(
+        encryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.KMSMasterKeyID
+      ).toEqual({ Ref: 'CorpSecurityKMSKey' });
     });
 
     test('S3 bucket should have versioning enabled', () => {
       const s3Bucket = template.Resources.CorpS3Bucket;
-      expect(s3Bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      expect(s3Bucket.Properties.VersioningConfiguration.Status).toBe(
+        'Enabled'
+      );
     });
 
     test('S3 bucket should block public access', () => {
@@ -161,7 +183,9 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have access logs bucket', () => {
       expect(template.Resources.CorpS3AccessLogsBucket).toBeDefined();
-      expect(template.Resources.CorpS3AccessLogsBucket.Type).toBe('AWS::S3::Bucket');
+      expect(template.Resources.CorpS3AccessLogsBucket.Type).toBe(
+        'AWS::S3::Bucket'
+      );
     });
 
     test('access logs bucket should have lifecycle policy', () => {
@@ -169,18 +193,21 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
       const lifecycle = logsBucket.Properties.LifecycleConfiguration;
       expect(lifecycle.Rules[0].ExpirationInDays).toBe(90);
     });
-
   });
 
   describe('Monitoring Resources', () => {
     test('should have CloudWatch log group', () => {
       expect(template.Resources.CorpCloudWatchLogGroup).toBeDefined();
-      expect(template.Resources.CorpCloudWatchLogGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(template.Resources.CorpCloudWatchLogGroup.Type).toBe(
+        'AWS::Logs::LogGroup'
+      );
     });
 
     test('CloudWatch log group should be encrypted', () => {
       const logGroup = template.Resources.CorpCloudWatchLogGroup;
-      expect(logGroup.Properties.KmsKeyId).toEqual({ 'Fn::GetAtt': ['CorpSecurityKMSKey', 'Arn'] });
+      expect(logGroup.Properties.KmsKeyId).toEqual({
+        'Fn::GetAtt': ['CorpSecurityKMSKey', 'Arn'],
+      });
     });
 
     test('CloudWatch log group should have retention policy', () => {
@@ -209,7 +236,9 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have internet gateway', () => {
       expect(template.Resources.CorpInternetGateway).toBeDefined();
-      expect(template.Resources.CorpInternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+      expect(template.Resources.CorpInternetGateway.Type).toBe(
+        'AWS::EC2::InternetGateway'
+      );
     });
 
     test('should have route table and route', () => {
@@ -220,7 +249,9 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have security group', () => {
       expect(template.Resources.CorpSecurityGroup).toBeDefined();
-      expect(template.Resources.CorpSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.CorpSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('security group should have restricted ingress', () => {
@@ -243,14 +274,18 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
   describe('Compliance Resources', () => {
     test('should have CloudTrail for audit logging', () => {
       expect(template.Resources.CorpCloudTrail).toBeDefined();
-      expect(template.Resources.CorpCloudTrail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(template.Resources.CorpCloudTrail.Type).toBe(
+        'AWS::CloudTrail::Trail'
+      );
     });
 
     test('CloudTrail should have encryption and logging enabled', () => {
       const cloudTrail = template.Resources.CorpCloudTrail;
       expect(cloudTrail.Properties.IsLogging).toBe(true);
       expect(cloudTrail.Properties.EnableLogFileValidation).toBe(true);
-      expect(cloudTrail.Properties.KMSKeyId).toEqual({ Ref: 'CorpSecurityKMSKey' });
+      expect(cloudTrail.Properties.KMSKeyId).toEqual({
+        Ref: 'CorpSecurityKMSKey',
+      });
     });
   });
 
@@ -284,7 +319,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
         'StackName',
         'EnvironmentSuffix',
         'VPCId',
-        'PublicSubnetId'
+        'PublicSubnetId',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -294,22 +329,23 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('outputs should have proper export names', () => {
       const expectedExports = {
-        'KMSKeyId': 'KMSKey',
-        'KMSKeyArn': 'KMSKeyArn',
-        'S3BucketName': 'S3Bucket',
-        'EC2RoleArn': 'EC2Role',
-        'LambdaRoleArn': 'LambdaRole',
-        'SecurityGroupId': 'SecurityGroup',
-        'CloudWatchLogGroup': 'LogGroup',
-        'StackName': 'StackName',
-        'EnvironmentSuffix': 'EnvironmentSuffix',
-        'VPCId': 'VPC',
-        'PublicSubnetId': 'PublicSubnet'
+        KMSKeyId: 'KMSKey',
+        KMSKeyArn: 'KMSKeyArn',
+        S3BucketName: 'S3Bucket',
+        EC2RoleArn: 'EC2Role',
+        LambdaRoleArn: 'LambdaRole',
+        SecurityGroupId: 'SecurityGroup',
+        CloudWatchLogGroup: 'LogGroup',
+        StackName: 'StackName',
+        EnvironmentSuffix: 'EnvironmentSuffix',
+        VPCId: 'VPC',
+        PublicSubnetId: 'PublicSubnet',
       };
 
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
-        const expectedExportKey = expectedExports[outputKey as keyof typeof expectedExports];
+        const expectedExportKey =
+          expectedExports[outputKey as keyof typeof expectedExports];
         expect(output.Export.Name).toEqual({
           'Fn::Sub': `\${AWS::StackName}-${expectedExportKey}`,
         });
@@ -333,7 +369,7 @@ describe('Secure AWS Infrastructure CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(19);
+      expect(resourceCount).toBe(22);
     });
 
     test('should have correct number of parameters', () => {
