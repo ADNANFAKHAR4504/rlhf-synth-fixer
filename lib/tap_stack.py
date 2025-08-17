@@ -1068,10 +1068,12 @@ class TapStack(ComponentResource):
     
     def _create_fargate_service(self):
       """Create ECS Fargate service."""
-      # FIXED: Target Group for Fargate with unique suffix
+      import uuid
+      
+      # Target Group for Fargate
       self.fargate_target_group = aws.lb.TargetGroup(
           f"{self.name_prefix}-fargate-tg",
-          name=f"{self.name_prefix}-fargate-tg-{self.unique_suffix}",  # Add unique suffix
+          name=f"{self.name_prefix}-fargate-tg-{self.unique_suffix}",
           port=80,
           protocol="HTTP",
           vpc_id=self.vpc.id,
@@ -1111,10 +1113,13 @@ class TapStack(ComponentResource):
           opts=ResourceOptions(parent=self)
       )
       
-      # ECS Service
+      # ECS Service with more unique naming
+      additional_unique_id = uuid.uuid4().hex[:6]
+      unique_service_name = f"{self.name_prefix}-service-{self.unique_suffix}-{additional_unique_id}"
+      
       self.ecs_service = aws.ecs.Service(
           f"{self.name_prefix}-service",
-          name=f"{self.name_prefix}-service",
+          name=unique_service_name,  # Use the more unique name
           cluster=self.ecs_cluster.id,
           task_definition=self.task_definition.arn,
           desired_count=2,
@@ -1138,6 +1143,7 @@ class TapStack(ComponentResource):
               depends_on=[self.alb_listener]
           )
       )
+
 
     
     def _create_cloudwatch_alarms(self):
