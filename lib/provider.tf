@@ -19,7 +19,7 @@ terraform {
     bucket         = "devs3-bucket-291749-nova"
     key            = "terraform.tfstate"
     region         = "us-west-2"  # <-- Correct region
-   dynamodb_table = "terraform-lock"  # Optional for state locking
+    use_lockfile   = true           # Optional for state locking
     encrypt        = true
   }
 }
