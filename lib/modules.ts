@@ -665,7 +665,7 @@ export class CloudTrailModule extends Construct {
           dataResource: [
             {
               type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/*'],
+              values: [`arn:aws:s3:::${config.s3BucketName}/`],
             },
           ],
         },
