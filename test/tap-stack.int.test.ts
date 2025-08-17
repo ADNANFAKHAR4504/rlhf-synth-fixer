@@ -261,7 +261,16 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive In
     test(`${generateUniqueTestId('kms_key_validation')}: KMS key should be properly configured`, () => {
       expect(outputs.KMSKeyId).toBeDefined();
       if (!outputs.KMSKeyId.includes('mock')) {
-        expect(outputs.KMSKeyId).toMatch(/^arn:aws:kms:/);
+        // KMS key can be either a full ARN or just a key ID
+        const isArn = outputs.KMSKeyId.startsWith('arn:aws:kms:');
+        const isKeyId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(outputs.KMSKeyId);
+        expect(isArn || isKeyId).toBe(true);
+        
+        if (isArn) {
+          expect(outputs.KMSKeyId).toMatch(/^arn:aws:kms:/);
+        } else if (isKeyId) {
+          expect(outputs.KMSKeyId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+        }
       }
     });
   });
