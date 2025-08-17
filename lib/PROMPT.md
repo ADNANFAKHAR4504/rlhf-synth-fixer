@@ -1,27 +1,31 @@
-You are an expert Terraform engineer. Generate a brand-new, security-first, multi-region Terraform stack for the project “IaC - AWS Nova Model Breaking.”
+# AWS Multi-Region Infrastructure
 
-Deliver exactly two files:
+Need to build out a secure multi-region AWS setup for our IaC testing project. This should be a pretty comprehensive infrastructure that spans both us-east-1 and us-west-2.
 
-provider.tf — pins Terraform and AWS provider versions, sets up default and aliased providers (us-east-1, us-west-2), and configures secure S3/DynamoDB backend for remote state. No variables here.
+## What we need
 
-lib/tap_stack.tf — contains all logic: variables, locals, data sources, resources, and outputs. No external modules or providers declared here.
+Just need two terraform files really:
 
-Core requirements:
+**provider.tf** - Should lock down the terraform and AWS provider versions, set up the main provider plus an alias for us-west-2, and configure the S3/DynamoDB backend for state management. Keep it simple with no variables.
 
-Multi-region VPCs with private/public subnets, NAT, and flow logs.
+**lib/tap_stack.tf** - This is where everything else goes. All the variables, data sources, resources, outputs - everything in one file. Don't want to deal with modules for this one.
 
-Bastion host (restricted SSH) and encrypted autoscaling app instances behind ALBs.
+## Infrastructure Requirements
 
-RDS in private subnets with encryption, backups, and least privilege security groups.
+The infrastructure should span both regions with proper VPCs, subnets (public/private), NAT gateways, and VPC flow logs enabled.
 
-Encrypted S3 buckets with versioning and CloudFront over HTTPS.
+We'll need bastion hosts for SSH access (locked down properly) and auto-scaling groups for the application instances. Everything should be behind application load balancers.
 
-VPC peering between regions and Route53 failover across ALBs.
+For data storage, set up RDS instances in the private subnets with encryption enabled, automated backups, and proper security groups following least privilege.
 
-CloudTrail enabled and encrypted; CloudWatch monitoring and alarms.
+S3 buckets need encryption and versioning turned on. Also want CloudFront distributions serving content over HTTPS only.
 
-All IAM roles scoped with least privilege; consistent tagging applied.
+The two regions should be connected via VPC peering, and we'll use Route53 for DNS failover between the ALBs.
 
-Outputs include only safe values (VPC IDs, ALB DNS, RDS endpoints, etc.).
+Make sure CloudTrail is logging everything with encryption, and set up CloudWatch monitoring with some basic alarms.
 
-Return only the two files above, fully working Terraform HCL, nothing else.
+All the IAM roles should follow least privilege principles, and everything should be tagged consistently.
+
+For outputs, just include the safe stuff - VPC IDs, load balancer DNS names, RDS endpoints, that sort of thing. Nothing sensitive.
+
+That should cover everything we need for a solid multi-region setup.
