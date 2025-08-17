@@ -207,7 +207,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-secure-logs-${AWS::AccountId}"
+                    "Fn::Sub": "tapstack-secure-logs-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -246,7 +246,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-access-logs-${AWS::AccountId}"
+                    "Fn::Sub": "tapstack-access-logs-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -458,7 +458,7 @@
                 "Action": "lambda:InvokeFunction",
                 "Principal": "s3.amazonaws.com",
                 "SourceArn": {
-                    "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-secure-logs-${AWS::AccountId}"
+                    "Fn::Sub": "arn:aws:s3:::tapstack-secure-logs-${AWS::AccountId}"
                 }
             }
         },
@@ -534,7 +534,7 @@
                                         "s3:PutBucketNotification"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-secure-logs-${AWS::AccountId}"
+                                        "Fn::Sub": "arn:aws:s3:::tapstack-secure-logs-${AWS::AccountId}"
                                     }
                                 }
                             ]
