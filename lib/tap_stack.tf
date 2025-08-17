@@ -1217,7 +1217,7 @@ def handler(event, context):
         'body': json.dumps({
             'message': 'Hello from ${var.project_name} ${var.environment} Lambda - ${local.timestamp}!',
             'timestamp': '${local.timestamp}',
-            'environment': '${local.environment}',
+            'environment': '${vars.environment}',
             'event': event
         })
     }
