@@ -208,6 +208,8 @@ export class TapStack extends TerraformStack {
       retentionInDays: 30,
       kmsKeyId: kmsKey.id,
       tags: commonTags,
+      // FIX: Explicitly depend on the KMS key to prevent a race condition.
+      dependsOn: [kmsKey],
     });
     const flowLogRole = new IamRole(this, 'FlowLogRole', {
       name: `flow-log-role-${uniqueSuffix}`,
