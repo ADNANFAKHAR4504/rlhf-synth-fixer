@@ -7,16 +7,17 @@ following enterprise-grade security protocols, high availability configurations,
 and automated backup strategies.
 """
 
+import base64
 import json
 import os
-import re
 import random
+import re
 import string
-import base64
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import ComponentResource, ResourceOptions, Output
+from pulumi import ComponentResource, Output, ResourceOptions
 
 
 class TapStackArgs:
@@ -665,47 +666,48 @@ class TapStack(ComponentResource):
         )
     
     def _create_rds_instance(self):
-        """Create RDS instance with Multi-AZ deployment."""
-        # DB Subnet Group
-        self.db_subnet_group = aws.rds.SubnetGroup(
-            f"{self.name_prefix}-db-subnet-group",
-            subnet_ids=[subnet.id for subnet in self.db_subnets],
-            tags={
-                "Name": f"{self.name_prefix}-db-subnet-group",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # RDS Instance
-        self.rds_instance = aws.rds.Instance(
-            f"{self.name_prefix}-db",
-            identifier=f"{self.name_prefix}-db",
-            engine="mysql",
-            engine_version="8.0",
-            instance_class="db.t3.micro",
-            allocated_storage=20,
-            max_allocated_storage=100,
-            storage_type="gp2",
-            storage_encrypted=True,
-            kms_key_id=self.kms_key.arn,
-            db_name="tapdb",
-            username="admin",
-            password="changeme123!",  # In production, use Secrets Manager
-            vpc_security_group_ids=[self.rds_sg.id],
-            db_subnet_group_name=self.db_subnet_group.name,
-            multi_az=True,
-            backup_retention_period=7,
-            backup_window="03:00-04:00",
-            maintenance_window="sun:04:00-sun:05:00",
-            skip_final_snapshot=True,
-            deletion_protection=False,
-            tags={
-                "Name": f"{self.name_prefix}-db",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
+      """Create RDS instance with Multi-AZ deployment."""
+      # DB Subnet Group
+      self.db_subnet_group = aws.rds.SubnetGroup(
+          f"{self.name_prefix}-db-subnet-group",
+          subnet_ids=[subnet.id for subnet in self.db_subnets],
+          tags={
+              "Name": f"{self.name_prefix}-db-subnet-group",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # FIXED: RDS Instance with unique identifier
+      self.rds_instance = aws.rds.Instance(
+          f"{self.name_prefix}-db",
+          identifier=f"{self.name_prefix}-db-{self.unique_suffix}",  # Add unique suffix
+          engine="mysql",
+          engine_version="8.0",
+          instance_class="db.t3.micro",
+          allocated_storage=20,
+          max_allocated_storage=100,
+          storage_type="gp2",
+          storage_encrypted=True,
+          kms_key_id=self.kms_key.arn,
+          db_name="tapdb",
+          username="admin",
+          password="changeme123!",  # In production, use Secrets Manager
+          vpc_security_group_ids=[self.rds_sg.id],
+          db_subnet_group_name=self.db_subnet_group.name,
+          multi_az=True,
+          backup_retention_period=7,
+          backup_window="03:00-04:00",
+          maintenance_window="sun:04:00-sun:05:00",
+          skip_final_snapshot=True,
+          deletion_protection=False,
+          tags={
+              "Name": f"{self.name_prefix}-db",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+
     
     def _create_secrets_manager(self):
       """Create secrets in AWS Secrets Manager."""
@@ -845,67 +847,68 @@ class TapStack(ComponentResource):
         )
     
     def _create_application_load_balancer(self):
-        """Create Application Load Balancer."""
-        # Target Group
-        self.target_group = aws.lb.TargetGroup(
-            f"{self.name_prefix}-tg",
-            name=f"{self.name_prefix}-tg",
-            port=80,
-            protocol="HTTP",
-            vpc_id=self.vpc.id,
-            health_check=aws.lb.TargetGroupHealthCheckArgs(
-                enabled=True,
-                healthy_threshold=2,
-                interval=30,
-                matcher="200",
-                path="/",  # Changed to root path since we're serving a simple page
-                port="traffic-port",
-                protocol="HTTP",
-                timeout=5,
-                unhealthy_threshold=2,
-            ),
-            tags={
-                "Name": f"{self.name_prefix}-tg",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Application Load Balancer
-        self.alb = aws.lb.LoadBalancer(
-            f"{self.name_prefix}-alb",
-            name=f"{self.name_prefix}-alb",
-            load_balancer_type="application",
-            subnets=[subnet.id for subnet in self.public_subnets],
-            security_groups=[self.alb_sg.id],
-            enable_deletion_protection=False,
-            tags={
-                "Name": f"{self.name_prefix}-alb",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ALB Listener
-        self.alb_listener = aws.lb.Listener(
-            f"{self.name_prefix}-alb-listener",
-            load_balancer_arn=self.alb.arn,
-            port=80,
-            protocol="HTTP",
-            default_actions=[aws.lb.ListenerDefaultActionArgs(
-                type="forward",
-                target_group_arn=self.target_group.arn,
-            )],
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Update ASG with target group (attach after ALB is created)
-        self.asg_attachment = aws.autoscaling.Attachment(
-            f"{self.name_prefix}-asg-attachment",
-            autoscaling_group_name=self.asg.id,
-            lb_target_group_arn=self.target_group.arn,
-            opts=ResourceOptions(parent=self, depends_on=[self.asg, self.target_group])
-        )
+      """Create Application Load Balancer."""
+      # FIXED: Target Group with unique suffix
+      self.target_group = aws.lb.TargetGroup(
+          f"{self.name_prefix}-tg",
+          name=f"{self.name_prefix}-tg-{self.unique_suffix}",  # Add unique suffix
+          port=80,
+          protocol="HTTP",
+          vpc_id=self.vpc.id,
+          health_check=aws.lb.TargetGroupHealthCheckArgs(
+              enabled=True,
+              healthy_threshold=2,
+              interval=30,
+              matcher="200",
+              path="/",  # Changed to root path since we're serving a simple page
+              port="traffic-port",
+              protocol="HTTP",
+              timeout=5,
+              unhealthy_threshold=2,
+          ),
+          tags={
+              "Name": f"{self.name_prefix}-tg",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # Application Load Balancer (also add unique suffix for safety)
+      self.alb = aws.lb.LoadBalancer(
+          f"{self.name_prefix}-alb",
+          name=f"{self.name_prefix}-alb-{self.unique_suffix}",  # Add unique suffix
+          load_balancer_type="application",
+          subnets=[subnet.id for subnet in self.public_subnets],
+          security_groups=[self.alb_sg.id],
+          enable_deletion_protection=False,
+          tags={
+              "Name": f"{self.name_prefix}-alb",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # ALB Listener
+      self.alb_listener = aws.lb.Listener(
+          f"{self.name_prefix}-alb-listener",
+          load_balancer_arn=self.alb.arn,
+          port=80,
+          protocol="HTTP",
+          default_actions=[aws.lb.ListenerDefaultActionArgs(
+              type="forward",
+              target_group_arn=self.target_group.arn,
+          )],
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # Update ASG with target group (attach after ALB is created)
+      self.asg_attachment = aws.autoscaling.Attachment(
+          f"{self.name_prefix}-asg-attachment",
+          autoscaling_group_name=self.asg.id,
+          lb_target_group_arn=self.target_group.arn,
+          opts=ResourceOptions(parent=self, depends_on=[self.asg, self.target_group])
+      )
+
     
     def _create_waf(self):
       """Create WAF to protect against OWASP top 10 threats, with unique name to avoid collision."""
@@ -1063,77 +1066,78 @@ class TapStack(ComponentResource):
         )
     
     def _create_fargate_service(self):
-        """Create ECS Fargate service."""
-        # Target Group for Fargate
-        self.fargate_target_group = aws.lb.TargetGroup(
-            f"{self.name_prefix}-fargate-tg",
-            name=f"{self.name_prefix}-fargate-tg",
-            port=80,
-            protocol="HTTP",
-            vpc_id=self.vpc.id,
-            target_type="ip",
-            health_check=aws.lb.TargetGroupHealthCheckArgs(
-                enabled=True,
-                healthy_threshold=2,
-                interval=30,
-                matcher="200",
-                path="/",
-                port="traffic-port",
-                protocol="HTTP",
-                timeout=5,
-                unhealthy_threshold=2,
-            ),
-            tags={
-                "Name": f"{self.name_prefix}-fargate-tg",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ALB Listener Rule for Fargate
-        self.fargate_listener_rule = aws.lb.ListenerRule(
-            f"{self.name_prefix}-fargate-rule",
-            listener_arn=self.alb_listener.arn,
-            priority=100,
-            actions=[aws.lb.ListenerRuleActionArgs(
-                type="forward",
-                target_group_arn=self.fargate_target_group.arn,
-            )],
-            conditions=[aws.lb.ListenerRuleConditionArgs(
-                path_pattern=aws.lb.ListenerRuleConditionPathPatternArgs(
-                    values=["/api/*"]
-                ),
-            )],
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ECS Service
-        self.ecs_service = aws.ecs.Service(
-            f"{self.name_prefix}-service",
-            name=f"{self.name_prefix}-service",
-            cluster=self.ecs_cluster.id,
-            task_definition=self.task_definition.arn,
-            desired_count=2,
-            launch_type="FARGATE",
-            network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
-                subnets=[subnet.id for subnet in self.private_subnets],
-                security_groups=[self.fargate_sg.id],
-                assign_public_ip=False,
-            ),
-            load_balancers=[aws.ecs.ServiceLoadBalancerArgs(
-                target_group_arn=self.fargate_target_group.arn,
-                container_name=f"{self.name_prefix}-container",
-                container_port=80,
-            )],
-            tags={
-                "Name": f"{self.name_prefix}-service",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(
-                parent=self,
-                depends_on=[self.alb_listener]
-            )
-        )
+      """Create ECS Fargate service."""
+      # FIXED: Target Group for Fargate with unique suffix
+      self.fargate_target_group = aws.lb.TargetGroup(
+          f"{self.name_prefix}-fargate-tg",
+          name=f"{self.name_prefix}-fargate-tg-{self.unique_suffix}",  # Add unique suffix
+          port=80,
+          protocol="HTTP",
+          vpc_id=self.vpc.id,
+          target_type="ip",
+          health_check=aws.lb.TargetGroupHealthCheckArgs(
+              enabled=True,
+              healthy_threshold=2,
+              interval=30,
+              matcher="200",
+              path="/",
+              port="traffic-port",
+              protocol="HTTP",
+              timeout=5,
+              unhealthy_threshold=2,
+          ),
+          tags={
+              "Name": f"{self.name_prefix}-fargate-tg",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # ALB Listener Rule for Fargate
+      self.fargate_listener_rule = aws.lb.ListenerRule(
+          f"{self.name_prefix}-fargate-rule",
+          listener_arn=self.alb_listener.arn,
+          priority=100,
+          actions=[aws.lb.ListenerRuleActionArgs(
+              type="forward",
+              target_group_arn=self.fargate_target_group.arn,
+          )],
+          conditions=[aws.lb.ListenerRuleConditionArgs(
+              path_pattern=aws.lb.ListenerRuleConditionPathPatternArgs(
+                  values=["/api/*"]
+              ),
+          )],
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # ECS Service
+      self.ecs_service = aws.ecs.Service(
+          f"{self.name_prefix}-service",
+          name=f"{self.name_prefix}-service",
+          cluster=self.ecs_cluster.id,
+          task_definition=self.task_definition.arn,
+          desired_count=2,
+          launch_type="FARGATE",
+          network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
+              subnets=[subnet.id for subnet in self.private_subnets],
+              security_groups=[self.fargate_sg.id],
+              assign_public_ip=False,
+          ),
+          load_balancers=[aws.ecs.ServiceLoadBalancerArgs(
+              target_group_arn=self.fargate_target_group.arn,
+              container_name=f"{self.name_prefix}-container",
+              container_port=80,
+          )],
+          tags={
+              "Name": f"{self.name_prefix}-service",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(
+              parent=self,
+              depends_on=[self.alb_listener]
+          )
+      )
+
     
     def _create_cloudwatch_alarms(self):
         """Create CloudWatch alarms for monitoring."""
@@ -1181,43 +1185,44 @@ class TapStack(ComponentResource):
         )
     
     def _create_backup_vault(self):
-        """Create AWS Backup vault and plan."""
-        # Backup Vault
-        self.backup_vault = aws.backup.Vault(
-            f"{self.name_prefix}-backup-vault",
-            name=f"{self.name_prefix}-backup-vault",
-            kms_key_arn=self.kms_key.arn,
-            tags={
-                "Name": f"{self.name_prefix}-backup-vault",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Backup Plan
-        self.backup_plan = aws.backup.Plan(
-            f"{self.name_prefix}-backup-plan",
-            name=f"{self.name_prefix}-backup-plan",
-            rules=[
-                aws.backup.PlanRuleArgs(
-                    rule_name="DailyBackups",
-                    target_vault_name=self.backup_vault.name,
-                    schedule="cron(0 5 ? * * *)",  # Daily at 5 AM UTC
-                    lifecycle=aws.backup.PlanRuleLifecycleArgs(
-                        cold_storage_after=30,
-                        delete_after=120,
-                    ),
-                    recovery_point_tags={
-                        "Environment": self.environment_suffix,
-                    },
-                )
-            ],
-            tags={
-                "Name": f"{self.name_prefix}-backup-plan",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
+      """Create AWS Backup vault and plan."""
+      # FIXED: Backup Vault with unique suffix
+      self.backup_vault = aws.backup.Vault(
+          f"{self.name_prefix}-backup-vault",
+          name=f"{self.name_prefix}-backup-vault-{self.unique_suffix}",  # Add unique suffix
+          kms_key_arn=self.kms_key.arn,
+          tags={
+              "Name": f"{self.name_prefix}-backup-vault",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # Backup Plan (no name conflicts, but update for consistency)
+      self.backup_plan = aws.backup.Plan(
+          f"{self.name_prefix}-backup-plan",
+          name=f"{self.name_prefix}-backup-plan-{self.unique_suffix}",  # Add unique suffix
+          rules=[
+              aws.backup.PlanRuleArgs(
+                  rule_name="DailyBackups",
+                  target_vault_name=self.backup_vault.name,
+                  schedule="cron(0 5 ? * * *)",  # Daily at 5 AM UTC
+                  lifecycle=aws.backup.PlanRuleLifecycleArgs(
+                      cold_storage_after=30,
+                      delete_after=120,
+                  ),
+                  recovery_point_tags={
+                      "Environment": self.environment_suffix,
+                  },
+              )
+          ],
+          tags={
+              "Name": f"{self.name_prefix}-backup-plan",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+
     
     def _create_codepipeline(self):
         """Create CI/CD pipeline using AWS CodePipeline."""
