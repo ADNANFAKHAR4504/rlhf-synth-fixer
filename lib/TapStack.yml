@@ -615,7 +615,7 @@ Resources:
     Properties:
       DistributionConfig:
         Aliases:
-          - !Ref DomainName
+          - tap-dev-20250817085957-98vyfo.example.com
         Origins:
           - DomainName: !GetAtt ApplicationLoadBalancer.DNSName
             Id: ALBOrigin
@@ -645,22 +645,13 @@ Resources:
             Cookies:
               Forward: none
         ViewerCertificate:
-          AcmCertificateArn: !Ref SSLCertificate
+          AcmCertificateArn: arn:aws:acm:us-east-1:718240086340:certificate/29692b19-daa9-4748-ac64-2cb2913cfd97
           SslSupportMethod: sni-only
           MinimumProtocolVersion: TLSv1.2_2021
         WebACLId: !GetAtt WebACL.Arn
       Tags:
         - Key: Name
           Value: !Sub 'CloudFront-tapstackpr1271-${Environment}'
-
-  SSLCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Ref DomainName
-      ValidationMethod: DNS
-      Tags:
-        - Key: Name
-          Value: !Sub 'SSLCert-tapstackpr1271-${Environment}'
 
   # =========================================================================
   # 2. ROOT USER MFA - AWS CONFIG RULE
