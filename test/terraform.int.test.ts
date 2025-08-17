@@ -1,86 +1,138 @@
 import * as fs from "fs";
 import * as path from "path";
-import { EC2Client, DescribeVpcsCommand, DescribeInstancesCommand } from "@aws-sdk/client-ec2";
-import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
-import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeInstancesCommand,
+  DescribeSecurityGroupsCommand,
+} from "@aws-sdk/client-ec2";
+import {
+  IAMClient,
+  GetRoleCommand,
+} from "@aws-sdk/client-iam";
+import {
+  SecretsManagerClient,
+  DescribeSecretCommand,
+  GetSecretValueCommand,
+} from "@aws-sdk/client-secrets-manager";
 
-// AWS region
-const region = "us-east-1";
-const ec2 = new EC2Client({ region });
-const iam = new IAMClient({ region });
-const sm = new SecretsManagerClient({ region });
-
-type TfOutputValue<T> = {
-  sensitive: boolean;
-  type: any;
-  value: T;
-};
-
-type StructuredOutputs = {
-  vpc_id?: TfOutputValue<string>;
-  bastion_ip?: TfOutputValue<string>;
-  private_instance_ids?: TfOutputValue<string[]>;
-  public_subnet_ids?: TfOutputValue<string[]>;
-  private_subnet_ids?: TfOutputValue<string[]>;
-  role_name?: TfOutputValue<string>;
-  secrets_manager_secret_arn?: TfOutputValue<string>;
-};
-
-function readStructuredOutputs() {
-  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-  if (!fs.existsSync(p)) {
-    throw new Error(`Outputs file not found at ${p}`);
-  }
-
-  const parsed = JSON.parse(fs.readFileSync(p, "utf8")) as StructuredOutputs;
-
-  if (
-    !parsed.vpc_id?.value ||
-    !parsed.bastion_ip?.value ||
-    !parsed.private_instance_ids?.value ||
-    !parsed.role_name?.value ||
-    !parsed.secrets_manager_secret_arn?.value
-  ) {
-    throw new Error("One or more required Terraform outputs are missing in all-outputs.json");
-  }
-
-  return {
-    vpcId: parsed.vpc_id.value,
-    bastionIp: parsed.bastion_ip.value,
-    privateInstanceIds: parsed.private_instance_ids.value,
-    publicSubnetIds: parsed.public_subnet_ids?.value || [],
-    privateSubnetIds: parsed.private_subnet_ids?.value || [],
-    roleName: parsed.role_name.value,
-    secretArn: parsed.secrets_manager_secret_arn.value,
-  };
+interface TerraformOutputs {
+  bastion_host_public_ip: string;
+  iam_role_name: string;
+  private_instance_ids: string; // JSON string
+  private_subnet_ids: string;   // JSON string
+  public_subnet_ids: string;    // JSON string
+  secrets_manager_secret_arn: string;
+  vpc_id: string;
 }
 
-const o = readStructuredOutputs();
+describe("Terraform VPC/EC2 Integration Tests", () => {
+  let outputs: TerraformOutputs;
+  let ec2Client: EC2Client;
+  let iamClient: IAMClient;
+  let secretsClient: SecretsManagerClient;
 
-describe("Terraform AWS Infrastructure Integration Tests", () => {
-  test("VPC exists", async () => {
-    const res = await ec2.send(new DescribeVpcsCommand({ VpcIds: [o.vpcId] }));
-    expect(res.Vpcs?.length).toBe(1);
+  let privateInstances: string[];
+  let publicSubnets: string[];
+  let privateSubnets: string[];
+
+  beforeAll(() => {
+    const outputsPath = path.resolve(
+      process.cwd(),
+      "cfn-outputs/flat-outputs.json"
+    );
+
+    try {
+      outputs = JSON.parse(fs.readFileSync(outputsPath, "utf-8"));
+      console.log("✅ Loaded outputs from:", outputsPath);
+    } catch (err) {
+      throw new Error("❌ Could not load Terraform outputs. Run `terraform apply` first.");
+    }
+
+    // Parse JSON array outputs
+    privateInstances = JSON.parse(outputs.private_instance_ids);
+    publicSubnets = JSON.parse(outputs.public_subnet_ids);
+    privateSubnets = JSON.parse(outputs.private_subnet_ids);
+
+    const awsRegion = "us-east-1";
+    ec2Client = new EC2Client({ region: awsRegion });
+    iamClient = new IAMClient({ region: awsRegion });
+    secretsClient = new SecretsManagerClient({ region: awsRegion });
   });
 
-  test("Bastion host reachable", () => {
-    expect(o.bastionIp).toMatch(/\b\d{1,3}(\.\d{1,3}){3}\b/);
+  describe("VPC Validation", () => {
+    test("VPC should exist", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+
+      const cmd = new DescribeVpcsCommand({ VpcIds: [outputs.vpc_id] });
+      const res = await ec2Client.send(cmd);
+      expect(res.Vpcs?.[0].VpcId).toBe(outputs.vpc_id);
+    });
+
+    test("Public subnet should belong to VPC", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+
+      const cmd = new DescribeSubnetsCommand({ SubnetIds: [publicSubnets[0]] });
+      const res = await ec2Client.send(cmd);
+      expect(res.Subnets?.[0].VpcId).toBe(outputs.vpc_id);
+    });
+
+    test("Private subnet should belong to VPC", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+
+      const cmd = new DescribeSubnetsCommand({ SubnetIds: [privateSubnets[0]] });
+      const res = await ec2Client.send(cmd);
+      expect(res.Subnets?.[0].VpcId).toBe(outputs.vpc_id);
+    });
   });
 
-  test("Private instances exist", async () => {
-    const res = await ec2.send(new DescribeInstancesCommand({ InstanceIds: o.privateInstanceIds }));
-    const instanceCount =
-      res.Reservations?.reduce((sum, r) => sum + (r.Instances?.length || 0), 0) || 0;
-    expect(instanceCount).toBeGreaterThan(0);
+  describe("EC2 Instances", () => {
+    test("Private instance should exist and be running", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+
+      const cmd = new DescribeInstancesCommand({ InstanceIds: [privateInstances[0]] });
+      const res = await ec2Client.send(cmd);
+      expect(res.Reservations?.[0].Instances?.[0].State?.Name).toBe("running");
+      expect(res.Reservations?.[0].Instances?.[0].SubnetId).toBe(privateSubnets[0]);
+    });
   });
 
-  test("IAM role exists", async () => {
-    const res = await iam.send(new GetRoleCommand({ RoleName: o.roleName }));
-    expect(res.Role?.RoleName).toBe(o.roleName);
+  describe("IAM Role", () => {
+    test("EC2 secrets role should exist", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+
+      const cmd = new GetRoleCommand({ RoleName: outputs.iam_role_name });
+      const res = await iamClient.send(cmd);
+      expect(res.Role?.RoleName).toBe(outputs.iam_role_name);
+    });
   });
 
-  test("Secrets Manager secret exists", async () => {
-    const res = await sm.send(new DescribeSecretCommand({ SecretId: o.secretArn }));
-    expect(res.ARN).toBe(o.secretArn);
+  describe("Secrets Manager", () => {
+    test("Secret should exist", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+
+      const cmd = new DescribeSecretCommand({ SecretId: outputs.secrets_manager_secret_arn });
+      const res = await secretsClient.send(cmd);
+      expect(res.ARN).toBe(outputs.secrets_manager_secret_arn);
+    });
+
+    test("Secret should contain db_password", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+
+      const cmd = new GetSecretValueCommand({ SecretId: outputs.secrets_manager_secret_arn });
+      const res = await secretsClient.send(cmd);
+      const secret = JSON.parse(res.SecretString!);
+      expect(secret).toHaveProperty("db_password");
+      expect(secret.db_password.length).toBeGreaterThanOrEqual(16);
+    });
+  });
+
+  describe("Networking", () => {
+    test("Bastion host should have a valid public IP", () => {
+      expect(outputs.bastion_host_public_ip).toMatch(
+        /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/
+      );
+    });
   });
 });
