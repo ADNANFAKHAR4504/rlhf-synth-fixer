@@ -556,11 +556,6 @@ Resources:
               - { Key: Project, Value: 'NovaModelBreaking' }
               - { Key: Environment, Value: !Ref EnvironmentSuffix }
               - { Key: Owner, Value: 'DevSecOpsTeam' }
-          - ResourceType: launch-template
-            Tags:
-              - { Key: Project, Value: 'NovaModelBreaking' }
-              - { Key: Environment, Value: !Ref EnvironmentSuffix }
-              - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
