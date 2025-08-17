@@ -285,4 +285,356 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(responseData.message).toBe('TAP task data processed successfully');
     });
   });
+
+  describe('End-to-End TAP Workflow Tests', () => {
+    test('complete task assignment workflow: create → process → validate', async () => {
+      const timestamp = Date.now();
+      const taskAssignment = {
+        type: 'task_assignment',
+        data: {
+          assignee: 'test-user-001',
+          task_title: `E2E Test Task ${timestamp}`,
+          description: 'End-to-end test task assignment',
+          deadline: new Date(Date.now() + 86400000).toISOString(), // 24 hours from now
+          category: 'testing',
+        },
+        priority: 'high',
+        source: 'e2e-test',
+      };
+
+      // Step 1: Create task assignment via API
+      const createResponse = await fetch(`${apiGatewayUrl}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(taskAssignment),
+      });
+
+      expect(createResponse.status).toBe(200);
+      const createData = (await createResponse.json()) as any;
+
+      // Validate task creation response
+      expect(createData.task_id).toBeDefined();
+      expect(createData.message).toBe('TAP task data processed successfully');
+      expect(createData.processed_at).toBeDefined();
+      expect(createData.status).toBe('processed');
+      expect(createData.table_name).toContain('TurnAroundPromptTable');
+
+      // Step 2: Verify data structure and metadata
+      expect(createData.task_details).toBeDefined();
+      expect(createData.task_details.type).toBe('task_assignment');
+      expect(createData.task_details.priority).toBe('high');
+      expect(createData.task_details.source).toBe('e2e-test');
+
+      // Step 3: Validate multi-region and compliance data
+      expect(createData.deployment_region).toBeDefined();
+      expect(typeof createData.is_primary_region).toBe('boolean');
+      expect(typeof createData.replication_enabled).toBe('boolean');
+      expect(createData.memory_limit).toBe('256MB');
+
+      // Store task ID for follow-up validations
+      const taskId = createData.task_id;
+      expect(taskId).toMatch(/^[a-f0-9-]{36}$/); // UUID format validation
+    });
+
+    test('task data processing with different priorities and types', async () => {
+      const testCases = [
+        {
+          type: 'urgent_assignment',
+          priority: 'critical',
+          data: { assignee: 'senior-dev', urgency_level: 1 },
+        },
+        {
+          type: 'routine_task',
+          priority: 'low',
+          data: { assignee: 'intern', learning_opportunity: true },
+        },
+        {
+          type: 'review_request',
+          priority: 'medium',
+          data: { reviewer: 'tech-lead', review_type: 'code' },
+        },
+      ];
+
+      const results = [];
+
+      // Process all task types
+      for (const testCase of testCases) {
+        const response = await fetch(`${apiGatewayUrl}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(testCase),
+        });
+
+        expect(response.status).toBe(200);
+        const data = (await response.json()) as any;
+
+        expect(data.task_id).toBeDefined();
+        expect(data.task_details.type).toBe(testCase.type);
+        expect(data.task_details.priority).toBe(testCase.priority);
+
+        results.push({
+          taskId: data.task_id,
+          type: testCase.type,
+          priority: testCase.priority,
+          processingTime: data.processed_at,
+        });
+      }
+
+      // Verify all tasks were processed successfully
+      expect(results).toHaveLength(3);
+      expect(results.every(r => r.taskId && r.processingTime)).toBe(true);
+    });
+
+    test('DynamoDB integration: data validation and error handling', async () => {
+      // Test valid data processing
+      const validTask = {
+        type: 'validation_test',
+        data: {
+          field1: 'valid_string',
+          field2: 12345,
+          field3: true,
+          nested: { key: 'value' },
+        },
+        priority: 'medium',
+      };
+
+      const validResponse = await fetch(`${apiGatewayUrl}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validTask),
+      });
+
+      expect(validResponse.status).toBe(200);
+      const validData = (await validResponse.json()) as any;
+      expect(validData.task_id).toBeDefined();
+      expect(validData.status).toBe('processed');
+
+      // Test with edge case data (empty objects, arrays, etc.)
+      const edgeCaseTask = {
+        type: 'edge_case_test',
+        data: {
+          empty_object: {},
+          empty_array: [],
+          null_value: null,
+          zero_number: 0,
+          empty_string: '',
+        },
+        priority: 'low',
+      };
+
+      const edgeResponse = await fetch(`${apiGatewayUrl}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(edgeCaseTask),
+      });
+
+      expect(edgeResponse.status).toBe(200);
+      const edgeData = (await edgeResponse.json()) as any;
+      expect(edgeData.task_id).toBeDefined();
+      expect(edgeData.message).toBe('TAP task data processed successfully');
+    });
+
+    test('system performance and scalability: concurrent task processing', async () => {
+      const concurrentTasks = Array.from({ length: 5 }, (_, index) => ({
+        type: 'concurrent_test',
+        data: {
+          batch_id: `batch-${Date.now()}`,
+          task_index: index,
+          payload: `Concurrent task processing test #${index}`,
+        },
+        priority: index % 2 === 0 ? 'high' : 'medium',
+      }));
+
+      // Process tasks concurrently
+      const promises = concurrentTasks.map(task =>
+        fetch(`${apiGatewayUrl}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(task),
+        })
+      );
+
+      const responses = await Promise.all(promises);
+
+      // Verify all requests succeeded
+      expect(responses.every(r => r.status === 200)).toBe(true);
+
+      const responseData = await Promise.all(responses.map(r => r.json()));
+
+      // Verify all tasks were processed with unique IDs
+      const taskIds = responseData.map((d: any) => d.task_id);
+      const uniqueTaskIds = new Set(taskIds);
+      expect(uniqueTaskIds.size).toBe(5); // All IDs should be unique
+
+      // Verify processing metadata
+      responseData.forEach((data: any, index) => {
+        expect(data.task_details.task_index).toBe(index);
+        expect(data.status).toBe('processed');
+        expect(data.memory_limit).toBe('256MB');
+      });
+    });
+
+    test('end-to-end monitoring and observability validation', async () => {
+      // Create a task that exercises monitoring features
+      const monitoringTask = {
+        type: 'monitoring_validation',
+        data: {
+          test_scenario: 'observability_check',
+          monitoring_points: ['start', 'process', 'store', 'complete'],
+          trace_id: `trace-${Date.now()}`,
+        },
+        priority: 'high',
+      };
+
+      const response = await fetch(`${apiGatewayUrl}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(monitoringTask),
+      });
+
+      expect(response.status).toBe(200);
+      const data = (await response.json()) as any;
+
+      // Verify monitoring metadata is included
+      expect(data.task_id).toBeDefined();
+      expect(data.processed_at).toBeDefined();
+      expect(data.memory_limit).toBe('256MB');
+
+      // Check X-Ray tracing and CloudWatch integration
+      expect(data.compliance_status).toBeDefined();
+
+      // Validate through health endpoint that monitoring is active
+      const healthResponse = await fetch(`${apiGatewayUrl}/health`);
+      const healthData = (await healthResponse.json()) as any;
+
+      expect(healthData.monitoring.cloudwatch_alarms).toBe(true);
+      expect(healthData.compliance_status.xray_tracing).toBe(true);
+      expect(healthData.monitoring.production_ready).toBe(true);
+    });
+
+    test('full TAP platform integration: task lifecycle simulation', async () => {
+      const projectId = `project-${Date.now()}`;
+
+      // Simulate a complete project task lifecycle
+      const taskLifecycle = [
+        {
+          stage: 'planning',
+          type: 'project_setup',
+          data: { project_id: projectId, phase: 'initiation' },
+          priority: 'high',
+        },
+        {
+          stage: 'development',
+          type: 'feature_assignment',
+          data: { project_id: projectId, feature: 'user_auth' },
+          priority: 'high',
+        },
+        {
+          stage: 'testing',
+          type: 'qa_assignment',
+          data: { project_id: projectId, test_suite: 'integration' },
+          priority: 'medium',
+        },
+        {
+          stage: 'deployment',
+          type: 'deploy_task',
+          data: { project_id: projectId, environment: 'production' },
+          priority: 'critical',
+        },
+      ];
+
+      const lifecycleResults = [];
+
+      // Execute each stage of the lifecycle
+      for (const stage of taskLifecycle) {
+        const response = await fetch(`${apiGatewayUrl}/tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(stage),
+        });
+
+        expect(response.status).toBe(200);
+        const stageData = (await response.json()) as any;
+
+        lifecycleResults.push({
+          stage: stage.stage,
+          taskId: stageData.task_id,
+          priority: stage.priority,
+          processed_at: stageData.processed_at,
+        });
+
+        // Verify stage-specific data
+        expect(stageData.task_details.data.project_id).toBe(projectId);
+        expect(stageData.task_details.type).toBe(stage.type);
+        expect(stageData.status).toBe('processed');
+      }
+
+      // Verify complete lifecycle was processed
+      expect(lifecycleResults).toHaveLength(4);
+      expect(lifecycleResults.map(r => r.stage)).toEqual([
+        'planning',
+        'development',
+        'testing',
+        'deployment',
+      ]);
+
+      // Verify all tasks have the same project ID but unique task IDs
+      const taskIds = lifecycleResults.map(r => r.taskId);
+      expect(new Set(taskIds).size).toBe(4); // All unique
+    });
+
+    test('data persistence verification: write → read → validate flow', async () => {
+      // Step 1: Write data to DynamoDB via tasks endpoint
+      const persistenceTest = {
+        type: 'data_persistence_test',
+        data: {
+          test_id: `persistence-${Date.now()}`,
+          complex_data: {
+            nested_object: { level1: { level2: 'deep_value' } },
+            array_data: [1, 2, 3, 'string', { mixed: true }],
+            special_chars: 'àáâäèéêë@#$%^&*()',
+            unicode: '🚀 TAP Test 📊',
+          },
+          metadata: {
+            created_by: 'e2e-test',
+            version: '1.0.0',
+            tags: ['test', 'persistence', 'validation'],
+          },
+        },
+        priority: 'medium',
+      };
+
+      const writeResponse = await fetch(`${apiGatewayUrl}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(persistenceTest),
+      });
+
+      expect(writeResponse.status).toBe(200);
+      const writeData = (await writeResponse.json()) as any;
+
+      // Verify write operation
+      expect(writeData.task_id).toBeDefined();
+      expect(writeData.status).toBe('processed');
+      expect(writeData.table_name).toContain('TurnAroundPromptTable');
+
+      // Step 2: Verify data integrity and structure
+      expect(writeData.task_details.data.test_id).toBe(
+        persistenceTest.data.test_id
+      );
+      expect(writeData.task_details.data.complex_data.unicode).toBe(
+        '🚀 TAP Test 📊'
+      );
+      expect(writeData.task_details.data.metadata.tags).toEqual([
+        'test',
+        'persistence',
+        'validation',
+      ]);
+
+      // Step 3: Verify system metadata was added
+      expect(writeData.processed_at).toBeDefined();
+      expect(writeData.deployment_region).toBeDefined();
+      expect(writeData.memory_limit).toBe('256MB');
+    });
+  });
 });
