@@ -1,5 +1,6 @@
 import AWS from 'aws-sdk';
 import fs from 'fs';
+
 // Load CloudFormation outputs
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -19,15 +20,15 @@ const configservice = new AWS.ConfigService();
 async function validateVpc(vpcId: string) {
   const res = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
   if (!res.Vpcs || res.Vpcs.length === 0) throw new Error('VPC not found');
-  expect(res.Vpcs!.length).toBe(1);
+  expect(res.Vpcs.length).toBe(1);
 }
 
 async function validateSubnet(subnetId: string, vpcId?: string) {
   const res = await ec2.describeSubnets({ SubnetIds: [subnetId] }).promise();
   if (!res.Subnets || res.Subnets.length === 0)
     throw new Error('Subnet not found');
-  expect(res.Subnets!.length).toBe(1);
-  if (vpcId) expect(res.Subnets![0].VpcId).toBe(vpcId);
+  expect(res.Subnets.length).toBe(1);
+  if (vpcId) expect(res.Subnets[0].VpcId).toBe(vpcId);
 }
 
 async function validateS3Bucket(bucketName: string) {
@@ -41,34 +42,29 @@ async function validateS3Bucket(bucketName: string) {
   const encryption = await s3
     .getBucketEncryption({ Bucket: bucketName })
     .promise();
-  if (
-    !encryption.ServerSideEncryptionConfiguration ||
-    !encryption.ServerSideEncryptionConfiguration.Rules ||
-    encryption.ServerSideEncryptionConfiguration.Rules.length === 0
-  ) {
+  if (!encryption.ServerSideEncryptionConfiguration)
+    throw new Error('Bucket encryption not configured');
+  const rules = encryption.ServerSideEncryptionConfiguration.Rules;
+  if (!rules || rules.length === 0)
     throw new Error('Bucket encryption rules not configured');
-  }
-  expect(
-    encryption.ServerSideEncryptionConfiguration!.Rules![0]
-      .ApplyServerSideEncryptionByDefault.SSEAlgorithm
-  ).toBe('aws:kms');
+  const algo =
+    rules[0].ApplyServerSideEncryptionByDefault &&
+    rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm;
+  expect(algo).toBe('aws:kms');
 }
 
 async function validateKmsKey(keyId: string) {
   const res = await kms.describeKey({ KeyId: keyId }).promise();
-  if (!res.KeyMetadata) {
-    throw new Error('KMS KeyMetadata not found');
-  } else {
-    expect(res.KeyMetadata.KeyId).toBeDefined();
-    expect(res.KeyMetadata.Enabled).toBe(true);
-  }
+  if (!res.KeyMetadata) throw new Error('KMS KeyMetadata not found');
+  expect(res.KeyMetadata.KeyId).toBeDefined();
+  expect(res.KeyMetadata.Enabled).toBe(true);
 }
 
 async function validateAlb(albDns: string) {
   const res = await elbv2.describeLoadBalancers({}).promise();
   if (!res.LoadBalancers || res.LoadBalancers.length === 0)
     throw new Error('No load balancers found');
-  const found = res.LoadBalancers!.find((lb: any) => lb.DNSName === albDns);
+  const found = res.LoadBalancers.find((lb: any) => lb.DNSName === albDns);
   if (!found) throw new Error('ALB not found');
   expect(found.Scheme).toBe('internet-facing');
 }
@@ -83,8 +79,8 @@ async function validateCloudTrail(
     .promise();
   if (!res.trailList || res.trailList.length === 0)
     throw new Error('CloudTrail not found');
-  expect(res.trailList!.length).toBe(1);
-  const trail = res.trailList![0];
+  expect(res.trailList.length).toBe(1);
+  const trail = res.trailList[0];
   expect(trail.S3BucketName).toBe(bucketName);
   expect(trail.KmsKeyId).toBe(kmsKeyId);
   const status = await cloudtrail.getTrailStatus({ Name: trailName }).promise();
@@ -95,14 +91,14 @@ async function validateSecurityGroup(sgId: string, vpcId: string) {
   const res = await ec2.describeSecurityGroups({ GroupIds: [sgId] }).promise();
   if (!res.SecurityGroups || res.SecurityGroups.length === 0)
     throw new Error('Security group not found');
-  expect(res.SecurityGroups!.length).toBe(1);
-  expect(res.SecurityGroups![0].VpcId).toBe(vpcId);
+  expect(res.SecurityGroups.length).toBe(1);
+  expect(res.SecurityGroups[0].VpcId).toBe(vpcId);
 }
 
 async function validateIamRole(roleName: string) {
   const res = await iam.getRole({ RoleName: roleName }).promise();
   if (!res.Role) throw new Error('IAM Role not found');
-  expect(res.Role!.RoleName).toBe(roleName);
+  expect(res.Role.RoleName).toBe(roleName);
 }
 
 async function validateInstanceProfile(profileName: string) {
@@ -110,7 +106,7 @@ async function validateInstanceProfile(profileName: string) {
     .getInstanceProfile({ InstanceProfileName: profileName })
     .promise();
   if (!res.InstanceProfile) throw new Error('Instance profile not found');
-  expect(res.InstanceProfile!.InstanceProfileName).toBe(profileName);
+  expect(res.InstanceProfile.InstanceProfileName).toBe(profileName);
 }
 
 async function validateAsg(asgName: string) {
@@ -119,8 +115,8 @@ async function validateAsg(asgName: string) {
     .promise();
   if (!res.AutoScalingGroups || res.AutoScalingGroups.length === 0)
     throw new Error('ASG not found');
-  expect(res.AutoScalingGroups!.length).toBe(1);
-  expect(res.AutoScalingGroups![0].HealthCheckType).toBeDefined();
+  expect(res.AutoScalingGroups.length).toBe(1);
+  expect(res.AutoScalingGroups[0].HealthCheckType).toBeDefined();
 }
 
 async function validateLaunchTemplate(ltName: string) {
@@ -129,7 +125,7 @@ async function validateLaunchTemplate(ltName: string) {
     .promise();
   if (!res.LaunchTemplates || res.LaunchTemplates.length === 0)
     throw new Error('Launch template not found');
-  expect(res.LaunchTemplates!.length).toBe(1);
+  expect(res.LaunchTemplates.length).toBe(1);
 }
 
 async function validateConfigRecorder(name: string) {
@@ -138,7 +134,7 @@ async function validateConfigRecorder(name: string) {
     .promise();
   if (!res.ConfigurationRecorders || res.ConfigurationRecorders.length === 0)
     throw new Error('Config recorder not found');
-  expect(res.ConfigurationRecorders!.length).toBe(1);
+  expect(res.ConfigurationRecorders.length).toBe(1);
 }
 
 async function validateConfigDeliveryChannel(name: string) {
@@ -147,7 +143,7 @@ async function validateConfigDeliveryChannel(name: string) {
     .promise();
   if (!res.DeliveryChannels || res.DeliveryChannels.length === 0)
     throw new Error('Config delivery channel not found');
-  expect(res.DeliveryChannels!.length).toBe(1);
+  expect(res.DeliveryChannels.length).toBe(1);
 }
 
 async function validateNatGateway(natGatewayId: string) {
@@ -156,8 +152,8 @@ async function validateNatGateway(natGatewayId: string) {
     .promise();
   if (!res.NatGateways || res.NatGateways.length === 0)
     throw new Error('NAT Gateway not found');
-  expect(res.NatGateways!.length).toBe(1);
-  expect(res.NatGateways![0].State).toBe('available');
+  expect(res.NatGateways.length).toBe(1);
+  expect(res.NatGateways[0].State).toBe('available');
 }
 
 async function validateRouteTable(routeTableId: string) {
@@ -166,7 +162,7 @@ async function validateRouteTable(routeTableId: string) {
     .promise();
   if (!res.RouteTables || res.RouteTables.length === 0)
     throw new Error('Route table not found');
-  expect(res.RouteTables!.length).toBe(1);
+  expect(res.RouteTables.length).toBe(1);
 }
 
 async function validateLambda(functionName: string) {
@@ -176,155 +172,127 @@ async function validateLambda(functionName: string) {
     .promise();
   if (!res.Configuration)
     throw new Error('Lambda function configuration not found');
-  expect(res.Configuration!.FunctionName).toBe(functionName);
+  expect(res.Configuration.FunctionName).toBe(functionName);
 }
 
 describe('TapStack Enterprise Integration Tests', () => {
-  // VPC
   if (outputs.VPCId) {
     test('VPC exists', async () => {
-      await validateVpc(outputs.VPCId);
+      await validateVpc(outputs.VPCId as string);
     });
   }
-  // Subnets
   if (outputs.PublicSubnets) {
     outputs.PublicSubnets.split(',').forEach((subnetId: string) => {
       test(`Public Subnet ${subnetId} exists`, async () => {
-        await validateSubnet(subnetId, outputs.VPCId);
+        await validateSubnet(subnetId, outputs.VPCId as string);
       });
     });
   }
   if (outputs.PrivateSubnets) {
     outputs.PrivateSubnets.split(',').forEach((subnetId: string) => {
       test(`Private Subnet ${subnetId} exists`, async () => {
-        await validateSubnet(subnetId, outputs.VPCId);
+        await validateSubnet(subnetId, outputs.VPCId as string);
       });
     });
   }
-  // S3 Bucket
   const bucketName = outputs.ALBEndpoint
-    ? outputs.ALBEndpoint.split('.')[0]
+    ? (outputs.ALBEndpoint as string).split('.')[0]
     : `prod-cloudtrail-bucket-${process.env.AWS_ACCOUNT_ID}`;
   test('S3 Bucket exists, is versioned, and encrypted', async () => {
     await validateS3Bucket(bucketName);
   });
-  // KMS Key
   if (outputs.CloudTrailKMSKeyId) {
     test('KMS Key exists and is enabled', async () => {
-      await validateKmsKey(outputs.CloudTrailKMSKeyId);
+      await validateKmsKey(outputs.CloudTrailKMSKeyId as string);
     });
   }
-  // ALB
   if (outputs.ALBEndpoint) {
     test('ALB exists and is internet-facing', async () => {
-      await validateAlb(outputs.ALBEndpoint);
+      await validateAlb(outputs.ALBEndpoint as string);
     });
   }
-  // CloudTrail
   if (outputs.ProdCloudTrailName && outputs.CloudTrailKMSKeyId && bucketName) {
     test('CloudTrail exists, is logging, and is configured correctly', async () => {
       await validateCloudTrail(
-        outputs.ProdCloudTrailName,
+        outputs.ProdCloudTrailName as string,
         bucketName,
-        outputs.CloudTrailKMSKeyId
+        outputs.CloudTrailKMSKeyId as string
       );
     });
   }
-  // Security Group
   if (outputs.ProdSecurityGroupId && outputs.VPCId) {
     test('Security Group exists and is in the correct VPC', async () => {
-      await validateSecurityGroup(outputs.ProdSecurityGroupId, outputs.VPCId);
+      await validateSecurityGroup(
+        outputs.ProdSecurityGroupId as string,
+        outputs.VPCId as string
+      );
     });
   }
-  // IAM Role
   if (outputs.EC2RoleName) {
     test('EC2 IAM Role exists', async () => {
-      await validateIamRole(outputs.EC2RoleName);
+      await validateIamRole(outputs.EC2RoleName as string);
     });
   }
-  // Instance Profile
   if (outputs.EC2InstanceProfileName) {
     test('EC2 Instance Profile exists', async () => {
-      await validateInstanceProfile(outputs.EC2InstanceProfileName);
+      await validateInstanceProfile(outputs.EC2InstanceProfileName as string);
     });
   }
-  // ASG
   if (outputs.ProdASGName) {
     test('Auto Scaling Group exists and is healthy', async () => {
-      await validateAsg(outputs.ProdASGName);
+      await validateAsg(outputs.ProdASGName as string);
     });
   }
-  // Launch Template
   if (outputs.ProdLaunchTemplateName) {
     test('Launch Template exists', async () => {
-      await validateLaunchTemplate(outputs.ProdLaunchTemplateName);
+      await validateLaunchTemplate(outputs.ProdLaunchTemplateName as string);
     });
   }
-  // Config Recorder
   if (outputs.ConfigRecorderName) {
     test('Config Recorder exists', async () => {
-      await validateConfigRecorder(outputs.ConfigRecorderName);
+      await validateConfigRecorder(outputs.ConfigRecorderName as string);
     });
   }
-  // Config Delivery Channel
   if (outputs.ConfigDeliveryChannelName) {
     test('Config Delivery Channel exists', async () => {
-      await validateConfigDeliveryChannel(outputs.ConfigDeliveryChannelName);
+      await validateConfigDeliveryChannel(
+        outputs.ConfigDeliveryChannelName as string
+      );
     });
   }
-  // NAT Gateways
   if (outputs.NatGW1Id) {
     test('NAT Gateway 1 exists and is available', async () => {
-      await validateNatGateway(outputs.NatGW1Id);
+      await validateNatGateway(outputs.NatGW1Id as string);
     });
   }
   if (outputs.NatGW2Id) {
     test('NAT Gateway 2 exists and is available', async () => {
-      await validateNatGateway(outputs.NatGW2Id);
+      await validateNatGateway(outputs.NatGW2Id as string);
     });
   }
-  // Route Tables
   if (outputs.PublicRouteTableId) {
     test('Public Route Table exists', async () => {
-      await validateRouteTable(outputs.PublicRouteTableId);
+      await validateRouteTable(outputs.PublicRouteTableId as string);
     });
   }
   if (outputs.PrivateRouteTableAId) {
     test('Private Route Table A exists', async () => {
-      await validateRouteTable(outputs.PrivateRouteTableAId);
+      await validateRouteTable(outputs.PrivateRouteTableAId as string);
     });
   }
   if (outputs.PrivateRouteTableBId) {
     test('Private Route Table B exists', async () => {
-      await validateRouteTable(outputs.PrivateRouteTableBId);
+      await validateRouteTable(outputs.PrivateRouteTableBId as string);
     });
   }
-  // Lambda
   if (outputs.S3BucketCleanupFunctionName) {
     test('S3BucketCleanup Lambda exists', async () => {
-      await validateLambda(outputs.S3BucketCleanupFunctionName);
+      await validateLambda(outputs.S3BucketCleanupFunctionName as string);
     });
   }
-  // Config IAM Role
   if (outputs.ConfigRoleName) {
     test('Config IAM Role exists', async () => {
-      await validateIamRole(outputs.ConfigRoleName);
+      await validateIamRole(outputs.ConfigRoleName as string);
     });
   }
-  // Warn for missing outputs
-  [
-    'NatGW1Id',
-    'NatGW2Id',
-    'PublicRouteTableId',
-    'PrivateRouteTableAId',
-    'PrivateRouteTableBId',
-    'S3BucketCleanupFunctionName',
-    'ConfigRoleName',
-  ].forEach(key => {
-    if (!outputs[key]) {
-      test.skip(`${key} not found in outputs. Skipping live validation.`, () => {
-        console.warn(`${key} not found in outputs. Skipping live validation.`);
-      });
-    }
-  });
 });
