@@ -179,3 +179,4 @@ Outputs:
   BucketName:
     Description: Name of the S3 bucket with SSE enabled.
     Value: !Ref AppBucket
+
