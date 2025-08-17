@@ -398,18 +398,28 @@ Resources:
               AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
             Resource: "*"
-          - Sid: AllowCloudTrail
+
+          # Allow CloudTrail to use this key for envelope encryption + grants
+          - Sid: AllowCloudTrailUseOfTheKey
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
-              - kms:Decrypt
-              - kms:DescribeKey
               - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:GenerateDataKeyWithoutPlaintext
+              - kms:Decrypt
               - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
             Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+              # (Optional but nice) tie to this trail's encryption context
+              StringEquals:
+                "kms:EncryptionContext:aws:cloudtrail:arn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-trail"
+
+          # Allow CloudWatch Logs service to use the key (you already had this)
           - Sid: AllowCloudWatchLogs
             Effect: Allow
             Principal:
@@ -422,6 +432,8 @@ Resources:
               - kms:GenerateDataKeyWithoutPlaintext
               - kms:ReEncrypt*
             Resource: "*"
+
+          # S3 and SNS statements you had are fine to keep
           - Sid: AllowSNS
             Effect: Allow
             Principal:
@@ -582,6 +594,7 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt TrailLogsBucket.Arn
+
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -593,6 +606,7 @@ Resources:
                 "s3:x-amz-acl": bucket-owner-full-control
                 "s3:x-amz-server-side-encryption": aws:kms
                 "s3:x-amz-server-side-encryption-aws-kms-key-id": !GetAtt KmsKeyLogs.Arn
+
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: "*"
@@ -709,20 +723,11 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
+                  - logs:DescribeLogStreams
                 Resource: !Join ["", [!GetAtt CloudTrailLogGroup.Arn, ":*"]]
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-cloudtrail-role"
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Region
-          Value: !Ref "AWS::Region"
-        - Key: Owner
-          Value: Security
 
   # --------------------------
   # CloudWatch Log Groups
@@ -776,7 +781,7 @@ Resources:
     Properties:
       TrailName: !Sub "${ProjectName}-${Environment}-trail"
       S3BucketName: !Ref TrailLogsBucket
-      S3KeyPrefix: AWSLogs
+      # REMOVE S3KeyPrefix to avoid AWSLogs/AWSLogs/... double-prefix
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: false
       EnableLogFileValidation: true
