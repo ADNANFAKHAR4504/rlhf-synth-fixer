@@ -1820,17 +1820,6 @@
                                         "Fn::Sub": "${ApplicationBucket}/*"
                                     }
                                 ]
-                            },
-                            {
-                                "Type": "AWS::S3::Object",
-                                "Values": [
-                                    {
-                                        "Fn::GetAtt": [
-                                            "ApplicationBucket",
-                                            "Arn"
-                                        ]
-                                    }
-                                ]
                             }
                         ]
                     }

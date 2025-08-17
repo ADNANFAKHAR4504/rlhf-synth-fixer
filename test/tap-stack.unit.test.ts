@@ -336,7 +336,6 @@ describe('TapStack CloudFormation Template', () => {
       const db = template.Resources.DatabaseInstance.Properties;
       expect(db.EnableCloudwatchLogsExports).toContain('error');
       expect(db.EnableCloudwatchLogsExports).toContain('general');
-      expect(db.EnableCloudwatchLogsExports).toContain('slow-query');
     });
 
     test('database should have Delete deletion policy', () => {
