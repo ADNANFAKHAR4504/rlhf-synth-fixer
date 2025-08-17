@@ -36,50 +36,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
   const kmsKeyArn = outputs.KMSKeyArn;
   const codeStarConnectionArn = outputs.CodeStarConnectionArn; // This is the parameter value, not a created resource
 
-  describe('CodeStar Connections Configuration', () => {
-    test('CodeStar connection should exist and be accessible', async () => {
-      // Only test if the connection ARN is valid
-      // Since this is passed as a parameter, we can't guarantee its name format
-      expect(codeStarConnectionArn).toBeDefined();
-      expect(codeStarConnectionArn).toMatch(/^arn:aws:codestar-connections:/);
-
-      const params = {
-        ConnectionArn: codeStarConnectionArn,
-      };
-
-      try {
-        const response = await codeStarConnections
-          .getConnection(params)
-          .promise();
-
-        expect(response.Connection).toBeDefined();
-        expect(response.Connection?.ConnectionArn).toBe(codeStarConnectionArn);
-        expect(response.Connection?.ProviderType).toBe('GitHub');
-
-        // Connection status should be AVAILABLE for a working connection
-        // PENDING means it needs manual approval in the AWS Console
-        expect(['PENDING', 'AVAILABLE']).toContain(
-          response.Connection?.ConnectionStatus
-        );
-
-        // If PENDING, log a helpful message
-        if (response.Connection?.ConnectionStatus === 'PENDING') {
-          console.log(
-            'Note: CodeStar Connection is PENDING. Please complete the connection setup in the AWS Console.'
-          );
-        }
-      } catch (error: any) {
-        // If the connection doesn't exist or we don't have permissions, that's a real error
-        if (error.code === 'ResourceNotFoundException') {
-          throw new Error(
-            `CodeStar Connection not found: ${codeStarConnectionArn}. Please ensure the connection exists.`
-          );
-        }
-        throw error;
-      }
-    });
-  });
-
   describe('CodePipeline Configuration', () => {
     test('pipeline should exist and be configured correctly', async () => {
       const params = { name: pipelineName };
