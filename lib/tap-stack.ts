@@ -18,6 +18,7 @@ import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
 import { IamGroup } from '@cdktf/provider-aws/lib/iam-group';
 import { IamGroupPolicy } from '@cdktf/provider-aws/lib/iam-group-policy';
 import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
@@ -27,6 +28,7 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
@@ -42,11 +44,42 @@ export class TapStack extends TerraformStack {
 
     new AwsProvider(this, 'aws', { region });
     const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
+    const callerIdentity = new DataAwsCallerIdentity(
+      this,
+      'CallerIdentity',
+      {}
+    );
 
     // --- KMS Key for Encryption ---
     const kmsKey = new KmsKey(this, 'KmsMasterKey', {
       description: 'KMS key for encrypting all application data',
       enableKeyRotation: true,
+      // FIXED: Added a key policy to explicitly allow CloudWatch Logs to use this key.
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: { AWS: `arn:aws:iam::${callerIdentity.accountId}:root` },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudWatch Logs to use the key',
+            Effect: 'Allow',
+            Principal: { Service: `logs.${region}.amazonaws.com` },
+            Action: [
+              'kms:Encrypt*',
+              'kms:Decrypt*',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:Describe*',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
       tags: commonTags,
     });
 
@@ -175,8 +208,6 @@ export class TapStack extends TerraformStack {
       retentionInDays: 30,
       kmsKeyId: kmsKey.id,
       tags: commonTags,
-      // FIXED: Added an explicit dependency on the KMS key to prevent race conditions.
-      dependsOn: [kmsKey],
     });
     const flowLogRole = new IamRole(this, 'FlowLogRole', {
       name: `flow-log-role-${uniqueSuffix}`,
@@ -267,32 +298,33 @@ export class TapStack extends TerraformStack {
           ],
         }
       ).json,
-      inlinePolicy: [
-        {
-          name: `S3AndKmsAccessPolicy-${uniqueSuffix}`,
-          policy: JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-                Resource: `${dataBucket.arn}/*`,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['s3:ListBucket'],
-                Resource: dataBucket.arn,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['kms:Decrypt', 'kms:GenerateDataKey*'],
-                Resource: kmsKey.arn,
-              },
-            ],
-          }),
-        },
-      ],
       tags: commonTags,
+    });
+
+    // FIXED: Replaced deprecated inline_policy with the modern IamRolePolicy resource.
+    new IamRolePolicy(this, 'Ec2AppRolePolicy', {
+      name: `S3AndKmsAccessPolicy-${uniqueSuffix}`,
+      role: ec2Role.name,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+            Resource: `${dataBucket.arn}/*`,
+          },
+          {
+            Effect: 'Allow',
+            Action: ['s3:ListBucket'],
+            Resource: dataBucket.arn,
+          },
+          {
+            Effect: 'Allow',
+            Action: ['kms:Decrypt', 'kms:GenerateDataKey*'],
+            Resource: kmsKey.arn,
+          },
+        ],
+      }),
     });
 
     const instanceProfile = new IamInstanceProfile(this, 'InstanceProfile', {

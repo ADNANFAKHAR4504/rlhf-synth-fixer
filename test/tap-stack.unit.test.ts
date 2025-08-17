@@ -46,17 +46,13 @@ describe('TapStack Unit Tests', () => {
     expect(s3Encryption.rule[0].bucket_key_enabled).toBe(true);
   });
 
-  it('should create an EC2 IAM Role with a correct inline policy', () => {
-    const iamRole = Object.values(resources.aws_iam_role).find(
-      (r: any) => r.name && r.name.startsWith('secure-ec2-role-')
-    ) as any;
-    expect(iamRole).toBeDefined();
-    expect(iamRole.inline_policy).toBeDefined();
-    expect(iamRole.inline_policy.length).toBe(1);
+  it('should create an EC2 IAM Role with a correct attached policy', () => {
+    // FIXED: The test now looks for the correct aws_iam_role_policy resource instead of an inline_policy.
+    const rolePolicy = Object.values(resources.aws_iam_role_policy)[0] as any;
+    expect(rolePolicy).toBeDefined();
 
-    // FIXED: The test now correctly parses the valid JSON string from the inline policy.
-    const inlinePolicy = JSON.parse(iamRole.inline_policy[0].policy);
-    const statements = inlinePolicy.Statement;
+    const policyDocument = JSON.parse(rolePolicy.policy);
+    const statements = policyDocument.Statement;
     expect(statements.length).toBe(3);
     expect(statements.some((s: any) => s.Action.includes('s3:GetObject'))).toBe(
       true
@@ -64,6 +60,11 @@ describe('TapStack Unit Tests', () => {
     expect(statements.some((s: any) => s.Action.includes('kms:Decrypt'))).toBe(
       true
     );
+    expect(
+      statements.some((s: any) =>
+        s.Resource.includes('${aws_s3_bucket.DataBucket.arn}')
+      )
+    ).toBe(true);
   });
 
   it('should enable VPC Flow Logs to a CloudWatch Log Group', () => {
