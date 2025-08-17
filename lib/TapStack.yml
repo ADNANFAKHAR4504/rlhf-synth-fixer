@@ -889,3 +889,4 @@ Outputs:
   SsmParamDbPassword:
     Description: SSM SecureString name for DB password
     Value: !Ref AppDbPasswordParam
+
