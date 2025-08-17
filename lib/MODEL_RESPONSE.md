@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready regional environment with VPC, EC2 Auto Scaling, RDS, S3, and AWS Config'
 
@@ -865,4 +866,4 @@ Resources:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls
-        
+```
