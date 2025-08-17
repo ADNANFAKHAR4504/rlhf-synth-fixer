@@ -477,7 +477,7 @@ describe('Production CloudFormation Template Unit Tests', () => {
 
     test('should have proper resource count', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(32); // Total number of resources in template
+      expect(resourceCount).toBe(39); // Total number of resources in template
     });
 
     test('all resources should have proper CloudFormation types', () => {
