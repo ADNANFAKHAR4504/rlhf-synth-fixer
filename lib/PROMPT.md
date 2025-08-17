@@ -1,72 +1,27 @@
-Act as a senior AWS CloudFormation engineer.
+you are a senior AWS CloudFormation engineer, and your goal is to create a single, production-ready CloudFormation template in YAML.  will build a foundational, secure, multi-zone AWS environment in the us-east-1 region.
 
-Goal Produce a single CloudFormation YAML template named secure_infrastructure.yaml that deploys a secure, production-ready baseline in us-east-1.
+The Architecture
+The stack will set up a new VPC and span it across multiple availability zones for high availability. It will include a pair of public subnets (with an Internet Gateway) and a pair of private subnets (with NAT Gateways) to handle network traffic. To ensure visibility into our network, Also configure VPC Flow Logs to be sent to an encrypted CloudWatch Logs group.
 
-Language & Platform
+To serve our application, an internet-facing Network Load Balancer (NLB) will sit in the public subnets. This NLB will forward traffic to a fleet of EC2 instances running in the secure, private subnets. These instances will be automatically registered with a target group and configured for health checks.
 
-Language: YAML
-Platform: AWS CloudFormation (no CDK/SAM)
-Architecture (must implement all)
+For operational tasks, you can  include a single public Bastion Host in one of the public subnets. This instance will have a carefully crafted, least-privilege IAM role that provides just enough access to manage resources like S3, EC2, and CloudWatch.
 
-VPC (secure, multi-AZ)
-New VPC (e.g., 10.0.0.0/16) in us-east-1.
-2 public and 2 private subnets across distinct AZs (use !GetAZs + !Select; do not hardcode AZ names).
-Internet Gateway for public subnets, NAT Gateway for private subnets.
-Route tables and associations for public/private subnets.
-VPC Flow Logs → CloudWatch Logs (encrypted), with an IAM role/policy for delivery and a LogGroup with retention.
-Network Load Balancer (NLB)
-Internet-facing NLB spanning both public subnets.
-Target Group (TCP) with health checks.
-Listener (TCP, e.g., port 80 or 8080) forwarding to the target group.
-Multiple EC2 instances in private subnets registered to the TG (launched in different AZs for HA).
-EC2 (public bastion / utility)
-One EC2 instance in a public subnet with an IAM Instance Profile.
-IAM Role permissions (least privilege): access to *S3 (read/write as appropriate), EC2 (Describe), and CloudWatch (logs + metrics)**.
-UserData can install a simple web or bootstrap agent (optional, but include basic health endpoint if using HTTP TG elsewhere).
-Security Groups
-All EC2 instances: inbound SSH (22) only from a specific IP/CIDR (use a parameter like AllowedSSHIp with CIDR validation).
-For NLB-backed instances: allow application port only from the NLB’s SG; deny internet ingress to these instances.
-Egress should be least-privilege or default allow to 0.0.0.0/0 as appropriate.
-S3
-Create an S3 bucket with server-side encryption (SSE-S3 or SSE-KMS; prefer KMS).
-Block all public access at bucket level.
-Add tags and (optional) lifecycle/ownership controls if needed.
-Tagging
-Apply Environment=Production to all resources that support tagging.
-Region & Robustness
+Security is paramount. All EC2 instances will have Security Groups that limit access. The bastion host will only allow SSH from a specific, parameterized IP address, and the application instances will only accept traffic from the NLB, with no direct internet access.
 
-Assume deployment in us-east-1; add a Condition to fail if ${AWS::Region} != us-east-1.
-Avoid hardcoded AZ names; use !GetAZs.
-Use dynamic AMI via SSM parameter for Amazon Linux 2 (no hardcoded AMI IDs).
-Security Best Practices (must show explicitly in template)
+Finally, set up a secure S3 bucket with encryption and public access blocked at the bucket level.
 
-Least-privilege IAM policies for the EC2 role and Flow Logs delivery.
-No public access to private-tier instances; NLB handles ingress.
-Encrypted CloudWatch LogGroup for Flow Logs; set retention (e.g., 30+ days).
-S3 bucket public access block enabled; encryption required.
-NACLs optional; if included, keep conservative rules and document them in comments.
-Template Requirements
+Key Details
+The entire stack must be built using pure CloudFormation YAML, without external tools like CDK or SAM.
 
-No external tools; pure CloudFormation YAML.
-Include helpful comments explaining each major block.
-Add Outputs for: VPC ID, Public/Private Subnet IDs, NLB ARN & DNS, Target Group ARN, Public EC2 InstanceId/PublicIP, S3 Bucket Name, VPC Flow Logs LogGroup.
-Add Metadata or comments with a short runbook (how to test reachability and logs).
-Parameters (minimal, validated)
+ make sure to use dynamic lookups for things like Availability Zones and the Amazon Linux 2 AMI to avoid hardcoding any values.
 
-AllowedSSHIp (String, CIDR; e.g., default “203.0.113.10/32”; regex validation).
-(Optional) InstanceType (default t3.micro).
-Keep other values self-contained to ensure easy deployment.
-Validation & Tests (embed as YAML comments at bottom)
+Every resource will be tagged with Environment=Production.
 
-cfn-lint passes; no W30xx warnings for hardcoded AZs.
-Stack creates successfully in us-east-1.
-Verify:
-EC2 (public) reachable via SSH only from AllowedSSHIp.
-NLB DNS name returns healthy target status (targets are instances in private subnets).
-Flow Logs delivering entries to CloudWatch Logs.
-S3 bucket encryption status = Enabled; public access blocked.
-All resources carry Environment=Production tag.
-Return Format
+The template will include a short runbook as a comment, explaining how to test the stack after deployment.
 
-Return only the final file content, named secure_infrastructure.yaml (no extra prose).
-Use intrinsic functions correctly, include DependsOn only when necessary to avoid circular dependencies.
+Also include a few validated parameters for user input, such as the allowed SSH IP and the instance type.
+
+Confirm that the template passes cfn-lint and meets all the security best practices I've outlined.
+
+The final output will be a single file containing only the YAML template itself.
