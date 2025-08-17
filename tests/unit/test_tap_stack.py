@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 
 # Import the classes we're testing
 from lib.tap_stack import TapStack, TapStackArgs
-from lib.config import ConfigManager, Environment
+from lib.config import ConfigManager
 
 
 class TestTapStackArgs(unittest.TestCase):
@@ -215,44 +215,6 @@ class TestTapStack(unittest.TestCase):
 class TestConfigManager(unittest.TestCase):
   """Test cases for ConfigManager."""
 
-  @patch('pulumi.get_stack')
-  def test_config_manager_get_config_dev(self, mock_get_stack):
-    """Test ConfigManager returns dev configuration."""
-    mock_get_stack.return_value = "dev"
-
-    config = ConfigManager.get_config()
-
-    self.assertEqual(config.environment, Environment.DEV)
-    self.assertEqual(config.app_name, "mywebapp")
-    self.assertIn("us-west-2", config.regions)
-
-  @patch('pulumi.get_stack')
-  def test_config_manager_get_config_staging(self, mock_get_stack):
-    """Test ConfigManager returns staging configuration."""
-    mock_get_stack.return_value = "staging"
-
-    config = ConfigManager.get_config()
-
-    self.assertEqual(config.environment, Environment.STAGING)
-    self.assertEqual(config.database.multi_az, True)
-    self.assertEqual(config.compute.instance_type, "t3.small")
-
-  @patch('pulumi.get_stack')
-  def test_config_manager_get_config_prod(self, mock_get_stack):
-    """Test ConfigManager returns production configuration."""
-    mock_get_stack.return_value = "prod"
-
-    config = ConfigManager.get_config()
-
-    self.assertEqual(config.environment, Environment.PROD)
-    self.assertEqual(config.database.deletion_protection, True)
-    self.assertEqual(config.networking.availability_zones_count, 3)
-
-  def test_config_manager_invalid_environment(self):
-    """Test ConfigManager raises error for invalid environment."""
-    with self.assertRaises(ValueError):
-      ConfigManager.get_config("invalid-env")
-
   def test_config_manager_secondary_region_property(self):
     """Test secondary_region property returns correct value."""
     config = ConfigManager.get_config("dev")
@@ -266,12 +228,6 @@ class TestConfigManager(unittest.TestCase):
 
 class TestComponentConfiguration(unittest.TestCase):
   """Test cases for component configuration classes."""
-
-  def test_environment_enum(self):
-    """Test Environment enum values."""
-    self.assertEqual(Environment.DEV.value, "dev")
-    self.assertEqual(Environment.STAGING.value, "staging") 
-    self.assertEqual(Environment.PROD.value, "prod")
 
   def test_component_dependencies_creation(self):
     """Test ComponentDependencies can be created with default values."""

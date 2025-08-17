@@ -1,14 +1,7 @@
 from dataclasses import dataclass
-from enum import Enum
 from typing import Dict, List, Any
 
 import pulumi
-
-
-class Environment(Enum):
-  DEV = "dev"
-  STAGING = "staging"
-  PROD = "prod"
 
 
 @dataclass
@@ -88,7 +81,6 @@ class ComponentDependencies:
 @dataclass
 class InfrastructureConfig:
   app_name: str
-  environment: Environment
   regions: List[str]
   primary_region: str
   networking: NetworkingConfig
@@ -98,6 +90,7 @@ class InfrastructureConfig:
   monitoring: MonitoringConfig
   security: SecurityConfig
   secrets: SecretsConfig
+  environment: str = None
 
   @property
   def secondary_region(self) -> str:
@@ -106,7 +99,7 @@ class InfrastructureConfig:
   @property
   def tags(self) -> Dict[str, str]:
     return {
-      "Environment": self.environment.value,
+      "Environment": self.environment,
       "Application": self.app_name,
       "ManagedBy": "Pulumi",
       "Project": f"{self.app_name}-infrastructure"
@@ -122,127 +115,9 @@ class ConfigManager:
     if environment is None:
       environment = pulumi.get_stack()
 
-    env_enum = Environment(environment.lower())
-
-    if env_enum == Environment.DEV:
-      return ConfigManager._dev_config()
-    if env_enum == Environment.STAGING:
-      return ConfigManager._staging_config()
-    if env_enum == Environment.PROD:
-      return ConfigManager._prod_config()
-    raise ValueError(f"Unknown environment: {environment}")
-
-  @staticmethod
-  def _dev_config() -> InfrastructureConfig:
     return InfrastructureConfig(
       app_name="mywebapp",
-      environment=Environment.DEV,
-      regions=["us-west-2", "us-east-1"],
-      primary_region="us-west-2",
-      networking=NetworkingConfig(
-        vpc_cidr="10.0.0.0/16",
-        availability_zones_count=2,
-        public_subnet_cidrs=["10.0.1.0/24", "10.0.2.0/24"],
-        private_subnet_cidrs=["10.0.10.0/24", "10.0.11.0/24"]
-      ),
-      database=DatabaseConfig(
-        instance_class="db.t3.micro",
-        allocated_storage=20,
-        max_allocated_storage=50,
-        backup_retention_period=7,
-        multi_az=False,
-        deletion_protection=False
-      ),
-      compute=ComputeConfig(
-        instance_type="t3.micro",
-        min_size=1,
-        max_size=3,
-        desired_capacity=1,
-        enable_detailed_monitoring=False
-      ),
-      storage=StorageConfig(
-        versioning_enabled=True,
-        lifecycle_transition_days=30,
-        glacier_transition_days=90,
-        log_retention_days=7
-      ),
-      monitoring=MonitoringConfig(
-        log_retention_days=14,
-        detailed_monitoring=False,
-        enable_insights=False,
-        budget_limit_usd=100
-      ),
-      security=SecurityConfig(
-        enable_waf=True,
-        enable_guardduty=False,
-        mfa_required=True,
-        certificate_domain="mywebapp-dev.example.com",
-        ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06"
-      ),
-      secrets=SecretsConfig(
-        kms_key_rotation_enabled=True,
-        secret_retention_days=7
-      )
-    )
-
-  @staticmethod
-  def _staging_config() -> InfrastructureConfig:
-    return InfrastructureConfig(
-      app_name="mywebapp",
-      environment=Environment.STAGING,
-      regions=["us-west-2", "us-east-1"],
-      primary_region="us-west-2",
-      networking=NetworkingConfig(
-        vpc_cidr="10.1.0.0/16",
-        availability_zones_count=2,
-        public_subnet_cidrs=["10.1.1.0/24", "10.1.2.0/24"],
-        private_subnet_cidrs=["10.1.10.0/24", "10.1.11.0/24"]
-      ),
-      database=DatabaseConfig(
-        instance_class="db.t3.small",
-        allocated_storage=50,
-        max_allocated_storage=200,
-        backup_retention_period=14,
-        multi_az=True,
-        deletion_protection=False
-      ),
-      compute=ComputeConfig(
-        instance_type="t3.small",
-        min_size=2,
-        max_size=6,
-        desired_capacity=2,
-        enable_detailed_monitoring=True
-      ),
-      storage=StorageConfig(
-        versioning_enabled=True,
-        lifecycle_transition_days=30,
-        glacier_transition_days=90,
-        log_retention_days=14
-      ),
-      monitoring=MonitoringConfig(
-        log_retention_days=30,
-        detailed_monitoring=True,
-        enable_insights=True,
-        budget_limit_usd=300
-      ),
-      security=SecurityConfig(
-        enable_waf=True,
-        enable_guardduty=True,
-        mfa_required=True,
-        certificate_domain="mywebapp-staging.example.com",
-        ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06"
-      ),
-      secrets=SecretsConfig(
-        kms_key_rotation_enabled=True,
-        secret_retention_days=14
-      )
-    )
-
-  @staticmethod
-  def _prod_config() -> InfrastructureConfig:
-    return InfrastructureConfig(
-      app_name="mywebapp",
-      environment=Environment.PROD,
+      environment=environment,
       regions=["us-west-2", "us-east-1"],
       primary_region="us-west-2",
       networking=NetworkingConfig(
@@ -305,7 +180,7 @@ def get_app_name() -> str:
 
 def get_environment() -> str:
   """Get environment name"""
-  return get_config().environment.value
+  return get_config().environment
 
 
 def get_regions() -> List[str]:
