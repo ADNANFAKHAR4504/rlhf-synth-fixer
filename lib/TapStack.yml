@@ -26,12 +26,15 @@ Metadata:
 Parameters:
   VpcId:
     Type: String
+    Default: ''
     Description: 'Use existing VPC ID if available, otherwise leave blank to create a new VPC'
   PublicSubnetIds:
     Type: CommaDelimitedList
+    Default: ''
     Description: 'List of existing public subnets, optional'
   PrivateSubnetIds:
     Type: CommaDelimitedList
+    Default: ''
     Description: 'List of existing private subnets, optional'
   CertificateArn:
     Type: String
