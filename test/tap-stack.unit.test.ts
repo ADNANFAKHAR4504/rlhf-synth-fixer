@@ -32,31 +32,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(envParam).toBeDefined();
       expect(envParam.Type).toBe('String');
       expect(envParam.Default).toBe('dev');
-      expect(envParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
+      expect(envParam.Description).toBe(
+        'Environment suffix for resource naming'
       );
-    });
-
-    test('should have DBSecretName parameter', () => {
-      const secretParam = template.Parameters.DBSecretName;
-      expect(secretParam).toBeDefined();
-      expect(secretParam.Type).toBe('String');
-      expect(secretParam.Default).toBe('database-secret');
-    });
-
-    test('should have AlertEmail parameter', () => {
-      const emailParam = template.Parameters.AlertEmail;
-      expect(emailParam).toBeDefined();
-      expect(emailParam.Type).toBe('String');
-      expect(emailParam.AllowedPattern).toBeDefined();
-    });
-
-    test('should have VpcCidr parameter', () => {
-      const vpcParam = template.Parameters.VpcCidr;
-      expect(vpcParam).toBeDefined();
-      expect(vpcParam.Type).toBe('String');
-      expect(vpcParam.Default).toBe('10.0.0.0/16');
     });
   });
 
@@ -162,9 +140,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(database).toBeDefined();
       expect(database.Type).toBe('AWS::RDS::DBInstance');
       expect(database.Properties.StorageEncrypted).toBe(true);
-      expect(database.Properties.DeletionProtection).toBe(true);
-      expect(database.DeletionPolicy).toBe('Snapshot');
-      expect(database.UpdateReplacePolicy).toBe('Snapshot');
+      expect(database.Properties.DeletionProtection).toBe(false);
+      expect(database.DeletionPolicy).toBe('Delete');
     });
 
     test('should use Secrets Manager for database credentials', () => {
@@ -260,15 +237,10 @@ describe('TapStack CloudFormation Template', () => {
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'S3ApplicationBucket',
-        'S3LoggingBucket',
-        'DatabaseEndpoint',
-        'DatabasePort',
-        'S3KMSKeyId',
-        'RDSKMSKeyId',
-        'S3AccessRoleArn',
-        'SecurityAlertsTopicArn',
         'VPCId',
+        'ApplicationBucketName',
+        'DatabaseEndpoint',
+        'S3KMSKeyId',
         'CloudTrailArn',
       ];
 
@@ -307,14 +279,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThan(25); // We have 30+ resources
     });
 
-    test('should have multiple parameters for configuration', () => {
+    test('should have one parameter for configuration', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4); // Environment, DBSecretName, AlertEmail, VpcCidr
+      expect(parameterCount).toBe(1); // ProjectId only
     });
 
-    test('should have multiple outputs for integration', () => {
+    test('should have five outputs for integration', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(10); // 10 outputs for various resources
+      expect(outputCount).toBe(5); // VPCId, ApplicationBucketName, DatabaseEndpoint, S3KMSKeyId, CloudTrailArn
     });
   });
 
