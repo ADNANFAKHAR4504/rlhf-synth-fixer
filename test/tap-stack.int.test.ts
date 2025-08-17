@@ -56,9 +56,12 @@ async function validateS3Bucket(bucketName: string) {
 
 async function validateKmsKey(keyId: string) {
   const res = await kms.describeKey({ KeyId: keyId }).promise();
-  if (!res.KeyMetadata) throw new Error('KMS KeyMetadata not found');
-  expect(res.KeyMetadata!.KeyId).toBeDefined();
-  expect(res.KeyMetadata!.Enabled).toBe(true);
+  if (!res.KeyMetadata) {
+    throw new Error('KMS KeyMetadata not found');
+  } else {
+    expect(res.KeyMetadata.KeyId).toBeDefined();
+    expect(res.KeyMetadata.Enabled).toBe(true);
+  }
 }
 
 async function validateAlb(albDns: string) {
