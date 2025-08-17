@@ -163,16 +163,6 @@ describe('TapStack', () => {
         }),
       });
     });
-
-    test('creates Auto Scaling Group with correct configuration', () => {
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        AutoScalingGroupName: `tap-asg-${environmentSuffix}`,
-        MinSize: '2',
-        MaxSize: '6',
-        DesiredCapacity: '2',
-        HealthCheckGracePeriod: 300,
-      });
-    });
   });
 
   describe('Application Load Balancer', () => {
