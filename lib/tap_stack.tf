@@ -272,6 +272,8 @@ resource "aws_flow_log" "vpc_flow_log" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-logs"
   })
+
+  depends_on = [aws_cloudwatch_log_group.vpc_flow_logs, aws_iam_role.flow_log]
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
@@ -340,6 +342,8 @@ resource "aws_internet_gateway" "main" {
     Name = "${local.name_prefix}-igw"
     Type = "networking"
   })
+  
+  depends_on = [aws_vpc.main]
 }
 
 # Create subnets in multiple AZs for high availability
@@ -356,6 +360,8 @@ resource "aws_subnet" "public" {
     Type = "public-subnet"
     Tier = "public"
   })
+  
+  depends_on = [aws_vpc.main]
 }
 
 resource "aws_route_table" "public" {
@@ -370,12 +376,16 @@ resource "aws_route_table" "public" {
     Name = "${local.name_prefix}-public-rt"
     Type = "networking"
   })
+  
+  depends_on = [aws_internet_gateway.main]
 }
 
 resource "aws_route_table_association" "public" {
   count          = 2
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
+  
+  depends_on = [aws_subnet.public, aws_route_table.public]
 }
 
 #######################
@@ -404,17 +414,19 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
-    description = "To EC2 instances only"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb-sg"
     Type = "Security"
   })
+  
+  depends_on = [aws_vpc.main]
 }
 
 resource "aws_security_group" "ec2" {
@@ -438,15 +450,6 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = var.allowed_ssh_cidrs
   }
 
-  # Health check endpoint accessible from ALB
-  ingress {
-    description     = "Health check from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
   egress {
     description = "All outbound traffic"
     from_port   = 0
@@ -459,6 +462,8 @@ resource "aws_security_group" "ec2" {
     Name = "${local.name_prefix}-ec2-sg"
     Type = "Security"
   })
+  
+  depends_on = [aws_security_group.alb]
 }
 
 #######################
@@ -522,6 +527,8 @@ resource "aws_iam_role_policy" "ec2_policy" {
       }
     ]
   })
+  
+  depends_on = [aws_iam_role.ec2_role]
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
@@ -532,6 +539,8 @@ resource "aws_iam_instance_profile" "ec2_profile" {
     Name = "${local.name_prefix}-ec2-profile"
     Type = "Security"
   })
+  
+  depends_on = [aws_iam_role.ec2_role]
 }
 
 resource "aws_iam_role" "lambda_role" {
@@ -557,6 +566,8 @@ resource "aws_iam_role" "lambda_role" {
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  
+  depends_on = [aws_iam_role.lambda_role]
 }
 
 #######################
@@ -576,6 +587,8 @@ resource "aws_s3_bucket_versioning" "app_data" {
   versioning_configuration {
     status = "Enabled"
   }
+  
+  depends_on = [aws_s3_bucket.app_data]
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
@@ -590,6 +603,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
     }
     bucket_key_enabled = true
   }
+  
+  depends_on = [aws_s3_bucket.app_data, aws_kms_key.main]
 }
 
 resource "aws_s3_bucket_public_access_block" "app_data" {
@@ -599,6 +614,8 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+  
+  depends_on = [aws_s3_bucket.app_data]
 }
 
 # S3 access logging for compliance
@@ -619,6 +636,8 @@ resource "aws_s3_bucket_logging" "app_data_logging" {
 
   target_bucket = aws_s3_bucket.access_logs[0].id
   target_prefix = "access-logs/"
+  
+  depends_on = [aws_s3_bucket.app_data, aws_s3_bucket.access_logs]
 }
 
 #######################
@@ -663,6 +682,8 @@ resource "aws_sns_topic_subscription" "email_alerts" {
   topic_arn = aws_sns_topic.alerts.arn
   protocol  = "email"
   endpoint  = var.notification_email
+  
+  depends_on = [aws_sns_topic.alerts]
 }
 
 #######################
@@ -693,6 +714,8 @@ resource "aws_lb" "main" {
     Name = "${local.name_prefix}-alb"
     Type = "LoadBalancer"
   })
+  
+  depends_on = [aws_security_group.alb, aws_subnet.public]
 }
 
 resource "aws_lb_target_group" "app" {
@@ -719,6 +742,8 @@ resource "aws_lb_target_group" "app" {
     Type         = "LoadBalancer"
     HealthChecks = join(",", local.test_endpoints)
   })
+  
+  depends_on = [aws_vpc.main]
 }
 
 resource "aws_lb_listener" "app" {
@@ -735,6 +760,8 @@ resource "aws_lb_listener" "app" {
     Name = "${local.name_prefix}-alb-listener"
     Type = "LoadBalancer"
   })
+  
+  depends_on = [aws_lb.main, aws_lb_target_group.app]
 }
 
 #######################
@@ -917,7 +944,13 @@ HTML
     Compliance   = "SOC2-Ready"
   })
 
-  depends_on = [aws_internet_gateway.main, aws_cloudwatch_log_group.ec2_logs]
+  depends_on = [
+    aws_internet_gateway.main, 
+    aws_cloudwatch_log_group.ec2_logs,
+    aws_iam_instance_profile.ec2_profile,
+    aws_subnet.public,
+    aws_security_group.ec2
+  ]
 }
 
 # Attach EC2 instance to target group
@@ -925,6 +958,8 @@ resource "aws_lb_target_group_attachment" "app" {
   target_group_arn = aws_lb_target_group.app.arn
   target_id        = aws_instance.app.id
   port             = 80
+
+  depends_on = [aws_lb_target_group.app, aws_instance.app]
 }
 
 #######################
@@ -961,7 +996,8 @@ resource "aws_lambda_function" "app" {
 
   depends_on = [
     aws_iam_role_policy_attachment.lambda_basic_execution,
-    aws_cloudwatch_log_group.lambda_logs
+    aws_cloudwatch_log_group.lambda_logs,
+    aws_iam_role.lambda_role
   ]
 }
 
@@ -1081,6 +1117,8 @@ resource "aws_cloudwatch_metric_alarm" "ec2_cpu_high" {
     Name = "${local.name_prefix}-cpu-alarm"
     Type = "Monitoring"
   })
+  
+  depends_on = [aws_instance.app, aws_sns_topic.alerts]
 }
 
 # ALB response time alarm
@@ -1104,6 +1142,8 @@ resource "aws_cloudwatch_metric_alarm" "alb_response_time" {
     Name = "${local.name_prefix}-response-time-alarm"
     Type = "Monitoring"
   })
+  
+  depends_on = [aws_lb.main, aws_sns_topic.alerts]
 }
 
 # Health check alarm
@@ -1128,6 +1168,8 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_hosts" {
     Name = "${local.name_prefix}-unhealthy-hosts-alarm"
     Type = "Monitoring"
   })
+  
+  depends_on = [aws_lb.main, aws_lb_target_group.app, aws_sns_topic.alerts]
 }
 
 # Lambda error rate alarm
@@ -1151,6 +1193,8 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
     Name = "${local.name_prefix}-lambda-errors-alarm"
     Type = "Monitoring"
   })
+  
+  depends_on = [aws_lambda_function.app, aws_sns_topic.alerts]
 }
 
 # CloudWatch Dashboard (FIXED - NO TAGS AT ALL)
@@ -1202,6 +1246,8 @@ resource "aws_cloudwatch_dashboard" "main" {
       }
     ]
   })
+  
+  depends_on = [aws_instance.app, aws_lb.main, aws_lb_target_group.app, aws_lambda_function.app]
 }
 
 ########################
