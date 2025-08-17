@@ -1,0 +1,53 @@
+{
+  "vpc_id": {
+    "value": "vpc-0123456789abcdef0",
+    "type": "string",
+    "sensitive": false
+  },
+  "public_subnet_ids": {
+    "value": ["subnet-01234567890abcdef", "subnet-abcdef0123456789"],
+    "type": ["tuple", ["string"]],
+    "sensitive": false
+  },
+  "private_subnet_ids": {
+    "value": ["subnet-11111111111111111", "subnet-22222222222222222"],
+    "type": ["tuple", ["string"]],
+    "sensitive": false
+  },
+  "alb_dns_name": {
+    "value": "aws-infrastructuredev-alb-123456789.us-east-1.elb.amazonaws.com",
+    "type": "string",
+    "sensitive": false
+  },
+  "bastion_public_ip": {
+    "value": "54.123.45.67",
+    "type": "string",
+    "sensitive": false
+  },
+  "rds_endpoint": {
+    "value": "aws-infrastructuredev-db.cluster-123456789.us-east-1.rds.amazonaws.com:3306",
+    "type": "string",
+    "sensitive": false
+  },
+  "s3_bucket_name": {
+    "value": "aws-infrastructuredev-data-a1b2c3d4",
+    "type": "string",
+    "sensitive": false
+  },
+  "secrets_manager_arn": {
+    "value": "arn:aws:secretsmanager:us-east-1:123456789012:secret:aws-infrastructuredev-db-secret-AbCdEf",
+    "type": "string",
+    "sensitive": false
+  },
+  "cost_estimation": {
+    "value": {
+      "ec2_instances": 29.94,
+      "rds_instance": 58.32,
+      "alb": 22.50,
+      "nat_gateway": 45.50,
+      "total_estimated": 156.26
+    },
+    "type": "object",
+    "sensitive": false
+  }
+}
