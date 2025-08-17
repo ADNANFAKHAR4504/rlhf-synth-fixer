@@ -23,5 +23,11 @@
     "Amazon CloudWatch",
     "AWS KMS",
     "AWS X-Ray"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
