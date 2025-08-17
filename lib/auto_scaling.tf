@@ -13,7 +13,7 @@ resource "aws_launch_template" "ecommerce_lt" {
       volume_type = "gp3"
       encrypted   = true
       # Using default AWS managed key for EBS encryption
-      # kms_key_id            = aws_kms_key.ecommerce_kms_key.arn
+      kms_key_id            = aws_kms_key.ecommerce_kms_key.arn
       delete_on_termination = true
     }
   }
