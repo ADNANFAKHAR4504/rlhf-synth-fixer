@@ -85,11 +85,9 @@ describe('Turn Around Prompt API Integration Tests', () => {
       const data = (await response.json()) as any;
       expect(data.multi_region_config).toBeDefined();
       expect(data.multi_region_config.multi_region_orchestration).toBe(true);
-      expect(data.multi_region_config.is_primary_region).toBeInstanceOf(
-        Boolean
-      );
-      expect(data.multi_region_config.replication_enabled).toBeInstanceOf(
-        Boolean
+      expect(typeof data.multi_region_config.is_primary_region).toBe('boolean');
+      expect(typeof data.multi_region_config.replication_enabled).toBe(
+        'boolean'
       );
     });
 
@@ -99,7 +97,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
       const data = (await response.json()) as any;
       expect(data.deployment_region).toBeDefined();
-      expect(data.is_primary_region).toBeInstanceOf(Boolean);
+      expect(typeof data.is_primary_region).toBe('boolean');
       expect(data.multi_region_status).toBeDefined();
       expect(data.multi_region_status.current_region).toBeDefined();
       expect(data.multi_region_status.target_region).toBeDefined();
@@ -122,8 +120,8 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
       const data = (await response.json()) as any;
       expect(data.deployment_region).toBeDefined();
-      expect(data.is_primary_region).toBeInstanceOf(Boolean);
-      expect(data.replication_enabled).toBeInstanceOf(Boolean);
+      expect(typeof data.is_primary_region).toBe('boolean');
+      expect(typeof data.replication_enabled).toBe('boolean');
     });
   });
 
