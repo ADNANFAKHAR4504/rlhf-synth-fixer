@@ -388,7 +388,7 @@ Resources:
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub 'rds-credentials-${AWS::StackName}-${Environment}'
+      Name: !Sub 'rds-credentials-tapstack1271-${Environment}'
       Description: 'RDS Database credentials'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DatabaseUsername}"}'
@@ -410,7 +410,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub 'db-subnet-group-${AWS::StackName}-${Environment}'
+      DBSubnetGroupName: !Sub 'db-subnet-group-tapstack1271-${Environment}'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -422,7 +422,7 @@ Resources:
   RDSDatabase:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub 'database-${AWS::StackName}-${Environment}'
+      DBInstanceIdentifier: !Sub 'database-tapstack1271-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.37'
@@ -451,7 +451,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'ALB-${AWS::StackName}-${Environment}'
+      Name: !Sub 'ALB-tapstack1271-${Environment}'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -466,7 +466,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'ALBTargetGroup-${AWS::StackName}-${Environment}'
+      Name: !Sub 'ALBTargetGroup-tapstack1271-${Environment}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -502,7 +502,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub 'WebACL-${AWS::StackName}-${Environment}'
+      Name: !Sub 'WebACL-tapstack1271-${Environment}'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -546,7 +546,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub 'WebACL-${AWS::StackName}-${Environment}'
+        MetricName: !Sub 'WebACL-tapstack1271-${Environment}'
       Tags:
         - Key: Name
           Value: !Sub 'WebACL-tapstackpr1271-${Environment}'
@@ -626,7 +626,7 @@ Resources:
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'aws-config-${AWS::StackName}-${Environment}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'aws-config-tapstack1271-${Environment}-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
