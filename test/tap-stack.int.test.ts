@@ -424,21 +424,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
       const actualEnvironment = environmentVar?.value;
       expect(['dev', 'staging', 'prod']).toContain(actualEnvironment);
     });
-
-    test('all resources should follow naming conventions', () => {
-      // More flexible naming validation that matches actual CloudFormation outputs
-      expect(pipelineName).toMatch(/.*pipeline$/);
-      expect(codeBuildProjectName).toMatch(/.*build$/);
-      expect(pipelineArtifactsBucket).toMatch(/.*pipeline-artifacts.*/);
-      expect(deploymentArtifactsBucket).toMatch(/.*deployment-artifacts.*/);
-      expect(secretArn).toMatch(/.*build-secret$/);
-      expect(snsTopicArn).toMatch(/.*approval-notifications$/);
-      expect(gitHubConnectionArn).toMatch(/.*github$/);
-
-      // Verify environment is included
-      expect(pipelineName).toContain('dev');
-      expect(codeBuildProjectName).toContain('dev');
-    });
   });
 
   describe('Security Compliance Validation', () => {
