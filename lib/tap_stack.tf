@@ -883,20 +883,9 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
-# RDS Parameter Group
-resource "aws_db_parameter_group" "main" {
-  family = "mysql8.0"
-  name   = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-params-manager-v3"
-
-  parameter {
-    name  = "character_set_server"
-    value = "utf8"
-  }
-
-  parameter {
-    name  = "character_set_client"
-    value = "utf8"
-  }
+# RDS Parameter Group - Use existing one
+data "aws_db_parameter_group" "main" {
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-params-manager-v3"
 }
 
 # RDS Instance with Secrets Manager Integration
@@ -918,7 +907,7 @@ resource "aws_db_instance" "main" {
   port     = var.mysql_port
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  parameter_group_name   = aws_db_parameter_group.main.name
+  parameter_group_name   = data.aws_db_parameter_group.main.name
   vpc_security_group_ids = [aws_security_group.database.id]
 
   backup_retention_period = 7
@@ -934,10 +923,9 @@ resource "aws_db_instance" "main" {
     Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-database-v3"
   }
 
-  # Force replacement when parameter group, subnet group, or security group changes
+  # Force replacement when subnet group or security group changes
   lifecycle {
     replace_triggered_by = [
-      aws_db_parameter_group.main.name,
       aws_db_subnet_group.main.name,
       aws_security_group.database.id
     ]
