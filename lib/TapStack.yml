@@ -443,6 +443,7 @@ Resources:
 
   DatabaseSecretRotation:
     Type: AWS::SecretsManager::RotationSchedule
+    DependsOn: MyRotationLambdaInvokePermission
     Properties:
       SecretId: !Ref DatabaseSecret
       RotationLambdaARN: !GetAtt MyRotationLambda.Arn
