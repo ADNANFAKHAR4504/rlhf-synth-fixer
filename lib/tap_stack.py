@@ -700,16 +700,16 @@ class TapStack(pulumi.ComponentResource):
 
     
     def _export_outputs(self):
-        """Export important stack outputs"""
-        pulumi.export("source_bucket_name", self.source_bucket.bucket)
-        pulumi.export("target_bucket_name", self.target_bucket.bucket)
-        pulumi.export("load_balancer_dns", self.alb.dns_name)
-        pulumi.export("rds_endpoint", self.rds_instance.endpoint)
-        pulumi.export("dashboard_url", self.cloudwatch_dashboard.dashboard_url)
-        pulumi.export("vpc_id", self.target_vpc.id)
-        pulumi.export("environment", self.env_suffix)
-        
-        # Export EC2 instance IDs
-        for i, instance in enumerate(self.ec2_instances):
-            pulumi.export(f"ec2_instance_{i+1}_id", instance.id)
-            pulumi.export(f"ec2_instance_{i+1}_public_ip", instance.public_ip)
+      """Export important stack outputs"""
+      pulumi.export("source_bucket_name", self.source_bucket.bucket)
+      pulumi.export("target_bucket_name", self.target_bucket.bucket)
+      pulumi.export("load_balancer_dns", self.alb.dns_name)
+      pulumi.export("rds_endpoint", self.rds_instance.endpoint)
+      pulumi.export("dashboard_arn", self.cloudwatch_dashboard.dashboard_arn)
+      pulumi.export("vpc_id", self.target_vpc.id)
+      pulumi.export("environment", self.env_suffix)
+      
+      # Export EC2 instance IDs
+      for i, instance in enumerate(self.ec2_instances):
+          pulumi.export(f"ec2_instance_{i+1}_id", instance.id)
+          pulumi.export(f"ec2_instance_{i+1}_public_ip", instance.public_ip)
