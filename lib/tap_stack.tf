@@ -4,14 +4,17 @@
 variable "vpc_id" {
   description = "Target VPC ID"
   type        = string
+  default     = ""
 }
 variable "subnet_id" {
   description = "Target subnet ID for the EC2 instance"
   type        = string
+  default     = ""
 }
 variable "allowed_cidr" {
   description = "CIDR allowed to access ports 22 and 443"
   type        = string
+  default     = "0.0.0.0/0"
 }
 variable "s3_kms_key_arn" {
   description = "KMS key ARN used for S3 server-side encryption (optional)"
@@ -21,10 +24,12 @@ variable "s3_kms_key_arn" {
 variable "data_bucket_name" {
   description = "S3 bucket name for application data"
   type        = string
+  default     = "tap-data-bucket-example"
 }
 variable "trail_bucket_name" {
   description = "S3 bucket name for CloudTrail logs (if created)"
   type        = string
+  default     = "tap-trail-bucket-example"
 }
 variable "instance_ami" {
   description = "AMI ID for the EC2 instance (if not provided, AL2023 is used)"
