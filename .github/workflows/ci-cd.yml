@@ -26,6 +26,7 @@ env:
   TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
   PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
+  PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
 
@@ -115,6 +116,17 @@ jobs:
 
       - name: Build
         run: npm run build
+      
+      name: Re-upload artifacts for Pulumi
+        if: ${{ needs.detect-metadata.outputs.platform == 'pulumi' && needs.detect-metadata.outputs.language == 'ts' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          include-hidden-files: true
+          overwrite: true
+          path: |
+            bin/
+
 
   synth:
     name: Synth
@@ -170,7 +182,7 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   deploy:
@@ -268,7 +280,7 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       - name: Deploy
@@ -332,7 +344,7 @@ jobs:
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}  
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
@@ -675,7 +687,7 @@ jobs:
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           CI: '1' # Set CI for the entire step
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
@@ -835,7 +847,7 @@ jobs:
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   archive-folders:
@@ -1158,7 +1170,7 @@ jobs:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   # TODO: For future use
