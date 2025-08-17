@@ -424,10 +424,14 @@ resource "aws_vpc_endpoint" "dynamodb" {
 #######################
 # S3 Bucket and Corrected Lifecycle
 #######################
+
 resource "aws_s3_bucket" "logs" {
-  bucket = "${local.name_prefix}-logs-bucket"
-  force_destroy = true
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-logs-bucket" })
+  bucket        = "${local.name_prefix}-logs-bucket"
+  force_destroy = true  # Add this line
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-logs-bucket"
+  })
 }
 
 resource "aws_s3_bucket_public_access_block" "logs" {
@@ -459,6 +463,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
     id     = "log-lifecycle"
     status = "Enabled"
     filter { prefix = "" }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -469,6 +476,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
     }
     expiration {
       days = local.backup_retention_days
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 1
     }
   }
 }
