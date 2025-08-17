@@ -317,7 +317,7 @@ def create_infrastructure(export_outputs=True):
         )
         private_rts.append(private_rt)
 
-        # Associate private subnets in this AZ
+        # Associates private subnets in this AZ
         for j in range(2):  # 2 private subnets per AZ
           subnet_idx = i * 2 + j
           rta = ec2.RouteTableAssociation(
