@@ -62,6 +62,7 @@ Parameters:
 Conditions:
   CreateSecurityHub: !Equals [!Ref EnableSecurityHub, "true"]
   CreateAWSConfig:   !Equals [!Ref EnableAWSConfig,   "true"]
+  HasCustomSsmName:  !Not [ !Equals [ !Ref SsmParamName, "" ] ]
 
 Resources:
   ############################################
@@ -521,7 +522,6 @@ Resources:
   ############################################
   # SSM Parameter (String; configurable name)
   ############################################
-Resources:
   AppDbPasswordParam:
     Type: AWS::SSM::Parameter
     Properties:
@@ -533,7 +533,6 @@ Resources:
       Tier: Standard
       Value: !Ref DbPassword
       Description: !Sub "DB password for ${ProjectName}-${EnvironmentSuffix} (String)"
-
 
   ############################################
   # Lambda (least-priv) + logs
@@ -641,5 +640,7 @@ Outputs:
   SecurityHubStatus:
     Value: !If [CreateSecurityHub, "Enabled", "Skipped"]
   SsmParamDbPassword:
-    Value: !Ref SsmParamName
-    
+    Value: !If
+      - HasCustomSsmName
+      - !Ref SsmParamName
+      - !Sub "/${ProjectName}/${EnvironmentSuffix}/DB_PASSWORD"
