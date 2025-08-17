@@ -23,11 +23,6 @@ Parameters:
     Type: String
     Default: 'dbadmin'
     Description: 'Database master username'
-  
-  DomainName:
-    Type: String
-    Default: 'example.com'
-    Description: 'Domain name for CloudFront distribution'
 
 Resources:
   # ============================================================================
@@ -432,7 +427,7 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref MyRotationLambda
+      FunctionName: !GetAtt MyRotationLambda.Arn
       Principal: secretsmanager.amazonaws.com
 
   DatabaseSecret:
