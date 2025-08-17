@@ -204,7 +204,9 @@ describe('Terraform integration tests (outputs + standards)', () => {
         expect(isArn(ctArn)).toBe(true);
       } else {
         // Allow absent/null when trail creation is disabled
-        expect(ctArn === null || ctArn === '' || typeof ctArn === 'undefined').toBe(true);
+        expect(
+          ctArn === null || ctArn === '' || typeof ctArn === 'undefined'
+        ).toBe(true);
       }
       expect(isNonEmptyString(outputs!.cloudtrail_home_region)).toBe(true);
     });
