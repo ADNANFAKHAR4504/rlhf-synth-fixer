@@ -138,6 +138,13 @@ resource "aws_instance" "app_server_eu_north_1" {
   tags = merge(local.common_tags, { Name = "nova-app-server-eu-north-1" })
 }
 
+# AWS Config setup for eu-north-1
+resource "aws_config_configuration_recorder" "recorder_eu_north_1" {
+  provider = aws.eu-north-1
+  name     = "default"
+  role_arn = aws_iam_role.config_role.arn
+}
+
 resource "aws_config_config_rule" "s3_encryption_eu_north_1" {
   provider = aws.eu-north-1
   name     = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
@@ -145,6 +152,7 @@ resource "aws_config_config_rule" "s3_encryption_eu_north_1" {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
   }
+  depends_on = [aws_config_configuration_recorder.recorder_eu_north_1]
 }
 
 resource "aws_config_config_rule" "ebs_encryption_eu_north_1" {
@@ -154,15 +162,7 @@ resource "aws_config_config_rule" "ebs_encryption_eu_north_1" {
     owner             = "AWS"
     source_identifier = "ENCRYPTED_VOLUMES"
   }
-}
-
-resource "aws_config_config_rule" "iam_policy_eu_north_1" {
-  provider = aws.eu-north-1
-  name     = "IAM_ROLE_MANAGED_POLICY_CHECK"
-  source {
-    owner             = "AWS"
-    source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
-  }
+  depends_on = [aws_config_configuration_recorder.recorder_eu_north_1]
 }
 
 # /-----------------------------------------------------------------------------
@@ -237,6 +237,13 @@ resource "aws_instance" "app_server_us_west_2" {
   tags = merge(local.common_tags, { Name = "nova-app-server-us-west-2" })
 }
 
+# AWS Config setup for us-west-2
+resource "aws_config_configuration_recorder" "recorder_us_west_2" {
+  provider = aws.us-west-2
+  name     = "default"
+  role_arn = aws_iam_role.config_role.arn
+}
+
 resource "aws_config_config_rule" "s3_encryption_us_west_2" {
   provider = aws.us-west-2
   name     = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
@@ -244,6 +251,7 @@ resource "aws_config_config_rule" "s3_encryption_us_west_2" {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
   }
+  depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
 }
 
 resource "aws_config_config_rule" "ebs_encryption_us_west_2" {
@@ -253,15 +261,29 @@ resource "aws_config_config_rule" "ebs_encryption_us_west_2" {
     owner             = "AWS"
     source_identifier = "ENCRYPTED_VOLUMES"
   }
+  depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
 }
 
-resource "aws_config_config_rule" "iam_policy_us_west_2" {
-  provider = aws.us-west-2
-  name     = "IAM_ROLE_MANAGED_POLICY_CHECK"
-  source {
-    owner             = "AWS"
-    source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
-  }
+# /-----------------------------------------------------------------------------
+# | Global Resources for AWS Config
+# |-----------------------------------------------------------------------------
+
+# A single IAM role for the AWS Config service, used by recorders in all regions.
+resource "aws_iam_role" "config_role" {
+  name = "nova-config-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "config.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "config_policy" {
+  role       = aws_iam_role.config_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 # /-----------------------------------------------------------------------------

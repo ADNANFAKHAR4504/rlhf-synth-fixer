@@ -206,34 +206,35 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
             'm'
           )
         );
-        const iamRule = mainTfContent.match(
-          new RegExp(
-            `resource "aws_config_config_rule" "iam_policy_${regionSuffix}"`,
-            'm'
-          )
-        );
+
         expect(s3Rule).not.toBeNull();
         expect(ebsRule).not.toBeNull();
-        expect(iamRule).not.toBeNull();
       }
     );
   });
 
   describe('Terraform Outputs', () => {
-    it('should define a structured output for deployment_summary', () => {
-      const outputBlock = mainTfContent.match(
-        /output "deployment_summary" {[\s\S]*?^}/m
-      );
-      expect(outputBlock).not.toBeNull();
-      const normalizedOutput = normalize(outputBlock![0]);
-      // Check that the output block correctly references the explicit resources
-      expect(normalizedOutput).toContain(
-        's3_bucket_name = aws_s3_bucket.data_bucket_eu_north_1.id'
-      );
+    test.each([{ region: 'eu-north-1' }, { region: 'us-west-2' }])(
+      'should define a structured output for $region in deployment_summary',
+      ({ region }) => {
+        const outputBlock = mainTfContent.match(
+          /output "deployment_summary" {[\s\S]*?^}/m
+        );
+        expect(outputBlock).not.toBeNull();
+        const normalizedOutput = normalize(outputBlock![0]);
+        const regionSuffix = region.replace(/-/g, '_');
 
-      expect(normalizedOutput).toContain(
-        'ec2_instance_id = aws_instance.app_server_us_west_2.id'
-      );
-    });
+        // Check that the output block correctly references the explicit resources for the given region
+        expect(normalizedOutput).toContain(
+          `"${region}" = { s3_bucket_name = aws_s3_bucket.data_bucket_${regionSuffix}.id`
+        );
+        expect(normalizedOutput).toContain(
+          `ec2_instance_id = aws_instance.app_server_${regionSuffix}.id`
+        );
+        expect(normalizedOutput).toContain(
+          `kms_key_arn = aws_kms_key.app_key_${regionSuffix}.arn`
+        );
+      }
+    );
   });
 });
