@@ -21,7 +21,12 @@ provider "aws" {
 
   default_tags {
     tags = {
-      ManagedBy = "Terraform"
+      Environment = var.environment
+      Project     = var.project_name
+      Owner       = var.owner
+      ManagedBy   = "Terraform"
+      CostCenter  = var.cost_center
+      CreatedDate = formatdate("YYYY-MM-DD", timestamp())
     }
   }
 }

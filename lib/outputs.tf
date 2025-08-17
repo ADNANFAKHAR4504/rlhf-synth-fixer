@@ -42,3 +42,13 @@ output "availability_zones" {
   description = "Availability zones used"
   value       = data.aws_availability_zones.available.names
 }
+
+output "kms_key_id" {
+  description = "KMS Key ID for RDS encryption"
+  value       = aws_kms_key.rds.key_id
+}
+
+output "nat_gateway_ip" {
+  description = "NAT Gateway public IP"
+  value       = aws_eip.nat.public_ip
+}
