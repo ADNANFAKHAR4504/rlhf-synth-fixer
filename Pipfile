@@ -13,3 +13,6 @@ pylint = "*"
 
 [requires]
 python_version = "3.12"
+
+[scripts]
+lint = "pylint lib/ tests/"
