@@ -1,11 +1,11 @@
-# Data source for latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux" {
+# Data source for latest Ubuntu canonical AMI
+data "aws_ami" "ubuntu_jammy" {
   most_recent = true
-  owners      = ["amazon"]
+  owners      = ["099720109477"] # Canonical's AWS account ID
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 
   filter {
@@ -17,7 +17,7 @@ data "aws_ami" "amazon_linux" {
 # Launch Template
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.environment}-lt-"
-  image_id      = var.ami_id != "" ? var.ami_id : data.aws_ami.amazon_linux.id
+  image_id      = data.aws_ami.ubuntu_jammy.id
   instance_type = var.instance_type
 
   vpc_security_group_ids = var.security_group_ids
@@ -148,12 +148,16 @@ data "aws_subnet" "first" {
 locals {
   default_user_data = <<-EOF
     #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Hello from ${var.environment} environment!</h1>" > /var/www/html/index.html
-    echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
-    echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+    #!/bin/bash
+    # Update package list
+    apt-get update -y
+    # Install Apache2
+    apt-get install -y apache2
+    # Enable Apache2 to start on boot
+    systemctl enable apache2
+    # Start Apache2 service
+    systemctl start apache2
+    # Create a basic index.html page
+    echo "<h1>Apache is running on $(hostname -f)</h1>" > /var/www/html/index.html
   EOF
 }
