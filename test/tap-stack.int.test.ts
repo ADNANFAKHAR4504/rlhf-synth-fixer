@@ -414,11 +414,13 @@ describe('TAP Stack Integration Tests', () => {
       testConfig.timeout
     );
 
-    skipIfNoOutputs('should verify API Gateway uses HTTPS', async () => {
-      const apiEndpoint =
-        outputs[`${testConfig.stackName}-TapApiEndpoint`] ||
-        outputs.TapApiEndpoint;
-      expect(apiEndpoint).toMatch(/^https:\/\//);
+    skipIfNoOutputs('should verify API Gateway uses HTTPS', () => {
+      test('API Gateway endpoint should use HTTPS', () => {
+        const apiEndpoint =
+          outputs[`${testConfig.stackName}-TapApiEndpoint`] ||
+          outputs.TapApiEndpoint;
+        expect(apiEndpoint).toMatch(/^https:\/\//);
+      });
     });
 
     test(
