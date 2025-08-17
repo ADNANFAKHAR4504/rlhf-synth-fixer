@@ -22,3 +22,11 @@ It’s not clear how centralization is achieved, cross-region log aggregation in
 
 *** Flaw 7 ***
 No mention who to approve production deployment
+
+** Flaw 8 ***
+
+# Read Replica (Production only)
+resource "aws_db_instance" "replica" {
+  count = var.environment == "production" ? 1 : 0
+
+  identifier = "${var.name_prefix}-db-
