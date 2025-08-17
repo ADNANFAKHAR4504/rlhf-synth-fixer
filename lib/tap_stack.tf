@@ -348,7 +348,7 @@ resource "aws_flow_log" "vpc_flow_log" {
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/${local.name_prefix}-flow-logs"
+  name              = "/aws/vpc/${local.name_prefix}-flow-logs-${random_string.suffix.result}"
   retention_in_days = local.log_retention_days
   kms_key_id        = aws_kms_key.main.arn
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-vpc-flow-logs" })
@@ -815,6 +815,110 @@ resource "aws_iam_role_policy_attachment" "backup_policy" {
 resource "aws_iam_role_policy_attachment" "backup_restore_policy" {
   role       = aws_iam_role.backup_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+}
+
+# Modified locals block to ensure shorter resource names
+locals {
+  # Shorter timestamp format to avoid long names
+  timestamp   = formatdate("MMDD", timestamp())
+  name_prefix = "${substr(var.project_name, 0, 3)}-${var.environment}-${local.timestamp}-${random_string.suffix.result}"
+
+  # ... (rest of locals remain the same)
+}
+
+# Modified ACM Certificate with increased timeout
+resource "aws_acm_certificate" "main" {
+  # ... (previous configuration remains the same)
+  
+  timeouts {
+    create = "15m"  # Increased from default 5m
+  }
+}
+
+# Modified ALB with shortened name
+resource "aws_lb" "main" {
+  # Ensure name length is within 32 characters
+  name = "${substr(local.name_prefix, 0, 28)}-alb"
+  
+  # ... (rest of ALB configuration remains the same)
+}
+
+# Modified Auto Scaling Group with increased timeout
+resource "aws_autoscaling_group" "web" {
+  # ... (previous configuration remains the same)
+
+  timeouts {
+    create = "20m"  # Increased from 10m
+    delete = "20m"
+  }
+
+  # ... (rest of ASG configuration remains the same)
+}
+
+# Modified WAF WebACL with fixed rule configuration
+resource "aws_wafv2_web_acl" "main" {
+  count       = var.enable_waf ? 1 : 0
+  name        = "${local.name_prefix}-waf"
+  description = "WAF web ACL"
+  scope       = "REGIONAL"
+
+  default_action {
+    allow {}
+  }
+
+  # AWS Managed Rules Common Rule Set
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 1
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name               = "${replace(local.name_prefix, "-", "_")}_common_rule_metric"
+      sampled_requests_enabled  = true
+    }
+  }
+
+  # AWS Managed Rules Known Bad Inputs
+  rule {
+    name     = "AWSManagedRulesKnownBadInputsRuleSet"
+    priority = 2
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesKnownBadInputsRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name               = "${replace(local.name_prefix, "-", "_")}_bad_inputs_metric"
+      sampled_requests_enabled  = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name               = "${replace(local.name_prefix, "-", "_")}_waf_metric"
+    sampled_requests_enabled  = true
+  }
+
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-waf" })
 }
 
 #######################
