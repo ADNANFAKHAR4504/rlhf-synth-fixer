@@ -47,8 +47,6 @@ locals {
 # GLOBAL & SHARED RESOURCES
 # ------------------------------------------------------------------------------
 
-# Generates a secure, random password for the RDS database.
-# This removes the need for manual input during bootstrap.
 resource "random_password" "db_password" {
   length           = 16
   special          = true
@@ -126,7 +124,7 @@ data "aws_availability_zones" "primary" {
 
 resource "aws_security_group" "primary_alb" {
   provider    = aws.primary
-  name        = "sg-alb-primary-291295"
+  name        = "alb-primary-291295"
   description = "Allow HTTP/HTTPS inbound traffic to ALB"
   vpc_id      = aws_vpc.primary.id
 
@@ -147,7 +145,7 @@ resource "aws_security_group" "primary_alb" {
 
 resource "aws_security_group" "primary_ec2" {
   provider    = aws.primary
-  name        = "sg-ec2-primary-291295"
+  name        = "ec2-primary-291295"
   description = "Allow web and SSH traffic"
   vpc_id      = aws_vpc.primary.id
 
@@ -174,7 +172,7 @@ resource "aws_security_group" "primary_ec2" {
 
 resource "aws_security_group" "primary_rds" {
   provider    = aws.primary
-  name        = "sg-rds-primary-291295"
+  name        = "rds-primary-291295"
   description = "Allow PostgreSQL traffic from EC2 instances"
   vpc_id      = aws_vpc.primary.id
 
@@ -429,7 +427,7 @@ data "aws_availability_zones" "secondary" {
 
 resource "aws_security_group" "secondary_alb" {
   provider    = aws.secondary
-  name        = "sg-alb-secondary-291295"
+  name        = "alb-secondary-291295"
   description = "Allow HTTP/HTTPS inbound traffic to ALB"
   vpc_id      = aws_vpc.secondary.id
 
@@ -450,7 +448,7 @@ resource "aws_security_group" "secondary_alb" {
 
 resource "aws_security_group" "secondary_ec2" {
   provider    = aws.secondary
-  name        = "sg-ec2-secondary-291295"
+  name        = "ec2-secondary-291295"
   description = "Allow web and SSH traffic"
   vpc_id      = aws_vpc.secondary.id
 
@@ -721,9 +719,13 @@ resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
 # COST OPTIMIZATION LAMBDA
 # ------------------------------------------------------------------------------
 
+# FIX: Changed to use the correct 'source' block instead of 'source_code'.
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_code = <<-EOT
+  output_path = "cost_saver_lambda.zip"
+
+  source {
+    content  = <<-EOT
 import boto3
 import os
 
@@ -735,7 +737,8 @@ def lambda_handler(event, context):
     # This logic is illustrative.
     return { 'statusCode': 200, 'body': 'Cost optimization check complete.' }
 EOT
-  output_path = "cost_saver_lambda.zip"
+    filename = "index.py"
+  }
 }
 
 resource "aws_iam_role" "lambda_role" {

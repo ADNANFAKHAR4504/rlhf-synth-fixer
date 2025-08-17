@@ -79,14 +79,14 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
       );
     });
 
-    it('should define security groups with the correct suffix', () => {
+    it('should define security groups with the correct name (no sg- prefix)', () => {
       const albSg = getResourceBlock('aws_security_group', 'primary_alb');
       expect(albSg).not.toBeNull();
-      expect(albSg).toMatch(/name\s*=\s*"sg-alb-primary-291295"/);
+      expect(albSg).toMatch(/name\s*=\s*"alb-primary-291295"/);
 
       const ec2Sg = getResourceBlock('aws_security_group', 'primary_ec2');
       expect(ec2Sg).not.toBeNull();
-      expect(ec2Sg).toMatch(/name\s*=\s*"sg-ec2-primary-291295"/);
+      expect(ec2Sg).toMatch(/name\s*=\s*"ec2-primary-291295"/);
     });
   });
 
