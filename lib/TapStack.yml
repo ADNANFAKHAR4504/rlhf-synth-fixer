@@ -841,7 +841,7 @@ Resources:
       Engine: mysql
       EngineVersion: '8.0.43'
       AllocatedStorage: 20
-      StorageType: gp2
+      StorageType: gp2   
       StorageEncrypted: true
       KmsKeyId: !Ref RDSKMSKey
       MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
@@ -855,7 +855,6 @@ Resources:
       EnableCloudwatchLogsExports:
         - error
         - general
-        - slow-query
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       Tags:
@@ -865,6 +864,7 @@ Resources:
           Value: !Ref Owner
         - Key: project
           Value: !Ref ProjectName
+
 
   # ============================================================================
   # EC2 Instance with Encrypted EBS
