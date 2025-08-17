@@ -25,27 +25,32 @@ export class SecurityConstruct extends Construct {
       // Removed unused accountId variable
       const principalArn = '*'; // fallback to allow all (not recommended for production)
 
-      const kmsKeyInstance = new KmsKey(this, `${props.prefix}-kms-${region}`, {
-        provider: props.vpc.providers[region],
-        description: `KMS key for ${props.prefix} ${region} encryption`,
-        keyUsage: 'ENCRYPT_DECRYPT',
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'Enable IAM User Permissions',
-              Effect: 'Allow',
-              Principal: { AWS: principalArn },
-              Action: 'kms:*',
-              Resource: '*',
-            },
-          ],
-        }),
-        tags: {
-          Name: `${props.prefix}-kms-key-${region}`,
-          Environment: props.prefix,
-        },
-      });
+      const kmsSuffix = Math.random().toString(36).substring(2, 8);
+      const kmsKeyInstance = new KmsKey(
+        this,
+        `${props.prefix}-kms-${region}-${kmsSuffix}`,
+        {
+          provider: props.vpc.providers[region],
+          description: `KMS key for ${props.prefix} ${region} encryption`,
+          keyUsage: 'ENCRYPT_DECRYPT',
+          policy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: { AWS: principalArn },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+            ],
+          }),
+          tags: {
+            Name: `${props.prefix}-kms-key-${region}-${kmsSuffix}`,
+            Environment: props.prefix,
+          },
+        }
+      );
       this.kmsKeys[region] = kmsKeyInstance;
       // IAM Role (EC2)
       const randomSuffix = Math.random().toString(36).substring(2, 8);

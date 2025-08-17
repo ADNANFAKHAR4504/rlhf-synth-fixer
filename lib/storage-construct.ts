@@ -16,15 +16,16 @@ export class StorageConstruct extends Construct {
     // For each region, create S3 bucket with KMS encryption and logging
     Object.keys(props.security.kmsKeys).forEach(region => {
       const kmsKey = props.security.kmsKeys[region];
-      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      // Removed unused randomSuffix variable
+      const bucketSuffix = Math.random().toString(36).substring(2, 8);
       const bucket = new S3Bucket(
         this,
-        `${props.prefix}-s3-bucket-${region}-${randomSuffix}`,
+        `${props.prefix}-s3-bucket-${region}-${bucketSuffix}`,
         {
           provider: kmsKey.provider,
-          bucket: `${props.prefix}-bucket-${region}-${randomSuffix}`,
+          bucket: `${props.prefix}-bucket-${region}-${bucketSuffix}`,
           tags: {
-            Name: `${props.prefix}-s3-bucket-${region}-${randomSuffix}`,
+            Name: `${props.prefix}-s3-bucket-${region}-${bucketSuffix}`,
             Environment: props.prefix,
           },
         }
@@ -58,16 +59,21 @@ export class StorageConstruct extends Construct {
         }
       );
       // Enable logging for S3 bucket (to CloudWatch)
-      new CloudwatchLogGroup(this, `${props.prefix}-s3-logs-${region}`, {
-        provider: kmsKey.provider,
-        name: `/aws/s3/${props.prefix}-bucket-${region}`,
-        retentionInDays: 30,
-        kmsKeyId: kmsKey.arn,
-        tags: {
-          Name: `${props.prefix}-s3-logs-${region}`,
-          Environment: props.prefix,
-        },
-      });
+      const s3LogSuffix = Math.random().toString(36).substring(2, 8);
+      new CloudwatchLogGroup(
+        this,
+        `${props.prefix}-s3-logs-${region}-${s3LogSuffix}`,
+        {
+          provider: kmsKey.provider,
+          name: `/aws/s3/${props.prefix}-bucket-${region}-${s3LogSuffix}`,
+          retentionInDays: 30,
+          kmsKeyId: kmsKey.arn,
+          tags: {
+            Name: `${props.prefix}-s3-logs-${region}-${s3LogSuffix}`,
+            Environment: props.prefix,
+          },
+        }
+      );
     });
   }
 }

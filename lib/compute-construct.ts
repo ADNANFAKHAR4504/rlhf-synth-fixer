@@ -110,16 +110,17 @@ export class ComputeConstruct extends Construct {
         }
       );
       // Lambda Log Group
+      const lambdaLogSuffix = Math.random().toString(36).substring(2, 8);
       const lambdaLogGroup = new CloudwatchLogGroup(
         this,
-        `${props.prefix}-lambda-logs-${region}`,
+        `${props.prefix}-lambda-logs-${region}-${lambdaLogSuffix}`,
         {
           provider: vpc.provider,
-          name: `/aws/lambda/${props.prefix}-lambda-${region}`,
+          name: `/aws/lambda/${props.prefix}-lambda-${region}-${lambdaLogSuffix}`,
           retentionInDays: 14,
           kmsKeyId: kmsKey.arn,
           tags: {
-            Name: `${props.prefix}-lambda-logs-${region}`,
+            Name: `${props.prefix}-lambda-logs-${region}-${lambdaLogSuffix}`,
             Environment: props.prefix,
           },
         }

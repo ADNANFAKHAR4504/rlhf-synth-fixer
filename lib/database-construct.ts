@@ -35,26 +35,31 @@ export class DatabaseConstruct extends Construct {
         },
       });
 
-      new DbInstance(this, `${props.prefix}-rds-instance-${region}`, {
-        provider: vpc.provider,
-        identifier: `${props.prefix}-rds-${region}`,
-        instanceClass: 'db.t3.micro',
-        engine: 'mysql',
-        engineVersion: '8.0',
-        allocatedStorage: 20,
-        username: 'admin',
-        password: process.env.RDS_ADMIN_PASSWORD || '', // Use secrets manager in production
-        dbName: `${props.prefix}_db_${region}`,
-        vpcSecurityGroupIds: securityGroupIds, // Reference actual security groups
-        storageEncrypted: true,
-        kmsKeyId: kmsKey.arn,
-        publiclyAccessible: false,
-        dbSubnetGroupName: dbSubnetGroup.name,
-        tags: {
-          Name: `${props.prefix}-rds-instance-${region}`,
-          Environment: props.prefix,
-        },
-      });
+      const rdsSuffix = Math.random().toString(36).substring(2, 8);
+      new DbInstance(
+        this,
+        `${props.prefix}-rds-instance-${region}-${rdsSuffix}`,
+        {
+          provider: vpc.provider,
+          identifier: `${props.prefix}-rds-${region}-${rdsSuffix}`,
+          instanceClass: 'db.t3.micro',
+          engine: 'mysql',
+          engineVersion: '8.0',
+          allocatedStorage: 20,
+          username: 'admin',
+          password: process.env.RDS_ADMIN_PASSWORD || 'ValidP@ssw0rd123!',
+          dbName: `${props.prefix}_db_${region}`,
+          vpcSecurityGroupIds: securityGroupIds, // Reference actual security groups
+          storageEncrypted: true,
+          kmsKeyId: kmsKey.arn,
+          publiclyAccessible: false,
+          dbSubnetGroupName: dbSubnetGroup.name,
+          tags: {
+            Name: `${props.prefix}-rds-instance-${region}-${rdsSuffix}`,
+            Environment: props.prefix,
+          },
+        }
+      );
       // DynamoDB Table handled in DynamoDbConstruct
     });
   }
