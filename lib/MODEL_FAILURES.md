@@ -98,4 +98,3 @@ The goal is to identify where the model response deviates from both the code and
 ## Conclusion
 The **MODEL_RESPONSE.md** overstates several features (IAM coverage, ACM validation, monitoring, outputs) and omits important technical details (OAC usage, failover groups, logging buckets, rate limiting).  
 The `tap_stack.py` implementation is more detailed in security and CloudFront setup but less complete in monitoring, IAM, and ACM validation.  
-
