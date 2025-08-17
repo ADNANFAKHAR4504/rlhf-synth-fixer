@@ -324,7 +324,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
       test("should have RDS instance", () => {
         expect(databaseMain).toMatch(/resource "aws_db_instance" "main"/);
         expect(databaseMain).toMatch(/engine\s*=\s*"mysql"/);
-        expect(databaseMain).toMatch(/engine_version\s*=\s*"8\.0"/);
+        expect(databaseMain).toMatch(/engine_version\s*=\s*var\.db_engine_version/);
       });
 
       test("should have parameter group", () => {
