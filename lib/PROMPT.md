@@ -1,4 +1,4 @@
-You are an expert DevOps and Cloud Security Engineer. Implement a **highly secure AWS cloud environment** using **Terraform** in **HCL format**, saved as `secure_aws_environment.tf`. Follow the company’s security guidelines and resource naming conventions. The environment must:
+You are an expert DevOps and Cloud Security Engineer. Implement a **highly secure AWS cloud environment** using **Terraform** in **HCL format**, saved as `tap_stack.tf`. Follow the company’s security guidelines and resource naming conventions. The environment must:
 
 1. **IAM & MFA** – Define IAM roles and policies strictly following least privilege. Enforce MFA for all IAM users accessing the console.
 2. **Encryption** – Encrypt all AWS resources at rest with AWS KMS (AWS-managed keys).
@@ -12,7 +12,7 @@ You are an expert DevOps and Cloud Security Engineer. Implement a **highly secur
 10. **Threat Detection** – Enable AWS GuardDuty to trigger automated alerts for suspicious activity.
 
 **Expected Output:**
-A single Terraform configuration file (`secure_aws_environment.tf`) that:
+A single Terraform configuration file (`tap_stack.tf`) that:
 
 * Successfully provisions all listed AWS resources in **both `us-west-1` and `eu-central-1`**.
 * Implements **least privilege IAM roles and policies** with MFA enforced for all users.

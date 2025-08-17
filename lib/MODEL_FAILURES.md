@@ -75,3 +75,10 @@ Error: putting ConfigService Delivery Channel (SecurityDeliveryChannel-default-e
 **Impact:**
 - AWS Config service deployment failed
 - Compliance monitoring not functional
+
+**Root Cause:**
+AWS Config has strict service limits:
+- **1 Configuration Recorder per region** (maximum)
+- **1 Delivery Channel per region** (maximum)
+
+The error occurred because there were already existing AWS Config resources in the `eu-central-1` region, preventing the creation of new ones.
