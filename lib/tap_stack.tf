@@ -539,7 +539,7 @@ resource "aws_instance" "web" {
 resource "aws_lb" "main" {
   for_each = var.environments
   
-  name               = "${each.key}-alb"
+  name               = "${each.key}-alb-tapstack"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.elb_https[each.key].id]
@@ -606,7 +606,7 @@ resource "aws_lb_target_group_attachment" "main" {
 resource "aws_db_subnet_group" "main" {
   for_each = var.environments
   
-  name = "${each.key}-db-subnet-group"
+  name = "${each.key}-db-subnet-tapstack"
   subnet_ids = [
     aws_subnet.private["${each.key}-private-0"].id,
     aws_subnet.private["${each.key}-private-1"].id
