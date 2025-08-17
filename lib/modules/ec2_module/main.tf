@@ -54,14 +54,14 @@ resource "aws_launch_template" "main" {
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
   name                = "${var.environment}-asg"
-  vpc_zone_identifier = var.subnet_ids
+  vpc_zone_identifier = var.private_subnet_ids
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = 1
   max_size         = 3
-  desired_capacity = length(var.subnet_ids)
+  desired_capacity = length(var.private_subnet_ids)
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -94,7 +94,7 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = var.security_group_ids
-  subnets            = var.subnet_ids
+  subnets            = var.public_subnet_ids
 
   enable_deletion_protection = false
 

@@ -50,7 +50,8 @@ module "ec2_module" {
     source = "./modules/ec2_module"
     instance_type = var.instance_type
     ami_id = var.ami_id
-    subnet_ids = module.vpc.private_subnet_ids
+    private_subnet_ids = module.vpc.private_subnet_ids
+    public_subnet_ids = module.vpc.public_subnet_ids
     security_group_ids = [module.security_module.alb_security_group_id, module.security_module.alb_security_group_id]
     instance_profile_name = module.iam_module.ec2_instance_profile_name
     tags = local.common_tags

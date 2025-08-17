@@ -15,9 +15,14 @@ variable "ami_id" {
   default     = ""
 }
 
-variable "subnet_ids" {
-  description = "List of subnet IDs"
+variable "public_subnet_ids" {
+  description = "List of public subnet IDs"
   type        = list(string)
+}
+
+variable "private_subnet_ids" {
+    description = "List of private subnet IDs"
+    type = list(string)
 }
 
 variable "security_group_ids" {
