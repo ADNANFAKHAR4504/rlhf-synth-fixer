@@ -961,7 +961,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
      * Enables threat detection and security monitoring
      */
 
-    // Check for existing GuardDuty detector in us-east-1
     const existingDetector = aws.guardduty
       .getDetector({}, { provider })
       .then(res => res.id)
@@ -971,7 +970,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       .output(existingDetector)
       .apply(existingDetectorId => {
         if (existingDetectorId) {
-          // Use existing detector in us-east-1
           return aws.guardduty.Detector.get(
             `imported-guardduty-detector-us-east-1-${args.environment}`,
             existingDetectorId,
@@ -979,7 +977,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
             { provider, parent: this }
           );
         } else {
-          // Create new detector in ap-south-1 if none exists in us-east-1
           return new aws.guardduty.Detector(
             `main-guardduty-detector-${args.environment}`,
             {
@@ -996,9 +993,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       });
 
     // Create GuardDuty features based on where the detector is located
-    pulumi.output(existingDetectorInUsEast1).apply(usEast1DetectorId => {
-      const featureProvider = usEast1DetectorId ? usEast1Provider : provider;
-
+    pulumi.output(existingDetector).apply(_ => {
       // Enable S3 Data Events monitoring
       void new aws.guardduty.DetectorFeature(
         `guardduty-s3-data-events-${args.environment}`,
@@ -1007,7 +1002,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           name: 'S3_DATA_EVENTS',
           status: 'ENABLED',
         },
-        { provider: featureProvider, parent: this }
+        { provider, parent: this }
       );
 
       // Enable EKS Audit Logs monitoring
@@ -1018,7 +1013,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           name: 'EKS_AUDIT_LOGS',
           status: 'ENABLED',
         },
-        { provider: featureProvider, parent: this }
+        { provider, parent: this }
       );
 
       // Enable Malware Protection
@@ -1029,7 +1024,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           name: 'EBS_MALWARE_PROTECTION',
           status: 'ENABLED',
         },
-        { provider: featureProvider, parent: this }
+        { provider, parent: this }
       );
     });
 
