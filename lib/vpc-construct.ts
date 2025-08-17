@@ -1,15 +1,14 @@
-import { provider } from "@cdktf/provider-aws";
-import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
-import { Vpc } from "@cdktf/provider-aws/lib/vpc";
-import { Subnet } from "@cdktf/provider-aws/lib/subnet";
-import { InternetGateway } from "@cdktf/provider-aws/lib/internet-gateway";
-import { NatGateway } from "@cdktf/provider-aws/lib/nat-gateway";
-import { Eip } from "@cdktf/provider-aws/lib/eip";
-import { RouteTable } from "@cdktf/provider-aws/lib/route-table";
-import { Route } from "@cdktf/provider-aws/lib/route";
-import { RouteTableAssociation } from "@cdktf/provider-aws/lib/route-table-association";
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { Vpc } from '../.gen/providers/aws/vpc';
+import { Subnet } from '../.gen/providers/aws/subnet';
+import { InternetGateway } from '../.gen/providers/aws/internet-gateway';
+import { NatGateway } from '../.gen/providers/aws/nat-gateway';
+import { Eip } from '../.gen/providers/aws/eip';
+import { RouteTable } from '../.gen/providers/aws/route-table';
+import { Route } from '../.gen/providers/aws/route';
+import { RouteTableAssociation } from '../.gen/providers/aws/route-table-association';
 // Use 'any' for resource property types
-import { Construct } from "constructs";
+import { Construct } from 'constructs';
 
 interface VpcConstructProps {
   prefix: string;
@@ -31,7 +30,7 @@ export class VpcConstruct extends Construct {
         alias: region,
       });
       this.providers[region] = providerInstance;
-      const cidrBlock = idx === 0 ? "10.0.0.0/16" : "10.1.0.0/16";
+  const cidrBlock = idx === 0 ? '10.0.0.0/16' : '10.1.0.0/16';
   const vpcInstance = new Vpc(this, `${props.prefix}-vpc-${region}`, {
         provider: providerInstance,
         cidrBlock,
@@ -43,12 +42,12 @@ export class VpcConstruct extends Construct {
         },
       });
       this.vpcs[region] = vpcInstance;
-      const { Subnet, InternetGateway, NatGateway, Eip, RouteTable, Route, RouteTableAssociation } = require("@cdktf/provider-aws");
+  // All resources imported at top-level
       // Public Subnets
   const publicSubnet1 = new Subnet(this, `${props.prefix}-public-subnet-1-${region}`, {
         provider: providerInstance,
         vpcId: vpcInstance.id,
-        cidrBlock: idx === 0 ? "10.0.1.0/24" : "10.1.1.0/24",
+        cidrBlock: idx === 0 ? '10.0.1.0/24' : '10.1.1.0/24',
         availabilityZone: `${region}a`,
         mapPublicIpOnLaunch: true,
         tags: {
@@ -59,7 +58,7 @@ export class VpcConstruct extends Construct {
   const publicSubnet2 = new Subnet(this, `${props.prefix}-public-subnet-2-${region}`, {
         provider: providerInstance,
         vpcId: vpcInstance.id,
-        cidrBlock: idx === 0 ? "10.0.2.0/24" : "10.1.2.0/24",
+        cidrBlock: idx === 0 ? '10.0.2.0/24' : '10.1.2.0/24',
         availabilityZone: `${region}b`,
         mapPublicIpOnLaunch: true,
         tags: {
@@ -72,7 +71,7 @@ export class VpcConstruct extends Construct {
   const privateSubnet1 = new Subnet(this, `${props.prefix}-private-subnet-1-${region}`, {
         provider: providerInstance,
         vpcId: vpcInstance.id,
-        cidrBlock: idx === 0 ? "10.0.3.0/24" : "10.1.3.0/24",
+        cidrBlock: idx === 0 ? '10.0.3.0/24' : '10.1.3.0/24',
         availabilityZone: `${region}a`,
         tags: {
           Name: `${props.prefix}-private-subnet-1-${region}`,
@@ -82,7 +81,7 @@ export class VpcConstruct extends Construct {
   const privateSubnet2 = new Subnet(this, `${props.prefix}-private-subnet-2-${region}`, {
         provider: providerInstance,
         vpcId: vpcInstance.id,
-        cidrBlock: idx === 0 ? "10.0.4.0/24" : "10.1.4.0/24",
+        cidrBlock: idx === 0 ? '10.0.4.0/24' : '10.1.4.0/24',
         availabilityZone: `${region}b`,
         tags: {
           Name: `${props.prefix}-private-subnet-2-${region}`,
@@ -102,7 +101,7 @@ export class VpcConstruct extends Construct {
       // Elastic IPs for NAT Gateways
     const natEip1 = new Eip(this, `${props.prefix}-nat-eip-1-${region}`, {
         provider: providerInstance,
-        domain: "vpc",
+  domain: 'vpc',
         tags: {
           Name: `${props.prefix}-nat-eip-1-${region}`,
           Environment: props.prefix,
@@ -164,7 +163,7 @@ export class VpcConstruct extends Construct {
     new Route(this, `${props.prefix}-public-route-${region}`, {
         provider: providerInstance,
         routeTableId: publicRouteTable.id,
-        destinationCidrBlock: "0.0.0.0/0",
+  destinationCidrBlock: '0.0.0.0/0',
         gatewayId: igw.id,
       });
     new Route(this, `${props.prefix}-private-route-1-${region}`, {

@@ -1,6 +1,6 @@
-import { Construct } from "constructs";
-// Import DynamoDB from @cdktf/provider-aws as needed
-import { SecurityConstruct } from "./security-construct";
+import { Construct } from 'constructs';
+import { DynamodbTable } from '../.gen/providers/aws/dynamodb-table';
+import { SecurityConstruct } from './security-construct';
 
 interface DynamoDbConstructProps {
   prefix: string;
@@ -15,14 +15,13 @@ export class DynamoDbConstruct extends Construct {
       const kmsKey = props.security.kmsKeys[region];
       // Import DynamoDBTable from @cdktf/provider-aws
       // Dynamically require to avoid import errors if not used elsewhere
-      const { DynamoDbTable } = require("@cdktf/provider-aws");
-      new DynamoDbTable(this, `${props.prefix}-dynamodb-table-${region}`, {
+  new DynamodbTable(this, `${props.prefix}-dynamodb-table-${region}`, {
         provider: kmsKey.provider,
         name: `${props.prefix}-table-${region}`,
-        billingMode: "PAY_PER_REQUEST",
-        hashKey: "id",
+        billingMode: 'PAY_PER_REQUEST',
+        hashKey: 'id',
         attribute: [
-          { name: "id", type: "S" },
+          { name: 'id', type: 'S' },
         ],
         serverSideEncryption: {
           enabled: true,

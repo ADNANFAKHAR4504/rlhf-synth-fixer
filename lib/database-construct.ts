@@ -1,7 +1,7 @@
-import { Construct } from "constructs";
-// Import RDS, DynamoDB, etc. from @cdktf/provider-aws as needed
-import { SecurityConstruct } from "./security-construct";
-import { VpcConstruct } from "./vpc-construct";
+import { Construct } from 'constructs';
+import { DbInstance } from '@cdktf/provider-aws/lib/rds'; // Correct import
+import { SecurityConstruct } from './security-construct';
+import { VpcConstruct } from './vpc-construct';
 
 interface DatabaseConstructProps {
   prefix: string;
@@ -16,18 +16,22 @@ export class DatabaseConstruct extends Construct {
     Object.keys(props.vpc.vpcs).forEach(region => {
       const kmsKey = props.security.kmsKeys[region];
       const vpc = props.vpc.vpcs[region];
-      const { DbInstance } = require("@cdktf/provider-aws");
+
+      // Ensure security group IDs are properly referenced
+      const securityGroupIds =
+        props.security.securityGroups?.[region]?.map(sg => sg.id) || [];
+
       new DbInstance(this, `${props.prefix}-rds-instance-${region}`, {
         provider: vpc.provider,
         identifier: `${props.prefix}-rds-${region}`,
-        instanceClass: "db.t3.micro",
-        engine: "mysql",
-        engineVersion: "8.0",
+        instanceClass: 'db.t3.micro',
+        engine: 'mysql',
+        engineVersion: '8.0',
         allocatedStorage: 20,
-        username: "admin",
-        password: "securepassword123!", // Use secrets manager in production
+        username: 'admin',
+        password: process.env.RDS_ADMIN_PASSWORD || '', // Use secrets manager in production
         dbName: `${props.prefix}_db_${region}`,
-        vpcSecurityGroupIds: [], // Should reference security groups
+        vpcSecurityGroupIds: securityGroupIds, // Reference actual security groups
         storageEncrypted: true,
         kmsKeyId: kmsKey.arn,
         publiclyAccessible: false,

@@ -1,16 +1,16 @@
-import { TerraformStack } from "cdktf";
-import { Construct } from "constructs";
-import { ComputeConstruct } from "./compute-construct";
-import { DatabaseConstruct } from "./database-construct";
-import { DynamoDbConstruct } from "./dynamodb-construct";
-import { SecurityConstruct } from "./security-construct";
-import { StorageConstruct } from "./storage-construct";
-import { VpcConstruct } from "./vpc-construct";
-import { readFileSync } from "fs";
+import { TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
+import { ComputeConstruct } from './compute-construct';
+import { DatabaseConstruct } from './database-construct';
+import { DynamoDbConstruct } from './dynamodb-construct';
+import { SecurityConstruct } from './security-construct';
+import { StorageConstruct } from './storage-construct';
+import { VpcConstruct } from './vpc-construct';
+import { readFileSync } from 'fs';
 
 // Add other imports as needed for modular constructs
 
-const region = readFileSync("./lib/AWS_REGION", "utf-8").trim();
+const region = readFileSync('./lib/AWS_REGION', 'utf-8').trim();
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {

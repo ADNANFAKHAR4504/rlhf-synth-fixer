@@ -1,6 +1,9 @@
-import { Construct } from "constructs";
-// Import S3, encryption, logging from @cdktf/provider-aws as needed
-import { SecurityConstruct } from "./security-construct";
+import { Construct } from 'constructs';
+import { S3Bucket } from '../.gen/providers/aws/s3-bucket';
+import { S3BucketServerSideEncryptionConfigurationA } from '../.gen/providers/aws/s3-bucket-server-side-encryption-configuration';
+import { S3BucketPublicAccessBlock } from '../.gen/providers/aws/s3-bucket-public-access-block';
+import { CloudwatchLogGroup } from '../.gen/providers/aws/cloudwatch-log-group';
+import { SecurityConstruct } from './security-construct';
 
 interface StorageConstructProps {
   prefix: string;
@@ -13,7 +16,6 @@ export class StorageConstruct extends Construct {
     // For each region, create S3 bucket with KMS encryption and logging
     Object.keys(props.security.kmsKeys).forEach(region => {
       const kmsKey = props.security.kmsKeys[region];
-      const { S3Bucket, S3BucketEncryption, S3BucketPublicAccessBlock, CloudwatchLogGroup } = require("@cdktf/provider-aws");
       const bucket = new S3Bucket(this, `${props.prefix}-s3-bucket-${region}`, {
         provider: kmsKey.provider,
         bucket: `${props.prefix}-bucket-${region}`,
@@ -22,17 +24,17 @@ export class StorageConstruct extends Construct {
           Environment: props.prefix,
         },
       });
-      new S3BucketEncryption(this, `${props.prefix}-s3-bucket-encryption-${region}`, {
+      new S3BucketServerSideEncryptionConfigurationA(this, `${props.prefix}-s3-bucket-encryption-${region}`, {
         provider: kmsKey.provider,
         bucket: bucket.id,
-        serverSideEncryptionConfiguration: {
-          rule: {
+        rule: [
+          {
             applyServerSideEncryptionByDefault: {
               kmsMasterKeyId: kmsKey.arn,
-              sseAlgorithm: "aws:kms",
+              sseAlgorithm: 'aws:kms',
             },
           },
-        },
+        ],
       });
       new S3BucketPublicAccessBlock(this, `${props.prefix}-s3-bucket-pab-${region}`, {
         provider: kmsKey.provider,
