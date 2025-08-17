@@ -33,6 +33,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 # IAM Policy for EC2 instances
+# Note: Permissions have been tightened with additional conditions for security
 resource "aws_iam_policy" "ec2_policy" {
   name        = "${var.name_prefix}-ec2-policy"
   description = "Policy for EC2 instances"
@@ -58,6 +59,9 @@ resource "aws_iam_policy" "ec2_policy" {
           StringEquals = {
             "aws:RequestTag/Project" = [var.name_prefix]
           }
+          StringLike = {
+            "aws:RequestTag/Environment" = ["*"]
+          }
         }
       },
       {
@@ -75,8 +79,8 @@ resource "aws_iam_policy" "ec2_policy" {
         ]
       },
       {
-        Effect = "Allow"
-        Action = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
         Resource = "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${var.name_prefix}/*"
       },
       {
@@ -89,6 +93,11 @@ resource "aws_iam_policy" "ec2_policy" {
           "ssmmessages:OpenDataChannel"
         ]
         Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestTag/Project" = [var.name_prefix]
+          }
+        }
       }
     ]
   })

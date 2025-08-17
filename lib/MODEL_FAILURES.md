@@ -1,138 +1,57 @@
-***Flaw 1***
+***Flaw 1 - RESOLVED**
 
-RDS module not completed
+RDS module is now fully implemented with:
 
-# Security Group for RDS
+- Complete security group configuration
+- Parameter group with SSL/TLS settings
+- RDS instance with encryption and monitoring
+- Read replica for production environments
+- Enhanced monitoring role
+- All outputs properly configured
 
-resource "aws_security_group" "rds" {
-  name        = "${var.name_prefix}-rds-sg"
-  description = "Security group for RDS database"
-  vpc_id      = var.vpc_id
+***Flaw 2 - RESOLVED***
 
-  ingress {
-    description = "MySQL/Aurora"
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
-  }
+Database variables are now complete:
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+- All required variables defined
+- Proper validation for engine versions
+- Sensitive handling for credentials
+- Environment-specific configurations
 
-  tags = merge(var.common_tags, {
-    Name = "${var.name_prefix}-rds-sg"
-    Type = "security-group"
-  })
-}
+***Flaw 3 - RESOLVED***
 
-# RDS Parameter Group
+Database outputs are now implemented:
 
-resource "aws_db_parameter_group" "main" {
-  family = "mysql8.0"
-  name   = "${var.name_prefix}-db-params"
+- Database endpoint
+- Database ID
+- Database ARN
+- All properly exposed through module outputs
 
-  parameter {
-    name  = "innodb_buffer_pool_size"
-    value = "{DBInstanceClassMemory*3/4}"
-  }
+***Flaw 4 - RESOLVED***
 
-  tags = merge(var.common_tags, {
-    Name = "${var.name_prefix}-db-parameter-group"
-    Type = "database"
-  })
-}
+SSL/TLS configuration is now implemented:
 
-# RDS Instance
+- Parameter group with require_secure_transport=ON
+- CA certificate identifier configured
+- Encryption at rest enabled
+- SSL connections enforced
 
-resource "aws_db_instance" "main" {
-  identifier = "${var.name_prefix}-db"
+***NEW SECURITY ISSUES TO ADDRESS***
 
-  allocated_storage     = var.allocated_storage
-  max_allocated_storage = var.max_allocated_storage
-  storage_type          = "gp2"
-  storage_encrypted     = true
+***Security Issue 1 - SSH Access Over VPC CIDR***
 
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = var.db_instance_class
+- Current: SSH allowed from entire VPC CIDR
+- Risk: Lateral movement if any instance is compromised
+- Recommendation: Use Systems Manager Session Manager instead
 
-  db_name  = var.database_name
-  username = var.database_username
-  password = var.database_password
+***Security Issue 2 - IAM Permissions Could Be More Restrictive***
 
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = var.db_subnet_group_name
-  parameter_group_name   = aws_db_parameter_group.main.name
+- Current: Some EC2 describe actions use wildcards
+- Risk: Overly permissive access
+- Recommendation: Scope permissions by region/project tags
 
-  backup_retention_period = var.backup_retention_period
-  backup_window          = var.backup_window
-  maintenance_window     = var.maintenance_window
+***Security Issue 3 - Database Parameter Group Hardcoded***
 
-  multi_az               = var.environment == "production" ? true : false
-  publicly_accessible    = false
-  deletion_protection    = var.environment == "production" ? true : false
-  skip_final_snapshot    = var.environment == "staging" ? true : false
-  final_snapshot_identifier = var.environment == "production" ? "${var.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
-
-  performance_insights_enabled = var.environment == "production" ? true : false
-  monitoring_interval         = var.environment == "production" ? 60 : 0
-  monitoring_role_arn         = var.environment == "production" ? aws_iam_role.rds_enhanced_monitoring[0].arn : null
-
-  tags = merge(var.common_tags, {
-    Name = "${var.name_prefix}-database"
-    Type = "database"
-  })
-}
-
-# Enhanced Monitoring Role (Production only)
-
-resource "aws_iam_role" "rds_enhanced_monitoring" {
-  count = var.environment == "production" ? 1 : 0
-  name  = "${var.name_prefix}-rds-monitoring-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "monitoring.rds.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = merge(var.common_tags, {
-    Name = "${var.name_prefix}-rds-monitoring-role"
-    Type = "iam-role"
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
-  count      = var.environment == "production" ? 1 : 0
-  role       = aws_iam_role.rds_enhanced_monitoring[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
-}
-
-# Read Replica (Production only)
-
-resource "aws_db_instance" "replica" {
-  count = var.environment == "production" ? 1 : 0
-
-  identifier = "${var.name_prefix}-db-
-
-***Flaw 2***
-
-Database varibale missing
-
-***Flaw 3***
-Database output missing
-
-***Flaw 4***
-ssl script not found
+- Current: MySQL version hardcoded to 8.0
+- Risk: Inflexibility across environments
+- Recommendation: Parameterize for flexibility

@@ -34,6 +34,7 @@ resource "aws_security_group" "alb" {
 }
 
 # Security Group for EC2 instances
+# Note: SSH access removed for security - use AWS Systems Manager Session Manager instead
 resource "aws_security_group" "ec2" {
   name        = "${var.name_prefix}-ec2-sg"
   description = "Security group for EC2 instances"
@@ -47,13 +48,14 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
   }
 
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
-  }
+  # SSH access removed - use Systems Manager Session Manager instead
+  # ingress {
+  #   description = "SSH"
+  #   from_port   = 22
+  #   to_port     = 22
+  #   protocol    = "tcp"
+  #   cidr_blocks = [var.vpc_cidr]
+  # }
 
   egress {
     from_port   = 0

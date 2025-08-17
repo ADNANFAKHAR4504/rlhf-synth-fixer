@@ -329,7 +329,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
       test("should have parameter group", () => {
         expect(databaseMain).toMatch(/resource "aws_db_parameter_group" "main"/);
-        expect(databaseMain).toMatch(/family\s*=\s*"mysql8\.0"/);
+        expect(databaseMain).toMatch(/family\s*=\s*var\.db_engine_version == "8\.0" \? "mysql8\.0"/);
       });
 
       test("should have enhanced monitoring for production", () => {
