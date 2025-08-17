@@ -236,32 +236,32 @@ resource "aws_config_config_rule" "ebs_encryption_eu_north_1" {
 # | US-WEST-2 Regional Resources
 # |-----------------------------------------------------------------------------
 
-resource "aws_vpc" "nova_vpc_291844_us_west_2" {
+resource "aws_vpc" "nova_vpc_us_west_2_291844" {
   provider             = aws.us-west-2
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags                 = merge(local.common_tags, { Name = "nova-vpc-291844-us-west-2" })
+  tags                 = merge(local.common_tags, { Name = "nova-vpc-us-west-2-291844" })
 }
 
-resource "aws_subnet" "nova_subnet_291844_us_west_2" {
+resource "aws_subnet" "nova_subnet_us_west_2_291844" {
   provider          = aws.us-west-2
-  vpc_id            = aws_vpc.nova_vpc_291844_us_west_2.id
+  vpc_id            = aws_vpc.nova_vpc_us_west_2_291844.id
   cidr_block        = "10.0.1.0/24" # Adjust CIDR as needed
   availability_zone = "us-west-2a"  # Choose an AZ
-  tags              = merge(local.common_tags, { Name = "nova-subnet-291844-us-west-2" })
+  tags              = merge(local.common_tags, { Name = "nova-subnet-us-west-2-291844" })
 }
 
-resource "aws_internet_gateway" "nova_igw_291844_us_west_2" {
+resource "aws_internet_gateway" "nova_igw_us_west_2_291844" {
   provider = aws.us-west-2
-  vpc_id   = aws_vpc.nova_vpc_291844_us_west_2.id
-  tags     = merge(local.common_tags, { Name = "nova-igw-291844-us-west-2" })
+  vpc_id   = aws_vpc.nova_vpc_us_west_2_291844.id
+  tags     = merge(local.common_tags, { Name = "nova-igw-us-west-2-291844" })
 }
-resource "aws_security_group" "nova_sg_291844_us_west_2" {
+resource "aws_security_group" "nova_sg_us_west_2_291844" {
   provider    = aws.us-west-2
-  name        = "nova-sg-291844-us-west-2"
+  name        = "nova-sg-us-west-2-291844"
   description = "Security group for Nova instances"
-  vpc_id      = aws_vpc.nova_vpc_291844_us_west_2.id
+  vpc_id      = aws_vpc.nova_vpc_us_west_2_291844.id
 
   ingress {
     from_port   = 22
@@ -277,25 +277,25 @@ resource "aws_security_group" "nova_sg_291844_us_west_2" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.common_tags, { Name = "nova-sg-291844-us-west-2" })
+  tags = merge(local.common_tags, { Name = "nova-sg-us-west-2-291844" })
 }
 
-resource "aws_route_table" "nova_rt_291844_us_west_2" {
+resource "aws_route_table" "nova_rt_us_west_2_291844" {
   provider = aws.us-west-2
-  vpc_id   = aws_vpc.nova_vpc_291844_us_west_2.id
+  vpc_id   = aws_vpc.nova_vpc_us_west_2_291844.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.nova_igw_291844_us_west_2.id
+    gateway_id = aws_internet_gateway.nova_igw_us_west_2_291844.id
   }
 
-  tags = merge(local.common_tags, { Name = "nova-rt-291844-us-west-2" })
+  tags = merge(local.common_tags, { Name = "nova-rt-us-west-2-291844" })
 }
 
-resource "aws_route_table_association" "nova_rta_291844_us_west_2" {
+resource "aws_route_table_association" "nova_rta_us_west_2_291844" {
   provider       = aws.us-west-2
-  subnet_id      = aws_subnet.nova_subnet_291844_us_west_2.id
-  route_table_id = aws_route_table.nova_rt_291844_us_west_2.id
+  subnet_id      = aws_subnet.nova_subnet_us_west_2_291844.id
+  route_table_id = aws_route_table.nova_rt_us_west_2_291844.id
 }
 
 data "aws_ami" "amazon_linux_2_us_west_2" {
@@ -350,13 +350,13 @@ resource "aws_s3_bucket_public_access_block" "data_bucket_pac_us_west_2" {
   restrict_public_buckets = true
 }
 
-resource "aws_instance" "app_server_us_west_2" {
+resource "aws_instance" "app_server_us_west_2_291844" {
   provider               = aws.us-west-2
   ami                    = data.aws_ami.amazon_linux_2_us_west_2.id
   instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.nova_subnet_291844_us_west_2.id
+  subnet_id              = aws_subnet.nova_subnet_us_west_2_291844.id
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
-  vpc_security_group_ids = [aws_security_group.nova_sg_291844_us_west_2.id]
+  vpc_security_group_ids = [aws_security_group.nova_sg_us_west_2_291844.id]
 
   ebs_block_device {
     device_name = data.aws_ami.amazon_linux_2_us_west_2.root_device_name
@@ -364,7 +364,7 @@ resource "aws_instance" "app_server_us_west_2" {
     kms_key_id  = aws_kms_key.app_key_us_west_2.arn
   }
 
-  tags = merge(local.common_tags, { Name = "nova-app-server-us-west-2" })
+  tags = merge(local.common_tags, { Name = "nova-app-server-us-west-2-291844" })
 }
 
 # AWS Config setup for us-west-2
