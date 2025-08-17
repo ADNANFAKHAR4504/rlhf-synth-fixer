@@ -112,7 +112,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'cloudtrail-logs-tapstackpr1271-${Environment}-tapstackpr1271-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'cloudtrail-logs-${Environment}-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
