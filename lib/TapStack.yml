@@ -3,7 +3,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Secure, compliance-oriented AWS CloudFormation stack with VPC (2 public + 2 private),
   app S3 (versioning + SSE-KMS), CloudTrail + S3 log bucket (delete-protected),
-  AWS Config managed rules, Security Hub (FSBP), KMS key, SSM Parameter (SecureString),
+  AWS Config managed rules, Security Hub (FSBP), KMS key, SSM Parameter (String),
   Lambda (least-priv), VPC Flow Logs, and CloudWatch Alarms for unauthorized access.
   Naming: <resource-type>-<project-name>-<environment>. No named IAM (no RoleName/UserName).
 
@@ -51,19 +51,18 @@ Parameters:
     Description: CIDR allowed for HTTPS ingress (tighten for production)
 
   # CFN Parameters support only String/StringList.
-  # Secrets go to SSM via a resource (below). Keep this as String + NoEcho.
   DbPassword:
     Type: String
     NoEcho: true
     Default: "Tempp@55w0rd!"
-    Description: Database password (stored into SSM SecureString)
+    Description: Database password (will be copied to SSM Parameter)
 
 Mappings: {}
 Conditions: {}
 
 Resources:
   ############################################
-  # KMS Key (for App S3 + SSM SecureString)
+  # KMS Key (for App S3 encryption)
   ############################################
   AppKmsKey:
     Type: AWS::KMS::Key
@@ -589,7 +588,7 @@ Resources:
     Properties:
       Name: !Sub "configchannel-${ProjectName}-${EnvironmentSuffix}"
       S3BucketName: !Ref ConfigBucket
-      ConfigSnapshotDeliveryProperties: {}  # object, not null
+      ConfigSnapshotDeliveryProperties: {}
 
   ConfigRuleCloudTrailEnabled:
     Type: AWS::Config::ConfigRule
@@ -640,17 +639,16 @@ Resources:
       StandardsArn: !Sub "arn:${AWS::Partition}:securityhub:${AWS::Region}::standards/aws-foundational-security-best-practices/v/1.0.0"
 
   ############################################
-  # SSM Parameter (SecureString encrypted by KMS)
+  # SSM Parameter (String; no KeyId)
   ############################################
   AppDbPasswordParam:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub "/${ProjectName}/${EnvironmentSuffix}/DB_PASSWORD"
-      Type: SecureString         # valid here (resource)
-      KeyId: !Ref AppKmsKey      # valid here (resource)
+      Type: String                # <- fixed: not SecureString
       Tier: Standard
       Value: !Ref DbPassword
-      Description: !Sub "Secure DB password for ${ProjectName}-${EnvironmentSuffix}"
+      Description: !Sub "DB password for ${ProjectName}-${EnvironmentSuffix} (stored as String)"
 
   ############################################
   # Lambda (example) + least-priv role + logging
@@ -686,11 +684,6 @@ Resources:
                   - ssm:GetParameters
                   - ssm:GetParameterHistory
                 Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/${EnvironmentSuffix}/DB_PASSWORD"
-              - Sid: DecryptWithAppKey
-                Effect: Allow
-                Action:
-                  - kms:Decrypt
-                Resource: !GetAtt AppKmsKey.Arn
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -718,7 +711,7 @@ Resources:
           def handler(event, context):
               ssm = boto3.client("ssm")
               name = f"/{os.environ.get('PROJECT')}/{os.environ.get('ENV')}/DB_PASSWORD"
-              p = ssm.get_parameter(Name=name, WithDecryption=True)
+              p = ssm.get_parameter(Name=name, WithDecryption=False)
               return {
                   "statusCode": 200,
                   "body": json.dumps({"parameter": name, "len": len(p['Parameter']['Value'])})
@@ -736,6 +729,12 @@ Resources:
   ############################################
   # CloudWatch Alarm for Unauthorized Access
   ############################################
+  CloudTrailLogGroup: # ensure referenced above exists here
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/cloudtrail/${ProjectName}/${EnvironmentSuffix}"
+      RetentionInDays: 90
+
   UnauthorizedMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -799,5 +798,5 @@ Outputs:
     Value: Enabled
 
   SsmParamDbPassword:
-    Description: SSM SecureString name for DB password
+    Description: SSM Parameter name for DB password
     Value: !Ref AppDbPasswordParam
