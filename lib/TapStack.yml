@@ -400,10 +400,6 @@ Resources:
               - kms:DescribeKey
               - kms:ReEncrypt*
             Resource: '*'
-            Condition:
-              StringEquals:
-                kms:ViaService: !Sub kms.${AWS::Region}.amazonaws.com
-                kms:CallerAccount: !Ref AWS::AccountId
       Tags:
         - Key: Name
           Value: prod-cloudtrail-key

@@ -831,17 +831,7 @@
                                 "kms:DescribeKey",
                                 "kms:ReEncrypt*"
                             ],
-                            "Resource": "*",
-                            "Condition": {
-                                "StringEquals": {
-                                    "kms:ViaService": {
-                                        "Fn::Sub": "kms.${AWS::Region}.amazonaws.com"
-                                    },
-                                    "kms:CallerAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
-                                }
-                            }
+                            "Resource": "*"
                         }
                     ]
                 },
