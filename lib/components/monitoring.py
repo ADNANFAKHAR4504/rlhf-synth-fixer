@@ -191,24 +191,24 @@ class MonitoringComponent(ComponentResource):
       limit_amount=str(budget_limit),
       limit_unit="USD",
       time_unit="MONTHLY",
-      cost_filters={
-        "TagKey": ["Environment"],
+      cost_filters=[{
+        "TagKey": "Environment",
         "TagValue": [config.environment]
-      },
+      }],
       notifications=[
         {
           "comparison_operator": "GREATER_THAN",
           "threshold": 80,
           "threshold_type": "PERCENTAGE",
           "notification_type": "ACTUAL",
-          "subscriber_email_addresses": ["admin@example.com"]  # Replace with actual email
+          "subscriber_email_addresses": ["admin@example.com"]
         },
         {
           "comparison_operator": "GREATER_THAN",
           "threshold": 100,
           "threshold_type": "PERCENTAGE",
           "notification_type": "FORECASTED",
-          "subscriber_email_addresses": ["admin@example.com"]  # Replace with actual email
+          "subscriber_email_addresses": ["admin@example.com"]
         }
       ],
       opts=ResourceOptions(parent=self)
