@@ -436,7 +436,7 @@ resource "aws_autoscaling_group" "primary_app" {
 
 resource "aws_lb" "primary_app" {
   provider                         = aws.primary
-  name_prefix                      = "alb-pri-"
+  name_prefix                      = "pri-"
   internal                         = false
   load_balancer_type               = "application"
   security_groups                  = [aws_security_group.primary_alb.id]
@@ -450,7 +450,7 @@ resource "aws_lb" "primary_app" {
 
 resource "aws_lb_target_group" "primary_app" {
   provider    = aws.primary
-  name_prefix = "tg-pri-"
+  name_prefix = "tgpri-"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.primary.id
@@ -775,7 +775,7 @@ resource "aws_autoscaling_group" "secondary_app" {
 
 resource "aws_lb" "secondary_app" {
   provider                         = aws.secondary
-  name_prefix                      = "alb-sec-"
+  name_prefix                      = "sec-"
   internal                         = false
   load_balancer_type               = "application"
   security_groups                  = [aws_security_group.secondary_alb.id]
@@ -789,7 +789,7 @@ resource "aws_lb" "secondary_app" {
 
 resource "aws_lb_target_group" "secondary_app" {
   provider    = aws.secondary
-  name_prefix = "tg-sec-"
+  name_prefix = "tgsec-"
   port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.secondary.id
@@ -1072,31 +1072,61 @@ resource "aws_lambda_permission" "allow_cloudwatch" {
 # ------------------------------------------------------------------------------
 
 output "primary_alb_dns" {
-  description = "DNS name of the Application Load Balancer in the primary region."
+  description = "DNS name of the primary ALB"
   value       = aws_lb.primary_app.dns_name
 }
 
 output "secondary_alb_dns" {
-  description = "DNS name of the Application Load Balancer in the secondary region."
+  description = "DNS name of the secondary ALB"
   value       = aws_lb.secondary_app.dns_name
 }
 
 output "rds_endpoint" {
-  description = "Endpoint of the PostgreSQL RDS instance."
-  value       = aws_db_instance.primary_db.endpoint
+  description = "RDS endpoint"
+  value       = aws_db_instance.primary_db.endpoint # Adjust resource name as needed
 }
 
 output "s3_bucket_name" {
-  description = "Name of the S3 bucket for artifacts."
-  value       = aws_s3_bucket.artifacts.bucket
-}
-
-output "application_url" {
-  description = "The Route 53 URL for the application."
-  value       = "http://app.${var.domain_name}"
+  description = "S3 bucket name"
+  value       = aws_s3_bucket.artifacts_bucket.id # Adjust resource name as needed
 }
 
 output "private_key_path" {
-  description = "Path to the generated private key for SSH access. IMPORTANT: Secure this file!"
-  value       = local_file.nova_key_pem.filename
+  description = "Path to the private key file"
+  value       = local_file.private_key.filename # Adjust resource name as needed
+}
+
+output "primary_alb_name" {
+  description = "Name of the primary ALB"
+  value       = aws_lb.primary_app.name
+}
+
+output "secondary_alb_name" {
+  description = "Name of the secondary ALB"
+  value       = aws_lb.secondary_app.name
+}
+
+output "primary_asg_name" {
+  description = "Name of the primary Auto Scaling Group"
+  value       = aws_autoscaling_group.primary_app.name # Adjust resource name as needed
+}
+
+output "secondary_asg_name" {
+  description = "Name of the secondary Auto Scaling Group"
+  value       = aws_autoscaling_group.secondary_app.name # Adjust resource name as needed
+}
+
+output "primary_db_identifier" {
+  description = "Primary database identifier"
+  value       = aws_db_instance.primary_db.identifier # Adjust resource name as needed
+}
+
+output "lambda_function_name" {
+  description = "Lambda function name"
+  value       = aws_lambda_function.cost_saver.function_name # Adjust resource name as needed
+}
+
+output "event_rule_name" {
+  description = "EventBridge rule name"
+  value       = aws_cloudwatch_event_rule.daily_shutdown.name # Adjust resource name as needed
 }

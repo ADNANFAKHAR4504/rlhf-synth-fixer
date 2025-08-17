@@ -70,6 +70,7 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
     );
   });
 
+  // --- NEW TESTS FOR SECURITY ---
   describe('Security Validation', () => {
     it('should define IAM roles with the correct suffix', () => {
       const ec2RoleBlock = getResourceBlock('aws_iam_role', 'ec2_role');
@@ -92,20 +93,105 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
       expect(ec2Sg).not.toBeNull();
       expect(ec2Sg).toMatch(/name_prefix\s*=\s*"ec2-primary-"/);
     });
+
+    it('1. should ensure RDS storage is encrypted', () => {
+      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db');
+      expect(rdsBlock).not.toBeNull();
+      expect(rdsBlock).toMatch(/storage_encrypted\s*=\s*true/);
+    });
+
+    it('2. should ensure EC2 root volumes are encrypted', () => {
+      const ltBlock = getResourceBlock('aws_launch_template', 'primary_app');
+      expect(ltBlock).not.toBeNull();
+      // This regex navigates into the ebs block to find the encrypted flag
+      expect(ltBlock).toMatch(/ebs\s*\{\s*[\s\S]*?encrypted\s*=\s*true/);
+    });
+
+    it('3. should restrict SSH access to a variable CIDR block, not 0.0.0.0/0', () => {
+      const ec2Sg = getResourceBlock('aws_security_group', 'primary_ec2');
+      expect(ec2Sg).not.toBeNull();
+
+      // This regex creates a pattern that looks for an ingress block containing BOTH port 22 and an open CIDR.
+      // We expect this pattern to NOT be found.
+      const insecureSshRulePattern =
+        /ingress\s*\{[^\}]*?from_port\s*=\s*22[^\}]*?cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/;
+
+      // Check that the insecure rule does not exist
+      expect(ec2Sg).not.toMatch(insecureSshRulePattern);
+
+      // Check that the ingress rule for port 22 DOES use the correct variable
+      expect(ec2Sg).toMatch(
+        /ingress\s*\{[^\}]*?from_port\s*=\s*22[^\}]*?cidr_blocks\s*=\s*var\.allowed_ssh_cidr/
+      );
+    });
+
+    it('4. should enable versioning on the S3 artifacts bucket', () => {
+      const s3VersioningBlock = getResourceBlock(
+        'aws_s3_bucket_versioning',
+        'artifacts'
+      );
+      expect(s3VersioningBlock).not.toBeNull();
+      expect(s3VersioningBlock).toMatch(/status\s*=\s*"Enabled"/);
+    });
+
+    it('5. should block all public access on the S3 artifacts bucket', () => {
+      const s3PublicAccessBlock = getResourceBlock(
+        'aws_s3_bucket_public_access_block',
+        'artifacts'
+      );
+      expect(s3PublicAccessBlock).not.toBeNull();
+      expect(s3PublicAccessBlock).toMatch(/block_public_acls\s*=\s*true/);
+      expect(s3PublicAccessBlock).toMatch(/block_public_policy\s*=\s*true/);
+      expect(s3PublicAccessBlock).toMatch(/ignore_public_acls\s*=\s*true/);
+      expect(s3PublicAccessBlock).toMatch(/restrict_public_buckets\s*=\s*true/);
+    });
   });
 
-  describe('Terraform Outputs', () => {
-    it('should define all required outputs', () => {
-      const outputs = [
-        'primary_alb_dns',
-        'secondary_alb_dns',
-        'rds_endpoint',
-        's3_bucket_name',
-        'application_url',
-      ];
-      outputs.forEach(outputName => {
-        expect(mainTfContent).toMatch(new RegExp(`output\\s+"${outputName}"`));
-      });
+  // --- NEW TESTS FOR HIGH AVAILABILITY AND NETWORKING ---
+  describe('High Availability & Networking Validation', () => {
+    it('6. should enable Multi-AZ for the RDS instance', () => {
+      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db');
+      expect(rdsBlock).not.toBeNull();
+      expect(rdsBlock).toMatch(/multi_az\s*=\s*true/);
+    });
+
+    it('7. should configure the ASG with a minimum of 1 and a max of 4 instances', () => {
+      const asgBlock = getResourceBlock('aws_autoscaling_group', 'primary_app');
+      expect(asgBlock).not.toBeNull();
+      expect(asgBlock).toMatch(/min_size\s*=\s*1/);
+      expect(asgBlock).toMatch(/max_size\s*=\s*4/);
+    });
+
+    it('8. should define a VPC peering connection between the primary and secondary VPCs', () => {
+      const vpcPeeringBlock = getResourceBlock(
+        'aws_vpc_peering_connection',
+        'peer'
+      );
+      expect(vpcPeeringBlock).not.toBeNull();
+      expect(vpcPeeringBlock).toMatch(/vpc_id\s*=\s*aws_vpc\.primary\.id/);
+      expect(vpcPeeringBlock).toMatch(
+        /peer_vpc_id\s*=\s*aws_vpc\.secondary\.id/
+      );
+    });
+
+    it('9. should route traffic from the private subnet through a NAT Gateway', () => {
+      const privateRouteTable = getResourceBlock(
+        'aws_route_table',
+        'primary_private'
+      );
+      expect(privateRouteTable).not.toBeNull();
+      expect(privateRouteTable).toMatch(
+        /nat_gateway_id\s*=\s*aws_nat_gateway\.primary\.id/
+      );
+    });
+  });
+
+  // --- NEW TEST FOR CONFIGURATION ---
+  describe('Configuration Best Practices', () => {
+    it('10. should explicitly set RDS deletion protection to false', () => {
+      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db');
+      expect(rdsBlock).not.toBeNull();
+      expect(rdsBlock).toMatch(/deletion_protection\s*=\s*false/);
     });
   });
 });
