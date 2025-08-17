@@ -374,7 +374,7 @@ export class TapStack extends cdk.Stack {
 
     // Route 53 Hosted Zone
     const hostedZone = new route53.HostedZone(this, 'TapHostedZone', {
-      zoneName: `tap-app-${environmentSuffix}.example.com`,
+      zoneName: `tap-app-${environmentSuffix}.local`,
       comment: 'Hosted zone for TAP application',
     });
 
