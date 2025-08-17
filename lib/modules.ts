@@ -623,7 +623,7 @@ export class CloudTrailModule extends Construct {
 
       // Include global service events
       includeGlobalServiceEvents: true,
-      // isMultiRegionTrail: true,
+      isMultiRegionTrail: false,
 
       // Event selectors for data events
       eventSelector: [
