@@ -415,11 +415,12 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 }
 
 resource "aws_flow_log" "vpc" {
-  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
-  tags            = local.common_tags
+  iam_role_arn         = aws_iam_role.vpc_flow_logs.arn
+  log_destination_type = "cloud-watch-logs"
+  log_group_name       = aws_cloudwatch_log_group.vpc_flow_logs.name
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.main.id
+  tags                 = local.common_tags
 }
 
 ########################
@@ -740,6 +741,7 @@ resource "aws_api_gateway_stage" "main" {
   deployment_id = aws_api_gateway_deployment.main.id
   rest_api_id   = aws_api_gateway_rest_api.main.id
   stage_name    = var.environment
+  depends_on    = [aws_api_gateway_deployment.main]
   dynamic "access_log_settings" {
     for_each = var.enable_api_stage_logging ? [1] : []
     content {

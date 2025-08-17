@@ -216,8 +216,9 @@ describe('Terraform unit tests for lib/tap_stack.tf', () => {
     test('API Gateway with stage access log settings', () => {
       expect(src).toMatch(/resource\s+"aws_api_gateway_rest_api"\s+"main"/);
       expect(src).toMatch(/resource\s+"aws_api_gateway_stage"\s+"main"/);
+      // Accept either static block or dynamic block guarded by a flag
       expect(oneLine).toMatch(
-        /access_log_settings\s*\{[\s\S]*destination_arn[\s\S]*format\s*=\s*jsonencode\(/
+        /(access_log_settings\s*\{|dynamic\s+"access_log_settings"\s*\{)[\s\S]*destination_arn[\s\S]*format\s*=\s*jsonencode\(/
       );
     });
 
