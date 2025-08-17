@@ -204,7 +204,7 @@ describe('Terraform integration tests (outputs + standards)', () => {
         expect(isArn(ctArn)).toBe(true);
       } else {
         // Allow absent/null when trail creation is disabled
-        expect(ctArn === null || ctArn === '').toBe(true);
+        expect(ctArn === null || ctArn === '' || typeof ctArn === 'undefined').toBe(true);
       }
       expect(isNonEmptyString(outputs!.cloudtrail_home_region)).toBe(true);
     });
@@ -231,7 +231,7 @@ describe('Terraform integration tests (outputs + standards)', () => {
       expect(isNonEmptyString(outputs!.rds_endpoint)).toBe(true);
       // Basic RDS endpoint heuristic
       expect(String(outputs!.rds_endpoint)).toMatch(
-        /\.rds\.[a-z0-9-]+\.amazonaws\.com(?::\d+)?/
+        /(\.rds\.[a-z0-9-]+\.amazonaws\.com|\.[a-z0-9-]+\.rds\.amazonaws\.com)(?::\d+)?/
       );
     });
   });
