@@ -1,5 +1,5 @@
 ```
-Generate CLOUDFORMATION YAML IAC code. Please make sure that the provided data should remain intact and it should not change in anyway, use the below data to generate the IAC:
+Please generate IAC code is CloudFormation Yaml using the data given below:
 
 Contraints:
 
