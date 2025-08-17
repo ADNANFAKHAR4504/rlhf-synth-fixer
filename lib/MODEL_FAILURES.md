@@ -1,11 +1,120 @@
 # Model Response Failures
 
-## 1. Deprecated S3 Resource Usage
+## Prompt Requirement Violations
 
-**Issue Type**: Deprecation Issue
-**Description**: Model used deprecated S3 resources that will cause build failures and warnings.
+### 1. Security Issue: Insufficient Security Architecture Beyond Basic Requirements
 
-**Model Code**:
+**What model did wrong**: Only implemented basic prompt requirements without adding production-ready security enhancements.
+
+**What was the issue**: Prompt asked for "production-ready" and "strict security" but model didn't go beyond minimum requirements to add essential security features.
+
+**Wrong code generated**:
+
+```typescript
+// Only basic requirements implemented:
+// - VPC with public subnets only
+// - Basic security group
+// - Basic IAM role
+// - CloudTrail and S3
+// - DynamoDB
+// Missing: Private subnets, NAT Gateway, database security group, monitoring, etc.
+```
+
+**Correct code**:
+
+```typescript
+// Should have added production security features:
+// - Private subnets for database tier
+// - NAT Gateway for secure outbound access
+// - Database security group
+// - GuardDuty threat detection
+// - AWS Config compliance monitoring
+// - CloudWatch alarms and SNS alerting
+// - VPC endpoints for secure AWS service access
+```
+
+### 2. Code Issue: Missing Pulumi Best Practices Implementation
+
+**What model did wrong**: Used flat code structure instead of implementing Pulumi ComponentResource best practices as requested.
+
+**What was the issue**: Prompt specifically asked for "Pulumi best practices for maintainability and clarity" but model provided flat, non-reusable code.
+
+**Wrong code generated**:
+
+```typescript
+// Flat structure with direct exports
+import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
+
+const provider = new aws.Provider(/*...*/);
+const vpc = new aws.ec2.Vpc(/*...*/);
+// ... more resources
+
+export const vpcId = vpc.id;
+export const publicSubnetIds = [
+  /*...*/
+];
+```
+
+**Correct code**:
+
+```typescript
+// ComponentResource pattern for maintainability
+export class SecureInfrastructure extends pulumi.ComponentResource {
+  constructor(
+    name: string,
+    args: SecureInfrastructureArgs,
+    opts?: ResourceOptions
+  ) {
+    super('tap:infrastructure:SecureInfrastructure', name, args, opts);
+    // Proper encapsulation and reusability
+  }
+}
+```
+
+### 3. Code Issue: Inadequate Commenting and Documentation
+
+**What model did wrong**: Provided basic comments but missed comprehensive documentation for production maintainability.
+
+**What was the issue**: Prompt asked for "commented infrastructure code" but model's comments were insufficient for production maintenance.
+
+**Wrong code generated**:
+
+```typescript
+// Basic comments like:
+/**
+ * VPC Configuration
+ * Creates a VPC with DNS support enabled for production workloads
+ */
+const vpc = new aws.ec2.Vpc(/*...*/);
+```
+
+**Correct code**:
+
+```typescript
+/**
+ * SecureInfrastructure component that creates a complete AWS infrastructure
+ * with VPC, security groups, IAM roles, CloudTrail, and DynamoDB.
+ *
+ * This component follows AWS Well-Architected Framework principles:
+ * - Security: Multi-tier architecture with private subnets
+ * - Reliability: Multi-AZ deployment with proper monitoring
+ * - Performance: Provisioned DynamoDB with appropriate capacity
+ * - Cost Optimization: S3 lifecycle policies for log retention
+ * - Operational Excellence: Comprehensive monitoring and alerting
+ */
+```
+
+## Implementation Failures
+
+## 1. Deprecation Issue: Deprecated S3 Resource Usage
+
+**What model did wrong**: Used deprecated S3 resources that will cause build failures and warnings.
+
+**What was the issue**: Model used BucketVersioningV2 and BucketServerSideEncryptionConfigurationV2 instead of the current versions.
+
+**Wrong code generated**:
+
 ```typescript
 const cloudtrailBucketVersioning = new aws.s3.BucketVersioningV2(
   'cloudtrail-bucket-versioning',
@@ -39,7 +148,8 @@ const cloudtrailBucketEncryption =
   );
 ```
 
-**Correct Code**:
+**Correct code**:
+
 ```typescript
 void new aws.s3.BucketVersioning(
   `cloudtrail-bucket-versioning-${args.environment}`,
@@ -70,12 +180,14 @@ void new aws.s3.BucketServerSideEncryptionConfiguration(
 );
 ```
 
-## 2. KMS Policy Implementation Issue
+## 2. Build Issue: KMS Policy Implementation Error
 
-**Issue Type**: IAM/Security Issue
-**Description**: Model used incorrect pulumi.interpolate syntax for KMS policy that would cause runtime errors.
+**What model did wrong**: Used incorrect pulumi.interpolate syntax for KMS policy that would cause runtime errors.
 
-**Model Code**:
+**What was the issue**: Incorrect async handling in policy JSON generation causing build failures.
+
+**Wrong code generated**:
+
 ```typescript
 policy: JSON.stringify({
   Version: '2012-10-17',
@@ -95,7 +207,8 @@ policy: JSON.stringify({
 }),
 ```
 
-**Correct Code**:
+**Correct code**:
+
 ```typescript
 policy: pulumi
   .all([aws.getCallerIdentity({}, { provider })])
@@ -117,12 +230,14 @@ policy: pulumi
   ),
 ```
 
-## 3. S3 Bucket Naming Syntax Error
+## 3. Build Issue: S3 Bucket Naming Syntax Error
 
-**Issue Type**: Build Failure
-**Description**: Model used incorrect pulumi.interpolate syntax for S3 bucket naming that would cause build failures.
+**What model did wrong**: Used incorrect pulumi.interpolate syntax for S3 bucket naming that would cause build failures.
 
-**Model Code**:
+**What was the issue**: Improper async handling in bucket name generation.
+
+**Wrong code generated**:
+
 ```typescript
 const cloudtrailBucket = new aws.s3.Bucket(
   'cloudtrail-logs-bucket',
@@ -130,13 +245,13 @@ const cloudtrailBucket = new aws.s3.Bucket(
     bucket: pulumi.interpolate`cloudtrail-logs-${aws
       .getCallerIdentity({}, { provider })
       .then(id => id.accountId)}-ap-south-1`,
-    // ...
   },
   { provider }
 );
 ```
 
-**Correct Code**:
+**Correct code**:
+
 ```typescript
 const cloudtrailBucket = new aws.s3.Bucket(
   `cloudtrail-logs-bucket-${args.environment}`,
@@ -147,117 +262,243 @@ const cloudtrailBucket = new aws.s3.Bucket(
         ([identity]) =>
           `cloudtrail-logs-${identity.accountId}-ap-south-1-${args.environment}`
       ),
-    // ...
   },
   { provider, parent: this }
 );
 ```
 
-## 4. CloudTrail S3 Bucket Policy Security Issue
+## 4. Security Issue: SSH Access Vulnerability
 
-**Issue Type**: Security Issue
-**Description**: Model's CloudTrail S3 bucket policy was missing critical security conditions and source ARN validation.
+**What model did wrong**: Allowed SSH access (port 22) from the internet, creating a major security vulnerability.
 
-**Model Code**:
+**What was the issue**: Exposed SSH port to 0.0.0.0/0 violating security best practices.
+
+**Wrong code generated**:
+
 ```typescript
-const cloudtrailBucketPolicy = new aws.s3.BucketPolicy(
-  'cloudtrail-bucket-policy',
+ingress: [
   {
-    bucket: cloudtrailBucket.id,
-    policy: pulumi
-      .all([cloudtrailBucket.arn, aws.getCallerIdentity({}, { provider })])
-      .apply(([bucketArn, identity]) =>
-        JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'AWSCloudTrailAclCheck',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'cloudtrail.amazonaws.com',
-              },
-              Action: 's3:GetBucketAcl',
-              Resource: bucketArn,
-              // Missing Condition for source ARN validation
-            },
-            {
-              Sid: 'AWSCloudTrailWrite',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'cloudtrail.amazonaws.com',
-              },
-              Action: 's3:PutObject',
-              Resource: `${bucketArn}/*`,
-              Condition: {
-                StringEquals: {
-                  's3:x-amz-acl': 'bucket-owner-full-control',
-                  // Missing AWS:SourceArn condition
-                },
-              },
-            },
-          ],
-        })
-      ),
+    description: 'SSH access from internet',
+    fromPort: 22,
+    toPort: 22,
+    protocol: 'tcp',
+    cidrBlocks: ['0.0.0.0/0'],
   },
-  { provider }
-);
+  {
+    description: 'HTTP access from internet',
+    fromPort: 80,
+    toPort: 80,
+    protocol: 'tcp',
+    cidrBlocks: ['0.0.0.0/0'],
+  },
+],
 ```
 
-**Correct Code**:
+**Correct code**:
+
 ```typescript
-const cloudtrailBucketPolicy = new aws.s3.BucketPolicy(
-  `cloudtrail-bucket-policy-${args.environment}`,
+ingress: [
   {
-    bucket: cloudtrailBucket.id,
-    policy: pulumi
-      .all([cloudtrailBucket.arn, aws.getCallerIdentity({}, { provider })])
-      .apply(([bucketArn, identity]) =>
-        JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'AWSCloudTrailAclCheck',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'cloudtrail.amazonaws.com',
-              },
-              Action: 's3:GetBucketAcl',
-              Resource: bucketArn,
-              Condition: {
-                StringEquals: {
-                  'AWS:SourceArn': `arn:aws:cloudtrail:ap-south-1:${identity.accountId}:trail/main-cloudtrail-${args.environment}`,
-                },
-              },
-            },
-            {
-              Sid: 'AWSCloudTrailWrite',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'cloudtrail.amazonaws.com',
-              },
-              Action: 's3:PutObject',
-              Resource: `${bucketArn}/*`,
-              Condition: {
-                StringEquals: {
-                  's3:x-amz-acl': 'bucket-owner-full-control',
-                  'AWS:SourceArn': `arn:aws:cloudtrail:ap-south-1:${identity.accountId}:trail/main-cloudtrail-${args.environment}`,
-                },
-              },
-            },
-          ],
-        })
-      ),
+    description: 'HTTP access from internet',
+    fromPort: 80,
+    toPort: 80,
+    protocol: 'tcp',
+    cidrBlocks: ['0.0.0.0/0'],
+  },
+  {
+    description: 'HTTPS access from internet',
+    fromPort: 443,
+    toPort: 443,
+    protocol: 'tcp',
+    cidrBlocks: ['0.0.0.0/0'],
+  },
+],
+```
+
+## 5. Security Issue: Missing Private Subnets Architecture
+
+**What model did wrong**: Only created public subnets, missing private subnets for secure database and application tiers.
+
+**What was the issue**: No network segmentation for database tier security.
+
+**Wrong code generated**:
+
+```typescript
+const publicSubnet1 = new aws.ec2.Subnet('public-subnet-1', {
+  cidrBlock: '10.0.1.0/24',
+  mapPublicIpOnLaunch: true,
+});
+
+const publicSubnet2 = new aws.ec2.Subnet('public-subnet-2', {
+  cidrBlock: '10.0.2.0/24',
+  mapPublicIpOnLaunch: true,
+});
+```
+
+**Correct code**:
+
+```typescript
+const privateSubnet1 = new aws.ec2.Subnet(
+  `private-subnet-1-${args.environment}`,
+  {
+    vpcId: vpc.id,
+    cidrBlock: '10.0.10.0/24',
+    availabilityZone: availabilityZones.then(az => az.names[0]),
+    mapPublicIpOnLaunch: false,
+    tags: {
+      ...commonTags,
+      Name: `private-subnet-1-${args.environment}`,
+      Type: 'private',
+    },
+  },
+  { provider, parent: this }
+);
+
+const privateSubnet2 = new aws.ec2.Subnet(
+  `private-subnet-2-${args.environment}`,
+  {
+    vpcId: vpc.id,
+    cidrBlock: '10.0.11.0/24',
+    availabilityZone: availabilityZones.then(az => az.names[1]),
+    mapPublicIpOnLaunch: false,
+    tags: {
+      ...commonTags,
+      Name: `private-subnet-2-${args.environment}`,
+      Type: 'private',
+    },
   },
   { provider, parent: this }
 );
 ```
 
-## 5. IAM Policy Resource Scope Issue
+## 6. Security Issue: Missing Database Security Group
 
-**Issue Type**: IAM/Security Issue
-**Description**: Model's IAM policy used incorrect pulumi.interpolate syntax and had overly broad resource scope.
+**What model did wrong**: Only created web security group, missing dedicated database security group with restricted access.
 
-**Model Code**:
+**What was the issue**: No network isolation for database tier.
+
+**Wrong code generated**:
+
+```typescript
+const webSecurityGroup = new aws.ec2.SecurityGroup('web-security-group', {
+  // ... only web security group created
+});
+```
+
+**Correct code**:
+
+```typescript
+const dbSecurityGroup = new aws.ec2.SecurityGroup(
+  `database-security-group-${args.environment}`,
+  {
+    name: `database-security-group-${args.environment}`,
+    description:
+      'Security group for database tier - only accessible from web tier',
+    vpcId: vpc.id,
+    ingress: [
+      {
+        description: 'MySQL/Aurora access from web tier',
+        fromPort: 3306,
+        toPort: 3306,
+        protocol: 'tcp',
+        securityGroups: [webSecurityGroup.id],
+      },
+      {
+        description: 'PostgreSQL access from web tier',
+        fromPort: 5432,
+        toPort: 5432,
+        protocol: 'tcp',
+        securityGroups: [webSecurityGroup.id],
+      },
+    ],
+    egress: [],
+    tags: {
+      ...commonTags,
+      Name: `database-security-group-${args.environment}`,
+    },
+  },
+  { provider, parent: this }
+);
+```
+
+## 7. Security Missed: CloudTrail S3 Bucket Policy Missing Security Conditions
+
+**What model did wrong**: CloudTrail S3 bucket policy was missing critical security conditions and source ARN validation.
+
+**What was the issue**: Missing AWS:SourceArn conditions allowing potential unauthorized access.
+
+**Wrong code generated**:
+
+```typescript
+{
+  Sid: 'AWSCloudTrailAclCheck',
+  Effect: 'Allow',
+  Principal: {
+    Service: 'cloudtrail.amazonaws.com',
+  },
+  Action: 's3:GetBucketAcl',
+  Resource: bucketArn,
+  // Missing Condition for source ARN validation
+},
+{
+  Sid: 'AWSCloudTrailWrite',
+  Effect: 'Allow',
+  Principal: {
+    Service: 'cloudtrail.amazonaws.com',
+  },
+  Action: 's3:PutObject',
+  Resource: `${bucketArn}/*`,
+  Condition: {
+    StringEquals: {
+      's3:x-amz-acl': 'bucket-owner-full-control',
+      // Missing AWS:SourceArn condition
+    },
+  },
+},
+```
+
+**Correct code**:
+
+```typescript
+{
+  Sid: 'AWSCloudTrailAclCheck',
+  Effect: 'Allow',
+  Principal: {
+    Service: 'cloudtrail.amazonaws.com',
+  },
+  Action: 's3:GetBucketAcl',
+  Resource: bucketArn,
+  Condition: {
+    StringEquals: {
+      'AWS:SourceArn': `arn:aws:cloudtrail:ap-south-1:${identity.accountId}:trail/main-cloudtrail-${args.environment}`,
+    },
+  },
+},
+{
+  Sid: 'AWSCloudTrailWrite',
+  Effect: 'Allow',
+  Principal: {
+    Service: 'cloudtrail.amazonaws.com',
+  },
+  Action: 's3:PutObject',
+  Resource: `${bucketArn}/*`,
+  Condition: {
+    StringEquals: {
+      's3:x-amz-acl': 'bucket-owner-full-control',
+      'AWS:SourceArn': `arn:aws:cloudtrail:ap-south-1:${identity.accountId}:trail/main-cloudtrail-${args.environment}`,
+    },
+  },
+},
+```
+
+## 8. Least Privilege Issue: Overly Permissive IAM Policy
+
+**What model did wrong**: IAM policy used incorrect syntax and had overly broad resource scope with excessive permissions.
+
+**What was the issue**: Granted StartInstances, StopInstances, RebootInstances permissions violating least privilege principle.
+
+**Wrong code generated**:
+
 ```typescript
 policy: JSON.stringify({
   Version: '2012-10-17',
@@ -297,7 +538,8 @@ policy: JSON.stringify({
 }),
 ```
 
-**Correct Code**:
+**Correct code**:
+
 ```typescript
 policy: pulumi
   .all([aws.getCallerIdentity({}, { provider })])
@@ -348,24 +590,78 @@ policy: pulumi
   ),
 ```
 
-## 6. Missing Component Architecture Pattern
+## 9. Least Privilege Issue: Missing DynamoDB IAM Permissions
 
-**Issue Type**: Architecture Issue
-**Description**: Model used flat resource structure instead of Pulumi ComponentResource pattern, making it non-reusable and hard to manage.
+**What model did wrong**: Failed to include DynamoDB permissions in IAM policy for application deployment role.
 
-**Model Code**:
+**What was the issue**: EC2 instances would not be able to access DynamoDB table for application functionality.
+
+**Wrong code generated**:
+
 ```typescript
-// Flat structure with exports at the end
-const vpc = new aws.ec2.Vpc(/*...*/);
-const publicSubnet1 = new aws.ec2.Subnet(/*...*/);
-// ... more resources
+// Missing DynamoDB permissions in IAM policy
+policy: JSON.stringify({
+  Version: '2012-10-17',
+  Statement: [
+    {
+      Effect: 'Allow',
+      Action: [
+        'ec2:DescribeInstances',
+        // ... EC2 actions only, no DynamoDB
+      ],
+    },
+  ],
+}),
+```
+
+**Correct code**:
+
+```typescript
+{
+  Effect: 'Allow',
+  Action: [
+    'dynamodb:GetItem',
+    'dynamodb:PutItem',
+    'dynamodb:UpdateItem',
+    'dynamodb:DeleteItem',
+    'dynamodb:Query',
+    'dynamodb:Scan',
+  ],
+  Resource: `arn:aws:dynamodb:ap-south-1:${identity.accountId}:table/application-data-table-${args.environment}`,
+},
+{
+  Effect: 'Allow',
+  Action: ['dynamodb:Query', 'dynamodb:Scan'],
+  Resource: `arn:aws:dynamodb:ap-south-1:${identity.accountId}:table/application-data-table-${args.environment}/index/*`,
+},
+```
+
+## 10. Code Issue: Missing Component Architecture Pattern
+
+**What model did wrong**: Used flat infrastructure code without proper Pulumi ComponentResource pattern.
+
+**What was the issue**: Created non-reusable, hard-to-manage infrastructure without proper encapsulation.
+
+**Wrong code generated**:
+
+```typescript
+import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
+
+const provider = new aws.Provider('ap-south-1-provider', {
+  region: 'ap-south-1',
+});
+
+const vpc = new aws.ec2.Vpc('main-vpc', {
+  // ... direct resource creation
+});
 
 export const vpcId = vpc.id;
 export const publicSubnetIds = [publicSubnet1.id, publicSubnet2.id];
-// ... more exports
 ```
 
-**Correct Code**:
+**Correct code**:
+
 ```typescript
 export interface SecureInfrastructureArgs {
   environment: string;
@@ -375,7 +671,6 @@ export interface SecureInfrastructureArgs {
 export class SecureInfrastructure extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
   public readonly publicSubnetIds: pulumi.Output<string>[];
-  // ... more outputs
 
   constructor(
     name: string,
@@ -384,275 +679,48 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
   ) {
     super('tap:infrastructure:SecureInfrastructure', name, args, opts);
 
-    // Resources created with proper parent relationship
-    const vpc = new aws.ec2.Vpc(
-      `main-vpc-${args.environment}`,
-      {/*...*/},
-      { provider, parent: this }
+    const provider = new aws.Provider(
+      `ap-south-1-provider-${args.environment}`,
+      { region: 'ap-south-1' },
+      { parent: this }
     );
 
-    // Set outputs
-    this.vpcId = vpc.id;
-    this.publicSubnetIds = [publicSubnet1.id, publicSubnet2.id];
-
-    // Register outputs
     this.registerOutputs({
       vpcId: this.vpcId,
       publicSubnetIds: this.publicSubnetIds,
-      // ... more outputs
     });
   }
 }
 ```
 
-## 18. SSH Access Security Vulnerability
+## 11. Security Missed: Missing SSM Session Manager Support
 
-**Issue**: Model included SSH access (port 22) from the internet, which is a major security risk.
+**What model did wrong**: Failed to implement SSM Session Manager for secure instance access without SSH.
 
-**Model Code**:
+**What was the issue**: No secure access mechanism provided after removing SSH access.
+
+**Wrong code generated**:
 
 ```typescript
-ingress: [
-  {
-    description: 'SSH access from internet',
-    fromPort: 22,
-    toPort: 22,
-    protocol: 'tcp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-  {
-    description: 'HTTP access from internet',
-    fromPort: 80,
-    toPort: 80,
-    protocol: 'tcp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-],
+// No SSM Session Manager implementation
+// Relies on SSH for instance access
 ```
 
-**What We Added**:
+**Correct code**:
 
 ```typescript
-// NO SSH ACCESS - Following security best practices
-ingress: [
+// Attach SSM managed instance core policy
+void new aws.iam.RolePolicyAttachment(
+  `ec2-ssm-policy-attachment-${args.environment}`,
   {
-    description: 'HTTP access from internet',
-    fromPort: 80,
-    toPort: 80,
-    protocol: 'tcp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-  {
-    description: 'HTTPS access from internet',
-    fromPort: 443,
-    toPort: 443,
-    protocol: 'tcp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-],
-```
-
-## 2. Missing Private Subnets and Multi-Tier Architecture
-
-**Issue**: Model only created public subnets, missing private subnets for database tier and secure architecture.
-
-**Model Code**: Only had public subnets:
-
-```typescript
-const publicSubnet1 = new aws.ec2.Subnet(/*...*/);
-const publicSubnet2 = new aws.ec2.Subnet(/*...*/);
-```
-
-**What We Added**:
-
-```typescript
-// Private subnets for database and internal services
-const privateSubnet1 = new aws.ec2.Subnet(
-  `private-subnet-1-${args.environment}`,
-  {
-    vpcId: vpc.id,
-    cidrBlock: '10.0.10.0/24',
-    availabilityZone: availabilityZones.then(az => az.names[0]),
-    mapPublicIpOnLaunch: false,
-    tags: {
-      ...commonTags,
-      Name: `private-subnet-1-${args.environment}`,
-      Type: 'private',
-    },
+    role: ec2Role.name,
+    policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
   },
   { provider, parent: this }
 );
 
-// NAT Gateway for secure outbound access
-const natGateway = new aws.ec2.NatGateway(/*...*/);
-```
-
-## 3. Missing Database Security Group
-
-**Issue**: Model only had one security group, missing database tier isolation.
-
-**Model Code**: Only had `webSecurityGroup`.
-
-**What We Added**:
-
-```typescript
-const dbSecurityGroup = new aws.ec2.SecurityGroup(
-  `database-security-group-${args.environment}`,
-  {
-    name: `database-security-group-${args.environment}`,
-    description:
-      'Security group for database tier - only accessible from web tier',
-    vpcId: vpc.id,
-    // Only allow access from web security group
-    ingress: [
-      {
-        description: 'MySQL/Aurora access from web tier',
-        fromPort: 3306,
-        toPort: 3306,
-        protocol: 'tcp',
-        securityGroups: [webSecurityGroup.id],
-      },
-    ],
-    // No outbound rules - database should not initiate connections
-    egress: [],
-  },
-  { provider, parent: this }
-);
-```
-
-## 4. Missing Environment Suffix Implementation
-
-**Issue**: Model had no environment-specific naming, preventing multi-environment deployments.
-
-**Model Code**: Hard-coded resource names:
-
-```typescript
-const vpc = new aws.ec2.Vpc('main-vpc' /*...*/);
-const dynamoTable = new aws.dynamodb.Table('application-table' /*...*/);
-```
-
-**What We Added**:
-
-```typescript
-const vpc = new aws.ec2.Vpc(
-  `main-vpc-${args.environment}`
-  /*...*/
-);
-const dynamoTable = new aws.dynamodb.Table(
-  `application-table-${args.environment}`,
-  {
-    name: `application-data-table-${args.environment}`,
-    /*...*/
-  }
-);
-```
-
-## 5. Missing Security Monitoring
-
-**Issue**: Model lacked comprehensive security monitoring and threat detection.
-
-**Model Code**: No GuardDuty, Config, or CloudWatch alarms.
-
-**What We Added**:
-
-```typescript
-// GuardDuty for threat detection
-const guardDutyDetector = pulumi.output(existingDetectorId).apply(id => {
-  if (id) {
-    return aws.guardduty.Detector.get(/*...*/);
-  }
-  return new aws.guardduty.Detector(/*...*/);
-});
-
-// AWS Config for compliance monitoring
-const configRecorder = new aws.cfg.Recorder(/*...*/);
-const configDeliveryChannel = new aws.cfg.DeliveryChannel(/*...*/);
-
-// CloudWatch alarms for monitoring
-void (new aws.cloudwatch.MetricAlarm(/*...*/));
-```
-
-## 6. Missing SNS Alerting System
-
-**Issue**: Model had no centralized alerting mechanism for security events.
-
-**Model Code**: No SNS topic or alerting.
-
-**What We Added**:
-
-```typescript
-const securityAlertsTopic = new aws.sns.Topic(
-  `security-alerts-topic-${args.environment}`,
-  {
-    name: `security-alerts-topic-${args.environment}`,
-    displayName: 'Security Alerts and Monitoring',
-  },
-  { provider, parent: this }
-);
-```
-
-## 18. Insufficient IAM Least Privilege Implementation
-
-**Issue**: Model's IAM policy was too permissive, allowing dangerous EC2 actions.
-
-**Model Code**:
-
-```typescript
-Action: [
-  'ec2:DescribeInstances',
-  'ec2:DescribeInstanceStatus',
-  'ec2:DescribeInstanceAttribute',
-  'ec2:DescribeTags',
-  'ec2:CreateTags',
-  'ec2:StartInstances',    // Too permissive
-  'ec2:StopInstances',     // Too permissive
-  'ec2:RebootInstances',   // Too permissive
-],
-Resource: '*',  // Too broad
-```
-
-**What We Added**:
-
-```typescript
-Action: [
-  'ec2:DescribeInstances',
-  'ec2:DescribeInstanceStatus',
-  'ec2:DescribeInstanceAttribute',
-  'ec2:DescribeTags',
-],
-Resource: '*',
-Condition: {
-  StringEquals: {
-    'ec2:Region': 'ap-south-1',
-  },
-},
-// Separate statement for CreateTags with specific conditions
-{
-  Effect: 'Allow',
-  Action: ['ec2:CreateTags'],
-  Resource: [
-    'arn:aws:ec2:ap-south-1:*:instance/*',
-    'arn:aws:ec2:ap-south-1:*:volume/*',
-  ],
-  Condition: {
-    StringEquals: {
-      'ec2:CreateAction': ['RunInstances', 'CreateVolume'],
-    },
-  },
-},
-```
-
-## 18. Missing VPC Endpoints for Secure Access
-
-**Issue**: Model had no VPC endpoints, requiring internet access for AWS services.
-
-**Model Code**: No VPC endpoints.
-
-**What We Added**:
-
-```typescript
-// SSM VPC Endpoints for secure instance access without SSH
-void new aws.ec2.VpcEndpoint(
+// VPC Endpoints for SSM
+const ssmEndpoint = new aws.ec2.VpcEndpoint(
   `ssm-endpoint-${args.environment}`,
   {
     vpcId: vpc.id,
@@ -666,175 +734,121 @@ void new aws.ec2.VpcEndpoint(
 );
 ```
 
-## 18. Missing S3 Lifecycle and Security Configurations
+## 12. Security Missed: Missing Security Monitoring and Alerting
 
-**Issue**: Model's S3 bucket lacked lifecycle policies and comprehensive security settings.
+**What model did wrong**: Failed to implement comprehensive security monitoring with SNS topics, CloudWatch alarms, and GuardDuty.
 
-**Model Code**: Basic S3 bucket with minimal configuration.
+**What was the issue**: No threat detection or security event alerting capabilities.
 
-**What We Added**:
+**Wrong code generated**:
 
 ```typescript
-// S3 lifecycle configuration for cost optimization
-void new aws.s3.BucketLifecycleConfiguration(
-  `cloudtrail-bucket-lifecycle-${args.environment}`,
+// No security monitoring implementation
+// No SNS topics for alerts
+// No CloudWatch alarms
+// No GuardDuty threat detection
+```
+
+**Correct code**:
+
+```typescript
+const securityAlertsTopic = new aws.sns.Topic(
+  `security-alerts-topic-${args.environment}`,
   {
-    bucket: cloudtrailBucket.id,
-    rules: [
-      {
-        id: 'cloudtrail-logs-lifecycle',
-        status: 'Enabled',
-        transitions: [
-          { days: 30, storageClass: 'STANDARD_IA' },
-          { days: 90, storageClass: 'GLACIER' },
-          { days: 365, storageClass: 'DEEP_ARCHIVE' },
-        ],
-        expiration: { days: 2555 }, // 7 years retention
-      },
-    ],
+    name: `security-alerts-topic-${args.environment}`,
+    displayName: 'Security Alerts and Monitoring',
   },
   { provider, parent: this }
 );
 
-// S3 bucket notification configuration
-void (new aws.s3.BucketNotification(/*...*/));
-```
-
-## 18. Missing DynamoDB Security Features
-
-**Issue**: Model's DynamoDB table lacked point-in-time recovery and deletion protection.
-
-**Model Code**: Basic DynamoDB table without advanced security features.
-
-**What We Added**:
-
-```typescript
-// Enable point-in-time recovery for production
-pointInTimeRecovery: {
-  enabled: true,
-},
-
-// Enable deletion protection
-deletionProtectionEnabled: true,
-```
-
-## 18. Missing Explicit Egress Rules
-
-**Issue**: Model used implicit egress rules, violating security best practices.
-
-**Model Code**:
-
-```typescript
-egress: [
+const guardDutyDetector = new aws.guardduty.Detector(
+  `main-guardduty-detector-${args.environment}`,
   {
-    description: 'All outbound traffic',
-    fromPort: 0,
-    toPort: 0,
-    protocol: '-1',
-    cidrBlocks: ['0.0.0.0/0'],
+    enable: true,
+    findingPublishingFrequency: 'FIFTEEN_MINUTES',
   },
-],
-```
+  { provider, parent: this }
+);
 
-**What We Added**:
-
-```typescript
-// Explicit outbound rules for security
-egress: [
-  {
-    description: 'HTTPS outbound for package updates',
-    fromPort: 443,
-    toPort: 443,
-    protocol: 'tcp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-  {
-    description: 'HTTP outbound for package updates',
-    fromPort: 80,
-    toPort: 80,
-    protocol: 'tcp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-  {
-    description: 'DNS outbound',
-    fromPort: 53,
-    toPort: 53,
-    protocol: 'udp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-  {
-    description: 'NTP outbound',
-    fromPort: 123,
-    toPort: 123,
-    protocol: 'udp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-],
-```
-
-## 18. Missing Critical Security Monitoring Components
-
-**Issue Type**: Security/Compliance Issue
-**Description**: Model completely missed essential security monitoring components required for production environments.
-
-**Model Code**: No GuardDuty, AWS Config, CloudWatch Alarms, or SNS alerting.
-
-**What We Added**:
-```typescript
-// GuardDuty for threat detection
-const guardDutyDetector = pulumi.output(existingDetectorId).apply(id => {
-  if (id) {
-    return aws.guardduty.Detector.get(/*...*/);
-  }
-  return new aws.guardduty.Detector(/*...*/);
-});
-
-// AWS Config for compliance monitoring
-const configRecorder = new aws.cfg.Recorder(/*...*/);
-const configDeliveryChannel = new aws.cfg.DeliveryChannel(/*...*/);
-const configBucket = new aws.s3.Bucket(/*...*/);
-
-// CloudWatch alarms for proactive monitoring
 void new aws.cloudwatch.MetricAlarm(
   `dynamodb-read-throttle-alarm-${args.environment}`,
   {
     name: `dynamodb-read-throttle-alarm-${args.environment}`,
-    comparisonOperator: 'GreaterThanOrEqualToThreshold',
-    evaluationPeriods: 2,
     metricName: 'ReadThrottledEvents',
     namespace: 'AWS/DynamoDB',
-    period: 300,
     statistic: 'Sum',
+    period: 300,
+    evaluationPeriods: 2,
     threshold: 1,
-    alarmActions: [securityAlertsTopic.arn],
+    comparisonOperator: 'GreaterThanOrEqualToThreshold',
     dimensions: {
       TableName: dynamoTable.name,
     },
-  },
-  { provider, parent: this }
-);
-
-// SNS topic for centralized alerting
-const securityAlertsTopic = new aws.sns.Topic(
-  `security-alerts-topic-${args.environment}`,
-  {
-    name: `security-alerts-topic-${args.environment}`,
-    displayName: 'Security Alerts and Monitoring',
+    alarmActions: [securityAlertsTopic.arn],
   },
   { provider, parent: this }
 );
 ```
 
-## 19. Missing S3 Lifecycle and Cost Optimization
+## 13. Security Missed: Missing AWS Config Compliance Monitoring
 
-**Issue Type**: Cost Optimization/Compliance Issue
-**Description**: Model's S3 bucket lacked lifecycle policies for cost optimization and compliance retention requirements.
+**What model did wrong**: Failed to implement AWS Config for compliance monitoring and configuration drift detection.
 
-**Model Code**: Basic S3 bucket with no lifecycle management.
+**What was the issue**: No compliance monitoring or configuration change tracking.
 
-**What We Added**:
+**Wrong code generated**:
+
 ```typescript
-// S3 lifecycle configuration for cost optimization
+// No AWS Config implementation
+// No compliance rules
+// No configuration monitoring
+```
+
+**Correct code**:
+
+```typescript
+const configRecorder = new aws.cfg.Recorder(
+  `config-recorder-${args.environment}`,
+  {
+    name: `config-recorder-${args.environment}`,
+    roleArn: configRole.arn,
+    recordingGroup: {
+      allSupported: true,
+      includeGlobalResourceTypes: true,
+    },
+  },
+  { provider, parent: this }
+);
+
+void new aws.cfg.Rule(
+  `encrypted-volumes-rule-${args.environment}`,
+  {
+    name: `encrypted-volumes-rule-${args.environment}`,
+    source: {
+      owner: 'AWS',
+      sourceIdentifier: 'ENCRYPTED_VOLUMES',
+    },
+  },
+  { provider, parent: this }
+);
+```
+
+## 14. Missing S3 Lifecycle Management
+
+**What model did wrong**: Failed to implement S3 lifecycle policies for cost optimization and compliance retention.
+
+**What was the issue**: No cost optimization for CloudTrail logs storage.
+
+**Wrong code generated**:
+
+```typescript
+// No S3 lifecycle configuration
+// No cost optimization for CloudTrail logs
+```
+
+**Correct code**:
+
+```typescript
 void new aws.s3.BucketLifecycleConfiguration(
   `cloudtrail-bucket-lifecycle-${args.environment}`,
   {
@@ -844,116 +858,123 @@ void new aws.s3.BucketLifecycleConfiguration(
         id: 'cloudtrail-logs-lifecycle',
         status: 'Enabled',
         transitions: [
-          { days: 30, storageClass: 'STANDARD_IA' },
-          { days: 90, storageClass: 'GLACIER' },
-          { days: 365, storageClass: 'DEEP_ARCHIVE' },
+          {
+            days: 30,
+            storageClass: 'STANDARD_IA',
+          },
+          {
+            days: 90,
+            storageClass: 'GLACIER',
+          },
+          {
+            days: 365,
+            storageClass: 'DEEP_ARCHIVE',
+          },
         ],
-        expiration: { days: 2555 }, // 7 years retention for compliance
+        expiration: {
+          days: 2555, // 7 years retention
+        },
       },
     ],
   },
   { provider, parent: this }
 );
+```
 
-// S3 bucket notification configuration for monitoring
-void new aws.s3.BucketNotification(
-  `cloudtrail-bucket-notification-${args.environment}`,
+## 15. Missing NAT Gateway for Private Subnets
+
+**What model did wrong**: Failed to implement NAT Gateway for secure outbound internet access from private subnets.
+
+**What was the issue**: Private subnets would have no internet access for updates and external API calls.
+
+**Wrong code generated**:
+
+```typescript
+// No NAT Gateway implementation
+// Private subnets would have no internet access
+```
+
+**Correct code**:
+
+```typescript
+const natEip = new aws.ec2.Eip(
+  `nat-eip-${args.environment}`,
   {
-    bucket: cloudtrailBucket.id,
+    domain: 'vpc',
+    tags: {
+      ...commonTags,
+      Name: `nat-eip-${args.environment}`,
+    },
+  },
+  { provider, parent: this }
+);
+
+const natGateway = new aws.ec2.NatGateway(
+  `nat-gateway-${args.environment}`,
+  {
+    allocationId: natEip.id,
+    subnetId: publicSubnet1.id,
+    tags: {
+      ...commonTags,
+      Name: `nat-gateway-${args.environment}`,
+    },
   },
   { provider, parent: this }
 );
 ```
 
-**Issue**: Model relied on insecure SSH access from the internet instead of secure SSM Session Manager.
+## 16. Code Issue: Missing Environment Parameterization
 
-**Model Code**: Included SSH access:
+**What model did wrong**: Created hardcoded infrastructure without environment parameterization, preventing proper multi-environment deployments.
+
+**What was the issue**: No way to deploy the same infrastructure to different environments.
+
+**Wrong code generated**:
 
 ```typescript
-ingress: [
-  {
-    description: 'SSH access from internet',
-    fromPort: 22,
-    toPort: 22,
-    protocol: 'tcp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-  // ...
-],
+const commonTags = {
+  Environment: 'production', // Hardcoded
+  Project: 'secure-infrastructure',
+};
 ```
 
-**What We Added**: Removed SSH and added SSM Session Manager:
+**Correct code**:
 
 ```typescript
-// Attach AWS managed policy for SSM Session Manager (secure alternative to SSH)
-void new aws.iam.RolePolicyAttachment(
-  `ec2-ssm-policy-attachment-${args.environment}`,
-  {
-    role: ec2Role.name,
-    policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
-  },
-  { provider, parent: this }
-);
+export interface SecureInfrastructureArgs {
+  environment: string;
+  tags?: pulumi.Input<{ [key: string]: string }>;
+}
 
-// VPC Endpoints for SSM Session Manager (secure access without internet)
-void new aws.ec2.VpcEndpoint(
-  `ssm-endpoint-${args.environment}`,
-  {
-    vpcId: vpc.id,
-    serviceName: 'com.amazonaws.ap-south-1.ssm',
-    vpcEndpointType: 'Interface',
-    subnetIds: [privateSubnet1.id, privateSubnet2.id],
-    securityGroupIds: [ssmEndpointSecurityGroup.id],
-    privateDnsEnabled: true,
-  },
-  { provider, parent: this }
-);
+const commonTags = {
+  Environment: args.environment, // Parameterized
+  Project: 'secure-infrastructure',
+  ...args.tags,
+};
 ```
 
-## 20. Added SSM Session Manager to Replace SSH Access
+## 17. Code Issue: Missing Output Registration
 
-**Issue Type**: Security Enhancement
-**Description**: Model relied on insecure SSH access from the internet instead of secure SSM Session Manager.
+**What model did wrong**: Used simple exports instead of proper Pulumi ComponentResource output registration.
 
-**Model Code**: Included SSH access:
+**What was the issue**: Outputs not properly managed within component resource pattern.
+
+**Wrong code generated**:
 
 ```typescript
-ingress: [
-  {
-    description: 'SSH access from internet',
-    fromPort: 22,
-    toPort: 22,
-    protocol: 'tcp',
-    cidrBlocks: ['0.0.0.0/0'],
-  },
-  // ...
-],
+// Simple exports without proper output registration
+export const vpcId = vpc.id;
+export const publicSubnetIds = [publicSubnet1.id, publicSubnet2.id];
 ```
 
-**What We Added**: Removed SSH and added SSM Session Manager:
+**Correct code**:
 
 ```typescript
-// Attach AWS managed policy for SSM Session Manager (secure alternative to SSH)
-void new aws.iam.RolePolicyAttachment(
-  `ec2-ssm-policy-attachment-${args.environment}`,
-  {
-    role: ec2Role.name,
-    policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
-  },
-  { provider, parent: this }
-);
-
-// VPC Endpoints for SSM Session Manager (secure access without internet)
-void new aws.ec2.VpcEndpoint(
-  `ssm-endpoint-${args.environment}`,
-  {
-    vpcId: vpc.id,
-    serviceName: 'com.amazonaws.ap-south-1.ssm',
-    vpcEndpointType: 'Interface',
-    subnetIds: [privateSubnet1.id, privateSubnet2.id],
-    securityGroupIds: [ssmEndpointSecurityGroup.id],
-    privateDnsEnabled: true,
-  },
-  { provider, parent: this }
-);
+// Proper output registration in ComponentResource
+this.registerOutputs({
+  vpcId: this.vpcId,
+  publicSubnetIds: this.publicSubnetIds,
+  privateSubnetIds: this.privateSubnetIds,
+  // ... all outputs
+});
 ```

@@ -1,8 +1,16 @@
 # Secure AWS Infrastructure with Pulumi TypeScript
 
 ```typescript
+/**
+ * secure-infrastructure.ts
+ *
+ * This module defines the SecureInfrastructure class, a Pulumi ComponentResource
+ * that creates a comprehensive, production-ready AWS infrastructure setup
+ * following security best practices for the ap-south-1 region.
+ */
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { ResourceOptions } from '@pulumi/pulumi';
 
 /**
  * SecureInfrastructureArgs defines the input arguments for the SecureInfrastructure component.
@@ -21,10 +29,9 @@ export interface SecureInfrastructureArgs {
 
 /**
  * SecureInfrastructure component that creates a complete AWS infrastructure
- * with VPC, security groups, IAM roles, CloudTrail, DynamoDB, and advanced security features.
+ * with VPC, security groups, IAM roles, CloudTrail, and DynamoDB.
  */
 export class SecureInfrastructure extends pulumi.ComponentResource {
-  // Public outputs for all infrastructure components
   public readonly vpcId: pulumi.Output<string>;
   public readonly publicSubnetIds: pulumi.Output<string>[];
   public readonly privateSubnetIds: pulumi.Output<string>[];
@@ -45,13 +52,13 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
   constructor(
     name: string,
     args: SecureInfrastructureArgs,
-    opts?: pulumi.ComponentResourceOptions
+    opts?: ResourceOptions
   ) {
-    super('custom:infrastructure:SecureInfrastructure', name, {}, opts);
+    super('tap:infrastructure:SecureInfrastructure', name, args, opts);
 
     // Configure the AWS provider for ap-south-1 region
     const provider = new aws.Provider(
-      `${name}-provider`,
+      `ap-south-1-provider-${args.environment}`,
       {
         region: 'ap-south-1',
       },
@@ -147,7 +154,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     /**
      * Private Subnets
-     * Two private subnets in different AZs for database and internal services
+     * Two private subnets in different AZs for database and application tiers
      */
     const privateSubnet1 = new aws.ec2.Subnet(
       `private-subnet-1-${args.environment}`,
@@ -182,7 +189,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     );
 
     /**
-     * NAT Gateway for Private Subnet Internet Access
+     * NAT Gateway for Private Subnet Internet Access (Optional)
      * Provides secure outbound internet access for private subnets
      */
     const natEip = new aws.ec2.Eip(
@@ -209,11 +216,12 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Purpose: 'Secure outbound internet access for private subnets',
         },
       },
-      { provider, parent: this, dependsOn: [internetGateway] }
+      { provider, parent: this, dependsOn: [natEip] }
     );
+
     /**
-     * Route Tables
-     * Separate route tables for public and private subnets
+     * Route Table for Public Subnets
+     * Routes traffic to the internet gateway
      */
     const publicRouteTable = new aws.ec2.RouteTable(
       `public-route-table-${args.environment}`,
@@ -233,7 +241,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Associate public subnets with public route table
+    // Associate route table with public subnets
     void new aws.ec2.RouteTableAssociation(
       `public-subnet-1-association-${args.environment}`,
       {
@@ -252,6 +260,10 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    /**
+     * Route Table for Private Subnets
+     * Routes traffic through NAT Gateway for secure internet access
+     */
     const privateRouteTable = new aws.ec2.RouteTable(
       `private-route-table-${args.environment}`,
       {
@@ -270,7 +282,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Associate private subnets with private route table
+    // Associate route table with private subnets
     void new aws.ec2.RouteTableAssociation(
       `private-subnet-1-association-${args.environment}`,
       {
@@ -292,7 +304,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     /**
      * Security Groups
      * Restrictive security groups following least privilege principle
-     * NO SSH ACCESS - Following security best practices
      */
     const webSecurityGroup = new aws.ec2.SecurityGroup(
       `web-security-group-${args.environment}`,
@@ -302,7 +313,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           'Security group for web servers with restricted access - NO SSH',
         vpcId: vpc.id,
 
-        // Inbound rules - NO SSH for security
+        // Inbound rules - NO SSH, only HTTP/HTTPS
         ingress: [
           {
             description: 'HTTP access from internet',
@@ -320,7 +331,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           },
         ],
 
-        // Explicit outbound rules for security
+        // Outbound rules (explicit for security) - Restricted outbound access
         egress: [
           {
             description: 'HTTPS outbound for package updates',
@@ -362,7 +373,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     /**
      * Database Security Group
-     * Only accessible from web tier - no direct internet access
+     * Allows access only from web security group
      */
     const dbSecurityGroup = new aws.ec2.SecurityGroup(
       `database-security-group-${args.environment}`,
@@ -372,7 +383,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           'Security group for database tier - only accessible from web tier',
         vpcId: vpc.id,
 
-        // Only allow access from web security group
+        // Inbound rules - Only from web security group
         ingress: [
           {
             description: 'MySQL/Aurora access from web tier',
@@ -390,7 +401,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           },
         ],
 
-        // No outbound rules - database should not initiate connections
+        // No outbound rules needed for database
         egress: [],
 
         tags: {
@@ -400,15 +411,17 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       },
       { provider, parent: this }
     );
+
     /**
      * KMS Key for Encryption
-     * Used for encrypting S3 buckets, DynamoDB table, and other sensitive data
+     * Used for encrypting S3 bucket and DynamoDB table
      */
     const kmsKey = new aws.kms.Key(
       `infrastructure-kms-key-${args.environment}`,
       {
         description: `KMS key for infrastructure encryption - ${args.environment}`,
         keyUsage: 'ENCRYPT_DECRYPT',
+
         policy: pulumi
           .all([aws.getCallerIdentity({}, { provider })])
           .apply(([identity]) =>
@@ -436,6 +449,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
               ],
             })
           ),
+
         tags: {
           ...commonTags,
           Name: `infrastructure-kms-key-${args.environment}`,
@@ -444,7 +458,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // KMS Key Alias for easier reference
     void new aws.kms.Alias(
       `infrastructure-kms-key-alias-${args.environment}`,
       {
@@ -456,7 +469,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     /**
      * S3 Bucket for CloudTrail Logs
-     * Encrypted bucket with versioning, lifecycle policies, and security configurations
+     * Encrypted bucket with versioning and lifecycle policies
      */
     const cloudtrailBucket = new aws.s3.Bucket(
       `cloudtrail-logs-bucket-${args.environment}`,
@@ -467,6 +480,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
             ([identity]) =>
               `cloudtrail-logs-${identity.accountId}-ap-south-1-${args.environment}`
           ),
+
         tags: {
           ...commonTags,
           Name: `cloudtrail-logs-bucket-${args.environment}`,
@@ -519,7 +533,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Lifecycle configuration for cost optimization
+    // S3 bucket lifecycle configuration for cost optimization
     void new aws.s3.BucketLifecycleConfiguration(
       `cloudtrail-bucket-lifecycle-${args.environment}`,
       {
@@ -543,7 +557,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
               },
             ],
             expiration: {
-              days: 2555, // 7 years retention
+              days: 2555, // 7 years retention for compliance
             },
           },
         ],
@@ -551,7 +565,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // S3 bucket notification configuration
+    // S3 bucket notification configuration for security monitoring
     void new aws.s3.BucketNotification(
       `cloudtrail-bucket-notification-${args.environment}`,
       {
@@ -568,7 +582,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         bucket: cloudtrailBucket.id,
         policy: pulumi
           .all([cloudtrailBucket.arn, aws.getCallerIdentity({}, { provider })])
-          .apply(([bucketArn, identity]) =>
+          .apply(([bucketArn, _identity]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -580,11 +594,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
                   },
                   Action: 's3:GetBucketAcl',
                   Resource: bucketArn,
-                  Condition: {
-                    StringEquals: {
-                      'AWS:SourceArn': `arn:aws:cloudtrail:ap-south-1:${identity.accountId}:trail/main-cloudtrail-${args.environment}`,
-                    },
-                  },
                 },
                 {
                   Sid: 'AWSCloudTrailWrite',
@@ -597,7 +606,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
                   Condition: {
                     StringEquals: {
                       's3:x-amz-acl': 'bucket-owner-full-control',
-                      'AWS:SourceArn': `arn:aws:cloudtrail:ap-south-1:${identity.accountId}:trail/main-cloudtrail-${args.environment}`,
                     },
                   },
                 },
@@ -610,7 +618,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     /**
      * CloudTrail Configuration
-     * Comprehensive logging of all API calls for security monitoring
+     * Logs all API calls for security monitoring
      */
     const cloudTrail = new aws.cloudtrail.Trail(
       `main-cloudtrail-${args.environment}`,
@@ -629,7 +637,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
             dataResources: [
               {
                 type: 'AWS::S3::Object',
-                values: ['arn:aws:s3:::*/*'],
+                values: cloudtrailBucket.arn.apply(arn => [`${arn}/`]),
               },
             ],
           },
@@ -646,9 +654,10 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         dependsOn: [cloudtrailBucketPolicy],
       }
     );
+
     /**
      * IAM Role for EC2 Application Deployment
-     * Follows principle of least privilege with region-specific permissions
+     * Follows principle of least privilege
      */
     const ec2Role = new aws.iam.Role(
       `ec2-deployment-role-${args.environment}`,
@@ -759,7 +768,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Attach custom policy to role
+    // Attach policy to role
     void new aws.iam.RolePolicyAttachment(
       `ec2-role-policy-attachment-${args.environment}`,
       {
@@ -769,7 +778,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Attach AWS managed policy for SSM Session Manager (secure alternative to SSH)
+    // Attach SSM managed instance core policy for Session Manager
     void new aws.iam.RolePolicyAttachment(
       `ec2-ssm-policy-attachment-${args.environment}`,
       {
@@ -796,7 +805,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     /**
      * DynamoDB Table with Provisioned Throughput
-     * Encrypted at rest using KMS with point-in-time recovery
+     * Encrypted at rest using KMS
      */
     const dynamoTable = new aws.dynamodb.Table(
       `application-table-${args.environment}`,
@@ -855,9 +864,10 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       },
       { provider, parent: this }
     );
+
     /**
-     * SNS Topic for Security Alerts
-     * Centralized notification system for security events
+     * SNS Topic for Security Alerts and Monitoring
+     * Used for CloudWatch Alarms and security notifications
      */
     const securityAlertsTopic = new aws.sns.Topic(
       `security-alerts-topic-${args.environment}`,
@@ -874,24 +884,25 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     );
 
     /**
-     * CloudWatch Alarms for Monitoring
-     * Proactive monitoring of critical infrastructure components
+     * CloudWatch Alarms for Infrastructure Monitoring
      */
+
+    // DynamoDB Read Throttle Alarm
     void new aws.cloudwatch.MetricAlarm(
       `dynamodb-read-throttle-alarm-${args.environment}`,
       {
         name: `dynamodb-read-throttle-alarm-${args.environment}`,
-        comparisonOperator: 'GreaterThanOrEqualToThreshold',
-        evaluationPeriods: 2,
         metricName: 'ReadThrottledEvents',
         namespace: 'AWS/DynamoDB',
-        period: 300,
         statistic: 'Sum',
+        period: 300,
+        evaluationPeriods: 2,
         threshold: 1,
-        alarmActions: [securityAlertsTopic.arn],
+        comparisonOperator: 'GreaterThanOrEqualToThreshold',
         dimensions: {
           TableName: dynamoTable.name,
         },
+        alarmActions: [securityAlertsTopic.arn],
         tags: {
           ...commonTags,
           Name: `dynamodb-read-throttle-alarm-${args.environment}`,
@@ -900,21 +911,22 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    // DynamoDB Write Throttle Alarm
     void new aws.cloudwatch.MetricAlarm(
       `dynamodb-write-throttle-alarm-${args.environment}`,
       {
         name: `dynamodb-write-throttle-alarm-${args.environment}`,
-        comparisonOperator: 'GreaterThanOrEqualToThreshold',
-        evaluationPeriods: 2,
         metricName: 'WriteThrottledEvents',
         namespace: 'AWS/DynamoDB',
-        period: 300,
         statistic: 'Sum',
+        period: 300,
+        evaluationPeriods: 2,
         threshold: 1,
-        alarmActions: [securityAlertsTopic.arn],
+        comparisonOperator: 'GreaterThanOrEqualToThreshold',
         dimensions: {
           TableName: dynamoTable.name,
         },
+        alarmActions: [securityAlertsTopic.arn],
         tags: {
           ...commonTags,
           Name: `dynamodb-write-throttle-alarm-${args.environment}`,
@@ -923,21 +935,22 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    // S3 Bucket 4xx Error Alarm
     void new aws.cloudwatch.MetricAlarm(
       `s3-4xx-error-alarm-${args.environment}`,
       {
         name: `s3-4xx-error-alarm-${args.environment}`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 2,
         metricName: '4xxErrors',
         namespace: 'AWS/S3',
-        period: 300,
         statistic: 'Sum',
+        period: 300,
+        evaluationPeriods: 2,
         threshold: 10,
-        alarmActions: [securityAlertsTopic.arn],
+        comparisonOperator: 'GreaterThanThreshold',
         dimensions: {
           BucketName: cloudtrailBucket.bucket,
         },
+        alarmActions: [securityAlertsTopic.arn],
         tags: {
           ...commonTags,
           Name: `s3-4xx-error-alarm-${args.environment}`,
@@ -966,36 +979,38 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       .then(res => res.id)
       .catch(() => undefined);
 
-    const guardDutyDetector = pulumi.output(existingDetectorInUsEast1).apply(usEast1DetectorId => {
-      if (usEast1DetectorId) {
-        // Use existing detector in us-east-1
-        return aws.guardduty.Detector.get(
-          `imported-guardduty-detector-us-east-1-${args.environment}`,
-          usEast1DetectorId,
-          {},
-          { provider: usEast1Provider, parent: this }
-        );
-      } else {
-        // Create new detector in ap-south-1 if none exists in us-east-1
-        return new aws.guardduty.Detector(
-          `main-guardduty-detector-${args.environment}`,
-          {
-            enable: true,
-            findingPublishingFrequency: 'FIFTEEN_MINUTES',
-            tags: {
-              ...commonTags,
-              Name: `main-guardduty-detector-${args.environment}`,
+    const guardDutyDetector = pulumi
+      .output(existingDetectorInUsEast1)
+      .apply(usEast1DetectorId => {
+        if (usEast1DetectorId) {
+          // Use existing detector in us-east-1
+          return aws.guardduty.Detector.get(
+            `imported-guardduty-detector-us-east-1-${args.environment}`,
+            usEast1DetectorId,
+            {},
+            { provider: usEast1Provider, parent: this }
+          );
+        } else {
+          // Create new detector in ap-south-1 if none exists in us-east-1
+          return new aws.guardduty.Detector(
+            `main-guardduty-detector-${args.environment}`,
+            {
+              enable: true,
+              findingPublishingFrequency: 'FIFTEEN_MINUTES',
+              tags: {
+                ...commonTags,
+                Name: `main-guardduty-detector-${args.environment}`,
+              },
             },
-          },
-          { provider, parent: this }
-        );
-      }
-    });
+            { provider, parent: this }
+          );
+        }
+      });
 
     // Create GuardDuty features based on where the detector is located
     pulumi.output(existingDetectorInUsEast1).apply(usEast1DetectorId => {
       const featureProvider = usEast1DetectorId ? usEast1Provider : provider;
-      
+
       // Enable S3 Data Events monitoring
       void new aws.guardduty.DetectorFeature(
         `guardduty-s3-data-events-${args.environment}`,
@@ -1030,10 +1045,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       );
     });
 
-    /**
-     * AWS Config for Compliance Monitoring
-     * Tracks configuration changes and compliance
-     */
+    // S3 bucket for Config
     const configBucket = new aws.s3.Bucket(
       `aws-config-bucket-${args.environment}`,
       {
@@ -1059,7 +1071,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         bucket: configBucket.id,
         policy: pulumi
           .all([configBucket.arn, aws.getCallerIdentity({}, { provider })])
-          .apply(([bucketArn, identity]) =>
+          .apply(([bucketArn, _identity]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -1073,7 +1085,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
                   Resource: bucketArn,
                   Condition: {
                     StringEquals: {
-                      'AWS:SourceAccount': identity.accountId,
+                      'AWS:SourceAccount': _identity.accountId,
                     },
                   },
                 },
@@ -1087,7 +1099,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
                   Resource: bucketArn,
                   Condition: {
                     StringEquals: {
-                      'AWS:SourceAccount': identity.accountId,
+                      'AWS:SourceAccount': _identity.accountId,
                     },
                   },
                 },
@@ -1102,7 +1114,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
                   Condition: {
                     StringEquals: {
                       's3:x-amz-acl': 'bucket-owner-full-control',
-                      'AWS:SourceAccount': identity.accountId,
+                      'AWS:SourceAccount': _identity.accountId,
                     },
                   },
                 },
@@ -1150,14 +1162,15 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     // AWS Config recorder and delivery channel handling
     // AWS Config allows only one recorder per region per account
-    
+
     // Check if we should create Config resources or use existing ones
     // Set PULUMI_CREATE_CONFIG_RESOURCES=true to create new Config resources
-    const shouldCreateConfigResources = process.env.PULUMI_CREATE_CONFIG_RESOURCES === 'true';
-    
+    const shouldCreateConfigResources =
+      process.env.PULUMI_CREATE_CONFIG_RESOURCES === 'true';
+
     let configRecorder: aws.cfg.Recorder;
     let configDeliveryChannel: aws.cfg.DeliveryChannel;
-    
+
     if (shouldCreateConfigResources) {
       // Create new Config recorder and delivery channel
       configRecorder = new aws.cfg.Recorder(
@@ -1189,7 +1202,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       // Create placeholder objects for outputs
       configRecorder = {} as aws.cfg.Recorder;
       configDeliveryChannel = {
-        name: pulumi.output('existing-config-delivery-channel')
+        name: pulumi.output('existing-config-delivery-channel'),
       } as aws.cfg.DeliveryChannel;
     }
 
@@ -1207,11 +1220,11 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: `encrypted-volumes-rule-${args.environment}`,
         },
       },
-      { 
-        provider, 
+      {
+        provider,
         parent: this,
         // Only depend on configRecorder if we created it
-        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {})
+        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {}),
       }
     );
 
@@ -1228,17 +1241,17 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
           Name: `s3-bucket-public-read-prohibited-${args.environment}`,
         },
       },
-      { 
-        provider, 
+      {
+        provider,
         parent: this,
         // Only depend on configRecorder if we created it
-        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {})
+        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {}),
       }
     );
 
     /**
      * VPC Endpoints for SSM Session Manager
-     * Enables secure access to EC2 instances without SSH or bastion hosts
+     * Enables secure access without SSH or public IPs
      */
     const ssmEndpointSecurityGroup = new aws.ec2.SecurityGroup(
       `ssm-endpoint-sg-${args.environment}`,
@@ -1246,7 +1259,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
         name: `ssm-endpoint-sg-${args.environment}`,
         description: 'Security group for SSM VPC endpoints',
         vpcId: vpc.id,
-
         ingress: [
           {
             description: 'HTTPS from VPC',
@@ -1256,7 +1268,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
             cidrBlocks: [vpc.cidrBlock],
           },
         ],
-
         egress: [
           {
             description: 'All outbound',
@@ -1266,7 +1277,6 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
             cidrBlocks: ['0.0.0.0/0'],
           },
         ],
-
         tags: {
           ...commonTags,
           Name: `ssm-endpoint-sg-${args.environment}`,
@@ -1329,9 +1339,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    /**
-     * Set all output properties
-     */
+    // Set outputs
     this.vpcId = vpc.id;
     this.publicSubnetIds = [publicSubnet1.id, publicSubnet2.id];
     this.privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
@@ -1349,9 +1357,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     this.guardDutyDetectorId = guardDutyDetector.id;
     this.configDeliveryChannelName = configDeliveryChannel.name;
 
-    /**
-     * Register all outputs with Pulumi
-     */
+    // Register outputs
     this.registerOutputs({
       vpcId: this.vpcId,
       publicSubnetIds: this.publicSubnetIds,
