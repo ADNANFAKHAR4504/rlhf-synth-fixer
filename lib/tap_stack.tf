@@ -9,6 +9,12 @@ variable "aws_region" {
   default     = "us-west-2"
 }
 
+# Random password for RDS
+resource "random_password" "db_password" {
+  length  = 16
+  special = true
+}
+
 variable "environments" {
   description = "Environment configurations"
   type = map(object({
@@ -51,12 +57,6 @@ variable "db_username" {
   default     = "dbadmin"
 }
 
-variable "db_password" {
-  description = "Database master password"
-  type        = string
-  sensitive   = true
-  default     = "ChangeMe123!"
-}
 
 # Locals
 locals {
@@ -631,7 +631,7 @@ resource "aws_db_instance" "postgres" {
   instance_class         = each.value.db_instance_class
   db_name                = "${each.key}db"
   username               = var.db_username
-  password               = var.db_password
+  password               = random_password.db_password.result
   parameter_group_name   = "default.postgres15"
   db_subnet_group_name   = aws_db_subnet_group.main[each.key].name
   vpc_security_group_ids = [aws_security_group.rds[each.key].id]
