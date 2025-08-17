@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import * as random from '@pulumi/random';
 
 export interface ScalableWebAppInfrastructureArgs {
   environmentSuffix: string;
@@ -26,8 +27,20 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
     const minCapacity = config.getNumber('minCapacity') || 2;
     const maxCapacity = config.getNumber('maxCapacity') || 10;
     const desiredCapacity = config.getNumber('desiredCapacity') || 3;
-    const dbUsername = config.require('dbUsername');
-    const dbPassword = config.requireSecret('dbPassword');
+    const dbUsername = config.get('dbUsername') || 'admin';
+
+    // Generate secure password
+    const dbPassword = new random.RandomPassword(
+      `${environmentSuffix}-db-password`,
+      {
+        length: 32,
+        special: true,
+        upper: true,
+        lower: true,
+        numeric: true,
+      },
+      { parent: this }
+    );
 
     // AWS Provider with explicit region
     const provider = new aws.Provider(
@@ -36,6 +49,28 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
         region: 'ap-south-1',
       },
       { parent: this }
+    );
+
+    // Store in Secrets Manager
+    const dbSecret = new aws.secretsmanager.Secret(
+      `${environmentSuffix}-db-secret`,
+      {
+        description: `DB credentials for ${environmentSuffix}`,
+        tags: {
+          Name: `${environmentSuffix}-db-secret`,
+          Environment: 'production',
+        },
+      },
+      { provider, parent: this }
+    );
+
+    new aws.secretsmanager.SecretVersion(
+      `${environmentSuffix}-db-secret-version`,
+      {
+        secretId: dbSecret.id,
+        secretString: pulumi.interpolate`{"username":"${dbUsername}","password":"${dbPassword.result}"}`,
+      },
+      { provider, parent: this }
     );
 
     // Get availability zones
@@ -876,7 +911,7 @@ EOF
         instanceClass: 'db.t3.micro',
         dbName: 'appdb',
         username: dbUsername,
-        password: dbPassword,
+        manageMasterUserPassword: true,
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: rdsSubnetGroup.name,
         backupRetentionPeriod: 30,
