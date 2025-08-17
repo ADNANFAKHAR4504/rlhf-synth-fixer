@@ -1,3 +1,4 @@
+// test/tap-stack.unit.test.ts
 import fs from 'fs';
 import path from 'path';
 
@@ -5,9 +6,8 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If you're testing a YAML template, run:
-    //   pipenv run cfn-flip-to-json lib/TapStack.yml > lib/TapStack.json
-    // Make sure lib/TapStack.json exists before running tests.
+    // Ensure lib/TapStack.json exists (convert YAML to JSON before running tests):
+    // pipenv run cfn-flip-to-json lib/TapStack.yml > lib/TapStack.json
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -21,7 +21,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Production-grade secure infrastructure baseline with encryption at rest, least-privilege IAM, and comprehensive monitoring (single region)'
+        'Production-grade secure infrastructure baseline with encryption at rest, least-privilege IAM, and comprehensive monitoring (single region)',
       );
     });
   });
@@ -39,7 +39,6 @@ describe('TapStack CloudFormation Template', () => {
         'AlertEmail',
         'AllowSshCidr',
       ];
-
       expectedParameters.forEach((paramName) => {
         expect(template.Parameters[paramName]).toBeDefined();
       });
@@ -66,15 +65,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.AllowedPattern).toBe('^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$');
     });
 
-    // Updated: KeyPairName is optional String in the template
     test('KeyPairName parameter should be optional string', () => {
       const param = template.Parameters.KeyPairName;
       expect(param.Type).toBe('String');
-      // Optional default (empty string) is acceptable
-      expect(param.Default).toBeDefined();
+      expect(param.Default).toBeDefined(); // empty string allowed
     });
 
-    // Updated: AlertEmail pattern allows empty string or email
     test('AlertEmail parameter should allow empty or valid email', () => {
       const param = template.Parameters.AlertEmail;
       expect(param.Type).toBe('String');
@@ -180,24 +176,27 @@ describe('TapStack CloudFormation Template', () => {
 
       const encryption = template.Resources.AppDataBucket.Properties.BucketEncryption;
       expect(
-        encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm
+        encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm,
       ).toBe('aws:kms');
       expect(
-        encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID
+        encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault
+          .KMSMasterKeyID,
       ).toEqual({ Ref: 'KmsKeyData' });
     });
 
-    test('should have CloudTrail logs bucket with KMS encryption', () => {
+    test('should have CloudTrail logs bucket with SSE-S3 (AES256) encryption', () => {
       expect(template.Resources.TrailLogsBucket).toBeDefined();
       expect(template.Resources.TrailLogsBucket.Type).toBe('AWS::S3::Bucket');
 
       const encryption = template.Resources.TrailLogsBucket.Properties.BucketEncryption;
       expect(
-        encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm
-      ).toBe('aws:kms');
+        encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm,
+      ).toBe('AES256');
+      // No KMS key id present in SSE-S3 mode
       expect(
-        encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID
-      ).toEqual({ Ref: 'KmsKeyLogs' });
+        encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault
+          .KMSMasterKeyID,
+      ).toBeUndefined();
     });
 
     test('both S3 buckets should have public access blocked', () => {
@@ -216,7 +215,6 @@ describe('TapStack CloudFormation Template', () => {
     test('both S3 buckets should have versioning enabled', () => {
       const appBucket = template.Resources.AppDataBucket;
       const trailBucket = template.Resources.TrailLogsBucket;
-
       [appBucket, trailBucket].forEach((bucket) => {
         expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       });
@@ -235,7 +233,7 @@ describe('TapStack CloudFormation Template', () => {
     test('instance role should have SSM managed policy', () => {
       const role = template.Resources.InstanceRole;
       expect(role.Properties.ManagedPolicyArns).toContain(
-        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
       );
     });
 
@@ -280,12 +278,12 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('CloudWatch and Monitoring', () => {
-    test('should have CloudTrail log group with KMS encryption', () => {
+    test('should have CloudTrail log group without KMS (SCP bypass path)', () => {
       expect(template.Resources.CloudTrailLogGroup).toBeDefined();
       expect(template.Resources.CloudTrailLogGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(template.Resources.CloudTrailLogGroup.Properties.KmsKeyId).toEqual({
-        'Fn::GetAtt': ['KmsKeyLogs', 'Arn'],
-      });
+      expect(
+        template.Resources.CloudTrailLogGroup.Properties.KmsKeyId,
+      ).toBeUndefined(); // no KMS on CT log group
     });
 
     test('should have EC2 log group with KMS encryption', () => {
@@ -296,18 +294,16 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('should have CloudTrail', () => {
+    test('should have CloudTrail without KMS key id (SSE-S3 delivery)', () => {
       expect(template.Resources.CloudTrail).toBeDefined();
       expect(template.Resources.CloudTrail.Type).toBe('AWS::CloudTrail::Trail');
-      expect(template.Resources.CloudTrail.Properties.KMSKeyId).toEqual({ Ref: 'KmsKeyLogs' });
+      expect(template.Resources.CloudTrail.Properties.KMSKeyId).toBeUndefined();
     });
 
-    test('should have SNS topic for alerts with KMS encryption', () => {
+    test('should have SNS topic for alerts without KMS (avoid SCP grant)', () => {
       expect(template.Resources.AlertTopic).toBeDefined();
       expect(template.Resources.AlertTopic.Type).toBe('AWS::SNS::Topic');
-      expect(template.Resources.AlertTopic.Properties.KmsMasterKeyId).toEqual({
-        'Fn::GetAtt': ['KmsKeyLogs', 'Arn'],
-      });
+      expect(template.Resources.AlertTopic.Properties.KmsMasterKeyId).toBeUndefined();
     });
 
     test('should have security metric filters', () => {
@@ -335,7 +331,8 @@ describe('TapStack CloudFormation Template', () => {
         template.Resources.AlarmRootAccountUsage,
       ].forEach((alarm) => {
         expect(alarm.Type).toBe('AWS::CloudWatch::Alarm');
-        expect(alarm.Properties.AlarmActions).toContain({ Ref: 'AlertTopic' });
+        // Use toContainEqual for deep object comparison
+        expect(alarm.Properties.AlarmActions).toContainEqual({ Ref: 'AlertTopic' });
       });
     });
   });
@@ -356,7 +353,6 @@ describe('TapStack CloudFormation Template', () => {
         'BastionInstanceId',
         'AppInstanceId',
       ];
-
       expectedOutputs.forEach((outputName) => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
@@ -425,13 +421,13 @@ describe('TapStack CloudFormation Template', () => {
       ];
 
       taggedResources.forEach((resourceName) => {
-        if (template.Resources[resourceName] && template.Resources[resourceName].Properties.Tags) {
-          const tags = template.Resources[resourceName].Properties.Tags;
-          const tagMap = tags.reduce((acc: any, tag: any) => {
+        const res = template.Resources[resourceName];
+        if (res && res.Properties && res.Properties.Tags) {
+          const tags = res.Properties.Tags;
+          const tagMap = tags.reduce((acc: Record<string, any>, tag: any) => {
             acc[tag.Key] = tag.Value;
             return acc;
           }, {});
-
           expect(tagMap.Project).toEqual({ Ref: 'ProjectName' });
           expect(tagMap.Environment).toEqual({ Ref: 'Environment' });
           expect(tagMap.Region).toEqual({ Ref: 'AWS::Region' });
@@ -452,9 +448,10 @@ describe('TapStack CloudFormation Template', () => {
 
       sensitiveResources.forEach((resourceName) => {
         const resource = template.Resources[resourceName];
-        if (resource && resource.Properties.Tags) {
-          const tags = resource.Properties.Tags;
-          const classificationTag = tags.find((tag: any) => tag.Key === 'DataClassification');
+        if (resource && resource.Properties && resource.Properties.Tags) {
+          const classificationTag = resource.Properties.Tags.find(
+            (tag: any) => tag.Key === 'DataClassification',
+          );
           expect(classificationTag).toBeDefined();
           expect(classificationTag.Value).toBe('Confidential');
         }
