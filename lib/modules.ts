@@ -281,7 +281,7 @@ export class S3Module extends Construct {
   constructor(scope: Construct, id: string, config: S3ModuleConfig) {
     super(scope, id);
 
-    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
+    const callerIdentity = new DataAwsCallerIdentity(this, 'caller-identity');
     const region = new DataAwsRegion(this, 'current');
 
     // Create KMS key for S3 encryption
