@@ -71,10 +71,6 @@ class DatabaseComponent(ComponentResource):
     db_password = aws.secretsmanager.Secret(
       f"{name}-db-password",
       description=f"Database password for {config.app_name}-{config.environment}",
-      generate_secret_string={
-        "length": 32,
-        "exclude_characters": '"@/\\'
-      },
       tags={
         **config.tags,
         "Name": f"{config.app_name}-{config.environment}-db-password"
@@ -86,7 +82,10 @@ class DatabaseComponent(ComponentResource):
     db_password_version = aws.secretsmanager.SecretVersion(
       f"{name}-db-password-version",
       secret_id=db_password.id,
-      secret_string=db_password.id,
+      secret_string=json.dumps({
+        "username": "admin",
+        "dbname": f"{config.app_name}_{config.environment}".replace("-", "_")
+      }),
       opts=ResourceOptions(parent=self)
     )
 
