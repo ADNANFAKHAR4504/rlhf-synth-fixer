@@ -1,23 +1,16 @@
 import fs from "fs";
 import path from "path";
 
-const STACK_REL = "../lib/tap_stack.tf";
+const STACK_REL = "../lib/main.tf"; // PROMPT.md requires main.tf
 const stackPath = path.resolve(__dirname, STACK_REL);
 
-describe("Terraform Infrastructure Plan: main.json", () => {
-  test("main.json exists", () => {
+describe("Terraform single-file stack: main.tf", () => {
+  test("main.tf exists", () => {
     const exists = fs.existsSync(stackPath);
     if (!exists) {
-      console.error(`[unit] Expected Terraform plan at: ${stackPath}`);
+      console.error(`[unit] Expected stack at: ${stackPath}`);
     }
     expect(exists).toBe(true);
-  });
-
-  // Load and parse the plan JSON (only once)
-  let plan: any;
-  beforeAll(() => {
-    const planData = fs.readFileSync(stackPath, "utf8");
-    plan = JSON.parse(planData);
   });
 
   // --- Sanity checks ---
