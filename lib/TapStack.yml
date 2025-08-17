@@ -385,6 +385,56 @@ Resources:
   # ============================================================================
   # 15. CENTRALIZED SECRET MANAGEMENT
   # ============================================================================
+  MyRotationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'rds-rotation-lambda-tapstack1271-${Environment}'
+      Handler: index.handler
+      Role: !GetAtt MyRotationLambdaRole.Arn
+      Runtime: python3.12
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          def handler(event, context):
+              return {'status': 'ok'}
+
+  MyRotationLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaBasicExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:PutSecretValue
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:UpdateSecretVersionStage
+                Resource: '*'
+
+  MyRotationLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt MyRotationLambda.Arn
+      Principal: secretsmanager.amazonaws.com
+
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -400,7 +450,7 @@ Resources:
     Type: AWS::SecretsManager::RotationSchedule
     Properties:
       SecretId: !Ref DatabaseSecret
-      RotationLambdaARN: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:SecretsManagerRDSMySQLRotationSingleUser'
+      RotationLambdaARN: !GetAtt MyRotationLambda.Arn
       RotationRules:
         AutomaticallyAfterDays: 30
 
@@ -484,7 +534,7 @@ Resources:
           Value: '86400'
       Tags:
         - Key: Name
-          Value: !Sub 'ALBTargetGroup-tapstackpr1271-${Environment}'
+          Value: !Sub 'ALBTargetGroup-tapstack1271-${Environment}'
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
