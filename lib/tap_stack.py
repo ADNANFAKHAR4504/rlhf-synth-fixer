@@ -281,16 +281,16 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(provider=self.source_provider, parent=self)
         )
         
-        # Configure cross-region replication using BucketReplicationConfigurationV2
-        aws.s3.BucketReplicationConfigurationV2(
+        # Configure cross-region replication using BucketReplicationConfig (correct class name)
+        aws.s3.BucketReplicationConfig(
             f"bucket-replication-{self.env_suffix}",
             role=self.replication_role.arn,
             bucket=self.source_bucket.id,
             rules=[
-                aws.s3.BucketReplicationConfigurationV2RuleArgs(
+                aws.s3.BucketReplicationConfigRuleArgs(
                     id="ReplicateEverything",
                     status="Enabled",
-                    destination=aws.s3.BucketReplicationConfigurationV2RuleDestinationArgs(
+                    destination=aws.s3.BucketReplicationConfigRuleDestinationArgs(
                         bucket=self.target_bucket.arn,
                         storage_class="STANDARD"
                     )
@@ -575,7 +575,7 @@ class TapStack(pulumi.ComponentResource):
         
         dashboard_body = Output.all(
             ec2_instance_1_id=self.ec2_instances[0].id,
-            ec2_instance_2_id=self.ec2_instances[1].id,
+            ec2_instance_2_id=self.ec2_instances[11].id,
             rds_instance_id=self.rds_instance.id
         ).apply(lambda args: json.dumps(create_dashboard_body(
             args["ec2_instance_1_id"],
