@@ -48,6 +48,13 @@ variable "config_role_name" {
   default     = null
 }
 
+# Optional: enable AWS Config in eu-west-1 (default false to avoid account limits)
+variable "enable_config_eu_west_1" {
+  description = "Whether to enable AWS Config components in eu-west-1"
+  type        = bool
+  default     = false
+}
+
 ############################################
 # Providers (single file, multi-region)
 # Assume a default provider is configured in provider.tf.
@@ -334,6 +341,71 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data_enc_eu_west_
   }
 }
 
+# Bucket policies to allow AWS Config delivery
+resource "aws_s3_bucket_policy" "config_us_east_1" {
+  provider = aws.us_east_1
+  bucket   = aws_s3_bucket.config_us_east_1.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid       = "AWSConfigBucketPermissionsCheck",
+        Effect    = "Allow",
+        Principal = { Service = "config.amazonaws.com" },
+        Action    = "s3:GetBucketAcl",
+        Resource  = aws_s3_bucket.config_us_east_1.arn
+      },
+      {
+        Sid       = "AWSConfigBucketExistenceCheck",
+        Effect    = "Allow",
+        Principal = { Service = "config.amazonaws.com" },
+        Action    = "s3:ListBucket",
+        Resource  = aws_s3_bucket.config_us_east_1.arn
+      },
+      {
+        Sid       = "AWSConfigBucketDelivery",
+        Effect    = "Allow",
+        Principal = { Service = "config.amazonaws.com" },
+        Action    = "s3:PutObject",
+        Resource  = "${aws_s3_bucket.config_us_east_1.arn}/*",
+        Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
+      }
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "config_eu_west_1" {
+  provider = aws.eu_west_1
+  bucket   = aws_s3_bucket.config_eu_west_1.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid       = "AWSConfigBucketPermissionsCheck",
+        Effect    = "Allow",
+        Principal = { Service = "config.amazonaws.com" },
+        Action    = "s3:GetBucketAcl",
+        Resource  = aws_s3_bucket.config_eu_west_1.arn
+      },
+      {
+        Sid       = "AWSConfigBucketExistenceCheck",
+        Effect    = "Allow",
+        Principal = { Service = "config.amazonaws.com" },
+        Action    = "s3:ListBucket",
+        Resource  = aws_s3_bucket.config_eu_west_1.arn
+      },
+      {
+        Sid       = "AWSConfigBucketDelivery",
+        Effect    = "Allow",
+        Principal = { Service = "config.amazonaws.com" },
+        Action    = "s3:PutObject",
+        Resource  = "${aws_s3_bucket.config_eu_west_1.arn}/*",
+        Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
+      }
+    ]
+  })
+}
+
 ############################################
 # AWS Config: recorder + delivery + rule (both regions)
 ############################################
@@ -354,7 +426,7 @@ resource "aws_iam_role" "config_role" {
 resource "aws_iam_role_policy_attachment" "config_role_attach" {
   count      = var.config_role_name == null ? 1 : 0
   role       = aws_iam_role.config_role[0].name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigServiceRolePolicy"
 }
 
 # us-east-1
@@ -395,6 +467,7 @@ resource "aws_config_config_rule" "encrypted_volumes_us_east_1" {
 
 # eu-west-1
 resource "aws_config_configuration_recorder" "rec_eu_west_1" {
+  count    = var.enable_config_eu_west_1 ? 1 : 0
   provider = aws.eu_west_1
   name     = "${local.name_prefix}-recorder"
   role_arn = local.config_role_arn_effective
@@ -405,6 +478,7 @@ resource "aws_config_configuration_recorder" "rec_eu_west_1" {
 }
 
 resource "aws_config_delivery_channel" "dc_eu_west_1" {
+  count          = var.enable_config_eu_west_1 ? 1 : 0
   provider       = aws.eu_west_1
   name           = "${local.name_prefix}-delivery-channel"
   s3_bucket_name = aws_s3_bucket.config_eu_west_1.bucket
@@ -412,13 +486,15 @@ resource "aws_config_delivery_channel" "dc_eu_west_1" {
 }
 
 resource "aws_config_configuration_recorder_status" "enable_eu_west_1" {
+  count      = var.enable_config_eu_west_1 ? 1 : 0
   provider   = aws.eu_west_1
   is_enabled = true
-  name       = aws_config_configuration_recorder.rec_eu_west_1.name
+  name       = aws_config_configuration_recorder.rec_eu_west_1[0].name
   depends_on = [aws_config_delivery_channel.dc_eu_west_1]
 }
 
 resource "aws_config_config_rule" "encrypted_volumes_eu_west_1" {
+  count    = var.enable_config_eu_west_1 ? 1 : 0
   provider = aws.eu_west_1
   name     = "${local.name_prefix}-encrypted-volumes"
   source {
@@ -633,7 +709,7 @@ output "s3_data_buckets" {
 output "config_rules" {
   value = {
     us_east_1 = aws_config_config_rule.encrypted_volumes_us_east_1.name
-    eu_west_1 = aws_config_config_rule.encrypted_volumes_eu_west_1.name
+    eu_west_1 = var.enable_config_eu_west_1 ? aws_config_config_rule.encrypted_volumes_eu_west_1[0].name : ""
   }
 }
 
