@@ -63,8 +63,11 @@ Resources:
             Principal:
               Service: s3.amazonaws.com
             Action:
+              - 'kms:Encrypt'
               - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
             Resource: '*'
       Tags:
         - Key: env
@@ -73,6 +76,7 @@ Resources:
           Value: !Ref Owner
         - Key: project
           Value: !Ref ProjectName
+
 
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -487,7 +491,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${LoggingBucket.Arn}/cloudtrail-logs/*'
+            Resource: !Join ['', [!GetAtt LoggingBucket.Arn, '/cloudtrail-logs/*']]
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
@@ -497,6 +501,7 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:ListBucket
             Resource: !GetAtt LoggingBucket.Arn
+
 
   # Main application bucket with encryption and logging
   ApplicationBucket:
@@ -543,9 +548,6 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-            Condition:
-              StringEquals:
-                'aws:RequestedRegion': 'us-east-1'  # Restrict to us-east-1 only
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Tags:
@@ -555,6 +557,7 @@ Resources:
           Value: !Ref Owner
         - Key: project
           Value: !Ref ProjectName
+
 
   # Least privilege policy for S3 access
   S3AccessPolicy:
@@ -569,7 +572,7 @@ Resources:
               - 's3:GetObject'
               - 's3:PutObject'
               - 's3:DeleteObject'
-            Resource: !Sub '${ApplicationBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -587,6 +590,8 @@ Resources:
             Resource: !GetAtt S3KMSKey.Arn
       Roles:
         - !Ref EC2InstanceRole
+
+
 
   # Instance Profile for EC2
   EC2InstanceProfile:
@@ -608,9 +613,6 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-            Condition:
-              StringEquals:
-                'aws:RequestedRegion': 'us-east-1'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
@@ -636,6 +638,7 @@ Resources:
           Value: !Ref Owner
         - Key: project
           Value: !Ref ProjectName
+
 
   # RDS Enhanced Monitoring Role
   RDSMonitoringRole:
@@ -751,16 +754,7 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  # Secret Rotation Schedule for API credentials
-  APISecretRotationSchedule:
-    Type: AWS::SecretsManager::RotationSchedule
-    Properties:
-      SecretId: !Ref APICredentialsSecret
-      RotationLambdaARN: !GetAtt SecretRotationLambda.Arn
-      RotationRules:
-        AutomaticallyAfterDays: 30  # Rotate every 30 days
-
-  # Lambda function for secret rotation
+# Lambda function for secret rotation (unchanged logic but keep the same name)
   SecretRotationLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -773,10 +767,10 @@ Resources:
           import json
           import boto3
           import logging
-          
+
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
-          
+
           def lambda_handler(event, context):
               logger.info('Secret rotation triggered')
               # Implement your secret rotation logic here
@@ -792,13 +786,28 @@ Resources:
         - Key: project
           Value: !Ref ProjectName
 
-  # Permission for Secrets Manager to invoke the rotation Lambda
+  # Permission for Secrets Manager to invoke the rotation Lambda (tighten + scope it)
   SecretRotationLambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref SecretRotationLambda
       Action: lambda:InvokeFunction
       Principal: secretsmanager.amazonaws.com
+      # Scope the permission to just this secret + account
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Ref APICredentialsSecret
+
+  # Secret Rotation Schedule (ensure it waits for permission)
+  APISecretRotationSchedule:
+    Type: AWS::SecretsManager::RotationSchedule
+    DependsOn:
+      - SecretRotationLambdaInvokePermission
+    Properties:
+      SecretId: !Ref APICredentialsSecret
+      RotationLambdaARN: !GetAtt SecretRotationLambda.Arn
+      RotationRules:
+        AutomaticallyAfterDays: 30
+
 
   # ============================================================================
   # RDS Database with Encryption
@@ -949,7 +958,8 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !GetAtt ApplicationBucket.Arn
+                # Note the trailing slash:
+                - !Join ['', [!GetAtt ApplicationBucket.Arn, '/']]
       Tags:
         - Key: env
           Value: !Ref Environment
@@ -957,6 +967,7 @@ Resources:
           Value: !Ref Owner
         - Key: project
           Value: !Ref ProjectName
+
 
   # ============================================================================
   # VPC Flow Logs for Network Monitoring
