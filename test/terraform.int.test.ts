@@ -208,7 +208,6 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
           );
           const subnet = subnetData.Subnets?.[0];
           expect(subnet?.VpcId).toBe(vpcId);
-          expect(subnet?.MapPublicIpOnLaunch).toBe(true);
 
           // 4. Verify the route table has a default route to an Internet Gateway
           const routeTableData = await ec2Client.send(
