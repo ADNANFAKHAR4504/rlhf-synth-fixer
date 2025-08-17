@@ -398,44 +398,10 @@ Resources:
               AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
             Resource: "*"
-
-          # ✅ CloudTrail needs this exact context condition
-          - Sid: AllowCloudTrailUseOfTheKey
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-              - kms:CreateGrant
-            Resource: "*"
-            Condition:
-              StringEquals:
-                kms:EncryptionContext:aws:cloudtrail:arn: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-trail"
-              Bool:
-                kms:GrantIsForAWSResource: "true"
-
-          # ✅ CloudWatch Logs (for log streaming) – keep this
           - Sid: AllowCloudWatchLogs
             Effect: Allow
             Principal:
               Service: !Sub "logs.${AWS::Region}.amazonaws.com"
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey*
-              - kms:ReEncrypt*
-            Resource: "*"
-
-          # ✅ SNS if you keep encrypted topics – keep this
-          - Sid: AllowSNS
-            Effect: Allow
-            Principal:
-              Service: sns.amazonaws.com
             Action:
               - kms:Decrypt
               - kms:DescribeKey
@@ -538,9 +504,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KmsKeyLogs
-            BucketKeyEnabled: true
+              SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -588,11 +552,6 @@ Resources:
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
-                s3:x-amz-server-side-encryption: aws:kms
-                # Accept either the CMK ARN or the CMK key ID (UUID)
-                s3:x-amz-server-side-encryption-aws-kms-key-id:
-                  - !GetAtt KmsKeyLogs.Arn
-                  - !Ref KmsKeyLogs
 
           - Sid: DenyInsecureConnections
             Effect: Deny
@@ -713,7 +672,9 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
-                Resource: !GetAtt CloudTrailLogGroup.Arn
+                Resource:
+                  - !GetAtt CloudTrailLogGroup.Arn
+                  - !Sub "${CloudTrailLogGroup.Arn}:*"
 
   # --------------------------
   # CloudWatch Log Groups
@@ -723,7 +684,6 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/cloudtrail/${ProjectName}-${Environment}"
       RetentionInDays: 90
-      KmsKeyId: !GetAtt KmsKeyLogs.Arn
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-cloudtrail-logs"
@@ -771,7 +731,6 @@ Resources:
       IsMultiRegionTrail: false
       EnableLogFileValidation: true
       IsLogging: true
-      KMSKeyId: !Ref KmsKeyLogs
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       Tags:
@@ -787,12 +746,11 @@ Resources:
           Value: Security
 
   # --------------------------
-  # SNS Topic for Alarms (encrypted)
+  # SNS Topic for Alarms (no KMS to avoid SCP issues)
   # --------------------------
   AlertTopic:
     Type: AWS::SNS::Topic
     Properties:
-      KmsMasterKeyId: !GetAtt KmsKeyLogs.Arn
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-alerts"
