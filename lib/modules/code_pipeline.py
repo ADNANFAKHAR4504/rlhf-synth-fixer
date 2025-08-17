@@ -44,10 +44,52 @@ def setup_codepipeline(stack: str) -> Dict:
       }"""
   )
 
+  # Pipeline service role policy
+  pipeline_policy = aws.iam.Policy(
+    f"pipeline-policy-{stack}",
+    policy=json.dumps({
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "s3:GetBucketVersioning",
+            "s3:GetObject",
+            "s3:GetObjectVersion",
+            "s3:PutObject",
+            "s3:GetBucketLocation",
+            "s3:ListBucket"
+          ],
+          "Resource": [
+            artifact_bucket.arn,
+            f"{artifact_bucket.arn}/*",
+            source_bucket.arn,
+            f"{source_bucket.arn}/*"
+          ]
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "codebuild:BatchGetBuilds",
+            "codebuild:StartBuild"
+          ],
+          "Resource": "*"
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "iam:PassRole"
+          ],
+          "Resource": "*"
+        }
+      ]
+    })
+  )
+
   aws.iam.RolePolicyAttachment(
-    f"pipeline-fullaccess-{stack}",
+    f"pipeline-policy-attach-{stack}",
     role=pipeline_role.name,
-    policy_arn="arn:aws:iam::aws:policy/AWSCodePipeline_FullAccess"
+    policy_arn=pipeline_policy.arn
   )
 
   codebuild_role = aws.iam.Role(
