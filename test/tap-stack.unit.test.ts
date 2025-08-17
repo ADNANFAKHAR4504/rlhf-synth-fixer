@@ -3,13 +3,23 @@
 
 import { describe, expect, it } from "@jest/globals";
 import fs from "fs";
-import yaml from "js-yaml";
+import yaml, { Schema, Type } from "js-yaml";
 import path from "path";
 
+// --- Minimal CFN tag handlers used by your template ---
+const CFN_TAGS: Type[] = [
+  new Type("!Ref",    { kind: "scalar",   construct: (d: any) => ({ Ref: d }) }),
+  new Type("!GetAtt", { kind: "scalar",   construct: (d: any) => ({ "Fn::GetAtt": typeof d === "string" ? d.split(".") : d }) }),
+  new Type("!Sub",    { kind: "scalar",   construct: (d: any) => ({ "Fn::Sub": d }) }),
+  new Type("!Equals", { kind: "sequence", construct: (d: any) => ({ "Fn::Equals": d }) }),
+  // (Add more as needed: !Join, !If, !And, !Or, !FindInMap, !Select, !Split, !Base64, !Cidr, !GetAZs, !ImportValue, !ToJsonString, etc.)
+];
+const CFN_SCHEMA = Schema.create(CFN_TAGS);
+
+// Load template
 const templatePath = path.resolve(process.cwd(), "lib", "TapStack.yml");
 const raw = fs.readFileSync(templatePath, "utf-8");
-// js-yaml preserves CFN intrinsics as plain objects/strings; we only check structure/values we control.
-const doc: any = yaml.load(raw);
+const doc: any = yaml.load(raw, { schema: CFN_SCHEMA });
 
 describe("TapStack Template — Unit Tests", () => {
   it("has required top-level sections", () => {
@@ -35,13 +45,12 @@ describe("TapStack Template — Unit Tests", () => {
 
     expect(p.LatestAmiId?.Type).toBe("AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>");
     expect(
-      (p.LatestAmiId?.Default || "").includes(
+      String(p.LatestAmiId?.Default || "").includes(
         "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
       )
     ).toBe(true);
 
-    // Provided in pipeline; must exist and be used somewhere (echo Output in template)
-    expect(p.EnvironmentSuffix?.Type).toBe("String");
+    expect(p.EnvironmentSuffix?.Type).toBe("String"); // defined & used (echo output)
   });
 
   it("does not create IAM roles/users (no AWS::IAM::* resources)", () => {
@@ -65,10 +74,9 @@ describe("TapStack Template — Unit Tests", () => {
 
     const egress = sg?.SecurityGroupEgress;
     expect(Array.isArray(egress)).toBe(true);
-    const allowAll = egress.find((r: any) => String(r.IpProtocol) === "-1");
+    const allowAll = egress.find((r: any) => String(r.IpProtocol) === "-1" && r.CidrIp === "0.0.0.0/0");
     expect(allowAll).toBeTruthy();
 
-    // Tag check
     const envTag = (sg?.Tags || []).find((t: any) => t.Key === "Environment");
     expect(envTag?.Value).toBe("Production");
   });
@@ -93,7 +101,6 @@ describe("TapStack Template — Unit Tests", () => {
 
   it("EC2 instance uses LatestAmiId parameter and is tagged", () => {
     const inst = doc.Resources?.AppInstance?.Properties;
-    // ImageId is a Ref to LatestAmiId — in js-yaml it may parse as { Ref: 'LatestAmiId' } or a string.
     const img = inst?.ImageId;
     const refStr = typeof img === "string" ? img : JSON.stringify(img);
     expect(refStr).toContain("LatestAmiId");
@@ -115,8 +122,6 @@ describe("TapStack Template — Unit Tests", () => {
     ["SecurityGroupId", "InstanceId", "InstancePublicIp", "BucketName", "EnvironmentSuffixEcho"].forEach(
       (k) => expect(o[k]).toBeTruthy()
     );
-
-    // Ensure EnvironmentSuffix is actually referenced (avoids W2001)
     const echoVal = JSON.stringify(o.EnvironmentSuffixEcho?.Value ?? "");
     expect(echoVal).toContain("EnvironmentSuffix");
   });
