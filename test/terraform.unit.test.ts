@@ -61,7 +61,11 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
         const vpcBlock = getResourceBlock('aws_vpc', region);
         expect(vpcBlock).not.toBeNull();
         expect(vpcBlock).toMatch(new RegExp(`provider\\s*=\\s*${provider}`));
-        expect(vpcBlock).toMatch(new RegExp(`Name = "vpc-${region}-291295"`));
+        expect(vpcBlock).toMatch(
+          new RegExp(
+            `Name\\s*=\\s*"vpc-${region}-\\$\\{local\\.deployment_id\\}"`
+          )
+        );
       }
     );
   });
@@ -70,23 +74,23 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
     it('should define IAM roles with the correct suffix', () => {
       const ec2RoleBlock = getResourceBlock('aws_iam_role', 'ec2_role');
       expect(ec2RoleBlock).not.toBeNull();
-      expect(ec2RoleBlock).toMatch(/name\s*=\s*"iam-role-ec2-nova-291295"/);
+      expect(ec2RoleBlock).toMatch(/name_prefix\s*=\s*"iam-role-ec2-nova-"/);
 
       const lambdaRoleBlock = getResourceBlock('aws_iam_role', 'lambda_role');
       expect(lambdaRoleBlock).not.toBeNull();
       expect(lambdaRoleBlock).toMatch(
-        /name\s*=\s*"iam-role-lambda-cost-saver-291295"/
+        /name_prefix\s*=\s*"iam-role-lambda-cost-saver-"/
       );
     });
 
     it('should define security groups with the correct name (no sg- prefix)', () => {
       const albSg = getResourceBlock('aws_security_group', 'primary_alb');
       expect(albSg).not.toBeNull();
-      expect(albSg).toMatch(/name\s*=\s*"alb-primary-291295"/);
+      expect(albSg).toMatch(/name_prefix\s*=\s*"alb-primary-"/);
 
       const ec2Sg = getResourceBlock('aws_security_group', 'primary_ec2');
       expect(ec2Sg).not.toBeNull();
-      expect(ec2Sg).toMatch(/name\s*=\s*"ec2-primary-291295"/);
+      expect(ec2Sg).toMatch(/name_prefix\s*=\s*"ec2-primary-"/);
     });
   });
 

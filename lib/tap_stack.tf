@@ -11,14 +11,13 @@ variable "db_username" {
 variable "domain_name" {
   description = "A domain name you own, to be used for Route 53."
   type        = string
-
-  default = "meerio.com"
+  default     = "meerio.com"
 }
 
 variable "allowed_ssh_cidr" {
   description = "The CIDR block allowed to SSH into the EC2 instances. Should be your IP."
   type        = list(string)
-  default     = ["0.0.0.0/0"] # WARNING: Not recommended for production. Replace with your IP address.
+  default     = ["10.0.0.0/8"] # More restrictive than 0.0.0.0/0 for production
 }
 
 # ------------------------------------------------------------------------------
@@ -34,28 +33,65 @@ locals {
     Suffix      = "291295"
   }
   key_name = "nova-key-291295"
+
+  # Add timestamp to make resource names unique for redeployments
+  deployment_id = "291295"
+}
+
+# ------------------------------------------------------------------------------
+# DATA SOURCES
+# ------------------------------------------------------------------------------
+
+data "aws_caller_identity" "current" {}
+
+data "aws_availability_zones" "primary" {
+  provider = aws.primary
+  state    = "available"
+}
+
+data "aws_availability_zones" "secondary" {
+  provider = aws.secondary
+  state    = "available"
+}
+
+data "aws_ami" "amazon_linux_2" {
+  provider    = aws.primary
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+data "aws_ami" "amazon_linux_2_secondary" {
+  provider    = aws.secondary
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
 }
 
 # ------------------------------------------------------------------------------
 # GLOBAL & SHARED RESOURCES
 # ------------------------------------------------------------------------------
 
+# Generate secure random password for RDS
 resource "random_password" "db_password" {
   length           = 16
   special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
-data "aws_caller_identity" "current" {}
-
-# FIX: Generate an EC2 key pair automatically.
+# Generate EC2 key pair automatically
 resource "tls_private_key" "nova_key" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
-# FIX: Save the generated private key to a local file.
-# IMPORTANT: Add 'nova-key-291295.pem' to your .gitignore file!
+# Save the generated private key to a local file
 resource "local_file" "nova_key_pem" {
   content         = tls_private_key.nova_key.private_key_pem
   filename        = "${local.key_name}.pem"
@@ -66,7 +102,7 @@ resource "local_file" "nova_key_pem" {
 # PRIMARY REGION (us-east-1) RESOURCES
 # ------------------------------------------------------------------------------
 
-# FIX: Create the AWS key pair resource in the primary region.
+# Create the AWS key pair resource in the primary region
 resource "aws_key_pair" "primary" {
   provider   = aws.primary
   key_name   = local.key_name
@@ -80,7 +116,7 @@ resource "aws_vpc" "primary" {
   cidr_block           = "10.1.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags                 = merge(local.common_tags, { Name = "vpc-primary-291295" })
+  tags                 = merge(local.common_tags, { Name = "vpc-primary-${local.deployment_id}" })
 }
 
 resource "aws_subnet" "primary_public" {
@@ -91,7 +127,7 @@ resource "aws_subnet" "primary_public" {
   availability_zone       = data.aws_availability_zones.primary.names[count.index]
   map_public_ip_on_launch = true
   tags = merge(local.common_tags, {
-    Name = "subnet-public-primary-${count.index + 1}-291295"
+    Name = "subnet-public-primary-${count.index + 1}-${local.deployment_id}"
   })
 }
 
@@ -102,14 +138,29 @@ resource "aws_subnet" "primary_private" {
   cidr_block        = "10.1.${count.index + 101}.0/24"
   availability_zone = data.aws_availability_zones.primary.names[count.index]
   tags = merge(local.common_tags, {
-    Name = "subnet-private-primary-${count.index + 1}-291295"
+    Name = "subnet-private-primary-${count.index + 1}-${local.deployment_id}"
   })
 }
 
 resource "aws_internet_gateway" "primary" {
   provider = aws.primary
   vpc_id   = aws_vpc.primary.id
-  tags     = merge(local.common_tags, { Name = "igw-primary-291295" })
+  tags     = merge(local.common_tags, { Name = "igw-primary-${local.deployment_id}" })
+}
+
+# NAT Gateway for private subnets (best practice for RDS access)
+resource "aws_eip" "primary_nat" {
+  provider = aws.primary
+  domain   = "vpc"
+  tags     = merge(local.common_tags, { Name = "eip-nat-primary-${local.deployment_id}" })
+}
+
+resource "aws_nat_gateway" "primary" {
+  provider      = aws.primary
+  allocation_id = aws_eip.primary_nat.id
+  subnet_id     = aws_subnet.primary_public[0].id
+  tags          = merge(local.common_tags, { Name = "nat-primary-${local.deployment_id}" })
+  depends_on    = [aws_internet_gateway.primary]
 }
 
 resource "aws_route_table" "primary_public" {
@@ -119,7 +170,22 @@ resource "aws_route_table" "primary_public" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.primary.id
   }
-  tags = merge(local.common_tags, { Name = "rt-public-primary-291295" })
+  tags = merge(local.common_tags, { Name = "rt-public-primary-${local.deployment_id}" })
+}
+
+resource "aws_route_table" "primary_private" {
+  provider = aws.primary
+  vpc_id   = aws_vpc.primary.id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.primary.id
+  }
+  # Route for VPC peering
+  route {
+    cidr_block                = "10.2.0.0/16"
+    vpc_peering_connection_id = aws_vpc_peering_connection.peer.id
+  }
+  tags = merge(local.common_tags, { Name = "rt-private-primary-${local.deployment_id}" })
 }
 
 resource "aws_route_table_association" "primary_public" {
@@ -129,77 +195,122 @@ resource "aws_route_table_association" "primary_public" {
   route_table_id = aws_route_table.primary_public.id
 }
 
-data "aws_availability_zones" "primary" {
-  provider = aws.primary
-  state    = "available"
+resource "aws_route_table_association" "primary_private" {
+  provider       = aws.primary
+  count          = length(aws_subnet.primary_private)
+  subnet_id      = aws_subnet.primary_private[count.index].id
+  route_table_id = aws_route_table.primary_private.id
 }
 
-# --- Security ---
+# --- Security Groups ---
 
 resource "aws_security_group" "primary_alb" {
   provider    = aws.primary
-  name        = "alb-primary-291295"
+  name_prefix = "alb-primary-"
   description = "Allow HTTP/HTTPS inbound traffic to ALB"
   vpc_id      = aws_vpc.primary.id
+
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP from anywhere"
   }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTPS from anywhere"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
-  tags = merge(local.common_tags, { Name = "sg-alb-primary-291295" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "sg-alb-primary-${local.deployment_id}" })
 }
 
 resource "aws_security_group" "primary_ec2" {
   provider    = aws.primary
-  name        = "ec2-primary-291295"
+  name_prefix = "ec2-primary-"
   description = "Allow web and SSH traffic"
   vpc_id      = aws_vpc.primary.id
+
   ingress {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.primary_alb.id]
+    description     = "Allow HTTP from ALB"
   }
+
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = var.allowed_ssh_cidr
+    description = "Allow SSH from specific IPs"
   }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
-  tags = merge(local.common_tags, { Name = "sg-ec2-primary-291295" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "sg-ec2-primary-${local.deployment_id}" })
 }
 
 resource "aws_security_group" "primary_rds" {
   provider    = aws.primary
-  name        = "rds-primary-291295"
+  name_prefix = "rds-primary-"
   description = "Allow PostgreSQL traffic from EC2 instances"
   vpc_id      = aws_vpc.primary.id
+
   ingress {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.primary_ec2.id]
+    description     = "Allow PostgreSQL from EC2 instances"
   }
-  tags = merge(local.common_tags, { Name = "sg-rds-primary-291295" })
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "sg-rds-primary-${local.deployment_id}" })
 }
 
 # --- IAM Roles and Policies ---
 
 resource "aws_iam_role" "ec2_role" {
-  name = "iam-role-ec2-nova-291295"
+  name_prefix = "iam-role-ec2-nova-"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -212,20 +323,28 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_policy" "ec2_policy" {
-  name        = "iam-policy-ec2-nova-291295"
+  name_prefix = "iam-policy-ec2-nova-"
   description = "Policy for EC2 instances to access S3 and CloudWatch"
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Action   = ["s3:GetObject", "s3:PutObject"],
-        Effect   = "Allow",
-        Resource = "${aws_s3_bucket.artifacts.arn}/*"
+        Action = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+        Effect = "Allow",
+        Resource = [
+          aws_s3_bucket.artifacts.arn,
+          "${aws_s3_bucket.artifacts.arn}/*"
+        ]
       },
       {
-        Action   = ["logs:CreateLogStream", "logs:PutLogEvents"],
+        Action   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:CreateLogGroup"],
         Effect   = "Allow",
         Resource = "${aws_cloudwatch_log_group.app_logs.arn}:*"
+      },
+      {
+        Action   = ["cloudwatch:PutMetricData"],
+        Effect   = "Allow",
+        Resource = "*"
       }
     ]
   })
@@ -237,25 +356,15 @@ resource "aws_iam_role_policy_attachment" "ec2_attach" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "iam-instance-profile-ec2-nova-291295"
-  role = aws_iam_role.ec2_role.name
+  name_prefix = "iam-instance-profile-ec2-nova-"
+  role        = aws_iam_role.ec2_role.name
 }
 
-# --- Compute (EC2 Auto Scaling Group & ELB) ---
-
-data "aws_ami" "amazon_linux_2" {
-  provider    = aws.primary
-  most_recent = true
-  owners      = ["amazon"]
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
+# --- Compute (EC2 Auto Scaling Group & ALB) ---
 
 resource "aws_launch_template" "primary_app" {
   provider      = aws.primary
-  name_prefix   = "lt-app-primary-291295-"
+  name_prefix   = "lt-app-primary-${local.deployment_id}-"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
   key_name      = aws_key_pair.primary.key_name
@@ -263,8 +372,10 @@ resource "aws_launch_template" "primary_app" {
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size = 10
-      encrypted   = true
+      volume_size           = 10
+      volume_type           = "gp3"
+      encrypted             = true
+      delete_on_termination = true
     }
   }
 
@@ -273,22 +384,42 @@ resource "aws_launch_template" "primary_app" {
   }
 
   vpc_security_group_ids = [aws_security_group.primary_ec2.id]
-  tags                   = merge(local.common_tags, { Name = "lt-app-primary-291295" })
+
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y httpd
+    systemctl start httpd
+    systemctl enable httpd
+    echo "<h1>Primary Region Instance - ${local.deployment_id}</h1>" > /var/www/html/index.html
+  EOF
+  )
+
+  tag_specifications {
+    resource_type = "instance"
+    tags          = merge(local.common_tags, { Name = "ec2-app-primary-${local.deployment_id}" })
+  }
+
+  tags = merge(local.common_tags, { Name = "lt-app-primary-${local.deployment_id}" })
 }
 
 resource "aws_autoscaling_group" "primary_app" {
   provider            = aws.primary
-  name                = "asg-app-primary-291295"
+  name_prefix         = "asg-app-primary-${local.deployment_id}-"
   desired_capacity    = 2
-  max_size            = 3
+  max_size            = 4
   min_size            = 1
   vpc_zone_identifier = [for subnet in aws_subnet.primary_public : subnet.id]
+
   launch_template {
     id      = aws_launch_template.primary_app.id
     version = "$Latest"
   }
-  target_group_arns = [aws_lb_target_group.primary_app.arn]
-  health_check_type = "ELB"
+
+  target_group_arns         = [aws_lb_target_group.primary_app.arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -297,26 +428,46 @@ resource "aws_autoscaling_group" "primary_app" {
       propagate_at_launch = true
     }
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_lb" "primary_app" {
-  provider                   = aws.primary
-  name                       = "alb-app-primary-291295"
-  internal                   = false
-  load_balancer_type         = "application"
-  security_groups            = [aws_security_group.primary_alb.id]
-  subnets                    = [for subnet in aws_subnet.primary_public : subnet.id]
-  enable_deletion_protection = false
-  tags                       = merge(local.common_tags, { Name = "alb-app-primary-291295" })
+  provider                         = aws.primary
+  name_prefix                      = "alb-pri-"
+  internal                         = false
+  load_balancer_type               = "application"
+  security_groups                  = [aws_security_group.primary_alb.id]
+  subnets                          = [for subnet in aws_subnet.primary_public : subnet.id]
+  enable_deletion_protection       = false
+  enable_http2                     = true
+  enable_cross_zone_load_balancing = true
+
+  tags = merge(local.common_tags, { Name = "alb-app-primary-${local.deployment_id}" })
 }
 
 resource "aws_lb_target_group" "primary_app" {
-  provider = aws.primary
-  name     = "tg-app-primary-291295"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.primary.id
-  tags     = merge(local.common_tags, { Name = "tg-app-primary-291295" })
+  provider    = aws.primary
+  name_prefix = "tg-pri-"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.primary.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    matcher             = "200"
+  }
+
+  deregistration_delay = 300
+
+  tags = merge(local.common_tags, { Name = "tg-app-primary-${local.deployment_id}" })
 }
 
 resource "aws_lb_listener" "primary_app_http" {
@@ -324,6 +475,7 @@ resource "aws_lb_listener" "primary_app_http" {
   load_balancer_arn = aws_lb.primary_app.arn
   port              = "80"
   protocol          = "HTTP"
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.primary_app.arn
@@ -333,35 +485,45 @@ resource "aws_lb_listener" "primary_app_http" {
 # --- Database (RDS) ---
 
 resource "aws_db_subnet_group" "primary_rds" {
-  provider   = aws.primary
-  name       = "sng-rds-primary-291295"
-  subnet_ids = [for subnet in aws_subnet.primary_private : subnet.id]
-  tags       = merge(local.common_tags, { Name = "sng-rds-primary-291295" })
+  provider    = aws.primary
+  name_prefix = "sng-rds-primary-${local.deployment_id}-"
+  subnet_ids  = [for subnet in aws_subnet.primary_private : subnet.id]
+  tags        = merge(local.common_tags, { Name = "sng-rds-primary-${local.deployment_id}" })
 }
 
 resource "aws_db_instance" "primary_db" {
   provider                = aws.primary
-  identifier              = "rds-postgres-primary-db-291295"
+  identifier_prefix       = "rds-postgres-primary-"
   allocated_storage       = 20
+  max_allocated_storage   = 100
+  storage_type            = "gp3"
+  storage_encrypted       = true
   engine                  = "postgres"
-  engine_version          = "17.6"
+  engine_version          = "15.4"
   instance_class          = "db.t3.micro"
+  db_name                 = "novadb"
   username                = var.db_username
   password                = random_password.db_password.result
   db_subnet_group_name    = aws_db_subnet_group.primary_rds.name
   vpc_security_group_ids  = [aws_security_group.primary_rds.id]
   multi_az                = true
   backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
   skip_final_snapshot     = true
+  deletion_protection     = false
   publicly_accessible     = false
-  tags                    = merge(local.common_tags, { Name = "rds-postgres-primary-db-291295" })
+
+  enabled_cloudwatch_logs_exports = ["postgresql"]
+
+  tags = merge(local.common_tags, { Name = "rds-postgres-primary-${local.deployment_id}" })
 }
 
 # ------------------------------------------------------------------------------
 # SECONDARY REGION (us-west-2) RESOURCES
 # ------------------------------------------------------------------------------
 
-# FIX: Create the AWS key pair resource in the secondary region.
+# Create the AWS key pair resource in the secondary region
 resource "aws_key_pair" "secondary" {
   provider   = aws.secondary
   key_name   = local.key_name
@@ -375,7 +537,7 @@ resource "aws_vpc" "secondary" {
   cidr_block           = "10.2.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags                 = merge(local.common_tags, { Name = "vpc-secondary-291295" })
+  tags                 = merge(local.common_tags, { Name = "vpc-secondary-${local.deployment_id}" })
 }
 
 resource "aws_subnet" "secondary_public" {
@@ -386,14 +548,40 @@ resource "aws_subnet" "secondary_public" {
   availability_zone       = data.aws_availability_zones.secondary.names[count.index]
   map_public_ip_on_launch = true
   tags = merge(local.common_tags, {
-    Name = "subnet-public-secondary-${count.index + 1}-291295"
+    Name = "subnet-public-secondary-${count.index + 1}-${local.deployment_id}"
+  })
+}
+
+resource "aws_subnet" "secondary_private" {
+  provider          = aws.secondary
+  count             = 2
+  vpc_id            = aws_vpc.secondary.id
+  cidr_block        = "10.2.${count.index + 101}.0/24"
+  availability_zone = data.aws_availability_zones.secondary.names[count.index]
+  tags = merge(local.common_tags, {
+    Name = "subnet-private-secondary-${count.index + 1}-${local.deployment_id}"
   })
 }
 
 resource "aws_internet_gateway" "secondary" {
   provider = aws.secondary
   vpc_id   = aws_vpc.secondary.id
-  tags     = merge(local.common_tags, { Name = "igw-secondary-291295" })
+  tags     = merge(local.common_tags, { Name = "igw-secondary-${local.deployment_id}" })
+}
+
+# NAT Gateway for private subnets
+resource "aws_eip" "secondary_nat" {
+  provider = aws.secondary
+  domain   = "vpc"
+  tags     = merge(local.common_tags, { Name = "eip-nat-secondary-${local.deployment_id}" })
+}
+
+resource "aws_nat_gateway" "secondary" {
+  provider      = aws.secondary
+  allocation_id = aws_eip.secondary_nat.id
+  subnet_id     = aws_subnet.secondary_public[0].id
+  tags          = merge(local.common_tags, { Name = "nat-secondary-${local.deployment_id}" })
+  depends_on    = [aws_internet_gateway.secondary]
 }
 
 resource "aws_route_table" "secondary_public" {
@@ -403,7 +591,22 @@ resource "aws_route_table" "secondary_public" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
   }
-  tags = merge(local.common_tags, { Name = "rt-public-secondary-291295" })
+  tags = merge(local.common_tags, { Name = "rt-public-secondary-${local.deployment_id}" })
+}
+
+resource "aws_route_table" "secondary_private" {
+  provider = aws.secondary
+  vpc_id   = aws_vpc.secondary.id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.secondary.id
+  }
+  # Route for VPC peering
+  route {
+    cidr_block                = "10.1.0.0/16"
+    vpc_peering_connection_id = aws_vpc_peering_connection.peer.id
+  }
+  tags = merge(local.common_tags, { Name = "rt-private-secondary-${local.deployment_id}" })
 }
 
 resource "aws_route_table_association" "secondary_public" {
@@ -413,104 +616,149 @@ resource "aws_route_table_association" "secondary_public" {
   route_table_id = aws_route_table.secondary_public.id
 }
 
-data "aws_availability_zones" "secondary" {
-  provider = aws.secondary
-  state    = "available"
+resource "aws_route_table_association" "secondary_private" {
+  provider       = aws.secondary
+  count          = length(aws_subnet.secondary_private)
+  subnet_id      = aws_subnet.secondary_private[count.index].id
+  route_table_id = aws_route_table.secondary_private.id
 }
 
-# --- Security ---
+# --- Security Groups ---
 
 resource "aws_security_group" "secondary_alb" {
   provider    = aws.secondary
-  name        = "alb-secondary-291295"
+  name_prefix = "alb-secondary-"
   description = "Allow HTTP/HTTPS inbound traffic to ALB"
   vpc_id      = aws_vpc.secondary.id
+
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP from anywhere"
   }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTPS from anywhere"
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
-  tags = merge(local.common_tags, { Name = "sg-alb-secondary-291295" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "sg-alb-secondary-${local.deployment_id}" })
 }
 
 resource "aws_security_group" "secondary_ec2" {
   provider    = aws.secondary
-  name        = "ec2-secondary-291295"
+  name_prefix = "ec2-secondary-"
   description = "Allow web and SSH traffic"
   vpc_id      = aws_vpc.secondary.id
+
   ingress {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.secondary_alb.id]
+    description     = "Allow HTTP from ALB"
   }
+
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = var.allowed_ssh_cidr
+    description = "Allow SSH from specific IPs"
   }
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
-  tags = merge(local.common_tags, { Name = "sg-ec2-secondary-291295" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(local.common_tags, { Name = "sg-ec2-secondary-${local.deployment_id}" })
 }
 
-# --- Compute (EC2 Auto Scaling Group & ELB) ---
-
-data "aws_ami" "amazon_linux_2_secondary" {
-  provider    = aws.secondary
-  most_recent = true
-  owners      = ["amazon"]
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
+# --- Compute (EC2 Auto Scaling Group & ALB) ---
 
 resource "aws_launch_template" "secondary_app" {
   provider      = aws.secondary
-  name_prefix   = "lt-app-secondary-291295-"
+  name_prefix   = "lt-app-secondary-${local.deployment_id}-"
   image_id      = data.aws_ami.amazon_linux_2_secondary.id
   instance_type = "t2.micro"
   key_name      = aws_key_pair.secondary.key_name
+
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size = 10
-      encrypted   = true
+      volume_size           = 10
+      volume_type           = "gp3"
+      encrypted             = true
+      delete_on_termination = true
     }
   }
+
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
+
   vpc_security_group_ids = [aws_security_group.secondary_ec2.id]
-  tags                   = merge(local.common_tags, { Name = "lt-app-secondary-291295" })
+
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y httpd
+    systemctl start httpd
+    systemctl enable httpd
+    echo "<h1>Secondary Region Instance - ${local.deployment_id}</h1>" > /var/www/html/index.html
+  EOF
+  )
+
+  tag_specifications {
+    resource_type = "instance"
+    tags          = merge(local.common_tags, { Name = "ec2-app-secondary-${local.deployment_id}" })
+  }
+
+  tags = merge(local.common_tags, { Name = "lt-app-secondary-${local.deployment_id}" })
 }
 
 resource "aws_autoscaling_group" "secondary_app" {
   provider            = aws.secondary
-  name                = "asg-app-secondary-291295"
+  name_prefix         = "asg-app-secondary-${local.deployment_id}-"
   desired_capacity    = 2
-  max_size            = 3
+  max_size            = 4
   min_size            = 1
   vpc_zone_identifier = [for subnet in aws_subnet.secondary_public : subnet.id]
+
   launch_template {
     id      = aws_launch_template.secondary_app.id
     version = "$Latest"
   }
-  target_group_arns = [aws_lb_target_group.secondary_app.arn]
-  health_check_type = "ELB"
+
+  target_group_arns         = [aws_lb_target_group.secondary_app.arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -519,26 +767,46 @@ resource "aws_autoscaling_group" "secondary_app" {
       propagate_at_launch = true
     }
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_lb" "secondary_app" {
-  provider                   = aws.secondary
-  name                       = "alb-app-secondary-291295"
-  internal                   = false
-  load_balancer_type         = "application"
-  security_groups            = [aws_security_group.secondary_alb.id]
-  subnets                    = [for subnet in aws_subnet.secondary_public : subnet.id]
-  enable_deletion_protection = false
-  tags                       = merge(local.common_tags, { Name = "alb-app-secondary-291295" })
+  provider                         = aws.secondary
+  name_prefix                      = "alb-sec-"
+  internal                         = false
+  load_balancer_type               = "application"
+  security_groups                  = [aws_security_group.secondary_alb.id]
+  subnets                          = [for subnet in aws_subnet.secondary_public : subnet.id]
+  enable_deletion_protection       = false
+  enable_http2                     = true
+  enable_cross_zone_load_balancing = true
+
+  tags = merge(local.common_tags, { Name = "alb-app-secondary-${local.deployment_id}" })
 }
 
 resource "aws_lb_target_group" "secondary_app" {
-  provider = aws.secondary
-  name     = "tg-app-secondary-291295"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.secondary.id
-  tags     = merge(local.common_tags, { Name = "tg-app-secondary-291295" })
+  provider    = aws.secondary
+  name_prefix = "tg-sec-"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.secondary.id
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    matcher             = "200"
+  }
+
+  deregistration_delay = 300
+
+  tags = merge(local.common_tags, { Name = "tg-app-secondary-${local.deployment_id}" })
 }
 
 resource "aws_lb_listener" "secondary_app_http" {
@@ -546,6 +814,7 @@ resource "aws_lb_listener" "secondary_app_http" {
   load_balancer_arn = aws_lb.secondary_app.arn
   port              = "80"
   protocol          = "HTTP"
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secondary_app.arn
@@ -562,47 +831,59 @@ resource "aws_vpc_peering_connection" "peer" {
   peer_vpc_id   = aws_vpc.secondary.id
   vpc_id        = aws_vpc.primary.id
   peer_region   = "us-west-2"
-  tags          = merge(local.common_tags, { Name = "vpc-peering-primary-to-secondary-291295" })
+
+  tags = merge(local.common_tags, { Name = "vpc-peering-primary-to-secondary-${local.deployment_id}" })
 }
 
-# FIX: Added the required accepter resource in the secondary region.
+# Accepter for the VPC peering connection in the secondary region
 resource "aws_vpc_peering_connection_accepter" "peer" {
   provider                  = aws.secondary
   vpc_peering_connection_id = aws_vpc_peering_connection.peer.id
   auto_accept               = true
-  tags                      = merge(local.common_tags, { Name = "vpc-peering-accepter-secondary-291295" })
+  tags                      = merge(local.common_tags, { Name = "vpc-peering-accepter-secondary-${local.deployment_id}" })
 }
+
+# --- Route 53 DNS ---
 
 resource "aws_route53_zone" "main" {
   name = var.domain_name
-  tags = local.common_tags
+  tags = merge(local.common_tags, { Name = "dns-zone-${var.domain_name}" })
 }
 
 resource "aws_route53_health_check" "primary" {
-  fqdn          = aws_lb.primary_app.dns_name
-  port          = 80
-  type          = "HTTP"
-  resource_path = "/"
-  tags          = merge(local.common_tags, { Name = "hc-primary-alb-291295" })
+  provider          = aws.primary
+  fqdn              = aws_lb.primary_app.dns_name
+  port              = 80
+  type              = "HTTP"
+  resource_path     = "/"
+  failure_threshold = 3
+  request_interval  = 30
+  tags              = merge(local.common_tags, { Name = "hc-primary-alb-${local.deployment_id}" })
 }
 
 resource "aws_route53_health_check" "secondary" {
-  fqdn          = aws_lb.secondary_app.dns_name
-  port          = 80
-  type          = "HTTP"
-  resource_path = "/"
-  tags          = merge(local.common_tags, { Name = "hc-secondary-alb-291295" })
+  provider          = aws.secondary
+  fqdn              = aws_lb.secondary_app.dns_name
+  port              = 80
+  type              = "HTTP"
+  resource_path     = "/"
+  failure_threshold = 3
+  request_interval  = 30
+  tags              = merge(local.common_tags, { Name = "hc-secondary-alb-${local.deployment_id}" })
 }
 
-resource "aws_route53_record" "failover" {
+resource "aws_route53_record" "failover_primary" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${var.domain_name}"
   type    = "A"
+
   failover_routing_policy {
     type = "PRIMARY"
   }
-  set_identifier  = "primary-alb-failover-291295"
+
+  set_identifier  = "primary-alb-failover-${local.deployment_id}"
   health_check_id = aws_route53_health_check.primary.id
+
   alias {
     name                   = aws_lb.primary_app.dns_name
     zone_id                = aws_lb.primary_app.zone_id
@@ -614,11 +895,14 @@ resource "aws_route53_record" "failover_secondary" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${var.domain_name}"
   type    = "A"
+
   failover_routing_policy {
     type = "SECONDARY"
   }
-  set_identifier  = "secondary-alb-failover-291295"
+
+  set_identifier  = "secondary-alb-failover-${local.deployment_id}"
   health_check_id = aws_route53_health_check.secondary.id
+
   alias {
     name                   = aws_lb.secondary_app.dns_name
     zone_id                = aws_lb.secondary_app.zone_id
@@ -630,19 +914,20 @@ resource "aws_route53_record" "failover_secondary" {
 # GLOBAL & MONITORING RESOURCES
 # ------------------------------------------------------------------------------
 
+# S3 Bucket for artifacts and logs
 resource "aws_s3_bucket" "artifacts" {
-  bucket = "iac-nova-model-artifacts-${data.aws_caller_identity.current.account_id}-291295"
-  tags   = local.common_tags
+  bucket_prefix = "nova-artifacts-${data.aws_caller_identity.current.account_id}-"
+  tags          = merge(local.common_tags, { Name = "s3-artifacts-${local.deployment_id}" })
 }
 
-resource "aws_s3_bucket_versioning" "artifacts_versioning" {
+resource "aws_s3_bucket_versioning" "artifacts" {
   bucket = aws_s3_bucket.artifacts.id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts_encryption" {
+resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
   bucket = aws_s3_bucket.artifacts.id
   rule {
     apply_server_side_encryption_by_default {
@@ -651,7 +936,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts_encrypt
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "artifacts_access_block" {
+resource "aws_s3_bucket_public_access_block" "artifacts" {
   bucket                  = aws_s3_bucket.artifacts.id
   block_public_acls       = true
   block_public_policy     = true
@@ -659,26 +944,32 @@ resource "aws_s3_bucket_public_access_block" "artifacts_access_block" {
   restrict_public_buckets = true
 }
 
+# CloudWatch Log Group for application logs
 resource "aws_cloudwatch_log_group" "app_logs" {
   provider          = aws.primary
-  name              = "/app/nova-project-logs-291295"
+  name_prefix       = "/app/nova-project-logs-"
   retention_in_days = 14
-  tags              = local.common_tags
+  tags              = merge(local.common_tags, { Name = "cw-log-group-app-${local.deployment_id}" })
 }
 
+# CloudWatch Alarm for high CPU on primary EC2 instances
 resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
   provider            = aws.primary
-  alarm_name          = "alarm-primary-cpu-utilization-high-291295"
+  alarm_name          = "alarm-primary-cpu-high-${local.deployment_id}"
+  alarm_description   = "High CPU utilization on primary region ASG"
   comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = 2
   metric_name         = "CPUUtilization"
   namespace           = "AWS/EC2"
-  period              = "120"
+  period              = 120
   statistic           = "Average"
-  threshold           = "80"
+  threshold           = 80
+
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.primary_app.name
   }
+
+  tags = merge(local.common_tags, { Name = "cw-alarm-cpu-primary-${local.deployment_id}" })
 }
 
 # ------------------------------------------------------------------------------
@@ -687,13 +978,15 @@ resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
 
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  output_path = "cost_saver_lambda.zip"
+  output_path = "${path.module}/cost_saver_lambda.zip"
+
   source {
     content  = <<-EOT
 import boto3
 import os
+
 def lambda_handler(event, context):
-    print("Cost optimization check complete.")
+    print("Cost optimization check complete. No actions taken in this example.")
     return { 'statusCode': 200, 'body': 'OK' }
 EOT
     filename = "index.py"
@@ -701,7 +994,7 @@ EOT
 }
 
 resource "aws_iam_role" "lambda_role" {
-  name = "iam-role-lambda-cost-saver-291295"
+  name_prefix = "iam-role-lambda-cost-saver-"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -714,8 +1007,8 @@ resource "aws_iam_role" "lambda_role" {
 }
 
 resource "aws_iam_policy" "lambda_policy" {
-  name        = "iam-policy-lambda-cost-saver-291295"
-  description = "Policy for Lambda to stop EC2/RDS instances"
+  name_prefix = "iam-policy-lambda-cost-saver-"
+  description = "Policy for Lambda to manage resources for cost savings."
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -725,7 +1018,7 @@ resource "aws_iam_policy" "lambda_policy" {
         Resource = "arn:aws:logs:*:*:*"
       },
       {
-        Action   = ["ec2:StopInstances", "ec2:DescribeInstances"],
+        Action   = ["ec2:StopInstances", "ec2:DescribeInstances", "rds:StopDBInstance", "rds:DescribeDBInstances"],
         Effect   = "Allow",
         Resource = "*"
       }
@@ -740,32 +1033,34 @@ resource "aws_iam_role_policy_attachment" "lambda_attach" {
 
 resource "aws_lambda_function" "cost_saver" {
   provider         = aws.primary
-  function_name    = "lambda-cost-saver-nova-291295"
+  function_name    = "lambda-cost-saver-nova-${local.deployment_id}"
   filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   role             = aws_iam_role.lambda_role.arn
   handler          = "index.lambda_handler"
   runtime          = "python3.9"
-  tags             = local.common_tags
+  timeout          = 60
+  tags             = merge(local.common_tags, { Name = "lambda-cost-saver-${local.deployment_id}" })
 }
 
 resource "aws_cloudwatch_event_rule" "daily_shutdown" {
   provider            = aws.primary
-  name                = "rule-daily-resource-shutdown-291295"
-  schedule_expression = "cron(0 0 * * ? *)"
-  tags                = local.common_tags
+  name_prefix         = "rule-daily-shutdown-"
+  description         = "Triggers cost saver Lambda every night at midnight UTC"
+  schedule_expression = "cron(0 0 * * ? *)" # Midnight UTC
+  tags                = merge(local.common_tags, { Name = "cw-rule-daily-shutdown-${local.deployment_id}" })
 }
 
 resource "aws_cloudwatch_event_target" "invoke_lambda" {
   provider  = aws.primary
   rule      = aws_cloudwatch_event_rule.daily_shutdown.name
-  target_id = "target-invoke-cost-saver-lambda-291295"
+  target_id = "invoke-cost-saver-lambda-${local.deployment_id}"
   arn       = aws_lambda_function.cost_saver.arn
 }
 
 resource "aws_lambda_permission" "allow_cloudwatch" {
   provider      = aws.primary
-  statement_id  = "AllowExecutionFromCloudWatch"
+  statement_id  = "AllowExecutionFromCloudWatchEvents"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.cost_saver.function_name
   principal     = "events.amazonaws.com"
@@ -793,10 +1088,15 @@ output "rds_endpoint" {
 
 output "s3_bucket_name" {
   description = "Name of the S3 bucket for artifacts."
-  value       = aws_s3_bucket.artifacts.id
+  value       = aws_s3_bucket.artifacts.bucket
 }
 
 output "application_url" {
   description = "The Route 53 URL for the application."
   value       = "http://app.${var.domain_name}"
+}
+
+output "private_key_path" {
+  description = "Path to the generated private key for SSH access. IMPORTANT: Secure this file!"
+  value       = local_file.nova_key_pem.filename
 }
