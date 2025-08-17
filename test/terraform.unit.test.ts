@@ -276,7 +276,9 @@ describe('Terraform Stack Unit Tests', () => {
       const instanceBlock = stackContent.match(
         /resource\s+"aws_instance"\s+"main"\s*{[\s\S]*?}/m
       )?.[0];
-      expect(instanceBlock).toMatch(/ami\s*=\s*var\.ec2_ami_id/);
+      expect(instanceBlock).toMatch(
+        /ami\s*=\s*(var\.ec2_ami_id|local\.ami_id)/
+      );
       expect(instanceBlock).toMatch(
         /instance_type\s*=\s*var\.ec2_instance_type/
       );

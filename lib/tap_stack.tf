@@ -55,13 +55,13 @@ variable "trail_bucket_name" {
 }
 
 variable "ec2_ami_id" {
-  description = "AMI ID to use for EC2 instance"
+  description = "AMI ID to use for EC2 instance (leave blank to auto-select)"
   type        = string
-  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI in us-west-2
+  default     = ""
   nullable    = false
   validation {
-    condition     = can(regex("^ami-[a-f0-9]{8,17}$", var.ec2_ami_id))
-    error_message = "AMI ID must be in format ami-xxxxxxxx."
+    condition     = var.ec2_ami_id == "" || can(regex("^ami-[a-f0-9]{8,17}$", var.ec2_ami_id))
+    error_message = "If provided, AMI ID must be in format ami-xxxxxxxx."
   }
 }
 
@@ -131,6 +131,9 @@ locals {
   # Determine KMS key to use
   kms_key_arn = var.kms_key_arn != "" ? var.kms_key_arn : aws_kms_key.s3_encryption[0].arn
 
+  # Determine AMI ID to use
+  ami_id = var.ec2_ami_id != "" ? var.ec2_ami_id : data.aws_ami.amazon_linux[0].id
+
   # Generate unique bucket names if not provided
   app_bucket_name   = var.app_bucket_name != "" ? var.app_bucket_name : "prod-app-${var.aws_region}-${random_id.suffix.hex}"
   trail_bucket_name = var.trail_bucket_name != "" ? var.trail_bucket_name : "prod-trail-${var.aws_region}-${random_id.suffix.hex}"
@@ -141,6 +144,23 @@ locals {
 
 # Data sources
 data "aws_caller_identity" "current" {}
+
+# Get the latest Amazon Linux 2 AMI for the specified region
+data "aws_ami" "amazon_linux" {
+  count       = var.ec2_ami_id == "" ? 1 : 0
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
 
 # Get default VPC if no VPC ID provided
 data "aws_vpc" "default" {
@@ -490,7 +510,7 @@ resource "aws_security_group" "main" {
 
 # EC2 Instance
 resource "aws_instance" "main" {
-  ami                    = var.ec2_ami_id
+  ami                    = local.ami_id
   instance_type          = var.ec2_instance_type
   subnet_id              = local.subnet_id
   vpc_security_group_ids = [aws_security_group.main.id]
