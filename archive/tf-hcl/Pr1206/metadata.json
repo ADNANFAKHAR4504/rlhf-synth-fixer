@@ -1,6 +1,6 @@
 {
   "platform": "tf",
-  "language": "hcl", 
+  "language": "hcl",
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "trainr842",
@@ -16,5 +16,11 @@
     "Access Control",
     "Monitoring Setup",
     "Performance Optimization"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
