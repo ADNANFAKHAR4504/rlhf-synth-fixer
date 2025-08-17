@@ -34,7 +34,7 @@ class TestMinimalDeployment(TestTapStackIntegration):
 
   def test_minimal_stack_creation(self):
     """Test creating stack with minimal configuration."""
-    args = TapStackArgs('integration-minimal')
+    args = TapStackArgs('integration-minimal', test_mode=True)
     stack = TapStack('minimal-integration-stack', args)
 
     # Verify basic components
@@ -48,7 +48,7 @@ class TestMinimalDeployment(TestTapStackIntegration):
 
   def test_minimal_stack_resources(self):
     """Test minimal stack resource configuration."""
-    args = TapStackArgs('integration-minimal')
+    args = TapStackArgs('integration-minimal', test_mode=True)
     stack = TapStack('minimal-resources-stack', args)
 
     # Verify encryption and versioning
@@ -61,7 +61,7 @@ class TestMinimalDeployment(TestTapStackIntegration):
 
   def test_minimal_stack_security(self):
     """Test minimal stack security configuration."""
-    args = TapStackArgs('integration-security')
+    args = TapStackArgs('integration-security', test_mode=True)
     stack = TapStack('security-minimal-stack', args)
 
     # Verify WAF is configured
@@ -81,7 +81,8 @@ class TestFullDeployment(TestTapStackIntegration):
         domain_name='integration.example.com',
         hosted_zone_id='Z1234567890ABCDEF',
         enable_logging=True,
-        cost_optimization=False
+        cost_optimization=False,
+        test_mode=True
     )
     stack = TapStack('full-integration-stack', args)
 
@@ -99,7 +100,8 @@ class TestFullDeployment(TestTapStackIntegration):
     """Test full stack with comprehensive logging."""
     args = TapStackArgs(
         environment_suffix='integration-logging',
-        enable_logging=True
+        enable_logging=True,
+        test_mode=True
     )
     stack = TapStack('logging-integration-stack', args)
 
@@ -115,7 +117,8 @@ class TestFullDeployment(TestTapStackIntegration):
     args = TapStackArgs(
         environment_suffix='integration-cost',
         cost_optimization=True,
-        enable_logging=False
+        enable_logging=False,
+        test_mode=True
     )
     stack = TapStack('cost-integration-stack', args)
 
@@ -131,7 +134,8 @@ class TestDomainConfiguration(TestTapStackIntegration):
     """Test stack with domain name for certificate creation."""
     args = TapStackArgs(
         environment_suffix='integration-cert',
-        domain_name='cert.integration.example.com'
+        domain_name='cert.integration.example.com',
+        test_mode=True
     )
     stack = TapStack('cert-integration-stack', args)
 
@@ -144,7 +148,8 @@ class TestDomainConfiguration(TestTapStackIntegration):
     args = TapStackArgs(
         environment_suffix='integration-route53',
         domain_name='route53.integration.example.com',
-        hosted_zone_id='Z1234567890ROUTE53'
+        hosted_zone_id='Z1234567890ROUTE53',
+        test_mode=True
     )
     stack = TapStack('route53-integration-stack', args)
 
@@ -158,7 +163,8 @@ class TestDomainConfiguration(TestTapStackIntegration):
     """Test stack with domain but no hosted zone."""
     args = TapStackArgs(
         environment_suffix='integration-domain-only',
-        domain_name='domain-only.integration.example.com'
+        domain_name='domain-only.integration.example.com',
+        test_mode=True
     )
     stack = TapStack('domain-only-integration-stack', args)
 
@@ -171,7 +177,7 @@ class TestMultiRegionDeployment(TestTapStackIntegration):
 
   def test_multi_region_buckets(self):
     """Test S3 bucket creation in multiple regions."""
-    args = TapStackArgs('integration-multiregion')
+    args = TapStackArgs('integration-multiregion', test_mode=True)
     stack = TapStack('multiregion-integration-stack', args)
 
     # Verify buckets in both regions
@@ -186,7 +192,8 @@ class TestMultiRegionDeployment(TestTapStackIntegration):
     """Test logging configuration across regions."""
     args = TapStackArgs(
         environment_suffix='integration-multiregion-logging',
-        enable_logging=True
+        enable_logging=True,
+        test_mode=True
     )
     stack = TapStack('multiregion-logging-stack', args)
 
@@ -205,7 +212,7 @@ class TestSecurityConfiguration(TestTapStackIntegration):
 
   def test_kms_encryption(self):
     """Test KMS key configuration for encryption."""
-    args = TapStackArgs('integration-encryption')
+    args = TapStackArgs('integration-encryption', test_mode=True)
     stack = TapStack('encryption-integration-stack', args)
 
     # Verify KMS components
@@ -214,7 +221,7 @@ class TestSecurityConfiguration(TestTapStackIntegration):
 
   def test_waf_protection(self):
     """Test WAF configuration for web protection."""
-    args = TapStackArgs('integration-waf')
+    args = TapStackArgs('integration-waf', test_mode=True)
     stack = TapStack('waf-integration-stack', args)
 
     # Verify WAF configuration
@@ -222,7 +229,7 @@ class TestSecurityConfiguration(TestTapStackIntegration):
 
   def test_iam_least_privilege(self):
     """Test IAM configuration for least privilege access."""
-    args = TapStackArgs('integration-iam')
+    args = TapStackArgs('integration-iam', test_mode=True)
     stack = TapStack('iam-integration-stack', args)
 
     # Verify IAM components
@@ -231,7 +238,7 @@ class TestSecurityConfiguration(TestTapStackIntegration):
 
   def test_bucket_versioning(self):
     """Test S3 bucket versioning configuration."""
-    args = TapStackArgs('integration-versioning')
+    args = TapStackArgs('integration-versioning', test_mode=True)
     stack = TapStack('versioning-integration-stack', args)
 
     # Verify buckets have versioning enabled
@@ -243,7 +250,7 @@ class TestCloudFrontConfiguration(TestTapStackIntegration):
 
   def test_cloudfront_distribution(self):
     """Test CloudFront distribution configuration."""
-    args = TapStackArgs('integration-cloudfront')
+    args = TapStackArgs('integration-cloudfront', test_mode=True)
     stack = TapStack('cloudfront-integration-stack', args)
 
     # Verify CloudFront components
@@ -254,7 +261,8 @@ class TestCloudFrontConfiguration(TestTapStackIntegration):
     """Test CloudFront with custom domain configuration."""
     args = TapStackArgs(
         environment_suffix='integration-cloudfront-domain',
-        domain_name='cdn.integration.example.com'
+        domain_name='cdn.integration.example.com',
+        test_mode=True
     )
     stack = TapStack('cloudfront-domain-stack', args)
 
@@ -266,7 +274,8 @@ class TestCloudFrontConfiguration(TestTapStackIntegration):
     """Test CloudFront with access logging."""
     args = TapStackArgs(
         environment_suffix='integration-cloudfront-logging',
-        enable_logging=True
+        enable_logging=True,
+        test_mode=True
     )
     stack = TapStack('cloudfront-logging-stack', args)
 
@@ -281,7 +290,8 @@ class TestEnvironmentVariations(TestTapStackIntegration):
     args = TapStackArgs(
         environment_suffix='dev',
         enable_logging=True,
-        cost_optimization=True
+        cost_optimization=True,
+        test_mode=True
     )
     stack = TapStack('dev-integration-stack', args)
 
@@ -296,7 +306,8 @@ class TestEnvironmentVariations(TestTapStackIntegration):
         domain_name='prod.integration.example.com',
         hosted_zone_id='Z1234567890PROD',
         enable_logging=True,
-        cost_optimization=False
+        cost_optimization=False,
+        test_mode=True
     )
     stack = TapStack('prod-integration-stack', args)
 
@@ -315,7 +326,8 @@ class TestEnvironmentVariations(TestTapStackIntegration):
         environment_suffix='staging',
         domain_name='staging.integration.example.com',
         enable_logging=False,
-        cost_optimization=True
+        cost_optimization=True,
+        test_mode=True
     )
     stack = TapStack('staging-integration-stack', args)
 
@@ -331,7 +343,8 @@ class TestErrorHandling(TestTapStackIntegration):
     """Test handling of invalid domain format."""
     args = TapStackArgs(
         environment_suffix='integration-invalid-domain',
-        domain_name='invalid..domain..com'
+        domain_name='invalid..domain..com',
+        test_mode=True
     )
     # Should still create stack but may have certificate issues
     stack = TapStack('invalid-domain-stack', args)
@@ -339,7 +352,7 @@ class TestErrorHandling(TestTapStackIntegration):
 
   def test_empty_environment_suffix(self):
     """Test handling of empty environment suffix."""
-    args = TapStackArgs('')
+    args = TapStackArgs('', test_mode=True)
     stack = TapStack('empty-env-integration-stack', args)
 
     self.assertEqual(stack.environment_suffix, '')
@@ -348,7 +361,7 @@ class TestErrorHandling(TestTapStackIntegration):
   def test_very_long_names(self):
     """Test handling of very long resource names."""
     long_suffix = 'very-long-environment-suffix-that-might-cause-aws-naming-issues'
-    args = TapStackArgs(long_suffix)
+    args = TapStackArgs(long_suffix, test_mode=True)
     stack = TapStack('long-name-integration-stack', args)
 
     self.assertEqual(stack.environment_suffix, long_suffix)
@@ -363,7 +376,8 @@ class TestResourceValidation(TestTapStackIntegration):
         environment_suffix='integration-validation',
         domain_name='validation.integration.example.com',
         hosted_zone_id='Z1234567890VALID',
-        enable_logging=True
+        enable_logging=True,
+        test_mode=True
     )
     stack = TapStack('validation-integration-stack', args)
 
@@ -382,7 +396,8 @@ class TestResourceValidation(TestTapStackIntegration):
     """Test that resources are configured according to requirements."""
     args = TapStackArgs(
         environment_suffix='integration-compliance',
-        enable_logging=True
+        enable_logging=True,
+        test_mode=True
     )
     stack = TapStack('compliance-integration-stack', args)
 

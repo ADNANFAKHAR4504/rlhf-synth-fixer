@@ -18,6 +18,7 @@ class TapStackArgs:
   hosted_zone_id: str = None
   enable_logging: bool = True
   cost_optimization: bool = False
+  test_mode: bool = False
 
 class TapStack(pulumi.ComponentResource):
   """Multi-region static website deployment stack with enterprise security features."""
@@ -30,6 +31,7 @@ class TapStack(pulumi.ComponentResource):
     self.hosted_zone_id = args.hosted_zone_id
     self.enable_logging = args.enable_logging
     self.cost_optimization = args.cost_optimization
+    self.test_mode = args.test_mode
     self.regions = ['us-west-2', 'us-east-1']
     
     # Initialize attributes that might not be created
@@ -54,7 +56,10 @@ class TapStack(pulumi.ComponentResource):
       self._create_route53_resources()
     
     self._create_iam_resources()
-    self._register_outputs()
+    
+    # Only register outputs if not in test mode
+    if not self.test_mode:
+      self._register_outputs()
 
   def _create_kms_resources(self):
     """Create KMS key and alias for S3 bucket encryption."""
