@@ -963,29 +963,22 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
      * Check us-east-1 first, use it if exists, otherwise create in ap-south-1
      */
 
-    // Create provider for us-east-1 to check for existing GuardDuty detector
-    const usEast1Provider = new aws.Provider(
-      `us-east-1-provider-${args.environment}`,
-      { region: 'us-east-1' },
-      { parent: this }
-    );
-
     // Check for existing GuardDuty detector in us-east-1
-    const existingDetectorInUsEast1 = aws.guardduty
-      .getDetector({}, { provider: usEast1Provider })
+    const existingDetector = aws.guardduty
+      .getDetector({}, { provider })
       .then(res => res.id)
       .catch(() => undefined);
 
     const guardDutyDetector = pulumi
-      .output(existingDetectorInUsEast1)
-      .apply(usEast1DetectorId => {
-        if (usEast1DetectorId) {
+      .output(existingDetector)
+      .apply(existingDetectorId => {
+        if (existingDetectorId) {
           // Use existing detector in us-east-1
           return aws.guardduty.Detector.get(
             `imported-guardduty-detector-us-east-1-${args.environment}`,
-            usEast1DetectorId,
+            existingDetectorId,
             {},
-            { provider: usEast1Provider, parent: this }
+            { provider, parent: this }
           );
         } else {
           // Create new detector in ap-south-1 if none exists in us-east-1
