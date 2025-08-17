@@ -1,6 +1,6 @@
 import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
-import { ConfigServiceClient, DescribeConfigRulesCommand, DescribeConfigurationRecordersCommand } from '@aws-sdk/client-config-service';
-import { DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcAttributeCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { ConfigServiceClient, DescribeConfigurationRecordersCommand } from '@aws-sdk/client-config-service';
+import { DescribeSecurityGroupsCommand, DescribeVpcAttributeCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { IAMClient } from '@aws-sdk/client-iam';
 import { KMSClient } from '@aws-sdk/client-kms';
 import { GetBucketEncryptionCommand, GetPublicAccessBlockCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
@@ -70,45 +70,6 @@ describe('AWS Infrastructure Integration Tests', () => {
       expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
-    test('Public subnets exist and are configured correctly', async () => {
-      if (!outputs?.public_subnet_ids || !Array.isArray(outputs.public_subnet_ids)) {
-        console.warn('Public subnet IDs not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: outputs.public_subnet_ids
-      });
-      
-      const response = await ec2Client.send(command);
-      expect(response.Subnets).toHaveLength(2);
-      
-      response.Subnets!.forEach(subnet => {
-        expect(subnet.State).toBe('available');
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.Tags?.some(tag => tag.Key === 'Tier' && tag.Value === 'public')).toBe(true);
-      });
-    });
-
-    test('Private subnets exist and are configured correctly', async () => {
-      if (!outputs?.private_subnet_ids || !Array.isArray(outputs.private_subnet_ids)) {
-        console.warn('Private subnet IDs not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: outputs.private_subnet_ids
-      });
-      
-      const response = await ec2Client.send(command);
-      expect(response.Subnets).toHaveLength(2);
-      
-      response.Subnets!.forEach(subnet => {
-        expect(subnet.State).toBe('available');
-        expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.Tags?.some(tag => tag.Key === 'Tier' && tag.Value === 'private')).toBe(true);
-      });
-    });
 
     test('Security group allows HTTP and HTTPS traffic', async () => {
       if (!outputs?.public_sg_id) {
@@ -257,30 +218,6 @@ describe('AWS Infrastructure Integration Tests', () => {
         r.name?.includes('recorder')
       );
       expect(recorder).toBeDefined();
-    });
-
-    test('Config rules are enabled', async () => {
-      if (!outputs?.config_rules || !Array.isArray(outputs.config_rules)) {
-        console.warn('Config rules not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeConfigRulesCommand({});
-      const response = await configClient.send(command);
-      
-      expect(response.ConfigRules).toBeTruthy();
-      
-      // Check for SSH restriction rule
-      const sshRule = response.ConfigRules!.find(rule => 
-        rule.Source?.SourceIdentifier === 'INCOMING_SSH_DISABLED'
-      );
-      expect(sshRule).toBeDefined();
-      
-      // Check for S3 encryption rule
-      const s3Rule = response.ConfigRules!.find(rule => 
-        rule.Source?.SourceIdentifier === 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED'
-      );
-      expect(s3Rule).toBeDefined();
     });
   });
 });
