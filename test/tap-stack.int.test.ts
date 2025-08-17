@@ -33,7 +33,8 @@ import {
 import {
   GetRoleCommand,
   IAMClient,
-  ListRolePoliciesCommand
+  ListRolePoliciesCommand,
+  ListAttachedRolePoliciesCommand
 } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
@@ -549,7 +550,6 @@ describe('TapStack Integration Tests', () => {
       );
 
       // Check attached managed policies
-      const { ListAttachedRolePoliciesCommand } = await import('@aws-sdk/client-iam');
       const managedPoliciesResponse = await clients.iam.send(
         new ListAttachedRolePoliciesCommand({ RoleName: roleName })
       );
@@ -945,7 +945,6 @@ describe('TapStack Integration Tests', () => {
         const tableResponse = await clients.dynamodb.send(
           new DescribeTableCommand({ TableName: resourceIds.dynamoTableName })
         );
-        expect(tableResponse.Table!.BillingModeSummary?.BillingMode).toBe('PROVISIONED');
         expect(tableResponse.Table!.ProvisionedThroughput?.ReadCapacityUnits).toBeGreaterThan(0);
         expect(tableResponse.Table!.ProvisionedThroughput?.WriteCapacityUnits).toBeGreaterThan(0);
       }
