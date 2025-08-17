@@ -1,6 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Comprehensive CI/CD Pipeline with CodePipeline, CodeBuild, and secure artifact deployment'
 
+# ==============================================================================
+# PARAMETERS
+# Configurable values that can be customized during stack creation
+# ==============================================================================
 Parameters:
   ProjectName:
     Type: String
@@ -20,6 +24,7 @@ Parameters:
     Description: 'ARN of the CodeStar Connection for GitHub integration (replace with your actual connection ARN)'
     Default: 'arn:aws:codestar-connections:us-east-1:123456789012:connection/your-connection-id'
     ConstraintDescription: 'Must be a valid CodeStar Connection ARN. Replace the default placeholder with your actual connection ARN.'
+    # NOTE: You must create this connection manually in AWS Console first and authorize it with GitHub
 
   GitHubRepositoryOwner:
     Type: String
@@ -51,7 +56,7 @@ Parameters:
 
   SecretValue:
     Type: String
-    NoEcho: true
+    NoEcho: true # Hides the value in CloudFormation console/CLI output
     Description: 'Secret value to store in AWS Secrets Manager'
     Default: 'default-secret-change-me'
     MinLength: 8
@@ -59,20 +64,18 @@ Parameters:
     ConstraintDescription: 'Secret must be between 8 and 512 characters'
 
 Resources:
-  # REMOVED: GitHubConnection resource since we're using parameter
-  # GitHubConnection:
-  #   Type: AWS::CodeStarConnections::Connection
-  #   Properties:
-  #     ConnectionName: !Sub '${ProjectName}-${Environment}-github'
-  #     ProviderType: GitHub
+  # ==============================================================================
+  # ENCRYPTION AND SECURITY
+  # ==============================================================================
 
-  # KMS Key for encryption
+  # KMS Key for encrypting all pipeline artifacts, secrets, and notifications
   PipelineKMSKey:
     Type: AWS::KMS::Key
     Properties:
       Description: !Sub '${ProjectName}-${Environment} Pipeline KMS Key'
       KeyPolicy:
         Statement:
+          # Root account has full permissions (best practice for KMS key management)
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
@@ -118,10 +121,15 @@ Resources:
       AliasName: !Sub 'alias/${ProjectName}-${Environment}-pipeline-key'
       TargetKeyId: !Ref PipelineKMSKey
 
-  # S3 Bucket for Pipeline Artifacts
+  # ==============================================================================
+  # STORAGE BUCKETS
+  # ==============================================================================
+
+  # S3 Bucket for storing pipeline artifacts (source code, build outputs)
   PipelineArtifactsBucket:
     Type: AWS::S3::Bucket
     Properties:
+      # Bucket name must be globally unique
       BucketName: !Sub '${ProjectName}-${Environment}-pipeline-artifacts-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
@@ -130,7 +138,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref PipelineKMSKey
-            BucketKeyEnabled: true
+            BucketKeyEnabled: true # Reduces KMS API calls and costs
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -150,7 +158,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # S3 Bucket for Deployment Artifacts
+  # S3 Bucket for storing deployed artifacts
   DeploymentArtifactsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -182,7 +190,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # AWS Secrets Manager Secret
+  # ==============================================================================
+  # SECRETS MANAGEMENT
+  # ==============================================================================
+
   BuildSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -196,7 +207,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # SNS Topic for Approval Notifications
+  # ==============================================================================
+  # NOTIFICATIONS
+  # ==============================================================================
+
   ApprovalNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -216,7 +230,10 @@ Resources:
       TopicArn: !Ref ApprovalNotificationTopic
       Endpoint: !Ref ApprovalNotificationEmail
 
-  # CloudWatch Log Group for CodeBuild
+  # ==============================================================================
+  # LOGGING
+  # ==============================================================================
+
   CodeBuildLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -228,7 +245,11 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # IAM Role for CodePipeline - UPDATED to use parameter
+  # ==============================================================================
+  # IAM ROLES AND POLICIES
+  # ==============================================================================
+
+  # IAM Role for CodePipeline service
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -242,7 +263,7 @@ Resources:
         - PolicyName: PipelineExecutionPolicy
           PolicyDocument:
             Statement:
-              # S3 object-level permissions - FIXED to use proper ARN format
+              # S3 object-level permissions
               - Effect: Allow
                 Action:
                   - s3:GetBucketVersioning
@@ -250,9 +271,10 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:PutObject
                 Resource:
+                  # Note: Using !Sub with bucket name, not !GetAtt Arn
                   - !Sub 'arn:aws:s3:::${PipelineArtifactsBucket}/*'
                   - !Sub 'arn:aws:s3:::${DeploymentArtifactsBucket}/*'
-              # S3 bucket-level permissions - FIXED to use GetAtt for ARN
+              # S3 bucket-level permissions
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -266,7 +288,7 @@ Resources:
                   - codebuild:BatchGetBuilds
                   - codebuild:StartBuild
                 Resource: !GetAtt CodeBuildProject.Arn
-              # UPDATED: CodeStar Connections permissions - now uses parameter
+              # CodeStar Connections permissions
               - Effect: Allow
                 Action:
                   - codestar-connections:UseConnection
@@ -290,7 +312,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # IAM Role for CodeBuild - FIXED
+  # IAM Role for CodeBuild service
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -311,7 +333,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CodeBuildLogGroup}*'
-              # S3 object-level permissions - FIXED to use proper ARN format
+              # S3 object-level permissions
               - Effect: Allow
                 Action:
                   - s3:GetObject
@@ -320,7 +342,7 @@ Resources:
                 Resource:
                   - !Sub 'arn:aws:s3:::${PipelineArtifactsBucket}/*'
                   - !Sub 'arn:aws:s3:::${DeploymentArtifactsBucket}/*'
-              # S3 bucket-level permissions - FIXED to use GetAtt for ARN
+              # S3 bucket-level permissions
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -348,7 +370,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # CodeBuild Project
+  # ==============================================================================
+  # BUILD PROJECT
+  # ==============================================================================
+
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
@@ -359,7 +384,7 @@ Resources:
         Type: CODEPIPELINE
       Environment:
         Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_MEDIUM
+        ComputeType: BUILD_GENERAL1_MEDIUM # 7 GB memory, 4 vCPUs
         Image: aws/codebuild/standard:7.0
         EnvironmentVariables:
           - Name: PROJECT_NAME
@@ -381,6 +406,7 @@ Resources:
                 python: 3.11
               commands:
                 - echo "Installing dependencies..."
+                # Detect project type and install dependencies
                 - |
                   if [ -f package.json ]; then
                     npm install
@@ -398,6 +424,7 @@ Resources:
                 - SECRET_VALUE=$(aws secretsmanager get-secret-value --secret-id $SECRET_ARN --query SecretString --output text)
                 - echo "Secret retrieved successfully (not displaying value for security)"
                 - echo "Running security scans and linters..."
+                # Run security scans based on project type
                 - |
                   if [ -f package.json ]; then
                     npm audit --audit-level high || echo "NPM audit completed with warnings"
@@ -418,6 +445,7 @@ Resources:
                 - echo "Build phase started on $(date)"
                 - echo "Using secret for build process (value hidden for security)"
                 - echo "Compiling application..."
+                # Build and test based on project type
                 - |
                   if [ -f package.json ]; then
                     npm run build || echo "Build script not found, skipping"
@@ -427,6 +455,7 @@ Resources:
                   elif [ -f pom.xml ]; then
                     mvn clean compile test
                   else
+                    # Fallback: create sample application artifact
                     echo "Creating sample application artifact"
                     mkdir -p dist
                     echo "Sample application built on $(date)" > dist/app.txt
@@ -438,8 +467,8 @@ Resources:
               commands:
                 - echo "Post-build phase started on $(date)"
                 - echo "Packaging artifacts..."
+                # Create deployment package based on build output location
                 - |
-                  # Create deployment package
                   if [ -d dist ]; then
                     cd dist && zip -r ../deployment-package.zip . && cd ..
                   elif [ -d build ]; then
@@ -447,7 +476,7 @@ Resources:
                   elif [ -d target ]; then
                     cd target && zip -r ../deployment-package.zip . && cd ..
                   else
-                    # Create a sample deployment package
+                    # Fallback: create sample deployment package
                     mkdir -p package
                     echo "Deployment package created on $(date)" > package/deployment-info.txt
                     echo "Environment: $ENVIRONMENT" >> package/deployment-info.txt
@@ -471,7 +500,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # CodePipeline - UPDATED to use parameter
+  # ==============================================================================
+  # CI/CD PIPELINE
+  # ==============================================================================
+
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -484,6 +516,7 @@ Resources:
           Id: !GetAtt PipelineKMSKey.Arn
           Type: KMS
       Stages:
+        # Stage 1: Source - Pull code from GitHub
         - Name: Source
           Actions:
             - Name: SourceAction
@@ -493,13 +526,14 @@ Resources:
                 Provider: CodeStarSourceConnection
                 Version: '1'
               Configuration:
-                # UPDATED: Use parameter instead of resource reference
                 ConnectionArn: !Ref CodeStarConnectionArn
                 FullRepositoryId: !Sub '${GitHubRepositoryOwner}/${GitHubRepositoryName}'
                 BranchName: !Ref GitHubBranchName
                 DetectChanges: true
               OutputArtifacts:
                 - Name: SourceOutput
+
+        # Stage 2: Build - Compile and test the code
         - Name: Build
           Actions:
             - Name: BuildAction
@@ -514,6 +548,8 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: BuildOutput
+
+        # Stage 3: Manual approval before deployment
         - Name: Approval
           Actions:
             - Name: ManualApproval
@@ -525,6 +561,8 @@ Resources:
               Configuration:
                 NotificationArn: !Ref ApprovalNotificationTopic
                 CustomData: !Sub 'Please review and approve deployment for ${ProjectName} ${Environment} environment'
+
+        # Stage 4: Deploy artifacts to S3
         - Name: Deploy
           Actions:
             - Name: DeployAction
@@ -545,20 +583,16 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+# ==============================================================================
+# OUTPUTS
+# Export values for use by other stacks or reference
+# ==============================================================================
 Outputs:
-  # UPDATED: Output parameter value instead of resource reference
   CodeStarConnectionArn:
     Description: 'ARN of the CodeStar Connection to GitHub'
     Value: !Ref CodeStarConnectionArn
     Export:
       Name: !Sub '${AWS::StackName}-GitHubConnection'
-
-  # REMOVED: Can't get status from parameter
-  # GitHubConnectionStatus:
-  #   Description: 'Status of the CodeStar Connection (will be PENDING initially)'
-  #   Value: !GetAtt GitHubConnection.ConnectionStatus
-  #   Export:
-  #     Name: !Sub '${AWS::StackName}-GitHubConnectionStatus'
 
   PipelineName:
     Description: 'Name of the created CodePipeline'
