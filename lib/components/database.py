@@ -164,14 +164,14 @@ class DatabaseComponent(ComponentResource):
   def _create_read_replica(self, name: str, config: InfrastructureConfig):
     self.read_replica = aws.rds.Instance(
       f"{name}-db-replica",
-      identifier=f"{config.app_name}-{config.environment}-db-replica",
+      identifier=f"{config.app_name}-{config.environment}-db-replica".lower(),
       replicate_source_db=self.db_instance.identifier,
       instance_class="db.t3.micro",
       publicly_accessible=False,
       auto_minor_version_upgrade=True,
       tags={
         **config.tags,
-        "Name": f"{config.app_name}-{config.environment}-db-replica"
+        "Name": f"{config.app_name}-{config.environment}-db-replica".lower()
       },
       opts=ResourceOptions(parent=self)
     )
