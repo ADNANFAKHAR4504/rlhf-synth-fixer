@@ -8,17 +8,26 @@ terraform {
   }
 }
 
+# Configure the AWS Provider
 provider "aws" {
   region = var.aws_region
-
+  
   default_tags {
     tags = {
-      Project     = var.project_name
-      Author      = var.author
-      Environment = var.environment
-      CreatedDate = var.created_date
-      ManagedBy   = "Terraform"
+      Environment       = var.environment
+      Project           = var.project_name
+      ManagedBy         = "Terraform"
+      Author            = var.author
+      User              = "ngwakoleslieelijah"
+      CreatedDate       = var.created_date
+      DeployTime        = local.timestamp
+      ComplianceLevel   = var.compliance_level
+      DataClassification = "Internal"
+      BackupRequired    = "true"
+      LastAudit         = "2025-08-17"
     }
   }
 }
+
+provider "random" {}
 
