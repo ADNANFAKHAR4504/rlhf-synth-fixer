@@ -27,6 +27,8 @@ import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { EbsEncryptionByDefault } from '@cdktf/provider-aws/lib/ebs-encryption-by-default';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
 
 /**
  * VPC Module - Creates a secure VPC with public and private subnets
@@ -418,9 +420,18 @@ export interface S3ModuleConfig {
 export class S3Module extends Construct {
   public readonly buckets: S3Bucket[];
   public readonly cloudtrailBucket: S3Bucket;
+  public readonly accountId: string;
+  public readonly region: string;
 
   constructor(scope: Construct, id: string, config: S3ModuleConfig) {
     super(scope, id);
+
+    // Get current AWS account ID and region
+    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
+    const currentRegion = new DataAwsRegion(this, 'current-region');
+
+    this.accountId = callerIdentity.accountId;
+    this.region = currentRegion.name;
 
     // Create application S3 buckets
     this.buckets = [];
@@ -525,6 +536,11 @@ export class S3Module extends Construct {
             },
             Action: 's3:GetBucketAcl',
             Resource: `arn:aws:s3:::${this.cloudtrailBucket.bucket}`,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/corp-audit-cloudtrail`,
+              },
+            },
           },
           {
             Sid: 'AWSCloudTrailWrite',
@@ -533,10 +549,11 @@ export class S3Module extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `arn:aws:s3:::${this.cloudtrailBucket.bucket}/AWSLogs/718240086340/AWSCloudTrail/us-east-1/*`,
+            Resource: `arn:aws:s3:::${this.cloudtrailBucket.bucket}/AWSLogs/${this.accountId}/*`,
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
+                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/corp-audit-cloudtrail`,
               },
             },
           },
