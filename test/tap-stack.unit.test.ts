@@ -32,7 +32,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(envParam).toBeDefined();
       expect(envParam.Type).toBe('String');
       expect(envParam.Default).toBe('dev');
-      expect(envParam.AllowedValues).toEqual(['dev', 'staging', 'prod']);
+      expect(envParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+      expect(envParam.ConstraintDescription).toBe(
+        'Must contain only alphanumeric characters'
+      );
     });
 
     test('should have DBSecretName parameter', () => {

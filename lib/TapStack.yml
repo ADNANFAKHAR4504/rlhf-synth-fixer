@@ -5,8 +5,9 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
-    AllowedValues: ['dev', 'staging', 'prod']
-    Description: 'Environment suffix for resource naming'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod, pr1234)'
 
   DBSecretName:
     Type: String
