@@ -26,11 +26,6 @@ Resources:
   # =================================================================
   # Logging & Monitoring
   # =================================================================
-  ApiGatewayAccountSettings:
-    Type: AWS::ApiGateway::Account
-    Properties:
-      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
-
   CloudFormationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -70,12 +65,9 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   CloudTrailLogsS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -118,12 +110,9 @@ Resources:
             - Type: 'AWS::DynamoDB::Table'
               Values: [!GetAtt DynamoDBTable.Arn]
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   CloudTrailCWLRole:
     Type: AWS::IAM::Role
@@ -140,6 +129,31 @@ Resources:
               - Effect: Allow
                 Action: ['logs:CreateLogStream', 'logs:PutLogEvents']
                 Resource: !GetAtt CloudTrailLogGroup.Arn
+
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+      Tags:
+        - Key: Project
+          Value: 'NovaModelBreaking'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Owner
+          Value: 'DevSecOpsTeam'
+
+  ApiGatewayAccountSettings:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
 
   # =================================================================
   # KMS Customer Managed Key
@@ -158,12 +172,9 @@ Resources:
             Action: 'kms:*'
             Resource: '*'
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   # =================================================================
   # Networking
@@ -175,14 +186,10 @@ Resources:
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
-        - Key: Name
-          Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-vpc'
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Name, Value: !Sub 'novamodel-sec-${EnvironmentSuffix}-vpc' }
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   PublicSubnet1:
     Type: AWS::EC2::Subnet
@@ -254,12 +261,9 @@ Resources:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -272,12 +276,9 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -301,8 +302,7 @@ Resources:
 
   EIP1:
     Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
+    Properties: { Domain: vpc }
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -310,17 +310,13 @@ Resources:
       AllocationId: !GetAtt EIP1.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   EIP2:
     Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
+    Properties: { Domain: vpc }
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
@@ -328,24 +324,18 @@ Resources:
       AllocationId: !GetAtt EIP2.AllocationId
       SubnetId: !Ref PublicSubnet2
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   PrivateRoute1:
     Type: AWS::EC2::Route
@@ -365,12 +355,9 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   PrivateRoute2:
     Type: AWS::EC2::Route
@@ -405,12 +392,9 @@ Resources:
           CidrIp: 0.0.0.0/0
           Description: 'Allow HTTPS from internet'
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -429,12 +413,9 @@ Resources:
           SourceSecurityGroupId: !Ref ALBSecurityGroup
           Description: 'Allow HTTPS from ALB'
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -442,12 +423,9 @@ Resources:
       GroupDescription: 'Security group for Lambda function'
       VpcId: !Ref VPC
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -466,12 +444,9 @@ Resources:
           SourceSecurityGroupId: !Ref LambdaSecurityGroup
           Description: 'Allow MySQL from Lambda functions'
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   # =================================================================
   # Data Stores
@@ -482,12 +457,9 @@ Resources:
       DBSubnetGroupDescription: 'Subnet group for the RDS instance'
       SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   RDSDatabase:
     Type: AWS::RDS::DBInstance
@@ -506,12 +478,9 @@ Resources:
       BackupRetentionPeriod: 7
       DeleteAutomatedBackups: false
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   DynamoDBTable:
     Type: AWS::DynamoDB::Table
@@ -523,12 +492,9 @@ Resources:
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   # =================================================================
   # Compute (ALB, ASG, Lambda) & API
@@ -539,12 +505,9 @@ Resources:
       SecurityGroups: [!Ref ALBSecurityGroup]
       Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -563,12 +526,9 @@ Resources:
       Port: 80
       Protocol: HTTP
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -586,33 +546,21 @@ Resources:
               Encrypted: true
               KmsKeyId: !Ref EBSKMSKey
         TagSpecifications:
-          # Tags for the EC2 instance launched from the template
           - ResourceType: instance
             Tags:
-              - Key: Project
-                Value: 'NovaModelBreaking'
-              - Key: Environment
-                Value: !Ref EnvironmentSuffix
-              - Key: Owner
-                Value: 'DevSecOpsTeam'
-          # Tags for the EBS volume attached to the instance
+              - { Key: Project, Value: 'NovaModelBreaking' }
+              - { Key: Environment, Value: !Ref EnvironmentSuffix }
+              - { Key: Owner, Value: 'DevSecOpsTeam' }
           - ResourceType: volume
             Tags:
-              - Key: Project
-                Value: 'NovaModelBreaking'
-              - Key: Environment
-                Value: !Ref EnvironmentSuffix
-              - Key: Owner
-                Value: 'DevSecOpsTeam'
-          # FIX: Tags for the Launch Template resource itself
+              - { Key: Project, Value: 'NovaModelBreaking' }
+              - { Key: Environment, Value: !Ref EnvironmentSuffix }
+              - { Key: Owner, Value: 'DevSecOpsTeam' }
           - ResourceType: launch-template
             Tags:
-              - Key: Project
-                Value: 'NovaModelBreaking'
-              - Key: Environment
-                Value: !Ref EnvironmentSuffix
-              - Key: Owner
-                Value: 'DevSecOpsTeam'
+              - { Key: Project, Value: 'NovaModelBreaking' }
+              - { Key: Environment, Value: !Ref EnvironmentSuffix }
+              - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -658,12 +606,9 @@ Resources:
         Variables:
           TABLE_NAME: !Ref DynamoDBTable
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -684,24 +629,18 @@ Resources:
                 Action: 'dynamodb:PutItem'
                 Resource: !GetAtt DynamoDBTable.Arn
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   ApiGatewayRestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub 'novamodel-sec-${EnvironmentSuffix}-api'
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   ApiGatewayResource:
     Type: AWS::ApiGateway::Resource
@@ -726,8 +665,7 @@ Resources:
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn: ApiGatewayMethod
-    Properties:
-      RestApiId: !Ref ApiGatewayRestApi
+    Properties: { RestApiId: !Ref ApiGatewayRestApi }
 
   ApiGatewayStage:
     Type: AWS::ApiGateway::Stage
@@ -736,12 +674,9 @@ Resources:
       DeploymentId: !Ref ApiGatewayDeployment
       RestApiId: !Ref ApiGatewayRestApi
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   ApiGatewayApiKey:
     Type: AWS::ApiGateway::ApiKey
@@ -749,12 +684,9 @@ Resources:
       Name: !Sub 'novamodel-sec-${EnvironmentSuffix}-key'
       Enabled: true
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   UsagePlan:
     Type: AWS::ApiGateway::UsagePlan
@@ -763,12 +695,9 @@ Resources:
         - ApiId: !Ref ApiGatewayRestApi
           Stage: !Ref ApiGatewayStage
       Tags:
-        - Key: Project
-          Value: 'NovaModelBreaking'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Owner
-          Value: 'DevSecOpsTeam'
+        - { Key: Project, Value: 'NovaModelBreaking' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Owner, Value: 'DevSecOpsTeam' }
 
   UsagePlanKey:
     Type: AWS::ApiGateway::UsagePlanKey
