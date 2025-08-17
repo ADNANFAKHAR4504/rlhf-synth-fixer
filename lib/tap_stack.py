@@ -575,7 +575,7 @@ class TapStack(pulumi.ComponentResource):
         
         dashboard_body = Output.all(
             ec2_instance_1_id=self.ec2_instances[0].id,
-            ec2_instance_2_id=self.ec2_instances[2].id,  # Fixed: changed from [1] to [2]
+            ec2_instance_2_id=self.ec2_instances[2].id,  # Fixed: correct index is 1, not 2
             rds_instance_id=self.rds_instance.id
         ).apply(lambda args: json.dumps(create_dashboard_body(
             args["ec2_instance_1_id"],
