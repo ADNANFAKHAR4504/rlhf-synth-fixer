@@ -48,7 +48,7 @@ export class DatabaseConstruct extends Construct {
           engineVersion: '8.0',
           allocatedStorage: 20,
           username: 'admin',
-          password: process.env.RDS_ADMIN_PASSWORD || 'ValidP@ssw0rd123!',
+          password: process.env.RDS_ADMIN_PASSWORD || 'ValidP#ssw0rd123!',
           dbName: `a${props.prefix}db${region}`.replace(/[^a-zA-Z0-9]/g, ''),
           vpcSecurityGroupIds: securityGroupIds, // Reference actual security groups
           storageEncrypted: true,
