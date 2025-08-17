@@ -1,48 +1,56 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Production-ready application environment in AWS (us-east-1). Uses an existing VPC,
-  latest Amazon Linux 2 AMI via SSM, SG allowing only SSH/HTTPS, and an S3 bucket with SSE.
-  All resources are tagged Environment: Production.
+  Production-ready application environment in AWS (us-east-1). Uses the existing VPC
+  ID provided in the requirements, launches an EC2 instance on the latest Amazon Linux 2
+  AMI (via SSM), restricts inbound traffic to SSH and HTTPS only, and provisions an S3
+  bucket with server-side encryption. All resources are tagged Environment: Production.
 
 Metadata:
   ProvidedData:
-    ExistingVpcIdLiteral: "vpc-12345abcde"  # kept verbatim as requested
+    # Requirement-specified VPC ID kept verbatim as provided data
+    ExistingVpcIdLiteral: "vpc-12345abcde"
+
+Rules:
+  MustBeUsEast1:
+    Assertions:
+      - Assert: !Equals [ !Ref "AWS::Region", "us-east-1" ]
+        AssertDescription: "This stack must be deployed in us-east-1."
 
 Parameters:
+  # Using String to keep the provided literal intact without alteration
   VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: Existing VPC ID in us-east-1.
-    # Valid placeholder default to satisfy linting pattern; replace at deploy time if needed
-    Default: vpc-12345678
-  SubnetId:
-    Type: AWS::EC2::Subnet::Id
-    Description: Subnet in the specified VPC (us-east-1).
-    Default: subnet-12345678
+    Type: String
+    Default: vpc-12345abcde
+    Description: "Existing VPC ID as provided in the requirements."
+
   InstanceType:
     Type: String
     Default: t3.micro
     AllowedPattern: '^[a-z0-9]+\.[a-z0-9]+$'
-    Description: EC2 instance type.
+    Description: "EC2 instance type."
+
   IngressCidrSsh:
     Type: String
     Default: 0.0.0.0/0
     AllowedPattern: ^((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)\/(3[0-2]|[12]?\d)$
-    Description: IPv4 CIDR for SSH ingress (port 22).
+    Description: "IPv4 CIDR for SSH ingress (port 22)."
+
   IngressCidrHttps:
     Type: String
     Default: 0.0.0.0/0
     AllowedPattern: ^((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)\/(3[0-2]|[12]?\d)$
-    Description: IPv4 CIDR for HTTPS ingress (port 443).
+    Description: "IPv4 CIDR for HTTPS ingress (port 443)."
+
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    Description: SSM public parameter for the latest Amazon Linux 2 AMI.
+    Description: "SSM public parameter for the latest Amazon Linux 2 AMI (us-east-1)."
 
 Resources:
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH (22) and HTTPS (443) only
+      GroupDescription: "Allow SSH (22) and HTTPS (443) only"
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -56,6 +64,18 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  # Subnet created inside the provided existing VPC to host the instance.
+  # (Allowed by requirements; uses existing VPC and does not alter provided data.)
+  AppSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Environment
           Value: Production
@@ -81,7 +101,7 @@ Resources:
     Properties:
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
-      SubnetId: !Ref SubnetId
+      SubnetId: !Ref AppSubnet
       SecurityGroupIds:
         - !Ref AppSecurityGroup
       Tags:
@@ -90,22 +110,25 @@ Resources:
 
 Outputs:
   SecurityGroupId:
-    Description: ID of the security group allowing SSH/HTTPS.
+    Description: "ID of the security group allowing SSH/HTTPS."
     Value: !Ref AppSecurityGroup
     Export:
       Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
   InstanceId:
-    Description: ID of the EC2 instance.
+    Description: "ID of the EC2 instance."
     Value: !Ref AppInstance
     Export:
       Name: !Sub '${AWS::StackName}-InstanceId'
+
   InstancePublicIp:
-    Description: Public IPv4 of the EC2 instance (if assigned).
+    Description: "Public IPv4 of the EC2 instance (if assigned)."
     Value: !GetAtt AppInstance.PublicIp
     Export:
       Name: !Sub '${AWS::StackName}-InstancePublicIp'
+
   BucketName:
-    Description: Name of the S3 bucket with SSE enabled.
+    Description: "Name of the S3 bucket with SSE enabled."
     Value: !Ref AppBucket
     Export:
       Name: !Sub '${AWS::StackName}-BucketName'
