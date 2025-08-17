@@ -54,7 +54,7 @@ variable "enable_ec2" {
 variable "enable_cloudtrail" {
   description = "Whether to create CloudTrail and its bucket/policy"
   type        = bool
-  default     = true
+  default     = false
 }
 variable "reuse_existing_cloudtrail" {
   description = "Reuse an existing CloudTrail and bucket instead of creating new"
