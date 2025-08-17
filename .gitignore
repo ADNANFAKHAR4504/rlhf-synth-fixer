@@ -100,3 +100,5 @@ bin/tfplan
 
 build
 tasks.csv
+.sherlock/data
+.sherlock/reports
