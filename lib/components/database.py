@@ -92,7 +92,7 @@ class DatabaseComponent(ComponentResource):
     # RDS instance
     self.db_instance = aws.rds.Instance(
       f"{name}-db",
-      identifier=f"{config.app_name}-{config.environment}-db",
+      identifier=f"{config.app_name}-{config.environment}-db".lower(),
       engine="mysql",
       engine_version="8.0",
       instance_class=config.database.instance_class,
@@ -120,7 +120,7 @@ class DatabaseComponent(ComponentResource):
       # Monitoring
       monitoring_interval=60,
       monitoring_role_arn=self._create_monitoring_role().arn,
-      enabled_cloudwatch_logs_exports=["error", "general", "slow-query"],
+      enabled_cloudwatch_logs_exports=["error", "general", "slowquery"],
 
       # Security
       publicly_accessible=False,
