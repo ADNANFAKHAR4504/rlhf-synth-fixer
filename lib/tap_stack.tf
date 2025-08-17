@@ -426,9 +426,16 @@ resource "aws_iam_role" "config" {
 }
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
 }
+variable "enable_config" {
+  description = "Whether to enable AWS Config recorder, delivery channel, and rules"
+  type        = bool
+  default     = false
+}
+
 resource "aws_config_configuration_recorder" "main" {
+  count    = var.enable_config ? 1 : 0
   name     = "tap-config-recorder"
   role_arn = aws_iam_role.config.arn
   recording_group {
@@ -437,12 +444,14 @@ resource "aws_config_configuration_recorder" "main" {
   }
 }
 resource "aws_config_delivery_channel" "main" {
+  count          = var.enable_config ? 1 : 0
   name           = "tap-config-delivery"
   s3_bucket_name = aws_s3_bucket.config.bucket
   depends_on     = [aws_config_configuration_recorder.main]
 }
 resource "aws_config_config_rule" "s3_bucket_public_access_prohibited" {
-  name = "s3-bucket-public-access-prohibited"
+  count = var.enable_config ? 1 : 0
+  name  = "s3-bucket-public-access-prohibited"
   source {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
@@ -450,7 +459,8 @@ resource "aws_config_config_rule" "s3_bucket_public_access_prohibited" {
   depends_on = [aws_config_configuration_recorder.main]
 }
 resource "aws_config_config_rule" "encrypted_volumes" {
-  name = "encrypted-volumes"
+  count = var.enable_config ? 1 : 0
+  name  = "encrypted-volumes"
   source {
     owner             = "AWS"
     source_identifier = "ENCRYPTED_VOLUMES"
@@ -458,7 +468,8 @@ resource "aws_config_config_rule" "encrypted_volumes" {
   depends_on = [aws_config_configuration_recorder.main]
 }
 resource "aws_config_config_rule" "cloudtrail_enabled" {
-  name = "cloudtrail-enabled"
+  count = var.enable_config ? 1 : 0
+  name  = "cloudtrail-enabled"
   source {
     owner             = "AWS"
     source_identifier = "CLOUD_TRAIL_ENABLED"
