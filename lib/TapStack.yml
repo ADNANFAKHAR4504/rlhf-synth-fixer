@@ -673,19 +673,19 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Sub '${ConfigS3Bucket}'
+            Resource: !Sub 'arn:aws:s3:::${ConfigS3Bucket}'
           - Sid: AWSConfigBucketExistenceCheck
             Effect: Allow
             Principal:
               Service: config.amazonaws.com
             Action: s3:ListBucket
-            Resource: !Sub '${ConfigS3Bucket}'
+            Resource: !Sub 'arn:aws:s3:::${ConfigS3Bucket}'
           - Sid: AWSConfigBucketDelivery
             Effect: Allow
             Principal:
               Service: config.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${ConfigS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${ConfigS3Bucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
