@@ -26,12 +26,12 @@ commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 
 # Create a resource options object with default tags
 default_tags = {
-  'Environment': environment_suffix,
-  'Repository': repository_name,
-  'Author': commit_author,
+    'Environment': environment_suffix,
+    'Repository': repository_name,
+    'Author': commit_author,
 }
 
 stack = TapStack(
-  name="TapStack",
-  args=TapStackArgs(environment_suffix=environment_suffix),
+    name="TapStack",
+    args=TapStackArgs(environment_suffix=environment_suffix),
 )
