@@ -22,6 +22,8 @@ export class SecurityConstruct extends Construct {
       // KMS Key
       const accountId =
         process.env.CDKTF_DEFAULT_ACCOUNT || 'YOUR_AWS_ACCOUNT_ID';
+      const principalArn = accountId ? `arn:aws:iam::${accountId}:root` : '*'; // fallback to allow all if not set (not recommended for production)
+
       const kmsKeyInstance = new KmsKey(this, `${props.prefix}-kms-${region}`, {
         provider: props.vpc.providers[region],
         description: `KMS key for ${props.prefix} ${region} encryption`,
@@ -32,7 +34,7 @@ export class SecurityConstruct extends Construct {
             {
               Sid: 'Enable IAM User Permissions',
               Effect: 'Allow',
-              Principal: { AWS: `arn:aws:iam::${accountId}:root` },
+              Principal: { AWS: principalArn },
               Action: 'kms:*',
               Resource: '*',
             },
@@ -95,12 +97,13 @@ export class SecurityConstruct extends Construct {
         }),
       });
       // IAM Role (Lambda)
+      const lambdaRandomSuffix = Math.random().toString(36).substring(2, 8);
       const lambdaRoleInstance = new IamRole(
         this,
-        `${props.prefix}-lambda-role-${region}`,
+        `${props.prefix}-lambda-role-${region}-${lambdaRandomSuffix}`,
         {
           provider: props.vpc.vpcs[region].provider,
-          name: `${props.prefix}-lambda-role-${region}`,
+          name: `${props.prefix}-lambda-role-${region}-${lambdaRandomSuffix}`,
           assumeRolePolicy: JSON.stringify({
             Version: '2012-10-17',
             Statement: [
@@ -112,11 +115,12 @@ export class SecurityConstruct extends Construct {
             ],
           }),
           tags: {
-            Name: `${props.prefix}-lambda-role-${region}`,
+            Name: `${props.prefix}-lambda-role-${region}-${lambdaRandomSuffix}`,
             Environment: props.prefix,
           },
         }
       );
+      this.iamRoles[`${region}-lambda`] = lambdaRoleInstance;
       // Attach least privilege policy to Lambda
       new IamRolePolicy(this, `${props.prefix}-lambda-policy-${region}`, {
         provider: props.vpc.vpcs[region].provider,
