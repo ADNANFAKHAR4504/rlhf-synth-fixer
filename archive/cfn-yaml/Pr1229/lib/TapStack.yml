@@ -39,7 +39,7 @@ Resources:
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'application-data-bucket-prod-001-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'application-data-bucket-prod-001-${AWS::AccountId}-${AWS::Region}-tapstack1271'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -105,7 +105,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub 'arn:aws:s3:::application-data-bucket-prod-001-${AWS::AccountId}-us-east-1/*'
+                Resource: !Sub 'arn:aws:s3:::application-data-bucket-prod-001-${AWS::AccountId}-us-east-1-tapstack1271/*'
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
