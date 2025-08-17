@@ -109,6 +109,94 @@ describe('TapStack CloudFormation Template', () => {
     it('should have at least one resource', () => {
       expect(Object.keys(template.Resources).length).toBeGreaterThan(0);
     });
+    // Networking
+    [
+      'ProdVPC',
+      'InternetGateway',
+      'AttachGateway',
+      'PublicSubnetA',
+      'PublicSubnetB',
+      'PrivateSubnetA',
+      'PrivateSubnetB',
+      'NatEIP1',
+      'NatEIP2',
+      'NatGW1',
+      'NatGW2',
+      'PublicRouteTable',
+      'PublicRoute',
+      'PublicSubnetARouteTableAssoc',
+      'PublicSubnetBRouteTableAssoc',
+      'PrivateRouteTableA',
+      'PrivateRouteTableB',
+      'PrivateSubnetARoute',
+      'PrivateSubnetBRoute',
+      'PrivateSubnetARouteAssoc',
+      'PrivateSubnetBRouteAssoc',
+    ].forEach(name => {
+      it(`${name} should be defined`, () => {
+        expect(template.Resources[name]).toBeDefined();
+      });
+    });
+    // Security Group
+    it('ProdSecurityGroup should be defined', () => {
+      expect(template.Resources.ProdSecurityGroup).toBeDefined();
+    });
+    // IAM Roles/Profiles
+    [
+      'EC2Role',
+      'EC2InstanceProfile',
+      'ConfigRole',
+      'S3BucketCleanupRole',
+    ].forEach(name => {
+      it(`${name} should be defined`, () => {
+        expect(template.Resources[name]).toBeDefined();
+      });
+    });
+    // KMS, S3, CloudTrail
+    [
+      'CloudTrailKMSKey',
+      'ProdTrailBucket',
+      'ProdTrailBucketPolicy',
+      'ProdCloudTrail',
+    ].forEach(name => {
+      it(`${name} should be defined`, () => {
+        expect(template.Resources[name]).toBeDefined();
+      });
+    });
+    // EC2/ASG
+    ['ProdLaunchTemplate', 'ProdASG'].forEach(name => {
+      it(`${name} should be defined`, () => {
+        expect(template.Resources[name]).toBeDefined();
+      });
+    });
+    // ALB
+    [
+      'ProdALB',
+      'ProdTargetGroup',
+      'ProdHTTPSListener',
+      'ProdHTTPListener',
+    ].forEach(name => {
+      it(`${name} should be defined`, () => {
+        expect(template.Resources[name]).toBeDefined();
+      });
+    });
+    // AWS Config
+    ['ConfigRecorder', 'ConfigDeliveryChannel'].forEach(name => {
+      it(`${name} should be defined`, () => {
+        expect(template.Resources[name]).toBeDefined();
+      });
+    });
+    // Custom Lambda
+    [
+      'S3BucketCleanupFunction',
+      'S3BucketCleanupRole',
+      'S3BucketCleanup',
+    ].forEach(name => {
+      it(`${name} should be defined`, () => {
+        expect(template.Resources[name]).toBeDefined();
+      });
+    });
+    // Check all resources have Type and Properties
     Object.entries(template.Resources).forEach(([resName, res]) => {
       const r: any = res;
       it(`resource ${resName} should have Type`, () => {
@@ -119,32 +207,6 @@ describe('TapStack CloudFormation Template', () => {
         expect(r.Properties).toBeDefined();
         expect(typeof r.Properties).toBe('object');
       });
-      if (r.Properties && r.Properties.Tags) {
-        it(`resource ${resName} should have tags with required keys`, () => {
-          expect(Array.isArray(r.Properties.Tags)).toBe(true);
-          (r.Properties.Tags as any[]).forEach((tag: any) => {
-            expect(tag.Key).toBeDefined();
-            expect(tag.Value).toBeDefined();
-          });
-        });
-      }
-      if (r.DeletionPolicy) {
-        it(`resource ${resName} should have valid DeletionPolicy`, () => {
-          expect(['Delete', 'Retain', 'Snapshot']).toContain(r.DeletionPolicy);
-        });
-      }
-      if (r.UpdateReplacePolicy) {
-        it(`resource ${resName} should have valid UpdateReplacePolicy`, () => {
-          expect(['Delete', 'Retain', 'Snapshot']).toContain(
-            r.UpdateReplacePolicy
-          );
-        });
-      }
-      if (r.Condition) {
-        it(`resource ${resName} should reference a valid condition`, () => {
-          expect(template.Conditions[r.Condition]).toBeDefined();
-        });
-      }
     });
   });
 

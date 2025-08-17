@@ -1,58 +1,87 @@
 # Description:
-   This CloudFormation template defines a secure, production-ready AWS environment
-   within the us-west-2 region. It adheres to enterprise best practices including:
-     - Private, KMS-encrypted S3 buckets
-     - Least-privilege IAM roles for all services
-     - Auto Scaling Groups (minimum 2 instances) with Launch Templates
-     - Application Load Balancer (ALB) with multi-AZ support and HTTPS readiness
-     - CloudTrail and AWS Config for monitoring and compliance
-     - Dedicated VPC with public and private subnets
-     - NAT Gateways for private subnet internet access
-     - Uniform tagging for 'Environment: Production' and 'Project: IaC - AWS Nova Model Breaking'
+
+This CloudFormation template defines a secure, production-ready AWS environment
+within the us-west-2 region. It adheres to enterprise best practices including: - Private, KMS-encrypted S3 buckets - Least-privilege IAM roles for all services - Auto Scaling Groups (minimum 2 instances) with Launch Templates - Application Load Balancer (ALB) with multi-AZ support and HTTPS readiness - CloudTrail and AWS Config for monitoring and compliance - Dedicated VPC with public and private subnets - NAT Gateways for private subnet internet access - Uniform tagging for 'Environment: Production' and 'Project: IaC - AWS Nova Model Breaking'
 
 # Special Notes:
-   - Conditional logic is implemented to reuse existing VPCs, subnets, S3 buckets,
-     and IAM roles to prevent deployment failures in busy environments.
-   - Multi-AZ and ELB integration ensure high availability and fault tolerance.
-   - Designed for enterprise-grade deployment and AWS best practices compliance.
 
- 
+- Conditional logic is implemented to reuse existing VPCs, subnets, S3 buckets,
+  and IAM roles to prevent deployment failures in busy environments.
+- Multi-AZ and ELB integration ensure high availability and fault tolerance.
+- Designed for enterprise-grade deployment and AWS best practices compliance.
+
 ```yml
-
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Secure Production Environment with Multi-AZ, ELB with HTTPS,
-  Auto Scaling, CloudTrail, AWS Config, and full tagging.
+Description: Secure Production Environment with Multi-AZ, ELB with HTTPS, Auto Scaling, CloudTrail, AWS Config, and full tagging.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Networking'
+        Parameters:
+          - VpcId
+          - PublicSubnetIds
+          - PrivateSubnetIds
+      - Label:
+          default: 'Certificate'
+        Parameters:
+          - CertificateArn
+    ParameterLabels:
+      VpcId:
+        default: 'VPC ID'
+      PublicSubnetIds:
+        default: 'Public Subnet IDs'
+      PrivateSubnetIds:
+        default: 'Private Subnet IDs'
+      CertificateArn:
+        default: 'ACM Certificate ARN'
 
 Parameters:
   VpcId:
-    Type: AWS::EC2::VPC::Id
-    Default: ""
-    Description: "Use existing VPC ID if available, otherwise leave blank to create a new VPC"
+    Type: String
+    Default: ''
+    Description: 'Use existing VPC ID if available, otherwise leave blank to create a new VPC'
   PublicSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Default: []
-    Description: "List of existing public subnets, optional"
+    Type: CommaDelimitedList
+    Default: ''
+    Description: 'List of existing public subnets, optional'
   PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Default: []
-    Description: "List of existing private subnets, optional"
+    Type: CommaDelimitedList
+    Default: ''
+    Description: 'List of existing private subnets, optional'
   CertificateArn:
     Type: String
-    Description: "ACM certificate ARN for HTTPS listener"
+    Default: ''
+    Description: 'ACM certificate ARN for HTTPS listener (optional - leave empty for HTTP only)'
 
 Mappings:
   RegionMap:
+    us-east-1:
+      AZs: ['us-east-1a', 'us-east-1b', 'us-east-1c']
+    us-east-2:
+      AZs: ['us-east-2a', 'us-east-2b', 'us-east-2c']
+    us-west-1:
+      AZs: ['us-west-1a', 'us-west-1b']
     us-west-2:
-      AZs: ["us-west-2a", "us-west-2b"]
+      AZs: ['us-west-2a', 'us-west-2b', 'us-west-2c']
+    eu-west-1:
+      AZs: ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
+    eu-central-1:
+      AZs: ['eu-central-1a', 'eu-central-1b']
+    ap-southeast-1:
+      AZs: ['ap-southeast-1a', 'ap-southeast-1b', 'ap-southeast-1c']
+    ap-northeast-1:
+      AZs: ['ap-northeast-1a', 'ap-northeast-1c', 'ap-northeast-1d']
 
 Conditions:
-  CreateVPC: !Equals [ !Ref VpcId, "" ]
-  CreatePublicSubnets: !Equals [ !Join [ ",", !Ref PublicSubnetIds ], "" ]
-  CreatePrivateSubnets: !Equals [ !Join [ ",", !Ref PrivateSubnetIds ], "" ]
+  CreateVPC: !Equals [!Ref VpcId, '']
+  CreatePublicSubnets: !Equals [!Join [',', !Ref PublicSubnetIds], '']
+  CreatePrivateSubnets: !Equals [!Join [',', !Ref PrivateSubnetIds], '']
+  CreateVPCAndPublicSubnets:
+    !And [!Condition CreateVPC, !Condition CreatePublicSubnets]
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
 
 Resources:
-
   #############################
   # VPC and Networking
   #############################
@@ -87,7 +116,7 @@ Resources:
     Type: AWS::EC2::VPCGatewayAttachment
     Condition: CreateVPC
     Properties:
-      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
+      VpcId: !Ref ProdVPC
       InternetGatewayId: !Ref InternetGateway
 
   # Public Subnets
@@ -97,7 +126,8 @@ Resources:
     Properties:
       VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
       CidrBlock: 10.0.0.0/24
-      AvailabilityZone: !Select [0, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
+      AvailabilityZone:
+        !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -113,7 +143,8 @@ Resources:
     Properties:
       VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [1, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
+      AvailabilityZone:
+        !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -130,7 +161,8 @@ Resources:
     Properties:
       VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [0, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
+      AvailabilityZone:
+        !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -146,7 +178,8 @@ Resources:
     Properties:
       VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !Select [1, !FindInMap [RegionMap, !Ref "AWS::Region", AZs]]
+      AvailabilityZone:
+        !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -168,7 +201,8 @@ Resources:
     Condition: CreateVPC
     Properties:
       AllocationId: !GetAtt NatEIP1.AllocationId
-      SubnetId: !Ref PublicSubnetA
+      SubnetId:
+        !If [CreatePublicSubnets, !Ref PublicSubnetA, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: prod-nat-gw-a
@@ -188,7 +222,8 @@ Resources:
     Condition: CreateVPC
     Properties:
       AllocationId: !GetAtt NatEIP2.AllocationId
-      SubnetId: !Ref PublicSubnetB
+      SubnetId:
+        !If [CreatePublicSubnets, !Ref PublicSubnetB, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: prod-nat-gw-b
@@ -202,7 +237,7 @@ Resources:
     Type: AWS::EC2::RouteTable
     Condition: CreateVPC
     Properties:
-      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
+      VpcId: !Ref ProdVPC
       Tags:
         - Key: Name
           Value: prod-public-rt
@@ -222,14 +257,14 @@ Resources:
 
   PublicSubnetARouteTableAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: CreatePublicSubnets
+    Condition: CreateVPCAndPublicSubnets
     Properties:
       SubnetId: !Ref PublicSubnetA
       RouteTableId: !Ref PublicRouteTable
 
   PublicSubnetBRouteTableAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Condition: CreatePublicSubnets
+    Condition: CreateVPCAndPublicSubnets
     Properties:
       SubnetId: !Ref PublicSubnetB
       RouteTableId: !Ref PublicRouteTable
@@ -266,7 +301,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTableA
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGW1
+      NatGatewayId: !If [CreateVPC, !Ref NatGW1, !Ref 'AWS::NoValue']
 
   PrivateSubnetBRoute:
     Type: AWS::EC2::Route
@@ -274,7 +309,7 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTableB
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGW2
+      NatGatewayId: !If [CreateVPC, !Ref NatGW2, !Ref 'AWS::NoValue']
 
   PrivateSubnetARouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -352,13 +387,6 @@ Resources:
     Properties:
       Roles:
         - !Ref EC2Role
-      Tags:
-        - Key: Name
-          Value: prod-ec2-instance-profile
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: IaC - AWS Nova Model Breaking
 
   #############################
   # KMS Key & S3 for CloudTrail
@@ -366,15 +394,25 @@ Resources:
   CloudTrailKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: "KMS key for CloudTrail encryption"
+      Description: 'KMS key for CloudTrail encryption'
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: "kms:*"
-            Resource: "*"
+            Action: 'kms:*'
+            Resource: '*'
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+              - kms:Encrypt
+              - kms:DescribeKey
+              - kms:ReEncrypt*
+            Resource: '*'
       Tags:
         - Key: Name
           Value: prod-cloudtrail-key
@@ -401,12 +439,37 @@ Resources:
           Value: Production
         - Key: Project
           Value: IaC - AWS Nova Model Breaking
+  ProdTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ProdTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub arn:aws:s3:::prod-cloudtrail-bucket-${AWS::AccountId}
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::prod-cloudtrail-bucket-${AWS::AccountId}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+                aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/prod-cloudtrail
+                aws:SourceAccount: !Ref AWS::AccountId
 
   #############################
   # CloudTrail
   #############################
   ProdCloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: ProdTrailBucketPolicy
     Properties:
       TrailName: prod-cloudtrail
       S3BucketName: !Ref ProdTrailBucket
@@ -452,8 +515,8 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
+        - !If [CreatePrivateSubnets, !Ref PrivateSubnetA, !Ref 'AWS::NoValue']
+        - !If [CreatePrivateSubnets, !Ref PrivateSubnetB, !Ref 'AWS::NoValue']
       LaunchTemplate:
         LaunchTemplateId: !Ref ProdLaunchTemplate
         Version: !GetAtt ProdLaunchTemplate.LatestVersionNumber
@@ -479,8 +542,8 @@ Resources:
     Properties:
       Name: prod-alb
       Subnets:
-        - !Ref PublicSubnetA
-        - !Ref PublicSubnetB
+        - !If [CreatePublicSubnets, !Ref PublicSubnetA, !Ref 'AWS::NoValue']
+        - !If [CreatePublicSubnets, !Ref PublicSubnetB, !Ref 'AWS::NoValue']
       SecurityGroups:
         - !Ref ProdSecurityGroup
       Scheme: internet-facing
@@ -500,11 +563,12 @@ Resources:
       VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
       TargetType: instance
       HealthCheckProtocol: HTTP
-      HealthCheckPort: "80"
-      HealthCheckPath: "/"
+      HealthCheckPort: '80'
+      HealthCheckPath: '/'
 
   ProdHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasCertificate
     Properties:
       LoadBalancerArn: !Ref ProdALB
       Port: 443
@@ -522,11 +586,15 @@ Resources:
       Port: 80
       Protocol: HTTP
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
+        - !If
+          - HasCertificate
+          - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: 443
+              StatusCode: HTTP_301
+          - Type: forward
+            TargetGroupArn: !Ref ProdTargetGroup
 
   #############################
   # AWS Config Recorder
@@ -542,8 +610,26 @@ Resources:
               Service:
                 - config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      Policies:
+        - PolicyName: ConfigPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:Put*
+                  - config:Get*
+                  - config:List*
+                  - config:Describe*
+                  - config:Delete*
+                  - s3:GetBucketAcl
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                  - s3:GetBucketLocation
+                Resource: '*'
       Tags:
         - Key: Environment
           Value: Production
@@ -567,18 +653,80 @@ Resources:
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: TwentyFour_Hours
 
+  S3BucketCleanupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt S3BucketCleanupRole.Arn
+      Runtime: python3.9
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import os
+          def handler(event, context):
+              s3 = boto3.resource('s3')
+              bucket_name = event['ResourceProperties']['BucketName']
+              bucket = s3.Bucket(bucket_name)
+              try:
+                  if event['RequestType'] == 'Delete':
+                      # Delete all object versions and delete markers
+                      bucket.object_versions.delete()
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Message': str(e)})
+  S3BucketCleanupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3Cleanup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                  - s3:ListBucketVersions
+                Resource:
+                  - !Sub arn:aws:s3:::prod-cloudtrail-bucket-${AWS::AccountId}
+                  - !Sub arn:aws:s3:::prod-cloudtrail-bucket-${AWS::AccountId}/*
+  S3BucketCleanup:
+    Type: Custom::S3BucketCleanup
+    Properties:
+      ServiceToken: !GetAtt S3BucketCleanupFunction.Arn
+      BucketName: !Ref ProdTrailBucket
+
 Outputs:
   VPCId:
-    Description: "VPC ID"
+    Description: 'VPC ID'
     Value: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
   PublicSubnets:
-    Description: "Public Subnet IDs"
-    Value: !If [CreatePublicSubnets, !Join [",", [!Ref PublicSubnetA, !Ref PublicSubnetB]], !Join [",", !Ref PublicSubnetIds]]
+    Description: 'Public Subnet IDs'
+    Value:
+      !If [
+        CreatePublicSubnets,
+        !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]],
+        !Join [',', !Ref PublicSubnetIds],
+      ]
   PrivateSubnets:
-    Description: "Private Subnet IDs"
-    Value: !If [CreatePrivateSubnets, !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]], !Join [",", !Ref PrivateSubnetIds]]
+    Description: 'Private Subnet IDs'
+    Value:
+      !If [
+        CreatePrivateSubnets,
+        !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB]],
+        !Join [',', !Ref PrivateSubnetIds],
+      ]
   ALBEndpoint:
-    Description: "ALB DNS Name"
+    Description: 'ALB DNS Name'
     Value: !GetAtt ProdALB.DNSName
-
 ```
