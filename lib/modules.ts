@@ -459,8 +459,9 @@ export class S3Module extends Construct {
     tags: { [key: string]: string }
   ): S3Bucket {
     // Create S3 bucket
+    const bucketName = `corp-${name}-${this.accountId.slice(-4)}`;
     const bucket = new S3Bucket(this, `bucket-${name}`, {
-      bucket: `corp-${name}-${Math.random().toString(36).substr(2, 8)}`, // Ensure uniqueness
+      bucket: bucketName, // Ensure uniqueness
       forceDestroy: true, // Allow deletion for testing (remove in production)
       tags: tags,
     });
@@ -523,6 +524,8 @@ export class S3Module extends Construct {
   private setupCloudTrailBucketPolicy() {
     // CloudTrail requires specific bucket policy - this would be implemented
     // based on the AWS account ID and CloudTrail service requirements
+    const bucketArn = `arn:aws:s3:::${this.cloudtrailBucket.bucket}`;
+
     new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
       bucket: this.cloudtrailBucket.id, // Use .id instead of .bucket
       policy: JSON.stringify({
@@ -535,7 +538,7 @@ export class S3Module extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:GetBucketAcl',
-            Resource: this.cloudtrailBucket.arn, // Use .arn instead of constructing it
+            Resource: bucketArn, // Use .arn instead of constructing it
             Condition: {
               StringEquals: {
                 'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/corp-audit-cloudtrail`,
@@ -549,7 +552,7 @@ export class S3Module extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `${this.cloudtrailBucket.arn}/AWSLogs/${this.accountId}/*`, // Use .arn
+            Resource: `${bucketArn}/AWSLogs/${this.accountId}/*`, // Use .arn
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',

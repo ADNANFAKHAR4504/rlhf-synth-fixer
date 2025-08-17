@@ -1,7 +1,4 @@
-# AWS Infrastructure Setup Requirements
-
-## Project Overview
-We need to build a secure AWS environment using CDK for Terraform with TypeScript. The infrastructure should follow enterprise security standards and be organized into reusable modules.
+Please build a secure AWS environment using CDK for Terraform with TypeScript. The infrastructure should follow enterprise security standards and be organized into reusable modules.
 
 ## File Structure
 Split the implementation into two main files:
