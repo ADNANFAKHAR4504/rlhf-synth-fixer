@@ -10,6 +10,7 @@ pulumi-awsx = "<4.0.0,>=2.0.0"
 
 [dev-packages]
 pylint = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.12"
