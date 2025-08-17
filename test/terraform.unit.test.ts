@@ -116,7 +116,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
 
         // FIX: Change regex to look for the correct 'aws_instance' resource type.
         const ec2Regex = new RegExp(
-          `resource "aws_instance" "app_server_${regionSuffix}" {[\\s\\S]*?^}`,
+          `resource "aws_instance" "app_server_${regionSuffix}_291844" {[\\s\\S]*?^}`,
           'm'
         );
         const ec2Block = mainTfContent.match(ec2Regex);
@@ -181,7 +181,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
         const regionSuffix = region.replace(/-/g, '_');
         // FIX: Change regex to look for the correct 'aws_instance' resource type.
         const ec2Regex = new RegExp(
-          `resource "aws_instance" "app_server_${regionSuffix}" {[\\s\\S]*?^}`,
+          `resource "aws_instance" "app_server_${regionSuffix}_291844" {[\\s\\S]*?^}`,
           'm'
         );
         const ec2Block = mainTfContent.match(ec2Regex);
@@ -231,7 +231,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
           `"${region}" = { s3_bucket_name = aws_s3_bucket.data_bucket_${regionSuffix}.id`
         );
         expect(normalizedOutput).toContain(
-          `ec2_instance_id = aws_instance.app_server_${regionSuffix}.id`
+          `ec2_instance_id = aws_instance.app_server_${regionSuffix}_291844.id`
         );
         expect(normalizedOutput).toContain(
           `kms_key_arn = aws_kms_key.app_key_${regionSuffix}.arn`

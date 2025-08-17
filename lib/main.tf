@@ -162,7 +162,7 @@ resource "aws_s3_bucket_public_access_block" "data_bucket_pac_eu_north_1" {
   restrict_public_buckets = true
 }
 
-resource "aws_instance" "app_server_eu_north_1" {
+resource "aws_instance" "app_server_eu_north_1_291844" {
   provider                    = aws.eu-north-1
   ami                         = data.aws_ami.amazon_linux_2_eu_north_1.id
   instance_type               = "t3.micro"
@@ -425,12 +425,12 @@ output "deployment_summary" {
   value = {
     "eu-north-1" = {
       s3_bucket_name  = aws_s3_bucket.data_bucket_eu_north_1.id
-      ec2_instance_id = aws_instance.app_server_eu_north_1.id
+      ec2_instance_id = aws_instance.app_server_eu_north_1_291844.id
       kms_key_arn     = aws_kms_key.app_key_eu_north_1.arn
     }
     "us-west-2" = {
       s3_bucket_name  = aws_s3_bucket.data_bucket_us_west_2.id
-      ec2_instance_id = aws_instance.app_server_us_west_2.id
+      ec2_instance_id = aws_instance.app_server_us_west_2_291844.id
       kms_key_arn     = aws_kms_key.app_key_us_west_2.arn
     }
   }
