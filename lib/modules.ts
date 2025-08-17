@@ -524,7 +524,7 @@ export class S3Module extends Construct {
     // CloudTrail requires specific bucket policy - this would be implemented
     // based on the AWS account ID and CloudTrail service requirements
     new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
-      bucket: this.cloudtrailBucket.bucket,
+      bucket: this.cloudtrailBucket.id, // Use .id instead of .bucket
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -535,7 +535,7 @@ export class S3Module extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:GetBucketAcl',
-            Resource: `arn:aws:s3:::${this.cloudtrailBucket.bucket}`,
+            Resource: this.cloudtrailBucket.arn, // Use .arn instead of constructing it
             Condition: {
               StringEquals: {
                 'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/corp-audit-cloudtrail`,
@@ -549,7 +549,7 @@ export class S3Module extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `arn:aws:s3:::${this.cloudtrailBucket.bucket}/AWSLogs/${this.accountId}/*`,
+            Resource: `${this.cloudtrailBucket.arn}/AWSLogs/${this.accountId}/*`, // Use .arn
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
@@ -559,6 +559,7 @@ export class S3Module extends Construct {
           },
         ],
       }),
+      dependsOn: [this.cloudtrailBucket], // Ensure bucket exists first
     });
   }
 }
@@ -684,7 +685,7 @@ export class CloudTrailModule extends Construct {
           dataResource: [
             {
               type: 'AWS::S3::Object',
-              values: [`arn:aws:s3:::${config.s3BucketName}/`],
+              values: [`arn:aws:s3:::${config.s3BucketName}/*`],
             },
           ],
         },
