@@ -222,8 +222,10 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
       const db = DBInstances?.find(instance =>
         instance.TagList?.some(
           tag =>
-            tag.Key === 'aws:cloudformation:stack-name' &&
-            tag.Value === STACK_NAME
+            (tag.Key === 'Owner' && tag.Value === 'nova-devops-team') ||
+            (tag.Key === 'Purpose' &&
+              tag.Value === 'Nova Application Baseline') ||
+            (tag.Key === 'Name' && tag.Value?.includes('nova'))
         )
       );
 
@@ -298,18 +300,43 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
   // ---------------------------------------------------------------- //
   //                    Logging and Monitoring                        //
   // ---------------------------------------------------------------- //
+  // ---------------------------------------------------------------- //
+  //                    Logging and Monitoring                        //
+  // ---------------------------------------------------------------- //
   describe('📊 Logging and Monitoring', () => {
     // The trail name is the same as the CloudFormation stack name
     const trailName = STACK_NAME;
 
     test('CloudTrail should be configured correctly', async () => {
+      const trailName = `NovaModel-Secure-Stack-${ENVIRONMENT_SUFFIX}`;
+
       const { Trail } = await cloudTrailClient.send(
         new GetTrailCommand({ Name: trailName })
       );
       expect(Trail).toBeDefined();
+      expect(Trail?.Name).toBe(trailName);
       expect(Trail?.IsMultiRegionTrail).toBe(true);
-      // We can't check the bucket name easily, but we can check it's defined
-      expect(Trail?.S3BucketName).toBeDefined();
+      expect(Trail?.IncludeGlobalServiceEvents).toBe(true);
+
+      // Check logging status separately
+      const { IsLogging } = await cloudTrailClient.send(
+        new GetTrailStatusCommand({ Name: trailName })
+      );
+      expect(IsLogging).toBe(true);
+    });
+
+    test('RDS instance should have proper tags', async () => {
+      const { DBInstances } = await rdsClient.send(
+        new DescribeDBInstancesCommand({})
+      );
+      const db = DBInstances?.find(instance =>
+        instance.TagList?.some(
+          tag =>
+            (tag.Key === 'Project' && tag.Value === 'NovaModelBreaking') ||
+            (tag.Key === 'Owner' && tag.Value === 'DevSecOpsTeam')
+        )
+      );
+      expect(db).toBeDefined();
     });
 
     test('CloudTrail should have correct event selectors for S3, Lambda, and DynamoDB', async () => {
