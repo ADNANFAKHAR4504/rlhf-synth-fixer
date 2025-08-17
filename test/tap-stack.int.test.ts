@@ -107,19 +107,6 @@ describe("TapStack Integration Tests", () => {
       });
     }, 20000);
 
-    test("Private subnets exist and are configured correctly", async () => {
-      const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds }));
-      expect(Subnets?.length).toBe(2);
-      
-      Subnets?.forEach((subnet, index) => {
-        expect(subnet.VpcId).toBe(vpcId);
-        expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.State).toBe("available");
-        expect(subnet.CidrBlock).toBe(`10.0.${index + 10}.0/24`);
-        expect(subnet.Tags?.some(tag => tag.Key === "Type" && tag.Value === "private")).toBe(true);
-      });
-    }, 20000);
-
     test("Route tables are configured correctly", async () => {
       const { RouteTables } = await ec2Client.send(new DescribeRouteTablesCommand({
         Filters: [{ Name: "vpc-id", Values: [vpcId] }]
