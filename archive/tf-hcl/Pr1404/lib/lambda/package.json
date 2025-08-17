@@ -1,0 +1,37 @@
+{
+  "name": "data-processor-lambda",
+  "version": "1.0.0",
+  "description": "Production Lambda function for serverless data processing",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/client-kms": "^3.400.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.45.0",
+    "@aws-sdk/types": "^3.400.0"
+  },
+  "scripts": {
+    "test": "node test.js",
+    "lint": "eslint index.js",
+    "build": "npm install --production",
+    "build:optimized": "node build-optimization.js . ../build",
+    "build:production": "NODE_ENV=production node build-optimization.js . ../build",
+    "package": "zip -r lambda-function.zip index.js package.json node_modules/",
+    "package:optimized": "cd ../build && zip -r ../lambda-function-optimized.zip . -x build-manifest.json",
+    "clean": "rm -rf node_modules/ lambda-function.zip ../build/ ../lambda-function-optimized.zip",
+    "audit:security": "npm audit --audit-level=high",
+    "analyze:bundle": "node -e \"console.log('Bundle analysis:', JSON.stringify(require('./build-manifest.json'), null, 2))\" 2>/dev/null || echo 'Run build:optimized first'"
+  },
+  "keywords": [
+    "lambda",
+    "aws",
+    "serverless",
+    "data-processing"
+  ],
+  "author": "Infrastructure Team",
+  "license": "MIT"
+}
