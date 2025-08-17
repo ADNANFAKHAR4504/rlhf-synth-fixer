@@ -88,7 +88,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(policy.Properties.PolicyDocument.Statement).toHaveLength(2);
       
       const statements = policy.Properties.PolicyDocument.Statement;
-      statements.forEach(statement => {
+      statements.forEach((statement: any) => {
         expect(statement.Condition.Bool['aws:SecureTransport']).toBe('false');
         expect(statement.Effect).toBe('Deny');
       });
@@ -129,10 +129,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(role.Type).toBe('AWS::IAM::Role');
       expect(role.Properties.Policies).toHaveLength(2);
       
-      const s3Policy = role.Properties.Policies.find(p => p.PolicyName === 'S3LogsAccess');
+      const s3Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3LogsAccess');
       expect(s3Policy).toBeDefined();
       
-      const rdsPolicy = role.Properties.Policies.find(p => p.PolicyName === 'RDSAccess');
+      const rdsPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'RDSAccess');
       expect(rdsPolicy).toBeDefined();
     });
 
@@ -156,7 +156,7 @@ describe('TapStack CloudFormation Template', () => {
       const role = template.Resources.S3NotificationLambdaRole;
       expect(role.Type).toBe('AWS::IAM::Role');
       
-      const policy = role.Properties.Policies.find(p => p.PolicyName === 'S3NotificationAccess');
+      const policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3NotificationAccess');
       expect(policy).toBeDefined();
       expect(policy.PolicyDocument.Statement[0].Resource).toEqual({
         'Fn::Sub': 'arn:aws:s3:::tapstack-secure-logs-${AWS::AccountId}'
@@ -300,8 +300,8 @@ describe('TapStack CloudFormation Template', () => {
       };
       
       Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        const expectedExportName = outputMapping[outputKey] || outputKey;
+        const output = (template.Outputs as any)[outputKey];
+        const expectedExportName = (outputMapping as any)[outputKey] || outputKey;
         expect(output.Export.Name).toEqual({
           'Fn::Sub': `\${AWS::StackName}-${expectedExportName}`
         });
@@ -322,7 +322,7 @@ describe('TapStack CloudFormation Template', () => {
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource && resource.Properties && resource.Properties.Tags) {
-          const projectTag = resource.Properties.Tags.find(tag => tag.Key === 'Project');
+          const projectTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Project');
           expect(projectTag).toBeDefined();
           expect(projectTag.Value).toBe('SecurityConfig');
         }

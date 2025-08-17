@@ -283,7 +283,7 @@ describe('TapStack Integration Tests', () => {
         if (securityGroups.SecurityGroups && securityGroups.SecurityGroups.length > 0) {
           // Look for RDS security group with port 3306
           const rdsSecurityGroup = securityGroups.SecurityGroups.find(sg => 
-            sg.GroupDescription?.includes('RDS')
+            sg.Description?.includes('RDS')
           );
           
           if (rdsSecurityGroup) {
@@ -435,10 +435,10 @@ describe('TapStack Integration Tests', () => {
         }).promise();
 
         expect(encryptionConfig.ServerSideEncryptionConfiguration).toBeDefined();
-        expect(encryptionConfig.ServerSideEncryptionConfiguration.Rules).toHaveLength(1);
+        expect(encryptionConfig.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
         
-        const rule = encryptionConfig.ServerSideEncryptionConfiguration.Rules[0];
-        expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+        const rule = encryptionConfig.ServerSideEncryptionConfiguration?.Rules?.[0];
+        expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
       } catch (error) {
         console.warn('S3 encryption check failed. This may be expected if the deployment is not active.');
         expect(error).toBeInstanceOf(Error);
