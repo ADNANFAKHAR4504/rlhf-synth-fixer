@@ -52,22 +52,23 @@ class SecretsComponent(ComponentResource):
       f"{name}-db-secrets",
       name=f"{config.app_name}-{config.environment}-db-config",
       description=f"Database configuration for {config.app_name}-{config.environment}",
-      generate_secret_string={
-        "length": 32,
-        "exclude_characters": '"@/\\',
-        "generate_string_key": "password",
-        "secret_string_template": json.dumps({
-          "username": "admin",
-          "engine": "mysql",
-          "host": f"{config.app_name}-{config.environment}-db.region.rds.amazonaws.com",
-          "port": 3306,
-          "dbname": f"{config.app_name}_{config.environment}".replace("-", "_")
-        })
-      },
       tags={
         "Name": f"{config.app_name}-{config.environment}-db-config",
         **config.tags
       },
+      opts=ResourceOptions(parent=self)
+    )
+
+    aws.secretsmanager.SecretVersion(
+      f"{name}-app-secrets-version",
+      secret_id=self.app_secrets.id,
+      secret_string=json.dumps({
+        "username": "admin",
+        "engine": "mysql",
+        "host": f"{config.app_name}-{config.environment}-db.region.rds.amazonaws.com",
+        "port": 3306,
+        "dbname": f"{config.app_name}_{config.environment}".replace("-", "_")
+      }),
       opts=ResourceOptions(parent=self)
     )
 
