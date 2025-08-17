@@ -158,7 +158,9 @@ Resources:
           IncludeManagementEvents: true
           DataResources:
             - Type: 'AWS::S3::Object'
-              Values: ['arn:aws:s3:::*/*']
+              Values:
+                - !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/'
+                - !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/*'
     DependsOn: CloudTrailS3BucketPolicy
 
   # ============================================================================
