@@ -953,7 +953,7 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.database.id]
   publicly_accessible    = false
   skip_final_snapshot    = true
-  backup_retention_period = local.backup_retention_days
+  backup_retention_period = min(local.backup_retention_days, 35)
   deletion_protection    = var.environment == "prod" ? true : false
   copy_tags_to_snapshot  = true
 
