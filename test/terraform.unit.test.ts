@@ -34,7 +34,7 @@ describe("tap_stack.tf static verification", () => {
 
   it("declares db_username and db_password variables", () => {
     expect(has(/variable\s+"db_username"/)).toBe(true);
-    expect(has(/variable\s+"db_password"/)).toBe(true);
+    expect(has(/resource\s+"random_password"\s+"db_password"/)).toBe(true);
     expect(has(/sensitive\s*=\s*true/)).toBe(true); // for password sensitivity
   });
 
