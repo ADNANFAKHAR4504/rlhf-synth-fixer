@@ -1,34 +1,25 @@
-# Model Failures
+**Model Failures for Secure AWS Infrastructure CDKTF Response**
 
-## 1. Multi-Region Deployment
-- **Failure:** The solution only deploys resources to a single region (from `AWS_REGION` env var). The prompt requires deployment in both `us-east-1` and `us-west-2`.
+1. **Sensitive Data Encryption Coverage**:  
+	- The response uses AWS KMS for encrypting S3 buckets and CloudWatch logs, but does not explicitly show encryption for all other sensitive data at rest (e.g., EBS volumes for EC2 instances, RDS, DynamoDB, etc.).
 
-## 2. Workspace Isolation
-- **Failure:** No explicit use of Terraform workspaces for environment isolation. The solution uses environment variables, but does not show workspace configuration or switching.
+2. **Resource Name Prefixing**:  
+	- Most resources are prefixed with 'secure-env', but the S3 bucket for CloudTrail logs uses `"secure-env-cloudtrail-logs-${random_id}"`, which may not guarantee the prefix for all resources if random_id is not handled properly.
 
-## 3. Remote State Management
-- **Failure:** No backend configuration for remote state management or per-workspace state files.
+3. **Lambda Logging**:  
+	- Logging is enabled for Lambda functions via CloudWatch Log Groups, but the Lambda function configuration uses a placeholder for `filename` and `sourceCodeHash`, which may prevent actual deployment and logging validation.
 
-## 4. Security Group Rules
-- **Failure:** Security groups allow HTTP/HTTPS from `0.0.0.0/0` (the entire internet). The prompt requires only known IP ranges and all ports closed by default.
+4. **IAM Least Privilege Principle**:  
+	- IAM policies for EC2 and Lambda roles are provided, but may include overly broad permissions (e.g., `"Resource": "*"` for some actions) and do not demonstrate fine-grained least privilege for all required actions.
 
-## 5. IAM Least Privilege
-- **Failure:** IAM roles use broad managed policies (e.g., `AmazonSSMManagedInstanceCore`, `CloudWatchAgentServerPolicy`). The prompt requires permissions limited to minimum required actions and resources.
+5. **Multi-Region VPC Implementation**:  
+	- VPCs are created in two regions, but there is no cross-region connectivity or peering, which may be required for a truly multi-region setup.
 
-## 6. Logging/Auditing
-- **Failure:** No logging mechanism for auditing configuration changes is implemented.
+6. **Alerts for Unauthorized Access Attempts**:  
+	- CloudWatch alarms are set for unauthorized access attempts, but the metric and dimension configuration may not fully capture all types of unauthorized access (e.g., only `ErrorCode: AccessDenied` and `EventName: ConsoleLogin`).
 
-## 7. Terraform Version
-- **Failure:** The `cdktf.json` only specifies AWS provider version, not Terraform version (`>= 1.0.0`).
+7. **Test Coverage**:  
+	- The test suite is incomplete and does not cover all requirements (e.g., encryption for all resources, alerts, least privilege policies).
 
-## 8. Resource Naming
-- **Failure:** No standard naming convention with environment-specific prefixes for all resources (e.g., `dev-`, `prod-`).
-
-## 9. Module Usage
-- **Failure:** No explicit use of Terraform modules for reusable components; constructs are used, but not modules as required by the prompt.
-
-## 10. Resource Tagging
-- **Failure:** Tagging is present, but not validated for completeness (e.g., cost monitoring tags).
-
-## 11. Testing
-- **Failure:** No tests are provided to validate deployment in multiple regions, workspace isolation, or other critical functionalities.
+8. **Public Internet Access Restriction**:  
+	- Security groups restrict public access, but there is no explicit check or test to ensure only specific EC2 instances have public access.

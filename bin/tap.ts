@@ -26,13 +26,7 @@ const defaultTags = {
 };
 
 // Create the TapStack with the calculated properties
-new TapStack(app, stackName, {
-  environmentSuffix: environmentSuffix,
-  stateBucket: stateBucket,
-  stateBucketRegion: stateBucketRegion,
-  awsRegion: awsRegion,
-  defaultTags: defaultTags,
-});
+new TapStack(app, stackName);
 
 // Synthesize the app to generate the Terraform configuration
 app.synth();

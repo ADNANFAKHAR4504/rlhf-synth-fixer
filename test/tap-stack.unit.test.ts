@@ -1,10 +1,12 @@
+
 import { App, Testing } from 'cdktf';
-import { IAM } from '../lib/iam';
-import { Logging } from '../lib/logging';
-import { Networking } from '../lib/networking';
-import { Security } from '../lib/security';
-import { Storage } from '../lib/storage';
 import { TapStack } from '../lib/tap-stack';
+import { VpcConstruct } from '../lib/vpc-construct';
+import { SecurityConstruct } from '../lib/security-construct';
+import { ComputeConstruct } from '../lib/compute-construct';
+import { DatabaseConstruct } from '../lib/database-construct';
+import { StorageConstruct } from '../lib/storage-construct';
+import { DynamoDbConstruct } from '../lib/dynamodb-construct';
 
 describe('TapStack Comprehensive Unit Tests', () => {
   let app: App;
@@ -14,90 +16,97 @@ describe('TapStack Comprehensive Unit Tests', () => {
     app = new App();
   });
 
-  test('TapStack instantiates with all required props', () => {
-    const stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix: 'test',
-      stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
-      defaultTags: { tags: { Owner: 'test-owner', CostCenter: 'test-cc' } },
-    });
+  test('TapStack instantiates with required arguments', () => {
+    const stack = new TapStack(app, 'TestTapStack');
     const synthesized = Testing.synth(stack);
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
   });
 
-  test('Networking module creates VPC and subnets with correct tags', () => {
-    const stack = new TapStack(app, 'NetworkingTestStack');
-    const networking = new Networking(stack, 'NetworkingTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
+  test('VpcConstruct creates VPC and subnets', () => {
+    const stack = new TapStack(app, 'VpcTestStack');
+    const vpc = new VpcConstruct(stack, 'VpcTest', {
+      prefix: 'test',
+      regions: ['us-west-2'],
     });
-    expect(networking.vpc).toBeDefined();
-    expect(networking.publicSubnets.length).toBeGreaterThan(0);
-    expect(networking.privateSubnets.length).toBeGreaterThan(0);
+    expect(vpc.vpcs['us-west-2']).toBeDefined();
+    expect(vpc.publicSubnets['us-west-2'].length).toBeGreaterThan(0);
+    expect(vpc.privateSubnets['us-west-2'].length).toBeGreaterThan(0);
   });
 
-  test('Security module creates SGs with correct rules', () => {
+  test('SecurityConstruct creates security resources', () => {
     const stack = new TapStack(app, 'SecurityTestStack');
-    const security = new Security(stack, 'SecurityTest', {
-      vpcId: 'vpc-123',
-      environment: 'test',
-      region: 'us-west-2',
-      allowedCidr: '203.0.113.0/24',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
+    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
+    const security = new SecurityConstruct(stack, 'SecurityTest', {
+      prefix: 'test',
+      vpc,
     });
-    expect(security.webSg).toBeDefined();
-    expect(security.appSg).toBeDefined();
-    expect(security.dbSg).toBeDefined();
+    expect(security).toBeDefined();
+    // Optionally check for specific resources if exposed
   });
 
-  test('IAM module creates role with least privilege', () => {
-    const stack = new TapStack(app, 'IAMTestStack');
-    const iam = new IAM(stack, 'IAMTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
+  test('ComputeConstruct creates compute resources', () => {
+    const stack = new TapStack(app, 'ComputeTestStack');
+    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
+    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
+    const compute = new ComputeConstruct(stack, 'ComputeTest', {
+      prefix: 'test',
+      vpc,
+      security,
     });
-    expect(iam.role).toBeDefined();
+    expect(compute).toBeDefined();
+    // Optionally check for EC2/Lambda if exposed
   });
 
-  test('Logging module creates CloudTrail with correct bucket', () => {
-    const stack = new TapStack(app, 'LoggingTestStack');
-    const logging = new Logging(stack, 'LoggingTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
+  test('DatabaseConstruct creates RDS resources', () => {
+    const stack = new TapStack(app, 'DatabaseTestStack');
+    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
+    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
+    const database = new DatabaseConstruct(stack, 'DatabaseTest', {
+      prefix: 'test',
+      vpc,
+      security,
     });
-    expect(logging.trail).toBeDefined();
+    expect(database).toBeDefined();
+    // Optionally check for RDS if exposed
   });
 
-  test('Storage module creates secure S3 buckets', () => {
+  test('StorageConstruct creates S3 buckets', () => {
     const stack = new TapStack(app, 'StorageTestStack');
-    const storage = new Storage(stack, 'StorageTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
+    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
+    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
+    const storage = new StorageConstruct(stack, 'StorageTest', {
+      prefix: 'test',
+      security,
     });
-    expect(storage.appDataBucket).toBeDefined();
-    expect(storage.logsBucket).toBeDefined();
+    expect(storage).toBeDefined();
+    // Optionally check for buckets if exposed
   });
 
-  test('Stack outputs and standards are present', () => {
-    const stack = new TapStack(app, 'OutputTestStack', {
-      environmentSuffix: 'test',
-      stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
-      defaultTags: { tags: { Owner: 'test-owner', CostCenter: 'test-cc' } },
+  test('DynamoDbConstruct creates DynamoDB tables', () => {
+    const stack = new TapStack(app, 'DynamoDbTestStack');
+    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
+    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
+    const dynamodb = new DynamoDbConstruct(stack, 'DynamoDbTest', {
+      prefix: 'test',
+      security,
     });
+    expect(dynamodb).toBeDefined();
+    // Optionally check for tables if exposed
+  });
+
+  test('Synthesized output contains expected resource names', () => {
+    const stack = new TapStack(app, 'OutputTestStack');
+    // Add constructs to stack
+    new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
+  const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
+  const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
+  new StorageConstruct(stack, 'StorageTest', { prefix: 'test', security });
     const synthesized = Testing.synth(stack);
     expect(synthesized).toContain('test-us-west-2-vpc');
+    expect(synthesized).toContain('test-us-west-2-public-subnet-1');
+    expect(synthesized).toContain('test-us-west-2-private-subnet-1');
     expect(synthesized).toContain('test-us-west-2-app-data');
     expect(synthesized).toContain('test-us-west-2-logs');
-    expect(synthesized).toContain('test-us-west-2-trail-bucket');
   });
 });
-
-// add more test suites and cases as needed

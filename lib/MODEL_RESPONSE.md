@@ -1,550 +1,415 @@
-I'll generate a comprehensive CDKTF Infrastructure as Code solution. Since you didn't specify the exact provider and resources, I'll create an AWS example with common infrastructure components that demonstrates all the requested constraints and best practices.
+I'll create a comprehensive CDKTF configuration that meets all the specified security and architectural requirements. Here's the complete solution:
 
-## CDKTF Infrastructure as Code Solution
+## CDKTF Configuration for Secure AWS Infrastructure
 
-### Project Structure
-```
-cdktf-infrastructure/
-├── main.ts
-├── constructs/
-│   ├── networking.ts
-│   ├── compute.ts
-│   ├── storage.ts
-│   └── security.ts
-├── config/
-│   └── environment.ts
-├── package.json
-└── cdktf.json
-```
-
-### 1. Main Infrastructure Stack
+### Main Configuration File
 
 ```typescript
 // main.ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
-import { NetworkingConstruct } from "./constructs/networking";
-import { ComputeConstruct } from "./constructs/compute";
-import { StorageConstruct } from "./constructs/storage";
-import { SecurityConstruct } from "./constructs/security";
-import { EnvironmentConfig } from "./config/environment";
-
-/**
- * Main infrastructure stack that orchestrates all resources
- * Follows modular design pattern for reusability and maintainability
- */
-class InfrastructureStack extends TerraformStack {
-  constructor(scope: Construct, id: string) {
-    super(scope, id);
-
-    // Load environment configuration
-    const config = new EnvironmentConfig();
-
-    // Configure AWS Provider with region from environment
-    new AwsProvider(this, "aws", {
-      region: config.region,
-      defaultTags: [
-        {
-          tags: config.defaultTags,
-        },
-      ],
-    });
-
-    // Create networking infrastructure (VPC, subnets, gateways)
-    const networking = new NetworkingConstruct(this, "networking", {
-      environment: config.environment,
-      region: config.region,
-      availabilityZones: config.availabilityZones,
-      vpcCidr: config.vpcCidr,
-      tags: config.defaultTags,
-    });
-
-    // Create security groups and IAM roles
-    const security = new SecurityConstruct(this, "security", {
-      vpc: networking.vpc,
-      environment: config.environment,
-      tags: config.defaultTags,
-    });
-
-    // Create storage resources (S3 buckets)
-    const storage = new StorageConstruct(this, "storage", {
-      environment: config.environment,
-      tags: config.defaultTags,
-    });
-
-    // Create compute resources (EC2 instances)
-    const compute = new ComputeConstruct(this, "compute", {
-      vpc: networking.vpc,
-      privateSubnets: networking.privateSubnets,
-      publicSubnets: networking.publicSubnets,
-      securityGroups: security.securityGroups,
-      iamRole: security.ec2Role,
-      environment: config.environment,
-      instanceType: config.instanceType,
-      keyPairName: config.keyPairName,
-      tags: config.defaultTags,
-    });
-
-    // Output important resource identifiers and connection details
-    this.createOutputs(networking, compute, storage, security);
-  }
-
-  /**
-   * Create Terraform outputs for resource identifiers and connection details
-   */
-  private createOutputs(
-    networking: NetworkingConstruct,
-    compute: ComputeConstruct,
-    storage: StorageConstruct,
-    security: SecurityConstruct
-  ) {
-    // VPC and Networking Outputs
-    new TerraformOutput(this, "vpc_id", {
-      value: networking.vpc.id,
-      description: "ID of the VPC",
-    });
-
-    new TerraformOutput(this, "public_subnet_ids", {
-      value: networking.publicSubnets.map(subnet => subnet.id),
-      description: "IDs of the public subnets",
-    });
-
-    new TerraformOutput(this, "private_subnet_ids", {
-      value: networking.privateSubnets.map(subnet => subnet.id),
-      description: "IDs of the private subnets",
-    });
-
-    // Compute Outputs
-    new TerraformOutput(this, "web_server_public_ips", {
-      value: compute.webServers.map(instance => instance.publicIp),
-      description: "Public IP addresses of web servers",
-    });
-
-    new TerraformOutput(this, "app_server_private_ips", {
-      value: compute.appServers.map(instance => instance.privateIp),
-      description: "Private IP addresses of application servers",
-    });
-
-    // Storage Outputs
-    new TerraformOutput(this, "s3_bucket_names", {
-      value: {
-        app_data: storage.appDataBucket.bucket,
-        logs: storage.logsBucket.bucket,
-      },
-      description: "S3 bucket names for application data and logs",
-    });
-
-    // Security Outputs
-    new TerraformOutput(this, "security_group_ids", {
-      value: {
-        web: security.securityGroups.web.id,
-        app: security.securityGroups.app.id,
-        database: security.securityGroups.database.id,
-      },
-      description: "Security group IDs",
-    });
-  }
-}
-
-// Initialize the CDK app and stack
-const app = new App();
-new InfrastructureStack(app, "infrastructure");
-app.synth();
-```
-
-### 2. Environment Configuration
-
-```typescript
-// config/environment.ts
-/**
- * Environment configuration class that manages all environment-specific settings
- * Uses environment variables for sensitive data and configuration
- */
-export class EnvironmentConfig {
-  public readonly environment: string;
-  public readonly region: string;
-  public readonly availabilityZones: string[];
-  public readonly vpcCidr: string;
-  public readonly instanceType: string;
-  public readonly keyPairName: string;
-  public readonly defaultTags: { [key: string]: string };
-
-  constructor() {
-    // Load configuration from environment variables with defaults
-    this.environment = process.env.ENVIRONMENT || "dev";
-    this.region = process.env.AWS_REGION || "us-west-2";
-    this.availabilityZones = process.env.AVAILABILITY_ZONES?.split(",") || [
-      "us-west-2a",
-      "us-west-2b",
-      "us-west-2c",
-    ];
-    this.vpcCidr = process.env.VPC_CIDR || "10.0.0.0/16";
-    this.instanceType = process.env.INSTANCE_TYPE || "t3.micro";
-    this.keyPairName = process.env.KEY_PAIR_NAME || "default-key";
-
-    // Standard resource tags for governance and cost tracking
-    this.defaultTags = {
-      Environment: this.environment,
-      Project: process.env.PROJECT_NAME || "cdktf-infrastructure",
-      Owner: process.env.OWNER || "platform-team",
-      ManagedBy: "terraform",
-      CreatedBy: "cdktf",
-    };
-  }
-}
-```
-
-### 3. Networking Construct
-
-```typescript
-// constructs/networking.ts
-import { Construct } from "constructs";
 import { Vpc } from "@cdktf/provider-aws/lib/vpc";
 import { Subnet } from "@cdktf/provider-aws/lib/subnet";
 import { InternetGateway } from "@cdktf/provider-aws/lib/internet-gateway";
-import { NatGateway } from "@cdktf/provider-aws/lib/nat-gateway";
-import { Eip } from "@cdktf/provider-aws/lib/eip";
 import { RouteTable } from "@cdktf/provider-aws/lib/route-table";
 import { Route } from "@cdktf/provider-aws/lib/route";
 import { RouteTableAssociation } from "@cdktf/provider-aws/lib/route-table-association";
+import { NatGateway } from "@cdktf/provider-aws/lib/nat-gateway";
+import { Eip } from "@cdktf/provider-aws/lib/eip";
+import { SecurityGroup } from "@cdktf/provider-aws/lib/security-group";
+import { Instance } from "@cdktf/provider-aws/lib/instance";
+import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
+import { IamRolePolicy } from "@cdktf/provider-aws/lib/iam-role-policy";
+import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
+import { KmsKey } from "@cdktf/provider-aws/lib/kms-key";
+import { KmsAlias } from "@cdktf/provider-aws/lib/kms-alias";
+import { LambdaFunction } from "@cdktf/provider-aws/lib/lambda-function";
+import { CloudwatchLogGroup } from "@cdktf/provider-aws/lib/cloudwatch-log-group";
+import { CloudwatchMetricAlarm } from "@cdktf/provider-aws/lib/cloudwatch-metric-alarm";
+import { SnsTopicSubscription } from "@cdktf/provider-aws/lib/sns-topic-subscription";
+import { SnsTopic } from "@cdktf/provider-aws/lib/sns-topic";
+import { CloudtrailEventDataStore } from "@cdktf/provider-aws/lib/cloudtrail-event-data-store";
+import { Cloudtrail } from "@cdktf/provider-aws/lib/cloudtrail";
+import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
+import { S3BucketEncryption } from "@cdktf/provider-aws/lib/s3-bucket-encryption";
+import { S3BucketPublicAccessBlock } from "@cdktf/provider-aws/lib/s3-bucket-public-access-block";
 
-export interface NetworkingConstructProps {
-  environment: string;
-  region: string;
-  availabilityZones: string[];
-  vpcCidr: string;
-  tags: { [key: string]: string };
-}
-
-/**
- * Networking construct that creates VPC, subnets, gateways, and routing
- * Implements multi-AZ architecture for high availability
- */
-export class NetworkingConstruct extends Construct {
-  public readonly vpc: Vpc;
-  public readonly publicSubnets: Subnet[] = [];
-  public readonly privateSubnets: Subnet[] = [];
-  public readonly internetGateway: InternetGateway;
-
-  constructor(scope: Construct, id: string, props: NetworkingConstructProps) {
+class SecureInfrastructureStack extends TerraformStack {
+  constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    // Create VPC with DNS support enabled
-    this.vpc = new Vpc(this, "vpc", {
-      cidrBlock: props.vpcCidr,
+    // AWS Providers for multiple regions
+    const primaryProvider = new AwsProvider(this, "aws-primary", {
+      region: "us-east-1",
+      alias: "primary",
+    });
+
+    const secondaryProvider = new AwsProvider(this, "aws-secondary", {
+      region: "us-west-2",
+      alias: "secondary",
+    });
+
+    // KMS Keys for encryption
+    const primaryKmsKey = new KmsKey(this, "secure-env-primary-kms", {
+      provider: primaryProvider,
+      description: "KMS key for secure-env primary region encryption",
+      keyUsage: "ENCRYPT_DECRYPT",
+      keySpec: "SYMMETRIC_DEFAULT",
+      policy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Sid: "Enable IAM User Permissions",
+            Effect: "Allow",
+            Principal: { AWS: "arn:aws:iam::*:root" },
+            Action: "kms:*",
+            Resource: "*",
+          },
+        ],
+      }),
+      tags: {
+        Name: "secure-env-primary-kms-key",
+        Environment: "secure-env",
+      },
+    });
+
+    new KmsAlias(this, "secure-env-primary-kms-alias", {
+      provider: primaryProvider,
+      name: "alias/secure-env-primary",
+      targetKeyId: primaryKmsKey.keyId,
+    });
+
+    const secondaryKmsKey = new KmsKey(this, "secure-env-secondary-kms", {
+      provider: secondaryProvider,
+      description: "KMS key for secure-env secondary region encryption",
+      keyUsage: "ENCRYPT_DECRYPT",
+      keySpec: "SYMMETRIC_DEFAULT",
+      policy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Sid: "Enable IAM User Permissions",
+            Effect: "Allow",
+            Principal: { AWS: "arn:aws:iam::*:root" },
+            Action: "kms:*",
+            Resource: "*",
+          },
+        ],
+      }),
+      tags: {
+        Name: "secure-env-secondary-kms-key",
+        Environment: "secure-env",
+      },
+    });
+
+    new KmsAlias(this, "secure-env-secondary-kms-alias", {
+      provider: secondaryProvider,
+      name: "alias/secure-env-secondary",
+      targetKeyId: secondaryKmsKey.keyId,
+    });
+
+    // Primary Region Infrastructure
+    const primaryInfra = this.createRegionalInfrastructure(
+      "primary",
+      primaryProvider,
+      "10.0.0.0/16",
+      primaryKmsKey.arn
+    );
+
+    // Secondary Region Infrastructure
+    const secondaryInfra = this.createRegionalInfrastructure(
+      "secondary",
+      secondaryProvider,
+      "10.1.0.0/16",
+      secondaryKmsKey.arn
+    );
+
+    // CloudTrail for monitoring and alerting
+    this.setupCloudTrailAndAlerting(primaryProvider, primaryKmsKey.arn);
+
+    // Outputs
+    new TerraformOutput(this, "primary-vpc-id", {
+      value: primaryInfra.vpc.id,
+    });
+
+    new TerraformOutput(this, "secondary-vpc-id", {
+      value: secondaryInfra.vpc.id,
+    });
+  }
+
+  private createRegionalInfrastructure(
+    region: string,
+    provider: AwsProvider,
+    cidrBlock: string,
+    kmsKeyArn: string
+  ) {
+    // VPC
+    const vpc = new Vpc(this, `secure-env-vpc-${region}`, {
+      provider: provider,
+      cidrBlock: cidrBlock,
       enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
-        ...props.tags,
-        Name: `${props.environment}-vpc`,
+        Name: `secure-env-vpc-${region}`,
+        Environment: "secure-env",
       },
     });
 
-    // Create Internet Gateway for public subnet internet access
-    this.internetGateway = new InternetGateway(this, "igw", {
-      vpcId: this.vpc.id,
+    // Internet Gateway
+    const igw = new InternetGateway(this, `secure-env-igw-${region}`, {
+      provider: provider,
+      vpcId: vpc.id,
       tags: {
-        ...props.tags,
-        Name: `${props.environment}-igw`,
+        Name: `secure-env-igw-${region}`,
+        Environment: "secure-env",
       },
     });
 
-    // Create public and private subnets across multiple AZs
-    this.createSubnets(props);
-
-    // Create NAT Gateways for private subnet internet access
-    this.createNatGateways(props);
-
-    // Configure routing tables
-    this.configureRouting(props);
-  }
-
-  /**
-   * Create public and private subnets across availability zones
-   */
-  private createSubnets(props: NetworkingConstructProps) {
-    props.availabilityZones.forEach((az, index) => {
-      // Calculate CIDR blocks for subnets
-      const publicCidr = `10.0.${index * 2 + 1}.0/24`;
-      const privateCidr = `10.0.${index * 2 + 2}.0/24`;
-
-      // Create public subnet
-      const publicSubnet = new Subnet(this, `public-subnet-${index}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: publicCidr,
-        availabilityZone: az,
-        mapPublicIpOnLaunch: true,
-        tags: {
-          ...props.tags,
-          Name: `${props.environment}-public-subnet-${index + 1}`,
-          Type: "public",
-        },
-      });
-      this.publicSubnets.push(publicSubnet);
-
-      // Create private subnet
-      const privateSubnet = new Subnet(this, `private-subnet-${index}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: privateCidr,
-        availabilityZone: az,
-        tags: {
-          ...props.tags,
-          Name: `${props.environment}-private-subnet-${index + 1}`,
-          Type: "private",
-        },
-      });
-      this.privateSubnets.push(privateSubnet);
-    });
-  }
-
-  /**
-   * Create NAT Gateways in public subnets for private subnet internet access
-   */
-  private createNatGateways(props: NetworkingConstructProps) {
-    this.publicSubnets.forEach((subnet, index) => {
-      // Create Elastic IP for NAT Gateway
-      const eip = new Eip(this, `nat-eip-${index}`, {
-        domain: "vpc",
-        tags: {
-          ...props.tags,
-          Name: `${props.environment}-nat-eip-${index + 1}`,
-        },
-      });
-
-      // Create NAT Gateway
-      new NatGateway(this, `nat-gateway-${index}`, {
-        allocationId: eip.id,
-        subnetId: subnet.id,
-        tags: {
-          ...props.tags,
-          Name: `${props.environment}-nat-gateway-${index + 1}`,
-        },
-      });
-    });
-  }
-
-  /**
-   * Configure routing tables for public and private subnets
-   */
-  private configureRouting(props: NetworkingConstructProps) {
-    // Create and configure public route table
-    const publicRouteTable = new RouteTable(this, "public-rt", {
-      vpcId: this.vpc.id,
+    // Public Subnets
+    const publicSubnet1 = new Subnet(this, `secure-env-public-subnet-1-${region}`, {
+      provider: provider,
+      vpcId: vpc.id,
+      cidrBlock: region === "primary" ? "10.0.1.0/24" : "10.1.1.0/24",
+      availabilityZone: region === "primary" ? "us-east-1a" : "us-west-2a",
+      mapPublicIpOnLaunch: true,
       tags: {
-        ...props.tags,
-        Name: `${props.environment}-public-rt`,
+        Name: `secure-env-public-subnet-1-${region}`,
+        Environment: "secure-env",
+        Type: "public",
       },
     });
 
-    // Add route to Internet Gateway
-    new Route(this, "public-route", {
+    const publicSubnet2 = new Subnet(this, `secure-env-public-subnet-2-${region}`, {
+      provider: provider,
+      vpcId: vpc.id,
+      cidrBlock: region === "primary" ? "10.0.2.0/24" : "10.1.2.0/24",
+      availabilityZone: region === "primary" ? "us-east-1b" : "us-west-2b",
+      mapPublicIpOnLaunch: true,
+      tags: {
+        Name: `secure-env-public-subnet-2-${region}`,
+        Environment: "secure-env",
+        Type: "public",
+      },
+    });
+
+    // Private Subnets
+    const privateSubnet1 = new Subnet(this, `secure-env-private-subnet-1-${region}`, {
+      provider: provider,
+      vpcId: vpc.id,
+      cidrBlock: region === "primary" ? "10.0.3.0/24" : "10.1.3.0/24",
+      availabilityZone: region === "primary" ? "us-east-1a" : "us-west-2a",
+      tags: {
+        Name: `secure-env-private-subnet-1-${region}`,
+        Environment: "secure-env",
+        Type: "private",
+      },
+    });
+
+    const privateSubnet2 = new Subnet(this, `secure-env-private-subnet-2-${region}`, {
+      provider: provider,
+      vpcId: vpc.id,
+      cidrBlock: region === "primary" ? "10.0.4.0/24" : "10.1.4.0/24",
+      availabilityZone: region === "primary" ? "us-east-1b" : "us-west-2b",
+      tags: {
+        Name: `secure-env-private-subnet-2-${region}`,
+        Environment: "secure-env",
+        Type: "private",
+      },
+    });
+
+    // Elastic IPs for NAT Gateways
+    const natEip1 = new Eip(this, `secure-env-nat-eip-1-${region}`, {
+      provider: provider,
+      domain: "vpc",
+      tags: {
+        Name: `secure-env-nat-eip-1-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    const natEip2 = new Eip(this, `secure-env-nat-eip-2-${region}`, {
+      provider: provider,
+      domain: "vpc",
+      tags: {
+        Name: `secure-env-nat-eip-2-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    // NAT Gateways
+    const natGw1 = new NatGateway(this, `secure-env-nat-gw-1-${region}`, {
+      provider: provider,
+      allocationId: natEip1.id,
+      subnetId: publicSubnet1.id,
+      tags: {
+        Name: `secure-env-nat-gw-1-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    const natGw2 = new NatGateway(this, `secure-env-nat-gw-2-${region}`, {
+      provider: provider,
+      allocationId: natEip2.id,
+      subnetId: publicSubnet2.id,
+      tags: {
+        Name: `secure-env-nat-gw-2-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    // Route Tables
+    const publicRouteTable = new RouteTable(this, `secure-env-public-rt-${region}`, {
+      provider: provider,
+      vpcId: vpc.id,
+      tags: {
+        Name: `secure-env-public-rt-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    const privateRouteTable1 = new RouteTable(this, `secure-env-private-rt-1-${region}`, {
+      provider: provider,
+      vpcId: vpc.id,
+      tags: {
+        Name: `secure-env-private-rt-1-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    const privateRouteTable2 = new RouteTable(this, `secure-env-private-rt-2-${region}`, {
+      provider: provider,
+      vpcId: vpc.id,
+      tags: {
+        Name: `secure-env-private-rt-2-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    // Routes
+    new Route(this, `secure-env-public-route-${region}`, {
+      provider: provider,
       routeTableId: publicRouteTable.id,
       destinationCidrBlock: "0.0.0.0/0",
-      gatewayId: this.internetGateway.id,
+      gatewayId: igw.id,
     });
 
-    // Associate public subnets with public route table
-    this.publicSubnets.forEach((subnet, index) => {
-      new RouteTableAssociation(this, `public-rt-association-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
+    new Route(this, `secure-env-private-route-1-${region}`, {
+      provider: provider,
+      routeTableId: privateRouteTable1.id,
+      destinationCidrBlock: "0.0.0.0/0",
+      natGatewayId: natGw1.id,
     });
 
-    // Create private route tables (one per AZ for NAT Gateway routing)
-    this.privateSubnets.forEach((subnet, index) => {
-      const privateRouteTable = new RouteTable(this, `private-rt-${index}`, {
-        vpcId: this.vpc.id,
-        tags: {
-          ...props.tags,
-          Name: `${props.environment}-private-rt-${index + 1}`,
+    new Route(this, `secure-env-private-route-2-${region}`, {
+      provider: provider,
+      routeTableId: privateRouteTable2.id,
+      destinationCidrBlock: "0.0.0.0/0",
+      natGatewayId: natGw2.id,
+    });
+
+    // Route Table Associations
+    new RouteTableAssociation(this, `secure-env-public-rta-1-${region}`, {
+      provider: provider,
+      subnetId: publicSubnet1.id,
+      routeTableId: publicRouteTable.id,
+    });
+
+    new RouteTableAssociation(this, `secure-env-public-rta-2-${region}`, {
+      provider: provider,
+      subnetId: publicSubnet2.id,
+      routeTableId: publicRouteTable.id,
+    });
+
+    new RouteTableAssociation(this, `secure-env-private-rta-1-${region}`, {
+      provider: provider,
+      subnetId: privateSubnet1.id,
+      routeTableId: privateRouteTable1.id,
+    });
+
+    new RouteTableAssociation(this, `secure-env-private-rta-2-${region}`, {
+      provider: provider,
+      subnetId: privateSubnet2.id,
+      routeTableId: privateRouteTable2.id,
+    });
+
+    // Security Groups
+    const webSecurityGroup = new SecurityGroup(this, `secure-env-web-sg-${region}`, {
+      provider: provider,
+      name: `secure-env-web-sg-${region}`,
+      description: "Security group for web servers with restricted access",
+      vpcId: vpc.id,
+      ingress: [
+        {
+          fromPort: 80,
+          toPort: 80,
+          protocol: "tcp",
+          cidrBlocks: ["0.0.0.0/0"],
+          description: "HTTP access",
         },
-      });
-
-      // Associate private subnet with its route table
-      new RouteTableAssociation(this, `private-rt-association-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: privateRouteTable.id,
-      });
-    });
-  }
-}
-```
-
-### 4. Security Construct
-
-```typescript
-// constructs/security.ts
-import { Construct } from "constructs";
-import { Vpc } from "@cdktf/provider-aws/lib/vpc";
-import { SecurityGroup } from "@cdktf/provider-aws/lib/security-group";
-import { SecurityGroupRule } from "@cdktf/provider-aws/lib/security-group-rule";
-import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
-import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
-import { IamInstanceProfile } from "@cdktf/provider-aws/lib/iam-instance-profile";
-
-export interface SecurityConstructProps {
-  vpc: Vpc;
-  environment: string;
-  tags: { [key: string]: string };
-}
-
-export interface SecurityGroups {
-  web: SecurityGroup;
-  app: SecurityGroup;
-  database: SecurityGroup;
-}
-
-/**
- * Security construct that creates security groups and IAM roles
- * Implements least privilege access principles
- */
-export class SecurityConstruct extends Construct {
-  public readonly securityGroups: SecurityGroups;
-  public readonly ec2Role: IamRole;
-  public readonly ec2InstanceProfile: IamInstanceProfile;
-
-  constructor(scope: Construct, id: string, props: SecurityConstructProps) {
-    super(scope, id);
-
-    // Create security groups with proper access controls
-    this.securityGroups = this.createSecurityGroups(props);
-
-    // Create IAM roles for EC2 instances
-    this.ec2Role = this.createEC2Role(props);
-    this.ec2InstanceProfile = this.createInstanceProfile(props);
-  }
-
-  /**
-   * Create security groups for different tiers (web, app, database)
-   */
-  private createSecurityGroups(props: SecurityConstructProps): SecurityGroups {
-    // Web tier security group (public-facing)
-    const webSg = new SecurityGroup(this, "web-sg", {
-      name: `${props.environment}-web-sg`,
-      description: "Security group for web servers",
-      vpcId: props.vpc.id,
+        {
+          fromPort: 443,
+          toPort: 443,
+          protocol: "tcp",
+          cidrBlocks: ["0.0.0.0/0"],
+          description: "HTTPS access",
+        },
+        {
+          fromPort: 22,
+          toPort: 22,
+          protocol: "tcp",
+          cidrBlocks: [cidrBlock],
+          description: "SSH access from VPC only",
+        },
+      ],
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: "-1",
+          cidrBlocks: ["0.0.0.0/0"],
+          description: "All outbound traffic",
+        },
+      ],
       tags: {
-        ...props.tags,
-        Name: `${props.environment}-web-sg`,
-        Tier: "web",
+        Name: `secure-env-web-sg-${region}`,
+        Environment: "secure-env",
       },
     });
 
-    // Web tier rules - Allow HTTP/HTTPS from internet
-    new SecurityGroupRule(this, "web-http-ingress", {
-      type: "ingress",
-      fromPort: 80,
-      toPort: 80,
-      protocol: "tcp",
-      cidrBlocks: ["0.0.0.0/0"],
-      securityGroupId: webSg.id,
-      description: "Allow HTTP traffic from internet",
-    });
-
-    new SecurityGroupRule(this, "web-https-ingress", {
-      type: "ingress",
-      fromPort: 443,
-      toPort: 443,
-      protocol: "tcp",
-      cidrBlocks: ["0.0.0.0/0"],
-      securityGroupId: webSg.id,
-      description: "Allow HTTPS traffic from internet",
-    });
-
-    new SecurityGroupRule(this, "web-ssh-ingress", {
-      type: "ingress",
-      fromPort: 22,
-      toPort: 22,
-      protocol: "tcp",
-      cidrBlocks: ["10.0.0.0/16"],
-      securityGroupId: webSg.id,
-      description: "Allow SSH from VPC",
-    });
-
-    // Application tier security group
-    const appSg = new SecurityGroup(this, "app-sg", {
-      name: `${props.environment}-app-sg`,
-      description: "Security group for application servers",
-      vpcId: props.vpc.id,
+    const privateSecurityGroup = new SecurityGroup(this, `secure-env-private-sg-${region}`, {
+      provider: provider,
+      name: `secure-env-private-sg-${region}`,
+      description: "Security group for private instances",
+      vpcId: vpc.id,
+      ingress: [
+        {
+          fromPort: 0,
+          toPort: 65535,
+          protocol: "tcp",
+          cidrBlocks: [cidrBlock],
+          description: "All traffic from VPC",
+        },
+      ],
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: "-1",
+          cidrBlocks: ["0.0.0.0/0"],
+          description: "All outbound traffic",
+        },
+      ],
       tags: {
-        ...props.tags,
-        Name: `${props.environment}-app-sg`,
-        Tier: "application",
+        Name: `secure-env-private-sg-${region}`,
+        Environment: "secure-env",
       },
     });
 
-    // App tier rules - Allow traffic from web tier
-    new SecurityGroupRule(this, "app-web-ingress", {
-      type: "ingress",
-      fromPort: 8080,
-      toPort: 8080,
-      protocol: "tcp",
-      sourceSecurityGroupId: webSg.id,
-      securityGroupId: appSg.id,
-      description: "Allow traffic from web tier",
-    });
-
-    new SecurityGroupRule(this, "app-ssh-ingress", {
-      type: "ingress",
-      fromPort: 22,
-      toPort: 22,
-      protocol: "tcp",
-      cidrBlocks: ["10.0.0.0/16"],
-      securityGroupId: appSg.id,
-      description: "Allow SSH from VPC",
-    });
-
-    // Database tier security group
-    const dbSg = new SecurityGroup(this, "db-sg", {
-      name: `${props.environment}-db-sg`,
-      description: "Security group for database servers",
-      vpcId: props.vpc.id,
-      tags: {
-        ...props.tags,
-        Name: `${props.environment}-db-sg`,
-        Tier: "database",
-      },
-    });
-
-    // Database tier rules - Allow traffic from app tier only
-    new SecurityGroupRule(this, "db-app-ingress", {
-      type: "ingress",
-      fromPort: 3306,
-      toPort: 3306,
-      protocol: "tcp",
-      sourceSecurityGroupId: appSg.id,
-      securityGroupId: dbSg.id,
-      description: "Allow MySQL traffic from app tier",
-    });
-
-    // Allow all outbound traffic for all security groups
-    [webSg, appSg, dbSg].forEach((sg, index) => {
-      new SecurityGroupRule(this, `${sg.name}-egress-${index}`, {
-        type: "egress",
-        fromPort: 0,
-        toPort: 0,
-        protocol: "-1",
-        cidrBlocks: ["0.0.0.0/0"],
-        securityGroupId: sg.id,
-        description: "Allow all outbound traffic",
-      });
-    });
-
-    return {
-      web: webSg,
-      app: appSg,
-      database: dbSg,
-    };
-  }
-
-  /**
-   * Create IAM role for EC2 instances with necessary permissions
-   */
-  private createEC2Role(props: SecurityConstructProps): IamRole {
-    const role = new IamRole(this, "ec2-role", {
-      name: `${props.environment}-ec2-role`,
+    // IAM Role for EC2 instances
+    const ec2Role = new IamRole(this, `secure-env-ec2-role-${region}`, {
+      provider: provider,
+      name: `secure-env-ec2-role-${region}`,
       assumeRolePolicy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [
@@ -558,318 +423,358 @@ export class SecurityConstruct extends Construct {
         ],
       }),
       tags: {
-        ...props.tags,
-        Name: `${props.environment}-ec2-role`,
+        Name: `secure-env-ec2-role-${region}`,
+        Environment: "secure-env",
       },
     });
 
-    // Attach necessary managed policies
-    new IamRolePolicyAttachment(this, "ec2-ssm-policy", {
-      role: role.name,
-      policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-    });
-
-    new IamRolePolicyAttachment(this, "ec2-cloudwatch-policy", {
-      role: role.name,
-      policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
-    });
-
-    return role;
-  }
-
-  /**
-   * Create IAM instance profile for EC2 instances
-   */
-  private createInstanceProfile(props: SecurityConstructProps): IamInstanceProfile {
-    return new IamInstanceProfile(this, "ec2-instance-profile", {
-      name: `${props.environment}-ec2-instance-profile`,
-      role: this.ec2Role.name,
-      tags: {
-        ...props.tags,
-        Name: `${props.environment}-ec2-instance-profile`,
-      },
-    });
-  }
-}
-```
-
-### 5. Storage Construct
-
-```typescript
-// constructs/storage.ts
-import { Construct } from "constructs";
-import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
-import { S3BucketVersioning } from "@cdktf/provider-aws/lib/s3-bucket-versioning";
-import { S3BucketEncryption } from "@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration";
-import { S3BucketPublicAccessBlock } from "@cdktf/provider-aws/lib/s3-bucket-public-access-block";
-
-export interface StorageConstructProps {
-  environment: string;
-  tags: { [key: string]: string };
-}
-
-/**
- * Storage construct that creates S3 buckets with security best practices
- * Implements encryption, versioning, and access controls
- */
-export class StorageConstruct extends Construct {
-  public readonly appDataBucket: S3Bucket;
-  public readonly logsBucket: S3Bucket;
-
-  constructor(scope: Construct, id: string, props: StorageConstructProps) {
-    super(scope, id);
-
-    // Create application data bucket
-    this.appDataBucket = this.createSecureS3Bucket(
-      "app-data-bucket",
-      `${props.environment}-app-data-${Date.now()}`,
-      props
-    );
-
-    // Create logs bucket
-    this.logsBucket = this.createSecureS3Bucket(
-      "logs-bucket",
-      `${props.environment}-logs-${Date.now()}`,
-      props
-    );
-  }
-
-  /**
-   * Create S3 bucket with security best practices applied
-   */
-  private createSecureS3Bucket(
-    id: string,
-    bucketName: string,
-    props: StorageConstructProps
-  ): S3Bucket {
-    // Create S3 bucket
-    const bucket = new S3Bucket(this, id, {
-      bucket: bucketName,
-      tags: {
-        ...props.tags,
-        Name: bucketName,
-      },
-    });
-
-    // Enable versioning
-    new S3BucketVersioning(this, `${id}-versioning`, {
-      bucket: bucket.id,
-      versioningConfiguration: {
-        status: "Enabled",
-      },
-    });
-
-    // Enable server-side encryption
-    new S3BucketEncryption(this, `${id}-encryption`, {
-      bucket: bucket.id,
-      rule: [
-        {
-          applyServerSideEncryptionByDefault: {
-            sseAlgorithm: "AES256",
+    // Least privilege policy for EC2 instances
+    new IamRolePolicy(this, `secure-env-ec2-policy-${region}`, {
+      provider: provider,
+      name: `secure-env-ec2-policy-${region}`,
+      role: ec2Role.id,
+      policy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Effect: "Allow",
+            Action: [
+              "logs:CreateLogGroup",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents",
+              "logs:DescribeLogStreams",
+            ],
+            Resource: "arn:aws:logs:*:*:*",
           },
-          bucketKeyEnabled: true,
-        },
-      ],
+          {
+            Effect: "Allow",
+            Action: [
+              "kms:Decrypt",
+              "kms:DescribeKey",
+            ],
+            Resource: kmsKeyArn,
+          },
+        ],
+      }),
     });
 
-    // Block public access
-    new S3BucketPublicAccessBlock(this, `${id}-public-access-block`, {
-      bucket: bucket.id,
+    // IAM Role for Lambda functions
+    const lambdaRole = new IamRole(this, `secure-env-lambda-role-${region}`, {
+      provider: provider,
+      name: `secure-env-lambda-role-${region}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Action: "sts:AssumeRole",
+            Effect: "Allow",
+            Principal: {
+              Service: "lambda.amazonaws.com",
+            },
+          },
+        ],
+      }),
+      tags: {
+        Name: `secure-env-lambda-role-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    // Least privilege policy for Lambda functions
+    new IamRolePolicy(this, `secure-env-lambda-policy-${region}`, {
+      provider: provider,
+      name: `secure-env-lambda-policy-${region}`,
+      role: lambdaRole.id,
+      policy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+          {
+            Effect: "Allow",
+            Action: [
+              "logs:CreateLogGroup",
+              "logs:CreateLogStream",
+              "logs:PutLogEvents",
+            ],
+            Resource: "arn:aws:logs:*:*:*",
+          },
+          {
+            Effect: "Allow",
+            Action: [
+              "ec2:CreateNetworkInterface",
+              "ec2:DescribeNetworkInterfaces",
+              "ec2:DeleteNetworkInterface",
+            ],
+            Resource: "*",
+          },
+          {
+            Effect: "Allow",
+            Action: [
+              "kms:Decrypt",
+              "kms:DescribeKey",
+            ],
+            Resource: kmsKeyArn,
+          },
+        ],
+      }),
+    });
+
+    // CloudWatch Log Group for Lambda
+    const lambdaLogGroup = new CloudwatchLogGroup(this, `secure-env-lambda-logs-${region}`, {
+      provider: provider,
+      name: `/aws/lambda/secure-env-function-${region}`,
+      retentionInDays: 14,
+      kmsKeyId: kmsKeyArn,
+      tags: {
+        Name: `secure-env-lambda-logs-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    // Lambda Function with logging enabled
+    const lambdaFunction = new LambdaFunction(this, `secure-env-lambda-${region}`, {
+      provider: provider,
+      functionName: `secure-env-function-${region}`,
+      role: lambdaRole.arn,
+      handler: "index.handler",
+      runtime: "nodejs18.x",
+      filename: "lambda.zip", // This would need to be created separately
+      sourceCodeHash: "placeholder", // This would be calculated from the actual zip file
+      environment: {
+        variables: {
+          ENVIRONMENT: "secure-env",
+          KMS_KEY_ID: kmsKeyArn,
+        },
+      },
+      vpcConfig: {
+        subnetIds: [privateSubnet1.id, privateSubnet2.id],
+        securityGroupIds: [privateSecurityGroup.id],
+      },
+      dependsOn: [lambdaLogGroup],
+      tags: {
+        Name: `secure-env-lambda-${region}`,
+        Environment: "secure-env",
+      },
+    });
+
+    // EC2 Instance in public subnet (restricted access)
+    const webInstance = new Instance(this, `secure-env-web-instance-${region}`, {
+      provider: provider,
+      ami: "ami-0c02fb55956c7d316", // Amazon Linux 2 AMI (adjust for region)
+      instanceType: "t3.micro",
+      subnetId: publicSubnet1.id,
+      vpcSecurityGroupIds: [webSecurityGroup.id],
+      iamInstanceProfile: ec2Role.name,
+      userData: `#!/bin/bash
+        yum update -y
+        yum install -y awslogs
+        systemctl start awslogsd
+        systemctl enable awslogsd
+      `,
+      tags: {
+        Name: `secure-env-web-instance-${region}`,
+        Environment: "secure-env",
+        Type: "web-server",
+      },
+    });
+
+    // EC2 Instance in private subnet
+    const privateInstance = new Instance(this, `secure-env-private-instance-${region}`, {
+      provider: provider,
+      ami: "ami-0c02fb55956c7d316", // Amazon Linux 2 AMI (adjust for region)
+      instanceType: "t3.micro",
+      subnetId: privateSubnet1.id,
+      vpcSecurityGroupIds: [privateSecurityGroup.id],
+      iamInstanceProfile: ec2Role.name,
+      userData: `#!/bin/bash
+        yum update -y
+        yum install -y awslogs
+        systemctl start awslogsd
+        systemctl enable awslogsd
+      `,
+      tags: {
+        Name: `secure-env-private-instance-${region}`,
+        Environment: "secure-env",
+        Type: "private-server",
+      },
+    });
+
+    return {
+      vpc,
+      publicSubnets: [publicSubnet1, publicSubnet2],
+      privateSubnets: [privateSubnet1, privateSubnet2],
+      webInstance,
+      privateInstance,
+      lambdaFunction,
+    };
+  }
+
+  private setupCloudTrailAndAlerting(provider: AwsProvider, kmsKeyArn: string) {
+    // S3 Bucket for CloudTrail logs
+    const cloudtrailBucket = new S3Bucket(this, "secure-env-cloudtrail-bucket", {
+      provider: provider,
+      bucket: "secure-env-cloudtrail-logs-${random_id}",
+      tags: {
+        Name: "secure-env-cloudtrail-bucket",
+        Environment: "secure-env",
+      },
+    });
+
+    // S3 Bucket encryption
+    new S3BucketEncryption(this, "secure-env-cloudtrail-bucket-encryption", {
+      provider: provider,
+      bucket: cloudtrailBucket.id,
+      serverSideEncryptionConfiguration: {
+        rule: {
+          applyServerSideEncryptionByDefault: {
+            kmsMasterKeyId: kmsKeyArn,
+            sseAlgorithm: "aws:kms",
+          },
+        },
+      },
+    });
+
+    // Block public access to S3 bucket
+    new S3BucketPublicAccessBlock(this, "secure-env-cloudtrail-bucket-pab", {
+      provider: provider,
+      bucket: cloudtrailBucket.id,
       blockPublicAcls: true,
       blockPublicPolicy: true,
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
     });
 
-    return bucket;
-  }
-}
-```
-
-### 6. Compute Construct
-
-```typescript
-// constructs/compute.ts
-import { Construct } from "constructs";
-import { Vpc } from "@cdktf/provider-aws/lib/vpc";
-import { Subnet } from "@cdktf/provider-aws/lib/subnet";
-import { SecurityGroup } from "@cdktf/provider-aws/lib/security-group";
-import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
-import { Instance } from "@cdktf/provider-aws/lib/instance";
-import { DataAwsAmi } from "@cdktf/provider-aws/lib/data-aws-ami";
-
-export interface ComputeConstructProps {
-  vpc: Vpc;
-  publicSubnets: Subnet[];
-  privateSubnets: Subnet[];
-  securityGroups: {
-    web: SecurityGroup;
-    app: SecurityGroup;
-    database: SecurityGroup;
-  };
-  iamRole: IamRole;
-  environment: string;
-  instanceType: string;
-  keyPairName: string;
-  tags: { [key: string]: string };
-}
-
-/**
- * Compute construct that creates EC2 instances across multiple tiers
- * Implements multi-AZ deployment for high availability
- */
-export class ComputeConstruct extends Construct {
-  public readonly webServers: Instance[] = [];
-  public readonly appServers: Instance[] = [];
-
-  constructor(scope: Construct, id: string, props: ComputeConstructProps) {
-    super(scope, id);
-
-    // Get latest Amazon Linux 2 AMI
-    const ami = new DataAwsAmi(this, "amazon-linux", {
-      mostRecent: true,
-      owners: ["amazon"],
-      filter: [
+    // CloudTrail for monitoring
+    const cloudtrail = new Cloudtrail(this, "secure-env-cloudtrail", {
+      provider: provider,
+      name: "secure-env-cloudtrail",
+      s3BucketName: cloudtrailBucket.id,
+      includeGlobalServiceEvents: true,
+      isMultiRegionTrail: true,
+      enableLogging: true,
+      kmsKeyId: kmsKeyArn,
+      eventSelector: [
         {
-          name: "name",
-          values: ["amzn2-ami-hvm-*-x86_64-gp2"],
-        },
-        {
-          name: "virtualization-type",
-          values: ["hvm"],
+          readWriteType: "All",
+          includeManagementEvents: true,
+          dataResource: [
+            {
+              type: "AWS::S3::Object",
+              values: ["arn:aws:s3:::*/*"],
+            },
+          ],
         },
       ],
+      tags: {
+        Name: "secure-env-cloudtrail",
+        Environment: "secure-env",
+      },
     });
 
-    // Create web servers in public subnets
-    this.createWebServers(ami, props);
-
-    // Create application servers in private subnets
-    this.createAppServers(ami, props);
-  }
-
-  /**
-   * Create web server instances in public subnets
-   */
-  private createWebServers(ami: DataAwsAmi, props: ComputeConstructProps) {
-    props.publicSubnets.forEach((subnet, index) => {
-      const webServer = new Instance(this, `web-server-${index}`, {
-        ami: ami.id,
-        instanceType: props.instanceType,
-        keyName: props.keyPairName,
-        subnetId: subnet.id,
-        vpcSecurityGroupIds: [props.securityGroups.web.id],
-        associatePublicIpAddress: true,
-        
-        // User data script for web server setup
-        userData: this.getWebServerUserData(),
-        
-        tags: {
-          ...props.tags,
-          Name: `${props.environment}-web-server-${index + 1}`,
-          Tier: "web",
-          AZ: subnet.availabilityZone,
-        },
-      });
-
-      this.webServers.push(webServer);
+    // SNS Topic for alerts
+    const alertTopic = new SnsTopic(this, "secure-env-security-alerts", {
+      provider: provider,
+      name: "secure-env-security-alerts",
+      kmsKeyId: kmsKeyArn,
+      tags: {
+        Name: "secure-env-security-alerts",
+        Environment: "secure-env",
+      },
     });
-  }
 
-  /**
-   * Create application server instances in private subnets
-   */
-  private createAppServers(ami: DataAwsAmi, props: ComputeConstructProps) {
-    props.privateSubnets.forEach((subnet, index) => {
-      const appServer = new Instance(this, `app-server-${index}`, {
-        ami: ami.id,
-        instanceType: props.instanceType,
-        keyName: props.keyPairName,
-        subnetId: subnet.id,
-        vpcSecurityGroupIds: [props.securityGroups.app.id],
-        
-        // User data script for app server setup
-        userData: this.getAppServerUserData(),
-        
-        tags: {
-          ...props.tags,
-          Name: `${props.environment}-app-server-${index + 1}`,
-          Tier: "application",
-          AZ: subnet.availabilityZone,
-        },
-      });
-
-      this.appServers.push(appServer);
+    // CloudWatch Alarm for unauthorized access attempts
+    new CloudwatchMetricAlarm(this, "secure-env-unauthorized-access-alarm", {
+      provider: provider,
+      alarmName: "secure-env-unauthorized-access-attempts",
+      comparisonOperator: "GreaterThanThreshold",
+      evaluationPeriods: "2",
+      metricName: "ErrorCount",
+      namespace: "AWS/CloudTrail",
+      period: "300",
+      statistic: "Sum",
+      threshold: "5",
+      alarmDescription: "Alert on unauthorized access attempts",
+      alarmActions: [alertTopic.arn],
+      dimensions: {
+        ErrorCode: "AccessDenied",
+      },
+      tags: {
+        Name: "secure-env-unauthorized-access-alarm",
+        Environment: "secure-env",
+      },
     });
-  }
 
-  /**
-   * Get user data script for web servers
-   */
-  private getWebServerUserData(): string {
-    return Buffer.from(`#!/bin/bash
-      yum update -y
-      yum install -y httpd
-      systemctl start httpd
-      systemctl enable httpd
-      echo "<h1>Web Server - $(hostname -f)</h1>" > /var/www/html/index.html
-      echo "<p>Environment: ${process.env.ENVIRONMENT || 'dev'}</p>" >> /var/www/html/index.html
-    `).toString('base64');
-  }
-
-  /**
-   * Get user data script for application servers
-   */
-  private getAppServerUserData(): string {
-    return Buffer.from(`#!/bin/bash
-      yum update -y
-      yum install -y java-11-amazon-corretto
-      echo "Application Server Setup Complete" > /tmp/setup.log
-    `).toString('base64');
+    // CloudWatch Alarm for failed login attempts
+    new CloudwatchMetricAlarm(this, "secure-env-failed-login-alarm", {
+      provider: provider,
+      alarmName: "secure-env-failed-login-attempts",
+      comparisonOperator: "GreaterThanThreshold",
+      evaluationPeriods: "1",
+      metricName: "ErrorCount",
+      namespace: "AWS/CloudTrail",
+      period: "300",
+      statistic: "Sum",
+      threshold: "10",
+      alarmDescription: "Alert on multiple failed login attempts",
+      alarmActions: [alertTopic.arn],
+      dimensions: {
+        EventName: "ConsoleLogin",
+      },
+      tags: {
+        Name: "secure-env-failed-login-alarm",
+        Environment: "secure-env",
+      },
+    });
   }
 }
+
+const app = new App();
+new SecureInfrastructureStack(app, "secure-infrastructure");
+app.synth();
 ```
 
-### 7. Package Configuration
+### Package Configuration
 
 ```json
 // package.json
 {
-  "name": "cdktf-infrastructure",
+  "name": "secure-infrastructure-cdktf",
   "version": "1.0.0",
-  "description": "CDKTF Infrastructure as Code",
-  "main": "main.js",
+  "description": "Secure AWS infrastructure using CDKTF",
+  "main": "main.ts",
   "scripts": {
-    "get": "cdktf get",
     "build": "tsc",
     "synth": "cdktf synth",
     "deploy": "cdktf deploy",
     "destroy": "cdktf destroy",
-    "diff": "cdktf diff"
+    "test": "jest",
+    "get": "cdktf get"
   },
   "dependencies": {
     "@cdktf/provider-aws": "^19.0.0",
-    "cdktf": "^0.20.0",
+    "cdktf": "^0.19.0",
     "constructs": "^10.3.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.15.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
     "typescript": "^5.0.0"
   }
 }
 ```
 
-### 8. CDKTF Configuration
+### CDKTF Configuration
 
 ```json
 // cdktf.json
 {
   "language": "typescript",
   "app": "npx ts-node main.ts",
-  "projectId": "cdktf-infrastructure",
+  "projectId": "secure-infrastructure",
   "sendCrashReports": "false",
   "terraformProviders": [
-    "aws@~> 5.0"
+    "aws@~>5.0"
   ],
   "terraformModules": [],
   "context": {
@@ -879,44 +784,55 @@ export class ComputeConstruct extends Construct {
 }
 ```
 
-### 9. Environment Variables Example
+### Test Suite
 
-```bash
-# .env.example
-ENVIRONMENT=dev
-AWS_REGION=us-west-2
-AVAILABILITY_ZONES=us-west-2a,us-west-2b,us-west-2c
-VPC_CIDR=10.0.0.0/16
-INSTANCE_TYPE=t3.micro
-KEY_PAIR_NAME=my-key-pair
-PROJECT_NAME=cdktf-infrastructure
-OWNER=platform-team
-```
+```typescript
+// tests/infrastructure.test.ts
+import { Testing } from "cdktf";
+import { SecureInfrastructureStack } from "../main";
 
-### 10. Deployment Instructions
+describe("Secure Infrastructure Stack", () => {
+  let stack: SecureInfrastructureStack;
 
-```bash
-# Install dependencies
-npm install
+  beforeEach(() => {
+    const app = Testing.app();
+    stack = new SecureInfrastructureStack(app, "test-stack");
+  });
 
-# Generate provider bindings
-npm run get
+  test("should create VPCs in multiple regions", () => {
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toHaveResourceWithProperties("aws_vpc", {
+      cidr_block: "10.0.0.0/16",
+      enable_dns_hostnames: true,
+      enable_dns_support: true,
+      tags: {
+        Name: "secure-env-vpc-primary",
+        Environment: "secure-env",
+      },
+    });
 
-# Build TypeScript
-npm run build
+    expect(synthesized).toHaveResourceWithProperties("aws_vpc", {
+      cidr_block: "10.1.0.0/16",
+      enable_dns_hostnames: true,
+      enable_dns_support: true,
+      tags: {
+        Name: "secure-env-vpc-secondary",
+        Environment: "secure-env",
+      },
+    });
+  });
 
-# Plan deployment (equivalent to terraform plan)
-npm run diff
+  test("should create KMS keys for encryption", () => {
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toHaveResourceWithProperties("aws_kms_key", {
+      description: "KMS key for secure-env primary region encryption",
+      key_usage: "ENCRYPT_DECRYPT",
+      key_spec: "SYMMETRIC_DEFAULT",
+    });
+  });
 
-# Deploy infrastructure
-npm run deploy
-
-# Destroy infrastructure (when needed)
-npm run destroy
-```
-
-## Key Features Implemented
-
-### ✅ **Constraints Adherence**
-- **CDKTF Constructs**: All resources defined using CDKTF constructs
-- **
+  test("should create IAM roles with explicit policies", () => {
+    const synthesized = Testing.synth(stack);
+    expect(synthesized).toHaveResourceWithProperties("aws_iam_role", {
+      name: expect.stringMatching(/secure-env-ec2-role/),
+    });
