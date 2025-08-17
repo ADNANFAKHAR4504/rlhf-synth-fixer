@@ -399,6 +399,7 @@ Resources:
             Action: "kms:*"
             Resource: "*"
 
+          # ✅ CloudTrail needs this exact context condition
           - Sid: AllowCloudTrailUseOfTheKey
             Effect: Allow
             Principal:
@@ -412,27 +413,12 @@ Resources:
               - kms:CreateGrant
             Resource: "*"
             Condition:
-              Bool:
-                "kms:GrantIsForAWSResource": "true"
-
-          # IMPORTANT: no !GetAtt TrailLogsBucket here (breaks the cycle)
-          # inside KmsKeyLogs.KeyPolicy.Statement (replace the S3 statement)
-          - Sid: AllowS3BucketKeyForTrailLogsBucket
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:GenerateDataKey*
-            Resource: "*"
-            Condition:
               StringEquals:
-                kms:ViaService: !Sub "s3.${AWS::Region}.amazonaws.com"
-                # Compute the bucket ARN (no !GetAtt to avoid cycles)
-                kms:EncryptionContext:aws:s3:arn: !Sub "arn:aws:s3:::${ProjectName}-${Environment}-trail-logs-${AWS::AccountId}"
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-trail"
+              Bool:
+                kms:GrantIsForAWSResource: "true"
 
+          # ✅ CloudWatch Logs (for log streaming) – keep this
           - Sid: AllowCloudWatchLogs
             Effect: Allow
             Principal:
@@ -445,6 +431,7 @@ Resources:
               - kms:ReEncrypt*
             Resource: "*"
 
+          # ✅ SNS if you keep encrypted topics – keep this
           - Sid: AllowSNS
             Effect: Allow
             Principal:
@@ -713,8 +700,7 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
+            Principal: { Service: cloudtrail.amazonaws.com }
             Action: sts:AssumeRole
       Policies:
         - PolicyName: CloudWatchLogsDelivery
@@ -727,7 +713,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
-                Resource: !Join ["", [!GetAtt CloudTrailLogGroup.Arn, ":*"]]
+                Resource: !GetAtt CloudTrailLogGroup.Arn
 
   # --------------------------
   # CloudWatch Log Groups
