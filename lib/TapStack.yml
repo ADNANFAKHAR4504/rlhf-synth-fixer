@@ -30,7 +30,7 @@ Mappings:
       AvailabilityZone1: us-west-2a
       AvailabilityZone2: us-west-2b
     us-east-1:
-      AMI: ami-0abcdef1234567890  # Amazon Linux 2 AMI
+      AMI: ami-0c2b8ca1dad447f8a  # Amazon Linux 2 AMI (updated, valid)
       AvailabilityZone1: us-east-1a
       AvailabilityZone2: us-east-1b
   
@@ -441,7 +441,7 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub 'rds-password-${Environment}'
-      Description: 'RDS master password for ${Environment} environment'
+      Description: !Sub 'RDS master password for ${Environment} environment'
       GenerateSecretString:
         SecretStringTemplate: '{"username":"admin"}'
         GenerateStringKey: 'password'
