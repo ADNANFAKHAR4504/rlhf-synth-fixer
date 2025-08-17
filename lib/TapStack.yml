@@ -452,14 +452,15 @@ Resources:
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
-                aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/prod-cloudtrail
-                aws:SourceAccount: !Ref AWS::AccountId
+                # aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/prod-cloudtrail
+                # aws:SourceAccount: !Ref AWS::AccountId
 
   #############################
   # CloudTrail
   #############################
   ProdCloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: ProdTrailBucketPolicy
     Properties:
       TrailName: prod-cloudtrail
       S3BucketName: !Ref ProdTrailBucket
