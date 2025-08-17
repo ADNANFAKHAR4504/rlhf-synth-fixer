@@ -396,8 +396,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${S3Bucket}/*'
-              - !Ref S3Bucket
+              - !Sub 'arn:aws:s3:::${S3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${S3Bucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -436,6 +436,18 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # Secrets Manager Secret for RDS Password
+  RDSPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'rds-password-${Environment}'
+      Description: 'RDS master password for ${Environment} environment'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
+
   # RDS Database Instance
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
@@ -450,7 +462,7 @@ Resources:
       StorageType: gp2
       StorageEncrypted: !If [IsProduction, true, false]
       MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:rds-password-${Environment}:SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${RDSPasswordSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
