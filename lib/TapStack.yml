@@ -131,13 +131,13 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Sub '${CloudTrailS3Bucket}'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
