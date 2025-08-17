@@ -1,120 +1,92 @@
-# AWS CI/CD Pipeline Requirements
-
-## Overview
-
 Please provide a comprehensive AWS CloudFormation YAML template to establish a robust CI/CD pipeline for an application. The pipeline must be fully defined and orchestrated using AWS CodePipeline and integrate with other AWS services as specified below. The solution should prioritize security, maintainability, and operational best practices.
 
-## 1. CodePipeline Orchestration
+1. CodePipeline Orchestration
 
 The core CI/CD workflow should be orchestrated by AWS CodePipeline and include at least the following stages:
+• Source Stage: To fetch application code.
+• Build Stage: To compile, test, and package the application.
+• Approval Stage: A mandatory manual gate.
+• Deploy Stage: To deploy the compiled artifacts.
 
-- **Source Stage**: To fetch application code
-- **Build Stage**: To compile, test, and package the application
-- **Approval Stage**: A mandatory manual gate
-- **Deploy Stage**: To deploy the compiled artifacts
+2. Source Stage: GitHub Integration
 
-## 2. Source Stage: GitHub Integration
+The pipeline’s source stage must pull code from a GitHub repository.
+• Connection Method: Utilize AWS CodeStar Connections for secure and scalable integration with GitHub.
+• Requirement: The CloudFormation template should accept the CodeStar Connection ARN as a Parameter.
+• Repository Details: The template should allow specifying the GitHub Repository Owner, Repository Name, and Branch Name (e.g., main, develop) as Parameters.
+• Webhook: The pipeline should be configured to trigger automatically on code pushes to the specified branch in the GitHub repository.
 
-The pipeline's source stage must pull code from a GitHub repository.
-
-**Requirements:**
-
-- **Connection Method**: Utilize AWS CodeStar Connections for secure and scalable integration with GitHub
-- **Parameter**: The CloudFormation template should accept the CodeStar Connection ARN as a Parameter
-- **Repository Details**: The template should allow specifying the GitHub Repository Owner, Repository Name, and Branch Name (e.g., main, develop) as Parameters
-- **Webhook**: The pipeline should be configured to trigger automatically on code pushes to the specified branch in the GitHub repository
-
-## 3. Build Stage: AWS CodeBuild Configuration
+3. Build Stage: AWS CodeBuild Configuration
 
 The build stage must use AWS CodeBuild to compile and test the application.
 
-### Build Environment
+Build Environment
+• Runtime: Specify a suitable managed image (e.g., aws/codebuild/nodejs:20.0, aws/codebuild/standard:7.0 for Python).
+• Compute Type: Define the compute type (e.g., BUILD_GENERAL1_SMALL, BUILD_GENERAL1_MEDIUM) as appropriate for typical build workloads.
+• Environment Variables: Define necessary environment variables for the build process, including references to AWS Secrets Manager for sensitive data.
 
-- **Runtime**: Specify a suitable managed image (e.g., `aws/codebuild/nodejs:20.0`, `aws/codebuild/standard:7.0` for Python)
-- **Compute Type**: Define the compute type (e.g., `BUILD_GENERAL1_SMALL`, `BUILD_GENERAL1_MEDIUM`) as appropriate for typical build workloads
-- **Environment Variables**: Define necessary environment variables for the build process, including references to AWS Secrets Manager for sensitive data
+Build Specification (buildspec.yml)
+Phases (must be inlined within the CodeBuild project definition in the CloudFormation template):
+• install: To install dependencies.
+• pre_build: To run linters, security scans, or pre-build scripts.
+• build: To compile the application and run unit tests.
+• post_build: To package artifacts (e.g., a .zip file, Docker image, or CloudFormation template with deployable Lambda code/S3 assets).
+• Artifacts: Define the output artifacts to be passed to subsequent stages.
 
-### Build Specification (buildspec.yml)
-
-**Phases**: The buildspec.yml content must be inlined within the CodeBuild project definition in the CloudFormation template. It should include the following phases:
-
-- **install**: To install dependencies
-- **pre_build**: To run linters, security scans, or pre-build scripts
-- **build**: To compile the application and run unit tests
-- **post_build**: To package artifacts (e.g., a .zip file, Docker image, or CloudFormation template with deployable Lambda code/S3 assets)
-- **Artifacts**: Define the output artifacts to be passed to subsequent stages
-
-### IAM Permissions
-
+IAM Permissions
 The CodeBuild service role must have:
+• Permissions to fetch source code from CodePipeline.
+• Permissions to write logs to CloudWatch Logs.
+• Permissions to put build artifacts into the CodePipeline artifact S3 bucket.
+• Permissions to retrieve secrets from AWS Secrets Manager.
 
-- Permissions to fetch source code from CodePipeline
-- Permissions to write logs to CloudWatch Logs
-- Permissions to put build artifacts into the CodePipeline artifact S3 bucket
-- **Crucially**: Permissions to retrieve secrets from AWS Secrets Manager
+Logging
+• Configure detailed logging for CodeBuild to CloudWatch Logs.
 
-### Logging
-
-- Configure detailed logging for CodeBuild to CloudWatch Logs
-
-## 4. Artifact Deployment Stage: Secure S3 Bucket
+4. Artifact Deployment Stage: Secure S3 Bucket
 
 The deploy stage must deploy the artifacts generated by CodeBuild to a dedicated Amazon S3 bucket.
 
-### Bucket Naming
+Bucket Naming
+• The S3 bucket name should be dynamically generated using CloudFormation intrinsic functions (e.g., Fn::Sub with AWS::StackName).
 
-- The S3 bucket name should be dynamically generated using CloudFormation intrinsic functions (e.g., `Fn::Sub` with `AWS::StackName`)
+Security
+• Versioning: Must have versioning enabled.
+• Server-Side Encryption: Must be configured with SSE-KMS (AWS-managed KMS key or custom KMS key).
+• Block Public Access: All public access must be blocked.
+• Data Lifecycle Management: Transition non-current versions to S3 Glacier after 30 days and delete them after 365 days.
 
-### Security
+IAM Permissions
+• CodePipeline must have necessary permissions to upload and retrieve artifacts from this S3 bucket.
 
-- **Versioning**: The bucket must have versioning enabled to protect against accidental overwrites and enable easy rollbacks
-- **Server-Side Encryption**: The bucket must be configured for Server-Side Encryption with KMS (SSE-KMS), leveraging an AWS-managed KMS key or a custom KMS key (if you choose to define one)
-- **Block Public Access**: Ensure all public access is blocked for the bucket
-- **Data Lifecycle Management**: Implement a lifecycle policy to manage object versions. For example, transition non-current versions to S3 Glacier after 30 days and permanently delete them after 365 days (adjust as necessary for reasonable retention)
-
-### IAM Permissions
-
-- CodePipeline must have necessary permissions to upload artifacts to and retrieve them from this S3 bucket
-
-## 5. Manual Approval Stage
+5. Manual Approval Stage
 
 Introduce a manual approval stage between the build and deploy phases.
+• Placement: This stage halts pipeline execution after a successful build and before deployment.
+• Notification: Configure an Amazon SNS Topic to send a notification (via email, accepted as a Parameter) when the pipeline reaches this stage. The SNS topic should also be encrypted.
 
-**Requirements:**
+6. Secure Secrets Storage: AWS Secrets Manager
 
-- **Placement**: This stage should halt the pipeline execution after a successful build and before deployment begins
-- **Notification**: Configure an Amazon SNS Topic to send a notification (e.g., via email) to a specified recipient (accepted as a Parameter in the template) when the pipeline reaches this approval stage, requesting approval. The SNS topic should also be configured for encryption
+Securely store any sensitive information (e.g., API keys, tokens).
+• Secret Definition: Define an AWS Secrets Manager secret within the template.
+• Value: Accept the secret value as a Parameter (demo purpose only).
+• Referencing: Demonstrate how CodeBuild securely references and uses this secret via environment variables.
 
-## 6. Secure Secrets Storage: AWS Secrets Manager
+7. Security, Logging, and Best Practices
+   • IAM Least Privilege: Roles/policies must adhere to least privilege.
+   • Logging & Monitoring: CodeBuild and CodePipeline must log to CloudWatch Logs.
+   • Resource Naming: Use parameterized naming conventions (ProjectName, Environment).
+   • Tags: Apply meaningful tags (Project, Environment).
+   • Region: Deploy in us-east-1.
 
-Securely store any sensitive information (e.g., API keys, tokens) that might be needed by the build process or other parts of the pipeline.
+Expected Output and Testing Instructions
 
-**Requirements:**
+CloudFormation YAML Template
+• Provide a single, well-commented, and syntactically valid CloudFormation YAML template that fulfills all the above requirements.
+• Must be ready for deployment via AWS CloudFormation.
 
-- **Secret Definition**: Define a AWS Secrets Manager secret within the CloudFormation template
-- **Value**: The template should accept the secret value as a Parameter (be mindful that this is for demonstration; in production, you'd populate this through other means or use a custom resource for more secure injection)
-- **Referencing**: Demonstrate how the CodeBuild project (or any other relevant resource) securely references and uses this secret via environment variables
-
-## Security, Logging, and Best Practices
-
-- **IAM Least Privilege**: All IAM roles and policies should adhere strictly to the principle of least privilege, granting only the minimum necessary permissions
-- **Logging & Monitoring**: Ensure all services (CodeBuild, CodePipeline) have appropriate logging configured to AWS CloudWatch Logs
-- **Resource Naming**: Use clear, consistent, and parameterized naming conventions for all resources (e.g., using ProjectName and Environment parameters)
-- **Tags**: Apply meaningful tags (e.g., Project, Environment) to all resources for cost allocation and management
-- **Region**: The entire solution should be deployed in us-east-1
-
-## Expected Output and Testing Instructions
-
-### CloudFormation YAML Template
-
-- Provide a single, well-commented, and syntactically valid CloudFormation YAML template that fulfills all the above requirements
-- The template should be ready for deployment via the AWS CloudFormation service
-
-### Testing Instructions
-
-Include a section detailing the steps to manually test the deployed pipeline. This should cover:
-
-- How to initiate a pipeline run (e.g., via a GitHub push)
-- How to monitor the build stage
-- How to approve the manual approval stage
-- How to verify the successful deployment of artifacts to the S3 bucket
+Testing Instructions
+• Initiate a pipeline run (via GitHub push).
+• Monitor the build stage.
+• Approve the manual approval stage.
+• Verify successful deployment of artifacts to the S3 bucket.
