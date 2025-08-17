@@ -432,7 +432,7 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !GetAtt MyRotationLambda.Arn
+      FunctionName: !Ref MyRotationLambda
       Principal: secretsmanager.amazonaws.com
 
   DatabaseSecret:
