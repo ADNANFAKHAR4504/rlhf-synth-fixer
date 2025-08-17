@@ -23,7 +23,7 @@ locals {
 
 # This single IAM role will be used by EC2 instances in all regions.
 resource "aws_iam_role" "ec2_role" {
-  name = "nova-ec2-role"
+  name = "nova-ec2-role-291844"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -56,7 +56,7 @@ data "aws_iam_policy_document" "ec2_permissions" {
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
-  name   = "nova-ec2-s3-cloudwatch-policy"
+  name   = "nova-ec2-s3-cloudwatch-policy-291844"
   role   = aws_iam_role.ec2_role.id
   policy = data.aws_iam_policy_document.ec2_permissions.json
 }
@@ -97,7 +97,7 @@ resource "aws_kms_alias" "app_key_alias_eu_north_1" {
 
 resource "aws_s3_bucket" "data_bucket_eu_north_1" {
   provider = aws.eu-north-1
-  bucket   = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-eu-north-1"
+  bucket   = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-eu-north-1-291844"
   tags     = local.common_tags
 }
 
@@ -270,7 +270,7 @@ resource "aws_config_config_rule" "ebs_encryption_us_west_2" {
 
 # A single IAM role for the AWS Config service, used by recorders in all regions.
 resource "aws_iam_role" "config_role" {
-  name = "nova-config-role"
+  name = "nova-config-role-291844"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{

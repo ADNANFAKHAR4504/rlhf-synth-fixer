@@ -29,7 +29,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
       );
       expect(iamRoleBlock).not.toBeNull();
       const normalizedRole = normalize(iamRoleBlock![0]);
-      expect(normalizedRole).toContain('name = "nova-ec2-role"');
+      expect(normalizedRole).toContain('name = "nova-ec2-role-291844"');
       expect(normalizedRole).toContain('Service = "ec2.amazonaws.com"');
     });
 
