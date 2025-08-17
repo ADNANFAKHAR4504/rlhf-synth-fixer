@@ -792,8 +792,9 @@ resource "aws_iam_role" "config" {
 }
 
 resource "aws_iam_role_policy_attachment" "config" {
+  count      = var.enable_config_managed_policy ? 1 : 0
   role       = aws_iam_role.config.name
-  policy_arn = var.enable_config_managed_policy ? "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSConfigRole" : null
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSConfigRole"
 }
 
 resource "aws_iam_role_policy" "config_s3" {
