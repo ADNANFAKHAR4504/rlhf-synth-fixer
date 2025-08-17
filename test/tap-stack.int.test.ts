@@ -199,9 +199,7 @@ describe('TapStack Enterprise Integration Tests', () => {
       });
     });
   }
-  const bucketName = outputs.ALBEndpoint
-    ? (outputs.ALBEndpoint as string).split('.')[0]
-    : `prod-cloudtrail-bucket-${process.env.AWS_ACCOUNT_ID}`;
+  const bucketName = `prod-cloudtrail-bucket-${process.env.AWS_ACCOUNT_ID || 'unknown'}`;
   test('S3 Bucket exists, is versioned, and encrypted', async () => {
     await validateS3Bucket(bucketName);
   });
