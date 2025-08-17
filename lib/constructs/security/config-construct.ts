@@ -14,7 +14,13 @@ export class ConfigConstruct extends Construct {
   public readonly configBucket: s3.Bucket;
   public readonly configRole: iam.Role;
 
-  constructor(scope: Construct, id: string, encryptionKey: kms.Key, enableDeliveryChannel: boolean = false) {
+  constructor(
+    scope: Construct,
+    id: string,
+    encryptionKey: kms.Key,
+    enableDeliveryChannel: boolean = false,
+    enableConfigRecorder: boolean = false
+  ) {
     super(scope, id);
 
     // S3 bucket for AWS Config logs
@@ -81,113 +87,117 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    // Configuration Recorder
-    const configRecorder = new config.CfnConfigurationRecorder(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-ConfigRecorder`,
-      {
-        name: 'default',
-        roleArn: this.configRole.roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      }
-    );
-
-    // Optional Delivery Channel - only create if enabled
-    if (enableDeliveryChannel) {
-      const deliveryChannel = new config.CfnDeliveryChannel(
+    // Optional Configuration Recorder - only create if enabled
+    let configRecorder: config.CfnConfigurationRecorder | undefined;
+    if (enableConfigRecorder) {
+      configRecorder = new config.CfnConfigurationRecorder(
         this,
-        `${SecurityConfig.RESOURCE_PREFIX}-DeliveryChannel`,
+        `${SecurityConfig.RESOURCE_PREFIX}-ConfigRecorder`,
         {
           name: 'default',
-          s3BucketName: this.configBucket.bucketName,
-          s3KeyPrefix: 'config-logs',
-          configSnapshotDeliveryProperties: {
-            deliveryFrequency: 'TwentyFour_Hours',
+          roleArn: this.configRole.roleArn,
+          recordingGroup: {
+            allSupported: true,
+            includeGlobalResourceTypes: true,
           },
         }
       );
 
-      // Ensure configuration recorder depends on delivery channel when enabled
-      configRecorder.addDependency(deliveryChannel);
+      // Optional Delivery Channel - only create if enabled
+      if (enableDeliveryChannel) {
+        const deliveryChannel = new config.CfnDeliveryChannel(
+          this,
+          `${SecurityConfig.RESOURCE_PREFIX}-DeliveryChannel`,
+          {
+            name: 'default',
+            s3BucketName: this.configBucket.bucketName,
+            s3KeyPrefix: 'config-logs',
+            configSnapshotDeliveryProperties: {
+              deliveryFrequency: 'TwentyFour_Hours',
+            },
+          }
+        );
+
+        // Ensure configuration recorder depends on delivery channel when enabled
+        configRecorder.addDependency(deliveryChannel);
+      }
+
+      // Security-related Config rules - create after recorder
+      const s3BucketPublicReadProhibited = new config.ManagedRule(
+        this,
+        `${SecurityConfig.RESOURCE_PREFIX}-S3BucketPublicReadProhibited`,
+        {
+          identifier:
+            config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
+          description: 'Ensures S3 buckets do not allow public read access',
+        }
+      );
+
+      const s3BucketPublicWriteProhibited = new config.ManagedRule(
+        this,
+        `${SecurityConfig.RESOURCE_PREFIX}-S3BucketPublicWriteProhibited`,
+        {
+          identifier:
+            config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_WRITE_PROHIBITED,
+          description: 'Ensures S3 buckets do not allow public write access',
+        }
+      );
+
+      const rdsStorageEncrypted = new config.ManagedRule(
+        this,
+        `${SecurityConfig.RESOURCE_PREFIX}-RDSStorageEncrypted`,
+        {
+          identifier: config.ManagedRuleIdentifiers.RDS_STORAGE_ENCRYPTED,
+          description: 'Ensures RDS instances are encrypted at rest',
+        }
+      );
+
+      const iamPasswordPolicy = new config.ManagedRule(
+        this,
+        `${SecurityConfig.RESOURCE_PREFIX}-IAMPasswordPolicy`,
+        {
+          identifier: config.ManagedRuleIdentifiers.IAM_PASSWORD_POLICY,
+          description:
+            'Ensures IAM password policy meets security requirements',
+        }
+      );
+
+      const rootAccountMFAEnabled = new config.ManagedRule(
+        this,
+        `${SecurityConfig.RESOURCE_PREFIX}-RootAccountMFAEnabled`,
+        {
+          identifier: config.ManagedRuleIdentifiers.ROOT_ACCOUNT_MFA_ENABLED,
+          description: 'Ensures root account has MFA enabled',
+        }
+      );
+
+      const cloudTrailEnabled = new config.ManagedRule(
+        this,
+        `${SecurityConfig.RESOURCE_PREFIX}-CloudTrailEnabled`,
+        {
+          identifier: config.ManagedRuleIdentifiers.CLOUD_TRAIL_ENABLED,
+          description: 'Ensures CloudTrail is enabled for security auditing',
+        }
+      );
+
+      const vpcDefaultSecurityGroupClosed = new config.ManagedRule(
+        this,
+        `${SecurityConfig.RESOURCE_PREFIX}-VPCDefaultSecurityGroupClosed`,
+        {
+          identifier:
+            config.ManagedRuleIdentifiers.VPC_DEFAULT_SECURITY_GROUP_CLOSED,
+          description: 'Ensures default VPC security group blocks all traffic',
+        }
+      );
+
+      // Set up dependencies - rules depend on recorder
+      s3BucketPublicReadProhibited.node.addDependency(configRecorder);
+      s3BucketPublicWriteProhibited.node.addDependency(configRecorder);
+      rdsStorageEncrypted.node.addDependency(configRecorder);
+      iamPasswordPolicy.node.addDependency(configRecorder);
+      rootAccountMFAEnabled.node.addDependency(configRecorder);
+      cloudTrailEnabled.node.addDependency(configRecorder);
+      vpcDefaultSecurityGroupClosed.node.addDependency(configRecorder);
     }
-
-    // Security-related Config rules - create after recorder
-    const s3BucketPublicReadProhibited = new config.ManagedRule(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-S3BucketPublicReadProhibited`,
-      {
-        identifier:
-          config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
-        description: 'Ensures S3 buckets do not allow public read access',
-      }
-    );
-
-    const s3BucketPublicWriteProhibited = new config.ManagedRule(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-S3BucketPublicWriteProhibited`,
-      {
-        identifier:
-          config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_WRITE_PROHIBITED,
-        description: 'Ensures S3 buckets do not allow public write access',
-      }
-    );
-
-    const rdsStorageEncrypted = new config.ManagedRule(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-RDSStorageEncrypted`,
-      {
-        identifier: config.ManagedRuleIdentifiers.RDS_STORAGE_ENCRYPTED,
-        description: 'Ensures RDS instances are encrypted at rest',
-      }
-    );
-
-    const iamPasswordPolicy = new config.ManagedRule(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-IAMPasswordPolicy`,
-      {
-        identifier: config.ManagedRuleIdentifiers.IAM_PASSWORD_POLICY,
-        description: 'Ensures IAM password policy meets security requirements',
-      }
-    );
-
-    const rootAccountMFAEnabled = new config.ManagedRule(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-RootAccountMFAEnabled`,
-      {
-        identifier: config.ManagedRuleIdentifiers.ROOT_ACCOUNT_MFA_ENABLED,
-        description: 'Ensures root account has MFA enabled',
-      }
-    );
-
-    const cloudTrailEnabled = new config.ManagedRule(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-CloudTrailEnabled`,
-      {
-        identifier: config.ManagedRuleIdentifiers.CLOUD_TRAIL_ENABLED,
-        description: 'Ensures CloudTrail is enabled for security auditing',
-      }
-    );
-
-    const vpcDefaultSecurityGroupClosed = new config.ManagedRule(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-VPCDefaultSecurityGroupClosed`,
-      {
-        identifier:
-          config.ManagedRuleIdentifiers.VPC_DEFAULT_SECURITY_GROUP_CLOSED,
-        description: 'Ensures default VPC security group blocks all traffic',
-      }
-    );
-
-    // Set up dependencies - rules depend on recorder
-    s3BucketPublicReadProhibited.node.addDependency(configRecorder);
-    s3BucketPublicWriteProhibited.node.addDependency(configRecorder);
-    rdsStorageEncrypted.node.addDependency(configRecorder);
-    iamPasswordPolicy.node.addDependency(configRecorder);
-    rootAccountMFAEnabled.node.addDependency(configRecorder);
-    cloudTrailEnabled.node.addDependency(configRecorder);
-    vpcDefaultSecurityGroupClosed.node.addDependency(configRecorder);
   }
 }

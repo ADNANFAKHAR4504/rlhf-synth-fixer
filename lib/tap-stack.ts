@@ -81,7 +81,8 @@ export class TapStack extends cdk.Stack {
       this,
       'ConfigConstruct',
       kmsConstruct.cloudTrailKey,
-      false // Disable delivery channel by default
+      false, // Disable delivery channel by default
+      false // Disable config recorder by default to avoid deployment issues
     );
 
     // Create WAF for web application protection

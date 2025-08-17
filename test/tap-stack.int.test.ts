@@ -119,9 +119,26 @@ describe('TapStack Integration Tests', () => {
       template.hasResource('AWS::IAM::Role', {}); // IAM roles
       template.hasResource('AWS::SecretsManager::Secret', {}); // Secrets
       template.hasResource('AWS::CloudTrail::Trail', {}); // CloudTrail
-      template.hasResource('AWS::Config::ConfigRule', {}); // Config rules
+      // AWS Config rules are now optional and disabled by default
+      // template.hasResource('AWS::Config::ConfigRule', {}); // Config rules
       template.hasResource('AWS::WAFv2::WebACL', {}); // WAF
       template.hasResource('AWS::IAM::User', {}); // IAM users with MFA
+      
+      // Verify that Config bucket and role are still created even when rules are disabled
+      const buckets = template.findResources('AWS::S3::Bucket');
+      const configBucket = Object.values(buckets).find(bucket => 
+        bucket.Properties.BucketName && 
+        bucket.Properties.BucketName.includes('secureapp-cfg-')
+      );
+      expect(configBucket).toBeDefined();
+      
+      const roles = template.findResources('AWS::IAM::Role');
+      const configRole = Object.values(roles).find(role => 
+        role.Properties.AssumeRolePolicyDocument?.Statement?.some((stmt: any) => 
+          stmt.Principal?.Service === 'config.amazonaws.com'
+        )
+      );
+      expect(configRole).toBeDefined();
     });
 
     test('should have proper resource naming convention', () => {
