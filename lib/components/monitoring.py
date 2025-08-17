@@ -48,7 +48,7 @@ class MonitoringComponent(ComponentResource):
     self.alb_log_group = aws.cloudwatch.LogGroup(
       f"{name}-alb-logs",
       name=f"/aws/elasticloadbalancing/{config.app_name}-{config.environment}",
-      retention_in_days=config.monitoring.log_retention_days // 2,
+      retention_in_days=config.monitoring.log_retention_days // 3,
       tags={
         **config.tags,
         "Name": f"{config.app_name}-{config.environment}-alb-logs"
