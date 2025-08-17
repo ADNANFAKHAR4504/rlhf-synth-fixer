@@ -11,6 +11,18 @@ backend "s3" { # Backend configuration will be provided via command line argumen
 
 #######################
 
+variable "author" {
+description = "The author of the infrastructure"
+type = string
+default = "ngwakoleslieelijah"
+}
+
+variable "created_date" {
+description = "The date when the infrastructure was created"
+type = string
+default = "2025-08-17"
+}
+
 variable "aws_region" {
 description = "The AWS region where resources will be created"
 type = string
@@ -55,9 +67,9 @@ upper = false
 
 locals {
 
-# Use current timestamp: 2025-08-17 05:26:50
+# Use current timestamp: 2025-08-17 05:38:10
 
-timestamp = "052650"
+timestamp = "053810"
 
 # Create unique name prefix to avoid conflicts with existing resources
 
@@ -68,6 +80,8 @@ Environment = var.environment
 Project = var.project_name
 DeployTime = local.timestamp
 User = "ngwakoleslieelijah"
+Author = var.author
+CreatedDate = var.created_date
 }
 }
 
@@ -225,7 +239,7 @@ yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 echo "<h1>Hello from ${local.name_prefix}</h1>" > /var/www/html/index.html
-echo "<p>Dependency cycles fixed - 2025-08-17 05:26:50</p>" >> /var/www/html/index.html
+echo "<p>Dependency cycles fixed - 2025-08-17 05:38:10</p>" >> /var/www/html/index.html
 echo "<p>User: ngwakoleslieelijah</p>" >> /var/www/html/index.html
 EOF
 
@@ -258,7 +272,7 @@ value = "http://${aws_instance.standalone.public_ip}"
 output "deployment_info" {
 description = "Deployment information"
 value = {
-timestamp = "2025-08-17 05:26:50"
+timestamp = "2025-08-17 05:38:10"
 user = "ngwakoleslieelijah"
 prefix = local.name_prefix
 }

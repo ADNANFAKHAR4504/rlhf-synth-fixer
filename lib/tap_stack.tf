@@ -9,6 +9,18 @@ terraform {
 # Variables
 #######################
 
+variable "author" {
+  description = "The author of the infrastructure"
+  type        = string
+  default     = "ngwakoleslieelijah"
+}
+
+variable "created_date" {
+  description = "The date when the infrastructure was created"
+  type        = string
+  default     = "2025-08-17"
+}
+
 variable "aws_region" {
   description = "The AWS region where resources will be created"
   type        = string
@@ -48,8 +60,8 @@ resource "random_string" "suffix" {
 #######################
 
 locals {
-  # Use current timestamp: 2025-08-17 05:26:50
-  timestamp   = "052650"
+  # Use current timestamp: 2025-08-17 05:38:10
+  timestamp   = "053810"
   
   # Create unique name prefix to avoid conflicts with existing resources
   name_prefix = "${var.project_name}-${var.environment}-${local.timestamp}-${random_string.suffix.result}"
@@ -59,6 +71,8 @@ locals {
     Project     = var.project_name
     DeployTime  = local.timestamp
     User        = "ngwakoleslieelijah"
+    Author      = var.author
+    CreatedDate = var.created_date
   }
 }
 
@@ -207,7 +221,7 @@ resource "aws_instance" "standalone" {
     systemctl start httpd
     systemctl enable httpd
     echo "<h1>Hello from ${local.name_prefix}</h1>" > /var/www/html/index.html
-    echo "<p>Dependency cycles fixed - 2025-08-17 05:26:50</p>" >> /var/www/html/index.html
+    echo "<p>Dependency cycles fixed - 2025-08-17 05:38:10</p>" >> /var/www/html/index.html
     echo "<p>User: ngwakoleslieelijah</p>" >> /var/www/html/index.html
   EOF
 
@@ -238,7 +252,7 @@ output "web_url" {
 output "deployment_info" {
   description = "Deployment information"
   value = {
-    timestamp = "2025-08-17 05:26:50"
+    timestamp = "2025-08-17 05:38:10"
     user      = "ngwakoleslieelijah"
     prefix    = local.name_prefix
   }
