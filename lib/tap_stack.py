@@ -358,7 +358,7 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
         f"com.amazonaws.{region}.ec2",  # Regional
         f"com.amazonaws.{region}.ecr.api",  # Regional
         f"com.amazonaws.{region}.ecr.dkr",  # Regional
-        "com.amazonaws.s3",  # Global - no region needed
+        f"com.amazonaws.{region}.s3",  # Regional
         f"com.amazonaws.{region}.sts",  # Regional
     ]
     
