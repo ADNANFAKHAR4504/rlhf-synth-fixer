@@ -42,6 +42,12 @@ variable "create_vpcs" {
   default     = true
 }
 
+variable "create_cloudtrail" {
+  description = "Whether to create CloudTrail (set to false if CloudTrail limit is reached)"
+  type        = bool
+  default     = true
+}
+
 # Data sources for latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux_us_east_1" {
   most_recent = true
@@ -87,7 +93,7 @@ resource "aws_kms_key" "primary" {
 }
 
 resource "aws_kms_alias" "primary" {
-  name          = "alias/primary-key"
+  name          = "alias/primary-key-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.primary.key_id
 }
 
@@ -105,7 +111,7 @@ resource "aws_kms_key" "secondary" {
 
 resource "aws_kms_alias" "secondary" {
   provider      = aws.eu_west_1
-  name          = "alias/secondary-key"
+  name          = "alias/secondary-key-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.secondary.key_id
 }
 
@@ -392,6 +398,12 @@ resource "random_string" "bucket_suffix" {
   upper   = false
 }
 
+resource "random_string" "resource_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
 # S3 Bucket Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
   bucket = aws_s3_bucket.primary.id
@@ -445,7 +457,7 @@ resource "aws_s3_bucket_versioning" "secondary" {
 
 # S3 Bucket Replication
 resource "aws_iam_role" "replication" {
-  name = "s3-replication-role"
+  name = "s3-replication-role-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -462,7 +474,7 @@ resource "aws_iam_role" "replication" {
 }
 
 resource "aws_iam_policy" "replication" {
-  name = "s3-replication-policy"
+  name = "s3-replication-policy-${random_string.resource_suffix.result}"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -570,7 +582,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "logging" {
 
 # DynamoDB Tables for Global Table
 resource "aws_dynamodb_table" "primary" {
-  name           = "tap-stack-table"
+  name           = "tap-stack-table-${random_string.resource_suffix.result}"
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "id"
   stream_enabled = true
@@ -597,7 +609,7 @@ resource "aws_dynamodb_table" "primary" {
 
 resource "aws_dynamodb_table" "secondary" {
   provider       = aws.eu_west_1
-  name           = "tap-stack-table"
+  name           = "tap-stack-table-${random_string.resource_suffix.result}"
   billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "id"
   stream_enabled = true
@@ -629,7 +641,7 @@ resource "aws_dynamodb_global_table" "main" {
     aws_dynamodb_table.secondary
   ]
 
-  name = "tap-stack-table"
+  name = "tap-stack-table-${random_string.resource_suffix.result}"
 
   replica {
     region_name = "us-east-1"
@@ -643,7 +655,7 @@ resource "aws_dynamodb_global_table" "main" {
 # RDS Subnet Groups (conditional)
 resource "aws_db_subnet_group" "primary" {
   count      = var.create_vpcs ? 1 : 0
-  name       = "primary-subnet-group"
+  name       = "primary-subnet-group-${random_string.resource_suffix.result}"
   subnet_ids = [aws_subnet.primary_public[0].id, aws_subnet.primary_private[0].id]
 
   tags = {
@@ -654,7 +666,7 @@ resource "aws_db_subnet_group" "primary" {
 resource "aws_db_subnet_group" "secondary" {
   count      = var.create_vpcs ? 1 : 0
   provider   = aws.eu_west_1
-  name       = "secondary-subnet-group"
+  name       = "secondary-subnet-group-${random_string.resource_suffix.result}"
   subnet_ids = [aws_subnet.secondary_public[0].id, aws_subnet.secondary_private[0].id]
 
   tags = {
@@ -762,7 +774,7 @@ resource "aws_instance" "secondary" {
 
 # IAM Role for Global Access
 resource "aws_iam_role" "global_role" {
-  name = "tap-stack-global-role"
+  name = "tap-stack-global-role-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -784,7 +796,7 @@ resource "aws_iam_role" "global_role" {
 }
 
 resource "aws_iam_policy" "global_policy" {
-  name        = "tap-stack-global-policy"
+  name        = "tap-stack-global-policy-${random_string.resource_suffix.result}"
   description = "Least privilege policy for tap stack resources"
 
   policy = jsonencode({
@@ -839,7 +851,8 @@ resource "aws_iam_role_policy_attachment" "global_policy_attachment" {
 
 # CloudTrail
 resource "aws_cloudtrail" "primary" {
-  name           = "primary-cloudtrail"
+  count          = var.create_cloudtrail ? 1 : 0
+  name           = "primary-cloudtrail-${random_string.resource_suffix.result}"
   s3_bucket_name = aws_s3_bucket.logging.bucket
   s3_key_prefix  = "primary-region/"
 
@@ -861,8 +874,9 @@ resource "aws_cloudtrail" "primary" {
 }
 
 resource "aws_cloudtrail" "secondary" {
+  count          = var.create_cloudtrail ? 1 : 0
   provider       = aws.eu_west_1
-  name           = "secondary-cloudtrail"
+  name           = "secondary-cloudtrail-${random_string.resource_suffix.result}"
   s3_bucket_name = aws_s3_bucket.logging.bucket
   s3_key_prefix  = "secondary-region/"
 

@@ -139,6 +139,11 @@ describe('Terraform Configuration Integration Tests', () => {
         expect(stateList).toMatch(/aws_db_instance\.(primary|secondary)/);
         expect(stateList).toMatch(/aws_instance\.(primary|secondary)/);
       }
+      
+      // Check for CloudTrail resources only if they exist
+      if (stateList.includes('aws_cloudtrail.primary')) {
+        expect(stateList).toMatch(/aws_cloudtrail\.(primary|secondary)/);
+      }
     });
   });
 
