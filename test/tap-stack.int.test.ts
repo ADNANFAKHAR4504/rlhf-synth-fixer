@@ -8,11 +8,7 @@ import {
   Vpc,
   SecurityGroup,
 } from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DBInstance,
-} from '@aws-sdk/client-rds';
+import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
 import {
   LambdaClient,
   GetFunctionConfigurationCommand,
@@ -69,7 +65,7 @@ const apiGatewayClient = new APIGatewayClient({ region: REGION }); // Corrected 
 let outputs: StackOutputs | null = null;
 try {
   const rawOutputs = fs.readFileSync(
-    path.join(__dirname, '..', 'cfn-outputs.json'),
+    path.join(__dirname, 'cfn-outputs', 'cfn-outputs.json'),
     'utf8'
   );
   // Parse outputs from the CloudFormation describe-stacks command
