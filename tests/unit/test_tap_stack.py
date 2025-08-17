@@ -5,6 +5,8 @@ import os
 import sys
 import unittest
 from unittest.mock import Mock, patch, MagicMock
+import pytest
+from lib import tap_stack
 
 # Pipeline and deployment configuration constants
 REQUIRED_COVERAGE_THRESHOLD = 20
@@ -400,6 +402,34 @@ class TestCodeOptimization(unittest.TestCase):
     for step in strategy_flow:
       self.assertIsInstance(step, str)
       self.assertGreater(len(step), 10)  # Each step should be descriptive
+
+# Helper function tests for coverage
+
+def test_get_resource_name():
+    result = tap_stack.get_resource_name("vpc")
+    assert result == f"{tap_stack.PROJECT_NAME}-{tap_stack.ENVIRONMENT}-vpc-{tap_stack.DEPLOYMENT_ID}"
+
+
+def test_get_short_name_default():
+    result = tap_stack.get_short_name("vpc")
+    assert result.startswith(f"{tap_stack.PROJECT_NAME}-vpc-{tap_stack.DEPLOYMENT_ID}")
+    assert len(result) <= 32
+
+
+def test_get_short_name_truncate():
+    # Use a long resource type to force truncation
+    result = tap_stack.get_short_name("verylongresourcetypename", max_length=24)
+    assert result.endswith(f"-{tap_stack.DEPLOYMENT_ID}")
+    assert len(result) <= 24
+
+
+@pytest.mark.parametrize("vpc_cidr,subnet_index,expected", [
+    ("2001:db8::/56", 0, "2001:db8::/64"),
+    ("2001:db8::/56", 1, "2001:db8:0:1::/64"),
+])
+def test_calculate_ipv6_cidr(vpc_cidr, subnet_index, expected):
+    result = tap_stack.calculate_ipv6_cidr(vpc_cidr, subnet_index)
+    assert result == expected
 
 if __name__ == '__main__':
   unittest.main()

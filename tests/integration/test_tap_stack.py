@@ -3,6 +3,8 @@ import json
 import os
 import sys
 import time
+import pytest
+from lib import tap_stack
 
 # Add lib directory to path for tap_stack imports
 lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib')
@@ -676,6 +678,33 @@ def test_tap_stack_integration_end_to_end():
   print("✅ Step 6: Dual-stack networking validated")
   
   print("✅ tap_stack End-to-End Integration Test Completed Successfully!")
+
+
+# Integration tests for tap_stack.py helper functions
+
+def test_integration_get_resource_name():
+    result = tap_stack.get_resource_name("alb")
+    assert result == f"{tap_stack.PROJECT_NAME}-{tap_stack.ENVIRONMENT}-alb-{tap_stack.DEPLOYMENT_ID}"
+
+
+def test_integration_get_short_name():
+    result = tap_stack.get_short_name("alb")
+    assert result.startswith(f"{tap_stack.PROJECT_NAME}-alb-{tap_stack.DEPLOYMENT_ID}")
+    assert len(result) <= 32
+
+
+def test_integration_get_short_name_truncate():
+    result = tap_stack.get_short_name("verylongresourcetypename", max_length=24)
+    assert result.endswith(f"-{tap_stack.DEPLOYMENT_ID}")
+    assert len(result) <= 24
+
+@pytest.mark.parametrize("vpc_cidr,subnet_index,expected", [
+    ("2001:db8::/56", 0, "2001:db8::/64"),
+    ("2001:db8::/56", 1, "2001:db8:0:1::/64"),
+])
+def test_integration_calculate_ipv6_cidr(vpc_cidr, subnet_index, expected):
+    result = tap_stack.calculate_ipv6_cidr(vpc_cidr, subnet_index)
+    assert result == expected
 
 
 if __name__ == "__main__":
