@@ -4,16 +4,14 @@ Tests all components, edge cases, and configuration scenarios.
 """
 
 import unittest
-import json
-from unittest.mock import patch, MagicMock
-import pulumi
+from unittest.mock import patch
 from pulumi.runtime import mocks, set_mocks
 from lib.tap_stack import TapStack, TapStackArgs
 
 class ComprehensiveAwsMocks(mocks.Mocks):
   """Comprehensive AWS service mocks for testing."""
 
-  def new_resource(self, type_, name, inputs, provider, id_):
+  def new_resource(self, type_, name, inputs, provider=None, id_=None):
     """Mock AWS resource creation with realistic outputs."""
     outputs = dict(inputs)
     resource_type = type_.split(':')[-1].split('/')[-1]
@@ -65,7 +63,7 @@ class ComprehensiveAwsMocks(mocks.Mocks):
 
     return [f"{name}-id", outputs]
 
-  def call(self, token, args, provider):
+  def call(self, token, args, provider=None):
     """Mock AWS API calls."""
     return args
 
