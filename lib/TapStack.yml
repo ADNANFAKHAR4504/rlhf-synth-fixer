@@ -40,7 +40,8 @@ Parameters:
   # VPC is required but no default is set to satisfy linter W1030 (exact literal kept in Metadata).
   VpcId:
     Type: AWS::EC2::VPC::Id
-    Description: Existing VPC ID in us-east-1 (see Metadata.ExistingVpcIdLiteral).
+    Description: Existing VPC ID in us-east-1.
+    Default: vpc-002dd1e7eb944d35a
   InstanceType:
     Type: String
     Default: t3.micro
@@ -141,4 +142,4 @@ Outputs:
   BucketName:
     Description: Name of the S3 bucket with SSE enabled.
     Value: !Ref AppBucket
-    
+
