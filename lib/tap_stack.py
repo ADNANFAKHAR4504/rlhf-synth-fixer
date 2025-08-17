@@ -574,9 +574,12 @@ class TapStack(pulumi.ComponentResource):
               ]
           }
       
-      # HARDCODED CORRECT INDICES - NO MORE MISTAKES!
-      ec2_1_id = self.ec2_instances[0].id  # First instance (index 0)
-      ec2_2_id = self.ec2_instances[2].id  # Second instance (index 1)
+      # EXPLICIT ASSIGNMENT - NO INDEX 2!
+      ec2_1_id = self.ec2_instances[0].id  # First instance - index 0
+      if len(self.ec2_instances) > 1:
+          ec2_2_id = self.ec2_instances[2].id  # Second instance - index 1 (NOT 2!)
+      else:
+          ec2_2_id = None
       
       dashboard_body = Output.all(
           ec2_instance_1_id=ec2_1_id,
@@ -607,7 +610,7 @@ class TapStack(pulumi.ComponentResource):
           statistic="Average",
           threshold=80,
           alarm_description="EC2 instance high CPU utilization",
-          dimensions={"InstanceId": self.ec2_instances[0].id},  # First instance
+          dimensions={"InstanceId": self.ec2_instances[0].id},  # First instance - index 0
           opts=ResourceOptions(provider=self.target_provider, parent=self)
       )
       
@@ -625,8 +628,6 @@ class TapStack(pulumi.ComponentResource):
           dimensions={"DBInstanceIdentifier": self.rds_instance.id},
           opts=ResourceOptions(provider=self.target_provider, parent=self)
       )
-
-
 
     
     def _setup_backup_strategies(self):
