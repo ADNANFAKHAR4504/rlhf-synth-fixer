@@ -27,8 +27,8 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have Environment parameter', () => {
-      const envParam = template.Parameters.Environment;
+    test('should have EnvironmentSuffix parameter', () => {
+      const envParam = template.Parameters.EnvironmentSuffix;
       expect(envParam).toBeDefined();
       expect(envParam.Type).toBe('String');
       expect(envParam.Default).toBe('dev');

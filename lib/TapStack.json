@@ -2,7 +2,7 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure AWS Infrastructure Foundation with S3, RDS, IAM, and CloudWatch monitoring",
     "Parameters": {
-        "Environment": {
+        "EnvironmentSuffix": {
             "Type": "String",
             "Default": "dev",
             "AllowedValues": [
@@ -10,7 +10,7 @@
                 "staging",
                 "prod"
             ],
-            "Description": "Environment name for resource naming"
+            "Description": "Environment suffix for resource naming"
         },
         "DBSecretName": {
             "Type": "String",
@@ -49,7 +49,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-${DBSecretName}"
+                    "Fn::Sub": "${EnvironmentSuffix}-${DBSecretName}"
                 },
                 "Description": "Database administrator credentials",
                 "GenerateSecretString": {
@@ -64,7 +64,7 @@
             "Type": "AWS::KMS::Key",
             "Properties": {
                 "Description": {
-                    "Fn::Sub": "KMS Key for S3 encryption in ${Environment}"
+                    "Fn::Sub": "KMS Key for S3 encryption in ${EnvironmentSuffix}"
                 },
                 "KeyPolicy": {
                     "Version": "2012-10-17",
@@ -125,7 +125,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/s3-${Environment}-key"
+                    "Fn::Sub": "alias/s3-${EnvironmentSuffix}-key"
                 },
                 "TargetKeyId": {
                     "Ref": "S3KMSKey"
@@ -136,7 +136,7 @@
             "Type": "AWS::KMS::Key",
             "Properties": {
                 "Description": {
-                    "Fn::Sub": "KMS Key for RDS encryption in ${Environment}"
+                    "Fn::Sub": "KMS Key for RDS encryption in ${EnvironmentSuffix}"
                 },
                 "KeyPolicy": {
                     "Version": "2012-10-17",
@@ -174,7 +174,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/rds-${Environment}-key"
+                    "Fn::Sub": "alias/rds-${EnvironmentSuffix}-key"
                 },
                 "TargetKeyId": {
                     "Ref": "RDSKMSKey"
@@ -185,7 +185,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${Environment}-security-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${EnvironmentSuffix}-security-logs-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -225,7 +225,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${Environment}-application-data-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${EnvironmentSuffix}-application-data-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -354,7 +354,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-secure-vpc"
+                            "Fn::Sub": "${EnvironmentSuffix}-secure-vpc"
                         }
                     }
                 ]
@@ -392,7 +392,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-subnet-1"
+                            "Fn::Sub": "${EnvironmentSuffix}-private-subnet-1"
                         }
                     }
                 ]
@@ -430,7 +430,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-subnet-2"
+                            "Fn::Sub": "${EnvironmentSuffix}-private-subnet-2"
                         }
                     }
                 ]
@@ -439,6 +439,9 @@
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-db-subnet-group"
+                },
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
                     {
@@ -452,7 +455,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-db-subnet-group"
+                            "Fn::Sub": "${EnvironmentSuffix}-db-subnet-group"
                         }
                     }
                 ]
@@ -461,6 +464,9 @@
         "DBSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-db-security-group"
+                },
                 "GroupDescription": "Security group for RDS database",
                 "VpcId": {
                     "Ref": "VPC"
@@ -480,7 +486,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-db-security-group"
+                            "Fn::Sub": "${EnvironmentSuffix}-db-security-group"
                         }
                     }
                 ]
@@ -489,6 +495,9 @@
         "ApplicationSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentSuffix}-app-security-group"
+                },
                 "GroupDescription": "Security group for application tier",
                 "VpcId": {
                     "Ref": "VPC"
@@ -497,7 +506,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-app-security-group"
+                            "Fn::Sub": "${EnvironmentSuffix}-app-security-group"
                         }
                     }
                 ]
@@ -509,7 +518,7 @@
             "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "${Environment}-secure-database"
+                    "Fn::Sub": "${EnvironmentSuffix}-secure-database"
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
@@ -521,10 +530,10 @@
                     "Ref": "RDSKMSKey"
                 },
                 "MasterUsername": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${Environment}-${DBSecretName}:SecretString:username}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${EnvironmentSuffix}-${DBSecretName}:SecretString:username}}"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${Environment}-${DBSecretName}:SecretString:password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${EnvironmentSuffix}-${DBSecretName}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {
@@ -555,7 +564,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-secure-database"
+                            "Fn::Sub": "${EnvironmentSuffix}-secure-database"
                         }
                     }
                 ]
@@ -565,7 +574,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${Environment}-s3-access-role"
+                    "Fn::Sub": "${EnvironmentSuffix}-s3-access-role"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -631,7 +640,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${Environment}-rds-monitoring-role"
+                    "Fn::Sub": "${EnvironmentSuffix}-rds-monitoring-role"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -654,7 +663,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${Environment}-cloudwatch-role"
+                    "Fn::Sub": "${EnvironmentSuffix}-cloudwatch-role"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -698,7 +707,7 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "${Environment}-security-alerts"
+                    "Fn::Sub": "${EnvironmentSuffix}-security-alerts"
                 },
                 "KmsMasterKeyId": "alias/aws/sns"
             }
@@ -720,7 +729,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/s3/${Environment}-access-logs"
+                    "Fn::Sub": "/aws/s3/${EnvironmentSuffix}-access-logs"
                 },
                 "RetentionInDays": 30,
                 "KmsKeyId": {
@@ -735,7 +744,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/rds/instance/${Environment}-secure-database/error"
+                    "Fn::Sub": "/aws/rds/instance/${EnvironmentSuffix}-secure-database/error"
                 },
                 "RetentionInDays": 30
             }
@@ -744,7 +753,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "${Environment}-unauthorized-s3-access"
+                    "Fn::Sub": "${EnvironmentSuffix}-unauthorized-s3-access"
                 },
                 "AlarmDescription": "Detects potential unauthorized S3 access attempts",
                 "MetricName": "4xxErrors",
@@ -774,7 +783,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "${Environment}-database-connection-failures"
+                    "Fn::Sub": "${EnvironmentSuffix}-database-connection-failures"
                 },
                 "AlarmDescription": "Detects multiple database connection failures",
                 "MetricName": "DatabaseConnections",
@@ -804,7 +813,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "${Environment}-high-error-rate"
+                    "Fn::Sub": "${EnvironmentSuffix}-high-error-rate"
                 },
                 "AlarmDescription": "Detects high error rates in application logs",
                 "MetricName": "ErrorCount",
@@ -826,7 +835,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "${Environment}-unusual-kms-usage"
+                    "Fn::Sub": "${EnvironmentSuffix}-unusual-kms-usage"
                 },
                 "AlarmDescription": "Detects unusual KMS key usage patterns",
                 "MetricName": "NumberOfRequestsSucceeded",
@@ -856,7 +865,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/cloudtrail/${Environment}-security-trail"
+                    "Fn::Sub": "/aws/cloudtrail/${EnvironmentSuffix}-security-trail"
                 },
                 "RetentionInDays": 90
             }
@@ -865,7 +874,7 @@
             "Type": "AWS::CloudTrail::Trail",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "${Environment}-security-trail"
+                    "Fn::Sub": "${EnvironmentSuffix}-security-trail"
                 },
                 "S3BucketName": {
                     "Ref": "LoggingBucket"
@@ -929,7 +938,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "${Environment}-failed-login-attempts"
+                    "Fn::Sub": "${EnvironmentSuffix}-failed-login-attempts"
                 },
                 "AlarmDescription": "Detects multiple failed login attempts",
                 "MetricName": "FailedLogins",
@@ -956,7 +965,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-application-bucket"
+                    "Fn::Sub": "${EnvironmentSuffix}-application-bucket"
                 }
             }
         },
@@ -967,7 +976,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-logging-bucket"
+                    "Fn::Sub": "${EnvironmentSuffix}-logging-bucket"
                 }
             }
         },
@@ -981,7 +990,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-database-endpoint"
+                    "Fn::Sub": "${EnvironmentSuffix}-database-endpoint"
                 }
             }
         },
@@ -995,7 +1004,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-database-port"
+                    "Fn::Sub": "${EnvironmentSuffix}-database-port"
                 }
             }
         },
@@ -1006,7 +1015,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-s3-kms-key"
+                    "Fn::Sub": "${EnvironmentSuffix}-s3-kms-key"
                 }
             }
         },
@@ -1017,7 +1026,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-rds-kms-key"
+                    "Fn::Sub": "${EnvironmentSuffix}-rds-kms-key"
                 }
             }
         },
@@ -1031,7 +1040,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-s3-access-role-arn"
+                    "Fn::Sub": "${EnvironmentSuffix}-s3-access-role-arn"
                 }
             }
         },
@@ -1042,7 +1051,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-security-alerts-topic"
+                    "Fn::Sub": "${EnvironmentSuffix}-security-alerts-topic"
                 }
             }
         },
@@ -1053,7 +1062,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-vpc-id"
+                    "Fn::Sub": "${EnvironmentSuffix}-vpc-id"
                 }
             }
         },
@@ -1067,7 +1076,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-cloudtrail-arn"
+                    "Fn::Sub": "${EnvironmentSuffix}-cloudtrail-arn"
                 }
             }
         }
