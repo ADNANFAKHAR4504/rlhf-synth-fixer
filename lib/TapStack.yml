@@ -980,11 +980,8 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                # FIXED: Use proper wildcard format for S3 objects
                 - !Sub '${ApplicationBucket}/*'
-            - Type: 'AWS::S3::Object'
-              Values:
-                - !GetAtt ApplicationBucket.Arn
+           
       Tags:
         - Key: env
           Value: !Ref Environment
