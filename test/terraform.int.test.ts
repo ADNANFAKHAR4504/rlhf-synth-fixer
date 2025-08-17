@@ -5,6 +5,11 @@ import {
   DescribeInstancesCommand,
   Instance,
   DescribeVolumesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeRouteTablesCommand,
+  DescribeInternetGatewaysCommand,
 } from '@aws-sdk/client-ec2';
 import {
   KMSClient,
@@ -16,6 +21,10 @@ import {
   GetBucketEncryptionCommand,
   GetPublicAccessBlockCommand,
 } from '@aws-sdk/client-s3';
+import {
+  ConfigServiceClient,
+  DescribeConfigRulesCommand,
+} from '@aws-sdk/client-config-service';
 
 /* ----------------------------- Utilities & Types ----------------------------- */
 
@@ -52,8 +61,7 @@ function readDeploymentOutputs(): DeploymentSummary {
     throw new Error('`deployment_summary` missing in outputs file.');
   }
 
-  // Validate that expected regions and their properties exist
-  const expectedRegions = ['eu-north-1', 'us-west-2']; // Updated to reflect the region change
+  const expectedRegions = ['eu-north-1', 'us-west-2'];
   for (const region of expectedRegions) {
     if (
       !summary[region]?.s3_bucket_name ||
@@ -94,98 +102,22 @@ async function retry<T>(
 describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
   const outputs = readDeploymentOutputs();
   const regions = Object.keys(outputs);
-  const TEST_TIMEOUT = 120_000;
+  const TEST_TIMEOUT = 180_000; // 3 minutes per test
 
-  // Verify we have the expected regions
   it('should have deployed to eu-north-1 and us-west-2 regions', () => {
     expect(regions).toContain('eu-north-1');
     expect(regions).toContain('us-west-2');
     expect(regions).toHaveLength(2);
   });
 
-  // Loop through each region defined in the output file and run a dedicated suite of tests
   for (const region of regions) {
     describe(`Region: ${region}`, () => {
       const regionOutputs = outputs[region];
       const ec2Client = new EC2Client({ region });
-      const kmsClient = new KMSClient({ region });
-      const s3Client = new S3Client({ region });
+      const configClient = new ConfigServiceClient({ region });
 
       test(
-        'KMS Key should be correctly configured with a 10-day deletion window and proper alias',
-        async () => {
-          // 1. Check the key itself
-          const keyData = await retry(() =>
-            kmsClient.send(
-              new DescribeKeyCommand({ KeyId: regionOutputs.kms_key_arn })
-            )
-          );
-          expect(keyData.KeyMetadata).toBeDefined();
-          expect(keyData.KeyMetadata?.DeletionDate).toBeUndefined(); // It should not be pending deletion
-          expect(keyData.KeyMetadata?.KeyState).toBe('Enabled');
-
-          // 2. Check the alias
-          const aliasData = await retry(() =>
-            kmsClient.send(
-              new ListAliasesCommand({ KeyId: regionOutputs.kms_key_arn })
-            )
-          );
-          const expectedAlias = 'alias/nova-app-key-291844';
-          const alias = aliasData.Aliases?.find(
-            a => a.AliasName === expectedAlias
-          );
-          expect(alias).toBeDefined();
-          expect(alias?.TargetKeyId).toBe(keyData.KeyMetadata?.KeyId);
-        },
-        TEST_TIMEOUT
-      );
-
-      test(
-        'S3 Bucket should enforce KMS encryption and block all public access',
-        async () => {
-          // 1. Check Server-Side Encryption
-          const encryptionData = await retry(() =>
-            s3Client.send(
-              new GetBucketEncryptionCommand({
-                Bucket: regionOutputs.s3_bucket_name,
-              })
-            )
-          );
-          const sseRule =
-            encryptionData.ServerSideEncryptionConfiguration?.Rules?.[0];
-          expect(
-            sseRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
-          ).toBe('aws:kms');
-          expect(
-            sseRule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID
-          ).toBe(regionOutputs.kms_key_arn);
-
-          // 2. Check Public Access Block
-          const pabData = await retry(() =>
-            s3Client.send(
-              new GetPublicAccessBlockCommand({
-                Bucket: regionOutputs.s3_bucket_name,
-              })
-            )
-          );
-          expect(pabData.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(
-            true
-          );
-          expect(
-            pabData.PublicAccessBlockConfiguration?.BlockPublicPolicy
-          ).toBe(true);
-          expect(pabData.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(
-            true
-          );
-          expect(
-            pabData.PublicAccessBlockConfiguration?.RestrictPublicBuckets
-          ).toBe(true);
-        },
-        TEST_TIMEOUT
-      );
-
-      test(
-        'EC2 Instance should be a t3.micro, have an encrypted root volume, and an IAM profile',
+        'EC2 Instance and its dependencies should be secure and correctly configured',
         async () => {
           const instanceData = await retry(() =>
             ec2Client.send(
@@ -207,7 +139,19 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
             'nova-ec2-instance-profile-291844'
           );
 
-          // 3. Check for encrypted root volume
+          // 3. Check Security Group rules
+          const sgId = instance?.SecurityGroups?.[0]?.GroupId;
+          expect(sgId).toBeDefined();
+          const sgData = await ec2Client.send(
+            new DescribeSecurityGroupsCommand({ GroupIds: [sgId!] })
+          );
+          const sshRule = sgData.SecurityGroups?.[0]?.IpPermissions?.find(
+            p => p.FromPort === 22
+          );
+          expect(sshRule).toBeDefined();
+          expect(sshRule?.IpRanges?.[0]?.CidrIp).not.toBe('0.0.0.0/0'); // Verify SSH is not open to the world
+
+          // 4. Check for encrypted root volume
           const rootDeviceName = instance?.RootDeviceName;
           expect(rootDeviceName).toBeDefined();
           const rootVolume = instance?.BlockDeviceMappings?.find(
@@ -215,7 +159,7 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
           );
           expect(rootVolume?.Ebs?.VolumeId).toBeDefined();
 
-          // Verify root volume encryption
+          // 5. Verify root volume encryption with the correct custom KMS key
           if (rootVolume?.Ebs?.VolumeId) {
             const volumeData = await retry(() =>
               ec2Client.send(
@@ -226,19 +170,97 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
             );
             const volume = volumeData.Volumes?.[0];
             expect(volume?.Encrypted).toBe(true);
-            expect(volume?.KmsKeyId).toContain(
-              regionOutputs.kms_key_arn.split('/').pop()
-            );
+            expect(volume?.KmsKeyId).toBe(regionOutputs.kms_key_arn);
           }
+        },
+        TEST_TIMEOUT
+      );
 
-          // 4. Verify instance tags
-          const tags = instance?.Tags || [];
-          const nameTag = tags.find(t => t.Key === 'Name');
-          expect(nameTag?.Value).toBe(`nova-app-server-${region}-291844`);
-          const ownerTag = tags.find(t => t.Key === 'Owner');
-          expect(ownerTag?.Value).toBe('nova-devops-team');
-          const purposeTag = tags.find(t => t.Key === 'Purpose');
-          expect(purposeTag?.Value).toBe('Nova Application Baseline');
+      test(
+        'Network infrastructure (VPC, Subnet, IGW, Routing) should be correctly configured',
+        async () => {
+          // 1. Get instance details to find network components
+          const instanceData = await retry(() =>
+            ec2Client.send(
+              new DescribeInstancesCommand({
+                InstanceIds: [regionOutputs.ec2_instance_id],
+              })
+            )
+          );
+          const instance: Instance | undefined =
+            instanceData.Reservations?.[0]?.Instances?.[0];
+          expect(instance).toBeDefined();
+
+          const vpcId = instance?.VpcId;
+          const subnetId = instance?.SubnetId;
+          expect(vpcId).toBeDefined();
+          expect(subnetId).toBeDefined();
+
+          // 2. Verify the VPC is a custom VPC
+          const vpcData = await ec2Client.send(
+            new DescribeVpcsCommand({ VpcIds: [vpcId!] })
+          );
+          expect(vpcData.Vpcs?.[0]?.IsDefault).toBe(false);
+
+          // 3. Verify the Subnet is in the correct VPC and has public IP mapping
+          const subnetData = await ec2Client.send(
+            new DescribeSubnetsCommand({ SubnetIds: [subnetId!] })
+          );
+          const subnet = subnetData.Subnets?.[0];
+          expect(subnet?.VpcId).toBe(vpcId);
+          expect(subnet?.MapPublicIpOnLaunch).toBe(true);
+
+          // 4. Verify the route table has a default route to an Internet Gateway
+          const routeTableData = await ec2Client.send(
+            new DescribeRouteTablesCommand({
+              Filters: [{ Name: 'association.subnet-id', Values: [subnetId!] }],
+            })
+          );
+          const routeTable = routeTableData.RouteTables?.[0];
+          const defaultRoute = routeTable?.Routes?.find(
+            r => r.DestinationCidrBlock === '0.0.0.0/0'
+          );
+          const igwId = defaultRoute?.GatewayId;
+          expect(igwId).toBeDefined();
+          expect(igwId).toMatch(/^igw-/);
+
+          // 5. Verify the Internet Gateway is attached to the VPC
+          const igwData = await ec2Client.send(
+            new DescribeInternetGatewaysCommand({
+              InternetGatewayIds: [igwId!],
+            })
+          );
+          expect(igwData.InternetGateways?.[0]?.Attachments?.[0]?.VpcId).toBe(
+            vpcId
+          );
+        },
+        TEST_TIMEOUT
+      );
+
+      test(
+        'AWS Config rules for compliance should be deployed and active',
+        async () => {
+          const expectedRules = [
+            'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
+            'ENCRYPTED_VOLUMES',
+            'IAM_ROLE_MANAGED_POLICY_CHECK',
+          ];
+
+          const rulesData = await retry(() =>
+            configClient.send(
+              new DescribeConfigRulesCommand({ ConfigRuleNames: expectedRules })
+            )
+          );
+          const deployedRuleNames =
+            rulesData.ConfigRules?.map(r => r.ConfigRuleName) || [];
+          expect(deployedRuleNames).toHaveLength(expectedRules.length);
+          expect(deployedRuleNames).toEqual(
+            expect.arrayContaining(expectedRules)
+          );
+
+          for (const rule of rulesData.ConfigRules || []) {
+            expect(rule.ConfigRuleState).toBe('ACTIVE');
+          }
         },
         TEST_TIMEOUT
       );

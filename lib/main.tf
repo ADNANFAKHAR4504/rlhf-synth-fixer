@@ -8,6 +8,12 @@ variable "your_name" {
   default     = "nova-devops-team"
 }
 
+variable "ssh_ingress_cidr" {
+  description = "The CIDR block allowed to connect via SSH to the EC2 instances."
+  type        = list(string)
+  default     = ["10.0.0.0/16"] # IMPORTANT: Change this to your own IP address range for production.
+}
+
 data "aws_caller_identity" "current" {}
 
 locals {
@@ -21,7 +27,6 @@ locals {
 # | Global Resources (IAM)
 # |-----------------------------------------------------------------------------
 
-# This single IAM role will be used by EC2 instances in all regions.
 resource "aws_iam_role" "ec2_role" {
   name = "nova-ec2-role-291844"
   assume_role_policy = jsonencode({
@@ -35,7 +40,6 @@ resource "aws_iam_role" "ec2_role" {
   tags = local.common_tags
 }
 
-# The policy document grants access to resources in BOTH regions.
 data "aws_iam_policy_document" "ec2_permissions" {
   statement {
     sid     = "AllowS3ReadAccess"
@@ -168,9 +172,8 @@ resource "aws_instance" "app_server_eu_north_1_291844" {
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.nova_subnet_eu_north_1_291844.id # Explicit subnet
   associate_public_ip_address = true                                        # Only if public access needed
-
-  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
-  vpc_security_group_ids = [aws_security_group.nova_sg_eu_north_1_291844.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
+  vpc_security_group_ids      = [aws_security_group.nova_sg_eu_north_1_291844.id]
 
   ebs_block_device {
     device_name = data.aws_ami.amazon_linux_2_eu_north_1.root_device_name
@@ -187,12 +190,11 @@ resource "aws_security_group" "nova_sg_eu_north_1_291844" {
   description = "Security group for Nova EU instances"
   vpc_id      = aws_vpc.nova_vpc_eu_north_1_291844.id
 
-  # Example rules (customize as needed)
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.ssh_ingress_cidr
   }
 
   egress {
@@ -232,6 +234,16 @@ resource "aws_config_config_rule" "ebs_encryption_eu_north_1" {
   depends_on = [aws_config_configuration_recorder.recorder_eu_north_1]
 }
 
+resource "aws_config_config_rule" "iam_policy_eu_north_1" {
+  provider = aws.eu-north-1
+  name     = "IAM_ROLE_MANAGED_POLICY_CHECK"
+  source {
+    owner             = "AWS"
+    source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
+  }
+  depends_on = [aws_config_configuration_recorder.recorder_eu_north_1]
+}
+
 # /-----------------------------------------------------------------------------
 # | US-WEST-2 Regional Resources
 # |-----------------------------------------------------------------------------
@@ -267,7 +279,7 @@ resource "aws_security_group" "nova_sg_us_west_2_291844" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Restrict this in production!
+    cidr_blocks = var.ssh_ingress_cidr
   }
 
   egress {
@@ -390,6 +402,16 @@ resource "aws_config_config_rule" "ebs_encryption_us_west_2" {
   source {
     owner             = "AWS"
     source_identifier = "ENCRYPTED_VOLUMES"
+  }
+  depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
+}
+
+resource "aws_config_config_rule" "iam_policy_us_west_2" {
+  provider = aws.us-west-2
+  name     = "IAM_ROLE_MANAGED_POLICY_CHECK"
+  source {
+    owner             = "AWS"
+    source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
   }
   depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
 }
