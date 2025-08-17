@@ -141,7 +141,7 @@ resource "aws_lb_listener" "main" {
 
 # Data source to get VPC ID from subnet
 data "aws_subnet" "first" {
-  id = var.subnet_ids[0]
+  id = var.private_subnet_ids[0]
 }
 
 # Default user data script
