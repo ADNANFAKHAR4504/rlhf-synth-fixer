@@ -1,6 +1,12 @@
 ############################################
 # Variables
 ############################################
+variable "aws_region" {
+  description = "Default AWS region for the root provider in provider.tf"
+  type        = string
+  default     = "us-east-1"
+}
+
 variable "environment" {
   description = "Environment prefix (dev or prod)"
   type        = string
