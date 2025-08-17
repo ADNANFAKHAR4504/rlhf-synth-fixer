@@ -24,6 +24,10 @@ describe('Terraform integration tests (outputs + standards)', () => {
   const isArn = (s: any) =>
     typeof s === 'string' &&
     /^arn:(aws|aws-us-gov|aws-cn):[a-z0-9-]+:[a-z0-9-]*:\d{12}:.+/.test(s);
+  // S3 bucket ARNs don't include region/account segments
+  const isS3Arn = (s: any) =>
+    typeof s === 'string' &&
+    /^arn:(aws|aws-us-gov|aws-cn):s3:::[A-Za-z0-9._-]+(\/.*)?$/.test(s);
   const isVpcId = (s: any) =>
     typeof s === 'string' && /^vpc-([0-9a-f]{8,17})$/.test(s);
   const isSubnetId = (s: any) =>
@@ -65,17 +69,13 @@ describe('Terraform integration tests (outputs + standards)', () => {
         if (typeof value === 'string') {
           const parts = value
             .split(/[,\s]+/)
-            .map((s) => s.trim())
+            .map(s => s.trim())
             .filter(Boolean);
           return parts;
         }
       }
       // For non-array primitives expected as strings (ids, arns, names, urls)
-      if (
-        typeof value !== 'string' &&
-        !Array.isArray(value) &&
-        value != null
-      ) {
+      if (typeof value !== 'string' && !Array.isArray(value) && value != null) {
         return String(value);
       }
       return value;
@@ -98,7 +98,10 @@ describe('Terraform integration tests (outputs + standards)', () => {
       }
 
       // Case 2: [ { OutputKey, OutputValue }, ... ]
-      if (Array.isArray(raw) && raw.every((o) => o && typeof o === 'object' && 'OutputKey' in o)) {
+      if (
+        Array.isArray(raw) &&
+        raw.every(o => o && typeof o === 'object' && 'OutputKey' in o)
+      ) {
         const map: Record<string, any> = {};
         for (const o of raw) {
           const key = toSnakeCase(String(o.OutputKey));
@@ -115,7 +118,11 @@ describe('Terraform integration tests (outputs + standards)', () => {
           const key = toSnakeCase(k);
           if (v && typeof v === 'object' && !Array.isArray(v)) {
             // Common wrappers
-            const unwrapped = (v as any).value ?? (v as any).Value ?? (v as any).OutputValue ?? v;
+            const unwrapped =
+              (v as any).value ??
+              (v as any).Value ??
+              (v as any).OutputValue ??
+              v;
             map[key] = postShape(key, unwrapped);
           } else {
             map[key] = postShape(key, v as any);
@@ -184,15 +191,21 @@ describe('Terraform integration tests (outputs + standards)', () => {
 
     t('S3 buckets and ARNs', () => {
       expect(isBucketName(outputs!.logs_bucket_name)).toBe(true);
-      expect(isArn(outputs!.logs_bucket_arn)).toBe(true);
+      expect(isS3Arn(outputs!.logs_bucket_arn)).toBe(true);
       expect(isBucketName(outputs!.data_bucket_name)).toBe(true);
-      expect(isArn(outputs!.data_bucket_arn)).toBe(true);
+      expect(isS3Arn(outputs!.data_bucket_arn)).toBe(true);
       // Heuristic: logs bucket name contains "-logs-"
       expect(String(outputs!.logs_bucket_name)).toContain('-logs-');
     });
 
     t('CloudTrail + region coherence', () => {
-      expect(isArn(outputs!.cloudtrail_arn)).toBe(true);
+      const ctArn = outputs!.cloudtrail_arn;
+      if (ctArn) {
+        expect(isArn(ctArn)).toBe(true);
+      } else {
+        // Allow absent/null when trail creation is disabled
+        expect(ctArn === null || ctArn === '').toBe(true);
+      }
       expect(isNonEmptyString(outputs!.cloudtrail_home_region)).toBe(true);
     });
 
@@ -218,7 +231,7 @@ describe('Terraform integration tests (outputs + standards)', () => {
       expect(isNonEmptyString(outputs!.rds_endpoint)).toBe(true);
       // Basic RDS endpoint heuristic
       expect(String(outputs!.rds_endpoint)).toMatch(
-        /\.rds\.[a-z0-9-]+\.amazonaws\.com/
+        /\.rds\.[a-z0-9-]+\.amazonaws\.com(?::\d+)?/
       );
     });
   });
