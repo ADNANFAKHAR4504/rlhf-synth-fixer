@@ -1,4 +1,3 @@
-# serverless-template.yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: 'Serverless application with Lambda functions and API Gateway for user management'
@@ -79,203 +78,304 @@ Resources:
                   - dynamodb:Scan
                 Resource: !GetAtt UserTable.Arn
 
+  # API Gateway REST API
+  UserApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${Environment}-user-api'
+      Description: User Management API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway Deployment
+  UserApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - UserApiPostMethod
+      - UserApiGetMethod
+    Properties:
+      RestApiId: !Ref UserApi
+      Description: API deployment
+
+  # API Gateway Stage
+  UserApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref UserApi
+      DeploymentId: !Ref UserApiDeployment
+      StageName: !Ref Environment
+
+  # API Gateway Resources and Methods
+  UserResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref UserApi
+      ParentId: !GetAtt UserApi.RootResourceId
+      PathPart: user
+
+  UserIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref UserApi
+      ParentId: !Ref UserResource
+      PathPart: '{id}'
+
+  # POST /user method
+  UserApiPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref UserApi
+      ResourceId: !Ref UserResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseHeaders:
+            Access-Control-Allow-Origin: true
+            Access-Control-Allow-Headers: true
+            Access-Control-Allow-Methods: true
+
+  # GET /user/{id} method
+  UserApiGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref UserApi
+      ResourceId: !Ref UserIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      RequestParameters:
+        method.request.path.id: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseHeaders:
+            Access-Control-Allow-Origin: true
+            Access-Control-Allow-Headers: true
+            Access-Control-Allow-Methods: true
+
+  # OPTIONS methods for CORS
+  UserApiOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref UserApi
+      ResourceId: !Ref UserResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+  UserIdApiOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref UserApi
+      ResourceId: !Ref UserIdResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: 'Empty'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
   # Lambda function to create users
   CreateUserFunction:
-    Type: AWS::Serverless::Function
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-create-user'
-      InlineCode: |
-        import json
-        import os
-        import uuid
-        import boto3
-        from datetime import datetime
-
-        def lambda_handler(event, context):
-            # Feature flag check
-            if os.environ.get('FEATURE_FLAG_VALIDATION', 'false').lower() == 'true':
-                print("Feature flag validation is enabled")
-            
-            try:
-                # Parse request body
-                body = json.loads(event.get('body', '{}'))
-                
-                # Generate user ID and timestamp
-                user_id = str(uuid.uuid4())
-                timestamp = datetime.utcnow().isoformat()
-                
-                # Create user record
-                user_data = {
-                    'id': user_id,
-                    'name': body.get('name', ''),
-                    'email': body.get('email', ''),
-                    'created_at': timestamp,
-                    'updated_at': timestamp
-                }
-                
-                # Store in DynamoDB
-                dynamodb = boto3.resource('dynamodb')
-                table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
-                table.put_item(Item=user_data)
-                
-                return {
-                    'statusCode': 201,
-                    'headers': {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*',
-                        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                        'Access-Control-Allow-Methods': 'POST,OPTIONS'
-                    },
-                    'body': json.dumps(user_data)
-                }
-            except Exception as e:
-                return {
-                    'statusCode': 500,
-                    'headers': {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    'body': json.dumps({'error': str(e)})
-                }
+      Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 128
       Environment:
         Variables:
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: !Ref LogLevel
+          DYNAMODB_TABLE: !Ref UserTable
           FEATURE_FLAG_VALIDATION: 'true'
-      Events:
-        CreateUserApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserApi
-            Path: /user
-            Method: POST
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import uuid
+          import boto3
+          from datetime import datetime
+
+          def lambda_handler(event, context):
+              # Feature flag check
+              if os.environ.get('FEATURE_FLAG_VALIDATION', 'false').lower() == 'true':
+                  print("Feature flag validation is enabled")
+              
+              try:
+                  # Parse request body
+                  body = json.loads(event.get('body', '{}'))
+                  
+                  # Generate user ID and timestamp
+                  user_id = str(uuid.uuid4())
+                  timestamp = datetime.utcnow().isoformat()
+                  
+                  # Create user record
+                  user_data = {
+                      'id': user_id,
+                      'name': body.get('name', ''),
+                      'email': body.get('email', ''),
+                      'created_at': timestamp,
+                      'updated_at': timestamp
+                  }
+                  
+                  # Store in DynamoDB
+                  dynamodb = boto3.resource('dynamodb')
+                  table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+                  table.put_item(Item=user_data)
+                  
+                  return {
+                      'statusCode': 201,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                          'Access-Control-Allow-Methods': 'POST,OPTIONS'
+                      },
+                      'body': json.dumps(user_data)
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': str(e)})
+                  }
 
   # Lambda function to get users
   GetUserFunction:
-    Type: AWS::Serverless::Function
+    Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-get-user'
-      InlineCode: |
-        import json
-        import os
-        import boto3
-        from boto3.dynamodb.conditions import Key
-
-        def lambda_handler(event, context):
-            # Feature flag check
-            if os.environ.get('FEATURE_FLAG_CACHING', 'false').lower() == 'true':
-                print("Feature flag caching is enabled")
-            
-            try:
-                # Extract user ID from path parameters
-                user_id = event['pathParameters']['id']
-                
-                # Get user from DynamoDB
-                dynamodb = boto3.resource('dynamodb')
-                table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
-                
-                response = table.get_item(Key={'id': user_id})
-                
-                if 'Item' in response:
-                    return {
-                        'statusCode': 200,
-                        'headers': {
-                            'Content-Type': 'application/json',
-                            'Access-Control-Allow-Origin': '*',
-                            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                            'Access-Control-Allow-Methods': 'GET,OPTIONS'
-                        },
-                        'body': json.dumps(response['Item'], default=str)
-                    }
-                else:
-                    return {
-                        'statusCode': 404,
-                        'headers': {
-                            'Content-Type': 'application/json',
-                            'Access-Control-Allow-Origin': '*'
-                        },
-                        'body': json.dumps({'error': 'User not found'})
-                    }
-            except KeyError as e:
-                return {
-                    'statusCode': 400,
-                    'headers': {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    'body': json.dumps({'error': f'Missing parameter: {str(e)}'})
-                }
-            except Exception as e:
-                return {
-                    'statusCode': 500,
-                    'headers': {
-                        'Content-Type': 'application/json',
-                        'Access-Control-Allow-Origin': '*'
-                    },
-                    'body': json.dumps({'error': str(e)})
-                }
+      Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 128
       Environment:
         Variables:
+          ENVIRONMENT: !Ref Environment
+          LOG_LEVEL: !Ref LogLevel
+          DYNAMODB_TABLE: !Ref UserTable
           FEATURE_FLAG_CACHING: 'false'
-      Events:
-        GetUserApi:
-          Type: Api
-          Properties:
-            RestApiId: !Ref UserApi
-            Path: /user/{id}
-            Method: GET
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          from boto3.dynamodb.conditions import Key
 
-  # API Gateway REST API
-  UserApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: !Sub '${Environment}-user-api'
-      StageName: !Ref Environment
-      Cors:
-        AllowMethods: "'GET,POST,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"
-      DefinitionBody:
-        openapi: 3.0.1
-        info:
-          title: User Management API
-          version: 1.0.0
-        paths:
-          /user:
-            post:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserFunction.Arn}/invocations'
-              responses:
-                '200':
-                  description: User created successfully
-          /user/{id}:
-            get:
-              parameters:
-                - name: id
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserFunction.Arn}/invocations'
-              responses:
-                '200':
-                  description: User retrieved successfully
+          def lambda_handler(event, context):
+              # Feature flag check
+              if os.environ.get('FEATURE_FLAG_CACHING', 'false').lower() == 'true':
+                  print("Feature flag caching is enabled")
+              
+              try:
+                  # Extract user ID from path parameters
+                  user_id = event['pathParameters']['id']
+                  
+                  # Get user from DynamoDB
+                  dynamodb = boto3.resource('dynamodb')
+                  table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
+                  
+                  response = table.get_item(Key={'id': user_id})
+                  
+                  if 'Item' in response:
+                      return {
+                          'statusCode': 200,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*',
+                              'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                              'Access-Control-Allow-Methods': 'GET,OPTIONS'
+                          },
+                          'body': json.dumps(response['Item'], default=str)
+                      }
+                  else:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': '*'
+                          },
+                          'body': json.dumps({'error': 'User not found'})
+                      }
+              except KeyError as e:
+                  return {
+                      'statusCode': 400,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': f'Missing parameter: {str(e)}'})
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': '*'
+                      },
+                      'body': json.dumps({'error': str(e)})
+                  }
 
-  # Lambda permissions for API Gateway
+  # Lambda permissions for API Gateway - FIXED SourceArn patterns
   CreateUserFunctionPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref CreateUserFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${UserApi}/*/POST/user'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserApi}/*/POST/user'
 
   GetUserFunctionPermission:
     Type: AWS::Lambda::Permission
@@ -283,7 +383,7 @@ Resources:
       FunctionName: !Ref GetUserFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${UserApi}/*/GET/user/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserApi}/*/GET/user/*'
 
 Outputs:
   ApiGatewayUrl:
