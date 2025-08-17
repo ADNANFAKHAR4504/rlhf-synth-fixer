@@ -78,6 +78,12 @@ jobs:
           overwrite: true
           path: |
             bin/
+            bin/
+            lib/
+            package*.json
+            Pipfile
+            Pipfile.lock
+            tsconfig.json
 
   synth:
     name: Synth
