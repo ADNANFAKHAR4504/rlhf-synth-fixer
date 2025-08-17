@@ -95,7 +95,7 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
   describe(`${generateUniqueTestId('resources')}: Resources Comprehensive Validation`, () => {
     test(`${generateUniqueTestId('resource_count')}: should have expected number of resources`, () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(7); // UserTable, LambdaExecutionRole, CreateUserFunction, GetUserFunction, UserApi, CreateUserFunctionPermission, GetUserFunctionPermission
+      expect(resourceCount).toBe(15); // UserTable, LambdaExecutionRole, CreateUserFunction, GetUserFunction, UserApi, UserApiDeployment, UserApiStage, UserResource, UserIdResource, UserApiPostMethod, UserApiGetMethod, UserApiOptionsMethod, UserIdApiOptionsMethod, CreateUserFunctionPermission, GetUserFunctionPermission
     });
 
     test(`${generateUniqueTestId('user_table')}: UserTable should have correct configuration`, () => {
@@ -131,42 +131,38 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
     test(`${generateUniqueTestId('create_user_lambda')}: CreateUserFunction should have correct configuration`, () => {
       const lambda = template.Resources.CreateUserFunction;
       expect(lambda).toBeDefined();
-      expect(lambda.Type).toBe('AWS::Serverless::Function');
+      expect(lambda.Type).toBe('AWS::Lambda::Function');
       
       const props = lambda.Properties;
       expect(props.FunctionName).toEqual({ 'Fn::Sub': '${Environment}-create-user' });
-      expect(props.InlineCode).toBeDefined();
+      expect(props.Code.ZipFile).toBeDefined();
       expect(props.Handler).toBe('index.lambda_handler');
       expect(props.Role).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
       expect(props.Environment.Variables.FEATURE_FLAG_VALIDATION).toBe('true');
-      expect(props.Events.CreateUserApi.Type).toBe('Api');
     });
 
     test(`${generateUniqueTestId('get_user_lambda')}: GetUserFunction should have correct configuration`, () => {
       const lambda = template.Resources.GetUserFunction;
       expect(lambda).toBeDefined();
-      expect(lambda.Type).toBe('AWS::Serverless::Function');
+      expect(lambda.Type).toBe('AWS::Lambda::Function');
       
       const props = lambda.Properties;
       expect(props.FunctionName).toEqual({ 'Fn::Sub': '${Environment}-get-user' });
-      expect(props.InlineCode).toBeDefined();
+      expect(props.Code.ZipFile).toBeDefined();
       expect(props.Handler).toBe('index.lambda_handler');
       expect(props.Role).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
       expect(props.Environment.Variables.FEATURE_FLAG_CACHING).toBe('false');
-      expect(props.Events.GetUserApi.Type).toBe('Api');
     });
 
     test(`${generateUniqueTestId('api_gateway')}: UserApi should have correct configuration`, () => {
       const api = template.Resources.UserApi;
       expect(api).toBeDefined();
-      expect(api.Type).toBe('AWS::Serverless::Api');
+      expect(api.Type).toBe('AWS::ApiGateway::RestApi');
       
       const props = api.Properties;
       expect(props.Name).toEqual({ 'Fn::Sub': '${Environment}-user-api' });
-      expect(props.StageName).toEqual({ Ref: 'Environment' });
-      expect(props.Cors).toBeDefined();
-      expect(props.DefinitionBody).toBeDefined();
-      expect(props.DefinitionBody.openapi).toBe('3.0.1');
+      expect(props.Description).toBe('User Management API');
+      expect(props.EndpointConfiguration.Types).toEqual(['REGIONAL']);
     });
 
     test(`${generateUniqueTestId('lambda_permissions')}: Lambda permissions should be correctly configured`, () => {
@@ -284,12 +280,12 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
     });
 
     test(`${generateUniqueTestId('cors_validation')}: should have proper CORS configuration`, () => {
-      const api = template.Resources.UserApi;
-      const corsConfig = api.Properties.Cors;
+      const optionsMethod = template.Resources.UserApiOptionsMethod;
+      const optionsIntegration = optionsMethod.Properties.Integration;
       
-      expect(corsConfig.AllowMethods).toBe("'GET,POST,OPTIONS'");
-      expect(corsConfig.AllowHeaders).toBe("'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'");
-      expect(corsConfig.AllowOrigin).toBe("'*'");
+      expect(optionsIntegration.IntegrationResponses[0].ResponseParameters['method.response.header.Access-Control-Allow-Methods']).toBe("'GET,POST,OPTIONS'");
+      expect(optionsIntegration.IntegrationResponses[0].ResponseParameters['method.response.header.Access-Control-Allow-Headers']).toBe("'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'");
+      expect(optionsIntegration.IntegrationResponses[0].ResponseParameters['method.response.header.Access-Control-Allow-Origin']).toBe("'*'");
     });
 
     test(`${generateUniqueTestId('lambda_timeouts')}: should have reasonable Lambda timeouts`, () => {
@@ -339,13 +335,15 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
     });
 
     test(`${generateUniqueTestId('api_path_structure')}: API paths should follow RESTful conventions`, () => {
-      const apiDefinition = template.Resources.UserApi.Properties.DefinitionBody;
-      const paths = Object.keys(apiDefinition.paths);
+      const userResource = template.Resources.UserResource;
+      const userIdResource = template.Resources.UserIdResource;
+      const postMethod = template.Resources.UserApiPostMethod;
+      const getMethod = template.Resources.UserApiGetMethod;
       
-      expect(paths).toContain('/user');
-      expect(paths).toContain('/user/{id}');
-      expect(apiDefinition.paths['/user'].post).toBeDefined();
-      expect(apiDefinition.paths['/user/{id}'].get).toBeDefined();
+      expect(userResource.Properties.PathPart).toBe('user');
+      expect(userIdResource.Properties.PathPart).toBe('{id}');
+      expect(postMethod.Properties.HttpMethod).toBe('POST');
+      expect(getMethod.Properties.HttpMethod).toBe('GET');
     });
   });
 
@@ -438,12 +436,15 @@ describe(`${generateUniqueTestId('edge_cases')}: Edge Cases and Error Handling`,
     // Basic check - API references functions, functions don't reference API
     const createUserFunction = resources.CreateUserFunction;
     const getUserFunction = resources.GetUserFunction;
+    const postMethod = resources.UserApiPostMethod;
+    const getMethod = resources.UserApiGetMethod;
     
     // Functions should reference role and table, not API
     expect(createUserFunction.Properties.Role).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
     expect(getUserFunction.Properties.Role).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
     
-    // API events should reference the API resource itself
-    expect(createUserFunction.Properties.Events.CreateUserApi.Properties.RestApiId).toEqual({ Ref: 'UserApi' });
+    // API methods should reference functions correctly
+    expect(postMethod.Properties.Integration.Uri).toEqual({ 'Fn::Sub': 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserFunction.Arn}/invocations' });
+    expect(getMethod.Properties.Integration.Uri).toEqual({ 'Fn::Sub': 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserFunction.Arn}/invocations' });
   });
 });
