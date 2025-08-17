@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Production-ready app environment in AWS (us-east-1). Uses the specified existing VPC,
-  associates a dedicated secondary CIDR and subnet, launches an EC2 instance on the latest
+  discovers an existing subnet automatically, launches an EC2 instance on the latest
   Amazon Linux 2 AMI (via SSM), restricts inbound to SSH/HTTPS only, and provisions an S3
   bucket with server-side encryption. All resources tagged Environment: Production.
 
@@ -16,7 +16,6 @@ Rules:
         AssertDescription: "This stack must be deployed in us-east-1."
 
 Parameters:
-  # Your real VPC ID (provided)
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: Existing VPC ID in us-east-1.
@@ -45,27 +44,7 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     Description: SSM public parameter for latest Amazon Linux 2 AMI (us-east-1).
 
-  # Dedicated secondary CIDR for this stack (unlikely to collide)
-  SecondaryVpcCidr:
-    Type: String
-    Default: 10.255.0.0/16
-    AllowedPattern: ^((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)\/(3[0-2]|[12]?\d)$
-    Description: Secondary IPv4 CIDR to associate to the VPC for app subnet.
-
-  AppSubnetCidr:
-    Type: String
-    Default: 10.255.1.0/24
-    AllowedPattern: ^((25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(25[0-5]|2[0-4]\d|1?\d?\d)\/(3[0-2]|[12]?\d)$
-    Description: Subnet CIDR carved from SecondaryVpcCidr.
-
 Resources:
-  # Associate a dedicated secondary CIDR with the existing VPC so our subnet is guaranteed non-overlapping.
-  AppVpcCidrAssociation:
-    Type: AWS::EC2::VPCCidrBlock
-    Properties:
-      VpcId: !Ref VpcId
-      CidrBlock: !Ref SecondaryVpcCidr
-
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -87,54 +66,6 @@ Resources:
         - Key: Environment
           Value: Production
 
-  AppSubnet:
-    Type: AWS::EC2::Subnet
-    DependsOn: AppVpcCidrAssociation
-    Properties:
-      VpcId: !Ref VpcId
-      CidrBlock: !Ref AppSubnetCidr
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  # (Optional public routing; not strictly required for stack create,
-  # but enables outbound internet if desired and supports PublicIp output.)
-  AppInternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  AppIgwAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VpcId
-      InternetGatewayId: !Ref AppInternetGateway
-
-  AppRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VpcId
-      Tags:
-        - Key: Environment
-          Value: Production
-
-  AppRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AppIgwAttachment
-    Properties:
-      RouteTableId: !Ref AppRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref AppInternetGateway
-
-  AppSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref AppSubnet
-      RouteTableId: !Ref AppRouteTable
-
   AppBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -151,32 +82,109 @@ Resources:
         - Key: Environment
           Value: Production
 
+  # ---- Custom resource: discover a subnet in the provided VPC ----
+  FindSubnetRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FindSubnetInline
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ec2:DescribeSubnets
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  FindSubnetFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt FindSubnetRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json, boto3, urllib.request
+          def respond(event, context, status, data, physical_id=None):
+              body = {
+                'Status': status,
+                'Reason': f"See CloudWatch Logs: {getattr(context,'log_stream_name','')}",
+                'PhysicalResourceId': physical_id or getattr(context,'log_stream_name','FindSubnet'),
+                'StackId': event['StackId'],
+                'RequestId': event['RequestId'],
+                'LogicalResourceId': event['LogicalResourceId'],
+                'Data': data
+              }
+              req = urllib.request.Request(event['ResponseURL'], data=json.dumps(body).encode(), method='PUT')
+              req.add_header('content-type','')
+              req.add_header('content-length', str(len(json.dumps(body))))
+              urllib.request.urlopen(req).read()
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ('Create','Update'):
+                      vpc_id = event['ResourceProperties']['VpcId']
+                      ec2 = boto3.client('ec2')
+                      subs = ec2.describe_subnets(Filters=[{'Name':'vpc-id','Values':[vpc_id]}]).get('Subnets', [])
+                      if not subs:
+                          raise Exception(f'No subnets found in VPC {vpc_id}')
+                      subs.sort(key=lambda s: (not s.get('DefaultForAz', False), s.get('AvailabilityZoneId','zzz'), s['SubnetId']))
+                      subnet_id = subs[0]['SubnetId']
+                      respond(event, context, 'SUCCESS', {'SubnetId': subnet_id}, subnet_id)
+                  else:
+                      respond(event, context, 'SUCCESS', {}, 'deleted')
+              except Exception as e:
+                  respond(event, context, 'FAILED', {'Error': str(e)}, 'failed')
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  FindSubnet:
+    Type: Custom::FindSubnet
+    Properties:
+      ServiceToken: !GetAtt FindSubnetFunction.Arn
+      VpcId: !Ref VpcId
+
   AppInstance:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
-      SubnetId: !Ref AppSubnet
+      SubnetId: !GetAtt FindSubnet.SubnetId
       SecurityGroupIds:
         - !Ref AppSecurityGroup
       Tags:
         - Key: Environment
           Value: Production
+  # ---- end custom subnet discovery ----
 
 Outputs:
   SecurityGroupId:
     Description: ID of the security group allowing SSH/HTTPS.
     Value: !Ref AppSecurityGroup
-
   InstanceId:
     Description: ID of the EC2 instance.
     Value: !Ref AppInstance
-
   InstancePublicIp:
     Description: Public IPv4 of the EC2 instance (if assigned).
     Value: !GetAtt AppInstance.PublicIp
-
   BucketName:
     Description: Name of the S3 bucket with SSE enabled.
     Value: !Ref AppBucket
-
+  DiscoveredSubnetId:
+    Description: Subnet selected by the custom resource within the provided VPC.
+    Value: !GetAtt FindSubnet.SubnetId
