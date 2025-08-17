@@ -8,8 +8,11 @@ This file establishes the necessary AWS provider configurations, including a def
 # /-----------------------------------------------------------------------------
 # | Terraform & Provider Configuration
 # |-----------------------------------------------------------------------------
+
 terraform {
+
   backend "s3" {}
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -18,47 +21,21 @@ terraform {
   }
 }
 
-# Variable for the default AWS region (used for global resources like IAM)
-variable "aws_region" {
-  description = "The default AWS region for provider configuration."
-  type        = string
-  default     = "eu-north-1"
-}
-
-# Variable for target regions for deployment
-variable "aws_regions" {
-  description = "List of AWS regions for multi-region deployment"
-  type        = list(string)
-  default     = ["eu-north-1", "us-west-2"]
-}
-
-# Default provider configuration for non-regional resources like IAM
+# Default provider for non-regional resources like IAM.
 provider "aws" {
-  region = var.aws_region
+  region = "eu-north-1"
 }
 
-# Provider alias for US East (N. Virginia) region
-provider "aws" {
-  alias  = "us-east-1"
-  region = "us-east-1"
-}
-
-# Provider alias for US West (Oregon) region
-provider "aws" {
-  alias  = "us-west-2"
-  region = "us-west-2"
-}
-
-# Provider alias for EU North (Stockholm) region
+# Provider alias for the EU North (Stockholm) region.
 provider "aws" {
   alias  = "eu-north-1"
   region = "eu-north-1"
 }
 
-# Provider alias for EU Central (Frankfurt) region
+# Provider alias for the US West (Oregon) region.
 provider "aws" {
-  alias  = "eu-central-1"
-  region = "eu-central-1"
+  alias  = "us-west-2"
+  region = "us-west-2"
 }
 ```
 
@@ -86,20 +63,15 @@ locals {
     Owner   = var.your_name
     Purpose = "Nova Application Baseline"
   }
-
-  # Map regions to their provider aliases
-  region_providers = {
-    "us-east-1" = "aws.us-east-1"
-    "us-west-2" = "aws.us-west-2"
-  }
 }
 
 # /-----------------------------------------------------------------------------
 # | Global Resources (IAM)
 # |-----------------------------------------------------------------------------
 
+# This single IAM role will be used by EC2 instances in all regions.
 resource "aws_iam_role" "ec2_role" {
-  name = "nova-ec2-role"
+  name = "nova-ec2-role-291844"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -111,14 +83,15 @@ resource "aws_iam_role" "ec2_role" {
   tags = local.common_tags
 }
 
+# The policy document grants access to resources in BOTH regions.
 data "aws_iam_policy_document" "ec2_permissions" {
   statement {
     sid     = "AllowS3ReadAccess"
     effect  = "Allow"
     actions = ["s3:GetObject"]
     resources = [
-      for region in var.aws_regions :
-      "arn:aws:s3:::nova-data-bucket-${data.aws_caller_identity.current.account_id}-${region}/*"
+      "${aws_s3_bucket.data_bucket_eu_north_1.arn}/*",
+      "${aws_s3_bucket.data_bucket_us_west_2.arn}/*",
     ]
   }
 
@@ -131,19 +104,351 @@ data "aws_iam_policy_document" "ec2_permissions" {
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
-  name   = "nova-ec2-s3-cloudwatch-policy"
+  name   = "nova-ec2-s3-cloudwatch-policy-291844"
   role   = aws_iam_role.ec2_role.id
   policy = data.aws_iam_policy_document.ec2_permissions.json
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "nova-ec2-instance-profile"
+  name = "nova-ec2-instance-profile-291844"
   role = aws_iam_role.ec2_role.name
 }
 
-# AWS Config IAM Role
+# /-----------------------------------------------------------------------------
+# | EU-NORTH-1 Regional Resources
+# |-----------------------------------------------------------------------------
+
+resource "aws_vpc" "nova_vpc_eu_north_1_291844" {
+  provider             = aws.eu-north-1
+  cidr_block           = "10.2.0.0/16" # Unique CIDR
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags                 = merge(local.common_tags, { Name = "nova-vpc-eu-north-1-291844" })
+}
+
+resource "aws_subnet" "nova_subnet_eu_north_1_291844" {
+  provider          = aws.eu-north-1
+  vpc_id            = aws_vpc.nova_vpc_eu_north_1_291844.id
+  cidr_block        = "10.2.1.0/24"
+  availability_zone = "eu-north-1a" # Example AZ (verify in your AWS account)
+  tags              = merge(local.common_tags, { Name = "nova-subnet-eu-north-1-291844" })
+}
+
+resource "aws_internet_gateway" "nova_igw_eu_north_1_291844" {
+  provider = aws.eu-north-1
+  vpc_id   = aws_vpc.nova_vpc_eu_north_1_291844.id
+  tags     = merge(local.common_tags, { Name = "nova-igw-eu-north-1-291844" })
+}
+
+resource "aws_route_table" "nova_rt_eu_north_1_291844" {
+  provider = aws.eu-north-1
+  vpc_id   = aws_vpc.nova_vpc_eu_north_1_291844.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.nova_igw_eu_north_1_291844.id
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-rt-eu-north-1-291844" })
+}
+
+resource "aws_route_table_association" "nova_rta_eu_north_1_291844" {
+  provider       = aws.eu-north-1
+  subnet_id      = aws_subnet.nova_subnet_eu_north_1_291844.id
+  route_table_id = aws_route_table.nova_rt_eu_north_1_291844.id
+}
+
+data "aws_ami" "amazon_linux_2_eu_north_1" {
+  provider = aws.eu-north-1
+
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+resource "aws_kms_key" "app_key_eu_north_1" {
+  provider = aws.eu-north-1
+
+  description             = "KMS key for Nova (eu-north-1)"
+  deletion_window_in_days = 10
+  tags                    = local.common_tags
+}
+
+resource "aws_kms_alias" "app_key_alias_eu_north_1" {
+  provider      = aws.eu-north-1
+  name          = "alias/nova-app-key-291844"
+  target_key_id = aws_kms_key.app_key_eu_north_1.id
+}
+
+resource "aws_s3_bucket" "data_bucket_eu_north_1" {
+  provider = aws.eu-north-1
+  bucket   = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-eu-north-1-291844"
+  tags     = local.common_tags
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "data_bucket_encryption_eu_north_1" {
+  provider = aws.eu-north-1
+  bucket   = aws_s3_bucket.data_bucket_eu_north_1.id
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.app_key_eu_north_1.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "data_bucket_pac_eu_north_1" {
+  provider = aws.eu-north-1
+  bucket   = aws_s3_bucket.data_bucket_eu_north_1.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_instance" "app_server_eu_north_1_291844" {
+  provider                    = aws.eu-north-1
+  ami                         = data.aws_ami.amazon_linux_2_eu_north_1.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.nova_subnet_eu_north_1_291844.id # Explicit subnet
+  associate_public_ip_address = true                                        # Only if public access needed
+
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  vpc_security_group_ids = [aws_security_group.nova_sg_eu_north_1_291844.id]
+
+  ebs_block_device {
+    device_name = data.aws_ami.amazon_linux_2_eu_north_1.root_device_name
+    encrypted   = true
+    kms_key_id  = aws_kms_key.app_key_eu_north_1.arn
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-app-server-eu-north-1-291844" })
+}
+
+resource "aws_security_group" "nova_sg_eu_north_1_291844" {
+  provider    = aws.eu-north-1
+  name        = "nova-sg-eu-north-1-291844"
+  description = "Security group for Nova EU instances"
+  vpc_id      = aws_vpc.nova_vpc_eu_north_1_291844.id
+
+  # Example rules (customize as needed)
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-sg-eu-north-1-291844" })
+}
+
+# AWS Config setup for eu-north-1
+resource "aws_config_configuration_recorder" "recorder_eu_north_1" {
+  provider = aws.eu-north-1
+  name     = "default"
+  role_arn = aws_iam_role.config_role.arn
+}
+
+resource "aws_config_config_rule" "s3_encryption_eu_north_1" {
+  provider = aws.eu-north-1
+  name     = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+  source {
+    owner             = "AWS"
+    source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+  }
+  depends_on = [aws_config_configuration_recorder.recorder_eu_north_1]
+}
+
+resource "aws_config_config_rule" "ebs_encryption_eu_north_1" {
+  provider = aws.eu-north-1
+  name     = "ENCRYPTED_VOLUMES"
+  source {
+    owner             = "AWS"
+    source_identifier = "ENCRYPTED_VOLUMES"
+  }
+  depends_on = [aws_config_configuration_recorder.recorder_eu_north_1]
+}
+
+# /-----------------------------------------------------------------------------
+# | US-WEST-2 Regional Resources
+# |-----------------------------------------------------------------------------
+
+resource "aws_vpc" "nova_vpc_us_west_2_291844" {
+  provider             = aws.us-west-2
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags                 = merge(local.common_tags, { Name = "nova-vpc-us-west-2-291844" })
+}
+
+resource "aws_subnet" "nova_subnet_us_west_2_291844" {
+  provider          = aws.us-west-2
+  vpc_id            = aws_vpc.nova_vpc_us_west_2_291844.id
+  cidr_block        = "10.0.1.0/24" # Adjust CIDR as needed
+  availability_zone = "us-west-2a"  # Choose an AZ
+  tags              = merge(local.common_tags, { Name = "nova-subnet-us-west-2-291844" })
+}
+
+resource "aws_internet_gateway" "nova_igw_us_west_2_291844" {
+  provider = aws.us-west-2
+  vpc_id   = aws_vpc.nova_vpc_us_west_2_291844.id
+  tags     = merge(local.common_tags, { Name = "nova-igw-us-west-2-291844" })
+}
+resource "aws_security_group" "nova_sg_us_west_2_291844" {
+  provider    = aws.us-west-2
+  name        = "nova-sg-us-west-2-291844"
+  description = "Security group for Nova instances"
+  vpc_id      = aws_vpc.nova_vpc_us_west_2_291844.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Restrict this in production!
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-sg-us-west-2-291844" })
+}
+
+resource "aws_route_table" "nova_rt_us_west_2_291844" {
+  provider = aws.us-west-2
+  vpc_id   = aws_vpc.nova_vpc_us_west_2_291844.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.nova_igw_us_west_2_291844.id
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-rt-us-west-2-291844" })
+}
+
+resource "aws_route_table_association" "nova_rta_us_west_2_291844" {
+  provider       = aws.us-west-2
+  subnet_id      = aws_subnet.nova_subnet_us_west_2_291844.id
+  route_table_id = aws_route_table.nova_rt_us_west_2_291844.id
+}
+
+data "aws_ami" "amazon_linux_2_us_west_2" {
+  provider = aws.us-west-2
+
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+resource "aws_kms_key" "app_key_us_west_2" {
+  provider = aws.us-west-2
+
+  description             = "KMS key for Nova (us-west-2)"
+  deletion_window_in_days = 10
+  tags                    = local.common_tags
+}
+
+resource "aws_kms_alias" "app_key_alias_us_west_2" {
+  provider      = aws.us-west-2
+  name          = "alias/nova-app-key-291844"
+  target_key_id = aws_kms_key.app_key_us_west_2.id
+}
+
+resource "aws_s3_bucket" "data_bucket_us_west_2" {
+  provider = aws.us-west-2
+  bucket   = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-us-west-2-291844"
+  tags     = local.common_tags
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "data_bucket_encryption_us_west_2" {
+  provider = aws.us-west-2
+  bucket   = aws_s3_bucket.data_bucket_us_west_2.id
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.app_key_us_west_2.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "data_bucket_pac_us_west_2" {
+  provider = aws.us-west-2
+  bucket   = aws_s3_bucket.data_bucket_us_west_2.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_instance" "app_server_us_west_2_291844" {
+  provider               = aws.us-west-2
+  ami                    = data.aws_ami.amazon_linux_2_us_west_2.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.nova_subnet_us_west_2_291844.id
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  vpc_security_group_ids = [aws_security_group.nova_sg_us_west_2_291844.id]
+
+  ebs_block_device {
+    device_name = data.aws_ami.amazon_linux_2_us_west_2.root_device_name
+    encrypted   = true
+    kms_key_id  = aws_kms_key.app_key_us_west_2.arn
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-app-server-us-west-2-291844" })
+}
+
+# AWS Config setup for us-west-2
+resource "aws_config_configuration_recorder" "recorder_us_west_2" {
+  provider = aws.us-west-2
+  name     = "default"
+  role_arn = aws_iam_role.config_role.arn
+}
+
+resource "aws_config_config_rule" "s3_encryption_us_west_2" {
+  provider = aws.us-west-2
+  name     = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+  source {
+    owner             = "AWS"
+    source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+  }
+  depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
+}
+
+resource "aws_config_config_rule" "ebs_encryption_us_west_2" {
+  provider = aws.us-west-2
+  name     = "ENCRYPTED_VOLUMES"
+  source {
+    owner             = "AWS"
+    source_identifier = "ENCRYPTED_VOLUMES"
+  }
+  depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
+}
+
+# /-----------------------------------------------------------------------------
+# | Global Resources for AWS Config
+# |-----------------------------------------------------------------------------
+
+# A single IAM role for the AWS Config service, used by recorders in all regions.
 resource "aws_iam_role" "config_role" {
-  name = "nova-config-role"
+  name = "nova-config-role-291844"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -152,234 +457,11 @@ resource "aws_iam_role" "config_role" {
       Principal = { Service = "config.amazonaws.com" }
     }]
   })
-  tags = local.common_tags
 }
 
 resource "aws_iam_role_policy_attachment" "config_policy" {
   role       = aws_iam_role.config_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
-}
-
-# S3 bucket for Config (required for Config to work)
-resource "aws_s3_bucket" "config_bucket" {
-  for_each = toset(var.aws_regions)
-
-  provider = aws
-  bucket   = "nova-config-bucket-${data.aws_caller_identity.current.account_id}-${each.value}"
-  tags     = local.common_tags
-}
-
-resource "aws_iam_role_policy" "config_s3_policy" {
-  name = "nova-config-s3-policy"
-  role = aws_iam_role.config_role.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetBucketAcl",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          for region in var.aws_regions :
-          "arn:aws:s3:::nova-config-bucket-${data.aws_caller_identity.current.account_id}-${region}"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject"
-        ]
-        Resource = [
-          for region in var.aws_regions :
-          "arn:aws:s3:::nova-config-bucket-${data.aws_caller_identity.current.account_id}-${region}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject"
-        ]
-        Resource = [
-          for region in var.aws_regions :
-          "arn:aws:s3:::nova-config-bucket-${data.aws_caller_identity.current.account_id}-${region}/*"
-        ]
-        Condition = {
-          StringLike = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      }
-    ]
-  })
-}
-
-# /-----------------------------------------------------------------------------
-# | Regional Resources - Using for_each for DRY approach
-# |-----------------------------------------------------------------------------
-
-# AMI Discovery for each region
-data "aws_ami" "amazon_linux_2" {
-  for_each = toset(var.aws_regions)
-
-  provider    = aws
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
-
-# KMS Keys
-resource "aws_kms_key" "app_key" {
-  for_each = toset(var.aws_regions)
-
-  provider                = aws
-  description             = "KMS key for Nova (${each.value})"
-  deletion_window_in_days = 10
-  tags                    = local.common_tags
-}
-
-resource "aws_kms_alias" "app_key_alias" {
-  for_each = toset(var.aws_regions)
-
-  provider      = aws
-  name          = "alias/nova-app-key"
-  target_key_id = aws_kms_key.app_key[each.value].id
-}
-
-# S3 Buckets
-resource "aws_s3_bucket" "data_bucket" {
-  for_each = toset(var.aws_regions)
-
-  provider = aws
-  bucket   = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-${each.value}"
-  tags     = local.common_tags
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "data_bucket_encryption" {
-  for_each = toset(var.aws_regions)
-
-  provider = aws
-  bucket   = aws_s3_bucket.data_bucket[each.value].id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.app_key[each.value].arn
-      sse_algorithm     = "aws:kms"
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "data_bucket_pab" {
-  for_each = toset(var.aws_regions)
-
-  provider = aws
-  bucket   = aws_s3_bucket.data_bucket[each.value].id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# EC2 Instances
-resource "aws_instance" "app_server" {
-  for_each = toset(var.aws_regions)
-
-  provider             = aws
-  ami                  = data.aws_ami.amazon_linux_2[each.value].id
-  instance_type        = "t3.micro"
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-
-  root_block_device {
-    encrypted  = true
-    kms_key_id = aws_kms_key.app_key[each.value].arn
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "nova-app-server-${each.value}"
-  })
-}
-
-# AWS Config Configuration
-resource "aws_config_delivery_channel" "config_delivery" {
-  for_each = toset(var.aws_regions)
-
-  provider       = aws
-  name           = "default"
-  s3_bucket_name = aws_s3_bucket.config_bucket[each.value].id
-}
-
-resource "aws_config_configuration_recorder" "recorder" {
-  for_each = toset(var.aws_regions)
-
-  provider = aws
-  name     = "default"
-  role_arn = aws_iam_role.config_role.arn
-
-  recording_group {
-    all_supported = true
-  }
-
-  depends_on = [aws_config_delivery_channel.config_delivery]
-}
-
-resource "aws_config_configuration_recorder_status" "recorder_status" {
-  for_each = toset(var.aws_regions)
-
-  provider   = aws
-  name       = aws_config_configuration_recorder.recorder[each.value].name
-  is_enabled = true
-
-  depends_on = [aws_config_configuration_recorder.recorder]
-}
-
-# Config Rules
-resource "aws_config_config_rule" "s3_encryption" {
-  for_each = toset(var.aws_regions)
-
-  provider = aws
-  name     = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
-  }
-
-  depends_on = [aws_config_configuration_recorder.recorder]
-}
-
-resource "aws_config_config_rule" "ebs_encryption" {
-  for_each = toset(var.aws_regions)
-
-  provider = aws
-  name     = "ENCRYPTED_VOLUMES"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "ENCRYPTED_VOLUMES"
-  }
-
-  depends_on = [aws_config_configuration_recorder.recorder]
-}
-
-resource "aws_config_config_rule" "iam_role_policy" {
-  for_each = toset(var.aws_regions)
-
-  provider = aws
-  name     = "IAM_ROLE_MANAGED_POLICY_CHECK"
-
-  source {
-    owner             = "AWS"
-    source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
-  }
-
-  depends_on = [aws_config_configuration_recorder.recorder]
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 # /-----------------------------------------------------------------------------
@@ -389,10 +471,15 @@ resource "aws_config_config_rule" "iam_role_policy" {
 output "deployment_summary" {
   description = "Summary of deployed resources across all regions."
   value = {
-    for region in var.aws_regions : region => {
-      s3_bucket_name  = aws_s3_bucket.data_bucket[region].id
-      ec2_instance_id = aws_instance.app_server[region].id
-      kms_key_arn     = aws_kms_key.app_key[region].arn
+    "eu-north-1" = {
+      s3_bucket_name  = aws_s3_bucket.data_bucket_eu_north_1.id
+      ec2_instance_id = aws_instance.app_server_eu_north_1_291844.id
+      kms_key_arn     = aws_kms_key.app_key_eu_north_1.arn
+    }
+    "us-west-2" = {
+      s3_bucket_name  = aws_s3_bucket.data_bucket_us_west_2.id
+      ec2_instance_id = aws_instance.app_server_us_west_2_291844.id
+      kms_key_arn     = aws_kms_key.app_key_us_west_2.arn
     }
   }
 }

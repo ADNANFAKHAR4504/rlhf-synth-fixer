@@ -1,104 +1,40 @@
-### 1. Brittle Provider Assignment
+### 1. Critical Failure: Invalid Dynamic Provider Configuration
 
-* **Failure:** The code repeatedly uses a ternary operator to assign providers:
+The most significant failure is the attempt to use a dynamic expression for the `provider` meta-argument on a resource, which is a foundational concept in Terraform.
 
-  ```hcl
-  provider = each.value == "us-east-1" ? aws.us-east-1 : aws.us-west-2
-  ```
-* **Impact:** This approach only works for exactly **two regions**. Adding a third region requires rewriting every provider reference across multiple resources, which breaks scalability and violates DRY principles.
-* **Recommendation:** Use a provider map in `locals` and reference providers dynamically:
+* **Problem:** The code uses a `for_each` loop with `provider = local.region_providers[each.value]` for every regional resource. The `provider` meta-argument in Terraform **does not support dynamic expressions** like this. It must be a static reference.
+* **Impact:** This is a fatal syntax error. The configuration will fail during `terraform init` and is **completely non-deployable**.
+* **Recommendation:** The model must be trained to recognize this core limitation. It should produce one of two valid patterns:
+    1.  **Explicit Duplication:** For a single-file configuration, each regional resource must be defined in its own block with a hardcoded provider (e.g., `provider = aws.us-east-1`).
+    2.  **Child Modules (Best Practice):** The correct DRY approach is to place regional resources in a child module and use the `providers` map in the `module` block, which *is* designed to be dynamic.
 
-  ```hcl
-  locals {
-    providers = {
-      for region in var.aws_regions : region => aws[region]
-    }
-  }
+***
 
-  resource "aws_kms_key" "nova_key" {
-    for_each = toset(var.aws_regions)
-    provider = local.providers[each.key]
-  }
-  ```
+### 2. Security Failure: Incorrect EC2 Root Volume Encryption
 
----
+The configuration fails to meet the explicit security requirement of encrypting the EC2 root volume with the specified custom KMS key.
 
-### 2. Redundant Resource Definitions
+* **Problem:** The `aws_instance` resource uses a `root_block_device` block with a `kms_key_id` argument. The `root_block_device` argument **does not support `kms_key_id`**. AWS will silently ignore this parameter and encrypt the volume with the default AWS-managed key for EBS in that region.
+* **Impact:** The deployed infrastructure will **not be compliant** with the security requirements, as the wrong KMS key will be used for encryption. This is a critical security flaw.
+* **Recommendation:** The model must use the correct `ebs_block_device` block, which requires specifying the `device_name` from the AMI data source to correctly apply a custom KMS key.
 
-* **Failure:** The configuration defines duplicate resources for AMIs (`data "aws_ami"`) and AWS Config rules (`aws_config_config_rule`). For example, `data.aws_ami.amazon_linux` is created separately for east and west regions. Config rules are written as separate blocks instead of parameterized loops.
-* **Impact:** Leads to code bloat and higher maintenance burden. Any rule or data source change must be updated in multiple places, creating risk of drift.
-* **Recommendation:** Collapse repeated resources into a single block with `for_each` or a local list of rule identifiers. Example for Config rules:
+***
 
-  ```hcl
-  locals {
-    config_rules = [
-      "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED",
-      "ENCRYPTED_VOLUMES",
-      "IAM_ROLE_MANAGED_POLICY_CHECK"
-    ]
-  }
+### 3. Configuration Failure: Flawed IAM Policies
 
-  resource "aws_config_config_rule" "nova_rules" {
-    for_each = { for rule in local.config_rules : rule => rule }
-    name     = each.key
-    source {
-      owner             = "AWS"
-      source_identifier = each.value
-    }
-  }
-  ```
+The generated IAM policies are either invalid or do not follow best practices.
 
----
+* **Problem 1:** The `aws_iam_role_policy` for the EC2 role uses a nested `for` loop in the `Resource` block. This creates a list of lists (e.g., `[["arn1", "arn2"], ["arn3", "arn4"]]`), which is invalid syntax for a policy `Resource` element.
+* **Problem 2:** The `aws_iam_role_policy_attachment` for the AWS Config role uses the incorrect ARN for the AWS-managed policy (`.../ConfigRole` instead of `.../AWS_ConfigRole`).
+* **Impact:** The deployment will fail due to syntactically invalid IAM policies.
+* **Recommendation:** The model should use the `flatten()` function to create a valid, flat list of ARNs for the EC2 policy. It must also use the correct names for AWS-managed policies.
 
-### 3. AWS Config Misuse
+***
 
-* **Failure:** A separate AWS Config delivery channel and IAM role (`nova-config-role`) are provisioned for every region. In practice, **Config can use a single IAM role account-wide**, and delivery can target a centralized bucket.
-* **Impact:** This introduces unnecessary cost and complexity, creating multiple roles and buckets where one suffices. May also lead to non-compliance if Config is expected to use a consolidated view.
-* **Recommendation:** Create a single global IAM role for AWS Config. Use one secure S3 bucket for delivery (optionally replicated), instead of duplicating per-region.
+### 4. Architectural Failure: Overly Complex AWS Config Setup
 
----
+The implementation of AWS Config is inefficient and unnecessarily complex for a baseline deployment.
 
-### 4. Incomplete S3 Security for AWS Config
-
-* **Failure:** The delivery S3 buckets for Config lack explicit bucket policies. AWS Config requires service-specific permissions (`s3:PutObject`, `s3:GetBucketAcl`) for the `config.amazonaws.com` service principal.
-* **Impact:** Config delivery will fail silently. Snapshots and history files will not be delivered, leaving compliance gaps.
-* **Recommendation:** Add a bucket policy explicitly granting AWS Config write access:
-
-  ```hcl
-  resource "aws_s3_bucket_policy" "nova_config_policy" {
-    bucket = aws_s3_bucket.nova_data["us-east-1"].id
-    policy = jsonencode({
-      Version = "2012-10-17"
-      Statement = [
-        {
-          Effect    = "Allow"
-          Principal = { Service = "config.amazonaws.com" }
-          Action    = ["s3:GetBucketAcl", "s3:PutObject"]
-          Resource  = "${aws_s3_bucket.nova_data["us-east-1"].arn}/*"
-        }
-      ]
-    })
-  }
-  ```
-
----
-
-### 5. Outdated EC2 Root Volume Encryption Pattern
-
-* **Failure:** The EC2 `root_block_device` block specifies `kms_key_id` directly. AWS provider v5 recommends configuring root volume encryption through `ebs_block_device` for explicitness.
-* **Impact:** May result in compatibility issues with newer provider versions. The resource might fail to plan/apply in stricter environments.
-* **Recommendation:** Use `ebs_block_device` with `encrypted = true` and `kms_key_id` explicitly, aligning with current AWS provider standards.
-
----
-
-### 6. Tagging Consistency Gap
-
-* **Failure:** Some resources (e.g., IAM roles, Config delivery channels) do not consistently merge `local.common_tags`.
-* **Impact:** Missing tags break governance and cost allocation policies that rely on standardized tagging.
-* **Recommendation:** Apply `merge(local.common_tags, { ... })` consistently across **all resources**.
-
----
-
-## Conclusion
-
-The generated Terraform code is **functional but structurally flawed**. It lacks scalability beyond two regions, duplicates resources unnecessarily, misuses AWS Config setup, and omits critical security policies. While it demonstrates an attempt at multi-region best practices, the implementation falls short of production-ready standards.
+* **Problem:** It creates a separate S3 bucket and a complex S3 bucket policy in *each region*. It also creates a custom IAM policy for the Config role instead of using the standard AWS-managed policy.
+* **Impact:** This increases the number of resources to manage, raises costs, and complicates the IAM security posture without providing any benefit. Best practice is to use a single, centralized S3 bucket for all Config data.
+* **Recommendation:** The model should create a single global IAM role with the standard `AWS_ConfigRole` managed policy attached. It should also demonstrate the best practice of creating a single S3 bucket for Config and having the delivery channels in each region point to it.
