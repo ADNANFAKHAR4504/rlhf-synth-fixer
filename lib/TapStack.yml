@@ -630,3 +630,4 @@ Outputs:
     Value: !If [CreateSecurityHub, "Enabled", "Skipped"]
   SsmParamDbPassword:
     Value: !Ref SsmParamName
+    
