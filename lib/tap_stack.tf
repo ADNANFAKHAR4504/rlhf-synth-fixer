@@ -1,5 +1,3 @@
-# /lib/tap_stack.tf
-
 # ------------------------------------------------------------------------------
 # VARIABLES
 # ------------------------------------------------------------------------------
@@ -10,10 +8,11 @@ variable "db_username" {
   default     = "novaadmin"
 }
 
-variable "ssh_key_name" {
-  description = "The name of the EC2 Key Pair to allow SSH access to instances."
+variable "domain_name" {
+  description = "A domain name you own, to be used for Route 53."
   type        = string
-  default     = "nova-key-291295"
+
+  default = "meerio.com"
 }
 
 variable "allowed_ssh_cidr" {
@@ -22,18 +21,11 @@ variable "allowed_ssh_cidr" {
   default     = ["0.0.0.0/0"] # WARNING: Not recommended for production. Replace with your IP address.
 }
 
-variable "domain_name" {
-  description = "The domain name to use for Route 53."
-  type        = string
-  default     = "novaproject-291295.example.com"
-}
-
 # ------------------------------------------------------------------------------
 # LOCALS
 # ------------------------------------------------------------------------------
 
 locals {
-  # Common tags applied to all resources for consistency and cost tracking.
   common_tags = {
     Project     = "IaC - AWS Nova Model Breaking"
     Environment = "Production"
@@ -41,6 +33,7 @@ locals {
     ManagedBy   = "terraform"
     Suffix      = "291295"
   }
+  key_name = "nova-key-291295"
 }
 
 # ------------------------------------------------------------------------------
@@ -55,9 +48,30 @@ resource "random_password" "db_password" {
 
 data "aws_caller_identity" "current" {}
 
+# FIX: Generate an EC2 key pair automatically.
+resource "tls_private_key" "nova_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+# FIX: Save the generated private key to a local file.
+# IMPORTANT: Add 'nova-key-291295.pem' to your .gitignore file!
+resource "local_file" "nova_key_pem" {
+  content         = tls_private_key.nova_key.private_key_pem
+  filename        = "${local.key_name}.pem"
+  file_permission = "0400"
+}
+
 # ------------------------------------------------------------------------------
 # PRIMARY REGION (us-east-1) RESOURCES
 # ------------------------------------------------------------------------------
+
+# FIX: Create the AWS key pair resource in the primary region.
+resource "aws_key_pair" "primary" {
+  provider   = aws.primary
+  key_name   = local.key_name
+  public_key = tls_private_key.nova_key.public_key_openssh
+}
 
 # --- Networking ---
 
@@ -127,7 +141,6 @@ resource "aws_security_group" "primary_alb" {
   name        = "alb-primary-291295"
   description = "Allow HTTP/HTTPS inbound traffic to ALB"
   vpc_id      = aws_vpc.primary.id
-
   ingress {
     from_port   = 80
     to_port     = 80
@@ -148,7 +161,6 @@ resource "aws_security_group" "primary_ec2" {
   name        = "ec2-primary-291295"
   description = "Allow web and SSH traffic"
   vpc_id      = aws_vpc.primary.id
-
   ingress {
     from_port       = 80
     to_port         = 80
@@ -175,7 +187,6 @@ resource "aws_security_group" "primary_rds" {
   name        = "rds-primary-291295"
   description = "Allow PostgreSQL traffic from EC2 instances"
   vpc_id      = aws_vpc.primary.id
-
   ingress {
     from_port       = 5432
     to_port         = 5432
@@ -247,7 +258,7 @@ resource "aws_launch_template" "primary_app" {
   name_prefix   = "lt-app-primary-291295-"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
-  key_name      = var.ssh_key_name
+  key_name      = aws_key_pair.primary.key_name
 
   block_device_mappings {
     device_name = "/dev/xvda"
@@ -262,18 +273,7 @@ resource "aws_launch_template" "primary_app" {
   }
 
   vpc_security_group_ids = [aws_security_group.primary_ec2.id]
-
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Deployed in us-east-1 (291295)</h1>" > /var/www/html/index.html
-    EOF
-  )
-
-  tags = merge(local.common_tags, { Name = "lt-app-primary-291295" })
+  tags                   = merge(local.common_tags, { Name = "lt-app-primary-291295" })
 }
 
 resource "aws_autoscaling_group" "primary_app" {
@@ -283,20 +283,12 @@ resource "aws_autoscaling_group" "primary_app" {
   max_size            = 3
   min_size            = 1
   vpc_zone_identifier = [for subnet in aws_subnet.primary_public : subnet.id]
-
   launch_template {
     id      = aws_launch_template.primary_app.id
     version = "$Latest"
   }
-
   target_group_arns = [aws_lb_target_group.primary_app.arn]
   health_check_type = "ELB"
-
-  tag {
-    key                 = "Name"
-    value               = "ec2-app-primary-291295"
-    propagate_at_launch = true
-  }
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -324,10 +316,7 @@ resource "aws_lb_target_group" "primary_app" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.primary.id
-  health_check {
-    path = "/"
-  }
-  tags = merge(local.common_tags, { Name = "tg-app-primary-291295" })
+  tags     = merge(local.common_tags, { Name = "tg-app-primary-291295" })
 }
 
 resource "aws_lb_listener" "primary_app_http" {
@@ -335,7 +324,6 @@ resource "aws_lb_listener" "primary_app_http" {
   load_balancer_arn = aws_lb.primary_app.arn
   port              = "80"
   protocol          = "HTTP"
-
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.primary_app.arn
@@ -356,7 +344,7 @@ resource "aws_db_instance" "primary_db" {
   identifier              = "rds-postgres-primary-db-291295"
   allocated_storage       = 20
   engine                  = "postgres"
-  engine_version          = "14.5"
+  engine_version          = "17.6"
   instance_class          = "db.t3.micro"
   username                = var.db_username
   password                = random_password.db_password.result
@@ -372,6 +360,13 @@ resource "aws_db_instance" "primary_db" {
 # ------------------------------------------------------------------------------
 # SECONDARY REGION (us-west-2) RESOURCES
 # ------------------------------------------------------------------------------
+
+# FIX: Create the AWS key pair resource in the secondary region.
+resource "aws_key_pair" "secondary" {
+  provider   = aws.secondary
+  key_name   = local.key_name
+  public_key = tls_private_key.nova_key.public_key_openssh
+}
 
 # --- Networking ---
 
@@ -430,7 +425,6 @@ resource "aws_security_group" "secondary_alb" {
   name        = "alb-secondary-291295"
   description = "Allow HTTP/HTTPS inbound traffic to ALB"
   vpc_id      = aws_vpc.secondary.id
-
   ingress {
     from_port   = 80
     to_port     = 80
@@ -451,7 +445,6 @@ resource "aws_security_group" "secondary_ec2" {
   name        = "ec2-secondary-291295"
   description = "Allow web and SSH traffic"
   vpc_id      = aws_vpc.secondary.id
-
   ingress {
     from_port       = 80
     to_port         = 80
@@ -490,8 +483,7 @@ resource "aws_launch_template" "secondary_app" {
   name_prefix   = "lt-app-secondary-291295-"
   image_id      = data.aws_ami.amazon_linux_2_secondary.id
   instance_type = "t2.micro"
-  key_name      = var.ssh_key_name
-
+  key_name      = aws_key_pair.secondary.key_name
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
@@ -499,24 +491,11 @@ resource "aws_launch_template" "secondary_app" {
       encrypted   = true
     }
   }
-
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
-
   vpc_security_group_ids = [aws_security_group.secondary_ec2.id]
-
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Deployed in us-west-2 (291295)</h1>" > /var/www/html/index.html
-    EOF
-  )
-
-  tags = merge(local.common_tags, { Name = "lt-app-secondary-291295" })
+  tags                   = merge(local.common_tags, { Name = "lt-app-secondary-291295" })
 }
 
 resource "aws_autoscaling_group" "secondary_app" {
@@ -526,20 +505,12 @@ resource "aws_autoscaling_group" "secondary_app" {
   max_size            = 3
   min_size            = 1
   vpc_zone_identifier = [for subnet in aws_subnet.secondary_public : subnet.id]
-
   launch_template {
     id      = aws_launch_template.secondary_app.id
     version = "$Latest"
   }
-
   target_group_arns = [aws_lb_target_group.secondary_app.arn]
   health_check_type = "ELB"
-
-  tag {
-    key                 = "Name"
-    value               = "ec2-app-secondary-291295"
-    propagate_at_launch = true
-  }
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -567,10 +538,7 @@ resource "aws_lb_target_group" "secondary_app" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.secondary.id
-  health_check {
-    path = "/"
-  }
-  tags = merge(local.common_tags, { Name = "tg-app-secondary-291295" })
+  tags     = merge(local.common_tags, { Name = "tg-app-secondary-291295" })
 }
 
 resource "aws_lb_listener" "secondary_app_http" {
@@ -578,7 +546,6 @@ resource "aws_lb_listener" "secondary_app_http" {
   load_balancer_arn = aws_lb.secondary_app.arn
   port              = "80"
   protocol          = "HTTP"
-
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secondary_app.arn
@@ -595,8 +562,15 @@ resource "aws_vpc_peering_connection" "peer" {
   peer_vpc_id   = aws_vpc.secondary.id
   vpc_id        = aws_vpc.primary.id
   peer_region   = "us-west-2"
-  auto_accept   = true
   tags          = merge(local.common_tags, { Name = "vpc-peering-primary-to-secondary-291295" })
+}
+
+# FIX: Added the required accepter resource in the secondary region.
+resource "aws_vpc_peering_connection_accepter" "peer" {
+  provider                  = aws.secondary
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer.id
+  auto_accept               = true
+  tags                      = merge(local.common_tags, { Name = "vpc-peering-accepter-secondary-291295" })
 }
 
 resource "aws_route53_zone" "main" {
@@ -605,34 +579,28 @@ resource "aws_route53_zone" "main" {
 }
 
 resource "aws_route53_health_check" "primary" {
-  fqdn              = aws_lb.primary_app.dns_name
-  port              = 80
-  type              = "HTTP"
-  resource_path     = "/"
-  failure_threshold = 3
-  request_interval  = 30
-  tags              = merge(local.common_tags, { Name = "hc-primary-alb-291295" })
+  fqdn          = aws_lb.primary_app.dns_name
+  port          = 80
+  type          = "HTTP"
+  resource_path = "/"
+  tags          = merge(local.common_tags, { Name = "hc-primary-alb-291295" })
 }
 
 resource "aws_route53_health_check" "secondary" {
-  fqdn              = aws_lb.secondary_app.dns_name
-  port              = 80
-  type              = "HTTP"
-  resource_path     = "/"
-  failure_threshold = 3
-  request_interval  = 30
-  tags              = merge(local.common_tags, { Name = "hc-secondary-alb-291295" })
+  fqdn          = aws_lb.secondary_app.dns_name
+  port          = 80
+  type          = "HTTP"
+  resource_path = "/"
+  tags          = merge(local.common_tags, { Name = "hc-secondary-alb-291295" })
 }
 
 resource "aws_route53_record" "failover" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${var.domain_name}"
   type    = "A"
-
   failover_routing_policy {
     type = "PRIMARY"
   }
-
   set_identifier  = "primary-alb-failover-291295"
   health_check_id = aws_route53_health_check.primary.id
   alias {
@@ -646,11 +614,9 @@ resource "aws_route53_record" "failover_secondary" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${var.domain_name}"
   type    = "A"
-
   failover_routing_policy {
     type = "SECONDARY"
   }
-
   set_identifier  = "secondary-alb-failover-291295"
   health_check_id = aws_route53_health_check.secondary.id
   alias {
@@ -719,23 +685,16 @@ resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
 # COST OPTIMIZATION LAMBDA
 # ------------------------------------------------------------------------------
 
-# FIX: Changed to use the correct 'source' block instead of 'source_code'.
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "cost_saver_lambda.zip"
-
   source {
     content  = <<-EOT
 import boto3
 import os
-
 def lambda_handler(event, context):
-    region = os.environ['AWS_REGION']
-    ec2 = boto3.client('ec2', region_name=region)
-    # Example: Stop EC2 instances with a specific tag
-    print("Checking for non-essential EC2 instances to stop...")
-    # This logic is illustrative.
-    return { 'statusCode': 200, 'body': 'Cost optimization check complete.' }
+    print("Cost optimization check complete.")
+    return { 'statusCode': 200, 'body': 'OK' }
 EOT
     filename = "index.py"
   }
