@@ -17,4 +17,4 @@ Generate a single AWS CloudFormation template in **YAML** that sets up secure AW
 **Output**:
 - A complete, deployable CloudFormation YAML file that passes AWS compliance checks.
 - Use `Parameters`, `Mappings`, `Resources`, and `Outputs` sections where applicable.
-- Include inline comments explaining how each security requirement is satisfied.Insert here the prompt that made the model fail.
+- Include inline comments explaining how each security requirement is satisfied.
