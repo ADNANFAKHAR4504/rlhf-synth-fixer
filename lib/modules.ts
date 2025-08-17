@@ -499,7 +499,7 @@ export class CloudTrailModule extends Construct {
       includeGlobalServiceEvents: config.includeGlobalServiceEvents ?? true,
       isMultiRegionTrail: config.isMultiRegionTrail ?? true,
       enableLogFileValidation: config.enableLogFileValidation ?? true,
-      
+
       tags: {
         Name: config.name,
         Environment: 'production',
