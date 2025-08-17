@@ -684,7 +684,6 @@ def create_eks_cluster(
               security_group_ids=[eks_cluster_sg.id],
               endpoint_public_access=True,
               endpoint_private_access=True,
-              cluster_security_group_id=eks_cluster_sg.id,
               public_access_cidrs=["0.0.0.0/0"]
           ),
           enabled_cluster_log_types=[
@@ -1146,33 +1145,33 @@ def create_nginx_deployment(
           k8s_provider = eks_cluster.provider
           
           # Create NGINX deployment
-          nginx_deployment = aws.kubernetes.apps.v1.Deployment(
-              f"{name_prefix}-nginx-deployment",
-              metadata=aws.kubernetes.meta.v1.ObjectMetaArgs(
-                  name="nginx-deployment",
-                  labels={"app": "nginx"}
-              ),
-              spec=aws.kubernetes.apps.v1.DeploymentSpecArgs(
-                  replicas=2,
-                  selector=aws.kubernetes.meta.v1.LabelSelectorArgs(
-                      match_labels={"app": "nginx"}
+          nginx_deployment = k8s_provider.apps.v1.Deployment(
+                  f"{name_prefix}-nginx-deployment",
+                  metadata=k8s_provider.meta.v1.ObjectMetaArgs(
+                      name="nginx-deployment",
+                      labels={"app": "nginx"}
                   ),
-                  template=aws.kubernetes.core.v1.PodTemplateSpecArgs(
-                      metadata=aws.kubernetes.meta.v1.ObjectMetaArgs(
-                          labels={"app": "nginx"}
+                  spec=k8s_provider.apps.v1.DeploymentSpecArgs(
+                      replicas=2,
+                      selector=k8s_provider.meta.v1.LabelSelectorArgs(
+                          match_labels={"app": "nginx"}
                       ),
-                      spec=aws.kubernetes.core.v1.PodSpecArgs(
-                          containers=[aws.kubernetes.core.v1.ContainerArgs(
-                              name="nginx",
-                              image="nginx:latest",
-                              ports=[aws.kubernetes.core.v1.ContainerPortArgs(
-                                  container_port=80
+                      template=k8s_provider.core.v1.PodTemplateSpecArgs(
+                          metadata=k8s_provider.meta.v1.ObjectMetaArgs(
+                              labels={"app": "nginx"}
+                          ),
+                          spec=k8s_provider.core.v1.PodSpecArgs(
+                              containers=[k8s_provider.core.v1.ContainerArgs(
+                                  name="nginx",
+                                  image="nginx:latest",
+                                  ports=[k8s_provider.core.v1.ContainerPortArgs(
+                                      container_port=80
+                                  )]
                               )]
-                          )]
+                          )
                       )
-                  )
-              ),
-              opts=ResourceOptions(provider=k8s_provider)
+                  ),
+                  opts=ResourceOptions(provider=k8s_provider)
               )
           
           return nginx_deployment
