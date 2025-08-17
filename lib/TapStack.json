@@ -930,7 +930,13 @@
               },
               "Condition": {
                 "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
+                  "s3:x-amz-acl": "bucket-owner-full-control",
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/prod-cloudtrail"
+                  },
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
                 }
               }
             }
