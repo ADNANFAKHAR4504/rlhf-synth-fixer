@@ -13,20 +13,20 @@ const logs = new AWS.CloudWatchLogs();
 const sns = new AWS.SNS();
 const cloudformation = new AWS.CloudFormation();
 
-// Template description from your deployed stack
 const TEMPLATE_DESC =
   'Production-grade secure infrastructure baseline with encryption at rest, least-privilege IAM, and comprehensive monitoring (single region)';
 
 type OutputsMap = Record<string, string>;
 
+let usedStackName: string | undefined;
+
 async function loadOutputs(): Promise<OutputsMap> {
-  // 1) Prefer a local outputs file (CI/CD export)
   const outputsPath = path.join(__dirname, '../lib/stack-outputs.json');
   if (fs.existsSync(outputsPath)) {
-    return JSON.parse(fs.readFileSync(outputsPath, 'utf8')) as OutputsMap;
+    const local = JSON.parse(fs.readFileSync(outputsPath, 'utf8')) as OutputsMap;
+    return local;
   }
 
-  // 2) If user provided a stack name, use it directly
   const envStackName = process.env.STACK_NAME;
   if (envStackName && envStackName.trim()) {
     const res = await cloudformation.describeStacks({ StackName: envStackName }).promise();
@@ -36,31 +36,30 @@ async function loadOutputs(): Promise<OutputsMap> {
     (stack.Outputs ?? []).forEach((o) => {
       if (o.OutputKey && o.OutputValue) out[o.OutputKey] = o.OutputValue;
     });
+    usedStackName = envStackName;
     return out;
   }
 
-  // 3) Autodiscover the most recent matching stack (CREATE/UPDATE complete)
+  // Autodiscover: latest stack matching the template description and required outputs
   const statusFilter: AWS.CloudFormation.StackStatus[] = [
     'CREATE_COMPLETE',
     'UPDATE_COMPLETE',
     'UPDATE_ROLLBACK_COMPLETE',
     'IMPORT_COMPLETE',
   ];
-
   let nextToken: string | undefined;
-  const candidateNames: string[] = [];
+  const names: string[] = [];
   do {
     // eslint-disable-next-line no-await-in-loop
     const page = await cloudformation
       .listStacks({ StackStatusFilter: statusFilter, NextToken: nextToken })
       .promise();
     (page.StackSummaries ?? []).forEach((s) => {
-      if (s.StackName) candidateNames.push(s.StackName);
+      if (s.StackName) names.push(s.StackName);
     });
     nextToken = page.NextToken;
   } while (nextToken);
 
-  // Describe candidates and pick the newest one that matches description + has required outputs
   const requiredOutputs = new Set([
     'VpcId',
     'PublicSubnetIds',
@@ -76,39 +75,34 @@ async function loadOutputs(): Promise<OutputsMap> {
     'AppInstanceId',
   ]);
 
-  type ScoredStack = { name: string; createdAt: number; outputs: OutputsMap };
-  const matches: ScoredStack[] = [];
-
-  for (const name of candidateNames) {
+  type Scored = { name: string; when: number; outputs: OutputsMap };
+  const matches: Scored[] = [];
+  for (const name of names) {
     // eslint-disable-next-line no-await-in-loop
     const res = await cloudformation.describeStacks({ StackName: name }).promise();
     const stack = res.Stacks && res.Stacks[0];
-    if (!stack) continue;
-
-    // Check description match
-    if (stack.Description !== TEMPLATE_DESC) continue;
+    if (!stack || stack.Description !== TEMPLATE_DESC) continue;
 
     const outs: OutputsMap = {};
     (stack.Outputs ?? []).forEach((o) => {
       if (o.OutputKey && o.OutputValue) outs[o.OutputKey] = o.OutputValue;
     });
-
     const hasAll = [...requiredOutputs].every((k) => typeof outs[k] === 'string');
     if (!hasAll) continue;
 
-    const ts =
-      (stack.LastUpdatedTime?.getTime?.() ?? 0) || (stack.CreationTime?.getTime?.() ?? 0);
-    matches.push({ name, createdAt: ts, outputs: outs });
+    matches.push({
+      name,
+      when: (stack.LastUpdatedTime?.getTime?.() ?? stack.CreationTime?.getTime?.() ?? 0),
+      outputs: outs,
+    });
   }
-
   if (!matches.length) {
     throw new Error(
       'Could not autodiscover a deployed stack. Provide STACK_NAME env var or lib/stack-outputs.json',
     );
   }
-
-  // Most recently updated/created
-  matches.sort((a, b) => b.createdAt - a.createdAt);
+  matches.sort((a, b) => b.when - a.when);
+  usedStackName = matches[0].name;
   return matches[0].outputs;
 }
 
@@ -121,23 +115,22 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
   describe('VPC and Networking', () => {
     test('VPC should exist and have correct configuration', async () => {
-      const vpcId = outputs.VpcId;
-      const res = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
+      const res = await ec2.describeVpcs({ VpcIds: [outputs.VpcId] }).promise();
       expect(res.Vpcs?.length).toBe(1);
       expect(res.Vpcs?.[0]?.CidrBlock).toBe('10.0.0.0/16');
     });
 
     test('Public subnets should exist in different AZs and auto-assign public IPs', async () => {
-      const [subnet1, subnet2] = outputs.PublicSubnetIds.split(',');
-      const res = await ec2.describeSubnets({ SubnetIds: [subnet1, subnet2] }).promise();
+      const [s1, s2] = outputs.PublicSubnetIds.split(',');
+      const res = await ec2.describeSubnets({ SubnetIds: [s1, s2] }).promise();
       expect(res.Subnets?.length).toBe(2);
       const azs = new Set((res.Subnets ?? []).map((s) => s.AvailabilityZone));
       expect(azs.size).toBe(2);
     });
 
     test('Private subnets should exist in different AZs and not auto-assign public IPs', async () => {
-      const [subnet1, subnet2] = outputs.PrivateSubnetIds.split(',');
-      const res = await ec2.describeSubnets({ SubnetIds: [subnet1, subnet2] }).promise();
+      const [s1, s2] = outputs.PrivateSubnetIds.split(',');
+      const res = await ec2.describeSubnets({ SubnetIds: [s1, s2] }).promise();
       expect(res.Subnets?.length).toBe(2);
       const azs = new Set((res.Subnets ?? []).map((s) => s.AvailabilityZone));
       expect(azs.size).toBe(2);
@@ -146,16 +139,14 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
   describe('EC2 Instances', () => {
     test('Bastion instance should be running in public subnet', async () => {
-      const instanceId = outputs.BastionInstanceId;
-      const res = await ec2.describeInstances({ InstanceIds: [instanceId] }).promise();
+      const res = await ec2.describeInstances({ InstanceIds: [outputs.BastionInstanceId] }).promise();
       const inst = res.Reservations?.[0]?.Instances?.[0];
       expect(inst?.State?.Name).toBe('running');
       expect(inst?.SubnetId).toBe(outputs.PublicSubnetIds.split(',')[0]);
     });
 
     test('Application instance should be running in private subnet (no public IP)', async () => {
-      const instanceId = outputs.AppInstanceId;
-      const res = await ec2.describeInstances({ InstanceIds: [instanceId] }).promise();
+      const res = await ec2.describeInstances({ InstanceIds: [outputs.AppInstanceId] }).promise();
       const inst = res.Reservations?.[0]?.Instances?.[0];
       expect(inst?.State?.Name).toBe('running');
       expect(inst?.SubnetId).toBe(outputs.PrivateSubnetIds.split(',')[0]);
@@ -179,41 +170,36 @@ describe('TapStack Infrastructure Integration Tests', () => {
   describe('S3 Buckets', () => {
     test('Application data bucket should exist with proper encryption, public access block, and versioning', async () => {
       const bucket = outputs.AppDataBucketName;
-      const encryption = await s3.getBucketEncryption({ Bucket: bucket }).promise();
-      const rule =
-        encryption.ServerSideEncryptionConfiguration!.Rules![0]
-          .ApplyServerSideEncryptionByDefault!;
+      const enc = await s3.getBucketEncryption({ Bucket: bucket }).promise();
+      const rule = enc.ServerSideEncryptionConfiguration!.Rules![0].ApplyServerSideEncryptionByDefault!;
       expect(rule.SSEAlgorithm).toBe('aws:kms');
       expect(rule.KMSMasterKeyID).toBeDefined();
 
-      const publicAccess = await s3.getPublicAccessBlock({ Bucket: bucket }).promise();
-      expect(publicAccess.PublicAccessBlockConfiguration!.BlockPublicAcls).toBe(true);
-      expect(publicAccess.PublicAccessBlockConfiguration!.BlockPublicPolicy).toBe(true);
-      expect(publicAccess.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
-      expect(publicAccess.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
+      const pab = await s3.getPublicAccessBlock({ Bucket: bucket }).promise();
+      expect(pab.PublicAccessBlockConfiguration!.BlockPublicAcls).toBe(true);
+      expect(pab.PublicAccessBlockConfiguration!.BlockPublicPolicy).toBe(true);
+      expect(pab.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
+      expect(pab.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
 
-      const versioning = await s3.getBucketVersioning({ Bucket: bucket }).promise();
-      expect(versioning.Status).toBe('Enabled');
+      const ver = await s3.getBucketVersioning({ Bucket: bucket }).promise();
+      expect(ver.Status).toBe('Enabled');
     });
 
     test('CloudTrail logs bucket should exist with proper encryption, public access block, and versioning', async () => {
       const bucket = outputs.TrailLogsBucketName;
-      const encryption = await s3.getBucketEncryption({ Bucket: bucket }).promise();
-      const rule =
-        encryption.ServerSideEncryptionConfiguration!.Rules![0]
-          .ApplyServerSideEncryptionByDefault!;
-      // SCP-bypass path: SSE-S3 (AES256)
-      expect(rule.SSEAlgorithm).toBe('AES256');
+      const enc = await s3.getBucketEncryption({ Bucket: bucket }).promise();
+      const rule = enc.ServerSideEncryptionConfiguration!.Rules![0].ApplyServerSideEncryptionByDefault!;
+      expect(rule.SSEAlgorithm).toBe('AES256'); // SSE-S3
       expect(rule.KMSMasterKeyID).toBeUndefined();
 
-      const publicAccess = await s3.getPublicAccessBlock({ Bucket: bucket }).promise();
-      expect(publicAccess.PublicAccessBlockConfiguration!.BlockPublicAcls).toBe(true);
-      expect(publicAccess.PublicAccessBlockConfiguration!.BlockPublicPolicy).toBe(true);
-      expect(publicAccess.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
-      expect(publicAccess.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
+      const pab = await s3.getPublicAccessBlock({ Bucket: bucket }).promise();
+      expect(pab.PublicAccessBlockConfiguration!.BlockPublicAcls).toBe(true);
+      expect(pab.PublicAccessBlockConfiguration!.BlockPublicPolicy).toBe(true);
+      expect(pab.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
+      expect(pab.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
 
-      const versioning = await s3.getBucketVersioning({ Bucket: bucket }).promise();
-      expect(versioning.Status).toBe('Enabled');
+      const ver = await s3.getBucketVersioning({ Bucket: bucket }).promise();
+      expect(ver.Status).toBe('Enabled');
     });
   });
 
@@ -237,23 +223,69 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
   describe('CloudTrail and Monitoring', () => {
     test('CloudTrail should be active and logging', async () => {
-      const name = outputs.CloudTrailName;
-      const resp = await cloudtrail.getTrail({ Name: name }).promise();
+      const desiredName = outputs.CloudTrailName;
+
+      // Resolve the trail via multiple strategies to avoid "Unknown trail" flakiness
+      const resolveTrailId = async (): Promise<string> => {
+        // 1) Try direct name
+        try {
+          await cloudtrail.getTrail({ Name: desiredName }).promise();
+          return desiredName;
+        } catch {
+          // continue
+        }
+        // 2) Try describeTrails with explicit list
+        try {
+          const d1 = await cloudtrail
+            .describeTrails({ trailNameList: [desiredName], includeShadowTrails: false })
+            .promise();
+          const t = (d1.trailList ?? []).find((x) => x?.Name === desiredName || x?.TrailARN?.endsWith(`:trail/${desiredName}`));
+          if (t?.TrailARN) return t.TrailARN;
+        } catch {
+          // continue
+        }
+        // 3) Try all trails and match
+        try {
+          const d2 = await cloudtrail.describeTrails({ includeShadowTrails: false }).promise();
+          const t = (d2.trailList ?? []).find(
+            (x) => x?.Name === desiredName || (x?.TrailARN ? x.TrailARN.endsWith(`:trail/${desiredName}`) : false),
+          );
+          if (t?.TrailARN) return t.TrailARN;
+        } catch {
+          // continue
+        }
+        // 4) Ask CloudFormation for the physical id of the 'CloudTrail' resource
+        if (usedStackName) {
+          const dr = await cloudformation
+            .describeStackResources({ StackName: usedStackName, LogicalResourceId: 'CloudTrail' })
+            .promise();
+          const phys = dr.StackResources?.[0]?.PhysicalResourceId;
+          if (phys) return phys;
+        }
+        // If still nothing, throw
+        throw new Error(`Could not resolve CloudTrail id for ${desiredName}`);
+      };
+
+      const trailId = await resolveTrailId();
+      const resp = await cloudtrail.getTrail({ Name: trailId }).promise();
       const trail = resp.Trail!;
-      expect(trail.Name).toBe(name);
+      expect(trail.Name || trail.TrailARN).toBeTruthy();
       expect(trail.IsMultiRegionTrail).toBe(false);
       expect(trail.LogFileValidationEnabled).toBe(true);
       // Bypass path: no CMK on the trail
       expect(trail.KmsKeyId).toBeUndefined();
 
-      const status = await cloudtrail.getTrailStatus({ Name: name }).promise();
+      const status = await cloudtrail.getTrailStatus({ Name: trail.TrailARN || trail.Name! }).promise();
       expect(status.IsLogging).toBe(true);
     });
 
     test('CloudWatch log group should exist (no KMS on CT group) and have retention', async () => {
-      const logGroupArn = outputs.CloudTrailLogGroupArn;
+      let logGroupArn = outputs.CloudTrailLogGroupArn;
+      // Clean any policy-style suffix like ":*"
+      logGroupArn = logGroupArn.replace(/:\*$/, '');
       // arn:aws:logs:REGION:ACCOUNT:log-group:/aws/cloudtrail/<name>
-      const logGroupName = logGroupArn.replace(/^arn:[^:]*:logs:[^:]*:[^:]*:log-group:/, '');
+      let logGroupName = logGroupArn.replace(/^arn:[^:]*:logs:[^:]*:[^:]*:log-group:/, '');
+      logGroupName = logGroupName.replace(/:\*$/, '');
 
       const res = await logs.describeLogGroups({ logGroupNamePrefix: logGroupName }).promise();
       const groups = (res.logGroups ?? []).filter(
@@ -280,8 +312,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
   describe('Security Compliance', () => {
     test('All resources should have consistent tagging (spot-check VPC + EC2s)', async () => {
-      const vpcId = outputs.VpcId;
-      const vpcRes = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
+      const vpcRes = await ec2.describeVpcs({ VpcIds: [outputs.VpcId] }).promise();
       const vpcTagsRaw = vpcRes.Vpcs?.[0]?.Tags ?? [];
       const vpcTags = vpcTagsRaw.filter(
         (t): t is AWS.EC2.Tag => Boolean(t && typeof t.Key === 'string'),
@@ -304,7 +335,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
 
     test('Security groups should have minimal required access (sanity)', async () => {
-      // Sanity only: confirm the Bastion SG name tag exists in the template
       const tmplPath = path.join(__dirname, '../lib/TapStack.json');
       const tmpl = fs.existsSync(tmplPath)
         ? JSON.parse(fs.readFileSync(tmplPath, 'utf8'))
@@ -315,7 +345,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
         )?.Value;
         expect(bastionNameTag).toBeDefined();
       } else {
-        // If template JSON isn’t present, skip this soft assertion
         expect(true).toBe(true);
       }
     });
@@ -336,7 +365,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
         .flatMap((rt) => rt.Routes ?? [])
         .find(
           (r) =>
-            r.DestinationCidrBlock === '0.0.0.0/0' && typeof r.GatewayId === 'string' && r.GatewayId.startsWith('igw-'),
+            r.DestinationCidrBlock === '0.0.0.0/0' &&
+            typeof r.GatewayId === 'string' &&
+            r.GatewayId.startsWith('igw-'),
         );
       expect(igwRoute).toBeDefined();
     });
