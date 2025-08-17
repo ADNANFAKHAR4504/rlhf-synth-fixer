@@ -56,6 +56,10 @@ describe('Terraform Configuration Unit Tests', () => {
     test('allowed_cidr_blocks is defined as list of strings', () => {
       expect(stackContent).toMatch(/variable\s+"allowed_cidr_blocks"\s*{[^}]*type\s*=\s*list\(string\)/);
     });
+
+    test('create_vpcs variable is defined as boolean', () => {
+      expect(stackContent).toMatch(/variable\s+"create_vpcs"\s*{[^}]*type\s*=\s*bool/);
+    });
   });
 
   describe('Data Sources', () => {
@@ -96,9 +100,9 @@ describe('Terraform Configuration Unit Tests', () => {
   });
 
   describe('VPC Configuration', () => {
-    test('defines VPCs for both regions', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"secondary"/);
+    test('defines VPCs for both regions with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
 
     test('VPCs have correct CIDR blocks', () => {
@@ -117,47 +121,47 @@ describe('Terraform Configuration Unit Tests', () => {
   });
 
   describe('Networking Components', () => {
-    test('defines internet gateways', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"secondary"/);
+    test('defines internet gateways with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
 
-    test('defines subnets for both regions', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"primary_public"/);
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"primary_private"/);
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"secondary_public"/);
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"secondary_private"/);
+    test('defines subnets for both regions with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"primary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"primary_private"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"secondary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"secondary_private"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
 
     test('public subnets have auto-assign public IP enabled', () => {
       expect(stackContent).toMatch(/map_public_ip_on_launch\s*=\s*true/);
     });
 
-    test('defines route tables', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"primary_public"/);
-      expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"secondary_public"/);
+    test('defines route tables with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"primary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"secondary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
   });
 
   describe('VPC Peering', () => {
-    test('defines VPC peering connection', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_vpc_peering_connection"\s+"primary_to_secondary"/);
+    test('defines VPC peering connection with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_vpc_peering_connection"\s+"primary_to_secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
 
-    test('defines VPC peering accepter', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_vpc_peering_connection_accepter"\s+"secondary"/);
+    test('defines VPC peering accepter with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_vpc_peering_connection_accepter"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
 
-    test('defines routes for peering', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_route"\s+"primary_to_secondary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_route"\s+"secondary_to_primary"/);
+    test('defines routes for peering with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_route"\s+"primary_to_secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_route"\s+"secondary_to_primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
   });
 
   describe('Security Groups', () => {
-    test('defines security groups for both regions', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"secondary"/);
+    test('defines security groups for both regions with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
 
     test('SSH access is restricted to allowed CIDR blocks', () => {
@@ -194,8 +198,9 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"secondary"/);
     });
 
-    test('defines S3 replication configuration', () => {
+    test('defines S3 replication configuration with source selection criteria', () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_replication_configuration"\s+"primary"/);
+      expect(stackContent).toMatch(/source_selection_criteria\s*{[^}]*sse_kms_encrypted_objects/);
     });
   });
 
@@ -209,9 +214,10 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(stackContent).toMatch(/server_side_encryption\s*{[^}]*enabled\s*=\s*true/);
     });
 
-    test('DynamoDB tables use KMS encryption', () => {
-      expect(stackContent).toMatch(/kms_key_arn\s*=\s*aws_kms_key\.primary\.arn/);
-      expect(stackContent).toMatch(/kms_key_arn\s*=\s*aws_kms_key\.secondary\.arn/);
+    test('DynamoDB tables use AWS-managed encryption', () => {
+      expect(stackContent).toMatch(/server_side_encryption\s*{[^}]*enabled\s*=\s*true[^}]*}/);
+      expect(stackContent).not.toMatch(/kms_key_arn\s*=\s*aws_kms_key\.primary\.arn/);
+      expect(stackContent).not.toMatch(/kms_key_arn\s*=\s*aws_kms_key\.secondary\.arn/);
     });
 
     test('defines DynamoDB global table', () => {
@@ -225,9 +231,9 @@ describe('Terraform Configuration Unit Tests', () => {
   });
 
   describe('RDS Configuration', () => {
-    test('defines RDS instances for both regions', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"secondary"/);
+    test('defines RDS instances for both regions with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
 
     test('RDS instances have encryption enabled', () => {
@@ -247,16 +253,16 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(stackContent).toMatch(/password\s*=\s*var\.db_password/);
     });
 
-    test('defines DB subnet groups', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"secondary"/);
+    test('defines DB subnet groups with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
   });
 
   describe('EC2 Configuration', () => {
-    test('defines EC2 instances for both regions', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_instance"\s+"primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_instance"\s+"secondary"/);
+    test('defines EC2 instances for both regions with conditional creation', () => {
+      expect(stackContent).toMatch(/resource\s+"aws_instance"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(/resource\s+"aws_instance"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
     });
 
     test('EC2 instances use correct AMI data sources', () => {
@@ -264,9 +270,9 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(stackContent).toMatch(/ami\s*=\s*data\.aws_ami\.amazon_linux_eu_west_1\.id/);
     });
 
-    test('EC2 instances use variables for instance type and key pair', () => {
+    test('EC2 instances use variables for instance type and optional key pair', () => {
       expect(stackContent).toMatch(/instance_type\s*=\s*var\.ec2_instance_type/);
-      expect(stackContent).toMatch(/key_name\s*=\s*var\.ec2_key_pair_name/);
+      expect(stackContent).toMatch(/key_name\s*=\s*var\.ec2_key_pair_name\s*!=\s*""\s*\?\s*var\.ec2_key_pair_name\s*:\s*null/);
     });
 
     test('EC2 root block devices are encrypted', () => {
@@ -341,7 +347,7 @@ describe('Terraform Configuration Unit Tests', () => {
   });
 
   describe('Outputs', () => {
-    test('defines outputs for critical resources', () => {
+    test('defines outputs for critical resources with conditional VPC outputs', () => {
       const requiredOutputs = [
         'primary_vpc_id',
         'secondary_vpc_id',
@@ -361,6 +367,10 @@ describe('Terraform Configuration Unit Tests', () => {
       requiredOutputs.forEach(output => {
         expect(stackContent).toMatch(new RegExp(`output\\s+"${output}"\\s*{`));
       });
+
+      // Check that VPC-dependent outputs use conditional logic
+      expect(stackContent).toMatch(/output\s+"primary_vpc_id"\s*{[^}]*var\.create_vpcs\s*\?\s*aws_vpc\.primary\[0\]\.id\s*:\s*null/);
+      expect(stackContent).toMatch(/output\s+"secondary_vpc_id"\s*{[^}]*var\.create_vpcs\s*\?\s*aws_vpc\.secondary\[0\]\.id\s*:\s*null/);
     });
 
     test('sensitive outputs are marked as sensitive', () => {

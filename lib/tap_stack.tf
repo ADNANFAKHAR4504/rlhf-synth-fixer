@@ -6,9 +6,9 @@ variable "ec2_instance_type" {
 }
 
 variable "ec2_key_pair_name" {
-  description = "EC2 key pair name"
+  description = "EC2 key pair name (optional - leave empty to skip key pair)"
   type        = string
-  default     = "my-key-pair"
+  default     = ""
 }
 
 variable "aws_region" {
@@ -34,6 +34,12 @@ variable "allowed_cidr_blocks" {
   description = "Allowed CIDR blocks for SSH access"
   type        = list(string)
   default     = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+}
+
+variable "create_vpcs" {
+  description = "Whether to create VPCs and VPC-dependent resources (set to false if VPC limit is reached)"
+  type        = bool
+  default     = true
 }
 
 # Data sources for latest Amazon Linux 2 AMI
@@ -103,8 +109,9 @@ resource "aws_kms_alias" "secondary" {
   target_key_id = aws_kms_key.secondary.key_id
 }
 
-# VPCs
+# VPCs (conditional)
 resource "aws_vpc" "primary" {
+  count                = var.create_vpcs ? 1 : 0
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -117,6 +124,7 @@ resource "aws_vpc" "primary" {
 }
 
 resource "aws_vpc" "secondary" {
+  count                = var.create_vpcs ? 1 : 0
   provider             = aws.eu_west_1
   cidr_block           = "10.1.0.0/16"
   enable_dns_hostnames = true
@@ -129,9 +137,10 @@ resource "aws_vpc" "secondary" {
   }
 }
 
-# Internet Gateways
+# Internet Gateways (conditional)
 resource "aws_internet_gateway" "primary" {
-  vpc_id = aws_vpc.primary.id
+  count  = var.create_vpcs ? 1 : 0
+  vpc_id = aws_vpc.primary[0].id
 
   tags = {
     Name = "primary-igw"
@@ -139,17 +148,19 @@ resource "aws_internet_gateway" "primary" {
 }
 
 resource "aws_internet_gateway" "secondary" {
+  count    = var.create_vpcs ? 1 : 0
   provider = aws.eu_west_1
-  vpc_id   = aws_vpc.secondary.id
+  vpc_id   = aws_vpc.secondary[0].id
 
   tags = {
     Name = "secondary-igw"
   }
 }
 
-# Subnets
+# Subnets (conditional)
 resource "aws_subnet" "primary_public" {
-  vpc_id                  = aws_vpc.primary.id
+  count                   = var.create_vpcs ? 1 : 0
+  vpc_id                  = aws_vpc.primary[0].id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
@@ -160,7 +171,8 @@ resource "aws_subnet" "primary_public" {
 }
 
 resource "aws_subnet" "primary_private" {
-  vpc_id            = aws_vpc.primary.id
+  count             = var.create_vpcs ? 1 : 0
+  vpc_id            = aws_vpc.primary[0].id
   cidr_block        = "10.0.2.0/24"
   availability_zone = "us-east-1b"
 
@@ -170,8 +182,9 @@ resource "aws_subnet" "primary_private" {
 }
 
 resource "aws_subnet" "secondary_public" {
+  count                   = var.create_vpcs ? 1 : 0
   provider                = aws.eu_west_1
-  vpc_id                  = aws_vpc.secondary.id
+  vpc_id                  = aws_vpc.secondary[0].id
   cidr_block              = "10.1.1.0/24"
   availability_zone       = "eu-west-1a"
   map_public_ip_on_launch = true
@@ -182,8 +195,9 @@ resource "aws_subnet" "secondary_public" {
 }
 
 resource "aws_subnet" "secondary_private" {
+  count             = var.create_vpcs ? 1 : 0
   provider          = aws.eu_west_1
-  vpc_id            = aws_vpc.secondary.id
+  vpc_id            = aws_vpc.secondary[0].id
   cidr_block        = "10.1.2.0/24"
   availability_zone = "eu-west-1b"
 
@@ -192,13 +206,14 @@ resource "aws_subnet" "secondary_private" {
   }
 }
 
-# Route Tables
+# Route Tables (conditional)
 resource "aws_route_table" "primary_public" {
-  vpc_id = aws_vpc.primary.id
+  count  = var.create_vpcs ? 1 : 0
+  vpc_id = aws_vpc.primary[0].id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.primary.id
+    gateway_id = aws_internet_gateway.primary[0].id
   }
 
   tags = {
@@ -207,12 +222,13 @@ resource "aws_route_table" "primary_public" {
 }
 
 resource "aws_route_table" "secondary_public" {
+  count    = var.create_vpcs ? 1 : 0
   provider = aws.eu_west_1
-  vpc_id   = aws_vpc.secondary.id
+  vpc_id   = aws_vpc.secondary[0].id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.secondary.id
+    gateway_id = aws_internet_gateway.secondary[0].id
   }
 
   tags = {
@@ -220,22 +236,25 @@ resource "aws_route_table" "secondary_public" {
   }
 }
 
-# Route Table Associations
+# Route Table Associations (conditional)
 resource "aws_route_table_association" "primary_public" {
-  subnet_id      = aws_subnet.primary_public.id
-  route_table_id = aws_route_table.primary_public.id
+  count          = var.create_vpcs ? 1 : 0
+  subnet_id      = aws_subnet.primary_public[0].id
+  route_table_id = aws_route_table.primary_public[0].id
 }
 
 resource "aws_route_table_association" "secondary_public" {
+  count          = var.create_vpcs ? 1 : 0
   provider       = aws.eu_west_1
-  subnet_id      = aws_subnet.secondary_public.id
-  route_table_id = aws_route_table.secondary_public.id
+  subnet_id      = aws_subnet.secondary_public[0].id
+  route_table_id = aws_route_table.secondary_public[0].id
 }
 
-# VPC Peering Connection
+# VPC Peering Connection (conditional)
 resource "aws_vpc_peering_connection" "primary_to_secondary" {
-  vpc_id      = aws_vpc.primary.id
-  peer_vpc_id = aws_vpc.secondary.id
+  count       = var.create_vpcs ? 1 : 0
+  vpc_id      = aws_vpc.primary[0].id
+  peer_vpc_id = aws_vpc.secondary[0].id
   peer_region = "eu-west-1"
   auto_accept = false
 
@@ -245,8 +264,9 @@ resource "aws_vpc_peering_connection" "primary_to_secondary" {
 }
 
 resource "aws_vpc_peering_connection_accepter" "secondary" {
+  count                     = var.create_vpcs ? 1 : 0
   provider                  = aws.eu_west_1
-  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
+  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary[0].id
   auto_accept               = true
 
   tags = {
@@ -254,24 +274,27 @@ resource "aws_vpc_peering_connection_accepter" "secondary" {
   }
 }
 
-# Routes for VPC Peering
+# Routes for VPC Peering (conditional)
 resource "aws_route" "primary_to_secondary" {
-  route_table_id            = aws_route_table.primary_public.id
-  destination_cidr_block    = aws_vpc.secondary.cidr_block
-  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
+  count                     = var.create_vpcs ? 1 : 0
+  route_table_id            = aws_route_table.primary_public[0].id
+  destination_cidr_block    = aws_vpc.secondary[0].cidr_block
+  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary[0].id
 }
 
 resource "aws_route" "secondary_to_primary" {
+  count                     = var.create_vpcs ? 1 : 0
   provider                  = aws.eu_west_1
-  route_table_id            = aws_route_table.secondary_public.id
-  destination_cidr_block    = aws_vpc.primary.cidr_block
-  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
+  route_table_id            = aws_route_table.secondary_public[0].id
+  destination_cidr_block    = aws_vpc.primary[0].cidr_block
+  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary[0].id
 }
 
-# Security Groups
+# Security Groups (conditional)
 resource "aws_security_group" "primary" {
+  count       = var.create_vpcs ? 1 : 0
   name_prefix = "primary-sg"
-  vpc_id      = aws_vpc.primary.id
+  vpc_id      = aws_vpc.primary[0].id
 
   ingress {
     from_port   = 22
@@ -300,9 +323,10 @@ resource "aws_security_group" "primary" {
 }
 
 resource "aws_security_group" "secondary" {
+  count       = var.create_vpcs ? 1 : 0
   provider    = aws.eu_west_1
   name_prefix = "secondary-sg"
-  vpc_id      = aws_vpc.secondary.id
+  vpc_id      = aws_vpc.secondary[0].id
 
   ingress {
     from_port   = 22
@@ -501,12 +525,22 @@ resource "aws_s3_bucket_replication_configuration" "primary" {
     id     = "replicate-to-secondary"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     destination {
       bucket        = aws_s3_bucket.secondary.arn
       storage_class = "STANDARD"
 
       encryption_configuration {
         replica_kms_key_id = aws_kms_key.secondary.arn
+      }
+    }
+
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        status = "Enabled"
       }
     }
   }
@@ -548,8 +582,7 @@ resource "aws_dynamodb_table" "primary" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_arn = aws_kms_key.primary.arn
+    enabled = true
   }
 
   point_in_time_recovery {
@@ -576,8 +609,7 @@ resource "aws_dynamodb_table" "secondary" {
   }
 
   server_side_encryption {
-    enabled     = true
-    kms_key_arn = aws_kms_key.secondary.arn
+    enabled = true
   }
 
   point_in_time_recovery {
@@ -608,10 +640,11 @@ resource "aws_dynamodb_global_table" "main" {
   }
 }
 
-# RDS Subnet Groups
+# RDS Subnet Groups (conditional)
 resource "aws_db_subnet_group" "primary" {
+  count      = var.create_vpcs ? 1 : 0
   name       = "primary-subnet-group"
-  subnet_ids = [aws_subnet.primary_public.id, aws_subnet.primary_private.id]
+  subnet_ids = [aws_subnet.primary_public[0].id, aws_subnet.primary_private[0].id]
 
   tags = {
     Name = "primary-db-subnet-group"
@@ -619,33 +652,35 @@ resource "aws_db_subnet_group" "primary" {
 }
 
 resource "aws_db_subnet_group" "secondary" {
+  count      = var.create_vpcs ? 1 : 0
   provider   = aws.eu_west_1
   name       = "secondary-subnet-group"
-  subnet_ids = [aws_subnet.secondary_public.id, aws_subnet.secondary_private.id]
+  subnet_ids = [aws_subnet.secondary_public[0].id, aws_subnet.secondary_private[0].id]
 
   tags = {
     Name = "secondary-db-subnet-group"
   }
 }
 
-# RDS Instances
+# RDS Instances (conditional)
 resource "aws_db_instance" "primary" {
-  identifier             = "primary-database"
-  allocated_storage      = 20
-  storage_type          = "gp2"
-  storage_encrypted     = true
-  kms_key_id           = aws_kms_key.primary.arn
-  engine               = "mysql"
-  engine_version       = "8.0"
-  instance_class       = "db.t3.micro"
-  db_name              = "primarydb"
-  username             = "admin"
-  password             = var.db_password
-  multi_az             = true
-  publicly_accessible = false
-  db_subnet_group_name = aws_db_subnet_group.primary.name
-  vpc_security_group_ids = [aws_security_group.primary.id]
-  skip_final_snapshot  = true
+  count                    = var.create_vpcs ? 1 : 0
+  identifier               = "primary-database"
+  allocated_storage        = 20
+  storage_type            = "gp2"
+  storage_encrypted       = true
+  kms_key_id             = aws_kms_key.primary.arn
+  engine                 = "mysql"
+  engine_version         = "8.0"
+  instance_class         = "db.t3.micro"
+  db_name                = "primarydb"
+  username               = "admin"
+  password               = var.db_password
+  multi_az               = true
+  publicly_accessible    = false
+  db_subnet_group_name   = aws_db_subnet_group.primary[0].name
+  vpc_security_group_ids = [aws_security_group.primary[0].id]
+  skip_final_snapshot    = true
 
   tags = {
     Name        = "primary-rds-instance"
@@ -654,23 +689,24 @@ resource "aws_db_instance" "primary" {
 }
 
 resource "aws_db_instance" "secondary" {
-  provider           = aws.eu_west_1
-  identifier         = "secondary-database"
-  allocated_storage  = 20
-  storage_type      = "gp2"
-  storage_encrypted = true
-  kms_key_id       = aws_kms_key.secondary.arn
-  engine           = "mysql"
-  engine_version   = "8.0"
-  instance_class   = "db.t3.micro"
-  db_name          = "secondarydb"
-  username         = "admin"
-  password         = var.db_password
-  multi_az         = true
-  publicly_accessible = false
-  db_subnet_group_name = aws_db_subnet_group.secondary.name
-  vpc_security_group_ids = [aws_security_group.secondary.id]
-  skip_final_snapshot = true
+  count                    = var.create_vpcs ? 1 : 0
+  provider                 = aws.eu_west_1
+  identifier               = "secondary-database"
+  allocated_storage        = 20
+  storage_type            = "gp2"
+  storage_encrypted       = true
+  kms_key_id             = aws_kms_key.secondary.arn
+  engine                 = "mysql"
+  engine_version         = "8.0"
+  instance_class         = "db.t3.micro"
+  db_name                = "secondarydb"
+  username               = "admin"
+  password               = var.db_password
+  multi_az               = true
+  publicly_accessible    = false
+  db_subnet_group_name   = aws_db_subnet_group.secondary[0].name
+  vpc_security_group_ids = [aws_security_group.secondary[0].id]
+  skip_final_snapshot    = true
 
   tags = {
     Name        = "secondary-rds-instance"
@@ -678,13 +714,14 @@ resource "aws_db_instance" "secondary" {
   }
 }
 
-# EC2 Instances
+# EC2 Instances (conditional)
 resource "aws_instance" "primary" {
-  ami                    = data.aws_ami.amazon_linux_us_east_1.id
-  instance_type          = var.ec2_instance_type
-  key_name              = var.ec2_key_pair_name
-  subnet_id             = aws_subnet.primary_public.id
-  vpc_security_group_ids = [aws_security_group.primary.id]
+  count                   = var.create_vpcs ? 1 : 0
+  ami                     = data.aws_ami.amazon_linux_us_east_1.id
+  instance_type           = var.ec2_instance_type
+  key_name               = var.ec2_key_pair_name != "" ? var.ec2_key_pair_name : null
+  subnet_id              = aws_subnet.primary_public[0].id
+  vpc_security_group_ids = [aws_security_group.primary[0].id]
 
   root_block_device {
     volume_type = "gp3"
@@ -701,12 +738,13 @@ resource "aws_instance" "primary" {
 }
 
 resource "aws_instance" "secondary" {
-  provider               = aws.eu_west_1
-  ami                    = data.aws_ami.amazon_linux_eu_west_1.id
-  instance_type          = var.ec2_instance_type
-  key_name              = var.ec2_key_pair_name
-  subnet_id             = aws_subnet.secondary_public.id
-  vpc_security_group_ids = [aws_security_group.secondary.id]
+  count                   = var.create_vpcs ? 1 : 0
+  provider                = aws.eu_west_1
+  ami                     = data.aws_ami.amazon_linux_eu_west_1.id
+  instance_type           = var.ec2_instance_type
+  key_name               = var.ec2_key_pair_name != "" ? var.ec2_key_pair_name : null
+  subnet_id              = aws_subnet.secondary_public[0].id
+  vpc_security_group_ids = [aws_security_group.secondary[0].id]
 
   root_block_device {
     volume_type = "gp3"
@@ -828,7 +866,7 @@ resource "aws_cloudtrail" "secondary" {
   s3_bucket_name = aws_s3_bucket.logging.bucket
   s3_key_prefix  = "secondary-region/"
 
-  kms_key_id = aws_kms_key.secondary.arn
+  kms_key_id = aws_kms_key.primary.arn
 
   event_selector {
     read_write_type                 = "All"
@@ -882,23 +920,23 @@ resource "aws_s3_bucket_policy" "logging" {
 # Outputs
 output "primary_vpc_id" {
   description = "ID of the primary VPC"
-  value       = aws_vpc.primary.id
+  value       = var.create_vpcs ? aws_vpc.primary[0].id : null
 }
 
 output "secondary_vpc_id" {
   description = "ID of the secondary VPC"
-  value       = aws_vpc.secondary.id
+  value       = var.create_vpcs ? aws_vpc.secondary[0].id : null
 }
 
 output "primary_rds_endpoint" {
   description = "RDS instance endpoint in primary region"
-  value       = aws_db_instance.primary.endpoint
+  value       = var.create_vpcs ? aws_db_instance.primary[0].endpoint : null
   sensitive   = true
 }
 
 output "secondary_rds_endpoint" {
   description = "RDS instance endpoint in secondary region"
-  value       = aws_db_instance.secondary.endpoint
+  value       = var.create_vpcs ? aws_db_instance.secondary[0].endpoint : null
   sensitive   = true
 }
 
@@ -919,12 +957,12 @@ output "logging_s3_bucket_name" {
 
 output "primary_ec2_instance_id" {
   description = "ID of the primary EC2 instance"
-  value       = aws_instance.primary.id
+  value       = var.create_vpcs ? aws_instance.primary[0].id : null
 }
 
 output "secondary_ec2_instance_id" {
   description = "ID of the secondary EC2 instance"
-  value       = aws_instance.secondary.id
+  value       = var.create_vpcs ? aws_instance.secondary[0].id : null
 }
 
 output "primary_kms_key_id" {
@@ -944,5 +982,5 @@ output "dynamodb_global_table_name" {
 
 output "vpc_peering_connection_id" {
   description = "ID of the VPC peering connection"
-  value       = aws_vpc_peering_connection.primary_to_secondary.id
+  value       = var.create_vpcs ? aws_vpc_peering_connection.primary_to_secondary[0].id : null
 }
