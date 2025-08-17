@@ -14,5 +14,23 @@
     "Network Configuration",
     "Resource Scaling",
     "General Infrastructure Tooling QA"
-  ]
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ALB",
+    "AutoScaling",
+    "DynamoDB",
+    "S3",
+    "ACM",
+    "IAM",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
 }
