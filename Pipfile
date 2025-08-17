@@ -11,4 +11,4 @@ pulumi-awsx = "<4.0.0,>=2.0.0"
 [dev-packages]
 
 [requires]
-python_version = "3.13"
+python_version = "3.12"
