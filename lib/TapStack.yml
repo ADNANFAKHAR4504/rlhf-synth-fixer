@@ -548,7 +548,7 @@ Resources:
     Type: AWS::WAFv2::WebACL
     Properties:
       Name: !Sub 'WebACL-tapstack1271-${Environment}'
-      Scope: REGIONAL
+      Scope: CLOUDFRONT
       DefaultAction:
         Allow: {}
       Rules:
@@ -595,12 +595,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'WebACL-tapstackpr1271-${Environment}'
-
-  WebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      ResourceArn: !Ref ApplicationLoadBalancer
-      WebACLArn: !GetAtt WebACL.Arn
 
   # ============================================================================
   # 9. ENFORCE CLOUDFRONT ENCRYPTION
