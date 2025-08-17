@@ -414,7 +414,6 @@ Resources:
 
   ProdTrailBucket:
     Type: AWS::S3::Bucket
-    DependsOn: S3BucketCleanup
     Properties:
       BucketName: !Sub prod-cloudtrail-bucket-${AWS::AccountId}
       VersioningConfiguration:

@@ -863,7 +863,6 @@
         },
         "ProdTrailBucket": {
             "Type": "AWS::S3::Bucket",
-            "DependsOn": "S3BucketCleanup",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "prod-cloudtrail-bucket-${AWS::AccountId}"
