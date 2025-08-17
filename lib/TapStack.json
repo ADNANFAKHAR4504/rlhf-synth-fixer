@@ -145,22 +145,6 @@
                 "SSESpecification": {
                     "SSEEnabled": true
                 },
-                "GlobalTables": {
-                    "Fn::If": [
-                        "EnableReplication",
-                        [
-                            {
-                                "Region": "us-east-1"
-                            },
-                            {
-                                "Region": "us-west-2"
-                            }
-                        ],
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
-                    ]
-                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -183,10 +167,12 @@
                     {
                         "Key": "IsPrimaryRegion",
                         "Value": {
-                            "Fn::If": [
-                                "IsPrimaryRegion",
-                                "true",
-                                "false"
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "PrimaryRegion"
                             ]
                         }
                     }
@@ -1083,10 +1069,12 @@
         "IsPrimaryRegion": {
             "Description": "Whether this deployment is in the primary region",
             "Value": {
-                "Fn::If": [
-                    "IsPrimaryRegion",
-                    "true",
-                    "false"
+                "Fn::FindInMap": [
+                    "RegionMap",
+                    {
+                        "Ref": "AWS::Region"
+                    },
+                    "PrimaryRegion"
                 ]
             },
             "Export": {
@@ -1110,7 +1098,20 @@
         "MultiRegionStatus": {
             "Description": "Multi-region deployment status and configuration",
             "Value": {
-                "Fn::Sub": "Primary Region: ${AWS::Region}\nTarget Region: ${DeploymentRegion}\nIs Primary: ${IsPrimaryRegion}\nReplication: ${EnableCrossRegionReplication}\n"
+                "Fn::Sub": [
+                    "Primary Region: ${AWS::Region}\nTarget Region: ${DeploymentRegion}\nIs Primary: ${IsPrimary}\nReplication: ${EnableCrossRegionReplication}\n",
+                    {
+                        "IsPrimary": {
+                            "Fn::FindInMap": [
+                                "RegionMap",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "PrimaryRegion"
+                            ]
+                        }
+                    }
+                ]
             },
             "Export": {
                 "Name": {

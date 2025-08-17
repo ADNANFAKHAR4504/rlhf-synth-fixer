@@ -88,11 +88,6 @@ Resources:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
         SSEEnabled: true
-      GlobalTables: !If
-        - EnableReplication
-        - - Region: us-east-1
-          - Region: us-west-2
-        - !Ref 'AWS::NoValue'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -101,7 +96,7 @@ Resources:
         - Key: DeploymentRegion
           Value: !Ref DeploymentRegion
         - Key: IsPrimaryRegion
-          Value: !If [IsPrimaryRegion, 'true', 'false']
+          Value: !FindInMap [RegionMap, !Ref 'AWS::Region', PrimaryRegion]
 
   # IAM Role for Lambda Functions
   LambdaExecutionRole:
@@ -731,7 +726,7 @@ Outputs:
 
   IsPrimaryRegion:
     Description: 'Whether this deployment is in the primary region'
-    Value: !If [IsPrimaryRegion, 'true', 'false']
+    Value: !FindInMap [RegionMap, !Ref 'AWS::Region', PrimaryRegion]
     Export:
       Name: !Sub '${AWS::StackName}-IsPrimaryRegion'
 
@@ -744,11 +739,13 @@ Outputs:
 
   MultiRegionStatus:
     Description: 'Multi-region deployment status and configuration'
-    Value: !Sub |
-      Primary Region: ${AWS::Region}
-      Target Region: ${DeploymentRegion}
-      Is Primary: ${IsPrimaryRegion}
-      Replication: ${EnableCrossRegionReplication}
+    Value: !Sub 
+      - |
+        Primary Region: ${AWS::Region}
+        Target Region: ${DeploymentRegion}
+        Is Primary: ${IsPrimary}
+        Replication: ${EnableCrossRegionReplication}
+      - IsPrimary: !FindInMap [RegionMap, !Ref 'AWS::Region', PrimaryRegion]
     Export:
       Name: !Sub '${AWS::StackName}-MultiRegionStatus'
 
