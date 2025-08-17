@@ -377,69 +377,71 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # CloudTrail S3 Bucket
-  TapCloudTrailBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref TapS3KMSKey
-            BucketKeyEnabled: true
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-tap-cloudtrail-bucket-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref Environment
+  # CloudTrail Resources - COMMENTED OUT DUE TO SERVICE LIMIT
+  # NOTE: AWS CloudTrail has a limit of 7 trails per region (us-east-1 limit reached)
+  # These resources need to be enabled in a region with available CloudTrail quota
+  # or existing trails need to be cleaned up before deploying this stack
+  
+  # TapCloudTrailBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: aws:kms
+  #             KMSMasterKeyID: !Ref TapS3KMSKey
+  #           BucketKeyEnabled: true
+  #     VersioningConfiguration:
+  #       Status: Enabled
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${Environment}-tap-cloudtrail-bucket-${EnvironmentSuffix}'
+  #       - Key: Environment
+  #         Value: !Ref Environment
 
-  # CloudTrail Bucket Policy
-  TapCloudTrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref TapCloudTrailBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: 's3:GetBucketAcl'
-            Resource: !GetAtt TapCloudTrailBucket.Arn
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub '${TapCloudTrailBucket.Arn}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
+  # TapCloudTrailBucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref TapCloudTrailBucket
+  #     PolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: AWSCloudTrailAclCheck
+  #           Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: 's3:GetBucketAcl'
+  #           Resource: !GetAtt TapCloudTrailBucket.Arn
+  #         - Sid: AWSCloudTrailWrite
+  #           Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: 's3:PutObject'
+  #           Resource: !Sub '${TapCloudTrailBucket.Arn}/*'
+  #           Condition:
+  #             StringEquals:
+  #               's3:x-amz-acl': 'bucket-owner-full-control'
 
-  # CloudTrail
-  TapCloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: TapCloudTrailBucketPolicy
-    Properties:
-      TrailName: !Sub '${Environment}-tap-cloudtrail-${EnvironmentSuffix}'
-      S3BucketName: !Ref TapCloudTrailBucket
-      IncludeGlobalServiceEvents: true
-      IsLogging: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-tap-cloudtrail'
-        - Key: Environment
-          Value: !Ref Environment
+  # TapCloudTrail:
+  #   Type: AWS::CloudTrail::Trail
+  #   DependsOn: TapCloudTrailBucketPolicy
+  #   Properties:
+  #     TrailName: !Sub '${Environment}-tap-cloudtrail-${EnvironmentSuffix}'
+  #     S3BucketName: !Ref TapCloudTrailBucket
+  #     IncludeGlobalServiceEvents: true
+  #     IsLogging: true
+  #     IsMultiRegionTrail: true
+  #     EnableLogFileValidation: true
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub '${Environment}-tap-cloudtrail'
+  #       - Key: Environment
+  #         Value: !Ref Environment
 
   # Elasticsearch Domain with Encryption
   TapElasticsearchDomain:
@@ -590,17 +592,18 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-web-acl-arn'
 
-  CloudTrailArn:
-    Description: 'CloudTrail ARN'
-    Value: !GetAtt TapCloudTrail.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-cloudtrail-arn'
+  # CloudTrail outputs commented out due to CloudTrail service limit
+  # CloudTrailArn:
+  #   Description: 'CloudTrail ARN'
+  #   Value: !GetAtt TapCloudTrail.Arn
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-cloudtrail-arn'
   
-  CloudTrailBucketName:
-    Description: 'CloudTrail Bucket Name'
-    Value: !Ref TapCloudTrailBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-cloudtrail-bucket'
+  # CloudTrailBucketName:
+  #   Description: 'CloudTrail Bucket Name'
+  #   Value: !Ref TapCloudTrailBucket
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-cloudtrail-bucket'
   
   StackName:
     Description: 'CloudFormation Stack Name'

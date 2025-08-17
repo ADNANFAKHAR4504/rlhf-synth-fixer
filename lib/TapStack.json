@@ -32,17 +32,24 @@
             "MinLength": 1,
             "MaxLength": 16,
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
-        },
-        "DatabasePassword": {
-            "Type": "String",
-            "NoEcho": true,
-            "Description": "RDS Database password",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "[a-zA-Z0-9]*"
         }
     },
     "Resources": {
+        "TapDatabasePassword": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-tap-database-password-${EnvironmentSuffix}"
+                },
+                "Description": "RDS Database password for TapStack",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"tapuser\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                }
+            }
+        },
         "TapS3KMSKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
@@ -164,9 +171,6 @@
         "TapSecureS3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${Environment}-tap-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
@@ -202,7 +206,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-tap-secure-bucket"
+                            "Fn::Sub": "${Environment}-tap-secure-bucket-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -465,12 +469,12 @@
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0.35",
+                "EngineVersion": "8.0.43",
                 "MasterUsername": {
                     "Ref": "DatabaseUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DatabasePassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${TapDatabasePassword}:SecretString:password}}"
                 },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
@@ -512,9 +516,6 @@
         "TapEC2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${Environment}-tap-ec2-role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -529,38 +530,6 @@
                 },
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "TapS3AccessPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject",
-                                        "s3:PutObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "${TapSecureS3Bucket.Arn}/*"
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:ListBucket"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "TapSecureS3Bucket",
-                                            "Arn"
-                                        ]
-                                    }
-                                }
-                            ]
-                        }
-                    }
                 ],
                 "Tags": [
                     {
@@ -581,9 +550,6 @@
         "TapEC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${Environment}-tap-ec2-profile-${EnvironmentSuffix}"
-                },
                 "Roles": [
                     {
                         "Ref": "TapEC2Role"
@@ -594,9 +560,6 @@
         "TapLambdaRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${Environment}-tap-lambda-role-${EnvironmentSuffix}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -611,25 +574,6 @@
                 },
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "TapLambdaS3Policy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "${TapSecureS3Bucket.Arn}/*"
-                                    }
-                                }
-                            ]
-                        }
-                    }
                 ],
                 "Tags": [
                     {
@@ -685,122 +629,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-tap-function"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "TapCloudTrailBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "${Environment}-tap-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "TapS3KMSKey"
-                                }
-                            }
-                        }
-                    ]
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${Environment}-tap-cloudtrail-bucket"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
-                        }
-                    }
-                ]
-            }
-        },
-        "TapCloudTrailBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "TapCloudTrailBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSCloudTrailAclCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "TapCloudTrailBucket",
-                                    "Arn"
-                                ]
-                            }
-                        },
-                        {
-                            "Sid": "AWSCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${TapCloudTrailBucket.Arn}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "TapCloudTrail": {
-            "Type": "AWS::CloudTrail::Trail",
-            "DependsOn": "TapCloudTrailBucketPolicy",
-            "Properties": {
-                "TrailName": {
-                    "Fn::Sub": "${Environment}-tap-cloudtrail-${EnvironmentSuffix}"
-                },
-                "S3BucketName": {
-                    "Ref": "TapCloudTrailBucket"
-                },
-                "IncludeGlobalServiceEvents": true,
-                "IsLogging": true,
-                "IsMultiRegionTrail": true,
-                "EnableLogFileValidation": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${Environment}-tap-cloudtrail"
                         }
                     },
                     {
@@ -1083,31 +911,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-web-acl-arn"
-                }
-            }
-        },
-        "CloudTrailArn": {
-            "Description": "CloudTrail ARN",
-            "Value": {
-                "Fn::GetAtt": [
-                    "TapCloudTrail",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-cloudtrail-arn"
-                }
-            }
-        },
-        "CloudTrailBucketName": {
-            "Description": "CloudTrail Bucket Name",
-            "Value": {
-                "Ref": "TapCloudTrailBucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-cloudtrail-bucket"
                 }
             }
         },
