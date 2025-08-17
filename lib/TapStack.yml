@@ -93,7 +93,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
       Tags:
         - Key: Name
           Value: !Sub 'EC2Role-${Environment}-${AWS::Region}'
@@ -445,7 +445,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'database-${Environment}-${AWS::Region}'
       DBInstanceClass: !FindInMap [EnvironmentMap, !Ref Environment, DBInstanceClass]
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.37'
       AllocatedStorage: !FindInMap [EnvironmentMap, !Ref Environment, DBAllocatedStorage]
       StorageType: gp2
       StorageEncrypted: !If [IsProduction, true, false]
