@@ -156,7 +156,182 @@ variable "enable_deletion_protection" {
 variable "enable_multi_az_nat" {
   description = "Enable multiple NAT gateways for production resilience"
   type        = bool
-  default     = false
+  default     = true
+}
+
+# Storage and sizing variables
+variable "ec2_volume_size" {
+  description = "Size of EC2 root volume in GB"
+  type        = number
+  default     = 20
+  validation {
+    condition     = var.ec2_volume_size >= 8 && var.ec2_volume_size <= 100
+    error_message = "EC2 volume size must be between 8 and 100 GB."
+  }
+}
+
+variable "rds_allocated_storage" {
+  description = "Allocated storage for RDS instance in GB"
+  type        = number
+  default     = 20
+  validation {
+    condition     = var.rds_allocated_storage >= 20 && var.rds_allocated_storage <= 65536
+    error_message = "RDS allocated storage must be between 20 and 65536 GB."
+  }
+}
+
+# Network and security variables
+variable "http_port" {
+  description = "HTTP port for web traffic"
+  type        = number
+  default     = 80
+  validation {
+    condition     = var.http_port >= 1 && var.http_port <= 65535
+    error_message = "HTTP port must be between 1 and 65535."
+  }
+}
+
+variable "https_port" {
+  description = "HTTPS port for secure web traffic"
+  type        = number
+  default     = 443
+  validation {
+    condition     = var.https_port >= 1 && var.https_port <= 65535
+    error_message = "HTTPS port must be between 1 and 65535."
+  }
+}
+
+variable "ssh_port" {
+  description = "SSH port for secure shell access"
+  type        = number
+  default     = 22
+  validation {
+    condition     = var.ssh_port >= 1 && var.ssh_port <= 65535
+    error_message = "SSH port must be between 1 and 65535."
+  }
+}
+
+variable "mysql_port" {
+  description = "MySQL database port"
+  type        = number
+  default     = 3306
+  validation {
+    condition     = var.mysql_port >= 1 && var.mysql_port <= 65535
+    error_message = "MySQL port must be between 1 and 65535."
+  }
+}
+
+# Monitoring and lifecycle variables
+variable "cloudwatch_log_retention_days" {
+  description = "Number of days to retain CloudWatch logs"
+  type        = number
+  default     = 30
+  validation {
+    condition     = var.cloudwatch_log_retention_days >= 1 && var.cloudwatch_log_retention_days <= 3653
+    error_message = "CloudWatch log retention must be between 1 and 3653 days."
+  }
+}
+
+variable "s3_lifecycle_transition_days" {
+  description = "Days before transitioning S3 objects to IA storage"
+  type        = number
+  default     = 30
+  validation {
+    condition     = var.s3_lifecycle_transition_days >= 1
+    error_message = "S3 lifecycle transition days must be at least 1."
+  }
+}
+
+variable "s3_lifecycle_glacier_days" {
+  description = "Days before transitioning S3 objects to Glacier storage"
+  type        = number
+  default     = 90
+  validation {
+    condition     = var.s3_lifecycle_glacier_days >= 1
+    error_message = "S3 lifecycle glacier days must be at least 1."
+  }
+}
+
+variable "s3_lifecycle_expiration_days" {
+  description = "Days before expiring S3 objects"
+  type        = number
+  default     = 365
+  validation {
+    condition     = var.s3_lifecycle_expiration_days >= 1
+    error_message = "S3 lifecycle expiration days must be at least 1."
+  }
+}
+
+# Monitoring thresholds
+variable "cpu_threshold" {
+  description = "CPU utilization threshold for CloudWatch alarms"
+  type        = number
+  default     = 80
+  validation {
+    condition     = var.cpu_threshold >= 1 && var.cpu_threshold <= 100
+    error_message = "CPU threshold must be between 1 and 100 percent."
+  }
+}
+
+variable "cloudwatch_evaluation_periods" {
+  description = "Number of evaluation periods for CloudWatch alarms"
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.cloudwatch_evaluation_periods >= 1 && var.cloudwatch_evaluation_periods <= 10
+    error_message = "CloudWatch evaluation periods must be between 1 and 10."
+  }
+}
+
+variable "cloudwatch_period_seconds" {
+  description = "Period in seconds for CloudWatch metrics"
+  type        = number
+  default     = 300
+  validation {
+    condition     = var.cloudwatch_period_seconds >= 60 && var.cloudwatch_period_seconds <= 86400
+    error_message = "CloudWatch period must be between 60 and 86400 seconds."
+  }
+}
+
+# Load balancer health check variables
+variable "alb_health_check_interval" {
+  description = "Interval in seconds for ALB health checks"
+  type        = number
+  default     = 30
+  validation {
+    condition     = var.alb_health_check_interval >= 5 && var.alb_health_check_interval <= 300
+    error_message = "ALB health check interval must be between 5 and 300 seconds."
+  }
+}
+
+variable "alb_health_check_timeout" {
+  description = "Timeout in seconds for ALB health checks"
+  type        = number
+  default     = 5
+  validation {
+    condition     = var.alb_health_check_timeout >= 2 && var.alb_health_check_timeout <= 60
+    error_message = "ALB health check timeout must be between 2 and 60 seconds."
+  }
+}
+
+variable "alb_healthy_threshold" {
+  description = "Number of consecutive health check successes required"
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.alb_healthy_threshold >= 2 && var.alb_healthy_threshold <= 10
+    error_message = "ALB healthy threshold must be between 2 and 10."
+  }
+}
+
+variable "alb_unhealthy_threshold" {
+  description = "Number of consecutive health check failures required"
+  type        = number
+  default     = 2
+  validation {
+    condition     = var.alb_unhealthy_threshold >= 2 && var.alb_unhealthy_threshold <= 10
+    error_message = "ALB unhealthy threshold must be between 2 and 10."
+  }
 }
 
 # =============================================================================
@@ -198,10 +373,10 @@ resource "random_password" "db_password" {
 
 # AWS Secrets Manager for database credentials
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret-new"
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret-manager"
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret-manager"
   }
 }
 
@@ -265,21 +440,24 @@ resource "aws_subnet" "private" {
   }
 }
 
-# NAT Gateway
+# NAT Gateway EIPs
 resource "aws_eip" "nat" {
+  count  = var.enable_multi_az_nat ? length(var.public_subnet_cidrs) : 1
   domain = "vpc"
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-eip"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-eip-${count.index + 1}"
   }
 }
 
+# NAT Gateways - Multi-AZ for production, single for development
 resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
+  count         = var.enable_multi_az_nat ? length(var.public_subnet_cidrs) : 1
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-gateway"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-gateway-${count.index + 1}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -299,16 +477,18 @@ resource "aws_route_table" "public" {
   }
 }
 
+# Private Route Tables - One per AZ when multi-AZ NAT is enabled
 resource "aws_route_table" "private" {
+  count  = var.enable_multi_az_nat ? length(var.private_subnet_cidrs) : 1
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
+    nat_gateway_id = var.enable_multi_az_nat ? aws_nat_gateway.main[count.index].id : aws_nat_gateway.main[0].id
   }
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-private-rt"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-private-rt-${count.index + 1}"
   }
 }
 
@@ -322,7 +502,7 @@ resource "aws_route_table_association" "public" {
 resource "aws_route_table_association" "private" {
   count          = length(var.private_subnet_cidrs)
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
+  route_table_id = var.enable_multi_az_nat ? aws_route_table.private[count.index].id : aws_route_table.private[0].id
 }
 
 # =============================================================================
@@ -335,24 +515,24 @@ resource "aws_security_group" "web" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = 80
-    to_port     = 80
+    from_port   = var.http_port
+    to_port     = var.http_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP access"
   }
 
   ingress {
-    from_port   = 443
-    to_port     = 443
+    from_port   = var.https_port
+    to_port     = var.https_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS access"
   }
 
   ingress {
-    from_port   = 22
-    to_port     = 22
+    from_port   = var.ssh_port
+    to_port     = var.ssh_port
     protocol    = "tcp"
     cidr_blocks = var.allowed_ssh_cidrs
     description = "SSH access from allowed CIDRs"
@@ -377,8 +557,8 @@ resource "aws_security_group" "database" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 3306
-    to_port         = 3306
+    from_port       = var.mysql_port
+    to_port         = var.mysql_port
     protocol        = "tcp"
     security_groups = [aws_security_group.web.id]
     description     = "MySQL access from web servers"
@@ -615,7 +795,7 @@ EOF
   )
 
   root_block_device {
-    volume_size = 20
+    volume_size = var.ec2_volume_size
     volume_type = "gp3"
     encrypted   = true
   }
@@ -645,27 +825,27 @@ resource "aws_lb" "web" {
 # Target Group
 resource "aws_lb_target_group" "web" {
   name     = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-tg"
-  port     = 80
+  port     = var.http_port
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
   health_check {
     enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
+    healthy_threshold   = var.alb_healthy_threshold
+    interval            = var.alb_health_check_interval
     matcher             = "200"
     path                = "/"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = var.alb_health_check_timeout
+    unhealthy_threshold = var.alb_unhealthy_threshold
   }
 }
 
 # Load Balancer Listener
 resource "aws_lb_listener" "web" {
   load_balancer_arn = aws_lb.web.arn
-  port              = "80"
+  port              = var.http_port
   protocol          = "HTTP"
 
   default_action {
@@ -679,7 +859,7 @@ resource "aws_lb_target_group_attachment" "web" {
   count            = length(aws_instance.web)
   target_group_arn = aws_lb_target_group.web.arn
   target_id        = aws_instance.web[count.index].id
-  port             = 80
+  port             = var.http_port
 }
 
 # =============================================================================
@@ -688,18 +868,18 @@ resource "aws_lb_target_group_attachment" "web" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-new"
+  name       = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-manager"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-new"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-manager"
   }
 }
 
 # RDS Parameter Group
 resource "aws_db_parameter_group" "main" {
   family = "mysql8.0"
-  name   = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-params-new"
+  name   = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-params-manager"
 
   parameter {
     name  = "character_set_server"
@@ -712,15 +892,15 @@ resource "aws_db_parameter_group" "main" {
   }
 }
 
-# RDS Instance
+# RDS Instance with Secrets Manager Integration
 resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-new"
+  identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secrets-manager"
 
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = var.db_instance_class
 
-  allocated_storage     = 20
+  allocated_storage     = var.rds_allocated_storage
   max_allocated_storage = 100
   storage_type          = "gp2"
   storage_encrypted     = true
@@ -728,7 +908,7 @@ resource "aws_db_instance" "main" {
   db_name  = "application_db"
   username = var.db_username
   password = var.db_password != null ? var.db_password : random_password.db_password[0].result
-  port     = "3306"
+  port     = var.mysql_port
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
   parameter_group_name   = aws_db_parameter_group.main.name
@@ -810,17 +990,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
     }
 
     transition {
-      days          = 30
+      days          = var.s3_lifecycle_transition_days
       storage_class = "STANDARD_IA"
     }
 
     transition {
-      days          = 90
+      days          = var.s3_lifecycle_glacier_days
       storage_class = "GLACIER"
     }
 
     expiration {
-      days = 365
+      days = var.s3_lifecycle_expiration_days
     }
   }
 }
@@ -832,7 +1012,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "application" {
   name              = "/aws/ec2/${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
-  retention_in_days = 30
+  retention_in_days = var.cloudwatch_log_retention_days
 
   tags = {
     Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-logs"
@@ -843,12 +1023,12 @@ resource "aws_cloudwatch_log_group" "application" {
 resource "aws_cloudwatch_metric_alarm" "cpu" {
   alarm_name          = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-cpu-alarm"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = var.cloudwatch_evaluation_periods
   metric_name         = "CPUUtilization"
   namespace           = "AWS/EC2"
-  period              = "300"
+  period              = var.cloudwatch_period_seconds
   statistic           = "Average"
-  threshold           = "80"
+  threshold           = var.cpu_threshold
   alarm_description   = "This metric monitors EC2 CPU utilization"
 
   dimensions = {
@@ -860,12 +1040,12 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 resource "aws_cloudwatch_metric_alarm" "database_cpu" {
   alarm_name          = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-cpu-alarm"
   comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
+  evaluation_periods  = var.cloudwatch_evaluation_periods
   metric_name         = "CPUUtilization"
   namespace           = "AWS/RDS"
-  period              = "300"
+  period              = var.cloudwatch_period_seconds
   statistic           = "Average"
-  threshold           = "80"
+  threshold           = var.cpu_threshold
   alarm_description   = "This metric monitors RDS CPU utilization"
 
   dimensions = {
@@ -923,6 +1103,16 @@ output "security_group_ids" {
 output "secrets_manager_arn" {
   description = "The ARN of the Secrets Manager secret for database credentials"
   value       = aws_secretsmanager_secret.db_credentials.arn
+}
+
+output "nat_gateway_ids" {
+  description = "The IDs of the NAT gateways"
+  value       = aws_nat_gateway.main[*].id
+}
+
+output "nat_gateway_count" {
+  description = "The number of NAT gateways deployed"
+  value       = var.enable_multi_az_nat ? length(var.public_subnet_cidrs) : 1
 }
 
 # =============================================================================
