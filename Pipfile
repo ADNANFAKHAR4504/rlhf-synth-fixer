@@ -16,3 +16,4 @@ python_version = "3.12"
 
 [scripts]
 lint = "pylint lib/ tests/"
+pulumi-login = "pulumi login s3://iac-rlhf-pulumi-states"
