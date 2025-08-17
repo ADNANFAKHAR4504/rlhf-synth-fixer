@@ -185,7 +185,7 @@ Resources:
       FunctionName: !Ref TapDataProcessorFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${TapServerlessApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${TapServerlessApi}/*/*'
 
   # API Gateway REST API for TAP
   TapServerlessApi:

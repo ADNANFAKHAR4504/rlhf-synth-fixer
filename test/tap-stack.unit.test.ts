@@ -376,6 +376,10 @@ describe('TapStack CloudFormation Template', () => {
           'apigateway.amazonaws.com'
         );
         expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
+        expect(permission.Properties.SourceArn).toEqual({
+          'Fn::Sub':
+            'arn:aws:execute-api:us-east-1:${AWS::AccountId}:${TapServerlessApi}/*/*',
+        });
       });
     });
 
