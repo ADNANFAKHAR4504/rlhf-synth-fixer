@@ -1,7 +1,16 @@
-variable "region" {
-  description = "AWS region"
+# variable "region" {
+#   description = "AWS region"
+#   type        = string
+#   default = "us-west-2"
+# }
+
+########################
+# Variables
+########################
+variable "aws_region" {
+  description = "AWS provider region"
   type        = string
-  default = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "environment" {
