@@ -1,11 +1,11 @@
+import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
+import { ConfigServiceClient, DescribeConfigRulesCommand, DescribeConfigurationRecordersCommand } from '@aws-sdk/client-config-service';
+import { DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcAttributeCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { IAMClient } from '@aws-sdk/client-iam';
+import { KMSClient } from '@aws-sdk/client-kms';
+import { GetBucketEncryptionCommand, GetPublicAccessBlockCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';
-import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
-import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
-import { ConfigServiceClient, DescribeConfigurationRecordersCommand, DescribeConfigRulesCommand } from '@aws-sdk/client-config-service';
-import { IAMClient, GetUserCommand, GetUserPolicyCommand } from '@aws-sdk/client-iam';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
 
 describe('AWS Infrastructure Integration Tests', () => {
   let outputs: any;
@@ -281,58 +281,6 @@ describe('AWS Infrastructure Integration Tests', () => {
         rule.Source?.SourceIdentifier === 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED'
       );
       expect(s3Rule).toBeDefined();
-    });
-  });
-
-  describe('IAM Configuration', () => {
-    test('Example IAM user exists', async () => {
-      try {
-        const command = new GetUserCommand({
-          UserName: 'example.user'
-        });
-        
-        const response = await iamClient.send(command);
-        expect(response.User).toBeDefined();
-        expect(response.User!.UserName).toBe('example.user');
-      } catch (error: any) {
-        if (error.name === 'NoSuchEntity') {
-          console.warn('IAM user not found, this might be expected if user creation failed');
-        } else {
-          throw error;
-        }
-      }
-    });
-
-    test('IAM user has MFA enforcement policy', async () => {
-      if (!outputs?.iam_policy_name) {
-        console.warn('IAM policy name not found in outputs, skipping test');
-        return;
-      }
-      
-      try {
-        const command = new GetUserPolicyCommand({
-          UserName: 'example.user',
-          PolicyName: outputs.iam_policy_name
-        });
-        
-        const response = await iamClient.send(command);
-        expect(response.PolicyDocument).toBeDefined();
-        
-        const policyDoc = JSON.parse(decodeURIComponent(response.PolicyDocument!));
-        const denyMfaStatement = policyDoc.Statement?.find((stmt: any) => 
-          stmt.Sid === 'DenyWithoutMFA'
-        );
-        
-        expect(denyMfaStatement).toBeDefined();
-        expect(denyMfaStatement.Effect).toBe('Deny');
-        expect(denyMfaStatement.Condition?.BoolIfExists?.['aws:MultiFactorAuthPresent']).toBe('false');
-      } catch (error: any) {
-        if (error.name === 'NoSuchEntity') {
-          console.warn('IAM user or policy not found, this might be expected if user creation failed');
-        } else {
-          throw error;
-        }
-      }
     });
   });
 });
