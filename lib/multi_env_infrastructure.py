@@ -8,24 +8,20 @@ and RDS instances with proper security configurations.
 """
 
 from typing import Optional
+
 import aws_cdk as cdk
-from aws_cdk import (
-  NestedStack,
-  CfnOutput,
-  RemovalPolicy,
-  Duration
-)
+from aws_cdk import CfnOutput, Duration, NestedStack, RemovalPolicy
 from aws_cdk import aws_ec2 as ec2
-from aws_cdk import aws_s3 as s3
-from aws_cdk import aws_iam as iam
 from aws_cdk import aws_elasticloadbalancingv2 as elbv2
+from aws_cdk import aws_iam as iam
 from aws_cdk import aws_rds as rds
+from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 
 class NetworkStackProps(cdk.NestedStackProps):
   """Properties for the Network nested stack."""
-  
+
   def __init__(self, environment_name: str, environment_suffix: str, **kwargs):
     super().__init__(**kwargs)
     self.environment_name = environment_name
@@ -34,35 +30,35 @@ class NetworkStackProps(cdk.NestedStackProps):
 
 class NetworkStack(NestedStack):
   """Nested stack for VPC and networking resources."""
-  
+
   def __init__(self, scope: Construct, construct_id: str, props: NetworkStackProps, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
-    
+
     # Create VPC with public and private subnets
     self.vpc = ec2.Vpc(
-      self,
-      f"VPC{props.environment_suffix}",
-      vpc_name=f"vpc-{props.environment_name.lower()}-{props.environment_suffix}",
-      ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
-      max_azs=2,
-      subnet_configuration=[
-        ec2.SubnetConfiguration(
-          name=f"Public{props.environment_name}",
-          subnet_type=ec2.SubnetType.PUBLIC,
-          cidr_mask=24
-        ),
-        ec2.SubnetConfiguration(
-          name=f"Private{props.environment_name}",
-          subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidr_mask=24
-        )
-      ]
+        self,
+        f"VPC{props.environment_suffix}",
+        vpc_name=f"vpc-{props.environment_name.lower()}-{props.environment_suffix}",
+        ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
+        max_azs=2,
+        subnet_configuration=[
+            ec2.SubnetConfiguration(
+                name=f"Public{props.environment_name}",
+                subnet_type=ec2.SubnetType.PUBLIC,
+                cidr_mask=24
+            ),
+            ec2.SubnetConfiguration(
+                name=f"Private{props.environment_name}",
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
+                cidr_mask=24
+            )
+        ]
     )
 
 
 class StorageStackProps(cdk.NestedStackProps):
   """Properties for the Storage nested stack."""
-  
+
   def __init__(self, environment_name: str, environment_suffix: str, **kwargs):
     super().__init__(**kwargs)
     self.environment_name = environment_name
@@ -71,26 +67,26 @@ class StorageStackProps(cdk.NestedStackProps):
 
 class StorageStack(NestedStack):
   """Nested stack for S3 storage resources."""
-  
+
   def __init__(self, scope: Construct, construct_id: str, props: StorageStackProps, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
-    
+
     # Create S3 bucket with versioning and encryption
     self.bucket = s3.Bucket(
-      self,
-      f"Bucket{props.environment_suffix}",
-      bucket_name=f"app-{props.environment_name.lower()}-{props.environment_suffix}".lower(),
-      versioned=True,
-      encryption=s3.BucketEncryption.S3_MANAGED,
-      removal_policy=(RemovalPolicy.RETAIN if props.environment_name == "Production" 
-                      else RemovalPolicy.DESTROY)
+        self,
+        f"Bucket{props.environment_suffix}",
+        bucket_name=f"app-{props.environment_name.lower()}-{props.environment_suffix}".lower(),
+        versioned=True,
+        encryption=s3.BucketEncryption.S3_MANAGED,
+        removal_policy=(RemovalPolicy.RETAIN if props.environment_name == "Production"
+                        else RemovalPolicy.DESTROY)
     )
 
 
 class IAMStackProps(cdk.NestedStackProps):
   """Properties for the IAM nested stack."""
-  
-  def __init__(self, environment_name: str, environment_suffix: str, 
+
+  def __init__(self, environment_name: str, environment_suffix: str,
                bucket_arn: str, **kwargs):
     super().__init__(**kwargs)
     self.environment_name = environment_name
@@ -100,33 +96,35 @@ class IAMStackProps(cdk.NestedStackProps):
 
 class IAMStack(NestedStack):
   """Nested stack for IAM resources."""
-  
+
   def __init__(self, scope: Construct, construct_id: str, props: IAMStackProps, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
-    
+
     # Create IAM role for EC2 instances
     self.ec2_role = iam.Role(
-      self,
-      f"EC2Role{props.environment_suffix}",
-      assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-      managed_policies=[
-        iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy")
-      ]
+        self,
+        f"EC2Role{props.environment_suffix}",
+        assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
+        managed_policies=[
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "CloudWatchAgentServerPolicy")
+        ]
     )
-    
+
     # Add S3 permissions for environment-specific bucket
     self.ec2_role.add_to_policy(
-      iam.PolicyStatement(
-        actions=["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
-        resources=[props.bucket_arn, f"{props.bucket_arn}/*"]
-      )
+        iam.PolicyStatement(
+            actions=["s3:GetObject", "s3:PutObject",
+                     "s3:DeleteObject", "s3:ListBucket"],
+            resources=[props.bucket_arn, f"{props.bucket_arn}/*"]
+        )
     )
 
 
 class LoadBalancerStackProps(cdk.NestedStackProps):
   """Properties for the LoadBalancer nested stack."""
-  
-  def __init__(self, environment_name: str, environment_suffix: str, 
+
+  def __init__(self, environment_name: str, environment_suffix: str,
                vpc: ec2.Vpc, **kwargs):
     super().__init__(**kwargs)
     self.environment_name = environment_name
@@ -136,46 +134,46 @@ class LoadBalancerStackProps(cdk.NestedStackProps):
 
 class LoadBalancerStack(NestedStack):
   """Nested stack for Load Balancer resources."""
-  
-  def __init__(self, scope: Construct, construct_id: str, 
+
+  def __init__(self, scope: Construct, construct_id: str,
                props: LoadBalancerStackProps, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
-    
+
     # Create Application Load Balancer
     self.alb = elbv2.ApplicationLoadBalancer(
-      self,
-      f"ALB{props.environment_suffix}",
-      vpc=props.vpc,
-      internet_facing=True
+        self,
+        f"ALB{props.environment_suffix}",
+        vpc=props.vpc,
+        internet_facing=True
     )
-    
+
     # Create Target Group
     self.target_group = elbv2.ApplicationTargetGroup(
-      self,
-      f"TargetGroup{props.environment_suffix}",
-      port=80,
-      vpc=props.vpc,
-      health_check=elbv2.HealthCheck(
-        path="/health",
-        interval=Duration.seconds(30),
-        timeout=Duration.seconds(5),
-        healthy_threshold_count=2,
-        unhealthy_threshold_count=3
-      )
+        self,
+        f"TargetGroup{props.environment_suffix}",
+        port=80,
+        vpc=props.vpc,
+        health_check=elbv2.HealthCheck(
+            path="/health",
+            interval=Duration.seconds(30),
+            timeout=Duration.seconds(5),
+            healthy_threshold_count=2,
+            unhealthy_threshold_count=3
+        )
     )
-    
+
     # Create Listener
     self.alb.add_listener(
-      f"Listener{props.environment_suffix}",
-      port=80,
-      default_target_groups=[self.target_group]
+        f"Listener{props.environment_suffix}",
+        port=80,
+        default_target_groups=[self.target_group]
     )
 
 
 class DatabaseStackProps(cdk.NestedStackProps):
   """Properties for the Database nested stack."""
-  
-  def __init__(self, environment_name: str, environment_suffix: str, 
+
+  def __init__(self, environment_name: str, environment_suffix: str,
                vpc: ec2.Vpc, **kwargs):
     super().__init__(**kwargs)
     self.environment_name = environment_name
@@ -185,114 +183,114 @@ class DatabaseStackProps(cdk.NestedStackProps):
 
 class DatabaseStack(NestedStack):
   """Nested stack for RDS database resources."""
-  
-  def __init__(self, scope: Construct, construct_id: str, 
+
+  def __init__(self, scope: Construct, construct_id: str,
                props: DatabaseStackProps, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
-    
+
     # Create RDS instance
     self.database = rds.DatabaseInstance(
-      self,
-      f"Database{props.environment_suffix}",
-      engine=rds.DatabaseInstanceEngine.mysql(
-        version=rds.MysqlEngineVersion.VER_8_0_35
-      ),
-      instance_type=ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      vpc=props.vpc,
-      credentials=rds.Credentials.from_generated_secret("admin"),
-      backup_retention=Duration.days(7),
-      delete_automated_backups=False,
-      removal_policy=(RemovalPolicy.RETAIN if props.environment_name == "Production" 
-                      else RemovalPolicy.DESTROY)
+        self,
+        f"Database{props.environment_suffix}",
+        engine=rds.DatabaseInstanceEngine.mysql(
+            version=rds.MysqlEngineVersion.VER_8_0_35
+        ),
+        instance_type=ec2.InstanceType.of(
+            ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+        vpc=props.vpc,
+        credentials=rds.Credentials.from_generated_secret("admin"),
+        backup_retention=Duration.days(7),
+        delete_automated_backups=False,
+        removal_policy=(RemovalPolicy.RETAIN if props.environment_name == "Production"
+                        else RemovalPolicy.DESTROY)
     )
 
 
 class MultiEnvironmentInfrastructureStack(cdk.Stack):
   """Main stack that creates multi-environment infrastructure."""
-  
-  def __init__(self, scope: Construct, construct_id: str, 
+
+  def __init__(self, scope: Construct, construct_id: str,
                environment_suffix: Optional[str] = None, **kwargs):
     super().__init__(scope, construct_id, **kwargs)
-    
+
     env_suffix = environment_suffix or "dev"
     environments = ["Development", "Staging", "Production"]
-    
+
     for env_name in environments:
       # Create network stack
       network_props = NetworkStackProps(
-        environment_name=env_name,
-        environment_suffix=env_suffix
+          environment_name=env_name,
+          environment_suffix=env_suffix
       )
       network_stack = NetworkStack(
-        self, f"Network{env_name}{env_suffix}", props=network_props
+          self, f"Network{env_name}{env_suffix}", props=network_props
       )
-      
-      # Create storage stack  
+
+      # Create storage stack
       storage_props = StorageStackProps(
-        environment_name=env_name,
-        environment_suffix=env_suffix
+          environment_name=env_name,
+          environment_suffix=env_suffix
       )
       storage_stack = StorageStack(
-        self, f"Storage{env_name}{env_suffix}", props=storage_props
+          self, f"Storage{env_name}{env_suffix}", props=storage_props
       )
-      
+
       # Create IAM stack
       iam_props = IAMStackProps(
-        environment_name=env_name,
-        environment_suffix=env_suffix,
-        bucket_arn=storage_stack.bucket.bucket_arn
+          environment_name=env_name,
+          environment_suffix=env_suffix,
+          bucket_arn=storage_stack.bucket.bucket_arn
       )
       # Create IAM stack
       IAMStack(
-        self, f"IAM{env_name}{env_suffix}", props=iam_props
-      )
-      
-      # Create load balancer stack
-      lb_props = LoadBalancerStackProps(
-        environment_name=env_name,
-        environment_suffix=env_suffix,
-        vpc=network_stack.vpc
-      )
-      lb_stack = LoadBalancerStack(
-        self, f"LoadBalancer{env_name}{env_suffix}", props=lb_props
-      )
-      
-      # Create database stack
-      db_props = DatabaseStackProps(
-        environment_name=env_name,
-        environment_suffix=env_suffix,
-        vpc=network_stack.vpc
-      )
-      db_stack = DatabaseStack(
-        self, f"Database{env_name}{env_suffix}", props=db_props
-      )
-      
-      # Add outputs for this environment
-      CfnOutput(
-        self,
-        f"VpcId{env_name}{env_suffix}",
-        value=network_stack.vpc.vpc_id,
-        description=f"VPC ID for {env_name}"
-      )
-      
-      CfnOutput(
-        self,
-        f"BucketName{env_name}{env_suffix}",
-        value=storage_stack.bucket.bucket_name,
-        description=f"S3 Bucket name for {env_name}"
-      )
-      
-      CfnOutput(
-        self,
-        f"LoadBalancerDNS{env_name}{env_suffix}",
-        value=lb_stack.alb.load_balancer_dns_name,
-        description=f"Load Balancer DNS for {env_name}"
-      )
-      
-      CfnOutput(
-        self,
-        f"DatabaseEndpoint{env_name}{env_suffix}",
-        value=db_stack.database.instance_endpoint.hostname,
-        description=f"RDS endpoint for {env_name}"
+          self, f"IAM{env_name}{env_suffix}", props=iam_props
       )
 
+      # Create load balancer stack
+      lb_props = LoadBalancerStackProps(
+          environment_name=env_name,
+          environment_suffix=env_suffix,
+          vpc=network_stack.vpc
+      )
+      lb_stack = LoadBalancerStack(
+          self, f"LoadBalancer{env_name}{env_suffix}", props=lb_props
+      )
+
+      # Create database stack
+      db_props = DatabaseStackProps(
+          environment_name=env_name,
+          environment_suffix=env_suffix,
+          vpc=network_stack.vpc
+      )
+      db_stack = DatabaseStack(
+          self, f"Database{env_name}{env_suffix}", props=db_props
+      )
+
+      # Add outputs for this environment
+      CfnOutput(
+          self,
+          f"VpcId{env_name}{env_suffix}",
+          value=network_stack.vpc.vpc_id,
+          description=f"VPC ID for {env_name}"
+      )
+
+      CfnOutput(
+          self,
+          f"BucketName{env_name}{env_suffix}",
+          value=storage_stack.bucket.bucket_name,
+          description=f"S3 Bucket name for {env_name}"
+      )
+
+      CfnOutput(
+          self,
+          f"LoadBalancerDNS{env_name}{env_suffix}",
+          value=lb_stack.alb.load_balancer_dns_name,
+          description=f"Load Balancer DNS for {env_name}"
+      )
+
+      CfnOutput(
+          self,
+          f"DatabaseEndpoint{env_name}{env_suffix}",
+          value=db_stack.database.instance_endpoint.hostname,
+          description=f"RDS endpoint for {env_name}"
+      )
