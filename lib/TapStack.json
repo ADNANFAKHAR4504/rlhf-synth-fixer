@@ -122,136 +122,296 @@
                 ]
             }
         },
-        "CreateUserFunction": {
-            "Type": "AWS::Serverless::Function",
-            "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": "${Environment}-create-user"
-                },
-                "InlineCode": "import json\nimport os\nimport uuid\nimport boto3\nfrom datetime import datetime\n\ndef lambda_handler(event, context):\n    # Feature flag check\n    if os.environ.get('FEATURE_FLAG_VALIDATION', 'false').lower() == 'true':\n        print(\"Feature flag validation is enabled\")\n    \n    try:\n        # Parse request body\n        body = json.loads(event.get('body', '{}'))\n        \n        # Generate user ID and timestamp\n        user_id = str(uuid.uuid4())\n        timestamp = datetime.utcnow().isoformat()\n        \n        # Create user record\n        user_data = {\n            'id': user_id,\n            'name': body.get('name', ''),\n            'email': body.get('email', ''),\n            'created_at': timestamp,\n            'updated_at': timestamp\n        }\n        \n        # Store in DynamoDB\n        dynamodb = boto3.resource('dynamodb')\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        table.put_item(Item=user_data)\n        \n        return {\n            'statusCode': 201,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                'Access-Control-Allow-Methods': 'POST,OPTIONS'\n            },\n            'body': json.dumps(user_data)\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }",
-                "Handler": "index.lambda_handler",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "LambdaExecutionRole",
-                        "Arn"
-                    ]
-                },
-                "Environment": {
-                    "Variables": {
-                        "FEATURE_FLAG_VALIDATION": "true"
-                    }
-                },
-                "Events": {
-                    "CreateUserApi": {
-                        "Type": "Api",
-                        "Properties": {
-                            "RestApiId": {
-                                "Ref": "UserApi"
-                            },
-                            "Path": "/user",
-                            "Method": "POST"
-                        }
-                    }
-                }
-            }
-        },
-        "GetUserFunction": {
-            "Type": "AWS::Serverless::Function",
-            "Properties": {
-                "FunctionName": {
-                    "Fn::Sub": "${Environment}-get-user"
-                },
-                "InlineCode": "import json\nimport os\nimport boto3\nfrom boto3.dynamodb.conditions import Key\n\ndef lambda_handler(event, context):\n    # Feature flag check\n    if os.environ.get('FEATURE_FLAG_CACHING', 'false').lower() == 'true':\n        print(\"Feature flag caching is enabled\")\n    \n    try:\n        # Extract user ID from path parameters\n        user_id = event['pathParameters']['id']\n        \n        # Get user from DynamoDB\n        dynamodb = boto3.resource('dynamodb')\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        \n        response = table.get_item(Key={'id': user_id})\n        \n        if 'Item' in response:\n            return {\n                'statusCode': 200,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*',\n                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                    'Access-Control-Allow-Methods': 'GET,OPTIONS'\n                },\n                'body': json.dumps(response['Item'], default=str)\n            }\n        else:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User not found'})\n            }\n    except KeyError as e:\n        return {\n            'statusCode': 400,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': f'Missing parameter: {str(e)}'})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }",
-                "Handler": "index.lambda_handler",
-                "Role": {
-                    "Fn::GetAtt": [
-                        "LambdaExecutionRole",
-                        "Arn"
-                    ]
-                },
-                "Environment": {
-                    "Variables": {
-                        "FEATURE_FLAG_CACHING": "false"
-                    }
-                },
-                "Events": {
-                    "GetUserApi": {
-                        "Type": "Api",
-                        "Properties": {
-                            "RestApiId": {
-                                "Ref": "UserApi"
-                            },
-                            "Path": "/user/{id}",
-                            "Method": "GET"
-                        }
-                    }
-                }
-            }
-        },
         "UserApi": {
-            "Type": "AWS::Serverless::Api",
+            "Type": "AWS::ApiGateway::RestApi",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${Environment}-user-api"
                 },
+                "Description": "User Management API",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "UserApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "UserApiPostMethod",
+                "UserApiGetMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserApi"
+                },
+                "Description": "API deployment"
+            }
+        },
+        "UserApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserApi"
+                },
+                "DeploymentId": {
+                    "Ref": "UserApiDeployment"
+                },
                 "StageName": {
                     "Ref": "Environment"
+                }
+            }
+        },
+        "UserResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserApi"
                 },
-                "Cors": {
-                    "AllowMethods": "'GET,POST,OPTIONS'",
-                    "AllowHeaders": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
-                    "AllowOrigin": "'*'"
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "UserApi",
+                        "RootResourceId"
+                    ]
                 },
-                "DefinitionBody": {
-                    "openapi": "3.0.1",
-                    "info": {
-                        "title": "User Management API",
-                        "version": "1.0.0"
-                    },
-                    "paths": {
-                        "/user": {
-                            "post": {
-                                "x-amazon-apigateway-integration": {
-                                    "httpMethod": "POST",
-                                    "type": "aws_proxy",
-                                    "uri": {
-                                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserFunction.Arn}/invocations"
-                                    }
-                                },
-                                "responses": {
-                                    "200": {
-                                        "description": "User created successfully"
-                                    }
-                                }
-                            }
-                        },
-                        "/user/{id}": {
-                            "get": {
-                                "parameters": [
-                                    {
-                                        "name": "id",
-                                        "in": "path",
-                                        "required": true,
-                                        "schema": {
-                                            "type": "string"
-                                        }
-                                    }
-                                ],
-                                "x-amazon-apigateway-integration": {
-                                    "httpMethod": "POST",
-                                    "type": "aws_proxy",
-                                    "uri": {
-                                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserFunction.Arn}/invocations"
-                                    }
-                                },
-                                "responses": {
-                                    "200": {
-                                        "description": "User retrieved successfully"
-                                    }
-                                }
-                            }
+                "PathPart": "user"
+            }
+        },
+        "UserIdResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserApi"
+                },
+                "ParentId": {
+                    "Ref": "UserResource"
+                },
+                "PathPart": "{id}"
+            }
+        },
+        "UserApiPostMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateUserFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Origin": true,
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true
                         }
                     }
+                ]
+            }
+        },
+        "UserApiGetMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserIdResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "RequestParameters": {
+                    "method.request.path.id": true
+                },
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetUserFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Origin": true,
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true
+                        }
+                    }
+                ]
+            }
+        },
+        "UserApiOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            }
+                        }
+                    ],
+                    "PassthroughBehavior": "WHEN_NO_MATCH",
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": false,
+                            "method.response.header.Access-Control-Allow-Methods": false,
+                            "method.response.header.Access-Control-Allow-Origin": false
+                        }
+                    }
+                ]
+            }
+        },
+        "UserIdApiOptionsMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "UserApi"
+                },
+                "ResourceId": {
+                    "Ref": "UserIdResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            }
+                        }
+                    ],
+                    "PassthroughBehavior": "WHEN_NO_MATCH",
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        },
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": false,
+                            "method.response.header.Access-Control-Allow-Methods": false,
+                            "method.response.header.Access-Control-Allow-Origin": false
+                        }
+                    }
+                ]
+            }
+        },
+        "CreateUserFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-create-user"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        },
+                        "LOG_LEVEL": {
+                            "Ref": "LogLevel"
+                        },
+                        "DYNAMODB_TABLE": {
+                            "Ref": "UserTable"
+                        },
+                        "FEATURE_FLAG_VALIDATION": "true"
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport uuid\nimport boto3\nfrom datetime import datetime\n\ndef lambda_handler(event, context):\n    # Feature flag check\n    if os.environ.get('FEATURE_FLAG_VALIDATION', 'false').lower() == 'true':\n        print(\"Feature flag validation is enabled\")\n    \n    try:\n        # Parse request body\n        body = json.loads(event.get('body', '{}'))\n        \n        # Generate user ID and timestamp\n        user_id = str(uuid.uuid4())\n        timestamp = datetime.utcnow().isoformat()\n        \n        # Create user record\n        user_data = {\n            'id': user_id,\n            'name': body.get('name', ''),\n            'email': body.get('email', ''),\n            'created_at': timestamp,\n            'updated_at': timestamp\n        }\n        \n        # Store in DynamoDB\n        dynamodb = boto3.resource('dynamodb')\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        table.put_item(Item=user_data)\n        \n        return {\n            'statusCode': 201,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                'Access-Control-Allow-Methods': 'POST,OPTIONS'\n            },\n            'body': json.dumps(user_data)\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                }
+            }
+        },
+        "GetUserFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-get-user"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "Environment": {
+                    "Variables": {
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        },
+                        "LOG_LEVEL": {
+                            "Ref": "LogLevel"
+                        },
+                        "DYNAMODB_TABLE": {
+                            "Ref": "UserTable"
+                        },
+                        "FEATURE_FLAG_CACHING": "false"
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\nimport boto3\nfrom boto3.dynamodb.conditions import Key\n\ndef lambda_handler(event, context):\n    # Feature flag check\n    if os.environ.get('FEATURE_FLAG_CACHING', 'false').lower() == 'true':\n        print(\"Feature flag caching is enabled\")\n    \n    try:\n        # Extract user ID from path parameters\n        user_id = event['pathParameters']['id']\n        \n        # Get user from DynamoDB\n        dynamodb = boto3.resource('dynamodb')\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        \n        response = table.get_item(Key={'id': user_id})\n        \n        if 'Item' in response:\n            return {\n                'statusCode': 200,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*',\n                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                    'Access-Control-Allow-Methods': 'GET,OPTIONS'\n                },\n                'body': json.dumps(response['Item'], default=str)\n            }\n        else:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User not found'})\n            }\n    except KeyError as e:\n        return {\n            'statusCode': 400,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': f'Missing parameter: {str(e)}'})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
                 }
             }
         },
@@ -264,7 +424,7 @@
                 "Action": "lambda:InvokeFunction",
                 "Principal": "apigateway.amazonaws.com",
                 "SourceArn": {
-                    "Fn::Sub": "${UserApi}/*/POST/user"
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserApi}/*/POST/user"
                 }
             }
         },
@@ -277,7 +437,7 @@
                 "Action": "lambda:InvokeFunction",
                 "Principal": "apigateway.amazonaws.com",
                 "SourceArn": {
-                    "Fn::Sub": "${UserApi}/*/GET/user/*"
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UserApi}/*/GET/user/*"
                 }
             }
         }
