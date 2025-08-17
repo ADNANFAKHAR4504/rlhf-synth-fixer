@@ -19,15 +19,15 @@ const configservice = new AWS.ConfigService();
 async function validateVpc(vpcId: string) {
   const res = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
   if (!res.Vpcs || res.Vpcs.length === 0) throw new Error('VPC not found');
-  expect(res.Vpcs.length).toBe(1);
+  expect(res.Vpcs!.length).toBe(1);
 }
 
 async function validateSubnet(subnetId: string, vpcId?: string) {
   const res = await ec2.describeSubnets({ SubnetIds: [subnetId] }).promise();
   if (!res.Subnets || res.Subnets.length === 0)
     throw new Error('Subnet not found');
-  expect(res.Subnets.length).toBe(1);
-  if (vpcId) expect(res.Subnets[0].VpcId).toBe(vpcId);
+  expect(res.Subnets!.length).toBe(1);
+  if (vpcId) expect(res.Subnets![0].VpcId).toBe(vpcId);
 }
 
 async function validateS3Bucket(bucketName: string) {
@@ -49,7 +49,7 @@ async function validateS3Bucket(bucketName: string) {
     throw new Error('Bucket encryption rules not configured');
   }
   expect(
-    encryption.ServerSideEncryptionConfiguration.Rules[0]
+    encryption.ServerSideEncryptionConfiguration!.Rules![0]
       .ApplyServerSideEncryptionByDefault.SSEAlgorithm
   ).toBe('aws:kms');
 }
@@ -57,14 +57,15 @@ async function validateS3Bucket(bucketName: string) {
 async function validateKmsKey(keyId: string) {
   const res = await kms.describeKey({ KeyId: keyId }).promise();
   if (!res.KeyMetadata) throw new Error('KMS KeyMetadata not found');
-  expect(res.KeyMetadata.KeyId).toBeDefined();
-  expect(res.KeyMetadata.Enabled).toBe(true);
+  expect(res.KeyMetadata!.KeyId).toBeDefined();
+  expect(res.KeyMetadata!.Enabled).toBe(true);
 }
 
 async function validateAlb(albDns: string) {
   const res = await elbv2.describeLoadBalancers({}).promise();
-  if (!res.LoadBalancers) throw new Error('No load balancers found');
-  const found = res.LoadBalancers.find((lb: any) => lb.DNSName === albDns);
+  if (!res.LoadBalancers || res.LoadBalancers.length === 0)
+    throw new Error('No load balancers found');
+  const found = res.LoadBalancers!.find((lb: any) => lb.DNSName === albDns);
   if (!found) throw new Error('ALB not found');
   expect(found.Scheme).toBe('internet-facing');
 }
@@ -79,8 +80,8 @@ async function validateCloudTrail(
     .promise();
   if (!res.trailList || res.trailList.length === 0)
     throw new Error('CloudTrail not found');
-  expect(res.trailList.length).toBe(1);
-  const trail = res.trailList[0];
+  expect(res.trailList!.length).toBe(1);
+  const trail = res.trailList![0];
   expect(trail.S3BucketName).toBe(bucketName);
   expect(trail.KmsKeyId).toBe(kmsKeyId);
   const status = await cloudtrail.getTrailStatus({ Name: trailName }).promise();
@@ -91,20 +92,22 @@ async function validateSecurityGroup(sgId: string, vpcId: string) {
   const res = await ec2.describeSecurityGroups({ GroupIds: [sgId] }).promise();
   if (!res.SecurityGroups || res.SecurityGroups.length === 0)
     throw new Error('Security group not found');
-  expect(res.SecurityGroups.length).toBe(1);
-  expect(res.SecurityGroups[0].VpcId).toBe(vpcId);
+  expect(res.SecurityGroups!.length).toBe(1);
+  expect(res.SecurityGroups![0].VpcId).toBe(vpcId);
 }
 
 async function validateIamRole(roleName: string) {
   const res = await iam.getRole({ RoleName: roleName }).promise();
-  expect(res.Role.RoleName).toBe(roleName);
+  if (!res.Role) throw new Error('IAM Role not found');
+  expect(res.Role!.RoleName).toBe(roleName);
 }
 
 async function validateInstanceProfile(profileName: string) {
   const res = await iam
     .getInstanceProfile({ InstanceProfileName: profileName })
     .promise();
-  expect(res.InstanceProfile.InstanceProfileName).toBe(profileName);
+  if (!res.InstanceProfile) throw new Error('Instance profile not found');
+  expect(res.InstanceProfile!.InstanceProfileName).toBe(profileName);
 }
 
 async function validateAsg(asgName: string) {
@@ -113,8 +116,8 @@ async function validateAsg(asgName: string) {
     .promise();
   if (!res.AutoScalingGroups || res.AutoScalingGroups.length === 0)
     throw new Error('ASG not found');
-  expect(res.AutoScalingGroups.length).toBe(1);
-  expect(res.AutoScalingGroups[0].HealthCheckType).toBeDefined();
+  expect(res.AutoScalingGroups!.length).toBe(1);
+  expect(res.AutoScalingGroups![0].HealthCheckType).toBeDefined();
 }
 
 async function validateLaunchTemplate(ltName: string) {
@@ -123,7 +126,7 @@ async function validateLaunchTemplate(ltName: string) {
     .promise();
   if (!res.LaunchTemplates || res.LaunchTemplates.length === 0)
     throw new Error('Launch template not found');
-  expect(res.LaunchTemplates.length).toBe(1);
+  expect(res.LaunchTemplates!.length).toBe(1);
 }
 
 async function validateConfigRecorder(name: string) {
@@ -132,7 +135,7 @@ async function validateConfigRecorder(name: string) {
     .promise();
   if (!res.ConfigurationRecorders || res.ConfigurationRecorders.length === 0)
     throw new Error('Config recorder not found');
-  expect(res.ConfigurationRecorders.length).toBe(1);
+  expect(res.ConfigurationRecorders!.length).toBe(1);
 }
 
 async function validateConfigDeliveryChannel(name: string) {
@@ -141,7 +144,7 @@ async function validateConfigDeliveryChannel(name: string) {
     .promise();
   if (!res.DeliveryChannels || res.DeliveryChannels.length === 0)
     throw new Error('Config delivery channel not found');
-  expect(res.DeliveryChannels.length).toBe(1);
+  expect(res.DeliveryChannels!.length).toBe(1);
 }
 
 async function validateNatGateway(natGatewayId: string) {
@@ -150,8 +153,8 @@ async function validateNatGateway(natGatewayId: string) {
     .promise();
   if (!res.NatGateways || res.NatGateways.length === 0)
     throw new Error('NAT Gateway not found');
-  expect(res.NatGateways.length).toBe(1);
-  expect(res.NatGateways[0].State).toBe('available');
+  expect(res.NatGateways!.length).toBe(1);
+  expect(res.NatGateways![0].State).toBe('available');
 }
 
 async function validateRouteTable(routeTableId: string) {
@@ -160,7 +163,7 @@ async function validateRouteTable(routeTableId: string) {
     .promise();
   if (!res.RouteTables || res.RouteTables.length === 0)
     throw new Error('Route table not found');
-  expect(res.RouteTables.length).toBe(1);
+  expect(res.RouteTables!.length).toBe(1);
 }
 
 async function validateLambda(functionName: string) {
@@ -170,7 +173,7 @@ async function validateLambda(functionName: string) {
     .promise();
   if (!res.Configuration)
     throw new Error('Lambda function configuration not found');
-  expect(res.Configuration.FunctionName).toBe(functionName);
+  expect(res.Configuration!.FunctionName).toBe(functionName);
 }
 
 describe('TapStack Enterprise Integration Tests', () => {
