@@ -70,6 +70,46 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # | EU-NORTH-1 Regional Resources
 # |-----------------------------------------------------------------------------
 
+resource "aws_vpc" "nova_vpc_eu_north_1_291844" {
+  provider             = aws.eu-north-1
+  cidr_block           = "10.1.0.0/16" # Different CIDR than us-west-2
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags                 = merge(local.common_tags, { Name = "nova-vpc-eu-north-1-291844" })
+}
+
+resource "aws_subnet" "nova_subnet_eu_north_1_291844" {
+  provider          = aws.eu-north-1
+  vpc_id            = data.aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
+  cidr_block        = "10.1.1.0/24"
+  availability_zone = "eu-north-1a" # Example AZ (verify in your AWS account)
+  tags              = merge(local.common_tags, { Name = "nova-subnet-eu-north-1-291844" })
+}
+
+resource "aws_internet_gateway" "nova_igw_eu_north_1_291844" {
+  provider = aws.eu-north-1
+  vpc_id   = data.aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
+  tags     = merge(local.common_tags, { Name = "nova-igw-eu-north-1-291844" })
+}
+
+resource "aws_route_table" "nova_rt_eu_north_1_291844" {
+  provider = aws.eu-north-1
+  vpc_id   = data.aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.nova_igw_eu_north_1_291844.id
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-rt-eu-north-1-291844" })
+}
+
+resource "aws_route_table_association" "nova_rta_eu_north_1_291844" {
+  provider       = aws.eu-north-1
+  subnet_id      = aws_subnet.nova_subnet_eu_north_1_291844.id
+  route_table_id = aws_route_table.nova_rt_eu_north_1_291844.id
+}
+
 data "aws_ami" "amazon_linux_2_eu_north_1" {
   provider = aws.eu-north-1
 
@@ -123,11 +163,14 @@ resource "aws_s3_bucket_public_access_block" "data_bucket_pac_eu_north_1" {
 }
 
 resource "aws_instance" "app_server_eu_north_1" {
-  provider = aws.eu-north-1
+  provider                    = aws.eu-north-1
+  ami                         = data.aws_ami.amazon_linux_2_eu_north_1.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.nova_subnet_eu_north_1_291844.id # Explicit subnet
+  associate_public_ip_address = true                                        # Only if public access needed
 
-  ami                  = data.aws_ami.amazon_linux_2_eu_north_1.id
-  instance_type        = "t3.micro"
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  vpc_security_group_ids = [aws_security_group.nova_sg_eu_north_1_291844.id]
 
   ebs_block_device {
     device_name = data.aws_ami.amazon_linux_2_eu_north_1.root_device_name
@@ -135,7 +178,31 @@ resource "aws_instance" "app_server_eu_north_1" {
     kms_key_id  = aws_kms_key.app_key_eu_north_1.arn
   }
 
-  tags = merge(local.common_tags, { Name = "nova-app-server-eu-north-1" })
+  tags = merge(local.common_tags, { Name = "nova-app-server-eu-north-1-291844" })
+}
+
+resource "aws_security_group" "nova_sg_eu_north_1_291844" {
+  provider    = aws.eu-north-1
+  name        = "nova-sg-eu-north-1-291844"
+  description = "Security group for Nova EU instances"
+  vpc_id      = data.aws_vpc.default_eu_north_1.id # or aws_vpc.nova_vpc_eu_north_1_291844.id
+
+  # Example rules (customize as needed)
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-sg-eu-north-1-291844" })
 }
 
 # AWS Config setup for eu-north-1
@@ -193,6 +260,28 @@ resource "aws_internet_gateway" "nova_igw_291844_us_west_2" {
   provider = aws.us-west-2
   vpc_id   = data.aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id
   tags     = merge(local.common_tags, { Name = "nova-igw-291844-us-west-2" })
+}
+resource "aws_security_group" "nova_sg_291844_us_west_2" {
+  provider    = aws.us-west-2
+  name        = "nova-sg-291844-us-west-2"
+  description = "Security group for Nova instances"
+  vpc_id      = data.aws_vpc.default_us_west_2.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Restrict this in production!
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-sg-291844-us-west-2" })
 }
 
 resource "aws_route_table" "nova_rt_291844_us_west_2" {
@@ -266,11 +355,12 @@ resource "aws_s3_bucket_public_access_block" "data_bucket_pac_us_west_2" {
 }
 
 resource "aws_instance" "app_server_us_west_2" {
-  provider             = aws.us-west-2
-  ami                  = data.aws_ami.amazon_linux_2_us_west_2.id
-  instance_type        = "t3.micro"
-  subnet_id            = aws_subnet.nova_subnet_291844_us_west_2.id
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+  provider               = aws.us-west-2
+  ami                    = data.aws_ami.amazon_linux_2_us_west_2.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.nova_subnet_291844_us_west_2.id
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+  vpc_security_group_ids = [aws_security_group.nova_sg_291844_us_west_2.id]
 
   ebs_block_device {
     device_name = data.aws_ami.amazon_linux_2_us_west_2.root_device_name
