@@ -497,29 +497,33 @@ Type = "storage"
 
 # Only create ALB logs bucket if logging is enabled
 
+resource "null_resource" "empty_alb_logs_bucket" {
+count = var.enable_alb_logging ? 1 : 0
+
+provisioner "local-exec" {
+command = "aws s3 rm s3://${aws_s3_bucket.alb_logs[0].id} --recursive --force"
+}
+
+triggers = {
+bucket_name = aws_s3_bucket.alb_logs[0].id
+}
+}
+
 resource "aws_s3_bucket" "alb_logs" {
 count = var.enable_alb_logging ? 1 : 0
 
-bucket = "${local.name_prefix}-alb-logs"
+bucket = "tap-app-alb-logs-${data.aws_caller_identity.current.account_id}"
 force_destroy = true
 
 tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-alb-logs-bucket"
+Name = "tap-app-alb-logs"
 Type = "storage"
 })
+
 }
 
 resource "aws_s3_bucket_versioning" "app_data" {
 bucket = aws_s3_bucket.app_data.id
-versioning_configuration {
-status = "Enabled"
-}
-}
-
-resource "aws_s3_bucket_versioning" "alb_logs" {
-count = var.enable_alb_logging ? 1 : 0
-
-bucket = aws_s3_bucket.alb_logs[0].id
 versioning_configuration {
 status = "Enabled"
 }
@@ -577,65 +581,7 @@ count = var.enable_alb_logging ? 1 : 0
 
 bucket = aws_s3_bucket.alb_logs[0].id
 
-policy = jsonencode({
-Version = "2012-10-17"
-Statement = [
-{
-Sid = "AWSLogDeliveryWrite"
-Effect = "Allow"
-Principal = {
-AWS = data.aws_elb_service_account.main.arn
-}
-Action = "s3:PutObject"
-Resource = "${aws_s3_bucket.alb_logs[0].arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/\*"
-},
-{
-Sid = "AWSLogDeliveryAclCheck"
-Effect = "Allow"
-Principal = {
-AWS = data.aws_elb_service_account.main.arn
-}
-Action = "s3:GetBucketAcl"
-Resource = aws_s3_bucket.alb_logs[0].arn
-}
-]
-})
-
-depends_on = [aws_s3_bucket_public_access_block.alb_logs]
-}
-
-resource "aws_s3_bucket_policy" "app_data" {
 bucket = aws_s3_bucket.app_data.id
-
-policy = jsonencode({
-Version = "2012-10-17"
-Statement = [
-{
-Sid = "DenyInsecureConnections"
-Effect = "Deny"
-Principal = "_"
-Action = "s3:_"
-Resource = [
-aws_s3_bucket.app_data.arn,
-"${aws_s3_bucket.app_data.arn}/*",
-]
-Condition = {
-Bool = {
-"aws:SecureTransport" = "false"
-}
-}
-}
-]
-})
-
-depends_on = [aws_s3_bucket_public_access_block.app_data]
-}
-
-#######################
-
-# Security Groups
-
-#######################
 
 resource "aws_security_group" "alb" {
 name = "${local.name_prefix}-alb-sg"
@@ -791,50 +737,6 @@ Type = "iam"
 resource "aws_iam_instance_profile" "ec2_profile" {
 name = "${local.name_prefix}-ec2-profile"
 role = aws_iam_role.ec2_role.name
-
-tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-ec2-instance-profile"
-Type = "iam"
-})
-}
-
-resource "aws_iam_policy" "ec2_s3_access" {
-name = "${local.name_prefix}-ec2-s3-policy"
-  description = "Policy for EC2 instances to access S3 and KMS - ${local.name_prefix}"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowS3Access"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.app_data.arn,
-          "${aws_s3_bucket.app_data.arn}/\*"
-]
-},
-{
-Sid = "AllowKMSAccess"
-Effect = "Allow"
-Action = [
-"kms:Decrypt",
-"kms:DescribeKey"
-]
-Resource = [aws_kms_key.s3_key.arn]
-}
-]
-})
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_s3_access" {
-role = aws_iam_role.ec2_role.name
-policy_arn = aws_iam_policy.ec2_s3_access.arn
-}
 
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
 name = "${local.name_prefix}-cloudwatch-logs-policy"
@@ -1031,146 +933,12 @@ kms_key_id = aws_kms_key.ebs_key.arn
 
 # Enhanced user data script with better error handling and faster startup
 
-user_data = base64encode(<<-EOF
-#!/bin/bash
+user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
+ec2_log_group_name = aws_cloudwatch_log_group.ec2_logs.name
+timestamp = local.timestamp
+}))
 
-    # Enhanced logging and error handling
-    exec > >(tee /var/log/user-data.log)
-    exec 2>&1
-    set -x
-
-    echo "=== Starting user data script at $(date) ==="
-
-    # Update system packages
-    echo "Updating system packages..."
-    yum update -y
-
-    # Install required packages
-    echo "Installing httpd and CloudWatch agent..."
-    yum install -y httpd amazon-cloudwatch-agent
-
-    # Start and enable httpd immediately
-    echo "Starting httpd service..."
-    systemctl start httpd
-    systemctl enable httpd
-
-    # Verify httpd is running
-    if ! systemctl is-active --quiet httpd; then
-        echo "ERROR: httpd failed to start"
-        systemctl status httpd
-        exit 1
-    fi
-
-    # Create health check endpoint with more detailed response
-    echo "Creating health check endpoint..."
-    cat > /var/www/html/health <<'HEALTH_EOF'
-
-OK
-HEALTH_EOF
-
-    # Create main page with instance information
-    echo "Creating main page..."
-    cat > /var/www/html/index.html <<'INDEX_EOF'
-
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Tap App - Instance Health</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .header { color: #2e8b57; }
-        .info { background-color: #f0f8ff; padding: 20px; border-radius: 5px; }
-    </style>
-</head>
-<body>
-    <h1 class="header">Hello from Tap App Dev Environment!</h1>
-    <div class="info">
-        <h3>Instance Information:</h3>
-        <p><strong>Instance ID:</strong> <span id="instance-id">Loading...</span></p>
-        <p><strong>Availability Zone:</strong> <span id="az">Loading...</span></p>
-        <p><strong>Deployment Time:</strong> ${local.timestamp}</p>
-        <p><strong>Status:</strong> <span style="color: green;">Healthy ✓</span></p>
-        <p><strong>Last Updated:</strong> $(date)</p>
-    </div>
-    
-    <script>
-        // Fetch instance metadata
-        fetch('http://169.254.169.254/latest/meta-data/instance-id')
-            .then(response => response.text())
-            .then(data => document.getElementById('instance-id').textContent = data)
-            .catch(err => document.getElementById('instance-id').textContent = 'Unable to fetch');
-            
-        fetch('http://169.254.169.254/latest/meta-data/placement/availability-zone')
-            .then(response => response.text())
-            .then(data => document.getElementById('az').textContent = data)
-            .catch(err => document.getElementById('az').textContent = 'Unable to fetch');
-    </script>
-</body>
-</html>
-INDEX_EOF
-    
-    # Set proper permissions
-    echo "Setting file permissions..."
-    chown apache:apache /var/www/html/health /var/www/html/index.html
-    chmod 644 /var/www/html/health /var/www/html/index.html
-    
-    # Verify files are accessible
-    echo "Verifying web files..."
-    curl -f http://localhost/health || echo "WARNING: Health check failed locally"
-    curl -f http://localhost/ || echo "WARNING: Index page failed locally"
-    
-    # Configure CloudWatch agent
-    echo "Configuring CloudWatch agent..."
-    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CW_EOF'
-{
-  "logs": {
-    "logs_collected": {
-      "files": {
-        "collect_list": [
-          {
-            "file_path": "/var/log/messages",
-            "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
-            "log_stream_name": "{instance_id}/messages"
-          },
-          {
-            "file_path": "/var/log/user-data.log",
-            "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
-            "log_stream_name": "{instance_id}/user-data"
-          },
-          {
-            "file_path": "/var/log/httpd/access_log",
-            "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
-            "log_stream_name": "{instance_id}/httpd-access"
-          },
-          {
-            "file_path": "/var/log/httpd/error_log",
-            "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
-            "log_stream_name": "{instance_id}/httpd-error"
-          }
-        ]
-      }
-    }
-  }
-}
-CW_EOF
-    
-    # Start CloudWatch agent
-    echo "Starting CloudWatch agent..."
-    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-      -a fetch-config \
-      -m ec2 \
-      -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
-      -s
-    
-    # Final verification
-    echo "=== Final service verification ==="
-    systemctl status httpd --no-pager
-    curl -s http://localhost/health
-    
-    # Signal completion
-    echo "=== Instance setup completed successfully at $(date) ==="
-    EOF
-  )
+depends_on = [aws_nat_gateway.main]
 
 tag_specifications {
 resource_type = "instance"
@@ -1462,7 +1230,7 @@ return {
 'body': json.dumps({
 'message': 'Hello from ${var.project_name} ${var.environment} Lambda - ${local.timestamp}!',
             'timestamp': '${local.timestamp}',
-'environment': '${var.environment}',
+'environment': '${local.environment}',
 'event': event
 })
 }

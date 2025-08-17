@@ -503,7 +503,7 @@ resource "aws_s3_bucket" "alb_logs" {
     Type = "storage"
   })
 
-  depends_on = [null_resource.empty_alb_logs_bucket]
+  
 }
 
 resource "aws_s3_bucket_versioning" "app_data" {
@@ -564,63 +564,10 @@ resource "aws_s3_bucket_policy" "alb_logs" {
   
   bucket = aws_s3_bucket.alb_logs[0].id
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AWSLogDeliveryWrite"
-        Effect = "Allow"
-        Principal = {
-          AWS = data.aws_elb_service_account.main.arn
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs[0].arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
-      },
-      {
-        Sid    = "AWSLogDeliveryAclCheck"
-        Effect = "Allow"
-        Principal = {
-          AWS = data.aws_elb_service_account.main.arn
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.alb_logs[0].arn
-      }
-    ]
-  })
-
-  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
-}
-
-resource "aws_s3_bucket_policy" "app_data" {
+  
   bucket = aws_s3_bucket.app_data.id
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.app_data.arn,
-          "${aws_s3_bucket.app_data.arn}/*",
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      }
-    ]
-  })
-
-  depends_on = [aws_s3_bucket_public_access_block.app_data]
-}
-
-#######################
-# Security Groups
-#######################
+  
 
 resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb-sg"
@@ -775,51 +722,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-ec2-instance-profile"
-    Type = "iam"
-  })
-}
-
-resource "aws_iam_policy" "ec2_s3_access" {
-  name        = "${local.name_prefix}-ec2-s3-policy"
-  description = "Policy for EC2 instances to access S3 and KMS - ${local.name_prefix}"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowS3Access"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          aws_s3_bucket.app_data.arn,
-          "${aws_s3_bucket.app_data.arn}/*"
-        ]
-      },
-      {
-        Sid    = "AllowKMSAccess"
-        Effect = "Allow"
-        Action = [
-          "kms:Decrypt",
-          "kms:DescribeKey"
-        ]
-        Resource = [aws_kms_key.s3_key.arn]
-      }
-    ]
-  })
-
-  depends_on = [aws_s3_bucket_public_access_block.app_data]
-}
-
-resource "aws_iam_role_policy_attachment" "ec2_s3_access" {
-  role       = aws_iam_role.ec2_role.name
-  policy_arn = aws_iam_policy.ec2_s3_access.arn
-}
+  
 
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
   name        = "${local.name_prefix}-cloudwatch-logs-policy"
