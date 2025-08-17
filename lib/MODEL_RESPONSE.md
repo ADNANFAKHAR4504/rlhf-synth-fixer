@@ -1,5 +1,4 @@
 ```yaml
-```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade secure infrastructure baseline with encryption at rest, least-privilege IAM, and comprehensive monitoring'
 
