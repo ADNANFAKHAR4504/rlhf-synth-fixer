@@ -926,6 +926,14 @@ resource "aws_db_instance" "main" {
   tags = {
     Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-database-v3"
   }
+
+  # Force replacement when parameter group or subnet group changes
+  lifecycle {
+    replace_triggered_by = [
+      aws_db_parameter_group.main.name,
+      aws_db_subnet_group.main.name
+    ]
+  }
 }
 
 # =============================================================================
