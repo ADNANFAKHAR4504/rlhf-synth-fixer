@@ -1143,9 +1143,6 @@
             }
           ]
         },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/ConfigRole"
-        ],
         "Policies": [
           {
             "PolicyName": "ConfigPermissions",
