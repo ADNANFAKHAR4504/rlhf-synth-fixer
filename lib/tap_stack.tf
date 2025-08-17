@@ -1000,8 +1000,8 @@ resource "aws_autoscaling_group" "app" {
     }
   }
 
-  # Increased timeout to 20 minutes
-  wait_for_capacity_timeout = "20m"
+  # Increased timeout to 60 minutes
+  wait_for_capacity_timeout = "60m"
   
   # Enable detailed monitoring
   enabled_metrics = [
