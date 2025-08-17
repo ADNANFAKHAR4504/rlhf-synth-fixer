@@ -322,13 +322,23 @@ Resources:
                       'body': json.dumps({
                           'message': 'TAP task data processed successfully',
                           'task_id': item['id'],
+                          'processed_at': item['timestamp'],
+                          'status': 'processed',
+                          'table_name': table_name,
                           'region': os.environ.get('REGION'),
                           'deployment_region': os.environ.get('DEPLOYMENT_REGION'),
                           'environment_suffix': os.environ.get('ENVIRONMENT_SUFFIX'),
                           'is_primary_region': os.environ.get('IS_PRIMARY_REGION') == 'true',
                           'replication_enabled': os.environ.get('REPLICATION_ENABLED') == 'true',
                           'memory_limit': '256MB',
-                          'compliance_status': 'compliant'
+                          'compliance_status': 'compliant',
+                          'task_details': {
+                              'type': body.get('type', 'general'),
+                              'priority': body.get('priority', 'medium'),
+                              'source': body.get('source'),
+                              'data': body.get('data', {}),
+                              'task_index': body.get('data', {}).get('task_index') if isinstance(body.get('data'), dict) else None
+                          }
                       })
                   }
               except Exception as e:
