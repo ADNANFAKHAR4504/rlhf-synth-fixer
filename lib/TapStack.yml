@@ -378,7 +378,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource: 
-                  - !Sub '${ApplicationBucket}/*'
+                  - !Sub '${ApplicationBucket.Arn}/*'
                   - !GetAtt ApplicationBucket.Arn
 
   EC2InstanceProfile:
