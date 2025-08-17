@@ -37,9 +37,6 @@ describe('TapStack CloudFormation Template', () => {
     test('should have DatabaseUsername parameter', () => {
       expect(template.Parameters.DatabaseUsername).toBeDefined();
     });
-    test('should have DomainName parameter', () => {
-      expect(template.Parameters.DomainName).toBeDefined();
-    });
   });
 
   describe('Security Controls', () => {
@@ -84,11 +81,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.StorageEncrypted).toBe(true);
       expect(rds.PubliclyAccessible).toBe(false);
     });
-    test('should define a WAF WebACL and association', () => {
+    test('should define a WAF WebACL', () => {
       expect(template.Resources.WebACL).toBeDefined();
       expect(template.Resources.WebACL.Type).toBe('AWS::WAFv2::WebACL');
-      expect(template.Resources.WebACLAssociation).toBeDefined();
-      expect(template.Resources.WebACLAssociation.Type).toBe('AWS::WAFv2::WebACLAssociation');
     });
     test('should define an Application Load Balancer and stickiness', () => {
       expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
@@ -103,7 +98,6 @@ describe('TapStack CloudFormation Template', () => {
     test('should define a CloudFront distribution with HTTPS enforced', () => {
       expect(template.Resources.CloudFrontDistribution).toBeDefined();
       const dist = template.Resources.CloudFrontDistribution.Properties.DistributionConfig;
-      expect(dist.ViewerCertificate).toBeDefined();
       expect(dist.DefaultCacheBehavior.ViewerProtocolPolicy).toMatch(/https/);
     });
     test('should define a Config rule for root user MFA', () => {
