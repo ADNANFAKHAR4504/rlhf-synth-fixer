@@ -128,7 +128,7 @@ export class ComputeConstruct extends Construct {
       new LambdaFunction(this, `${props.prefix}-lambda-${region}`, {
         provider: vpc.provider,
         functionName: `${props.prefix}-lambda-${region}`,
-        role: props.security.iamRoles[region]?.arn,
+        role: props.security.iamRoles[`${region}-lambda`]?.arn,
         handler: 'lambda.handler',
         runtime: 'nodejs18.x',
         filename: 'lib/lambda.zip', // use correct path to deployment package
