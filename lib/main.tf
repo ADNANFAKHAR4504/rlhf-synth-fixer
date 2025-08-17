@@ -70,6 +70,11 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # | EU-NORTH-1 Regional Resources
 # |-----------------------------------------------------------------------------
 
+data "aws_vpc" "default_eu_north_1" {
+  provider = aws.eu_north_1
+  default  = true
+}
+
 resource "aws_vpc" "nova_vpc_eu_north_1_291844" {
   provider             = aws.eu-north-1
   cidr_block           = "10.1.0.0/16" # Different CIDR than us-west-2
