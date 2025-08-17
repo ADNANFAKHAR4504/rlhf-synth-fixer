@@ -1,134 +1,97 @@
 #!/bin/bash
 
-# Exit on any error
+# Setup script for TAP project
+# This script ensures the correct Node.js, Python, and pipenv versions are being used
+
 set -e
 
-echo "🔧 Setting up environment..."
+echo "🔧 Setting up TAP project..."
 
-# Read environment variables
-NODE_VERSION=${NODE_VERSION:-"22.17.0"}
-TERRAFORM_VERSION=${TERRAFORM_VERSION:-"1.12.2"}
-PULUMI_VERSION=${PULUMI_VERSION:-"3.109.0"}
-DOWNLOAD_ARTIFACTS=${DOWNLOAD_ARTIFACTS:-"true"}
-UPLOAD_ARTIFACTS=${UPLOAD_ARTIFACTS:-"false"}
-PLATFORM=${PLATFORM:-""}
+# Check if we have the required Node.js version
+REQUIRED_NODE_VERSION="v22.17.0"
+CURRENT_NODE_VERSION=$(node --version 2>/dev/null || echo "not installed")
 
-echo "Environment configuration:"
-echo "  Node.js version: $NODE_VERSION"
-echo "  Terraform version: $TERRAFORM_VERSION"
-echo "  Pulumi version: $PULUMI_VERSION"
-echo "  Platform: $PLATFORM"
-echo "  Download artifacts: $DOWNLOAD_ARTIFACTS"
-echo "  Upload artifacts: $UPLOAD_ARTIFACTS"
-
-# Install Python dependencies
-echo "📦 Installing Python dependencies..."
-if [ -f "requirements.txt" ]; then
-  echo "Installing dependencies from requirements.txt..."
-  pip install -r requirements.txt
-elif [ -f "Pipfile" ]; then
-  echo "Installing dependencies from Pipfile..."
-  # Install pipenv if not available
-  if ! command -v pipenv &> /dev/null; then
-    echo "Installing pipenv..."
-    pip install pipenv
-  fi
-  pipenv install --dev
-else
-  echo "No Python dependency files found, skipping Python setup"
+if [ "$CURRENT_NODE_VERSION" != "$REQUIRED_NODE_VERSION" ]; then
+    echo "❌ Node.js version mismatch!"
+    echo "   Required: $REQUIRED_NODE_VERSION"
+    echo "   Current:  $CURRENT_NODE_VERSION"
+    echo ""
+    echo "Please install Node.js $REQUIRED_NODE_VERSION using one of these methods:"
+    echo ""
+    echo "📋 Using NVM (recommended):"
+    echo "   nvm install 22.17.0"
+    echo "   nvm use 22.17.0"
+    echo ""
+    echo "📋 Using nodenv:"
+    echo "   nodenv install 22.17.0"
+    echo "   nodenv local 22.17.0"
+    echo ""
+    echo "📋 Direct download:"
+    echo "   Visit: https://nodejs.org/download/release/v22.17.0/"
+    echo ""
+    exit 1
 fi
 
-# Install Node.js dependencies
+echo "✅ Node.js version is correct: $CURRENT_NODE_VERSION"
+
+# Check if we have the required Python version
+REQUIRED_PYTHON_VERSION="Python 3.12.11"
+CURRENT_PYTHON_VERSION=$(python --version 2>/dev/null || python3 --version 2>/dev/null || echo "not installed")
+
+if [ "$CURRENT_PYTHON_VERSION" != "$REQUIRED_PYTHON_VERSION" ]; then
+    echo "❌ Python version mismatch!"
+    echo "   Required: $REQUIRED_PYTHON_VERSION"
+    echo "   Current:  $CURRENT_PYTHON_VERSION"
+    echo ""
+    echo "Please install Python 3.12.11 using one of these methods:"
+    echo ""
+    echo "📋 Using pyenv (recommended):"
+    echo "   pyenv install 3.12.11"
+    echo "   pyenv local 3.12.11"
+    echo ""
+    echo "📋 Using conda:"
+    echo "   conda install python=3.12.11"
+    echo ""
+    echo "📋 Direct download:"
+    echo "   Visit: https://www.python.org/downloads/release/python-31211/"
+    echo ""
+    exit 1
+fi
+
+echo "✅ Python version is correct: $CURRENT_PYTHON_VERSION"
+
+# Check if we have the required pipenv version
+REQUIRED_PIPENV_VERSION="2025.0.4"
+CURRENT_PIPENV_VERSION=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "not installed")
+
+if [ "$CURRENT_PIPENV_VERSION" != "$REQUIRED_PIPENV_VERSION" ]; then
+    echo "❌ Pipenv version mismatch!"
+    echo "   Required: $REQUIRED_PIPENV_VERSION"
+    echo "   Current:  $CURRENT_PIPENV_VERSION"
+    echo ""
+    echo "Installing pipenv $REQUIRED_PIPENV_VERSION..."
+    pip install pipenv==$REQUIRED_PIPENV_VERSION
+    
+    # Verify installation
+    NEW_PIPENV_VERSION=$(pipenv --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "failed")
+    if [ "$NEW_PIPENV_VERSION" != "$REQUIRED_PIPENV_VERSION" ]; then
+        echo "❌ Failed to install correct pipenv version"
+        exit 1
+    fi
+fi
+
+echo "✅ Pipenv version is correct: $CURRENT_PIPENV_VERSION"
+
+# Install dependencies
 echo "📦 Installing Node.js dependencies..."
-if [ -f "package.json" ]; then
-  echo "Installing dependencies from package.json..."
-  npm ci
-else
-  echo "No package.json found, skipping Node.js setup"
+npm ci
+
+echo "📦 Installing Python dependencies (if any)..."
+if [ -f "Pipfile" ]; then
+    pipenv install --dev
 fi
 
-# Platform-specific setup
-case $PLATFORM in
-  "cdk"|"cdktf")
-    echo "🔧 Setting up CDK/CDKTF environment..."
-    if [ -f "cdk.json" ]; then
-      echo "CDK configuration found"
-    fi
-    if [ -f "cdktf.json" ]; then
-      echo "CDKTF configuration found"
-    fi
-    ;;
-  "pulumi")
-    echo "🔧 Setting up Pulumi environment..."
-    if [ -f "Pulumi.yaml" ]; then
-      echo "Pulumi configuration found"
-    fi
-    ;;
-  "tf")
-    echo "🔧 Setting up Terraform environment..."
-    if [ -f "lib/main.tf" ] || [ -f "lib/provider.tf" ]; then
-      echo "Terraform configuration found"
-    fi
-    ;;
-  "cfn")
-    echo "🔧 Setting up CloudFormation environment..."
-    if [ -f "lib/TapStack.yml" ] || [ -f "lib/TapStack.json" ]; then
-      echo "CloudFormation configuration found"
-    fi
-    ;;
-  *)
-    echo "🔧 Auto-detecting platform..."
-    if [ -f "cdk.json" ]; then
-      echo "Detected CDK platform"
-    elif [ -f "cdktf.json" ]; then
-      echo "Detected CDKTF platform"
-    elif [ -f "Pulumi.yaml" ]; then
-      echo "Detected Pulumi platform"
-    elif [ -f "lib/main.tf" ] || [ -f "lib/provider.tf" ]; then
-      echo "Detected Terraform platform"
-    elif [ -f "lib/TapStack.yml" ] || [ -f "lib/TapStack.json" ]; then
-      echo "Detected CloudFormation platform"
-    else
-      echo "No platform configuration detected"
-    fi
-    ;;
-esac
-
-# Create necessary directories
-echo "📁 Creating necessary directories..."
-mkdir -p cfn-outputs
-mkdir -p bin
-mkdir -p lib
-
-# Set up environment for different platforms
-if [ -f "metadata.json" ]; then
-  echo "📋 Reading project metadata..."
-  PLATFORM_FROM_METADATA=$(jq -r '.platform // "unknown"' metadata.json)
-  LANGUAGE_FROM_METADATA=$(jq -r '.language // "unknown"' metadata.json)
-  echo "  Platform from metadata: $PLATFORM_FROM_METADATA"
-  echo "  Language from metadata: $LANGUAGE_FROM_METADATA"
-fi
-
-# Platform-specific initialization
-case $PLATFORM in
-  "cdk"|"cdktf")
-    if [ -f "cdk.json" ] || [ -f "cdktf.json" ]; then
-      echo "🔧 Initializing CDK/CDKTF..."
-      npm run build || echo "Build failed, continuing..."
-    fi
-    ;;
-  "pulumi")
-    if [ -f "Pulumi.yaml" ]; then
-      echo "🔧 Setting up Pulumi..."
-      # Pulumi setup will be handled by the bootstrap script
-    fi
-    ;;
-  "tf")
-    if [ -f "lib/main.tf" ] || [ -f "lib/provider.tf" ]; then
-      echo "🔧 Setting up Terraform..."
-      # Terraform setup will be handled by the bootstrap script
-    fi
-    ;;
-esac
-
-echo "✅ Environment setup completed successfully"
+echo "🎉 Setup complete! You can now run:"
+echo "   npm run build    - to compile TypeScript"
+echo "   npm run test     - to run tests"
+echo "   npm start        - to start the CLI"
