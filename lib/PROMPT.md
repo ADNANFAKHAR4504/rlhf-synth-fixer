@@ -30,28 +30,28 @@ You are tasked with creating and managing a cloud environment in AWS using Terra
 - Ensure all resources are properly configured and functional
 
 ### 5. Security and Access Control
-- Properly configure IAM roles with least privilege permissions
-- Implement proper authentication and authorization
-- Set up secure access controls for all resources
-- Ensure compliance with security best practices
+- Configure IAM roles with appropriate permissions
+- Implement basic authentication and authorization
+- Set up access controls for resources
+- Follow security best practices
 
 ### 6. Rollback and Recovery
-- Ensure there is a rollback plan to revert changes in case of failures
-- Create comprehensive backup and recovery procedures
-- Document all rollback procedures and steps
-- Test rollback procedures in staging environment
+- Ensure there is a basic rollback plan for changes
+- Create backup and recovery procedures
+- Document rollback procedures
+- Test rollback procedures
 
 ### 7. Validation and Testing
-- Validate all infrastructure with Terraform `plan` and `apply` commands
-- Test all resources for functionality
-- Verify network connectivity and security
-- Perform comprehensive testing before production deployment
+- Validate infrastructure with Terraform `plan` and `apply` commands
+- Test resources for functionality
+- Verify network connectivity
+- Perform testing before deployment
 
 ## Deliverables
 
 ### Documentation
 - Infrastructure plan and procedures
-- Rollback procedures
+- Basic rollback procedures
 - Network configuration documentation
 - Security configuration documentation
 
@@ -59,12 +59,12 @@ You are tasked with creating and managing a cloud environment in AWS using Terra
 - Terraform plan and apply validation
 - Resource functionality testing
 - Network connectivity testing
-- Security testing and validation
+- Basic security testing
 
 ## Success Criteria
 - All AWS resources successfully deployed and configured
 - Network configurations properly implemented
-- IAM roles configured with least privilege permissions
-- Rollback procedures tested and documented
+- IAM roles configured with appropriate permissions
+- Rollback procedures documented
 - All Terraform commands execute successfully
 - Infrastructure functions as expected
