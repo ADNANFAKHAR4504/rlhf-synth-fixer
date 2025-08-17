@@ -604,8 +604,6 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Aliases:
-          - tap-dev-20250817085957-98vyfo.example.com
         Origins:
           - DomainName: !GetAtt ApplicationLoadBalancer.DNSName
             Id: ALBOrigin
@@ -634,10 +632,6 @@ Resources:
             QueryString: false
             Cookies:
               Forward: none
-        ViewerCertificate:
-          AcmCertificateArn: arn:aws:acm:us-east-1:718240086340:certificate/29692b19-daa9-4748-ac64-2cb2913cfd97
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2021
         WebACLId: !GetAtt WebACL.Arn
       Tags:
         - Key: Name
