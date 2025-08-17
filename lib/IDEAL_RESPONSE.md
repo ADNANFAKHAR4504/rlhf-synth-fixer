@@ -115,11 +115,6 @@ variable "instance_type" {
   description = "EC2 instance type"
   type        = string
   default     = "t3.micro"
-
-  validation {
-    condition     = can(regex("^[a-z]+\\.[a-z0-9]+$", var.instance_type))
-    error_message = "Instance type must be in valid format (e.g., t3.micro)."
-  }
 }
 
 variable "db_instance_class" {
@@ -137,6 +132,7 @@ variable "db_username" {
   description = "Database master username"
   type        = string
   sensitive   = true
+  default     = "dbadmin"
 
   validation {
     condition     = length(var.db_username) >= 1 && length(var.db_username) <= 16
@@ -145,14 +141,10 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "Database master password"
+  description = "Database master password (leave empty to auto-generate)"
   type        = string
   sensitive   = true
-
-  validation {
-    condition     = length(var.db_password) >= 8
-    error_message = "Database password must be at least 8 characters long."
-  }
+  default     = null
 }
 
 variable "enable_deletion_protection" {

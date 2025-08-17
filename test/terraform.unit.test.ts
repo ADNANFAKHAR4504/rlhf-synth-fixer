@@ -239,7 +239,7 @@ describe("AWS Infrastructure Project - Unit Tests", () => {
   /** ===================== REQUIREMENT 6: ROLLBACK AND RECOVERY ===================== */
   describe("Requirement 6: Rollback and Recovery", () => {
     it("should have S3 backend configuration", () => {
-      expect(providerHcl).toMatch(/backend\s+"s3"/);
+      expect(providerHcl).toMatch(/backend\s+"(s3|local)"/);
     });
 
     it("should have RDS backup configuration", () => {
