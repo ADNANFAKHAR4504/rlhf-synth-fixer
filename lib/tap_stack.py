@@ -68,63 +68,64 @@ class TapStack(ComponentResource):
         })
     
     def _create_kms_key(self):
-        """Create KMS key for encryption at rest."""
-        # Get current AWS region and account ID
-        current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
-        current = aws.get_caller_identity()
-        
-        # Create KMS key with comprehensive policy for CloudWatch Logs
-        self.kms_key = aws.kms.Key(
-            f"{self.name_prefix}-kms-key",
-            description=f"KMS key for {self.name_prefix} encryption",
-            enable_key_rotation=True,
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "Allow CloudWatch Logs to use the key",
-                        "Effect": "Allow",
-                        "Principal": {"Service": f"logs.{current_region}.amazonaws.com"},
-                        "Action": [
-                            "kms:GenerateDataKey*",
-                            "kms:Encrypt",
-                            "kms:Decrypt",
-                            "kms:ReEncrypt*",
-                            "kms:DescribeKey"
-                        ],
-                        "Resource": "*",
-                        "Condition": {
-                            "StringEquals": {
-                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{current_region}:{current.account_id}:*"
-                            },
-                            "StringLike": {
-                                "kms:CallerAccount": current.account_id,
-                                "kms:ViaService": f"logs.{current_region}.amazonaws.com"
-                            }
-                        }
-                    },
-                    {
-                        "Sid": "Allow Administration of the key",
-                        "Effect": "Allow",
-                        "Principal": {"AWS": f"arn:aws:iam::{current.account_id}:root"},
-                        "Action": "kms:*",
-                        "Resource": "*"
-                    }
-                ]
-            }),
-            tags={
-                "Name": f"{self.name_prefix}-kms-key",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        self.kms_alias = aws.kms.Alias(
-            f"{self.name_prefix}-kms-alias",
-            name=f"alias/{self.name_prefix}-key",
-            target_key_id=self.kms_key.key_id,
-            opts=ResourceOptions(parent=self)
-        )
+      """Create KMS key for encryption at rest."""
+      current_region = pulumi.Config("aws").get("region") or os.environ.get("AWS_REGION", "us-east-1")
+      current = aws.get_caller_identity()
+      
+      self.kms_key = aws.kms.Key(
+          f"{self.name_prefix}-kms-key",
+          description=f"KMS key for {self.name_prefix} encryption",
+          enable_key_rotation=True,
+          policy=json.dumps({
+              "Version": "2012-10-17",
+              "Statement": [
+                  {
+                      "Sid": "Allow CloudWatch Logs to use the key",
+                      "Effect": "Allow",
+                      "Principal": {"Service": f"logs.{current_region}.amazonaws.com"},
+                      "Action": [
+                          "kms:GenerateDataKey*",
+                          "kms:Encrypt",
+                          "kms:Decrypt",
+                          "kms:ReEncrypt*",
+                          "kms:DescribeKey"
+                      ],
+                      "Resource": "*",
+                      "Condition": {
+                          "StringEquals": {
+                              "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{current_region}:{current.account_id}:*"
+                          },
+                          "StringLike": {
+                              "kms:CallerAccount": current.account_id,
+                              "kms:ViaService": f"logs.{current_region}.amazonaws.com"
+                          }
+                      }
+                  },
+                  {
+                      "Sid": "Allow Administration of the key",
+                      "Effect": "Allow",
+                      "Principal": {"AWS": f"arn:aws:iam::{current.account_id}:root"},
+                      "Action": "kms:*",
+                      "Resource": "*"
+                  }
+              ]
+          }),
+          tags={
+              "Name": f"{self.name_prefix}-kms-key",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      # FIXED: Unique alias name
+      self.kms_alias = aws.kms.Alias(
+          f"{self.name_prefix}-kms-alias",
+          name=f"alias/{self.name_prefix}-key-{self.unique_suffix}",
+          target_key_id=self.kms_key.key_id,
+          opts=ResourceOptions(parent=self)
+      )
+
+
     
     def _create_vpc_and_networking(self):
         """Create VPC with isolated subnets for database instances."""
@@ -707,36 +708,37 @@ class TapStack(ComponentResource):
         )
     
     def _create_secrets_manager(self):
-        """Create secrets in AWS Secrets Manager."""
-        self.db_secret = aws.secretsmanager.Secret(
-            f"{self.name_prefix}-db-secret",
-            name=f"{self.name_prefix}/database/credentials",
-            description="Database credentials for TAP application",
-            kms_key_id=self.kms_key.arn,
-            tags={
-                "Name": f"{self.name_prefix}-db-secret",
-                "Environment": self.environment_suffix,
-            },
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Create secret version with proper handling of Output values
-        def create_secret_string(endpoint):
-            return json.dumps({
-                "username": "admin",
-                "password": "changeme123!",
-                "engine": "mysql",
-                "host": endpoint,
-                "port": 3306,
-                "dbname": "tapdb"
-            })
-        
-        self.db_secret_version = aws.secretsmanager.SecretVersion(
-            f"{self.name_prefix}-db-secret-version",
-            secret_id=self.db_secret.id,
-            secret_string=self.rds_instance.endpoint.apply(create_secret_string),
-            opts=ResourceOptions(parent=self)
-        )
+      """Create secrets in AWS Secrets Manager."""
+      # FIXED: Unique secret name
+      self.db_secret = aws.secretsmanager.Secret(
+          f"{self.name_prefix}-db-secret",
+          name=f"{self.name_prefix}/database/credentials-{self.unique_suffix}",
+          description="Database credentials for TAP application",
+          kms_key_id=self.kms_key.arn,
+          tags={
+              "Name": f"{self.name_prefix}-db-secret",
+              "Environment": self.environment_suffix,
+          },
+          opts=ResourceOptions(parent=self)
+      )
+      
+      def create_secret_string(endpoint):
+          return json.dumps({
+              "username": "admin",
+              "password": "changeme123!",
+              "engine": "mysql",
+              "host": endpoint,
+              "port": 3306,
+              "dbname": "tapdb"
+          })
+      
+      self.db_secret_version = aws.secretsmanager.SecretVersion(
+          f"{self.name_prefix}-db-secret-version",
+          secret_id=self.db_secret.id,
+          secret_string=self.rds_instance.endpoint.apply(create_secret_string),
+          opts=ResourceOptions(parent=self)
+      )
+
     
     def _create_launch_template(self):
       """Create launch template for Auto Scaling Group with proper network config and user data."""
