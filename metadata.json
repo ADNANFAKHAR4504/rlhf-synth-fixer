@@ -1,0 +1,13 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291303",
+  "team": "4",
+  "startedAt": "2025-08-17T15:11:47.786Z",
+  "subtask": "General Infrastructure Provisioning in two regions",
+  "subject_labels": ["General Infrastructure Tooling for stage and production in two different regions", "Network Configuration"],
+  "training_quality": 8,
+  "aws_services": ["vpc", "subnet", "iam", "ec2", "security groups", "vpc peering", "route53"]
+}
