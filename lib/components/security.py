@@ -187,12 +187,12 @@ class SecurityComponent(ComponentResource):
     )
 
   def _create_ssl_certificate(self, name: str, config: InfrastructureConfig):
-    # Create ACM certificate
+    # Create ACM certificate with email validation for CI environments
     self.certificate = aws.acm.Certificate(
       f"{name}-cert",
       domain_name=config.security.certificate_domain,
       subject_alternative_names=[f"*.{config.security.certificate_domain}"],
-      validation_method="DNS",
+      validation_method="EMAIL",
       tags={
         **config.tags,
         "Name": f"{config.app_name}-{config.environment}-cert"
