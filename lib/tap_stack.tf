@@ -754,7 +754,6 @@ resource "aws_instance" "secondary" {
 resource "aws_eip" "primary_ec2" {
   provider = aws.us_east_2
   instance = aws_instance.primary.id
-  vpc      = true
   tags = merge(local.common_tags, {
     Name = "${var.environment}-primary-ec2-eip"
   })
@@ -762,7 +761,6 @@ resource "aws_eip" "primary_ec2" {
 resource "aws_eip" "secondary_ec2" {
   provider = aws.us_west_1
   instance = aws_instance.secondary.id
-  vpc      = true
   tags = merge(local.common_tags, {
     Name = "${var.environment}-secondary-ec2-eip"
   })
