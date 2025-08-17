@@ -341,13 +341,13 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     # Create VPC endpoint security group once and reuse it
     vpc_endpoint_sg = self._create_vpc_endpoint_sg()
     
-    # Use the provider's region instead of detecting it dynamically
-    # This ensures consistency with the AWS provider configuration
-    provider_region = self.provider.region
+    # For now, use a hardcoded region to avoid Pulumi Output issues
+    # This can be made configurable later if needed
+    region = "us-east-1"  # Default to us-east-1
     
     # Debug: Export the provider region (only in actual Pulumi context)
     try:
-        pulumi.export("provider_region", provider_region)
+        pulumi.export("provider_region", region)
     except Exception:
         # Skip export during unit tests
         pass
@@ -355,11 +355,11 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     # EKS VPC endpoints for cluster communication
     # Using only essential endpoints that are definitely needed
     eks_endpoints = [
-        "com.amazonaws.{}.ec2".format(provider_region),  # Regional
-        "com.amazonaws.{}.ecr.api".format(provider_region),  # Regional
-        "com.amazonaws.{}.ecr.dkr".format(provider_region),  # Regional
+        f"com.amazonaws.{region}.ec2",  # Regional
+        f"com.amazonaws.{region}.ecr.api",  # Regional
+        f"com.amazonaws.{region}.ecr.dkr",  # Regional
         "com.amazonaws.s3",  # Global - no region needed
-        "com.amazonaws.{}.sts".format(provider_region),  # Regional
+        f"com.amazonaws.{region}.sts",  # Regional
     ]
     
     for endpoint_service in eks_endpoints:
