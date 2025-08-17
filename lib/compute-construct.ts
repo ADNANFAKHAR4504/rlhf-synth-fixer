@@ -153,7 +153,7 @@ export class ComputeConstruct extends Construct {
   }
 }
 
-const amiMap = {
+const amiMap: Record<string, string> = {
   'us-east-1': 'ami-0c02fb55956c7d316',
   'us-west-1': 'ami-0b2b9b6c',
   // Add more regions as needed
