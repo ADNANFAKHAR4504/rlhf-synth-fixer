@@ -575,7 +575,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub 'novamodel-sec-${EnvironmentSuffix}-lt'
       LaunchTemplateData:
-        ImageId: 'ami-0c55b159cbfafe1f0' # Note: This is a us-east-1 AMI
+        ImageId: 'ami-05a2d2d0a1020fecd'
         InstanceType: 't3.micro'
         SecurityGroupIds: [!Ref EC2SecurityGroup]
         BlockDeviceMappings:
