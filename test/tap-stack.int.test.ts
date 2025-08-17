@@ -373,7 +373,8 @@ describe('TapStack Integration Tests', () => {
       
       // Verify secure connections between resources
       expect(outputs.RDSEndpoint).toBeDefined();
-      expect(outputs.ElasticsearchDomainEndpoint).toContain('https://');
+      // Elasticsearch domain endpoint format (without https:// prefix)
+      expect(outputs.ElasticsearchDomainEndpoint).toMatch(/vpc-.*\.us-east-1\.es\.amazonaws\.com$/);
       
       // Verify VPC isolation
       expect(outputs.VPCId).toBeDefined();
