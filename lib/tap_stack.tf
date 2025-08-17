@@ -498,7 +498,103 @@ resource "aws_s3_bucket_policy" "alb_logs" {
 #######################
 # Security Groups
 #######################
-# (No change, keep your previous SGs for ALB, web, db, etc.)
+resource "aws_security_group" "alb" {
+  name        = "${local.name_prefix}-alb-sg"
+  description = "Security group for the ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-sg"
+  })
+}
+
+resource "aws_security_group" "web" {
+  name        = "${local.name_prefix}-web-sg"
+  description = "Security group for the web servers"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-web-sg"
+  })
+}
+
+resource "aws_security_group" "database" {
+  name        = "${local.name_prefix}-db-sg"
+  description = "Security group for the database"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = local.db_port
+    to_port         = local.db_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.web.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-sg"
+  })
+}
+
+resource "aws_instance" "web" {
+  count         = 2
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = "t2.micro"
+  subnet_id     = aws_subnet.private[count.index].id
+  vpc_security_group_ids = [aws_security_group.web.id]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-web-instance-${count.index + 1}"
+  })
+}
 
 #######################
 # IAM Resources
@@ -646,6 +742,13 @@ resource "aws_lb_listener" "http" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-http-listener"
   })
+}
+
+resource "aws_lb_target_group_attachment" "main" {
+  count            = 2
+  target_group_arn = aws_lb_target_group.main.arn
+  target_id        = aws_instance.web[count.index].id
+  port             = 80
 }
 
 #######################
