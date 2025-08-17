@@ -11,7 +11,7 @@ variable "your_name" {
 variable "ssh_ingress_cidr" {
   description = "The CIDR block allowed to connect via SSH to the EC2 instances."
   type        = list(string)
-  default     = ["10.0.0.0/16"] # IMPORTANT: Change this to your own IP address range for production.
+  default     = ["10.0.0.0/16"]
 }
 
 data "aws_caller_identity" "current" {}
@@ -242,8 +242,10 @@ resource "aws_config_config_rule" "iam_policy_eu_north_1" {
     source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
   }
 
-  input_parameters = jsonencode({})
-  depends_on       = [aws_config_configuration_recorder.recorder_eu_north_1]
+  input_parameters = jsonencode({
+    managedPolicyArns = []
+  })
+  depends_on = [aws_config_configuration_recorder.recorder_eu_north_1]
 }
 
 # /-----------------------------------------------------------------------------
@@ -416,8 +418,11 @@ resource "aws_config_config_rule" "iam_policy_us_west_2" {
     source_identifier = "IAM_ROLE_MANAGED_POLICY_CHECK"
   }
 
-  input_parameters = jsonencode({})
-  depends_on       = [aws_config_configuration_recorder.recorder_us_west_2]
+  input_parameters = jsonencode({
+    managedPolicyArns = [
+    ]
+  })
+  depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
 }
 
 # /-----------------------------------------------------------------------------
