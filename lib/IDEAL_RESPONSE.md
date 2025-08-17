@@ -511,7 +511,7 @@ resource "aws_route_table_association" "private" {
 
 # Web Security Group
 resource "aws_security_group" "web" {
-  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-v3-"
+  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-v4-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -547,13 +547,13 @@ resource "aws_security_group" "web" {
   }
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-sg-v3"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-sg-v4"
   }
 }
 
 # Database Security Group
 resource "aws_security_group" "database" {
-  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-v3-"
+  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-v4-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -573,7 +573,7 @@ resource "aws_security_group" "database" {
   }
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-sg-v3"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-sg-v4"
   }
 }
 
@@ -805,6 +805,13 @@ EOF
   }
 
   depends_on = [aws_internet_gateway.main]
+
+  # Force replacement when security group changes
+  lifecycle {
+    replace_triggered_by = [
+      aws_security_group.web.id
+    ]
+  }
 }
 
 # Application Load Balancer
@@ -927,11 +934,12 @@ resource "aws_db_instance" "main" {
     Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-database-v3"
   }
 
-  # Force replacement when parameter group or subnet group changes
+  # Force replacement when parameter group, subnet group, or security group changes
   lifecycle {
     replace_triggered_by = [
       aws_db_parameter_group.main.name,
-      aws_db_subnet_group.main.name
+      aws_db_subnet_group.main.name,
+      aws_security_group.database.id
     ]
   }
 }
