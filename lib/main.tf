@@ -1,34 +1,12 @@
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.region
-  
-  default_tags {
-    tags = {
+# Local values for common configurations
+locals {
+  common_tags = {
       Environment   = var.environment
       Project       = "multi-env-infrastructure"
       ManagedBy     = "terraform"
       CostCenter    = "engineering"
       Owner         = "platform-team"
     }
-  }
-}
-
-# Local values for common configurations
-locals {
-  common_tags = {
-    Environment = var.environment
-    Project     = "multi-env-infrastructure"
-    ManagedBy   = "terraform"
-  }
 
   public_subnet_cidrs  = [for i in range(length(var.availability_zones)) : cidrsubnet(var.vpc_cidr, 8, i)]
   private_subnet_cidrs = [for i in range(length(var.availability_zones)) : cidrsubnet(var.vpc_cidr, 8, i + 10)]
