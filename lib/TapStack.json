@@ -75,10 +75,35 @@
                                 "Service": "s3.amazonaws.com"
                             },
                             "Action": [
+                                "kms:Encrypt",
                                 "kms:Decrypt",
-                                "kms:GenerateDataKey"
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
                             ],
                             "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudTrail Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:ReEncrypt*",
+                                "kms:Decrypt"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
                         }
                     ]
                 },
@@ -961,6 +986,13 @@
                                     "LoggingBucket",
                                     "Arn"
                                 ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-cloudtrail-${Environment}"
+                                    }
+                                }
                             }
                         },
                         {
@@ -975,7 +1007,10 @@
                             },
                             "Condition": {
                                 "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-cloudtrail-${Environment}"
+                                    }
                                 }
                             }
                         },
@@ -991,6 +1026,13 @@
                                     "LoggingBucket",
                                     "Arn"
                                 ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-cloudtrail-${Environment}"
+                                    }
+                                }
                             }
                         }
                     ]
@@ -1067,12 +1109,7 @@
                             "Principal": {
                                 "Service": "ec2.amazonaws.com"
                             },
-                            "Action": "sts:AssumeRole",
-                            "Condition": {
-                                "StringEquals": {
-                                    "aws:RequestedRegion": "us-east-1"
-                                }
-                            }
+                            "Action": "sts:AssumeRole"
                         }
                     ]
                 },
@@ -1118,7 +1155,7 @@
                                 "s3:DeleteObject"
                             ],
                             "Resource": {
-                                "Fn::Sub": "${ApplicationBucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1192,12 +1229,7 @@
                             "Principal": {
                                 "Service": "lambda.amazonaws.com"
                             },
-                            "Action": "sts:AssumeRole",
-                            "Condition": {
-                                "StringEquals": {
-                                    "aws:RequestedRegion": "us-east-1"
-                                }
-                            }
+                            "Action": "sts:AssumeRole"
                         }
                     ]
                 },
@@ -1448,23 +1480,6 @@
                 ]
             }
         },
-        "APISecretRotationSchedule": {
-            "Type": "AWS::SecretsManager::RotationSchedule",
-            "Properties": {
-                "SecretId": {
-                    "Ref": "APICredentialsSecret"
-                },
-                "RotationLambdaARN": {
-                    "Fn::GetAtt": [
-                        "SecretRotationLambda",
-                        "Arn"
-                    ]
-                },
-                "RotationRules": {
-                    "AutomaticallyAfterDays": 30
-                }
-            }
-        },
         "SecretRotationLambda": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
@@ -1511,7 +1526,33 @@
                     "Ref": "SecretRotationLambda"
                 },
                 "Action": "lambda:InvokeFunction",
-                "Principal": "secretsmanager.amazonaws.com"
+                "Principal": "secretsmanager.amazonaws.com",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                },
+                "SourceArn": {
+                    "Ref": "APICredentialsSecret"
+                }
+            }
+        },
+        "APISecretRotationSchedule": {
+            "Type": "AWS::SecretsManager::RotationSchedule",
+            "DependsOn": [
+                "SecretRotationLambdaInvokePermission"
+            ],
+            "Properties": {
+                "SecretId": {
+                    "Ref": "APICredentialsSecret"
+                },
+                "RotationLambdaARN": {
+                    "Fn::GetAtt": [
+                        "SecretRotationLambda",
+                        "Arn"
+                    ]
+                },
+                "RotationRules": {
+                    "AutomaticallyAfterDays": 30
+                }
             }
         },
         "DatabaseSubnetGroup": {
@@ -1587,8 +1628,7 @@
                 "PubliclyAccessible": false,
                 "EnableCloudwatchLogsExports": [
                     "error",
-                    "general",
-                    "slow-query"
+                    "general"
                 ],
                 "MonitoringInterval": 60,
                 "MonitoringRoleArn": {
@@ -1773,6 +1813,14 @@
                         "ReadWriteType": "All",
                         "IncludeManagementEvents": true,
                         "DataResources": [
+                            {
+                                "Type": "AWS::S3::Object",
+                                "Values": [
+                                    {
+                                        "Fn::Sub": "${ApplicationBucket}/*"
+                                    }
+                                ]
+                            },
                             {
                                 "Type": "AWS::S3::Object",
                                 "Values": [
