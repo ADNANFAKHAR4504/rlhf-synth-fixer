@@ -24,7 +24,8 @@ export class DatabaseConstruct extends Construct {
         props.security.securityGroups?.[region]?.map(sg => sg.id) || [];
 
       // Create DB Subnet Group for RDS
-      const subnetGroupName = `${props.prefix}-rds-subnet-group-${region}`;
+      const subnetGroupSuffix = Math.random().toString(36).substring(2, 8);
+      const subnetGroupName = `${props.prefix}-rds-subnet-group-${region}-${subnetGroupSuffix}`;
       const dbSubnetGroup = new DbSubnetGroup(this, subnetGroupName, {
         provider: vpc.provider,
         name: subnetGroupName,
