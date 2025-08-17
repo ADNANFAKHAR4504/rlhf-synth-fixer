@@ -28,11 +28,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "${var.project_name}-vpc"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-vpc"
   }
 }
 
@@ -41,11 +37,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name        = "${var.project_name}-igw"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-igw"
   }
 }
 
@@ -59,12 +51,8 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "${var.project_name}-public-subnet-${count.index + 1}"
-    Type        = "Public"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-public-subnet-${count.index + 1}"
+    Type = "Public"
   }
 }
 
@@ -77,12 +65,8 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name        = "${var.project_name}-private-subnet-${count.index + 1}"
-    Type        = "Private"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-private-subnet-${count.index + 1}"
+    Type = "Private"
   }
 }
 
@@ -92,11 +76,7 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 
   tags = {
-    Name        = "${var.project_name}-nat-eip"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-nat-eip"
   }
 }
 
@@ -106,11 +86,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[0].id
 
   tags = {
-    Name        = "${var.project_name}-nat-gateway"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-nat-gateway"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -126,11 +102,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name        = "${var.project_name}-public-rt"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-public-rt"
   }
 }
 
@@ -152,11 +124,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name        = "${var.project_name}-private-rt"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-private-rt"
   }
 }
 
@@ -181,11 +149,7 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = {
-    Name        = "${var.project_name}-lambda-sg"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-lambda-sg"
   }
 }
 
@@ -202,11 +166,7 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name        = "${var.project_name}-rds-sg"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-rds-sg"
   }
 }
 
@@ -217,11 +177,7 @@ resource "aws_kms_key" "rds" {
   enable_key_rotation     = true
 
   tags = {
-    Name        = "${var.project_name}-rds-kms-key"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-rds-kms-key"
   }
 }
 
@@ -237,11 +193,7 @@ resource "aws_db_subnet_group" "main" {
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name        = "${var.project_name}-db-subnet-group-${random_id.suffix.hex}"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-db-subnet-group-${random_id.suffix.hex}"
   }
 }
 
@@ -271,11 +223,7 @@ resource "aws_rds_cluster" "main" {
   }
 
   tags = {
-    Name        = "${var.project_name}-aurora-cluster"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-aurora-cluster"
   }
 }
 
@@ -289,11 +237,7 @@ resource "aws_rds_cluster_instance" "cluster_instances" {
   engine_version     = aws_rds_cluster.main.engine_version
 
   tags = {
-    Name        = "${var.project_name}-aurora-instance-${count.index + 1}"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-aurora-instance-${count.index + 1}"
   }
 }
 
@@ -315,11 +259,7 @@ resource "aws_iam_role" "lambda_role" {
   })
 
   tags = {
-    Name        = "${var.project_name}-lambda-role"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-lambda-role"
   }
 }
 
@@ -361,11 +301,7 @@ resource "aws_iam_policy" "lambda_policy" {
   })
 
   tags = {
-    Name        = "${var.project_name}-lambda-policy"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-lambda-policy"
   }
 }
 
@@ -403,11 +339,7 @@ resource "aws_lambda_function" "health_check" {
   ]
 
   tags = {
-    Name        = "${var.project_name}-health-check-lambda"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-health-check-lambda"
   }
 }
 
@@ -439,11 +371,7 @@ resource "aws_lambda_function" "data_processor" {
   ]
 
   tags = {
-    Name        = "${var.project_name}-data-processor-lambda"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-data-processor-lambda"
   }
 }
 
@@ -499,11 +427,7 @@ resource "aws_cloudwatch_log_group" "health_check" {
   retention_in_days = 14
 
   tags = {
-    Name        = "${var.project_name}-health-check-logs"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-health-check-logs"
   }
 }
 
@@ -512,11 +436,7 @@ resource "aws_cloudwatch_log_group" "data_processor" {
   retention_in_days = 14
 
   tags = {
-    Name        = "${var.project_name}-data-processor-logs"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-data-processor-logs"
   }
 }
 
@@ -530,11 +450,7 @@ resource "aws_api_gateway_rest_api" "main" {
   }
 
   tags = {
-    Name        = "${var.project_name}-api-gateway"
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = var.owner
-    CostCenter  = var.cost_center
+    Name = "${var.project_name}-api-gateway"
   }
 }
 

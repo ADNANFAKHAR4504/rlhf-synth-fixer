@@ -26,7 +26,6 @@ provider "aws" {
       Owner       = var.owner
       ManagedBy   = "Terraform"
       CostCenter  = var.cost_center
-      CreatedDate = formatdate("YYYY-MM-DD", timestamp())
     }
   }
 }
