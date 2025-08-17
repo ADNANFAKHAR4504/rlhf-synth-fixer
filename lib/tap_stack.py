@@ -777,12 +777,12 @@ class TapStack(ComponentResource):
           image_id=ami.id,
           instance_type="t3.micro",
           user_data=user_data_b64,
-          vpc_security_group_ids=[self.ec2_sg.id],
+          # REMOVED: vpc_security_group_ids=[self.ec2_sg.id], - this conflicts with network_interfaces
           monitoring={"enabled": True},
           iam_instance_profile={
               "name": self.ec2_instance_profile.name
           },
-          # The next line is what lets you assign a public IP on launch in a launch template in Python!
+          # Security groups are specified here in network_interfaces
           network_interfaces=[{
               "associatePublicIpAddress": True,
               "deviceIndex": 0,
@@ -797,6 +797,7 @@ class TapStack(ComponentResource):
           }],
           opts=ResourceOptions(parent=self),
       )
+
 
 
     
