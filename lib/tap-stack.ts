@@ -175,6 +175,8 @@ export class TapStack extends TerraformStack {
       retentionInDays: 30,
       kmsKeyId: kmsKey.id,
       tags: commonTags,
+      // FIXED: Added an explicit dependency on the KMS key to prevent race conditions.
+      dependsOn: [kmsKey],
     });
     const flowLogRole = new IamRole(this, 'FlowLogRole', {
       name: `flow-log-role-${uniqueSuffix}`,
@@ -265,10 +267,9 @@ export class TapStack extends TerraformStack {
           ],
         }
       ).json,
-      // FIXED: Switched from DataAwsIamPolicyDocument to a plain object to prevent JSON parsing errors in tests.
       inlinePolicy: [
         {
-          name: 'S3AndKmsAccessPolicy',
+          name: `S3AndKmsAccessPolicy-${uniqueSuffix}`,
           policy: JSON.stringify({
             Version: '2012-10-17',
             Statement: [
