@@ -175,7 +175,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.Engine).toBe('mysql');
       expect(rds.Properties.EngineVersion).toBe('8.0.39');
       expect(rds.Properties.StorageEncrypted).toBe(true);
-      expect(rds.Properties.DeletionProtection).toBe(true);
+      expect(rds.Properties.DeletionProtection).toBe(false);
     });
 
     test('SecureRDSInstance should have performance insights disabled', () => {

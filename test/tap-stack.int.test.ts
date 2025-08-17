@@ -187,7 +187,7 @@ describe('TapStack Integration Tests', () => {
           expect(targetInstance.Engine).toBe('mysql');
           expect(targetInstance.EngineVersion).toBe('8.0.39');
           expect(targetInstance.StorageEncrypted).toBe(true);
-          expect(targetInstance.DeletionProtection).toBe(true);
+          expect(targetInstance.DeletionProtection).toBe(false);
           expect(targetInstance.BackupRetentionPeriod).toBe(7);
           expect(targetInstance.PubliclyAccessible).toBe(false);
         }

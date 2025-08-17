@@ -575,7 +575,7 @@
                 "BackupRetentionPeriod": 7,
                 "MultiAZ": false,
                 "PubliclyAccessible": false,
-                "DeletionProtection": true,
+                "DeletionProtection": false,
                 "EnablePerformanceInsights": false,
                 "MonitoringInterval": 60,
                 "MonitoringRoleArn": {
