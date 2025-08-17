@@ -36,7 +36,7 @@ module "iam_module" {
 
 
 # Security Module
-module "security" {
+module "security_module" {
   source = "./modules/security_module"
   environment = var.environment
   vpc_id = module.vpc.vpc_id
@@ -55,6 +55,8 @@ module "ec2_module" {
     instance_profile_name = module.iam_module.ec2_instance_profile_name
     tags = local.common_tags
     environment = var.environment
+
+    depends_on = [ module.security_module ]
 }
 
 
