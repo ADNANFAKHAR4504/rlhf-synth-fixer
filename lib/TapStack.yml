@@ -43,8 +43,22 @@ Parameters:
 
 Mappings:
   RegionMap:
+    us-east-1:
+      AZs: ['us-east-1a', 'us-east-1b', 'us-east-1c']
+    us-east-2:
+      AZs: ['us-east-2a', 'us-east-2b', 'us-east-2c']
+    us-west-1:
+      AZs: ['us-west-1a', 'us-west-1b']
     us-west-2:
-      AZs: ['us-west-2a', 'us-west-2b']
+      AZs: ['us-west-2a', 'us-west-2b', 'us-west-2c']
+    eu-west-1:
+      AZs: ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
+    eu-central-1:
+      AZs: ['eu-central-1a', 'eu-central-1b']
+    ap-southeast-1:
+      AZs: ['ap-southeast-1a', 'ap-southeast-1b', 'ap-southeast-1c']
+    ap-northeast-1:
+      AZs: ['ap-northeast-1a', 'ap-northeast-1c', 'ap-northeast-1d']
 
 Conditions:
   CreateVPC: !Equals [!Ref VpcId, '']
