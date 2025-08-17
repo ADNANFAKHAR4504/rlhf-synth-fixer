@@ -15,6 +15,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
   let randomSuffix: string;
   let vpcId: string;
   let authValid: boolean = true;
+  let terraformOutputs: any = {};
 
   // Helper function to check if error is auth-related
   const isAuthError = (error: any): boolean => {
@@ -56,84 +57,54 @@ describe('Serverless Infrastructure Integration Tests', () => {
   };
 
   beforeAll(async () => {
-    // Get the project name and random suffix from Terraform outputs
+    // Primary approach: Use Terraform outputs as the single source of truth for testing
     try {
       const outputs = execSync('terraform output -json', { 
         cwd: './lib', 
         encoding: 'utf-8' 
       });
-      const parsedOutputs = JSON.parse(outputs);
+      terraformOutputs = JSON.parse(outputs);
       
-      // Extract project name from any resource name
-      projectName = 'serverless-app';
-      
-      // Extract VPC ID from outputs
-      vpcId = parsedOutputs.vpc_id?.value || '';
-      
-      // Extract random suffix from lambda function names
-      const lambdaNames = parsedOutputs.lambda_function_names?.value || [];
-      if (lambdaNames.length > 0) {
-        const match = lambdaNames[0].match(/-([a-f0-9]{8})$/);
-        randomSuffix = match ? match[1] : '';
-      }
-      
-      // Debug logging
-      console.log('Setup - Project name:', projectName);
-      console.log('Setup - VPC ID:', vpcId);
-      console.log('Setup - Random suffix:', randomSuffix);
-      
-      // If we don't have critical variables, try to get them from AWS directly
-      if (!vpcId || !randomSuffix) {
-        console.warn('Missing critical variables, attempting AWS fallback...');
+      // Check if we have valid outputs (infrastructure is deployed)
+      if (Object.keys(terraformOutputs).length > 0 && terraformOutputs.vpc_id?.value) {
+        console.log('✅ Using Terraform outputs as source of truth for integration tests');
         
-        try {
-          const AWS = require('aws-sdk');
-          AWS.config.update({ region: 'us-west-2' });
-          const ec2 = new AWS.EC2();
-          const lambdaClient = new AWS.Lambda();
-          
-          // Try to get VPC ID from existing VPCs with our project tag
-          const vpcs = await ec2.describeVpcs({
-            Filters: [{ Name: 'tag:Project', Values: ['serverless-app'] }]
-          }).promise();
-          
-          if (vpcs.Vpcs && vpcs.Vpcs.length > 0) {
-            vpcId = vpcs.Vpcs[0].VpcId;
-            console.log('Fallback - Found VPC ID:', vpcId);
-          }
-          
-          // Try to find Lambda functions to extract random suffix
-          if (!randomSuffix) {
-            const functions = await lambdaClient.listFunctions().promise();
-            const serverlessAppFunctions = functions.Functions?.filter((f: any) => 
-              f.FunctionName?.startsWith('serverless-app-')
-            );
-            
-            if (serverlessAppFunctions && serverlessAppFunctions.length > 0) {
-              const match = serverlessAppFunctions[0].FunctionName?.match(/-([a-f0-9]{8})$/);
-              if (match) {
-                randomSuffix = match[1];
-                console.log('Fallback - Found random suffix:', randomSuffix);
-              }
-            }
-          }
-          
-        } catch (fallbackError: any) {
-          console.warn('AWS fallback also failed:', fallbackError.message);
+        projectName = 'serverless-app'; // Consistent project name
+        vpcId = terraformOutputs.vpc_id.value;
+        
+        // Extract random suffix from lambda function names
+        const lambdaNames = terraformOutputs.lambda_function_names?.value || [];
+        if (lambdaNames.length > 0) {
+          const match = lambdaNames[0].match(/-([a-f0-9]{8})$/);
+          randomSuffix = match ? match[1] : '';
         }
+        
+        console.log('Setup - Using Terraform outputs:', {
+          projectName,
+          vpcId,
+          randomSuffix,
+          apiGatewayUrl: terraformOutputs.api_gateway_url?.value,
+          lambdaCount: lambdaNames.length,
+          availabilityZones: terraformOutputs.availability_zones?.value?.length || 0
+        });
+        
+        return; // Successfully loaded from outputs, skip fallback
+      } else {
+        console.warn('⚠️  No valid Terraform outputs - infrastructure may not be deployed');
       }
-      
-      // Final check - if still missing critical info, set defaults
-      if (!randomSuffix) {
-        console.warn('No random suffix found, some tests will be skipped');
-        randomSuffix = 'unknown';
-      }
-      
     } catch (error: any) {
-      console.warn('Could not get Terraform outputs:', error.message);
-      projectName = 'serverless-app';
+      console.warn('⚠️  Failed to read Terraform outputs:', error.message);
+    }
+    
+    // Fallback: Set defaults for missing infrastructure
+    projectName = 'serverless-app';
+    vpcId = '';
+    randomSuffix = '';
+    console.log('Setup - Using fallback values (infrastructure may not be deployed)');
+    
+    // Set unknown for randomSuffix when infrastructure is not deployed
+    if (!randomSuffix) {
       randomSuffix = 'unknown';
-      vpcId = '';
     }
   }, 30000);
 
@@ -341,6 +312,24 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
   describe('API Gateway', () => {
     test('should have REST API created', async () => {
+      // First try to use Terraform outputs for direct verification
+      if (terraformOutputs.api_gateway_url?.value) {
+        const apiGatewayUrl = terraformOutputs.api_gateway_url.value;
+        console.log('✅ Using API Gateway URL from Terraform outputs:', apiGatewayUrl);
+        
+        // Extract API ID from URL: https://{api-id}.execute-api.{region}.amazonaws.com/{stage}
+        const match = apiGatewayUrl.match(/https:\/\/([a-z0-9]+)\.execute-api\./);
+        if (match) {
+          const apiId = match[1];
+          const api = await apigateway.getRestApi({ restApiId: apiId }).promise();
+          expect(api.id).toBe(apiId);
+          expect(api.endpointConfiguration?.types).toContain('REGIONAL');
+          console.log('✅ API Gateway verified using Terraform outputs');
+          return;
+        }
+      }
+      
+      // Fallback to discovery method
       const apis = await apigateway.getRestApis().promise();
       
       // Debug logging to understand what's available
