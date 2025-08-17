@@ -32,6 +32,7 @@ type Outputs = {
 
 function loadOutputs() {
   const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+  
   if (!fs.existsSync(p)) {
     console.log("Outputs file not found, using mock data for testing");
     return {
