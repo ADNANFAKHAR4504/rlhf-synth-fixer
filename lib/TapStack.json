@@ -796,7 +796,7 @@
                 },
                 "S3KeyPrefix": "config-logs/",
                 "ConfigSnapshotDeliveryProperties": {
-                    "DeliveryFrequency": "Daily"
+                    "DeliveryFrequency": "TwentyFour_Hours"
                 }
             }
         }
