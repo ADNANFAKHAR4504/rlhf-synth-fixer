@@ -620,83 +620,84 @@ class TapStack(pulumi.ComponentResource):
 
     
     def _setup_backup_strategies(self):
-        """Setup backup strategies for all data"""
-        # S3 bucket lifecycle configuration for source bucket
-        aws.s3.BucketLifecycleConfigurationV2(
-            f"source-bucket-lifecycle-{self.env_suffix}",
-            bucket=self.source_bucket.id,
-            rules=[
-                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
-                    id="backup_rule",
-                    status="Enabled",
-                    noncurrent_version_transitions=[
-                        aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionTransitionArgs(
-                            days=30,
-                            storage_class="STANDARD_IA"
-                        ),
-                        aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionTransitionArgs(
-                            days=60,
-                            storage_class="GLACIER"
-                        )
-                    ]
-                )
-            ],
-            opts=ResourceOptions(provider=self.source_provider, parent=self)
-        )
-        
-        # Create backup vault for AWS Backup
-        self.backup_vault = aws.backup.Vault(
-            f"backup-vault-{self.env_suffix}",
-            name=f"tap-backup-vault-{self.env_suffix}",
-            kms_key_arn=self.rds_kms_key.arn,
-            tags=self.default_tags,
-            opts=ResourceOptions(provider=self.target_provider, parent=self)
-        )
-        
-        # IAM role for AWS Backup
-        backup_assume_role_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {"Service": "backup.amazonaws.com"},
-                    "Action": "sts:AssumeRole"
-                }
-            ]
-        }
-        
-        backup_role = aws.iam.Role(
-            f"backup-role-{self.env_suffix}",
-            assume_role_policy=json.dumps(backup_assume_role_policy),
-            tags=self.default_tags,
-            opts=ResourceOptions(provider=self.target_provider, parent=self)
-        )
-        
-        aws.iam.RolePolicyAttachment(
-            f"backup-policy-attachment-{self.env_suffix}",
-            role=backup_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
-            opts=ResourceOptions(provider=self.target_provider, parent=self)
-        )
-        
-        # Create backup plan
-        self.backup_plan = aws.backup.Plan(
-            f"backup-plan-{self.env_suffix}",
-            name=f"tap-backup-plan-{self.env_suffix}",
-            rules=[
-                aws.backup.PlanRuleArgs(
-                    rule_name="daily_backup",
-                    target_vault_name=self.backup_vault.name,
-                    schedule="cron(0 5 ? * * *)",  # Daily at 5 AM
-                    lifecycle=aws.backup.PlanRuleLifecycleArgs(
-                        cold_storage_after=30,
-                        delete_after=365
-                    )
-                )
-            ],
-            tags=self.default_tags,
-            opts=ResourceOptions(provider=self.target_provider, parent=self)
-        )
+      """Setup backup strategies for all data"""
+      # S3 bucket lifecycle configuration for source bucket
+      aws.s3.BucketLifecycleConfigurationV2(
+          f"source-bucket-lifecycle-{self.env_suffix}",
+          bucket=self.source_bucket.id,
+          rules=[
+              aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                  id="backup_rule",
+                  status="Enabled",
+                  noncurrent_version_transitions=[
+                      aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionTransitionArgs(
+                          noncurrent_days=30, 
+                          storage_class="STANDARD_IA"
+                      ),
+                      aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionTransitionArgs(
+                          noncurrent_days=60,   
+                          storage_class="GLACIER"
+                      )
+                  ]
+              )
+          ],
+          opts=ResourceOptions(provider=self.source_provider, parent=self)
+      )
+      
+      # Create backup vault for AWS Backup
+      self.backup_vault = aws.backup.Vault(
+          f"backup-vault-{self.env_suffix}",
+          name=f"tap-backup-vault-{self.env_suffix}",
+          kms_key_arn=self.rds_kms_key.arn,
+          tags=self.default_tags,
+          opts=ResourceOptions(provider=self.target_provider, parent=self)
+      )
+      
+      # IAM role for AWS Backup
+      backup_assume_role_policy = {
+          "Version": "2012-10-17",
+          "Statement": [
+              {
+                  "Effect": "Allow",
+                  "Principal": {"Service": "backup.amazonaws.com"},
+                  "Action": "sts:AssumeRole"
+              }
+          ]
+      }
+      
+      backup_role = aws.iam.Role(
+          f"backup-role-{self.env_suffix}",
+          assume_role_policy=json.dumps(backup_assume_role_policy),
+          tags=self.default_tags,
+          opts=ResourceOptions(provider=self.target_provider, parent=self)
+      )
+      
+      aws.iam.RolePolicyAttachment(
+          f"backup-policy-attachment-{self.env_suffix}",
+          role=backup_role.name,
+          policy_arn="arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+          opts=ResourceOptions(provider=self.target_provider, parent=self)
+      )
+      
+      # Create backup plan
+      self.backup_plan = aws.backup.Plan(
+          f"backup-plan-{self.env_suffix}",
+          name=f"tap-backup-plan-{self.env_suffix}",
+          rules=[
+              aws.backup.PlanRuleArgs(
+                  rule_name="daily_backup",
+                  target_vault_name=self.backup_vault.name,
+                  schedule="cron(0 5 ? * * *)",  # Daily at 5 AM
+                  lifecycle=aws.backup.PlanRuleLifecycleArgs(
+                      cold_storage_after=30,
+                      delete_after=365
+                  )
+              )
+          ],
+          tags=self.default_tags,
+          opts=ResourceOptions(provider=self.target_provider, parent=self)
+      )
+
     
     def _export_outputs(self):
         """Export important stack outputs"""
