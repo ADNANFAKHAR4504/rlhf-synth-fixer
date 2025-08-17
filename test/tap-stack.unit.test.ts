@@ -178,9 +178,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.DeletionProtection).toBe(true);
     });
 
-    test('SecureRDSInstance should have performance insights enabled', () => {
+    test('SecureRDSInstance should have performance insights disabled', () => {
       const rds = template.Resources.SecureRDSInstance;
-      expect(rds.Properties.EnablePerformanceInsights).toBe(true);
+      expect(rds.Properties.EnablePerformanceInsights).toBe(false);
       expect(rds.Properties.MonitoringInterval).toBe(60);
     });
 

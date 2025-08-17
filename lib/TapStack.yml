@@ -576,7 +576,7 @@
                 "MultiAZ": false,
                 "PubliclyAccessible": false,
                 "DeletionProtection": true,
-                "EnablePerformanceInsights": true,
+                "EnablePerformanceInsights": false,
                 "MonitoringInterval": 60,
                 "MonitoringRoleArn": {
                     "Fn::GetAtt": [
