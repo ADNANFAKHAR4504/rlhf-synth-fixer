@@ -8,21 +8,10 @@ Parameters:
     AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment name for resource naming'
 
-  DBUsername:
+  DBSecretName:
     Type: String
-    Default: 'admin'
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-    Description: 'Database administrator username'
-
-  DBPassword:
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    Description: 'Database administrator password (8-41 characters)'
+    Default: 'database-secret'
+    Description: 'Name of the Secrets Manager secret containing database credentials'
 
   AlertEmail:
     Type: String
@@ -36,6 +25,21 @@ Parameters:
     Description: 'CIDR block for VPC'
 
 Resources:
+  # ===========================================
+  # Secrets Manager for Database Credentials
+  # ===========================================
+
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Environment}-${DBSecretName}'
+      Description: 'Database administrator credentials'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
   # ===========================================
   # KMS Keys for Encryption
   # ===========================================
@@ -61,7 +65,7 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
             Resource: '*'
-      KeyRotationStatus: true
+      EnableKeyRotation: true
 
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -91,7 +95,7 @@ Resources:
               - kms:GenerateDataKey
               - kms:CreateGrant
             Resource: '*'
-      KeyRotationStatus: true
+      EnableKeyRotation: true
 
   RDSKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -126,15 +130,9 @@ Resources:
             Status: Enabled
             ExpirationInDays: 90
             NoncurrentVersionExpirationInDays: 30
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
 
   ApplicationBucket:
     Type: AWS::S3::Bucket
-    DependsOn: LoggingBucket
     Properties:
       BucketName: !Sub '${Environment}-application-data-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
@@ -153,11 +151,6 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
         LogFilePrefix: 'application-bucket-logs/'
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
 
   # S3 Bucket Policies
   LoggingBucketPolicy:
@@ -281,6 +274,7 @@ Resources:
   Database:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-secure-database'
       DBInstanceClass: 'db.t3.micro'
@@ -290,8 +284,8 @@ Resources:
       StorageType: 'gp2'
       StorageEncrypted: true
       KmsKeyId: !Ref RDSKMSKey
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:${Environment}-${DBSecretName}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${Environment}-${DBSecretName}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DBSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -408,14 +402,14 @@ Resources:
       Endpoint: !Ref AlertEmail
 
   S3AccessLogGroup:
-    Type: AWS::CloudWatch::LogGroup
+    Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/s3/${Environment}-access-logs'
       RetentionInDays: 30
       KmsKeyId: !GetAtt S3KMSKey.Arn
 
   RDSLogGroup:
-    Type: AWS::CloudWatch::LogGroup
+    Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/rds/instance/${Environment}-secure-database/error'
       RetentionInDays: 30
@@ -496,7 +490,7 @@ Resources:
 
   # CloudTrail for API Monitoring
   CloudTrailLogGroup:
-    Type: AWS::CloudWatch::LogGroup
+    Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${Environment}-security-trail'
       RetentionInDays: 90
@@ -510,6 +504,7 @@ Resources:
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
+      IsLogging: true
       KMSKeyId: !Ref S3KMSKey
       CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup}:*'
       CloudWatchLogsRoleArn: !GetAtt CloudWatchRole.Arn
@@ -520,9 +515,6 @@ Resources:
             - Type: AWS::S3::Object
               Values:
                 - !Sub '${ApplicationBucket}/*'
-            - Type: AWS::S3::Bucket
-              Values:
-                - !Ref ApplicationBucket
 
   # Metric Filter for Failed Login Attempts
   FailedLoginMetricFilter:

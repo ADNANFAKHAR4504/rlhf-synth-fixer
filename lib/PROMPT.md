@@ -1,4 +1,6 @@
-You are an AWS Cloud Architect specializing in secure infrastructure design with CloudFormation. Your task is to create a YAML-based CloudFormation template that provisions a secure foundation on AWS, following best practices for privacy, encryption, IAM, and monitoring.
+You are an AWS Cloud Architect specializing in secure infrastructure design with CloudFormation.
+Your task is to create a YAML-based CloudFormation template that provisions a secure foundation on AWS,
+following best practices for privacy, encryption, IAM, and monitoring.
 
 The solution must satisfy these requirements:
 
