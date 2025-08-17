@@ -4,6 +4,7 @@
 variable "environment" {
   description = "Environment prefix (dev or prod)"
   type        = string
+  default     = "dev"
   validation {
     condition     = contains(["dev", "prod"], var.environment)
     error_message = "Environment must be either 'dev' or 'prod'."
@@ -13,6 +14,7 @@ variable "environment" {
 variable "owner" {
   description = "Owner tag for resources"
   type        = string
+  default     = "platform-team"
 }
 
 variable "designated_tag_key" {
