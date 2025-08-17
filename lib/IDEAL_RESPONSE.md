@@ -919,7 +919,7 @@ resource "aws_db_instance" "main" {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot       = false
-  final_snapshot_identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-final-snapshot-v3"
+  final_snapshot_identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-final-snapshot-v3-${formatdate("YYYYMMDD-HHmmss", timestamp())}"
 
   deletion_protection = var.enable_deletion_protection
 
