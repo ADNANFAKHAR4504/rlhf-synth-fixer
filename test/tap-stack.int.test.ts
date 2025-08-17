@@ -44,7 +44,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(vpc.Vpcs).toHaveLength(1);
       expect(vpc.Vpcs![0].State).toBe('available');
 
-      // DNS attributes are returned by DescribeVpcAttribute (not DescribeVpcs)
+      // DNS attributes (via DescribeVpcAttribute)
       const [dnsHostnames, dnsSupport] = await Promise.all([
         ec2.describeVpcAttribute({ VpcId: outputs.VpcId, Attribute: 'enableDnsHostnames' }).promise(),
         ec2.describeVpcAttribute({ VpcId: outputs.VpcId, Attribute: 'enableDnsSupport' }).promise(),
@@ -64,14 +64,11 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const azs = subnets.Subnets!.map((s) => s.AvailabilityZone!);
       expect(new Set(azs).size).toBe(2);
 
-      // MapPublicIpOnLaunch is via DescribeSubnetAttribute
-      const attrs = await Promise.all(
-        publicSubnetIds.map((id) =>
-          ec2.describeSubnetAttribute({ SubnetId: id, Attribute: 'mapPublicIpOnLaunch' }).promise()
-        )
-      );
-      attrs.forEach((a) => expect(a.MapPublicIpOnLaunch?.Value).toBe(true));
-      subnets.Subnets!.forEach((s) => expect(s.State).toBe('available'));
+      // Check MapPublicIpOnLaunch directly from DescribeSubnets payload
+      subnets.Subnets!.forEach((s) => {
+        expect(s.State).toBe('available');
+        expect(s.MapPublicIpOnLaunch).toBe(true);
+      });
     });
 
     test('Private subnets should exist in different AZs and not auto-assign public IPs', async () => {
@@ -85,13 +82,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const azs = subnets.Subnets!.map((s) => s.AvailabilityZone!);
       expect(new Set(azs).size).toBe(2);
 
-      const attrs = await Promise.all(
-        privateSubnetIds.map((id) =>
-          ec2.describeSubnetAttribute({ SubnetId: id, Attribute: 'mapPublicIpOnLaunch' }).promise()
-        )
-      );
-      attrs.forEach((a) => expect(a.MapPublicIpOnLaunch?.Value).toBe(false));
-      subnets.Subnets!.forEach((s) => expect(s.State).toBe('available'));
+      subnets.Subnets!.forEach((s) => {
+        expect(s.State).toBe('available');
+        expect(s.MapPublicIpOnLaunch).toBe(false);
+      });
     });
   });
 
@@ -106,7 +100,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const instance = instances.Reservations![0].Instances![0];
       expect(instance.State!.Name).toBe('running');
 
-      // If your pipeline omits a KeyPair, public IP may still be present via subnet auto-assign
+      // Public IP expected in public subnet
       expect(instance.PublicIpAddress).toBeDefined();
 
       const publicSubnetIds: string[] = outputs.PublicSubnetIds.split(',');
@@ -237,7 +231,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(trail.IncludeGlobalServiceEvents).toBe(true);
       expect(trail.IsMultiRegionTrail).toBe(false);
       expect(trail.LogFileValidationEnabled).toBe(true);
-      expect(trail.KmsKeyId || trail.KMSKeyId).toBeDefined(); // API uses KmsKeyId or KMSKeyId casing in different SDKs
+      expect(trail.KmsKeyId).toBeDefined(); // use typed property
 
       const status = await cloudtrail.getTrailStatus({ Name: outputs.CloudTrailName }).promise();
       expect(status.IsLogging).toBe(true);
@@ -260,7 +254,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const topicAttributes = await sns.getTopicAttributes({ TopicArn: outputs.AlertTopicArn }).promise();
       expect(topicAttributes.Attributes!.KmsMasterKeyId).toBeDefined();
 
-      // Only enforce presence of a subscription if explicitly requested
       if (process.env.REQUIRE_SNS_SUBSCRIPTION === 'true') {
         const subs = await sns.listSubscriptionsByTopic({ TopicArn: outputs.AlertTopicArn }).promise();
         expect(subs.Subscriptions!.some((s) => s.Protocol === 'email')).toBe(true);
