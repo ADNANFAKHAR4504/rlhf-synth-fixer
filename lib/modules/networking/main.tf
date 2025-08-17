@@ -84,8 +84,9 @@ resource "aws_eip" "nat" {
   })
 }
 
+# NAT Gateways for private subnets (conditional based on environment)
 resource "aws_nat_gateway" "main" {
-  count = var.az_count
+  count = var.environment == "production" ? length(var.availability_zones) : 1
 
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
@@ -94,6 +95,8 @@ resource "aws_nat_gateway" "main" {
     Name = "${var.name_prefix}-nat-gw-${count.index + 1}"
     Type = "networking"
   })
+
+  depends_on = [aws_internet_gateway.main]
 }
 
 # Route Tables
@@ -111,9 +114,9 @@ resource "aws_route_table" "public" {
   })
 }
 
+# Private Route Tables
 resource "aws_route_table" "private" {
-  count = var.az_count
-
+  count  = var.environment == "production" ? length(var.availability_zones) : 1
   vpc_id = aws_vpc.main.id
 
   route {
@@ -135,8 +138,9 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+# Private Subnet Route Table Associations
 resource "aws_route_table_association" "private" {
-  count = var.az_count
+  count = var.environment == "production" ? length(var.availability_zones) : 1
 
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id

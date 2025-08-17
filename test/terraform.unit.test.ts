@@ -386,4 +386,82 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
   });
 
+  describe("Security Configuration Validation", () => {
+    let databaseMain: string;
+
+    beforeAll(() => {
+      databaseMain = fs.readFileSync(path.resolve(__dirname, "../lib/modules/database/main.tf"), "utf-8");
+    });
+
+    test("should have SSL/TLS configuration for database", () => {
+      expect(databaseMain).toMatch(/resource "aws_db_instance" "main"/);
+      expect(databaseMain).toMatch(/storage_encrypted\s*=\s*true/);
+      expect(databaseMain).toMatch(/ca_cert_identifier\s*=\s*"rds-ca-rsa2048-g1"/);
+    });
+
+    test("should have KMS encryption enabled for database", () => {
+      expect(databaseMain).toMatch(/kms_key_id\s*=\s*aws_kms_key\.database\.arn/);
+    });
+
+    test("should have secure password generation", () => {
+      expect(databaseMain).toMatch(/password\s*=\s*random_password\.database\.result/);
+      expect(databaseMain).toMatch(/resource "random_password" "database"/);
+    });
+
+    test("should have SSM parameter store for password storage", () => {
+      expect(databaseMain).toMatch(/resource "aws_ssm_parameter" "database_password"/);
+      expect(databaseMain).toMatch(/type\s*=\s*"SecureString"/);
+    });
+
+    test("should have scoped IAM permissions", () => {
+      expect(databaseMain).toMatch(/monitoring_role_arn\s*=\s*var\.environment == "production" \? var\.monitoring_role_arn : null/);
+    });
+
+    test("should have deletion protection for production", () => {
+      expect(databaseMain).toMatch(/deletion_protection\s*=\s*var\.environment == "production"/);
+    });
+
+    test("should have enhanced monitoring for production", () => {
+      expect(databaseMain).toMatch(/monitoring_interval\s*=\s*var\.environment == "production" \? 60 : 0/);
+    });
+
+    test("should have proper security group rules", () => {
+      expect(databaseMain).toMatch(/resource "aws_security_group" "rds"/);
+      expect(databaseMain).toMatch(/ingress\s*{/);
+      expect(databaseMain).toMatch(/egress\s*{/);
+    });
+  });
+
+  describe("Environment-Specific Logic", () => {
+    let databaseMain: string;
+
+    beforeAll(() => {
+      databaseMain = fs.readFileSync(path.resolve(__dirname, "../lib/modules/database/main.tf"), "utf-8");
+    });
+
+    test("should have different backup retention for staging vs production", () => {
+      expect(databaseMain).toMatch(/backup_retention_period\s*=\s*var\.environment == "production" \? 30 : 7/);
+    });
+
+    test("should have different monitoring intervals for staging vs production", () => {
+      expect(databaseMain).toMatch(/monitoring_interval\s*=\s*var\.environment == "production" \? 60 : 0/);
+    });
+
+    test("should have read replicas only for production", () => {
+      expect(databaseMain).toMatch(/count\s*=\s*var\.environment == "production" \? 1 : 0/);
+    });
+
+    test("should have multi-AZ only for production", () => {
+      expect(databaseMain).toMatch(/multi_az\s*=\s*var\.environment == "production"/);
+    });
+
+    test("should have different deletion protection for staging vs production", () => {
+      expect(databaseMain).toMatch(/deletion_protection\s*=\s*var\.environment == "production"/);
+    });
+
+    test("should have different final snapshot settings for staging vs production", () => {
+      expect(databaseMain).toMatch(/skip_final_snapshot\s*=\s*var\.environment != "production"/);
+    });
+  });
+
 });

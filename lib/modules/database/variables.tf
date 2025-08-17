@@ -30,6 +30,16 @@ variable "db_instance_class" {
   default     = "db.t3.micro"
 }
 
+variable "db_engine_version" {
+  description = "MySQL engine version"
+  type        = string
+  default     = "8.0"
+  validation {
+    condition     = contains(["8.0", "8.0.35", "8.0.34", "8.0.33", "8.0.32"], var.db_engine_version)
+    error_message = "Engine version must be a valid MySQL 8.0 version."
+  }
+}
+
 variable "allocated_storage" {
   description = "Allocated storage for RDS instance in GB"
   type        = number

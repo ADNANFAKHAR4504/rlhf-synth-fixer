@@ -132,28 +132,29 @@ resource "aws_launch_template" "main" {
   image_id      = var.ami_id
   instance_type = var.instance_type
 
+  user_data = base64encode(data.template_file.user_data.rendered)
+
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
   iam_instance_profile {
     name = var.instance_profile_name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    environment = var.environment
-    project     = var.project_name
-  }))
+  monitoring {
+    enabled = true
+  }
 
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.common_tags, {
       Name = "${var.name_prefix}-instance"
-      Type = "compute-instance"
+      Type = "compute"
     })
   }
 
   tags = merge(var.common_tags, {
     Name = "${var.name_prefix}-launch-template"
-    Type = "launch-template"
+    Type = "compute"
   })
 }
 
@@ -264,4 +265,75 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
     Name = "${var.name_prefix}-low-cpu-alarm"
     Type = "cloudwatch-alarm"
   })
+}
+
+# User data script for EC2 instances
+data "template_file" "user_data" {
+  template = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              
+              # Install SSM Agent
+              yum install -y amazon-ssm-agent
+              systemctl enable amazon-ssm-agent
+              systemctl start amazon-ssm-agent
+              
+              # Install CloudWatch agent
+              yum install -y amazon-cloudwatch-agent
+              
+              # Create CloudWatch config
+              cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWCONFIG'
+              {
+                "agent": {
+                  "metrics_collection_interval": 60,
+                  "run_as_user": "cwagent"
+                },
+                "metrics": {
+                  "metrics_collected": {
+                    "cpu": {
+                      "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
+                      "metrics_collection_interval": 60,
+                      "totalcpu": false
+                    },
+                    "disk": {
+                      "measurement": ["used_percent"],
+                      "metrics_collection_interval": 60,
+                      "resources": ["*"]
+                    },
+                    "diskio": {
+                      "measurement": ["io_time"],
+                      "metrics_collection_interval": 60,
+                      "resources": ["*"]
+                    },
+                    "mem": {
+                      "measurement": ["mem_used_percent"],
+                      "metrics_collection_interval": 60
+                    },
+                    "netstat": {
+                      "measurement": ["tcp_established", "tcp_time_wait"],
+                      "metrics_collection_interval": 60
+                    },
+                    "swap": {
+                      "measurement": ["swap_used_percent"],
+                      "metrics_collection_interval": 60
+                    }
+                  }
+                }
+              }
+              CWCONFIG
+              
+              # Start CloudWatch agent
+              /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+              systemctl enable amazon-cloudwatch-agent
+              systemctl start amazon-cloudwatch-agent
+              
+              # Create a simple web page
+              echo "<h1>Hello from ${var.name_prefix}!</h1>" > /var/www/html/index.html
+              echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+              echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+              echo "<p>Environment: ${var.environment}</p>" >> /var/www/html/index.html
+              EOF
 }

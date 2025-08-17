@@ -3,6 +3,22 @@ variable "name_prefix" {
   type        = string
 }
 
+variable "common_tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default     = {}
+}
+
+variable "environment" {
+  description = "Environment name (e.g., staging, production)"
+  type        = string
+}
+
+variable "availability_zones" {
+  description = "List of availability zones"
+  type        = list(string)
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
@@ -13,9 +29,4 @@ variable "az_count" {
   description = "Number of availability zones"
   type        = number
   default     = 3
-}
-
-variable "common_tags" {
-  description = "Common tags for all resources"
-  type        = map(string)
 }

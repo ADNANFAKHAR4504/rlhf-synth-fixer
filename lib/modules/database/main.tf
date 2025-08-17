@@ -82,7 +82,7 @@ resource "aws_ssm_parameter" "database_password" {
 
 # RDS Parameter Group with SSL/TLS configuration
 resource "aws_db_parameter_group" "main" {
-  family = "mysql8.0"
+  family = "mysql${replace(var.db_engine_version, ".", "")}"
   name   = "${var.name_prefix}-db-params"
 
   parameter {
@@ -150,7 +150,7 @@ resource "aws_db_instance" "main" {
 
   # Database configuration
   engine         = "mysql"
-  engine_version = "8.0"
+  engine_version = var.db_engine_version
   instance_class = var.db_instance_class
 
   # Storage configuration

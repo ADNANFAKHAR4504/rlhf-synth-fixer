@@ -55,6 +55,12 @@ variable "db_instance_class" {
   default     = "db.t3.micro"
 }
 
+variable "db_engine_version" {
+  description = "MySQL engine version"
+  type        = string
+  default     = "8.0"
+}
+
 variable "allocated_storage" {
   description = "Allocated storage for RDS instance in GB"
   type        = number
@@ -70,6 +76,14 @@ variable "max_allocated_storage" {
 ########################
 # Data Sources
 ########################
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+data "aws_caller_identity" "current" {}
+
+data "aws_region" "current" {}
+
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
@@ -105,12 +119,13 @@ locals {
 # Networking Module
 ########################
 module "networking" {
-  source = "./modules/networking"
-
-  name_prefix = local.name_prefix
-  vpc_cidr    = "10.0.0.0/16"
-  az_count    = 3
-  common_tags = local.common_tags
+  source             = "./modules/networking"
+  name_prefix        = local.name_prefix
+  common_tags        = local.common_tags
+  environment        = var.environment
+  availability_zones = data.aws_availability_zones.available.names
+  vpc_cidr           = "10.0.0.0/16"
+  az_count           = 3
 }
 
 ########################
@@ -156,6 +171,7 @@ module "database" {
   vpc_cidr                  = module.networking.vpc_cidr
   db_subnet_group_name      = module.networking.db_subnet_group_name
   db_instance_class         = var.db_instance_class
+  db_engine_version         = var.db_engine_version
   allocated_storage         = var.allocated_storage
   max_allocated_storage     = var.max_allocated_storage
   database_username         = "admin"
