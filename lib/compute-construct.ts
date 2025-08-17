@@ -34,19 +34,19 @@ export class ComputeConstruct extends Construct {
               fromPort: 80,
               toPort: 80,
               protocol: 'tcp',
-              cidr_blocks: ['0.0.0.0/0'],
+              cidrBlocks: ['0.0.0.0/0'],
             },
             {
               fromPort: 443,
               toPort: 443,
               protocol: 'tcp',
-              cidr_blocks: ['0.0.0.0/0'],
+              cidrBlocks: ['0.0.0.0/0'],
             },
             {
               fromPort: 22,
               toPort: 22,
               protocol: 'tcp',
-              cidr_blocks: [vpc.cidrBlock],
+              cidrBlocks: [vpc.cidrBlock],
             },
           ],
           egress: [
@@ -54,7 +54,7 @@ export class ComputeConstruct extends Construct {
               fromPort: 0,
               toPort: 0,
               protocol: '-1',
-              cidr_blocks: ['0.0.0.0/0'],
+              cidrBlocks: ['0.0.0.0/0'],
             },
           ],
           tags: {
@@ -91,7 +91,7 @@ export class ComputeConstruct extends Construct {
             {
               fromPort: 0,
               protocol: 'tcp',
-              cidr_blocks: [vpc.cidrBlock],
+              cidrBlocks: [vpc.cidrBlock],
             },
           ],
           egress: [
@@ -99,7 +99,7 @@ export class ComputeConstruct extends Construct {
               fromPort: 0,
               toPort: 0,
               protocol: '-1',
-              cidr_blocks: ['0.0.0.0/0'],
+              cidrBlocks: ['0.0.0.0/0'],
             },
           ],
           tags: {
