@@ -1,0 +1,891 @@
+# lib/TapStack.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Secure, compliance-oriented AWS CloudFormation stack with VPC (2 public + 2 private),
+  app S3 (versioning + SSE-KMS), CloudTrail + S3 log bucket (delete-protected),
+  AWS Config (managed rules), Security Hub (FSBP standard), KMS key with tight policy,
+  SSM Parameter Store (SecureString), Lambda (least-priv), VPC Flow Logs, and
+  CloudWatch Alarms for unauthorized access. Naming: <resource-type>-<project-name>-<environment>.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Project name (prefer lowercase for S3 bucket names)
+  Environment:
+    Type: String
+    Description: Environment (e.g., dev|stage|prod)
+    AllowedPattern: "^[a-z0-9-]+$"
+  CostCenter:
+    Type: String
+    Default: "cc-0000"
+    Description: Cost center tag
+  Owner:
+    Type: String
+    Default: "platform-team"
+    Description: Owner tag
+
+  VpcCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+    Description: VPC CIDR
+  PublicSubnetCidrs:
+    Type: CommaDelimitedList
+    Default: "10.0.0.0/24,10.0.1.0/24"
+    Description: Two public subnets (comma-separated)
+  PrivateSubnetCidrs:
+    Type: CommaDelimitedList
+    Default: "10.0.100.0/24,10.0.101.0/24"
+    Description: Two private subnets (comma-separated)
+  AllowedIngressCidr:
+    Type: String
+    Default: "0.0.0.0/0"
+    Description: CIDR allowed for HTTPS ingress (tighten for production)
+
+  KmsKeyAdminArn:
+    Type: String
+    Description: ARN of the principal (role/user) administering the KMS key
+  KmsKeyUserArns:
+    Type: CommaDelimitedList
+    Default: ""
+    Description: Optional ARNs of roles/users allowed to use (encrypt/decrypt) the KMS key
+
+  DbPassword:
+    Type: String
+    NoEcho: true
+    Description: Database password (stored to SSM SecureString)
+
+Metadata:
+  cfn_nag:
+    rules_to_suppress:
+      - id: W58
+        reason: Lambda role includes logs permissions with resource scoping
+      - id: W89
+        reason: Example Lambda not placed in VPC by design for simplicity
+      - id: W92
+        reason: Example Lambda has reasonable memory/time defaults
+
+Conditions:
+  HasKmsKeyUsers: !Not [!Equals [!Join ["", !Ref KmsKeyUserArns], ""]]
+
+Mappings: {}
+
+Resources:
+  ############################################
+  # Tags helper (applied where supported)
+  ############################################
+  CommonTags:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${ProjectName}/${Environment}/stack/common-tags"
+      Type: String
+      Value: !Sub |
+        Name=${ProjectName}-${Environment}
+        Project=${ProjectName}
+        Environment=${Environment}
+        CostCenter=${CostCenter}
+        Owner=${Owner}
+
+  ############################################
+  # KMS Key (for App S3 + SSM SecureString)
+  ############################################
+  AppKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "kms-${ProjectName}-${Environment} application key"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          # Full admin for the specified admin principal
+          - Sid: AllowKeyAdministration
+            Effect: Allow
+            Principal:
+              AWS: !Ref KmsKeyAdminArn
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:TagResource
+              - kms:UntagResource
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: "*"
+          # Allow optional user principals to use (encrypt/decrypt) the key
+          - Sid: AllowUseOfKeyToListedUsers
+            Effect: Allow
+            Principal:
+              AWS: !If [HasKmsKeyUsers, !Ref KmsKeyUserArns, !Ref "AWS::NoValue"]
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub "ssm.${AWS::Region}.amazonaws.com"
+          # Allow AWS SSM Parameter Store to use key on behalf of the account
+          - Sid: AllowSSMServiceUse
+            Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "kms-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Owner
+          Value: !Ref Owner
+
+  AppKmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/kms-${ProjectName}-${Environment}-app"
+      TargetKeyId: !Ref AppKmsKey
+
+  ############################################
+  # VPC (2 public + 2 private), IGW, NAT, Routes
+  ############################################
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "vpc-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Owner
+          Value: !Ref Owner
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "igw-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Ref PublicSubnetCidrs]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "subnet-public-a-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Ref PublicSubnetCidrs]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "subnet-public-b-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Ref PrivateSubnetCidrs]
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "subnet-private-a-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Ref PrivateSubnetCidrs]
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "subnet-private-b-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "rt-public-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "eip-nat-${ProjectName}-${Environment}"
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub "nat-${ProjectName}-${Environment}"
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "rt-private-a-${ProjectName}-${Environment}"
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "rt-private-b-${ProjectName}-${Environment}"
+
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
+
+  ############################################
+  # Security Group (restricted)
+  ############################################
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "sg-${ProjectName}-${Environment} web ingress"
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref AllowedIngressCidr
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: !Sub "sg-${ProjectName}-${Environment}-web"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  ############################################
+  # S3 Buckets (App + CloudTrail + Config)
+  ############################################
+  AppBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "s3-${ProjectName}-${Environment}-${AWS::AccountId}-${AWS::Region}-app"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref AppKmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "s3-${ProjectName}-${Environment}-app"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  AppBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AppBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt AppBucket.Arn
+              - !Sub "${AppBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "s3-${ProjectName}-${Environment}-${AWS::AccountId}-${AWS::Region}-cloudtrail"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256  # Simpler for CloudTrail delivery; policy below enforces required ACL header
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "s3-${ProjectName}-${Environment}-cloudtrail"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # Allow CloudTrail to write logs with the required canned ACL
+          - Sid: AllowCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub "${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: "bucket-owner-full-control"
+          - Sid: AllowCloudTrailBucketAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          # Deny deletion of any CloudTrail logs
+          - Sid: DenyDeleteCloudTrailLogs
+            Effect: Deny
+            Principal: "*"
+            Action:
+              - s3:DeleteObject
+              - s3:DeleteObjectVersion
+            Resource: !Sub "${CloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+          # Enforce TLS
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt CloudTrailBucket.Arn
+              - !Sub "${CloudTrailBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "s3-${ProjectName}-${Environment}-${AWS::AccountId}-${AWS::Region}-config"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub "s3-${ProjectName}-${Environment}-config"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: EnforceTLS
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ConfigBucket.Arn
+              - !Sub "${ConfigBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  ############################################
+  # CloudTrail (to S3 + CloudWatch Logs)
+  ############################################
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/cloudtrail/${ProjectName}/${Environment}"
+      RetentionInDays: 90
+
+  CloudTrailLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "iamrole-${ProjectName}-${Environment}-cloudtrail-cwlogs"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "cloudtrail-cwlogs-${ProjectName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CloudTrailLogGroup.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub "iamrole-${ProjectName}-${Environment}-cloudtrail-cwlogs"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  Trail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub "cloudtrail-${ProjectName}-${Environment}"
+      S3BucketName: !Ref CloudTrailBucket
+      IsLogging: true
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+      Tags:
+        - Key: Name
+          Value: !Sub "cloudtrail-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  ############################################
+  # VPC Flow Logs -> CloudWatch Logs
+  ############################################
+  VpcFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vpc/flowlogs/${ProjectName}/${Environment}"
+      RetentionInDays: 90
+
+  VpcFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "iamrole-${ProjectName}-${Environment}-vpc-flow-logs"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: vpc-flow-logs.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "vpc-flow-logs-${ProjectName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+              # Best effort scope to log group ARN
+                Resource: !GetAtt VpcFlowLogGroup.Arn
+
+  VpcFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VpcFlowLogGroup
+      DeliverLogsPermissionArn: !GetAtt VpcFlowLogsRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub "flowlog-${ProjectName}-${Environment}"
+
+  ############################################
+  # AWS Config (recorder + delivery + rules)
+  ############################################
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "iamrole-${ProjectName}-${Environment}-config"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: config.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      Tags:
+        - Key: Name
+          Value: !Sub "iamrole-${ProjectName}-${Environment}-config"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub "configrecorder-${ProjectName}-${Environment}"
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub "configchannel-${ProjectName}-${Environment}"
+      S3BucketName: !Ref ConfigBucket
+      ConfigSnapshotDeliveryProperties: {}  # must be an object if present
+
+  # Managed rules for security posture
+  ConfigRuleCloudTrailEnabled:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub "cfg-cloudtrail-enabled-${ProjectName}-${Environment}"
+      Source:
+        Owner: AWS
+        SourceIdentifier: CLOUD_TRAIL_ENABLED
+
+  ConfigRuleS3SSE:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub "cfg-s3-sse-${ProjectName}-${Environment}"
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+
+  ConfigRuleIamNoAdminStatements:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub "cfg-iam-no-admin-${ProjectName}-${Environment}"
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS
+
+  ConfigRuleDefaultSgClosed:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub "cfg-default-sg-closed-${ProjectName}-${Environment}"
+      Source:
+        Owner: AWS
+        SourceIdentifier: VPC_DEFAULT_SECURITY_GROUP_CLOSED
+
+  ############################################
+  # Security Hub (Hub + FSBP Standard)
+  ############################################
+  SecurityHubHub:
+    Type: AWS::SecurityHub::Hub
+    Properties:
+      Tags:
+        Name: !Sub "securityhub-${ProjectName}-${Environment}"
+        Project: !Ref ProjectName
+        Environment: !Ref Environment
+
+  SecurityHubFSBP:
+    Type: AWS::SecurityHub::Standard
+    Properties:
+      StandardsArn: !Sub "arn:${AWS::Partition}:securityhub:${AWS::Region}::standards/aws-foundational-security-best-practices/v/1.0.0"
+
+  ############################################
+  # SSM Parameter (SecureString encrypted by KMS)
+  ############################################
+  AppDbPasswordParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/${ProjectName}/${Environment}/DB_PASSWORD"
+      Type: SecureString
+      KeyId: !Ref AppKmsKey
+      Tier: Standard
+      Value: !Ref DbPassword
+      Description: !Sub "Secure DB password for ${ProjectName}-${Environment}"
+
+  ############################################
+  # Lambda (example) + least-priv role + logging
+  ############################################
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "iamrole-${ProjectName}-${Environment}-lambda"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub "lambda-logs-${ProjectName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*:*"
+        - PolicyName: !Sub "lambda-ssm-${ProjectName}-${Environment}"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ReadSpecificParam
+                Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParameterHistory
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ProjectName}/${Environment}/DB_PASSWORD"
+              - Sid: DecryptWithAppKey
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !GetAtt AppKmsKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub "iamrole-${ProjectName}-${Environment}-lambda"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  AppLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/func-${ProjectName}-${Environment}"
+      RetentionInDays: 90
+
+  AppLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "func-${ProjectName}-${Environment}"
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.11
+      Handler: index.handler
+      Timeout: 10
+      MemorySize: 256
+      Code:
+        ZipFile: |
+          import os, json, boto3
+          def handler(event, context):
+              ssm = boto3.client("ssm")
+              p = ssm.get_parameter(
+                  Name=f"/{os.environ.get('PROJECT')}/{os.environ.get('ENV')}/DB_PASSWORD",
+                  WithDecryption=True
+              )
+              return {
+                  "statusCode": 200,
+                  "body": json.dumps({"ok": True, "len": len(p['Parameter']['Value'])})
+              }
+      Environment:
+        Variables:
+          PROJECT: !Ref ProjectName
+          ENV: !Ref Environment
+      Tags:
+        - Key: Name
+          Value: !Sub "lambda-${ProjectName}-${Environment}"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  ############################################
+  # CloudWatch Alarm for Unauthorized Access
+  ############################################
+  UnauthorizedMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: >-
+        { ($.errorCode = "UnauthorizedOperation") ||
+          ($.errorCode = "AccessDenied*") }
+      MetricTransformations:
+        - MetricNamespace: !Sub "Security/${ProjectName}/${Environment}"
+          MetricName: "UnauthorizedAccessCount"
+          MetricValue: "1"
+
+  UnauthorizedAccessAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "alarm-unauth-${ProjectName}-${Environment}"
+      Namespace: !Sub "Security/${ProjectName}/${Environment}"
+      MetricName: "UnauthorizedAccessCount"
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmDescription: "Triggers on any unauthorized access attempts found in CloudTrail"
+      ActionsEnabled: true
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcId"
+
+  PublicSubnets:
+    Description: Public subnet IDs
+    Value: !Join [",", [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+
+  PrivateSubnets:
+    Description: Private subnet IDs
+    Value: !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
+
+  AppBucketName:
+    Description: App S3 bucket (versioned, SSE-KMS)
+    Value: !Ref AppBucket
+
+  CloudTrailBucketName:
+    Description: CloudTrail S3 bucket (delete-protected)
+    Value: !Ref CloudTrailBucket
+
+  KmsKeyArn:
+    Description: App KMS Key ARN
+    Value: !GetAtt AppKmsKey.Arn
+
+  CloudTrailArn:
+    Description: CloudTrail trail ARN
+    Value: !Sub "arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Trail}"
+
+  SecurityHubStatus:
+    Description: Security Hub enabled (Hub + FSBP standard)
+    Value: Enabled
+
+  SsmParamDbPassword:
+    Description: SSM SecureString name for DB password
+    Value: !Ref AppDbPasswordParam
