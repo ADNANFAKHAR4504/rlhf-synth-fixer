@@ -79,13 +79,13 @@ export class TapStack extends TerraformStack {
 
     // ? Add your stack instantiations here
     // Configuration parameters
-    // const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
-    //   this,
-    //   'db-password-secret',
-    //   {
-    //     secretId: 'my-db-password',
-    //   }
-    // );
+    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
+      this,
+      'db-password-secret',
+      {
+        secretId: 'my-db-password',
+      }
+    );
 
     const config = {
       vpcCidr: '10.0.0.0/16',
@@ -93,8 +93,7 @@ export class TapStack extends TerraformStack {
       instanceType: 'm5.large', // Meets minimum requirement
       rdsInstanceClass: 'db.t3.medium', // Can be upgraded as needed
       dbUsername: 'admin',
-      // dbPassword: dbPasswordSecret.secretString,
-      dbPassword: 'ChangeMe123', // Replace with actual secret management in production
+      dbPassword: dbPasswordSecret.secretString,
       dbName: 'corpdb',
     };
 

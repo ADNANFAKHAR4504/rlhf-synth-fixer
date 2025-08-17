@@ -388,14 +388,11 @@ export class Ec2Module extends Construct {
         },
 
         // User data for basic hardening
-        userData: Buffer.from(
-          `#!/bin/bash
+        userData: `#!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
-          # Configure CloudWatch agent
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-linux
-        `
-        ).toString('base64'),
+        `,
 
         tags: {
           Name: `corp-${id}-instance-${index + 1}`,
@@ -491,6 +488,11 @@ export class S3Module extends Construct {
         {
           id: 'glacier-transition',
           status: 'Enabled',
+          filter: [
+            {
+              prefix: '', // empty string applies to all objects
+            },
+          ],
           transition: [
             {
               days: 30,
@@ -621,7 +623,7 @@ export class CloudTrailModule extends Construct {
 
       // Include global service events
       includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
+      // isMultiRegionTrail: true,
 
       // Event selectors for data events
       eventSelector: [
