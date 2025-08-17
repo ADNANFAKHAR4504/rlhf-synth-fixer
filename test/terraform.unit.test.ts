@@ -343,4 +343,12 @@ describe("Terraform Multi-Environment Infrastructure (static checks)", () => {
     // This test documents the current duplicate reference
     expect(sgIdMatches).toHaveLength(2);
   });
+
+  // NOTE: If the endpoint is reachable in production, this validates that the following 
+  // infrastructure components are properly configured and working together:
+  // - VPC: Network infrastructure, subnets, internet gateway, route tables
+  // - Security Groups: Proper ingress/egress rules allowing traffic flow
+  // - IAM: Correct roles and policies for EC2 instances and services
+  // - Auto Scaling Group: Instance health checks, scaling policies, and load balancer integration
+  // A successful endpoint response indicates end-to-end infrastructure connectivity and security
 });

@@ -8,8 +8,8 @@ resource "aws_security_group" "web" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTP from anywhere"
+    security_groups = [aws_security_group.alb.id]
+    description = "HTTP from ALB"
   }
 
   # HTTPS
@@ -17,8 +17,8 @@ resource "aws_security_group" "web" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTPS from anywhere"
+    security_groups = [aws_security_group.alb.id]
+    description = "HTTPS from ALB"
   }
 
   # SSH from VPC only
