@@ -22,5 +22,11 @@
     "IAM",
     "CloudWatch",
     "SNS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akorede28",
+  "dockerS3Location": ""
 }
