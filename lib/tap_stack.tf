@@ -169,7 +169,7 @@ resource "random_string" "suffix" {
 
 locals {
   # Use current timestamp for naming based on provided time
-  timestamp   = "014323"  # Based on 01:43:23 UTC
+  timestamp   = "015246"  # Based on 01:52:46 UTC
   name_prefix = "${var.project_name}-${var.environment}-${local.timestamp}-${random_string.suffix.result}"
   
   common_tags = {
@@ -934,37 +934,6 @@ resource "aws_launch_template" "app" {
       kms_key_id  = aws_kms_key.ebs_key.arn
     }
   }
-
-    # Enhanced user data script with inline content (no template file needed)
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    
-    # Start and enable httpd
-    systemctl start httpd
-    systemctl enable httpd
-    
-    # Create health check endpoint
-    echo "OK" > /var/www/html/health
-    
-    # Create simple index page
-    cat > /var/www/html/index.html <<HTML
-    <!DOCTYPE html>
-    <html>
-    <head><title>TAP App - ${local.timestamp}</title></head>
-    <body>
-        <h1>TAP Application</h1>
-        <p>Instance launched at: ${local.timestamp}</p>
-        <p>Environment: ${var.environment}</p>
-    </body>
-    </html>
-HTML
-    
-    # Ensure httpd is running
-    systemctl restart httpd
-  EOF
-  )
 
   depends_on = [aws_nat_gateway.main]
 
