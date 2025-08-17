@@ -32,6 +32,11 @@ class TapStack(pulumi.ComponentResource):
     self.cost_optimization = args.cost_optimization
     self.regions = ['us-west-2', 'us-east-1']
     
+    # Initialize attributes that might not be created
+    self.route53_record = None
+    self.cert_validation_records = []
+    self.cert_validation = None
+    
     # Create all resources
     self._create_kms_resources()
     self._create_s3_resources()
@@ -362,27 +367,50 @@ class TapStack(pulumi.ComponentResource):
   def _create_route53_resources(self):
     """Create Route53 DNS records and certificate validation."""
     # Create certificate validation records
-    self.cert_validation_records = []
     if hasattr(self, 'certificate'):
-      for i, dvo in enumerate(self.certificate.domain_validation_options):
-        record = route53.Record(
-          f'cert-validation-{i}-{self.environment_suffix}',
-          zone_id=self.hosted_zone_id,
-          name=dvo.resource_record_name,
-          type=dvo.resource_record_type,
-          records=[dvo.resource_record_value],
-          ttl=60,
-          opts=ResourceOptions(parent=self.certificate)
-        )
-        self.cert_validation_records.append(record)
+      def create_validation_records(domain_validation_options):
+        """Create validation records from domain validation options."""
+        validation_records = []
+        for i, dvo in enumerate(domain_validation_options):
+          record = route53.Record(
+            f'cert-validation-{i}-{self.environment_suffix}',
+            zone_id=self.hosted_zone_id,
+            name=dvo['resource_record_name'],
+            type=dvo['resource_record_type'],
+            records=[dvo['resource_record_value']],
+            ttl=60,
+            opts=ResourceOptions(parent=self.certificate)
+          )
+          validation_records.append(record)
+        return validation_records
       
-      # Certificate validation
-      self.cert_validation = acm.CertificateValidation(
-        f'cert-validation-{self.environment_suffix}',
-        certificate_arn=self.certificate.arn,
-        validation_record_fqdns=[record.fqdn for record in self.cert_validation_records],
-        opts=ResourceOptions(parent=self.certificate)
-      )
+      # Handle both Output and direct values
+      if isinstance(self.certificate.domain_validation_options, Output):
+        self.cert_validation_records = self.certificate.domain_validation_options.apply(
+          create_validation_records
+        )
+      else:
+        # For mocked tests where it's a direct list
+        self.cert_validation_records = create_validation_records(
+          self.certificate.domain_validation_options
+        )
+      
+      # Certificate validation - only create if we have validation records
+      if self.cert_validation_records:
+        def create_cert_validation(validation_records):
+          if isinstance(validation_records, list) and validation_records:
+            return acm.CertificateValidation(
+              f'cert-validation-{self.environment_suffix}',
+              certificate_arn=self.certificate.arn,
+              validation_record_fqdns=[record.fqdn for record in validation_records],
+              opts=ResourceOptions(parent=self.certificate)
+            )
+          return None
+        
+        if isinstance(self.cert_validation_records, Output):
+          self.cert_validation = self.cert_validation_records.apply(create_cert_validation)
+        else:
+          self.cert_validation = create_cert_validation(self.cert_validation_records)
     
     # Create A record pointing to CloudFront
     self.route53_record = route53.Record(
