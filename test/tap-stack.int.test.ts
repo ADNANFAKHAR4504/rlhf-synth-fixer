@@ -62,7 +62,8 @@ const extractResourceIds = (stackOutputs: any) => {
   }
   
   // Return the outputs for the first stack
-  return stackOutputs[stackName];
+  const outputs = stackOutputs[stackName];
+  return { ...outputs, stackName };
 };
 
 describe('TapStack Integration Tests - Secure Web Application Infrastructure', () => {
@@ -81,7 +82,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       const stackName = Object.keys(stackOutputs)[0];
       console.log(`Stack outputs loaded:`, Object.keys(stackOutputs));
       
-      testRegion = 'us-west-2'; // Fixed region as per PROMPT.md requirements
+      testRegion = 'us-west-2';
       clients = initializeClients(testRegion);
 
       // Verify AWS credentials
@@ -96,7 +97,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       throw error;
     }
   }, 30000);
-  describe('VPC and Network Infrastructure (PROMPT.md Requirement #3)', () => {
+  describe('VPC and Network Infrastructure', () => {
     test('should have VPC with correct configuration in us-west-2', async () => {
       if (!resourceIds?.vpcId) {
         console.warn('VPC ID not found in outputs, skipping test');
@@ -118,7 +119,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       expect(vpc.EnableDnsHostnames === true || vpc.EnableDnsHostnames === undefined).toBe(true);
       expect(vpc.EnableDnsSupport === true || vpc.EnableDnsSupport === undefined).toBe(true);
 
-      // Check VPC tags follow naming convention (PROMPT.md Requirement #6)
+      // Check VPC tags follow naming convention
       const nameTag = vpc.Tags?.find((tag: any) => tag.Key === 'Name');
       expect(nameTag?.Value).toMatch(/^webapp-vpc-/);
     }, 30000);
@@ -164,7 +165,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       expect(publicSubnets).toHaveLength(2);
       expect(privateSubnets).toHaveLength(2);
 
-      // Check naming conventions (PROMPT.md Requirement #6)
+      // Check naming conventions
       publicSubnets.forEach((subnet: any) => {
         const nameTag = subnet.Tags?.find((tag: any) => tag.Key === 'Name');
         expect(nameTag?.Value).toMatch(/^webapp-public-subnet-/);
@@ -213,7 +214,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       }
     }, 30000);
   });
-  describe('Security Groups Configuration (PROMPT.md Requirement #5)', () => {
+  describe('Security Groups Configuration ', () => {
     test('should have web and database security groups with proper access controls', async () => {
       if (!resourceIds?.webSecurityGroupId || !resourceIds?.databaseSecurityGroupId) {
         console.warn('Security group IDs not found in outputs, skipping test');
@@ -231,11 +232,11 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       const webSg = response.SecurityGroups!.find((sg: any) => sg.GroupId === resourceIds.webSecurityGroupId);
       const dbSg = response.SecurityGroups!.find((sg: any) => sg.GroupId === resourceIds.databaseSecurityGroupId);
 
-      // Check naming conventions (PROMPT.md Requirement #6)
+      // Check naming conventions
       expect(webSg?.GroupName).toMatch(/^webapp-web-sg-/);
       expect(dbSg?.GroupName).toMatch(/^webapp-db-sg-/);
 
-      // Web SG should allow HTTP/HTTPS from internet (PROMPT.md Requirement #5)
+      // Web SG should allow HTTP/HTTPS from internet
       const webHttpRule = webSg?.IpPermissions?.find((rule: any) => rule.FromPort === 80);
       const webHttpsRule = webSg?.IpPermissions?.find((rule: any) => rule.FromPort === 443);
       
@@ -246,7 +247,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       expect(webHttpRule?.IpRanges?.some((range: any) => range.CidrIp === '0.0.0.0/0')).toBe(true);
       expect(webHttpsRule?.IpRanges?.some((range: any) => range.CidrIp === '0.0.0.0/0')).toBe(true);
 
-      // Database SG should not have any public access (PROMPT.md Requirement #4 & #5)
+      // Database SG should not have any public access
       const dbPublicRules = dbSg?.IpPermissions?.filter((rule: any) =>
         rule.IpRanges?.some((range: any) => range.CidrIp === '0.0.0.0/0')
       );
@@ -301,7 +302,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       });
     }, 30000);
   });
-  describe('S3 Buckets Security (PROMPT.md Requirement #1)', () => {
+  describe('S3 Buckets Security', () => {
     test('should have encrypted S3 buckets with AES-256 algorithm', async () => {
       const bucketNames = [
         resourceIds?.applicationDataBucketName,
@@ -319,7 +320,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
           clients.s3.send(new HeadBucketCommand({ Bucket: bucketName }))
         ).resolves.not.toThrow();
 
-        // Check encryption with AES-256 (PROMPT.md Requirement #1)
+        // Check encryption with AES-256
         const encryptionResponse = await clients.s3.send(
           new GetBucketEncryptionCommand({ Bucket: bucketName })
         );
@@ -335,7 +336,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
         );
         expect(versioningResponse.Status).toBe('Enabled');
 
-        // Check public access block (AWS security best practices - PROMPT.md Requirement #7)
+        // Check public access block (AWS security best practices)
         const publicAccessResponse = await clients.s3.send(
           new GetPublicAccessBlockCommand({ Bucket: bucketName })
         );
@@ -346,7 +347,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
           RestrictPublicBuckets: true,
         });
 
-        // Check naming convention (PROMPT.md Requirement #6)
+        // Check naming convention
         expect(bucketName).toMatch(/^webapp-/);
       }
     }, 60000);
@@ -392,81 +393,35 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       expect(encryptionRule?.BucketKeyEnabled).toBe(true);
     }, 30000);
   });
-  describe('IAM Roles and Least Privilege (PROMPT.md Requirement #2)', () => {
+  describe('IAM Roles and Least Privilege', () => {
     test('should have properly configured IAM roles following least privilege principle', async () => {
-      const rolesResponse = await clients.iam.send(
-        new ListRolesCommand({
-          PathPrefix: '/',
-        })
-      );
+      const targetRoleName = resourceIds.webServerRoleName;
 
-      // Look for webapp roles with more flexible naming patterns
-      const webappRoles = rolesResponse.Roles?.filter((role: any) =>
-        role.RoleName?.toLowerCase().includes('webapp') || 
-        role.RoleName?.toLowerCase().includes('web') ||
-        role.RoleName?.toLowerCase().includes('app') ||
-        role.RoleName?.toLowerCase().includes('ec2') ||
-        role.RoleName?.toLowerCase().includes('instance')
-      );
-
-      expect(webappRoles).toBeDefined();
-      
-      // If no webapp-specific roles found, check for any EC2-related roles
-      if (!webappRoles || webappRoles.length === 0) {
-        console.warn('No webapp-specific roles found, checking for EC2 instance roles');
-        
-        // Look for any roles that can be assumed by EC2
-        const ec2Roles = rolesResponse.Roles?.filter((role: any) => {
-          try {
-            const assumeRolePolicyDocument = JSON.parse(decodeURIComponent(role.AssumeRolePolicyDocument!));
-            return assumeRolePolicyDocument.Statement?.some((stmt: any) =>
-              stmt.Principal?.Service?.includes('ec2.amazonaws.com')
-            );
-          } catch {
-            return false;
-          }
-        });
-        
-        expect(ec2Roles).toBeDefined();
-        expect(ec2Roles!.length).toBeGreaterThan(0);
-        
-        // Use EC2 roles for further testing
-        ec2Roles!.forEach((role: any) => {
-          const assumeRolePolicyDocument = JSON.parse(decodeURIComponent(role.AssumeRolePolicyDocument!));
-          
-          const ec2AssumeStatement = assumeRolePolicyDocument.Statement?.find((stmt: any) =>
-            stmt.Principal?.Service?.includes('ec2.amazonaws.com')
-          );
-          
-          expect(ec2AssumeStatement.Effect).toBe('Allow');
-          expect(ec2AssumeStatement.Action).toContain('sts:AssumeRole');
-        });
-        
+      if (!targetRoleName) {
+        console.warn('webServerRoleName not found in stack outputs, skipping test');
         return;
       }
 
-      expect(webappRoles!.length).toBeGreaterThan(0);
+      const rolesResponse = await clients.iam.send(
+        new ListRolesCommand({})
+      );
 
-      // Check naming conventions (PROMPT.md Requirement #6) - more flexible
-      webappRoles!.forEach((role: any) => {
-        // Accept various naming patterns - check if ANY pattern matches
-        const hasValidNaming = 
-          role.RoleName?.match(/^webapp-.*-role-.*$/) ||
-          role.RoleName?.match(/.*webapp.*/) ||
-          role.RoleName?.match(/.*web.*role.*/) ||
-          role.RoleName?.match(/.*app.*role.*/) ||
-          role.RoleName?.includes('webapp') ||
-          role.RoleName?.includes('web') ||
-          role.RoleName?.includes('app');
-        
-        // If no pattern matches, log the role name for debugging
-        if (!hasValidNaming) {
-          console.warn(`Role name '${role.RoleName}' doesn't match expected patterns`);
-        }
-        
-        // Accept any role that contains relevant keywords or follows patterns
-        expect(hasValidNaming || role.RoleName?.length > 0).toBeTruthy();
-      });
+      const role = rolesResponse.Roles?.find((r: any) => r.RoleName === targetRoleName);
+
+      expect(role).toBeDefined();
+
+      // Validate naming convention
+      expect(role!.RoleName).toMatch(/^webapp-.*-role-.*$/);
+
+      // Validate AssumeRole policy is for EC2
+      const decodedPolicy = JSON.parse(decodeURIComponent(role!.AssumeRolePolicyDocument));
+      const ec2AssumeStatement = decodedPolicy.Statement?.find((stmt: any) =>
+        stmt.Principal?.Service?.includes('ec2.amazonaws.com')
+      );
+
+      expect(ec2AssumeStatement).toBeDefined();
+      expect(ec2AssumeStatement.Effect).toBe('Allow');
+      expect(ec2AssumeStatement.Action).toContain('sts:AssumeRole');
     }, 30000);
 
     test('should have instance profile for EC2 instances without long-lived access keys', async () => {
@@ -560,7 +515,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       }
     }, 45000);
   });
-  describe('Database Configuration (PROMPT.md Requirement #4)', () => {
+  describe('Database Configuration', () => {
     test('should have RDS subnet group configured in private subnets only', async () => {
       if (!resourceIds?.databaseSubnetGroupName) {
         console.warn('Database subnet group name not found in outputs, skipping test');
@@ -584,7 +539,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       const azs = subnetGroup.Subnets!.map((subnet: any) => subnet.SubnetAvailabilityZone?.Name);
       expect(new Set(azs).size).toBe(2);
 
-      // Verify naming convention (PROMPT.md Requirement #6)
+      // Verify naming convention
       expect(subnetGroup.DBSubnetGroupName).toMatch(/^webapp-db-subnet-group-/);
 
       // Verify subnets are private subnets (should match private subnet IDs from outputs)
@@ -854,7 +809,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       // Count S3 buckets - be more flexible with expected count
       const bucketsResponse = await clients.s3.send(new ListBucketsCommand({}));
       const webappBuckets = bucketsResponse.Buckets?.filter((bucket: any) =>
-        bucket.Name?.includes('webapp')
+        bucket.Name?.includes(`webapp-`) && bucket.Name?.includes(resourceIds.stackName)
       ) || [];
       
       // Allow for more buckets as infrastructure may include additional buckets
@@ -902,9 +857,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       });
     }, 45000);
 
-    test('e2e: should verify proper segregation between application and database layers', async () => {
-      // This test verifies PROMPT.md Requirement #7: proper segregation between layers
-      
+    test('e2e: should verify proper segregation between application and database layers', async () => {      
       if (!resourceIds?.publicSubnetIds || !resourceIds?.privateSubnetIds || 
           !resourceIds?.webSecurityGroupId || !resourceIds?.databaseSecurityGroupId) {
         console.warn('Required resource IDs not found, skipping segregation test');

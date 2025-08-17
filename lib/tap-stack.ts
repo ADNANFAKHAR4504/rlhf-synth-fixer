@@ -56,6 +56,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly applicationDataBucketName: pulumi.Output<string>;
   public readonly backupBucketName: pulumi.Output<string>;
   public readonly region: string;
+  public readonly webServerRoleName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -114,6 +115,7 @@ export class TapStack extends pulumi.ComponentResource {
       webAppInfrastructure.applicationDataBucketName;
     this.backupBucketName = webAppInfrastructure.backupBucketName;
     this.region = webAppInfrastructure.region;
+    this.webServerRoleName = webAppInfrastructure.webServerRoleName;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -128,6 +130,7 @@ export class TapStack extends pulumi.ComponentResource {
       applicationDataBucketName: this.applicationDataBucketName,
       backupBucketName: this.backupBucketName,
       region: this.region,
+      webServerRoleName: this.webServerRoleName,
     });
   }
 }

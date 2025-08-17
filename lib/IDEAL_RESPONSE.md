@@ -1,35 +1,47 @@
 ## Core Infrastructure Code
 
 ```typescript
-import * as aws from '@pulumi/aws';
-import * as pulumi from '@pulumi/pulumi';
-import { ResourceOptions } from '@pulumi/pulumi';
+/\*\*
 
-/**
- * WebAppInfrastructureArgs defines the input arguments for the WebAppInfrastructure component.
- */
-export interface WebAppInfrastructureArgs {
-  /**
-   * Environment suffix for resource naming (e.g., 'dev', 'prod').
-   */
-  environmentSuffix: string;
+- webapp-infrastructure.ts
+-
+- This module defines the WebAppInfrastructure class, a Pulumi ComponentResource
+- that creates a secure AWS infrastructure for a web application following
+- security best practices and the principle of least privilege.
+  _/
+  import _ as aws from '@pulumi/aws';
+  import \* as pulumi from '@pulumi/pulumi';
+  import { ResourceOptions } from '@pulumi/pulumi';
 
-  /**
-   * AWS region for deployment.
-   */
+/\*\*
+
+- WebAppInfrastructureArgs defines the input arguments for the WebAppInfrastructure component.
+  \*/
+  export interface WebAppInfrastructureArgs {
+  /\*\*
+  - Environment suffix for resource naming (e.g., 'dev', 'prod').
+    \*/
+    environmentSuffix: string;
+
+/\*\*
+
+- AWS region for deployment.
+  \*/
   region?: string;
 
-  /**
-   * Optional tags to apply to resources.
-   */
-  tags?: pulumi.Input<{ [key: string]: string }>;
-}
+/\*\*
 
-/**
- * WebAppInfrastructure creates a secure AWS infrastructure for a web application
- * including VPC, subnets, security groups, S3 buckets, and IAM roles.
- */
-export class WebAppInfrastructure extends pulumi.ComponentResource {
+- Optional tags to apply to resources.
+  \*/
+  tags?: pulumi.Input<{ [key: string]: string }>;
+  }
+
+/\*\*
+
+- WebAppInfrastructure creates a secure AWS infrastructure for a web application
+- including VPC, subnets, security groups, S3 buckets, and IAM roles.
+  \*/
+  export class WebAppInfrastructure extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
   public readonly publicSubnetIds: pulumi.Output<string[]>;
   public readonly privateSubnetIds: pulumi.Output<string[]>;
@@ -40,18 +52,19 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
   public readonly applicationDataBucketName: pulumi.Output<string>;
   public readonly backupBucketName: pulumi.Output<string>;
   public readonly region: string;
+  public readonly webServerRoleName: pulumi.Output<string>;
 
-  constructor(
-    name: string,
-    args: WebAppInfrastructureArgs,
-    opts?: ResourceOptions
-  ) {
-    super('tap:webapp:WebAppInfrastructure', name, {}, opts);
+constructor(
+name: string,
+args: WebAppInfrastructureArgs,
+opts?: ResourceOptions
+) {
+super('tap:webapp:WebAppInfrastructure', name, args, opts);
 
     // Configuration
     const projectName = 'webapp';
+    const region = args.region || 'us-west-2';
     const environmentSuffix = args.environmentSuffix;
-    const region = args.region || 'us-east-1';
     const tags = args.tags || {};
 
     this.region = region;
@@ -73,7 +86,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       { provider: awsProvider }
     );
 
-    // VPC Configuration with secure defaults
+    // VPC Configuration
     const vpc = new aws.ec2.Vpc(
       `${projectName}-vpc-${environmentSuffix}`,
       {
@@ -96,25 +109,25 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
         vpcId: vpc.id,
         tags: {
           Name: `${projectName}-igw-${environmentSuffix}`,
-          Environment: environmentSuffix,
           ...tags,
         },
       },
       { provider: awsProvider, parent: this }
     );
 
-    // Public Subnets (for web servers) - Multi-AZ for high availability
+    // Public Subnets (for application servers)
     const publicSubnet1 = new aws.ec2.Subnet(
       `${projectName}-public-subnet-1-${environmentSuffix}`,
       {
         vpcId: vpc.id,
-        availabilityZone: availabilityZones.then(azs => azs.names[0]),
+        availabilityZone: availabilityZones?.then
+          ? availabilityZones.then(azs => azs.names[0])
+          : `${region}a`,
         cidrBlock: '10.0.1.0/24',
         mapPublicIpOnLaunch: true,
         tags: {
           Name: `${projectName}-public-subnet-1-${environmentSuffix}`,
           Type: 'public',
-          Environment: environmentSuffix,
           ...tags,
         },
       },
@@ -125,31 +138,33 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       `${projectName}-public-subnet-2-${environmentSuffix}`,
       {
         vpcId: vpc.id,
-        availabilityZone: availabilityZones.then(azs => azs.names[1]),
+        availabilityZone: availabilityZones?.then
+          ? availabilityZones.then(azs => azs.names[1])
+          : `${region}b`,
         cidrBlock: '10.0.2.0/24',
         mapPublicIpOnLaunch: true,
         tags: {
           Name: `${projectName}-public-subnet-2-${environmentSuffix}`,
           Type: 'public',
-          Environment: environmentSuffix,
           ...tags,
         },
       },
       { provider: awsProvider, parent: this }
     );
 
-    // Private Subnets (for databases) - Multi-AZ for high availability
+    // Private Subnets (for database services)
     const privateSubnet1 = new aws.ec2.Subnet(
       `${projectName}-private-subnet-1-${environmentSuffix}`,
       {
         vpcId: vpc.id,
-        availabilityZone: availabilityZones.then(azs => azs.names[0]),
+        availabilityZone: availabilityZones?.then
+          ? availabilityZones.then(azs => azs.names[0])
+          : `${region}a`,
         cidrBlock: '10.0.10.0/24',
         mapPublicIpOnLaunch: false,
         tags: {
           Name: `${projectName}-private-subnet-1-${environmentSuffix}`,
           Type: 'private',
-          Environment: environmentSuffix,
           ...tags,
         },
       },
@@ -160,27 +175,27 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       `${projectName}-private-subnet-2-${environmentSuffix}`,
       {
         vpcId: vpc.id,
-        availabilityZone: availabilityZones.then(azs => azs.names[1]),
+        availabilityZone: availabilityZones?.then
+          ? availabilityZones.then(azs => azs.names[1])
+          : `${region}b`,
         cidrBlock: '10.0.11.0/24',
         mapPublicIpOnLaunch: false,
         tags: {
           Name: `${projectName}-private-subnet-2-${environmentSuffix}`,
           Type: 'private',
-          Environment: environmentSuffix,
           ...tags,
         },
       },
       { provider: awsProvider, parent: this }
     );
 
-    // NAT Gateway for private subnet internet access (security updates)
+    // NAT Gateway for private subnet internet access
     const natEip = new aws.ec2.Eip(
       `${projectName}-nat-eip-${environmentSuffix}`,
       {
         domain: 'vpc',
         tags: {
           Name: `${projectName}-nat-eip-${environmentSuffix}`,
-          Environment: environmentSuffix,
           ...tags,
         },
       },
@@ -198,21 +213,25 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
         subnetId: publicSubnet1.id,
         tags: {
           Name: `${projectName}-nat-gateway-${environmentSuffix}`,
-          Environment: environmentSuffix,
           ...tags,
         },
       },
       { provider: awsProvider, parent: this }
     );
 
-    // Route Tables with secure routing
+    // Route Tables
     const publicRouteTable = new aws.ec2.RouteTable(
       `${projectName}-public-rt-${environmentSuffix}`,
       {
         vpcId: vpc.id,
+        routes: [
+          {
+            cidrBlock: '0.0.0.0/0',
+            gatewayId: internetGateway.id,
+          },
+        ],
         tags: {
           Name: `${projectName}-public-rt-${environmentSuffix}`,
-          Environment: environmentSuffix,
           ...tags,
         },
       },
@@ -223,32 +242,16 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       `${projectName}-private-rt-${environmentSuffix}`,
       {
         vpcId: vpc.id,
+        routes: [
+          {
+            cidrBlock: '0.0.0.0/0',
+            natGatewayId: natGateway.id,
+          },
+        ],
         tags: {
           Name: `${projectName}-private-rt-${environmentSuffix}`,
-          Environment: environmentSuffix,
           ...tags,
         },
-      },
-      { provider: awsProvider, parent: this }
-    );
-
-    // Routes
-    const publicRoute = new aws.ec2.Route(
-      `${projectName}-public-route-${environmentSuffix}`,
-      {
-        routeTableId: publicRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        gatewayId: internetGateway.id,
-      },
-      { provider: awsProvider, parent: this }
-    );
-
-    const privateRoute = new aws.ec2.Route(
-      `${projectName}-private-route-${environmentSuffix}`,
-      {
-        routeTableId: privateRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: natGateway.id,
       },
       { provider: awsProvider, parent: this }
     );
@@ -290,17 +293,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       { provider: awsProvider, parent: this }
     );
 
-    // VPC Gateway Attachment
-    const vpcGatewayAttachment = new aws.ec2.VpcGatewayAttachment(
-      `${projectName}-vpc-gw-attachment-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        internetGatewayId: internetGateway.id,
-      },
-      { provider: awsProvider, parent: this }
-    );
-
-    // Security Groups with Least Privilege Principle
+    // Security Groups
     const webSecurityGroup = new aws.ec2.SecurityGroup(
       `${projectName}-web-sg-${environmentSuffix}`,
       {
@@ -369,7 +362,6 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
         ],
         tags: {
           Name: `${projectName}-web-sg-${environmentSuffix}`,
-          Environment: environmentSuffix,
           ...tags,
         },
       },
@@ -423,7 +415,6 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
         ],
         tags: {
           Name: `${projectName}-db-sg-${environmentSuffix}`,
-          Environment: environmentSuffix,
           ...tags,
         },
       },
@@ -434,9 +425,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
     const applicationDataBucket = new aws.s3.Bucket(
       `${projectName}-app-data-${environmentSuffix}`,
       {
-        bucket: `${projectName}-app-data-${environmentSuffix}-${(
-          pulumi.getStack() || 'test'
-        ).toLowerCase()}`,
+        bucket: `${projectName}-app-data-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`,
         tags: {
           Name: `${projectName}-app-data-${environmentSuffix}`,
           Environment: environmentSuffix,
@@ -476,12 +465,77 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       { provider: awsProvider, parent: this }
     );
 
+    // S3 Bucket Public Access Block for application data bucket
+    const applicationDataBucketPublicAccessBlock =
+      new aws.s3.BucketPublicAccessBlock(
+        `${projectName}-app-data-pab-${environmentSuffix}`,
+        {
+          bucket: applicationDataBucket.id,
+          blockPublicAcls: true,
+          blockPublicPolicy: true,
+          ignorePublicAcls: true,
+          restrictPublicBuckets: true,
+        },
+        { provider: awsProvider, parent: this }
+      );
+
+    // S3 Bucket Policy for application data bucket - enforce HTTPS
+    const applicationDataBucketPolicy = new aws.s3.BucketPolicy(
+      `${projectName}-app-data-policy-${environmentSuffix}`,
+      {
+        bucket: applicationDataBucket.id,
+        policy: applicationDataBucket.arn
+          ? pulumi.all([applicationDataBucket.arn]).apply(([bucketArn]) =>
+              JSON.stringify({
+                Version: '2012-10-17',
+                Statement: [
+                  {
+                    Sid: 'DenyInsecureConnections',
+                    Effect: 'Deny',
+                    Principal: '*',
+                    Action: 's3:*',
+                    Resource: [`${bucketArn}`, `${bucketArn}/*`],
+                    Condition: {
+                      Bool: {
+                        'aws:SecureTransport': 'false',
+                      },
+                    },
+                  },
+                ],
+              })
+            )
+          : JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'DenyInsecureConnections',
+                  Effect: 'Deny',
+                  Principal: '*',
+                  Action: 's3:*',
+                  Resource: [
+                    'arn:aws:s3:::test-bucket',
+                    'arn:aws:s3:::test-bucket/*',
+                  ],
+                  Condition: {
+                    Bool: {
+                      'aws:SecureTransport': 'false',
+                    },
+                  },
+                },
+              ],
+            }),
+      },
+      {
+        provider: awsProvider,
+        parent: this,
+        dependsOn: [applicationDataBucketPublicAccessBlock],
+      }
+    );
+
     const backupBucket = new aws.s3.Bucket(
       `${projectName}-backups-${environmentSuffix}`,
       {
-        bucket: `${projectName}-backups-${environmentSuffix}-${(
-          pulumi.getStack() || 'test'
-        ).toLowerCase()}`,
+        bucket: `${projectName}-backups-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`,
         tags: {
           Name: `${projectName}-backups-${environmentSuffix}`,
           Environment: environmentSuffix,
@@ -546,13 +600,89 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       { provider: awsProvider, parent: this }
     );
 
+    // S3 Bucket Public Access Block for backup bucket
+    const backupBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
+      `${projectName}-backups-pab-${environmentSuffix}`,
+      {
+        bucket: backupBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { provider: awsProvider, parent: this }
+    );
+
+    // S3 Bucket Policy for backup bucket - enforce HTTPS and restrict access
+    const backupBucketPolicy = new aws.s3.BucketPolicy(
+      `${projectName}-backups-policy-${environmentSuffix}`,
+      {
+        bucket: backupBucket.id,
+        policy: backupBucket.arn
+          ? pulumi.all([backupBucket.arn]).apply(([bucketArn]) =>
+              JSON.stringify({
+                Version: '2012-10-17',
+                Statement: [
+                  {
+                    Sid: 'DenyInsecureConnections',
+                    Effect: 'Deny',
+                    Principal: '*',
+                    Action: 's3:*',
+                    Resource: [`${bucketArn}`, `${bucketArn}/*`],
+                    Condition: {
+                      Bool: {
+                        'aws:SecureTransport': 'false',
+                      },
+                    },
+                  },
+                  {
+                    Sid: 'DenyUnencryptedObjectUploads',
+                    Effect: 'Deny',
+                    Principal: '*',
+                    Action: 's3:PutObject',
+                    Resource: `${bucketArn}/*`,
+                    Condition: {
+                      StringNotEquals: {
+                        's3:x-amz-server-side-encryption': 'AES256',
+                      },
+                    },
+                  },
+                ],
+              })
+            )
+          : JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'DenyInsecureConnections',
+                  Effect: 'Deny',
+                  Principal: '*',
+                  Action: 's3:*',
+                  Resource: [
+                    'arn:aws:s3:::test-backup-bucket',
+                    'arn:aws:s3:::test-backup-bucket/*',
+                  ],
+                  Condition: {
+                    Bool: {
+                      'aws:SecureTransport': 'false',
+                    },
+                  },
+                },
+              ],
+            }),
+      },
+      {
+        provider: awsProvider,
+        parent: this,
+        dependsOn: [backupBucketPublicAccessBlock],
+      }
+    );
+
     // S3 Access Logging Bucket for security monitoring
     const accessLogsBucket = new aws.s3.Bucket(
       `${projectName}-access-logs-${environmentSuffix}`,
       {
-        bucket: `${projectName}-access-logs-${environmentSuffix}-${(
-          pulumi.getStack() || 'test'
-        ).toLowerCase()}`,
+        bucket: `${projectName}-access-logs-${environmentSuffix}-${(pulumi.getStack() || 'test').toLowerCase()}`,
         tags: {
           Name: `${projectName}-access-logs-${environmentSuffix}`,
           Environment: environmentSuffix,
@@ -617,32 +747,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       { provider: awsProvider, parent: this }
     );
 
-    // S3 Public Access Block (Security Best Practice)
-    const applicationDataBucketPublicAccessBlock =
-      new aws.s3.BucketPublicAccessBlock(
-        `${projectName}-app-data-pab-${environmentSuffix}`,
-        {
-          bucket: applicationDataBucket.id,
-          blockPublicAcls: true,
-          blockPublicPolicy: true,
-          ignorePublicAcls: true,
-          restrictPublicBuckets: true,
-        },
-        { provider: awsProvider, parent: this }
-      );
-
-    const backupBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
-      `${projectName}-backups-pab-${environmentSuffix}`,
-      {
-        bucket: backupBucket.id,
-        blockPublicAcls: true,
-        blockPublicPolicy: true,
-        ignorePublicAcls: true,
-        restrictPublicBuckets: true,
-      },
-      { provider: awsProvider, parent: this }
-    );
-
+    // S3 Bucket Public Access Block for access logs bucket
     const accessLogsBucketPublicAccessBlock =
       new aws.s3.BucketPublicAccessBlock(
         `${projectName}-access-logs-pab-${environmentSuffix}`,
@@ -656,74 +761,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
         { provider: awsProvider, parent: this }
       );
 
-    // S3 Bucket Policies (HTTPS-only access)
-    const applicationDataBucketPolicy = new aws.s3.BucketPolicy(
-      `${projectName}-app-data-policy-${environmentSuffix}`,
-      {
-        bucket: applicationDataBucket.id,
-        policy: applicationDataBucket.arn.apply(bucketArn =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Sid: 'DenyInsecureConnections',
-                Effect: 'Deny',
-                Principal: '*',
-                Action: 's3:*',
-                Resource: [bucketArn, `${bucketArn}/*`],
-                Condition: {
-                  Bool: {
-                    'aws:SecureTransport': 'false',
-                  },
-                },
-              },
-            ],
-          })
-        ),
-      },
-      { provider: awsProvider, parent: this }
-    );
-
-    const backupBucketPolicy = new aws.s3.BucketPolicy(
-      `${projectName}-backups-policy-${environmentSuffix}`,
-      {
-        bucket: backupBucket.id,
-        policy: backupBucket.arn.apply(bucketArn =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Sid: 'DenyInsecureConnections',
-                Effect: 'Deny',
-                Principal: '*',
-                Action: 's3:*',
-                Resource: [bucketArn, `${bucketArn}/*`],
-                Condition: {
-                  Bool: {
-                    'aws:SecureTransport': 'false',
-                  },
-                },
-              },
-              {
-                Sid: 'DenyUnencryptedUploads',
-                Effect: 'Deny',
-                Principal: '*',
-                Action: 's3:PutObject',
-                Resource: `${bucketArn}/*`,
-                Condition: {
-                  StringNotEquals: {
-                    's3:x-amz-server-side-encryption': 'AES256',
-                  },
-                },
-              },
-            ],
-          })
-        ),
-      },
-      { provider: awsProvider, parent: this }
-    );
-
-    // S3 Access Logging Configuration
+    // Enable S3 access logging on application data bucket
     const applicationDataBucketLogging = new aws.s3.BucketLogging(
       `${projectName}-app-data-logging-${environmentSuffix}`,
       {
@@ -731,9 +769,14 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
         targetBucket: accessLogsBucket.id,
         targetPrefix: 'app-data-access-logs/',
       },
-      { provider: awsProvider, parent: this }
+      {
+        provider: awsProvider,
+        parent: this,
+        dependsOn: [accessLogsBucketPublicAccessBlock],
+      }
     );
 
+    // Enable S3 access logging on backup bucket
     const backupBucketLogging = new aws.s3.BucketLogging(
       `${projectName}-backups-logging-${environmentSuffix}`,
       {
@@ -741,56 +784,98 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
         targetBucket: accessLogsBucket.id,
         targetPrefix: 'backup-access-logs/',
       },
-      { provider: awsProvider, parent: this }
+      {
+        provider: awsProvider,
+        parent: this,
+        dependsOn: [accessLogsBucketPublicAccessBlock],
+      }
     );
 
-    // IAM Roles and Policies with Least Privilege
+    // IAM Roles following principle of least privilege
+    const ec2AssumeRolePolicy = aws.iam.getPolicyDocument(
+      {
+        statements: [
+          {
+            actions: ['sts:AssumeRole'],
+            effect: 'Allow',
+            principals: [
+              {
+                type: 'Service',
+                identifiers: ['ec2.amazonaws.com'],
+              },
+            ],
+          },
+        ],
+      },
+      { provider: awsProvider }
+    );
+
+    // Web Server IAM Role
     const webServerRole = new aws.iam.Role(
       `${projectName}-web-server-role-${environmentSuffix}`,
       {
         name: `${projectName}-web-server-role-${environmentSuffix}`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ec2.amazonaws.com',
-              },
-            },
-          ],
-        }),
+        assumeRolePolicy: ec2AssumeRolePolicy?.then
+          ? ec2AssumeRolePolicy.then(policy => policy.json)
+          : JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: { Service: 'ec2.amazonaws.com' },
+                  Action: 'sts:AssumeRole',
+                },
+              ],
+            }),
         tags: {
           Name: `${projectName}-web-server-role-${environmentSuffix}`,
-          Environment: environmentSuffix,
           ...tags,
         },
       },
       { provider: awsProvider, parent: this }
     );
 
-    // S3 Policy for Web Servers (Least Privilege)
+    // Policy for web servers to access application data bucket
     const webServerS3Policy = new aws.iam.Policy(
       `${projectName}-web-server-s3-policy-${environmentSuffix}`,
       {
         name: `${projectName}-web-server-s3-policy-${environmentSuffix}`,
         description: 'Policy for web servers to access application data bucket',
-        policy: pulumi
-          .all([applicationDataBucket.arn, backupBucket.arn])
-          .apply(([appBucketArn, backupBucketArn]) =>
-            JSON.stringify({
+        policy: applicationDataBucket.arn
+          ? pulumi.all([applicationDataBucket.arn]).apply(([bucketArn]) =>
+              JSON.stringify({
+                Version: '2012-10-17',
+                Statement: [
+                  {
+                    Effect: 'Allow',
+                    Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+                    Resource: `${bucketArn}/*`,
+                    Condition: {
+                      Bool: {
+                        'aws:SecureTransport': 'true',
+                      },
+                    },
+                  },
+                  {
+                    Effect: 'Allow',
+                    Action: ['s3:ListBucket'],
+                    Resource: bucketArn,
+                    Condition: {
+                      Bool: {
+                        'aws:SecureTransport': 'true',
+                      },
+                    },
+                  },
+                ],
+              })
+            )
+          : JSON.stringify({
               Version: '2012-10-17',
               Statement: [
                 {
                   Effect: 'Allow',
-                  Action: [
-                    's3:GetObject',
-                    's3:PutObject',
-                    's3:DeleteObject',
-                    's3:ListBucket',
-                  ],
-                  Resource: [appBucketArn, `${appBucketArn}/*`],
+                  Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+                  Resource: 'arn:aws:s3:::test-bucket/*',
                   Condition: {
                     Bool: {
                       'aws:SecureTransport': 'true',
@@ -799,25 +884,21 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
                 },
                 {
                   Effect: 'Allow',
-                  Action: ['s3:PutObject'],
-                  Resource: [`${backupBucketArn}/*`],
+                  Action: ['s3:ListBucket'],
+                  Resource: 'arn:aws:s3:::test-bucket',
                   Condition: {
                     Bool: {
                       'aws:SecureTransport': 'true',
                     },
-                    StringEquals: {
-                      's3:x-amz-server-side-encryption': 'AES256',
-                    },
                   },
                 },
               ],
-            })
-          ),
+            }),
       },
       { provider: awsProvider, parent: this }
     );
 
-    // CloudWatch Logs Policy (Scoped to specific log groups)
+    // CloudWatch logs policy for web servers
     const webServerLogsPolicy = new aws.iam.Policy(
       `${projectName}-web-server-logs-policy-${environmentSuffix}`,
       {
@@ -833,8 +914,12 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
                 'logs:DescribeLogStreams',
+                'logs:DescribeLogGroups',
               ],
-              Resource: `arn:aws:logs:${region}:*:log-group:/aws/ec2/${projectName}-${environmentSuffix}*`,
+              Resource: [
+                `arn:aws:logs:${region}:*:log-group:/aws/ec2/${projectName}-${environmentSuffix}*`,
+                `arn:aws:logs:${region}:*:log-group:/aws/ec2/${projectName}-${environmentSuffix}*:*`,
+              ],
             },
           ],
         }),
@@ -842,43 +927,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       { provider: awsProvider, parent: this }
     );
 
-    // Database IAM Role for Enhanced Monitoring
-    const databaseRole = new aws.iam.Role(
-      `${projectName}-database-role-${environmentSuffix}`,
-      {
-        name: `${projectName}-database-role-${environmentSuffix}`,
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'monitoring.rds.amazonaws.com',
-              },
-            },
-          ],
-        }),
-        tags: {
-          Name: `${projectName}-database-role-${environmentSuffix}`,
-          Environment: environmentSuffix,
-          ...tags,
-        },
-      },
-      { provider: awsProvider, parent: this }
-    );
-
-    // Instance Profile for Web Servers
-    const webServerInstanceProfile = new aws.iam.InstanceProfile(
-      `${projectName}-web-server-profile-${environmentSuffix}`,
-      {
-        name: `${projectName}-web-server-profile-${environmentSuffix}`,
-        role: webServerRole.name,
-      },
-      { provider: awsProvider, parent: this }
-    );
-
-    // Policy Attachments
+    // Attach policies to web server role
     const webServerS3PolicyAttachment = new aws.iam.RolePolicyAttachment(
       `${projectName}-web-server-s3-attachment-${environmentSuffix}`,
       {
@@ -897,6 +946,60 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       { provider: awsProvider, parent: this }
     );
 
+    // Instance profile for EC2 instances
+    const webServerInstanceProfile = new aws.iam.InstanceProfile(
+      `${projectName}-web-server-profile-${environmentSuffix}`,
+      {
+        name: `${projectName}-web-server-profile-${environmentSuffix}`,
+        role: webServerRole.name,
+      },
+      { provider: awsProvider, parent: this }
+    );
+
+    // Database IAM Role (for RDS enhanced monitoring, etc.)
+    const databaseAssumeRolePolicy = aws.iam.getPolicyDocument(
+      {
+        statements: [
+          {
+            actions: ['sts:AssumeRole'],
+            effect: 'Allow',
+            principals: [
+              {
+                type: 'Service',
+                identifiers: ['monitoring.rds.amazonaws.com'],
+              },
+            ],
+          },
+        ],
+      },
+      { provider: awsProvider }
+    );
+
+    const databaseRole = new aws.iam.Role(
+      `${projectName}-database-role-${environmentSuffix}`,
+      {
+        name: `${projectName}-database-role-${environmentSuffix}`,
+        assumeRolePolicy: databaseAssumeRolePolicy?.then
+          ? databaseAssumeRolePolicy.then(policy => policy.json)
+          : JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: { Service: 'monitoring.rds.amazonaws.com' },
+                  Action: 'sts:AssumeRole',
+                },
+              ],
+            }),
+        tags: {
+          Name: `${projectName}-database-role-${environmentSuffix}`,
+          ...tags,
+        },
+      },
+      { provider: awsProvider, parent: this }
+    );
+
+    // Attach RDS enhanced monitoring policy
     const databaseMonitoringAttachment = new aws.iam.RolePolicyAttachment(
       `${projectName}-db-monitoring-attachment-${environmentSuffix}`,
       {
@@ -912,18 +1015,16 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       `${projectName}-db-subnet-group-${environmentSuffix}`,
       {
         name: `${projectName}-db-subnet-group-${environmentSuffix}`,
-        description: 'Subnet group for RDS databases',
         subnetIds: [privateSubnet1.id, privateSubnet2.id],
         tags: {
           Name: `${projectName}-db-subnet-group-${environmentSuffix}`,
-          Environment: environmentSuffix,
           ...tags,
         },
       },
       { provider: awsProvider, parent: this }
     );
 
-    // Assign outputs
+    // Set outputs
     this.vpcId = vpc.id;
     this.publicSubnetIds = pulumi.output([publicSubnet1.id, publicSubnet2.id]);
     this.privateSubnetIds = pulumi.output([
@@ -936,8 +1037,9 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
     this.databaseSubnetGroupName = databaseSubnetGroup.name;
     this.applicationDataBucketName = applicationDataBucket.bucket;
     this.backupBucketName = backupBucket.bucket;
+    this.webServerRoleName = webServerRole.name;
 
-    // Register outputs to ensure proper resource creation order
+    // Register outputs
     this.registerOutputs({
       vpcId: this.vpcId,
       publicSubnetIds: this.publicSubnetIds,
@@ -949,6 +1051,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       applicationDataBucketName: this.applicationDataBucketName,
       backupBucketName: this.backupBucketName,
       region: this.region,
+      webServerRoleName: this.webServerRoleName,
       // Include dependencies to ensure proper resource creation order
       _applicationDataBucketEncryption: applicationDataBucketEncryption.id,
       _applicationDataBucketVersioning: applicationDataBucketVersioning.id,

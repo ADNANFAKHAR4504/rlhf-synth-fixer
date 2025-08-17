@@ -44,6 +44,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
   public readonly applicationDataBucketName: pulumi.Output<string>;
   public readonly backupBucketName: pulumi.Output<string>;
   public readonly region: string;
+  public readonly webServerRoleName: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -1028,6 +1029,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
     this.databaseSubnetGroupName = databaseSubnetGroup.name;
     this.applicationDataBucketName = applicationDataBucket.bucket;
     this.backupBucketName = backupBucket.bucket;
+    this.webServerRoleName = webServerRole.name;
 
     // Register outputs
     this.registerOutputs({
@@ -1041,6 +1043,7 @@ export class WebAppInfrastructure extends pulumi.ComponentResource {
       applicationDataBucketName: this.applicationDataBucketName,
       backupBucketName: this.backupBucketName,
       region: this.region,
+      webServerRoleName: this.webServerRoleName,
       // Include dependencies to ensure proper resource creation order
       _applicationDataBucketEncryption: applicationDataBucketEncryption.id,
       _applicationDataBucketVersioning: applicationDataBucketVersioning.id,

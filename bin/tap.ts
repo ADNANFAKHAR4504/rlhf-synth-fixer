@@ -51,3 +51,4 @@ export const databaseSubnetGroupName = stack.databaseSubnetGroupName;
 export const applicationDataBucketName = stack.applicationDataBucketName;
 export const backupBucketName = stack.backupBucketName;
 export const region = stack.region;
+export const webServerRoleName = stack.webServerRoleName;
