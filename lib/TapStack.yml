@@ -336,7 +336,7 @@ Resources:
           Value: Security
 
   # --------------------------
-  # KMS Keys (no role principals to avoid circular deps)
+  # KMS Keys
   # --------------------------
   KmsKeyData:
     Type: AWS::KMS::Key
@@ -399,7 +399,6 @@ Resources:
             Action: "kms:*"
             Resource: "*"
 
-          # Allow CloudTrail to use this key for envelope encryption + grants
           - Sid: AllowCloudTrailUseOfTheKey
             Effect: Allow
             Principal:
@@ -415,11 +414,23 @@ Resources:
             Condition:
               Bool:
                 "kms:GrantIsForAWSResource": "true"
-              # (Optional but nice) tie to this trail's encryption context
-              StringEquals:
-                "kms:EncryptionContext:aws:cloudtrail:arn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-trail"
 
-          # Allow CloudWatch Logs service to use the key (you already had this)
+          # IMPORTANT: no !GetAtt TrailLogsBucket here (breaks the cycle)
+          - Sid: AllowS3BucketKeyForTrailLogsBucket
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:GenerateDataKey*
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService": !Sub "s3.${AWS::Region}.amazonaws.com"
+                # Compute the bucket ARN via !Sub instead of !GetAtt
+                "kms:EncryptionContext:aws:s3:arn": !Sub "arn:aws:s3:::${ProjectName}-${Environment}-trail-logs-${AWS::AccountId}"
+
           - Sid: AllowCloudWatchLogs
             Effect: Allow
             Principal:
@@ -428,12 +439,10 @@ Resources:
               - kms:Decrypt
               - kms:DescribeKey
               - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:GenerateDataKeyWithoutPlaintext
+              - kms:GenerateDataKey*
               - kms:ReEncrypt*
             Resource: "*"
 
-          # S3 and SNS statements you had are fine to keep
           - Sid: AllowSNS
             Effect: Allow
             Principal:
@@ -442,23 +451,9 @@ Resources:
               - kms:Decrypt
               - kms:DescribeKey
               - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:GenerateDataKeyWithoutPlaintext
+              - kms:GenerateDataKey*
               - kms:ReEncrypt*
             Resource: "*"
-      Tags:
-        - Key: Name
-          Value: !Sub "${ProjectName}-${Environment}-logs-key"
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Region
-          Value: !Ref "AWS::Region"
-        - Key: Owner
-          Value: Security
-        - Key: DataClassification
-          Value: Confidential
 
   KmsKeyLogsAlias:
     Type: AWS::KMS::Alias
@@ -594,6 +589,9 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt TrailLogsBucket.Arn
+            Condition:
+              StringEquals:
+                aws:SourceArn: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-trail"
 
           - Sid: AWSCloudTrailWrite
             Effect: Allow
@@ -603,9 +601,10 @@ Resources:
             Resource: !Sub "${TrailLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
-                "s3:x-amz-acl": bucket-owner-full-control
-                "s3:x-amz-server-side-encryption": aws:kms
-                "s3:x-amz-server-side-encryption-aws-kms-key-id": !GetAtt KmsKeyLogs.Arn
+                aws:SourceArn: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-${Environment}-trail"
+                s3:x-amz-acl: bucket-owner-full-control
+                s3:x-amz-server-side-encryption: aws:kms
+                s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt KmsKeyLogs.Arn
 
           - Sid: DenyInsecureConnections
             Effect: Deny
@@ -619,7 +618,7 @@ Resources:
                 "aws:SecureTransport": false
 
   # --------------------------
-  # IAM Roles (no explicit names, avoids CAPABILITY_NAMED_IAM)
+  # IAM Roles
   # --------------------------
   InstanceRole:
     Type: AWS::IAM::Role
@@ -781,7 +780,6 @@ Resources:
     Properties:
       TrailName: !Sub "${ProjectName}-${Environment}-trail"
       S3BucketName: !Ref TrailLogsBucket
-      # REMOVE S3KeyPrefix to avoid AWSLogs/AWSLogs/... double-prefix
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: false
       EnableLogFileValidation: true
@@ -829,7 +827,7 @@ Resources:
       TopicArn: !Ref AlertTopic
 
   # --------------------------
-  # Metric Filters & Alarms (Security Signals)
+  # Metric Filters & Alarms
   # --------------------------
   MFUnauthorizedApiCalls:
     Type: AWS::Logs::MetricFilter
@@ -913,7 +911,7 @@ Resources:
         - !Ref AlertTopic
 
   # --------------------------
-  # EC2 Instances (EBS encrypted, no !Sub in Base64)
+  # EC2 Instances
   # --------------------------
   BastionInstance:
     Type: AWS::EC2::Instance
