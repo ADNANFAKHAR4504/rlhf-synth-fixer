@@ -243,7 +243,10 @@ resource "aws_config_config_rule" "iam_policy_eu_north_1" {
   }
 
   input_parameters = jsonencode({
-    managedPolicyArns = []
+    managedPolicyArns = [
+      "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+      "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+    ]
   })
   depends_on = [aws_config_configuration_recorder.recorder_eu_north_1]
 }
@@ -420,6 +423,8 @@ resource "aws_config_config_rule" "iam_policy_us_west_2" {
 
   input_parameters = jsonencode({
     managedPolicyArns = [
+      "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+      "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
     ]
   })
   depends_on = [aws_config_configuration_recorder.recorder_us_west_2]
