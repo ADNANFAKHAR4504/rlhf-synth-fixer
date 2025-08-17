@@ -14,11 +14,11 @@ class MonitoringComponent(ComponentResource):
     # Create CloudWatch Log Groups
     self._create_log_groups(name, config)
 
-    # Create CloudWatch Alarms
-    self._create_alarms(name, config, dependencies.alb_arn)
-
     # Create SNS topics for notifications
     self._create_notification_system(name, config)
+
+    # Create CloudWatch Alarms
+    self._create_alarms(name, config, dependencies.alb_arn)
 
     # Create AWS Budgets
     self._create_budget_alerts(name, config)
