@@ -6,7 +6,7 @@ import sys
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import pytest
-from lib import tap_stack
+from lib import tap_helpers
 
 # Pipeline and deployment configuration constants
 REQUIRED_COVERAGE_THRESHOLD = 20
@@ -99,7 +99,6 @@ class TestCompletelyIndependentDeployment(unittest.TestCase):
     
   def test_deployment_success_indicators(self):
     """Test deployment success indicators are present."""
-    # Test that required components exist in completely independent deployment
     required_components = [
       "NEW VPC with fresh 10.0.0.0/16 CIDR",
       "NEW Internet Gateway attached only to new VPC",
@@ -406,20 +405,20 @@ class TestCodeOptimization(unittest.TestCase):
 # Helper function tests for coverage
 
 def test_get_resource_name():
-    result = tap_stack.get_resource_name("vpc")
-    assert result == f"{tap_stack.PROJECT_NAME}-{tap_stack.ENVIRONMENT}-vpc-{tap_stack.DEPLOYMENT_ID}"
+    result = tap_helpers.get_resource_name("vpc")
+    assert result == f"{tap_helpers.PROJECT_NAME}-{tap_helpers.ENVIRONMENT}-vpc-{tap_helpers.DEPLOYMENT_ID}"
 
 
 def test_get_short_name_default():
-    result = tap_stack.get_short_name("vpc")
-    assert result.startswith(f"{tap_stack.PROJECT_NAME}-vpc-{tap_stack.DEPLOYMENT_ID}")
+    result = tap_helpers.get_short_name("vpc")
+    assert result.startswith(f"{tap_helpers.PROJECT_NAME}-vpc-{tap_helpers.DEPLOYMENT_ID}")
     assert len(result) <= 32
 
 
 def test_get_short_name_truncate():
     # Use a long resource type to force truncation
-    result = tap_stack.get_short_name("verylongresourcetypename", max_length=24)
-    assert result.endswith(f"-{tap_stack.DEPLOYMENT_ID}")
+    result = tap_helpers.get_short_name("verylongresourcetypename", max_length=24)
+    assert result.endswith(f"-{tap_helpers.DEPLOYMENT_ID}")
     assert len(result) <= 24
 
 
@@ -428,7 +427,7 @@ def test_get_short_name_truncate():
     ("2001:db8::/56", 1, "2001:db8:0:1::/64"),
 ])
 def test_calculate_ipv6_cidr(vpc_cidr, subnet_index, expected):
-    result = tap_stack.calculate_ipv6_cidr(vpc_cidr, subnet_index)
+    result = tap_helpers.calculate_ipv6_cidr(vpc_cidr, subnet_index)
     assert result == expected
 
 if __name__ == '__main__':
