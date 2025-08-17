@@ -434,24 +434,6 @@
                 ]
             }
         },
-        "CreateUserLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/${Environment}-create-user"
-                },
-                "RetentionInDays": 30
-            }
-        },
-        "GetUserLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/lambda/${Environment}-get-user"
-                },
-                "RetentionInDays": 30
-            }
-        },
         "CreateUserFunctionErrorAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
@@ -786,7 +768,7 @@
                         ]
                     },
                     "TimePeriod": {
-                        "Start": "2023-01-01_00:00"
+                        "Start": 1672531200
                     }
                 },
                 "NotificationsWithSubscribers": [

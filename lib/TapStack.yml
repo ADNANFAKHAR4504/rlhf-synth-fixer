@@ -256,18 +256,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # CloudWatch Log Groups for enhanced logging
-  CreateUserLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${Environment}-create-user'
-      RetentionInDays: 30
-
-  GetUserLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${Environment}-get-user'
-      RetentionInDays: 30
 
   # CloudWatch Alarms
   # Lambda Error Alarms
@@ -476,7 +464,7 @@ Resources:
           TagValue:
             - !Ref Environment
         TimePeriod:
-          Start: '2023-01-01_00:00'
+          Start: 1672531200
       NotificationsWithSubscribers:
         - Notification:
             NotificationType: ACTUAL

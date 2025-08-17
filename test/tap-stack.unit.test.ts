@@ -139,7 +139,7 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
   describe(`${generateUniqueTestId('resources')}: Resources Comprehensive Validation`, () => {
     test(`${generateUniqueTestId('resource_count')}: should have expected number of resources`, () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(37); // Updated count with all new resources
+      expect(resourceCount).toBe(35); // Updated count with all new resources (removed LogGroups)
     });
 
     test(`${generateUniqueTestId('kms_key')}: should have customer-managed KMS key`, () => {
@@ -203,17 +203,18 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       expect(getUserDLQ.Properties.MessageRetentionPeriod).toBe(1209600);
     });
 
-    test(`${generateUniqueTestId('cloudwatch_log_groups')}: should have CloudWatch log groups`, () => {
-      const createUserLogGroup = template.Resources.CreateUserLogGroup;
-      expect(createUserLogGroup).toBeDefined();
-      expect(createUserLogGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(createUserLogGroup.Properties.RetentionInDays).toBe(30);
-      
-      const getUserLogGroup = template.Resources.GetUserLogGroup;
-      expect(getUserLogGroup).toBeDefined();
-      expect(getUserLogGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(getUserLogGroup.Properties.RetentionInDays).toBe(30);
-    });
+    // LogGroups removed to avoid conflicts - Lambda creates them automatically
+    // test(`${generateUniqueTestId('cloudwatch_log_groups')}: should have CloudWatch log groups`, () => {
+    //   const createUserLogGroup = template.Resources.CreateUserLogGroup;
+    //   expect(createUserLogGroup).toBeDefined();
+    //   expect(createUserLogGroup.Type).toBe('AWS::Logs::LogGroup');
+    //   expect(createUserLogGroup.Properties.RetentionInDays).toBe(30);
+    //   
+    //   const getUserLogGroup = template.Resources.GetUserLogGroup;
+    //   expect(getUserLogGroup).toBeDefined();
+    //   expect(getUserLogGroup.Type).toBe('AWS::Logs::LogGroup');
+    //   expect(getUserLogGroup.Properties.RetentionInDays).toBe(30);
+    // });
 
     test(`${generateUniqueTestId('sns_topic')}: should have SNS topic for notifications`, () => {
       const snsTopic = template.Resources.AlarmNotificationTopic;
