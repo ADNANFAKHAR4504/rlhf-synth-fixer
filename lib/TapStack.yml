@@ -459,10 +459,14 @@ Resources:
           Amount: !Ref BudgetLimit
           Unit: USD
         CostFilters:
-          TagKey:
-            - Environment
-          TagValue:
-            - !Ref Environment
+          Service:
+            - Amazon DynamoDB
+            - AWS Lambda
+            - Amazon API Gateway
+            - Amazon Simple Queue Service
+            - Amazon Simple Notification Service
+            - AWS Key Management Service
+            - AWS CloudWatch
         TimePeriod:
           Start: 1672531200
       NotificationsWithSubscribers:

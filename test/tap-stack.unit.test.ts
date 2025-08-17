@@ -272,6 +272,17 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       expect(budget.Type).toBe('AWS::Budgets::Budget');
       expect(budget.Properties.Budget.BudgetLimit.Amount).toEqual({ Ref: 'BudgetLimit' });
       expect(budget.Properties.NotificationsWithSubscribers).toHaveLength(2);
+      
+      // Check that cost filters use supported Service dimension
+      const costFilters = budget.Properties.Budget.CostFilters;
+      expect(costFilters.Service).toBeDefined();
+      expect(costFilters.Service).toContain('Amazon DynamoDB');
+      expect(costFilters.Service).toContain('AWS Lambda');
+      expect(costFilters.Service).toContain('Amazon API Gateway');
+      
+      // Ensure deprecated TagKey/TagValue are not present
+      expect(costFilters.TagKey).toBeUndefined();
+      expect(costFilters.TagValue).toBeUndefined();
     });
   });
 
