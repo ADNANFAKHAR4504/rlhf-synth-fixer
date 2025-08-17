@@ -421,7 +421,7 @@ resource "aws_iam_policy" "ec2_cloudwatch_policy" {
   name        = "${var.environment}-ec2-cloudwatch-policy"
   description = "Policy for EC2 CloudWatch monitoring"
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
       Action   = [
@@ -766,12 +766,19 @@ resource "aws_eip" "secondary_ec2" {
   })
 }
 
-# = ROUTE 53 FAILOVER DNS CONFIGURATION =
-data "aws_route53_zone" "primary_zone" {
-  name         = var.domain_name
-  private_zone = false
+# = ROUTE 53 HOSTED ZONE CREATION =
+resource "aws_route53_zone" "primary" {
+  name    = var.domain_name
+  comment = "Primary public hosted zone"
+  tags    = local.common_tags
+}
+resource "aws_route53_zone" "secondary" {
+  name    = "secondary.${var.domain_name}"
+  comment = "Secondary public hosted zone or subdomain"
+  tags    = local.common_tags
 }
 
+# = ROUTE 53 FAILOVER DNS CONFIGURATION =
 resource "aws_route53_health_check" "primary_ec2" {
   type                            = "HTTP"
   resource_path                   = "/"
@@ -786,7 +793,7 @@ resource "aws_route53_health_check" "primary_ec2" {
 }
 
 resource "aws_route53_record" "primary_failover" {
-  zone_id         = data.aws_route53_zone.primary_zone.zone_id
+  zone_id         = aws_route53_zone.primary.zone_id
   name            = "${var.subdomain}.${var.domain_name}"
   type            = "A"
   set_identifier  = "primary"
@@ -799,7 +806,7 @@ resource "aws_route53_record" "primary_failover" {
 }
 
 resource "aws_route53_record" "secondary_failover" {
-  zone_id         = data.aws_route53_zone.primary_zone.zone_id
+  zone_id         = aws_route53_zone.primary.zone_id
   name            = "${var.subdomain}.${var.domain_name}"
   type            = "A"
   set_identifier  = "secondary"
@@ -848,6 +855,14 @@ output "secondary_ec2_instance" {
 output "vpc_peering_id" {
   value       = aws_vpc_peering_connection.primary_to_secondary.id
   description = "VPC Peering Connection ID"
+}
+output "primary_route53_zone_id" {
+  value       = aws_route53_zone.primary.zone_id
+  description = "Primary Route53 Hosted Zone ID"
+}
+output "secondary_route53_zone_id" {
+  value       = aws_route53_zone.secondary.zone_id
+  description = "Secondary Route53 Hosted Zone ID"
 }
 output "route53_record" {
   value       = "${var.subdomain}.${var.domain_name}"
