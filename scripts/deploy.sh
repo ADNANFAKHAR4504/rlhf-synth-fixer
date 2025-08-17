@@ -55,7 +55,6 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   npm run cdktf:deploy
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-  aws cloudformation wait stack-delete-complete --stack-name TapStackpr1438
   npm run cfn:deploy-yaml
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
