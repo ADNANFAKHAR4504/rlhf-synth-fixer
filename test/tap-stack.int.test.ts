@@ -35,12 +35,12 @@ describe('TapStack CloudFormation Outputs Integration', () => {
   test('should have SecretArn output', () => {
     expect(outputs.SecretArn).toBeDefined();
     expect(typeof outputs.SecretArn).toBe('string');
-    expect(outputs.SecretArn).toBe('arn:aws:secretsmanager:us-east-1:***:secret:rds-credentials-tapstack1271-dev-2Mopyw');
+    expect(outputs.SecretArn).toMatch(/^arn:aws:secretsmanager:[\w-]+:\d+:secret:rds-credentials-tapstack1271-dev-/);
   });
 
   test('should have WebACLArn output', () => {
     expect(outputs.WebACLArn).toBeDefined();
     expect(typeof outputs.WebACLArn).toBe('string');
-    expect(outputs.WebACLArn).toBe('arn:aws:wafv2:us-east-1:***:global/webacl/WebACL-tapstack1271-dev/419a9252-af55-42c3-8862-529946dff739');
+    expect(outputs.WebACLArn).toMatch(/^arn:aws:wafv2:[\w-]+:\d+:global\/webacl\/WebACL-tapstack1271-dev\//);
   });
 });

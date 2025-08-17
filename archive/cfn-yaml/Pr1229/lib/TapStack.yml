@@ -39,7 +39,7 @@ Resources:
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'application-data-bucket-prod-001-${AWS::AccountId}-${AWS::Region}-tapstackpr1271'
+      BucketName: !Sub 'application-data-bucket-prod-001-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -55,34 +55,34 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Environment
-          Value: production
+          Value: Production
 
   # DynamoDB Table for Processed Results
   ProcessedResultsDB:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: processedresultsdb
+      TableName: ProcessedResultsDB
       AttributeDefinitions:
-        - AttributeName: recordid
+        - AttributeName: recordId
           AttributeType: S
       KeySchema:
-        - AttributeName: recordid
+        - AttributeName: recordId
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
       Tags:
         - Key: Environment
-          Value: production
+          Value: Production
 
   # Secrets Manager Secret
   ApplicationSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: applicationsecret
-      Description: 'secret for storing sensitive application data'
-      SecretString: '{"apikey": "your-placeholder-api-key"}'
+      Name: ApplicationSecret
+      Description: 'Secret for storing sensitive application data'
+      SecretString: '{"ApiKey": "your-placeholder-api-key"}'
       Tags:
         - Key: Environment
-          Value: production
+          Value: Production
 
   # IAM Role for Lambda Function
   LambdaExecutionRole:
@@ -105,7 +105,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub 'arn:aws:s3:::application-data-bucket-prod-001-${AWS::AccountId}-${AWS::Region}-tapstackpr1271/*'
+                Resource: !Sub 'arn:aws:s3:::application-data-bucket-prod-001-${AWS::AccountId}-us-east-1/*'
               - Effect: Allow
                 Action:
                   - dynamodb:PutItem
@@ -126,13 +126,13 @@ Resources:
                 Resource: !GetAtt ApplicationDataBucketKMSKey.Arn
       Tags:
         - Key: Environment
-          Value: production
+          Value: Production
 
   # MFA Enforcement Policy
   MFAEnforcementPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: 'policy that denies all actions if mfa is not present'
+      Description: 'Policy that denies all actions if MFA is not present'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -148,7 +148,7 @@ Resources:
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: /aws/lambda/s3dataprocessor
+      LogGroupName: /aws/lambda/S3DataProcessor
       RetentionInDays: 14
 
   # Lambda Function for S3 Data Processing
@@ -156,15 +156,15 @@ Resources:
     Type: AWS::Lambda::Function
     DependsOn: LambdaLogGroup
     Properties:
-      FunctionName: s3dataprocessor
+      FunctionName: S3DataProcessor
       Runtime: python3.13
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 60
       Environment:
         Variables:
-          dynamodb_table: !Ref ProcessedResultsDB
-          secret_name: !Ref ApplicationSecret
+          DYNAMODB_TABLE: !Ref ProcessedResultsDB
+          SECRET_NAME: !Ref ApplicationSecret
       Code:
         ZipFile: |
           import json
@@ -185,7 +185,7 @@ Resources:
                       object_key = unquote_plus(record['s3']['object']['key'])
                       logger.info(f"Processing object: {object_key} from bucket: {bucket_name}")
                       try:
-                          secret_name = os.environ['secret_name']
+                          secret_name = os.environ['SECRET_NAME']
                           secret_response = secrets_client.get_secret_value(SecretId=secret_name)
                           secret_data = json.loads(secret_response['SecretString'])
                           logger.info("Successfully retrieved secret from Secrets Manager")
@@ -199,12 +199,12 @@ Resources:
                           logger.error(f"Error accessing S3 object: {str(e)}")
                           raise
                       try:
-                          table_name = os.environ['dynamodb_table']
+                          table_name = os.environ['DYNAMODB_TABLE']
                           table = dynamodb.Table(table_name)
                           item = {
-                              'recordid': object_key,
-                              'bucketname': bucket_name,
-                              'processedat': context.aws_request_id,
+                              'recordId': object_key,
+                              'bucketName': bucket_name,
+                              'processedAt': context.aws_request_id,
                               'status': 'processed'
                           }
                           table.put_item(Item=item)
@@ -221,7 +221,7 @@ Resources:
                   raise
       Tags:
         - Key: Environment
-          Value: production
+          Value: Production
 
   # Permission for S3 to invoke Lambda
   LambdaInvokePermission:
@@ -234,41 +234,41 @@ Resources:
       SourceAccount: !Ref AWS::AccountId
 
 Outputs:
-  s3bucketname:
-    description: 'name of the s3 bucket for application data'
-    value: !Ref ApplicationDataBucket
-    export:
-      name: !Sub 'tapstackpr1271-s3bucketname'
+  S3BucketName:
+    Description: 'Name of the S3 bucket for application data'
+    Value: !Ref ApplicationDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketName'
 
-  dynamodbtablename:
-    description: 'name of the dynamodb table for processed results'
-    value: !Ref ProcessedResultsDB
-    export:
-      name: !Sub 'tapstackpr1271-dynamodbtablename'
+  DynamoDBTableName:
+    Description: 'Name of the DynamoDB table for processed results'
+    Value: !Ref ProcessedResultsDB
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
 
-  lambdafunctionname:
-    description: 'name of the lambda function'
-    value: !Ref S3DataProcessor
-    export:
-      name: !Sub 'tapstackpr1271-lambdafunctionname'
+  LambdaFunctionName:
+    Description: 'Name of the Lambda function'
+    Value: !Ref S3DataProcessor
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
 
-  secretname:
-    description: 'name of the secrets manager secret'
-    value: !Ref ApplicationSecret
-    export:
-      name: !Sub 'tapstackpr1271-secretname'
+  SecretName:
+    Description: 'Name of the Secrets Manager secret'
+    Value: !Ref ApplicationSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-SecretName'
 
-  kmskeyid:
-    description: 'id of the kms key used for s3 encryption'
-    value: !Ref ApplicationDataBucketKMSKey
-    export:
-      name: !Sub 'tapstackpr1271-kmskeyid'
+  KMSKeyId:
+    Description: 'ID of the KMS key used for S3 encryption'
+    Value: !Ref ApplicationDataBucketKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
 
-  mfaenforcementpolicyarn:
-    description: 'arn of the mfa enforcement policy'
-    value: !Ref MFAEnforcementPolicy
-    export:
-      name: !Sub 'tapstackpr1271-mfaenforcementpolicyarn'
+  MFAEnforcementPolicyArn:
+    Description: 'ARN of the MFA enforcement policy'
+    Value: !Ref MFAEnforcementPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-MFAEnforcementPolicyArn'
 
 # AWS CLI deployment command:
 # aws cloudformation create-stack --stack-name secure-data-processing-pipeline --template-body file://secure_infrastructure.yaml --capabilities CAPABILITY_NAMED_IAM --region us-east-1
