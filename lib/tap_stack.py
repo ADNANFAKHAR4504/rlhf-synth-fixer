@@ -566,36 +566,57 @@ class TapStack(pulumi.ComponentResource):
           opts=ResourceOptions(provider=self.target_provider, parent=self)
       )
       
-      # Simple dashboard with basic widgets
-      dashboard_body = {
-          "widgets": [
-              {
-                  "type": "metric",
-                  "x": 0,
-                  "y": 0,
-                  "width": 12,
-                  "height": 6,
-                  "properties": {
-                      "metrics": [
-                          ["AWS/EC2", "CPUUtilization", "InstanceId", self.ec2_instances[0].id.apply(lambda x: x)]
-                      ],
-                      "period": 300,
-                      "stat": "Average",
-                      "region": self.target_region,
-                      "title": "EC2 CPU Utilization"
+      # Create dashboard body function that takes resolved values
+      def create_dashboard_body(ec2_instance_id, rds_instance_id):
+          return {
+              "widgets": [
+                  {
+                      "type": "metric",
+                      "x": 0,
+                      "y": 0,
+                      "width": 12,
+                      "height": 6,
+                      "properties": {
+                          "metrics": [["AWS/EC2", "CPUUtilization", "InstanceId", ec2_instance_id]],
+                          "period": 300,
+                          "stat": "Average",
+                          "region": self.target_region,
+                          "title": "EC2 CPU Utilization"
+                      }
+                  },
+                  {
+                      "type": "metric",
+                      "x": 0,
+                      "y": 6,
+                      "width": 12,
+                      "height": 6,
+                      "properties": {
+                          "metrics": [
+                              ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", rds_instance_id],
+                              [".", "DatabaseConnections", ".", "."],
+                              [".", "FreeableMemory", ".", "."]
+                          ],
+                          "period": 300,
+                          "stat": "Average",
+                          "region": self.target_region,
+                          "title": "RDS Metrics"
+                      }
                   }
-              }
-          ]
-      }
+              ]
+          }
+      
+      # Use Output.all() to combine outputs and apply() to create JSON string
+      dashboard_body_output = Output.all(
+          self.ec2_instances[0].id,
+          self.rds_instance.id
+      ).apply(lambda ids: json.dumps(create_dashboard_body(ids, ids[1])))
       
       self.cloudwatch_dashboard = aws.cloudwatch.Dashboard(
           f"tap-dashboard-{self.env_suffix}",
           dashboard_name=f"TAP-Migration-Dashboard-{self.env_suffix}",
-          dashboard_body=json.dumps(dashboard_body),
+          dashboard_body=dashboard_body_output,
           opts=ResourceOptions(provider=self.target_provider, parent=self)
       )
-
-
 
     
     def _setup_backup_strategies(self):
