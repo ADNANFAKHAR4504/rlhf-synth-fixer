@@ -66,7 +66,7 @@ export class ComputeConstruct extends Construct {
       // EC2 Instance in public subnet
       new Instance(this, `${props.prefix}-ec2-public-${region}`, {
         provider: vpc.provider,
-        ami: 'ami-0c02fb55956c7d316', // Amazon Linux 2, update as needed
+        ami: amiMap[region],
         instanceType: 't3.micro',
         subnetId: props.vpc.publicSubnets[region]?.[0]?.id,
         vpcSecurityGroupIds: [publicSg.id],
@@ -152,3 +152,9 @@ export class ComputeConstruct extends Construct {
     });
   }
 }
+
+const amiMap = {
+  'us-east-1': 'ami-0c02fb55956c7d316',
+  'us-west-1': 'ami-0b2b9b6c',
+  // Add more regions as needed
+};

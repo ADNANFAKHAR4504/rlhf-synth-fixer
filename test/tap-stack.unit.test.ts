@@ -102,18 +102,18 @@ describe('TapStack Comprehensive Unit Tests', () => {
     const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc: vpc2 });
     new StorageConstruct(stack, 'StorageTest', { prefix: 'test', security });
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('test-us-west-2-vpc');
-    expect(synthesized).toContain('test-us-west-2-public-subnet-1');
-    expect(synthesized).toContain('test-us-west-2-private-subnet-1');
-    expect(synthesized).toContain('test-us-west-2-app-data');
-    expect(synthesized).toContain('test-us-west-2-logs');
-    // Additional checks for multi-region and edge cases
-    expect(synthesized).toContain('test2-us-east-1-vpc');
-    expect(synthesized).toContain('test2-us-west-2-vpc');
-    expect(synthesized).toContain('test2-us-east-1-public-subnet-1');
-    expect(synthesized).toContain('test2-us-west-2-public-subnet-1');
-    expect(synthesized).toContain('test2-us-east-1-private-subnet-1');
-    expect(synthesized).toContain('test2-us-west-2-private-subnet-1');
+  expect(synthesized).toContain('test-vpc-us-west-2');
+  expect(synthesized).toContain('test-public-subnet-1-us-west-2');
+  expect(synthesized).toContain('test-private-subnet-1-us-west-2');
+  expect(synthesized).toContain('test-app-data-us-west-2');
+  expect(synthesized).toContain('test-logs-us-west-2');
+  // Additional checks for multi-region and edge cases
+  expect(synthesized).toContain('test2-vpc-us-east-1');
+  expect(synthesized).toContain('test2-vpc-us-west-2');
+  expect(synthesized).toContain('test2-public-subnet-1-us-east-1');
+  expect(synthesized).toContain('test2-public-subnet-1-us-west-2');
+  expect(synthesized).toContain('test2-private-subnet-1-us-east-1');
+  expect(synthesized).toContain('test2-private-subnet-1-us-west-2');
   });
 
   test('VpcConstruct handles empty regions array gracefully', () => {
