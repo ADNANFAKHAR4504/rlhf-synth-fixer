@@ -459,7 +459,7 @@ export class S3Module extends Construct {
     tags: { [key: string]: string }
   ): S3Bucket {
     // Create S3 bucket
-    const bucketName = `corp-${name}-${this.accountId.slice(-4)}`;
+    const bucketName = `corp-${name}-dev`;
     const bucket = new S3Bucket(this, `bucket-${name}`, {
       bucket: bucketName, // Ensure uniqueness
       forceDestroy: true, // Allow deletion for testing (remove in production)
