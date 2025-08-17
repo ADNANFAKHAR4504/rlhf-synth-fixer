@@ -426,6 +426,7 @@ resource "aws_vpc_endpoint" "dynamodb" {
 #######################
 resource "aws_s3_bucket" "logs" {
   bucket = "${local.name_prefix}-logs-bucket"
+  force_destroy = true
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-logs-bucket" })
 }
 
