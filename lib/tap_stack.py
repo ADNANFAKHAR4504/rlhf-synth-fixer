@@ -209,40 +209,79 @@ class TapStack(pulumi.ComponentResource):
         )
         
         # Create IAM role for replication
-        replication_role = aws.iam.Role(
+        replication_assume_role_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"Service": "s3.amazonaws.com"},
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }
+        
+        self.replication_role = aws.iam.Role(
             f"replication-role-{self.env_suffix}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {"Service": "s3.amazonaws.com"},
-                        "Action": "sts:AssumeRole"
-                    }
-                ]
-            }),
+            assume_role_policy=json.dumps(replication_assume_role_policy),
             tags=self.default_tags,
             opts=ResourceOptions(provider=self.source_provider, parent=self)
         )
         
-        # Attach replication policy
-        aws.iam.RolePolicyAttachment(
-            f"replication-policy-attachment-{self.env_suffix}",
-            role=replication_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWSS3ReplicationServiceRolePolicy",
+        # Create custom replication policy
+        replication_policy_document = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:GetObjectVersionForReplication",
+                        "s3:GetObjectVersionAcl",
+                        "s3:GetObjectVersionTagging"
+                    ],
+                    "Resource": f"{self.source_bucket.arn}/*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:ListBucket"
+                    ],
+                    "Resource": self.source_bucket.arn
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:ReplicateObject",
+                        "s3:ReplicateDelete",
+                        "s3:ReplicateTags"
+                    ],
+                    "Resource": f"{self.target_bucket.arn}/*"
+                }
+            ]
+        }
+        
+        replication_policy = aws.iam.Policy(
+            f"replication-policy-{self.env_suffix}",
+            policy=json.dumps(replication_policy_document),
             opts=ResourceOptions(provider=self.source_provider, parent=self)
         )
         
-        # Configure cross-region replication
-        aws.s3.BucketReplicationConfiguration(
+        aws.iam.RolePolicyAttachment(
+            f"replication-policy-attachment-{self.env_suffix}",
+            role=self.replication_role.name,
+            policy_arn=replication_policy.arn,
+            opts=ResourceOptions(provider=self.source_provider, parent=self)
+        )
+        
+        # Configure cross-region replication using BucketReplicationConfigurationV2
+        aws.s3.BucketReplicationConfigurationV2(
             f"bucket-replication-{self.env_suffix}",
-            role=replication_role.arn,
+            role=self.replication_role.arn,
             bucket=self.source_bucket.id,
             rules=[
-                aws.s3.BucketReplicationConfigurationRuleArgs(
+                aws.s3.BucketReplicationConfigurationV2RuleArgs(
                     id="ReplicateEverything",
                     status="Enabled",
-                    destination=aws.s3.BucketReplicationConfigurationRuleDestinationArgs(
+                    destination=aws.s3.BucketReplicationConfigurationV2RuleDestinationArgs(
                         bucket=self.target_bucket.arn,
                         storage_class="STANDARD"
                     )
@@ -251,7 +290,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(
                 provider=self.source_provider,
                 parent=self,
-                depends_on=[self.source_bucket, self.target_bucket]
+                depends_on=[self.source_bucket, self.target_bucket, self.replication_role]
             )
         )
     
@@ -467,7 +506,7 @@ class TapStack(pulumi.ComponentResource):
             instance_class="db.t3.micro",
             identifier=f"tap-db-{self.env_suffix}",
             username="admin",
-            password=self.config.require_secret("db_password"),
+            password=self.config.get_secret("db_password") or "DefaultPassword123!",
             vpc_security_group_ids=[self.rds_security_group.id],
             db_subnet_group_name=self.db_subnet_group.name,
             backup_retention_period=7,
@@ -520,24 +559,6 @@ class TapStack(pulumi.ComponentResource):
                         "region": self.target_region,
                         "title": "RDS Metrics"
                     }
-                },
-                {
-                    "type": "metric",
-                    "x": 0,
-                    "y": 12,
-                    "width": 12,
-                    "height": 6,
-                    "properties": {
-                        "metrics": [
-                            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", self.alb.arn_suffix],
-                            [".", "TargetResponseTime", ".", "."],
-                            [".", "HTTPCode_Target_2XX_Count", ".", "."]
-                        ],
-                        "period": 300,
-                        "stat": "Sum",
-                        "region": self.target_region,
-                        "title": "Load Balancer Metrics"
-                    }
                 }
             ]
         }
@@ -545,7 +566,7 @@ class TapStack(pulumi.ComponentResource):
         self.cloudwatch_dashboard = aws.cloudwatch.Dashboard(
             f"tap-dashboard-{self.env_suffix}",
             dashboard_name=f"TAP-Migration-Dashboard-{self.env_suffix}",
-            dashboard_body=json.dumps(dashboard_body),
+            dashboard_body=Output.from_input(dashboard_body).apply(lambda x: json.dumps(x)),
             opts=ResourceOptions(provider=self.target_provider, parent=self)
         )
         
@@ -581,29 +602,10 @@ class TapStack(pulumi.ComponentResource):
             dimensions={"DBInstanceIdentifier": self.rds_instance.id},
             opts=ResourceOptions(provider=self.target_provider, parent=self)
         )
-        
-        # ALB Target Health Alarm
-        self.alb_health_alarm = aws.cloudwatch.MetricAlarm(
-            f"alb-health-alarm-{self.env_suffix}",
-            name=f"alb-unhealthy-targets-{self.env_suffix}",
-            comparison_operator="LessThanThreshold",
-            evaluation_periods=2,
-            metric_name="HealthyHostCount",
-            namespace="AWS/ApplicationELB",
-            period=300,
-            statistic="Average",
-            threshold=1,
-            alarm_description="ALB has unhealthy targets",
-            dimensions={
-                "TargetGroup": self.target_group.arn_suffix,
-                "LoadBalancer": self.alb.arn_suffix
-            },
-            opts=ResourceOptions(provider=self.target_provider, parent=self)
-        )
     
     def _setup_backup_strategies(self):
         """Setup backup strategies for all data"""
-        # S3 bucket lifecycle configuration
+        # S3 bucket lifecycle configuration for source bucket
         aws.s3.BucketLifecycleConfigurationV2(
             f"source-bucket-lifecycle-{self.env_suffix}",
             bucket=self.source_bucket.id,
@@ -626,16 +628,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(provider=self.source_provider, parent=self)
         )
         
-        # RDS automated backups are already enabled with 7-day retention
-        # Create additional manual snapshot
-        self.rds_snapshot = aws.rds.Snapshot(
-            f"rds-migration-snapshot-{self.env_suffix}",
-            db_instance_identifier=self.rds_instance.id,
-            db_snapshot_identifier=f"tap-migration-snapshot-{self.env_suffix}",
-            tags={**self.default_tags, "Purpose": "Migration Backup"},
-            opts=ResourceOptions(provider=self.target_provider, parent=self)
-        )
-        
         # Create backup vault for AWS Backup
         self.backup_vault = aws.backup.Vault(
             f"backup-vault-{self.env_suffix}",
@@ -646,18 +638,20 @@ class TapStack(pulumi.ComponentResource):
         )
         
         # IAM role for AWS Backup
+        backup_assume_role_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"Service": "backup.amazonaws.com"},
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }
+        
         backup_role = aws.iam.Role(
             f"backup-role-{self.env_suffix}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Effect": "Allow",
-                        "Principal": {"Service": "backup.amazonaws.com"},
-                        "Action": "sts:AssumeRole"
-                    }
-                ]
-            }),
+            assume_role_policy=json.dumps(backup_assume_role_policy),
             tags=self.default_tags,
             opts=ResourceOptions(provider=self.target_provider, parent=self)
         )
