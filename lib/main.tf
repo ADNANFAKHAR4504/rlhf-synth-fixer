@@ -71,7 +71,7 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 # |-----------------------------------------------------------------------------
 
 data "aws_vpc" "default_eu_north_1" {
-  provider = aws.eu_north_1
+  provider = aws.eu-north-1
   default  = true
 }
 
