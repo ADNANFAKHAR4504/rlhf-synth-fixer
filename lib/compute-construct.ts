@@ -130,7 +130,7 @@ export class ComputeConstruct extends Construct {
         provider: vpc.provider,
         functionName: `${props.prefix}-lambda-${region}`,
         role: props.security.iamRoles[region]?.arn,
-        handler: 'index.handler',
+        handler: 'lambda.handler',
         runtime: 'nodejs18.x',
         filename: 'lib/lambda.zip', // use correct path to deployment package
         sourceCodeHash: 'placeholder', // Replace with actual hash
