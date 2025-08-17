@@ -634,7 +634,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
             dataResources: [
               {
                 type: 'AWS::S3::Object',
-                values: cloudtrailBucket.arn.apply(arn => `${arn}/`),
+                values: cloudtrailBucket.arn.apply(arn => [`${arn}/`]),
               },
             ],
           },
