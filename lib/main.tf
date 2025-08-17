@@ -81,7 +81,7 @@ resource "aws_vpc" "nova_vpc_eu_north_1_291844" {
 resource "aws_subnet" "nova_subnet_eu_north_1_291844" {
   provider          = aws.eu-north-1
   vpc_id            = aws_vpc.nova_vpc_eu_north_1_291844.id
-  cidr_block        = "10.1.1.0/24"
+  cidr_block        = "10.2.1.0/24"
   availability_zone = "eu-north-1a" # Example AZ (verify in your AWS account)
   tags              = merge(local.common_tags, { Name = "nova-subnet-eu-north-1-291844" })
 }
