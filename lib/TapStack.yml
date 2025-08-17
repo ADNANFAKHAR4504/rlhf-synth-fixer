@@ -524,7 +524,7 @@ Resources:
       EnableLogFileValidation: true
       IsLogging: true
       KMSKeyId: !Ref S3KMSKey
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudWatchRole.Arn
       EventSelectors:
         - ReadWriteType: All

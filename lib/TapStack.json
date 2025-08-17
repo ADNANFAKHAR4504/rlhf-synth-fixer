@@ -879,7 +879,10 @@
                     "Ref": "S3KMSKey"
                 },
                 "CloudWatchLogsLogGroupArn": {
-                    "Fn::Sub": "${CloudTrailLogGroup}:*"
+                    "Fn::GetAtt": [
+                        "CloudTrailLogGroup",
+                        "Arn"
+                    ]
                 },
                 "CloudWatchLogsRoleArn": {
                     "Fn::GetAtt": [
