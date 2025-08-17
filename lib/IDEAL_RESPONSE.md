@@ -19,13 +19,8 @@ This document provides a comprehensive guide to a secure, multi-region AWS infra
 ## Architecture Overview
 
 This infrastructure deploys a secure, multi-region setup across two AWS regions:
-<<<<<<< HEAD
 - **Primary Region**: us-west-1
 - **Secondary Region**: eu-central-1
-=======
-- **Primary Region**: us-west-1 (Asia Pacific - Singapore)
-- **Secondary Region**: eu-central-1 (Canada - Central)
->>>>>>> 5351080ae (feat(IAC-291775): Updated code with regions and complete integration tests)
 
 The architecture implements a 3-tier design with:
 - **Web Tier**: Public-facing components with restricted access
@@ -352,11 +347,7 @@ resource "aws_route_table_association" "private_rta_us_west_1a" {
 # Web Tier Security Group
 resource "aws_security_group" "web_tier_us_west" {
   provider    = aws.us_west
-<<<<<<< HEAD
   name        = "${local.environment}-web-tier-sg-us-west-1"
-=======
-  name        = "WebTierSG-${local.environment}-us-west-1-${random_string.bucket_suffix.result}"
->>>>>>> 5351080ae (feat(IAC-291775): Updated code with regions and complete integration tests)
   description = "Security group for web tier with restricted access"
   vpc_id      = aws_vpc.secure_app_vpc_us_west.id
   
@@ -413,11 +404,7 @@ resource "aws_security_group" "web_tier_us_west" {
   }
   
   tags = merge(local.common_tags, {
-<<<<<<< HEAD
     Name = "${local.environment}-web-tier-sg-us-west-1"
-=======
-    Name = "WebTierSG-${local.environment}-us-west-1"
->>>>>>> 5351080ae (feat(IAC-291775): Updated code with regions and complete integration tests)
     Tier = "Web"
   })
 }
@@ -426,11 +413,7 @@ resource "aws_security_group" "web_tier_us_west" {
 # Database Tier Security Group
 resource "aws_security_group" "database_tier_us_west" {
   provider    = aws.us_west
-<<<<<<< HEAD
   name        = "${local.environment}-database-tier-sg-us-west-1"
-=======
-  name        = "DatabaseTierSG-${local.environment}-us-west-1-${random_string.bucket_suffix.result}"
->>>>>>> 5351080ae (feat(IAC-291775): Updated code with regions and complete integration tests)
   description = "Security group for database tier"
   vpc_id      = aws_vpc.secure_app_vpc_us_west.id
   
@@ -470,11 +453,7 @@ resource "aws_security_group" "database_tier_us_west" {
   }
   
   tags = merge(local.common_tags, {
-<<<<<<< HEAD
     Name = "${local.environment}-database-tier-sg-us-west-1"
-=======
-    Name = "DatabaseTierSG-${local.environment}-us-west-1"
->>>>>>> 5351080ae (feat(IAC-291775): Updated code with regions and complete integration tests)
     Tier = "Database"
   })
 }
@@ -1367,6 +1346,9 @@ Now we can create the AWS Config resources using a **smart deployment strategy**
 ```hcl
 # From: tap_stack.tf
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> bc0c831cc (resolve resources conflicts)
 # AWS Config - Smart deployment strategy
 # Uses locals to control Config resource creation based on environment needs
 
@@ -1379,6 +1361,7 @@ locals {
 }
 
 # Create Config resources only when explicitly enabled
+<<<<<<< HEAD
 resource "aws_config_configuration_recorder" "recorder_us_west" {
   provider = aws.us_west
   count    = local.deploy_config_us_west ? 1 : 0
@@ -1389,6 +1372,12 @@ resource "aws_config_configuration_recorder" "recorder_us_west" {
   provider = aws.us_west
   name     = "SecurityRecorder-${local.environment}-us-west-1"
 >>>>>>> 5351080ae (feat(IAC-291775): Updated code with regions and complete integration tests)
+=======
+resource "aws_config_configuration_recorder" "recorder_us_west" {
+  provider = aws.us_west
+  count    = local.deploy_config_us_west ? 1 : 0
+  name     = "SecurityRecorder-${local.environment}-us-west-1-${random_string.bucket_suffix.result}"
+>>>>>>> bc0c831cc (resolve resources conflicts)
   role_arn = aws_iam_role.config_role.arn
 
   recording_group {
@@ -1400,11 +1389,16 @@ resource "aws_config_configuration_recorder" "recorder_us_west" {
 resource "aws_config_configuration_recorder" "recorder_eu_central" {
   provider = aws.eu_central
 <<<<<<< HEAD
+<<<<<<< HEAD
   count    = local.deploy_config_eu_central ? 1 : 0
   name     = "SecurityRecorder-${local.environment}-eu-central-1-${random_string.bucket_suffix.result}"
 =======
   name     = "SecurityRecorder-${local.environment}-eu-central-1"
 >>>>>>> 5351080ae (feat(IAC-291775): Updated code with regions and complete integration tests)
+=======
+  count    = local.deploy_config_eu_central ? 1 : 0
+  name     = "SecurityRecorder-${local.environment}-eu-central-1-${random_string.bucket_suffix.result}"
+>>>>>>> bc0c831cc (resolve resources conflicts)
   role_arn = aws_iam_role.config_role.arn
 
   recording_group {
@@ -1413,6 +1407,7 @@ resource "aws_config_configuration_recorder" "recorder_eu_central" {
   }
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 resource "aws_config_delivery_channel" "delivery_channel_us_west" {
   provider       = aws.us_west
@@ -1424,6 +1419,12 @@ resource "aws_config_delivery_channel" "delivery_channel_us_west" {
   provider       = aws.us_west
   name           = "SecurityDeliveryChannel-${local.environment}-us-west-1"
 >>>>>>> 5351080ae (feat(IAC-291775): Updated code with regions and complete integration tests)
+=======
+resource "aws_config_delivery_channel" "delivery_channel_us_west" {
+  provider       = aws.us_west
+  count          = local.deploy_config_us_west ? 1 : 0
+  name           = "SecurityDeliveryChannel-${local.environment}-us-west-1-${random_string.bucket_suffix.result}"
+>>>>>>> bc0c831cc (resolve resources conflicts)
   s3_bucket_name = aws_s3_bucket.config_bucket_us_west.bucket
 
   depends_on = [
@@ -1435,11 +1436,16 @@ resource "aws_config_delivery_channel" "delivery_channel_us_west" {
 resource "aws_config_delivery_channel" "delivery_channel_eu_central" {
   provider       = aws.eu_central
 <<<<<<< HEAD
+<<<<<<< HEAD
   count          = local.deploy_config_eu_central ? 1 : 0
   name           = "SecurityDeliveryChannel-${local.environment}-eu-central-1-${random_string.bucket_suffix.result}"
 =======
   name           = "SecurityDeliveryChannel-${local.environment}-eu-central-1"
 >>>>>>> 5351080ae (feat(IAC-291775): Updated code with regions and complete integration tests)
+=======
+  count          = local.deploy_config_eu_central ? 1 : 0
+  name           = "SecurityDeliveryChannel-${local.environment}-eu-central-1-${random_string.bucket_suffix.result}"
+>>>>>>> bc0c831cc (resolve resources conflicts)
   s3_bucket_name = aws_s3_bucket.config_bucket_eu_central.bucket
 
   depends_on = [
