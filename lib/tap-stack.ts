@@ -222,7 +222,6 @@ export class TapStack extends cdk.Stack {
         launchTemplate,
         minCapacity: 2,
         maxCapacity: 6,
-        desiredCapacity: 2,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
@@ -389,7 +388,6 @@ export class TapStack extends cdk.Stack {
       target: route53.RecordTarget.fromAlias(
         new targets.LoadBalancerTarget(alb)
       ),
-      ttl: cdk.Duration.seconds(300),
     });
 
     // Route 53 AAAA Record pointing to ALB (IPv6)
@@ -399,7 +397,6 @@ export class TapStack extends cdk.Stack {
       target: route53.RecordTarget.fromAlias(
         new targets.LoadBalancerTarget(alb)
       ),
-      ttl: cdk.Duration.seconds(300),
     });
 
     // Route 53 A Record pointing to CloudFront
@@ -409,7 +406,6 @@ export class TapStack extends cdk.Stack {
       target: route53.RecordTarget.fromAlias(
         new targets.CloudFrontTarget(distribution)
       ),
-      ttl: cdk.Duration.seconds(300),
     });
 
     // Outputs
