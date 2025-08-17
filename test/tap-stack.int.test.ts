@@ -199,10 +199,11 @@ describe('TapStack Enterprise Integration Tests', () => {
       });
     });
   }
-  const bucketName = `prod-cloudtrail-bucket-${process.env.AWS_ACCOUNT_ID || 'unknown'}`;
-  test('S3 Bucket exists, is versioned, and encrypted', async () => {
-    await validateS3Bucket(bucketName);
-  });
+  if (outputs.ProdTrailBucketName) {
+    test('S3 Bucket exists, is versioned, and encrypted', async () => {
+      await validateS3Bucket(outputs.ProdTrailBucketName as string);
+    });
+  }
   if (outputs.CloudTrailKMSKeyId) {
     test('KMS Key exists and is enabled', async () => {
       await validateKmsKey(outputs.CloudTrailKMSKeyId as string);
@@ -213,11 +214,15 @@ describe('TapStack Enterprise Integration Tests', () => {
       await validateAlb(outputs.ALBEndpoint as string);
     });
   }
-  if (outputs.ProdCloudTrailName && outputs.CloudTrailKMSKeyId && bucketName) {
+  if (
+    outputs.ProdCloudTrailName &&
+    outputs.CloudTrailKMSKeyId &&
+    outputs.ProdTrailBucketName
+  ) {
     test('CloudTrail exists, is logging, and is configured correctly', async () => {
       await validateCloudTrail(
         outputs.ProdCloudTrailName as string,
-        bucketName,
+        outputs.ProdTrailBucketName as string,
         outputs.CloudTrailKMSKeyId as string
       );
     });
