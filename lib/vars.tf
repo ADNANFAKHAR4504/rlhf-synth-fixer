@@ -2,7 +2,7 @@
 variable "project" {
   description = "Project Name"
   type =  string
-  default = "IAC-291432-tf"
+  default = "IAC-291320"
 }
 
 variable "aws_region" {
