@@ -458,7 +458,7 @@ export class CloudTrailModule extends Construct {
             Resource: `arn:aws:s3:::${config.s3BucketName}`,
             Condition: {
               StringEquals: {
-                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/${config.s3BucketName}`,
+                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/${config.name}`,
               },
             },
           },
@@ -469,11 +469,11 @@ export class CloudTrailModule extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `arn:aws:s3:::${config.s3BucketName}/AWSLogs/${callerIdentity.accountId}/*`,
+            Resource: `arn:aws:s3:::${config.s3BucketName}/AWSLogs/${this.accountId}/*`,
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
-                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/${config.s3BucketName}`,
+                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/${config.name}`,
               },
             },
           },
@@ -505,6 +505,8 @@ export class CloudTrailModule extends Construct {
         Name: config.name,
         Environment: 'production',
       },
+      // Add explicit dependency on the bucket policy
+      dependsOn: [this.bucketPolicy],
     });
 
     // Create CloudTrail Event Data Store for advanced querying
