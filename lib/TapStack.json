@@ -214,6 +214,21 @@
                                 "kms:DescribeKey"
                             ],
                             "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Config Encryption",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
                         }
                     ]
                 },
@@ -556,6 +571,61 @@
                                     "s3:x-amz-acl": "bucket-owner-full-control"
                                 }
                             }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketExistenceCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:ListBucket",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDelivery",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::corp-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/config-logs/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "AWS:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
                         }
                     ]
                 }
@@ -787,6 +857,7 @@
         },
         "CorpConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
+            "DependsOn": "CorpS3BucketPolicy",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "corp-config-delivery-${Environment}"
@@ -794,7 +865,7 @@
                 "S3BucketName": {
                     "Ref": "CorpS3Bucket"
                 },
-                "S3KeyPrefix": "config-logs/",
+                "S3KeyPrefix": "config-logs",
                 "ConfigSnapshotDeliveryProperties": {
                     "DeliveryFrequency": "TwentyFour_Hours"
                 }
