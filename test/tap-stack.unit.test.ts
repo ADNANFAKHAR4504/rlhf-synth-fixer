@@ -1,20 +1,36 @@
-// unit_test.ts
+// test/tap-stack.unit.test.ts
 // Static/unit tests that validate the CloudFormation YAML structure without touching AWS.
 
 import { describe, expect, it } from "@jest/globals";
 import fs from "fs";
-import yaml, { Schema, Type } from "js-yaml";
+import yaml, { Type } from "js-yaml";
 import path from "path";
 
 // --- Minimal CFN tag handlers used by your template ---
 const CFN_TAGS: Type[] = [
-  new Type("!Ref",    { kind: "scalar",   construct: (d: any) => ({ Ref: d }) }),
-  new Type("!GetAtt", { kind: "scalar",   construct: (d: any) => ({ "Fn::GetAtt": typeof d === "string" ? d.split(".") : d }) }),
-  new Type("!Sub",    { kind: "scalar",   construct: (d: any) => ({ "Fn::Sub": d }) }),
-  new Type("!Equals", { kind: "sequence", construct: (d: any) => ({ "Fn::Equals": d }) }),
-  // (Add more as needed: !Join, !If, !And, !Or, !FindInMap, !Select, !Split, !Base64, !Cidr, !GetAZs, !ImportValue, !ToJsonString, etc.)
+  new Type("!Ref", {
+    kind: "scalar",
+    construct: (d: any) => ({ Ref: d }),
+  }),
+  new Type("!GetAtt", {
+    kind: "scalar",
+    // supports "!GetAtt LogicalId.Attribute"
+    construct: (d: any) =>
+      ({ "Fn::GetAtt": typeof d === "string" ? d.split(".") : d }),
+  }),
+  new Type("!Sub", {
+    // allow scalar and sequence forms
+    kind: "scalar",
+    construct: (d: any) => ({ "Fn::Sub": d }),
+  }),
+  new Type("!Equals", {
+    kind: "sequence",
+    construct: (d: any) => ({ "Fn::Equals": d }),
+  }),
 ];
-const CFN_SCHEMA = Schema.create(CFN_TAGS);
+
+// Use DEFAULT_SCHEMA and extend with our CFN tags
+const CFN_SCHEMA = yaml.DEFAULT_SCHEMA.extend(CFN_TAGS);
 
 // Load template
 const templatePath = path.resolve(process.cwd(), "lib", "TapStack.yml");
@@ -43,14 +59,17 @@ describe("TapStack Template — Unit Tests", () => {
     expect(p.VpcId?.Type).toBe("AWS::EC2::VPC::Id");
     expect(typeof p.VpcId?.Default).toBe("string");
 
-    expect(p.LatestAmiId?.Type).toBe("AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>");
+    expect(p.LatestAmiId?.Type).toBe(
+      "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>"
+    );
     expect(
       String(p.LatestAmiId?.Default || "").includes(
         "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
       )
     ).toBe(true);
 
-    expect(p.EnvironmentSuffix?.Type).toBe("String"); // defined & used (echo output)
+    // defined & used (echo output)
+    expect(p.EnvironmentSuffix?.Type).toBe("String");
   });
 
   it("does not create IAM roles/users (no AWS::IAM::* resources)", () => {
@@ -74,7 +93,9 @@ describe("TapStack Template — Unit Tests", () => {
 
     const egress = sg?.SecurityGroupEgress;
     expect(Array.isArray(egress)).toBe(true);
-    const allowAll = egress.find((r: any) => String(r.IpProtocol) === "-1" && r.CidrIp === "0.0.0.0/0");
+    const allowAll = egress.find(
+      (r: any) => String(r.IpProtocol) === "-1" && r.CidrIp === "0.0.0.0/0"
+    );
     expect(allowAll).toBeTruthy();
 
     const envTag = (sg?.Tags || []).find((t: any) => t.Key === "Environment");
@@ -83,7 +104,8 @@ describe("TapStack Template — Unit Tests", () => {
 
   it("S3 bucket has AES256 SSE and public access blocks", () => {
     const bkt = doc.Resources?.AppBucket?.Properties;
-    const sseRules = bkt?.BucketEncryption?.ServerSideEncryptionConfiguration || [];
+    const sseRules =
+      bkt?.BucketEncryption?.ServerSideEncryptionConfiguration || [];
     const hasAES256 = sseRules.some(
       (r: any) => r.ServerSideEncryptionByDefault?.SSEAlgorithm === "AES256"
     );
@@ -119,9 +141,15 @@ describe("TapStack Template — Unit Tests", () => {
 
   it("Outputs include SecurityGroupId, InstanceId, InstancePublicIp, BucketName, EnvironmentSuffixEcho", () => {
     const o = doc.Outputs || {};
-    ["SecurityGroupId", "InstanceId", "InstancePublicIp", "BucketName", "EnvironmentSuffixEcho"].forEach(
-      (k) => expect(o[k]).toBeTruthy()
-    );
+    [
+      "SecurityGroupId",
+      "InstanceId",
+      "InstancePublicIp",
+      "BucketName",
+      "EnvironmentSuffixEcho",
+    ].forEach((k) => expect(o[k]).toBeTruthy());
+
+    // Ensure EnvironmentSuffix is actually referenced (avoids W2001)
     const echoVal = JSON.stringify(o.EnvironmentSuffixEcho?.Value ?? "");
     expect(echoVal).toContain("EnvironmentSuffix");
   });
