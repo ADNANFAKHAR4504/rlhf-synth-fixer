@@ -107,10 +107,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(statement.Condition.Bool['aws:SecureTransport']).toBe('false');
     });
 
-    test('should have CloudTrail S3 bucket (commented out due to service limit)', () => {
+    test('should have CloudTrail S3 bucket', () => {
       const bucket = template.Resources.TapCloudTrailBucket;
-      // CloudTrail resources are commented out due to 7 trail limit in us-east-1
-      expect(bucket).toBeUndefined();
+      expect(bucket).toBeDefined();
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
   });
 
@@ -231,15 +233,28 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('CloudTrail', () => {
-    test('CloudTrail resources should be commented out due to service limit', () => {
+    test('should have CloudTrail enabled in all regions', () => {
       const trail = template.Resources.TapCloudTrail;
-      const bucket = template.Resources.TapCloudTrailBucket;
+      expect(trail).toBeDefined();
+      expect(trail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(trail.Properties.IsMultiRegionTrail).toBe(true);
+      expect(trail.Properties.IsLogging).toBe(true);
+    });
+
+    test('should have log file validation enabled', () => {
+      const trail = template.Resources.TapCloudTrail;
+      expect(trail.Properties.EnableLogFileValidation).toBe(true);
+    });
+
+    test('should include global service events', () => {
+      const trail = template.Resources.TapCloudTrail;
+      expect(trail.Properties.IncludeGlobalServiceEvents).toBe(true);
+    });
+
+    test('should have CloudTrail bucket policy', () => {
       const policy = template.Resources.TapCloudTrailBucketPolicy;
-      
-      // CloudTrail resources are commented out due to 7 trail limit in us-east-1
-      expect(trail).toBeUndefined();
-      expect(bucket).toBeUndefined();
-      expect(policy).toBeUndefined();
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
     });
   });
 
@@ -304,8 +319,8 @@ describe('TapStack CloudFormation Template', () => {
         'ElasticsearchDomainEndpoint',
         'LambdaFunctionArn',
         'WebACLArn',
-        // 'CloudTrailArn', // Commented out due to CloudTrail service limit
-        // 'CloudTrailBucketName', // Commented out due to CloudTrail service limit
+        'CloudTrailArn',
+        'CloudTrailBucketName',
         'StackName',
         'EnvironmentSuffix'
       ];
