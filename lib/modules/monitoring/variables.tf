@@ -13,6 +13,22 @@ variable "account_id" {
   type        = string
 }
 
+variable "cloudtrail_s3_bucket" {
+  description = "S3 bucket name for CloudTrail logs"
+  type        = string
+}
+
+variable "kms_key_id" {
+  description = "KMS key ID for encryption"
+  type        = string
+}
+
+variable "notification_email" {
+  description = "Email address for SNS notifications"
+  type        = string
+  default     = ""
+}
+
 variable "common_tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)

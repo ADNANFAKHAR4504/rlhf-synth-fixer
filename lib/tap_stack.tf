@@ -90,8 +90,12 @@ output "security_groups" {
 
 output "s3_buckets" {
   description = "S3 bucket information"
-  value       = module.storage.bucket_info
-  sensitive   = true
+  value = {
+    sensitive_data_bucket = module.storage.sensitive_data_bucket_name
+    cloudtrail_bucket     = module.storage.cloudtrail_bucket_name
+    config_bucket         = module.storage.config_bucket_name
+  }
+  sensitive = true
 }
 
 output "kms_key_id" {
@@ -121,11 +125,11 @@ data "aws_region" "current" {}
 # VPC Module
 module "vpc" {
   source = "./modules/vpc"
-  
+
   project_name = var.project_name
   environment  = var.environment
   vpc_cidr     = var.vpc_cidr
-  
+
   public_subnet_cidrs  = var.public_subnet_cidrs
   private_subnet_cidrs = var.private_subnet_cidrs
   availability_zones   = var.availability_zones
@@ -134,21 +138,21 @@ module "vpc" {
 # IAM Module
 module "iam" {
   source = "./modules/iam"
-  
+
   project_name = var.project_name
   environment  = var.environment
-  
-  idp_arn          = var.idp_arn
-  idp_url          = var.idp_url
-  idp_thumbprint   = var.idp_thumbprint
-  
+
+  idp_arn        = var.idp_arn
+  idp_url        = var.idp_url
+  idp_thumbprint = var.idp_thumbprint
+
   depends_on = [module.vpc]
 }
 
 # Security Module (Security Groups)
 module "security" {
   source = "./modules/security"
-  
+
   project_name = var.project_name
   environment  = var.environment
   vpc_id       = module.vpc.vpc_id
@@ -158,37 +162,37 @@ module "security" {
 # Storage Module (S3 + KMS)
 module "storage" {
   source = "./modules/storage"
-  
+
   project_name = var.project_name
   environment  = var.environment
-  
+
   account_id = data.aws_caller_identity.current.account_id
 }
 
 # Monitoring Module (CloudTrail + SNS)
 module "monitoring" {
   source = "./modules/monitoring"
-  
+
   project_name = var.project_name
   environment  = var.environment
-  
+
   account_id           = data.aws_caller_identity.current.account_id
   cloudtrail_s3_bucket = module.storage.cloudtrail_bucket_name
-  kms_key_id          = module.storage.kms_key_id
-  
+  kms_key_id           = module.storage.kms_key_id
+
   notification_email = var.notification_email
 }
 
 # Compliance Module (AWS Config)
 module "compliance" {
   source = "./modules/compliance"
-  
+
   project_name = var.project_name
   environment  = var.environment
-  
-  account_id           = data.aws_caller_identity.current.account_id
-  config_s3_bucket     = module.storage.config_bucket_name
-  sns_topic_arn        = module.monitoring.sns_topic_arn
-  
+
+  account_id       = data.aws_caller_identity.current.account_id
+  config_s3_bucket = module.storage.config_bucket_name
+  sns_topic_arn    = module.monitoring.sns_topic_arn
+
   depends_on = [module.storage, module.monitoring]
 }
