@@ -92,14 +92,6 @@
                 true
             ]
         },
-        "EnableReplication": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnableCrossRegionReplication"
-                },
-                "true"
-            ]
-        },
         "HasCrossRegionEndpoint": {
             "Fn::Not": [
                 {

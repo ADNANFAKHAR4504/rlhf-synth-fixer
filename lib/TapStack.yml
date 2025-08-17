@@ -64,7 +64,6 @@ Mappings:
 Conditions:
   IsPrimaryRegion:
     !Equals [!FindInMap [RegionMap, !Ref 'AWS::Region', PrimaryRegion], true]
-  EnableReplication: !Equals [!Ref EnableCrossRegionReplication, 'true']
   HasCrossRegionEndpoint: !Not [!Equals [!Ref CrossRegionEndpoint, '']]
 
 Resources:
@@ -739,7 +738,7 @@ Outputs:
 
   MultiRegionStatus:
     Description: 'Multi-region deployment status and configuration'
-    Value: !Sub 
+    Value: !Sub
       - |
         Primary Region: ${AWS::Region}
         Target Region: ${DeploymentRegion}
