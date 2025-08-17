@@ -180,7 +180,7 @@ describe("AWS Infrastructure Project - Unit Tests", () => {
     it("should have EC2 instances configured", () => {
       const ec2 = extractFirstBlock(hcl, /resource\s+"aws_instance"\s+"web"\s*/g);
       expect(ec2).toBeTruthy();
-      expect(ec2!).toMatch(/instance_type\s*=\s*"t3\.micro"/);
+      expect(ec2!).toMatch(/instance_type\s*=\s*var\.instance_type/);
     });
 
     it("should have RDS instance configured", () => {
@@ -252,7 +252,7 @@ describe("AWS Infrastructure Project - Unit Tests", () => {
     it("should have deletion protection", () => {
       const rds = extractFirstBlock(hcl, /resource\s+"aws_db_instance"\s+"main"\s*/g);
       expect(rds).toBeTruthy();
-      expect(rds!).toMatch(/deletion_protection\s*=\s*true/);
+      expect(rds!).toMatch(/deletion_protection\s*=\s*var\.enable_deletion_protection/);
     });
 
     it("should have S3 versioning enabled", () => {

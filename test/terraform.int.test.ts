@@ -325,7 +325,7 @@ describe("Project Requirement Validation", () => {
     const terraformContent = fs.readFileSync(path.resolve(__dirname, '../lib/tap_stack.tf'), 'utf8');
     
     expect(terraformContent).toMatch(/resource\s+"aws_instance"\s+"web"/);
-    expect(terraformContent).toMatch(/instance_type\s*=\s*"t3\.micro"/);
+    expect(terraformContent).toMatch(/instance_type\s*=\s*var\.instance_type/);
     expect(terraformContent).toMatch(/resource\s+"aws_db_instance"\s+"main"/);
     expect(terraformContent).toMatch(/engine\s*=\s*"mysql"/);
     expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket"\s+"data"/);

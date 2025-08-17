@@ -36,6 +36,17 @@ variable "environment" {
   }
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource isolation"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = length(var.environment_suffix) <= 10
+    error_message = "Environment suffix must be 10 characters or less."
+  }
+}
+
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
@@ -100,11 +111,32 @@ variable "allowed_ssh_cidrs" {
   }
 }
 
+variable "instance_type" {
+  description = "EC2 instance type"
+  type        = string
+  default     = "t3.micro"
+
+  validation {
+    condition     = can(regex("^[a-z]+\\.[a-z0-9]+$", var.instance_type))
+    error_message = "Instance type must be in valid format (e.g., t3.micro)."
+  }
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+
+  validation {
+    condition     = can(regex("^db\\.[a-z0-9]+\\.[a-z0-9]+$", var.db_instance_class))
+    error_message = "DB instance class must be in valid format (e.g., db.t3.micro)."
+  }
+}
+
 variable "db_username" {
   description = "Database master username"
   type        = string
   sensitive   = true
-  default     = "admin"
 
   validation {
     condition     = length(var.db_username) >= 1 && length(var.db_username) <= 16
@@ -116,12 +148,23 @@ variable "db_password" {
   description = "Database master password"
   type        = string
   sensitive   = true
-  default     = "SecurePassword123!"
 
   validation {
     condition     = length(var.db_password) >= 8
     error_message = "Database password must be at least 8 characters long."
   }
+}
+
+variable "enable_deletion_protection" {
+  description = "Enable deletion protection for RDS instance"
+  type        = bool
+  default     = true
+}
+
+variable "enable_multi_az_nat" {
+  description = "Enable multiple NAT gateways for production resilience"
+  type        = bool
+  default     = false
 }
 
 # =============================================================================
@@ -148,6 +191,37 @@ data "aws_ami" "amazon_linux" {
 }
 
 # =============================================================================
+# SECURITY RESOURCES
+# =============================================================================
+
+# Random password generator for database
+resource "random_password" "db_password" {
+  count   = var.db_password == null ? 1 : 0
+  length  = 16
+  special = true
+  upper   = true
+  lower   = true
+  numeric = true
+}
+
+# AWS Secrets Manager for database credentials
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret"
+
+  tags = {
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "db_credentials" {
+  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = var.db_password != null ? var.db_password : random_password.db_password[0].result
+  })
+}
+
+# =============================================================================
 # NETWORK INFRASTRUCTURE
 # =============================================================================
 
@@ -158,7 +232,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "${var.project_name}-vpc"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-vpc"
   }
 }
 
@@ -167,7 +241,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "${var.project_name}-igw"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-igw"
   }
 }
 
@@ -181,7 +255,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project_name}-public-subnet-${count.index + 1}"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-public-subnet-${count.index + 1}"
     Type = "Public"
   }
 }
@@ -194,7 +268,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "${var.project_name}-private-subnet-${count.index + 1}"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-private-subnet-${count.index + 1}"
     Type = "Private"
   }
 }
@@ -204,7 +278,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "${var.project_name}-nat-eip"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-eip"
   }
 }
 
@@ -213,7 +287,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[0].id
 
   tags = {
-    Name = "${var.project_name}-nat-gateway"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-gateway"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -229,7 +303,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "${var.project_name}-public-rt"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-public-rt"
   }
 }
 
@@ -242,7 +316,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "${var.project_name}-private-rt"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-private-rt"
   }
 }
 
@@ -265,7 +339,7 @@ resource "aws_route_table_association" "private" {
 
 # Web Security Group
 resource "aws_security_group" "web" {
-  name_prefix = "${var.project_name}-web-"
+  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -301,13 +375,13 @@ resource "aws_security_group" "web" {
   }
 
   tags = {
-    Name = "${var.project_name}-web-sg"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-sg"
   }
 }
 
 # Database Security Group
 resource "aws_security_group" "database" {
-  name_prefix = "${var.project_name}-db-"
+  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -327,7 +401,7 @@ resource "aws_security_group" "database" {
   }
 
   tags = {
-    Name = "${var.project_name}-database-sg"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-sg"
   }
 }
 
@@ -337,7 +411,7 @@ resource "aws_security_group" "database" {
 
 # EC2 Instance Role
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}-ec2-role"
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -353,13 +427,13 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = {
-    Name = "${var.project_name}-ec2-role"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-role"
   }
 }
 
 # EC2 Policy
 resource "aws_iam_policy" "ec2_policy" {
-  name = "${var.project_name}-ec2-policy"
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-policy"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -397,7 +471,7 @@ resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
 
 # Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-ec2-profile"
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -410,7 +484,7 @@ resource "aws_instance" "web" {
   count = 2
 
   ami           = data.aws_ami.amazon_linux.id
-  instance_type = "t3.micro"
+  instance_type = var.instance_type
 
   subnet_id                   = aws_subnet.public[count.index % length(aws_subnet.public)].id
   vpc_security_group_ids      = [aws_security_group.web.id]
@@ -418,13 +492,134 @@ resource "aws_instance" "web" {
   associate_public_ip_address = true
 
   user_data = base64encode(<<-EOF
-              #!/bin/bash
-              yum update -y
-              yum install -y httpd
-              systemctl start httpd
-              systemctl enable httpd
-              echo "<h1>Hello from ${var.project_name} - Instance $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html
-              EOF
+#!/bin/bash
+# User data script for EC2 instances
+# This script is used to bootstrap EC2 instances with required software and configuration
+
+set -e
+
+# Update system packages
+yum update -y
+
+# Install required packages
+yum install -y httpd php php-mysqlnd mysql
+
+# Start and enable Apache
+systemctl start httpd
+systemctl enable httpd
+
+# Create a simple health check page
+cat > /var/www/html/index.html << 'HTML_EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>${var.project_name} - Instance Health</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .status { padding: 10px; border-radius: 5px; margin: 10px 0; }
+        .healthy { background-color: #d4edda; color: #155724; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>${var.project_name} - Instance Health Check</h1>
+        <div class="status healthy">
+            <strong>Status:</strong> Healthy
+        </div>
+        <div class="status info">
+            <strong>Instance ID:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+        </div>
+        <div class="status info">
+            <strong>Availability Zone:</strong> $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+        </div>
+        <div class="status info">
+            <strong>Timestamp:</strong> $(date)
+        </div>
+    </div>
+</body>
+</html>
+HTML_EOF
+
+# Create a health check endpoint
+cat > /var/www/html/health << 'HEALTH_EOF'
+OK
+HEALTH_EOF
+
+# Set proper permissions
+chown -R apache:apache /var/www/html
+chmod -R 755 /var/www/html
+
+# Configure Apache to handle health checks
+cat > /etc/httpd/conf.d/health.conf << 'CONF_EOF'
+<Location "/health">
+    SetHandler default-handler
+    Require all granted
+</Location>
+CONF_EOF
+
+# Restart Apache to apply changes
+systemctl restart httpd
+
+# Install CloudWatch agent for monitoring
+yum install -y amazon-cloudwatch-agent
+
+# Configure CloudWatch agent
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CW_EOF'
+{
+    "agent": {
+        "metrics_collection_interval": 60,
+        "run_as_user": "cwagent"
+    },
+    "logs": {
+        "logs_collected": {
+            "files": {
+                "collect_list": [
+                    {
+                        "file_path": "/var/log/httpd/access_log",
+                        "log_group_name": "/aws/ec2/${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}",
+                        "log_stream_name": "{instance_id}/apache/access.log",
+                        "timezone": "UTC"
+                    },
+                    {
+                        "file_path": "/var/log/httpd/error_log",
+                        "log_group_name": "/aws/ec2/${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}",
+                        "log_stream_name": "{instance_id}/apache/error.log",
+                        "timezone": "UTC"
+                    }
+                ]
+            }
+        }
+    },
+    "metrics": {
+        "metrics_collected": {
+            "disk": {
+                "measurement": [
+                    "used_percent"
+                ],
+                "metrics_collection_interval": 60,
+                "resources": [
+                    "*"
+                ]
+            },
+            "mem": {
+                "measurement": [
+                    "mem_used_percent"
+                ],
+                "metrics_collection_interval": 60
+            }
+        }
+    }
+}
+CW_EOF
+
+# Start CloudWatch agent
+systemctl start amazon-cloudwatch-agent
+systemctl enable amazon-cloudwatch-agent
+
+echo "User data script completed successfully"
+EOF
   )
 
   root_block_device {
@@ -434,7 +629,7 @@ resource "aws_instance" "web" {
   }
 
   tags = {
-    Name = "${var.project_name}-web-${count.index + 1}"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-${count.index + 1}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -442,7 +637,7 @@ resource "aws_instance" "web" {
 
 # Application Load Balancer
 resource "aws_lb" "web" {
-  name               = "${var.project_name}-alb"
+  name               = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web.id]
@@ -451,13 +646,13 @@ resource "aws_lb" "web" {
   enable_deletion_protection = false
 
   tags = {
-    Name = "${var.project_name}-alb"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-alb"
   }
 }
 
 # Target Group
 resource "aws_lb_target_group" "web" {
-  name     = "${var.project_name}-tg"
+  name     = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -501,18 +696,18 @@ resource "aws_lb_target_group_attachment" "web" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
+  name       = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "${var.project_name}-db-subnet-group"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group"
   }
 }
 
 # RDS Parameter Group
 resource "aws_db_parameter_group" "main" {
   family = "mysql8.0"
-  name   = "${var.project_name}-db-params"
+  name   = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-params"
 
   parameter {
     name  = "character_set_server"
@@ -527,11 +722,11 @@ resource "aws_db_parameter_group" "main" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}-db"
+  identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db"
 
   engine         = "mysql"
   engine_version = "8.0"
-  instance_class = "db.t3.micro"
+  instance_class = var.db_instance_class
 
   allocated_storage     = 20
   max_allocated_storage = 100
@@ -540,24 +735,24 @@ resource "aws_db_instance" "main" {
 
   db_name  = "application_db"
   username = var.db_username
-  password = var.db_password
+  password = var.db_password != null ? var.db_password : random_password.db_password[0].result
   port     = "3306"
 
-  vpc_security_group_ids = [aws_security_group.database.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
   parameter_group_name   = aws_db_parameter_group.main.name
+  vpc_security_group_ids = [aws_security_group.database.id]
 
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot       = false
-  final_snapshot_identifier = "${var.project_name}-db-final-snapshot"
+  final_snapshot_identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-final-snapshot"
 
-  deletion_protection = true
+  deletion_protection = var.enable_deletion_protection
 
   tags = {
-    Name = "${var.project_name}-database"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-database"
   }
 }
 
@@ -574,10 +769,10 @@ resource "random_string" "bucket_suffix" {
 
 # S3 Bucket for Application Data
 resource "aws_s3_bucket" "data" {
-  bucket = "${var.project_name}-data-${random_string.bucket_suffix.result}"
+  bucket = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-data-${random_string.bucket_suffix.result}"
 
   tags = {
-    Name = "${var.project_name}-data-bucket"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-data-bucket"
   }
 }
 
@@ -644,17 +839,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "data" {
 
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "application" {
-  name              = "/aws/ec2/${var.project_name}"
+  name              = "/aws/ec2/${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}"
   retention_in_days = 30
 
   tags = {
-    Name = "${var.project_name}-logs"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-logs"
   }
 }
 
 # CloudWatch Alarm for CPU
 resource "aws_cloudwatch_metric_alarm" "cpu" {
-  alarm_name          = "${var.project_name}-cpu-alarm"
+  alarm_name          = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-cpu-alarm"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -671,7 +866,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 
 # CloudWatch Alarm for Database
 resource "aws_cloudwatch_metric_alarm" "database_cpu" {
-  alarm_name          = "${var.project_name}-db-cpu-alarm"
+  alarm_name          = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-cpu-alarm"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -731,6 +926,11 @@ output "security_group_ids" {
     web      = aws_security_group.web.id
     database = aws_security_group.database.id
   }
+}
+
+output "secrets_manager_arn" {
+  description = "The ARN of the Secrets Manager secret for database credentials"
+  value       = aws_secretsmanager_secret.db_credentials.arn
 }
 
 # =============================================================================
