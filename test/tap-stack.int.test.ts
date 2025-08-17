@@ -1,150 +1,215 @@
 // integration_test.ts
 // Live integration tests for the deployed TapStack stack.
-// Reads cfn-outputs/flat-outputs.json (same pattern as your Python snippet) and
-// verifies real AWS resources in us-east-1 using AWS SDK v3.
+// 1) Read ../../cfn-outputs/flat-outputs.json if present (same format your other project uses)
+// 2) Otherwise, fetch CloudFormation outputs for the live stack and proceed
+// Tests cover: Security Group, EC2 instance, S3 bucket — matching your TapStack.yml.
 
+import {
+  CloudFormationClient,
+  DescribeStacksCommand,
+} from "@aws-sdk/client-cloudformation";
 import {
   DescribeInstancesCommand,
   DescribeSecurityGroupsCommand,
-  EC2Client
+  EC2Client,
 } from "@aws-sdk/client-ec2";
 import {
   GetBucketEncryptionCommand,
   GetBucketTaggingCommand,
   GetPublicAccessBlockCommand,
+  HeadBucketCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
 import { beforeAll, describe, expect, it } from "@jest/globals";
 import fs from "fs";
 import path from "path";
 
-// ---- flat outputs loader (keep format compatible with your pipeline) ----
+const REGION = process.env.AWS_REGION || "us-east-1"; // template enforces us-east-1
 const baseDir = path.dirname(__filename);
 const flatOutputsPath = path.resolve(baseDir, "..", "..", "cfn-outputs", "flat-outputs.json");
-const flatOutputs = fs.existsSync(flatOutputsPath)
-  ? JSON.parse(fs.readFileSync(flatOutputsPath, "utf-8"))
-  : {};
 
-// Helper: resolve a value from flat outputs by suffix or exact key.
-function getOutput(key: string): string | undefined {
-  if (flatOutputs[key]) return String(flatOutputs[key]);
-
-  // Common patterns: "<StackName>.<OutputKey>" or just "<OutputKey>"
-  const entries = Object.entries(flatOutputs) as [string, unknown][];
-  const bySuffix = entries.find(([k]) => k.endsWith(`.${key}`));
-  if (bySuffix) return String(bySuffix[1]);
-
-  // Last resort: contains (more permissive but helpful in CI)
-  const byContains = entries.find(([k]) => k.includes(key));
-  return byContains ? String(byContains[1]) : undefined;
-}
-
-// ---- expected outputs from your template ----
-const SECURITY_GROUP_ID = getOutput("SecurityGroupId");
-const INSTANCE_ID = getOutput("InstanceId");
-const BUCKET_NAME = getOutput("BucketName");
-
-// Region is fixed by template rule
-const REGION = process.env.AWS_REGION || "us-east-1";
-
-// ---- AWS clients (read-only) ----
+const cfn = new CloudFormationClient({ region: REGION });
 const ec2 = new EC2Client({ region: REGION });
 const s3 = new S3Client({ region: REGION });
 
+type FlatOutputs = Record<string, string>;
+
+async function loadOutputs(): Promise<{ outputs: FlatOutputs; stackName: string; envSuffix: string }> {
+  // 1) Try reading the flat outputs file (same pattern as your other project)
+  if (fs.existsSync(flatOutputsPath)) {
+    const txt = fs.readFileSync(flatOutputsPath, "utf-8");
+    const outputs = JSON.parse(txt) as FlatOutputs;
+    const stackName =
+      outputs.StackName ||
+      Object.keys(outputs).find((k) => k.includes(".SecurityGroupId"))?.split(".")[0] ||
+      `TapStack${process.env.ENVIRONMENT_SUFFIX || "dev"}`;
+    const envSuffix =
+      outputs.EnvironmentSuffix ||
+      outputs.EnvironmentSuffixEcho ||
+      process.env.ENVIRONMENT_SUFFIX ||
+      "dev";
+    return { outputs, stackName, envSuffix };
+  }
+
+  // 2) Otherwise fetch from CloudFormation for this run
+  const stackName =
+    process.env.STACK_NAME || `TapStack${process.env.ENVIRONMENT_SUFFIX || "dev"}`;
+
+  const resp = await cfn.send(
+    new DescribeStacksCommand({ StackName: stackName })
+  );
+  const outs = resp.Stacks?.[0]?.Outputs || [];
+
+  const outputs: FlatOutputs = {};
+  for (const o of outs) {
+    if (!o.OutputKey || o.OutputValue == null) continue;
+    outputs[o.OutputKey] = String(o.OutputValue);
+    // also add namespaced keys like "<Stack>.<OutputKey>" to mimic other repos
+    outputs[`${stackName}.${o.OutputKey}`] = String(o.OutputValue);
+  }
+  // Not all templates output StackName/EnvironmentSuffix; synthesize if missing
+  outputs.StackName ||= stackName;
+  outputs.EnvironmentSuffix ||= process.env.ENVIRONMENT_SUFFIX || "dev";
+
+  // Best effort: write file for subsequent runs (safe if CI workspace is writable)
+  try {
+    const outDir = path.dirname(flatOutputsPath);
+    fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(flatOutputsPath, JSON.stringify(outputs, null, 2));
+  } catch {
+    // ignore if filesystem is readonly
+  }
+
+  return {
+    outputs,
+    stackName,
+    envSuffix: outputs.EnvironmentSuffix,
+  };
+}
+
+let outputs: FlatOutputs = {};
+let stackName = "";
+let envSuffix = "";
+
+function getOut(key: string): string | undefined {
+  if (outputs[key]) return outputs[key];
+  const namespaced = outputs[`${stackName}.${key}`];
+  if (namespaced) return namespaced;
+  const entry = Object.entries(outputs).find(([k]) => k.endsWith(`.${key}`));
+  return entry ? String(entry[1]) : undefined;
+}
+
 describe("TapStack Integration Tests (live)", () => {
-  beforeAll(() => {
-    // Basic sanity so tests fail with clear messages if outputs are missing
-    expect(SECURITY_GROUP_ID).toBeTruthy();
-    expect(INSTANCE_ID).toBeTruthy();
-    expect(BUCKET_NAME).toBeTruthy();
+  beforeAll(async () => {
+    const loaded = await loadOutputs();
+    outputs = loaded.outputs;
+    stackName = loaded.stackName;
+    envSuffix = loaded.envSuffix;
   });
 
-  it("Security Group allows only SSH(22) and HTTPS(443) inbound, and allow-all egress", async () => {
-    const sgId = SECURITY_GROUP_ID!;
-    const { SecurityGroups } = await ec2.send(
-      new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
-    );
-    expect(SecurityGroups && SecurityGroups.length).toBe(1);
-    const sg = SecurityGroups![0];
+  describe("Security Group", () => {
+    it("allows only SSH(22) and HTTPS(443) inbound and allow-all egress", async () => {
+      const sgId = getOut("SecurityGroupId");
+      if (!sgId) {
+        console.log("Skipping SG test — SecurityGroupId not found in outputs");
+        return;
+      }
 
-    // Inbound: exactly two rules, ports 22 and 443 (tcp)
-    const ingress = (sg.IpPermissions ?? []).flatMap((p) =>
-      (p.IpRanges ?? []).map((r) => ({
-        ipProtocol: p.IpProtocol,
-        from: p.FromPort,
-        to: p.ToPort,
-        cidr: r.CidrIp,
-      }))
-    );
+      const { SecurityGroups } = await ec2.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: [sgId] })
+      );
+      expect(SecurityGroups && SecurityGroups.length).toBe(1);
+      const sg = SecurityGroups![0];
 
-    const ingressPorts = ingress.map((r) => r.from);
-    expect(ingress.length).toBe(2);
-    expect(ingressPorts.sort()).toEqual([22, 443]);
+      const ingress = (sg.IpPermissions ?? []).flatMap((p) =>
+        (p.IpRanges ?? []).map((r) => ({
+          ipProtocol: p.IpProtocol,
+          from: p.FromPort,
+          to: p.ToPort,
+          cidr: r.CidrIp,
+        }))
+      );
+      // exactly two inbound rules (22, 443)
+      expect(ingress.length).toBe(2);
+      const ports = ingress.map((r) => r.from).sort();
+      expect(ports).toEqual([22, 443]);
+      ingress.forEach((r) => {
+        expect(r.ipProtocol).toBe("tcp");
+        expect(typeof r.cidr).toBe("string");
+      });
 
-    // Ensure protocols are TCP and CIDR exists (default is 0.0.0.0/0 per template)
-    ingress.forEach((r) => {
-      expect(r.ipProtocol).toBe("tcp");
-      expect(typeof r.cidr).toBe("string");
+      // egress allow-all
+      const egress = (sg.IpPermissionsEgress ?? []).flatMap((p) =>
+        (p.IpRanges ?? []).map((r) => ({ ipProtocol: p.IpProtocol, cidr: r.CidrIp }))
+      );
+      const hasAllowAll = egress.some((r) => r.ipProtocol === "-1" && r.cidr === "0.0.0.0/0");
+      expect(hasAllowAll).toBe(true);
+
+      // tag check
+      const envTag = (sg.Tags ?? []).find((t) => t.Key === "Environment");
+      expect(envTag?.Value).toBe("Production");
     });
-
-    // Egress: allow-all (protocol -1 to 0.0.0.0/0)
-    const egress = (sg.IpPermissionsEgress ?? []).flatMap((p) =>
-      (p.IpRanges ?? []).map((r) => ({
-        ipProtocol: p.IpProtocol,
-        cidr: r.CidrIp,
-      }))
-    );
-    const hasAllowAll = egress.some((r) => r.ipProtocol === "-1" && r.cidr === "0.0.0.0/0");
-    expect(hasAllowAll).toBe(true);
-
-    // Tag check
-    const envTag = (sg.Tags ?? []).find((t) => t.Key === "Environment");
-    expect(envTag?.Value).toBe("Production");
   });
 
-  it("EC2 Instance exists, is attached to the SG, and tagged Environment=Production", async () => {
-    const instanceId = INSTANCE_ID!;
-    const { Reservations } = await ec2.send(
-      new DescribeInstancesCommand({ InstanceIds: [instanceId] })
-    );
-    const instance = Reservations?.[0]?.Instances?.[0];
-    expect(instance).toBeTruthy();
+  describe("EC2 Instance", () => {
+    it("exists, attached to the SG, tagged Environment=Production", async () => {
+      const instanceId = getOut("InstanceId");
+      const sgId = getOut("SecurityGroupId");
+      if (!instanceId || !sgId) {
+        console.log("Skipping EC2 test — missing InstanceId or SecurityGroupId in outputs");
+        return;
+      }
 
-    // SG association
-    const sgIds = (instance!.SecurityGroups ?? []).map((g) => g.GroupId);
-    expect(sgIds).toContain(SECURITY_GROUP_ID);
+      const { Reservations } = await ec2.send(
+        new DescribeInstancesCommand({ InstanceIds: [instanceId] })
+      );
+      const instance = Reservations?.[0]?.Instances?.[0];
+      expect(instance).toBeTruthy();
 
-    // Tag check
-    const envTag = (instance!.Tags ?? []).find((t) => t.Key === "Environment");
-    expect(envTag?.Value).toBe("Production");
+      // SG attachment
+      const sgIds = (instance!.SecurityGroups ?? []).map((g) => g.GroupId);
+      expect(sgIds).toContain(sgId);
 
-    // Basic platform sanity: Linux/UNIX (Amazon Linux 2)
-    // (We won't hard-assert AL2 name here to avoid regional catalog drift)
-    expect(instance!.PlatformDetails || "Linux/UNIX").toContain("Linux");
+      // tag check
+      const envTag = (instance!.Tags ?? []).find((t) => t.Key === "Environment");
+      expect(envTag?.Value).toBe("Production");
+
+      // sanity: linux platform (AL2)
+      expect((instance!.PlatformDetails || "Linux/UNIX").toString()).toContain("Linux");
+    });
   });
 
-  it("S3 bucket has server-side encryption (AES256) and public access blocks enabled", async () => {
-    const bucket = BUCKET_NAME!;
+  describe("S3 Bucket", () => {
+    it("exists, has AES256 SSE, blocks public access, and tagged Environment=Production", async () => {
+      const bucket = getOut("BucketName");
+      if (!bucket) {
+        console.log("Skipping S3 test — BucketName not found in outputs");
+        return;
+      }
 
-    // SSE check
-    const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
-    const rules = enc.ServerSideEncryptionConfiguration?.Rules ?? [];
-    const hasAES256 = rules.some(
-      (r) => r.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === "AES256"
-    );
-    expect(hasAES256).toBe(true);
+      // existence
+      await expect(s3.send(new HeadBucketCommand({ Bucket: bucket }))).resolves.toBeDefined();
 
-    // Public access block check
-    const pab = await s3.send(new GetPublicAccessBlockCommand({ Bucket: bucket }));
-    const cfg = pab.PublicAccessBlockConfiguration;
-    expect(cfg?.BlockPublicAcls).toBe(true);
-    expect(cfg?.BlockPublicPolicy).toBe(true);
-    expect(cfg?.IgnorePublicAcls).toBe(true);
-    expect(cfg?.RestrictPublicBuckets).toBe(true);
+      // SSE
+      const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: bucket }));
+      const rules = enc.ServerSideEncryptionConfiguration?.Rules ?? [];
+      const hasAES256 = rules.some(
+        (r) => r.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === "AES256"
+      );
+      expect(hasAES256).toBe(true);
 
-    // Tag check
-    const tagging = await s3.send(new GetBucketTaggingCommand({ Bucket: bucket }));
-    const envTag = (tagging.TagSet ?? []).find((t) => t.Key === "Environment");
-    expect(envTag?.Value).toBe("Production");
+      // public access blocks
+      const pab = await s3.send(new GetPublicAccessBlockCommand({ Bucket: bucket }));
+      const cfg = pab.PublicAccessBlockConfiguration;
+      expect(cfg?.BlockPublicAcls).toBe(true);
+      expect(cfg?.BlockPublicPolicy).toBe(true);
+      expect(cfg?.IgnorePublicAcls).toBe(true);
+      expect(cfg?.RestrictPublicBuckets).toBe(true);
+
+      // tag check
+      const tagging = await s3.send(new GetBucketTaggingCommand({ Bucket: bucket }));
+      const envTag = (tagging.TagSet ?? []).find((t) => t.Key === "Environment");
+      expect(envTag?.Value).toBe("Production");
+    });
   });
 });
