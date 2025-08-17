@@ -19,6 +19,12 @@
       ],
       "Description": "Environment name for resource naming and tagging"
     },
+    "CodeStarConnectionArn": {
+      "Type": "String",
+      "Description": "ARN of the CodeStar Connection for GitHub integration (replace with your actual connection ARN)",
+      "Default": "arn:aws:codestar-connections:us-east-1:123456789012:connection/your-connection-id",
+      "ConstraintDescription": "Must be a valid CodeStar Connection ARN. Replace the default placeholder with your actual connection ARN."
+    },
     "GitHubRepositoryOwner": {
       "Type": "String",
       "Default": "your-github-username",
@@ -58,29 +64,6 @@
     }
   },
   "Resources": {
-    "GitHubConnection": {
-      "Type": "AWS::CodeStarConnections::Connection",
-      "Properties": {
-        "ConnectionName": {
-          "Fn::Sub": "${ProjectName}-${Environment}-github"
-        },
-        "ProviderType": "GitHub",
-        "Tags": [
-          {
-            "Key": "Project",
-            "Value": {
-              "Ref": "ProjectName"
-            }
-          },
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          }
-        ]
-      }
-    },
     "PipelineKMSKey": {
       "Type": "AWS::KMS::Key",
       "Properties": {
@@ -452,7 +435,7 @@
                     "codestar-connections:UseConnection"
                   ],
                   "Resource": {
-                    "Ref": "GitHubConnection"
+                    "Ref": "CodeStarConnectionArn"
                   }
                 },
                 {
@@ -727,7 +710,7 @@
                 },
                 "Configuration": {
                   "ConnectionArn": {
-                    "Ref": "GitHubConnection"
+                    "Ref": "CodeStarConnectionArn"
                   },
                   "FullRepositoryId": {
                     "Fn::Sub": "${GitHubRepositoryOwner}/${GitHubRepositoryName}"
@@ -843,28 +826,14 @@
     }
   },
   "Outputs": {
-    "GitHubConnectionArn": {
+    "CodeStarConnectionArn": {
       "Description": "ARN of the CodeStar Connection to GitHub",
       "Value": {
-        "Ref": "GitHubConnection"
+        "Ref": "CodeStarConnectionArn"
       },
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-GitHubConnection"
-        }
-      }
-    },
-    "GitHubConnectionStatus": {
-      "Description": "Status of the CodeStar Connection (will be PENDING initially)",
-      "Value": {
-        "Fn::GetAtt": [
-          "GitHubConnection",
-          "ConnectionStatus"
-        ]
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-GitHubConnectionStatus"
         }
       }
     },

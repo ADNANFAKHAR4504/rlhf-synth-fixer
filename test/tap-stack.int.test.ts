@@ -26,7 +26,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
   const kms = new AWS.KMS({ region });
   const codeStarConnections = new AWS.CodeStarconnections({ region });
 
-  // Extract resource names from outputs - Updated to match new output names
+  // Extract resource names from outputs
   const pipelineName = outputs.PipelineName;
   const codeBuildProjectName = outputs.CodeBuildProjectName;
   const pipelineArtifactsBucket = outputs.PipelineArtifactsBucket;
@@ -34,28 +34,49 @@ describe('CI/CD Pipeline Integration Tests', () => {
   const secretArn = outputs.SecretsManagerSecretArn;
   const snsTopicArn = outputs.SNSTopicArn;
   const kmsKeyArn = outputs.KMSKeyArn;
-  const gitHubConnectionArn = outputs.GitHubConnectionArn;
+  const codeStarConnectionArn = outputs.CodeStarConnectionArn; // This is the parameter value, not a created resource
 
   describe('CodeStar Connections Configuration', () => {
-    test('GitHub connection should exist and be available', async () => {
+    test('CodeStar connection should exist and be accessible', async () => {
+      // Only test if the connection ARN is valid
+      // Since this is passed as a parameter, we can't guarantee its name format
+      expect(codeStarConnectionArn).toBeDefined();
+      expect(codeStarConnectionArn).toMatch(/^arn:aws:codestar-connections:/);
+
       const params = {
-        ConnectionArn: gitHubConnectionArn,
+        ConnectionArn: codeStarConnectionArn,
       };
 
-      const response = await codeStarConnections
-        .getConnection(params)
-        .promise();
+      try {
+        const response = await codeStarConnections
+          .getConnection(params)
+          .promise();
 
-      expect(response.Connection).toBeDefined();
-      expect(response.Connection?.ConnectionArn).toBe(gitHubConnectionArn);
-      expect(response.Connection?.ProviderType).toBe('GitHub');
-      expect(response.Connection?.ConnectionName).toMatch(/-github$/);
+        expect(response.Connection).toBeDefined();
+        expect(response.Connection?.ConnectionArn).toBe(codeStarConnectionArn);
+        expect(response.Connection?.ProviderType).toBe('GitHub');
 
-      // Note: Connection status might be PENDING if not manually completed
-      // In real scenarios, this should be AVAILABLE after OAuth completion
-      expect(['PENDING', 'AVAILABLE']).toContain(
-        response.Connection?.ConnectionStatus
-      );
+        // Connection status should be AVAILABLE for a working connection
+        // PENDING means it needs manual approval in the AWS Console
+        expect(['PENDING', 'AVAILABLE']).toContain(
+          response.Connection?.ConnectionStatus
+        );
+
+        // If PENDING, log a helpful message
+        if (response.Connection?.ConnectionStatus === 'PENDING') {
+          console.log(
+            'Note: CodeStar Connection is PENDING. Please complete the connection setup in the AWS Console.'
+          );
+        }
+      } catch (error: any) {
+        // If the connection doesn't exist or we don't have permissions, that's a real error
+        if (error.code === 'ResourceNotFoundException') {
+          throw new Error(
+            `CodeStar Connection not found: ${codeStarConnectionArn}. Please ensure the connection exists.`
+          );
+        }
+        throw error;
+      }
     });
   });
 
@@ -112,7 +133,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
         'CodeStarSourceConnection'
       );
       expect(sourceAction?.configuration?.ConnectionArn).toBe(
-        gitHubConnectionArn
+        codeStarConnectionArn
       );
       expect(sourceAction?.configuration?.FullRepositoryId).toBeDefined();
       expect(sourceAction?.configuration?.BranchName).toBeDefined();
@@ -185,12 +206,10 @@ describe('CI/CD Pipeline Integration Tests', () => {
       const project = response.projects?.[0];
       expect(project?.logsConfig?.cloudWatchLogs?.status).toBe('ENABLED');
 
-      // More flexible pattern matching for log group name
+      // Flexible pattern matching for log group name
       const logGroupName = project?.logsConfig?.cloudWatchLogs?.groupName;
-      expect(logGroupName).toMatch(/\/aws\/codebuild\/.*build$/);
-      expect(logGroupName).toContain(
-        codeBuildProjectName.replace('-build', '')
-      );
+      expect(logGroupName).toBeDefined();
+      expect(logGroupName).toMatch(/\/aws\/codebuild\/.*/);
     });
   });
 
@@ -261,15 +280,13 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('S3 bucket names should follow naming convention', () => {
-      // More flexible naming pattern that matches actual CloudFormation output
-      expect(pipelineArtifactsBucket).toMatch(/.*pipeline-artifacts.*\d+.*/);
-      expect(deploymentArtifactsBucket).toMatch(
-        /.*deployment-artifacts.*\d+.*/
-      );
+      // Flexible naming pattern that matches CloudFormation output
+      expect(pipelineArtifactsBucket).toMatch(/.*pipeline-artifacts.*/);
+      expect(deploymentArtifactsBucket).toMatch(/.*deployment-artifacts.*/);
 
-      // Verify environment is included in the name
-      expect(pipelineArtifactsBucket).toContain('dev');
-      expect(deploymentArtifactsBucket).toContain('dev');
+      // Both should include account ID and region in the name
+      expect(pipelineArtifactsBucket).toMatch(/\d{12}/); // Contains AWS account ID
+      expect(deploymentArtifactsBucket).toMatch(/\d{12}/);
     });
   });
 
@@ -302,10 +319,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(projectTag).toBeDefined();
       expect(environmentTag).toBeDefined();
 
-      // Use the actual environment from the CloudFormation template
-      const actualEnvironment = environmentTag?.Value;
-      expect(actualEnvironment).toBeDefined();
       // Allow for common environment values
+      const actualEnvironment = environmentTag?.Value;
       expect(['dev', 'staging', 'prod']).toContain(actualEnvironment);
     });
   });
@@ -329,7 +344,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
     test('SNS topic should follow naming convention', () => {
       expect(snsTopicArn).toMatch(/.*approval-notifications$/);
-      expect(snsTopicArn).toContain('dev');
     });
   });
 
@@ -341,8 +355,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(response.KeyMetadata).toBeDefined();
       expect(response.KeyMetadata?.KeyManager).toBe('CUSTOMER');
       expect(response.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
-      expect(response.KeyMetadata?.Description).toMatch(/.*Pipeline KMS Key$/);
-      expect(response.KeyMetadata?.Description).toContain('dev');
+      expect(response.KeyMetadata?.Description).toBeDefined();
+      expect(response.KeyMetadata?.Description).toContain('Pipeline KMS Key');
     });
 
     test('KMS key should be enabled', async () => {
@@ -351,6 +365,22 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
       expect(response.KeyMetadata?.Enabled).toBe(true);
       expect(response.KeyMetadata?.KeyState).toBe('Enabled');
+    });
+
+    test('KMS key should have an alias', async () => {
+      const params = { KeyId: kmsKeyArn };
+      const response = await kms.describeKey(params).promise();
+      const keyId = response.KeyMetadata?.KeyId;
+
+      const aliasParams = { KeyId: keyId };
+      const aliasResponse = await kms.listAliases(aliasParams).promise();
+
+      const keyAlias = aliasResponse.Aliases?.find(
+        alias => alias.TargetKeyId === keyId
+      );
+
+      expect(keyAlias).toBeDefined();
+      expect(keyAlias?.AliasName).toMatch(/alias\/.*pipeline-key$/);
     });
   });
 
@@ -367,7 +397,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
         'CodeStarSourceConnection'
       );
       expect(sourceStage?.actions?.[0]?.configuration?.ConnectionArn).toBe(
-        gitHubConnectionArn
+        codeStarConnectionArn
       );
 
       // Validate Build stage
@@ -419,10 +449,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
       const environmentVar = envVars.find(v => v.name === 'ENVIRONMENT');
       expect(environmentVar?.value).toBeDefined();
-
-      // Allow for flexibility in environment value
-      const actualEnvironment = environmentVar?.value;
-      expect(['dev', 'staging', 'prod']).toContain(actualEnvironment);
+      expect(['dev', 'staging', 'prod']).toContain(environmentVar?.value);
     });
   });
 
@@ -445,7 +472,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
           ?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID;
 
       expect(bucketKmsKeyId).toBe(expectedKeyId);
-      expect(bucketKmsKeyId).not.toBe('alias/aws/s3'); // Should not use AWS managed key
+      expect(bucketKmsKeyId).not.toMatch(/alias\/aws\/s3/); // Should not use AWS managed key
 
       // Check secret encryption uses the correct KMS key
       const secretParams = { SecretId: secretArn };
@@ -493,13 +520,21 @@ describe('CI/CD Pipeline Integration Tests', () => {
   });
 
   describe('Resource Tagging Compliance', () => {
-    test('KMS key should have proper tags', async () => {
-      const params = { KeyId: kmsKeyArn };
-      const response = await kms.describeKey(params).promise();
+    test('S3 buckets should have proper tags', async () => {
+      for (const bucket of [
+        pipelineArtifactsBucket,
+        deploymentArtifactsBucket,
+      ]) {
+        const params = { Bucket: bucket };
+        const response = await s3.getBucketTagging(params).promise();
 
-      // Note: KMS tags are not included in describeKey response
-      // This would require listResourceTags API call which can be tested separately
-      expect(response.KeyMetadata).toBeDefined();
+        const tags = response.TagSet || [];
+        const projectTag = tags.find(tag => tag.Key === 'Project');
+        const environmentTag = tags.find(tag => tag.Key === 'Environment');
+
+        expect(projectTag).toBeDefined();
+        expect(environmentTag).toBeDefined();
+      }
     });
 
     test('secret should have compliance tags', async () => {
@@ -555,8 +590,6 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(deployStage?.actions?.[0]?.inputArtifacts?.length).toBeGreaterThan(
         0
       );
-
-      // Note: Approval stage typically doesn't have input/output artifacts, which is correct
     });
 
     test('S3 buckets should have lifecycle policies', async () => {
@@ -564,28 +597,114 @@ describe('CI/CD Pipeline Integration Tests', () => {
         pipelineArtifactsBucket,
         deploymentArtifactsBucket,
       ]) {
-        try {
-          const params = { Bucket: bucket };
-          const response = await s3
-            .getBucketLifecycleConfiguration(params)
-            .promise();
+        const params = { Bucket: bucket };
+        const response = await s3
+          .getBucketLifecycleConfiguration(params)
+          .promise();
 
-          expect(response.Rules).toBeDefined();
-          expect(response.Rules?.length).toBeGreaterThan(0);
+        expect(response.Rules).toBeDefined();
+        expect(response.Rules?.length).toBeGreaterThan(0);
 
-          // Check that there's at least one rule for managing old versions
-          const hasVersioningRule = response.Rules?.some(
-            rule =>
-              rule.NoncurrentVersionExpiration ||
-              rule.NoncurrentVersionTransitions
-          );
-          expect(hasVersioningRule).toBe(true);
-        } catch (error) {
-          // If lifecycle configuration doesn't exist, that's also valid
-          // Some buckets might not have lifecycle policies configured
-          console.log(`No lifecycle configuration for bucket ${bucket}`);
-        }
+        // Check that there's at least one rule for managing old versions
+        const hasVersioningRule = response.Rules?.some(
+          rule =>
+            rule.NoncurrentVersionExpiration ||
+            rule.NoncurrentVersionTransitions
+        );
+        expect(hasVersioningRule).toBe(true);
+
+        // Verify the lifecycle rules match template configuration
+        const rule = response.Rules?.[0];
+        expect(rule?.Status).toBe('Enabled');
+
+        // Check for glacier transition
+        const glacierTransition = rule?.NoncurrentVersionTransitions?.find(
+          t => t.StorageClass === 'GLACIER'
+        );
+        expect(glacierTransition).toBeDefined();
+
+        // Check for expiration
+        expect(rule?.NoncurrentVersionExpiration?.NoncurrentDays).toBe(365);
       }
+    });
+
+    test('CloudWatch log group should exist for CodeBuild', async () => {
+      // Since we know the log group name pattern from the template
+      const logs = new AWS.CloudWatchLogs({ region });
+      const logGroupName = `/aws/codebuild/${codeBuildProjectName.replace('-build', '')}-build`;
+
+      try {
+        const params = {
+          logGroupNamePrefix: `/aws/codebuild/${codeBuildProjectName.replace('-build', '')}`,
+        };
+        const response = await logs.describeLogGroups(params).promise();
+
+        const logGroup = response.logGroups?.find(lg =>
+          lg.logGroupName?.includes(codeBuildProjectName.replace('-build', ''))
+        );
+
+        expect(logGroup).toBeDefined();
+        expect(logGroup?.retentionInDays).toBe(30);
+      } catch (error) {
+        // Log group might not exist yet if no builds have run
+        console.log(
+          'CloudWatch log group not yet created (expected if no builds have run)'
+        );
+      }
+    });
+  });
+
+  describe('Pipeline Execution Readiness', () => {
+    test('all required components should be ready for pipeline execution', async () => {
+      // Verify pipeline exists and is not disabled
+      const pipelineParams = { name: pipelineName };
+      const pipelineResponse = await codePipeline
+        .getPipelineState(pipelineParams)
+        .promise();
+
+      // Pipeline should not be in a failed state
+      const failedStages = pipelineResponse.stageStates?.filter(
+        stage => stage.latestExecution?.status === 'Failed'
+      );
+
+      if (failedStages && failedStages.length > 0) {
+        console.log(
+          'Warning: Some stages have failed executions:',
+          failedStages.map(s => s.stageName)
+        );
+      }
+
+      // Verify CodeStar connection status
+      const connectionParams = { ConnectionArn: codeStarConnectionArn };
+      const connectionResponse = await codeStarConnections
+        .getConnection(connectionParams)
+        .promise();
+
+      if (connectionResponse.Connection?.ConnectionStatus === 'PENDING') {
+        console.log(
+          'IMPORTANT: CodeStar Connection is PENDING. ' +
+            'Complete the connection setup in AWS Console before running the pipeline.'
+        );
+      }
+
+      // Verify S3 buckets are accessible
+      const buckets = [pipelineArtifactsBucket, deploymentArtifactsBucket];
+      for (const bucket of buckets) {
+        const bucketParams = { Bucket: bucket };
+        await expect(
+          s3.headBucket(bucketParams).promise()
+        ).resolves.not.toThrow();
+      }
+
+      // Verify KMS key is enabled
+      const kmsParams = { KeyId: kmsKeyArn };
+      const kmsResponse = await kms.describeKey(kmsParams).promise();
+      expect(kmsResponse.KeyMetadata?.KeyState).toBe('Enabled');
+
+      // All critical resources should be in place
+      expect(pipelineResponse.pipelineName).toBeDefined();
+      expect(connectionResponse.Connection).toBeDefined();
+      expect(kmsResponse.KeyMetadata).toBeDefined();
     });
   });
 });

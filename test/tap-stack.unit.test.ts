@@ -30,7 +30,8 @@ describe('TapStack CloudFormation Template', () => {
       const expectedParams = [
         'ProjectName',
         'Environment',
-        'GitHubRepositoryOwner', // Updated: CodeStarConnectionArn removed since connection is created in template
+        'CodeStarConnectionArn', // This is now a parameter, not created in template
+        'GitHubRepositoryOwner',
         'GitHubRepositoryName',
         'GitHubBranchName',
         'ApprovalNotificationEmail',
@@ -61,6 +62,14 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
+    test('CodeStarConnectionArn parameter should be defined', () => {
+      const param = template.Parameters.CodeStarConnectionArn;
+      expect(param.Type).toBe('String');
+      expect(param.Description).toBe(
+        'ARN of the CodeStar Connection for GitHub integration (replace with your actual connection ARN)'
+      );
+    });
+
     test('SecretValue parameter should have NoEcho enabled', () => {
       const param = template.Parameters.SecretValue;
       expect(param.Type).toBe('String');
@@ -71,7 +80,7 @@ describe('TapStack CloudFormation Template', () => {
   describe('Resources', () => {
     test('should have all core CI/CD resources', () => {
       const expectedResources = [
-        'GitHubConnection', // Added: CodeStar connection created in template
+        // GitHubConnection is NOT created as a resource anymore
         'PipelineKMSKey',
         'PipelineKMSKeyAlias',
         'PipelineArtifactsBucket',
@@ -89,15 +98,6 @@ describe('TapStack CloudFormation Template', () => {
       expectedResources.forEach(resource => {
         expect(template.Resources[resource]).toBeDefined();
       });
-    });
-
-    test('GitHubConnection should be a CodeStar Connection', () => {
-      const resource = template.Resources.GitHubConnection;
-      expect(resource.Type).toBe('AWS::CodeStarConnections::Connection');
-      expect(resource.Properties.ConnectionName['Fn::Sub']).toBe(
-        '${ProjectName}-${Environment}-github'
-      );
-      expect(resource.Properties.ProviderType).toBe('GitHub');
     });
 
     test('PipelineKMSKey should be a KMS Key', () => {
@@ -166,17 +166,17 @@ describe('TapStack CloudFormation Template', () => {
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'GitHubConnectionArn', // Added: New outputs in updated template
-        'GitHubConnectionStatus', // Added: New outputs in updated template
+        'CodeStarConnectionArn', // Now outputs the parameter value
+        // 'GitHubConnectionStatus' is removed since we can't get status from a parameter
         'PipelineName',
         'PipelineArtifactsBucket',
-        'PipelineArtifactsBucketArn', // Added: New outputs in updated template
+        'PipelineArtifactsBucketArn',
         'DeploymentArtifactsBucket',
-        'DeploymentArtifactsBucketArn', // Added: New outputs in updated template
+        'DeploymentArtifactsBucketArn',
         'CodeBuildProjectName',
         'SecretsManagerSecretArn',
         'SNSTopicArn',
-        'KMSKeyArn', // Added: New outputs in updated template
+        'KMSKeyArn',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -184,12 +184,12 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('GitHubConnectionArn output should be correct', () => {
-      const output = template.Outputs.GitHubConnectionArn;
+    test('CodeStarConnectionArn output should be correct', () => {
+      const output = template.Outputs.CodeStarConnectionArn;
       expect(output.Description).toBe(
         'ARN of the CodeStar Connection to GitHub'
       );
-      expect(output.Value.Ref).toBe('GitHubConnection');
+      expect(output.Value.Ref).toBe('CodeStarConnectionArn'); // References the parameter
       expect(output.Export.Name['Fn::Sub']).toBe(
         '${AWS::StackName}-GitHubConnection'
       );
@@ -230,19 +230,19 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources for CI/CD pipeline', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(13); // Updated: Added GitHubConnection resource
+      expect(resourceCount).toBe(12); // 13 minus GitHubConnection resource
     });
 
-    test('should have seven parameters', () => {
-      // Updated: One less parameter (removed CodeStarConnectionArn)
+    test('should have eight parameters', () => {
+      // Now includes CodeStarConnectionArn parameter
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7);
+      expect(parameterCount).toBe(8);
     });
 
-    test('should have eleven outputs', () => {
-      // Updated: More outputs added in the template
+    test('should have ten outputs', () => {
+      // 11 minus GitHubConnectionStatus
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(11);
+      expect(outputCount).toBe(10);
     });
   });
 
@@ -276,7 +276,7 @@ describe('TapStack CloudFormation Template', () => {
     test('KMS key should have proper key policy', () => {
       const kmsKey = template.Resources.PipelineKMSKey;
       expect(kmsKey.Properties.KeyPolicy).toBeDefined();
-      expect(kmsKey.Properties.KeyPolicy.Statement).toHaveLength(4); // Updated: Now has 4 statements (added Secrets Manager)
+      expect(kmsKey.Properties.KeyPolicy.Statement).toHaveLength(4);
 
       const statements = kmsKey.Properties.KeyPolicy.Statement;
       const rootStatement = statements.find(
@@ -365,7 +365,6 @@ describe('TapStack CloudFormation Template', () => {
         // Check that S3 object resources use proper ARN format
         s3ObjectStatement.Resource.forEach((resource: any) => {
           if (resource['Fn::Sub']) {
-            // Updated regex to match actual CloudFormation Fn::Sub format
             expect(resource['Fn::Sub']).toMatch(
               /^arn:aws:s3:::\$\{[^}]+\}\/\*$/
             );
@@ -391,10 +390,28 @@ describe('TapStack CloudFormation Template', () => {
         'secretsmanager:DescribeSecret'
       );
     });
+
+    test('CodePipeline role should have CodeStar Connections permissions', () => {
+      const pipelineRole = template.Resources.CodePipelineServiceRole;
+      const policies = pipelineRole.Properties.Policies;
+      const statements = policies[0].PolicyDocument.Statement;
+
+      const connectionsStatement = statements.find((s: any) =>
+        s.Action.some((action: string) =>
+          action.includes('codestar-connections:')
+        )
+      );
+
+      expect(connectionsStatement).toBeDefined();
+      expect(connectionsStatement.Action).toContain(
+        'codestar-connections:UseConnection'
+      );
+      expect(connectionsStatement.Resource.Ref).toBe('CodeStarConnectionArn');
+    });
   });
 
   describe('Pipeline Configuration', () => {
-    test('Pipeline should use CodeStar connection for source', () => {
+    test('Pipeline should use CodeStar connection parameter for source', () => {
       const pipeline = template.Resources.CodePipeline;
       const sourceStage = pipeline.Properties.Stages.find(
         (stage: any) => stage.Name === 'Source'
@@ -405,8 +422,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(sourceAction.ActionTypeId.Provider).toBe(
         'CodeStarSourceConnection'
       );
+      // Now references the parameter, not a resource
       expect(sourceAction.Configuration.ConnectionArn.Ref).toBe(
-        'GitHubConnection'
+        'CodeStarConnectionArn'
       );
     });
 

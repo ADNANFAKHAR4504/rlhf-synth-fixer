@@ -15,6 +15,12 @@ Parameters:
     AllowedValues: ['dev', 'staging', 'prod']
     Description: 'Environment name for resource naming and tagging'
 
+  CodeStarConnectionArn:
+    Type: String
+    Description: 'ARN of the CodeStar Connection for GitHub integration (replace with your actual connection ARN)'
+    Default: 'arn:aws:codestar-connections:us-east-1:123456789012:connection/your-connection-id'
+    ConstraintDescription: 'Must be a valid CodeStar Connection ARN. Replace the default placeholder with your actual connection ARN.'
+
   GitHubRepositoryOwner:
     Type: String
     Default: 'your-github-username'
@@ -53,17 +59,12 @@ Parameters:
     ConstraintDescription: 'Secret must be between 8 and 512 characters'
 
 Resources:
-  # CodeStar Connection for GitHub
-  GitHubConnection:
-    Type: AWS::CodeStarConnections::Connection
-    Properties:
-      ConnectionName: !Sub '${ProjectName}-${Environment}-github'
-      ProviderType: GitHub
-      Tags:
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
+  # REMOVED: GitHubConnection resource since we're using parameter
+  # GitHubConnection:
+  #   Type: AWS::CodeStarConnections::Connection
+  #   Properties:
+  #     ConnectionName: !Sub '${ProjectName}-${Environment}-github'
+  #     ProviderType: GitHub
 
   # KMS Key for encryption
   PipelineKMSKey:
@@ -227,7 +228,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # IAM Role for CodePipeline - FIXED
+  # IAM Role for CodePipeline - UPDATED to use parameter
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -249,9 +250,7 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:PutObject
                 Resource:
-                  # FIX: Changed from !Sub '${PipelineArtifactsBucket}/*' to !Sub 'arn:aws:s3:::${PipelineArtifactsBucket}/*'
                   - !Sub 'arn:aws:s3:::${PipelineArtifactsBucket}/*'
-                  # FIX: Changed from !Sub '${DeploymentArtifactsBucket}/*' to !Sub 'arn:aws:s3:::${DeploymentArtifactsBucket}/*'
                   - !Sub 'arn:aws:s3:::${DeploymentArtifactsBucket}/*'
               # S3 bucket-level permissions - FIXED to use GetAtt for ARN
               - Effect: Allow
@@ -267,11 +266,11 @@ Resources:
                   - codebuild:BatchGetBuilds
                   - codebuild:StartBuild
                 Resource: !GetAtt CodeBuildProject.Arn
-              # CodeStar Connections permissions
+              # UPDATED: CodeStar Connections permissions - now uses parameter
               - Effect: Allow
                 Action:
                   - codestar-connections:UseConnection
-                Resource: !Ref GitHubConnection
+                Resource: !Ref CodeStarConnectionArn
               # SNS permissions
               - Effect: Allow
                 Action:
@@ -319,9 +318,7 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:PutObject
                 Resource:
-                  # FIX: Changed from !Sub '${PipelineArtifactsBucket}/*' to !Sub 'arn:aws:s3:::${PipelineArtifactsBucket}/*'
                   - !Sub 'arn:aws:s3:::${PipelineArtifactsBucket}/*'
-                  # FIX: Changed from !Sub '${DeploymentArtifactsBucket}/*' to !Sub 'arn:aws:s3:::${DeploymentArtifactsBucket}/*'
                   - !Sub 'arn:aws:s3:::${DeploymentArtifactsBucket}/*'
               # S3 bucket-level permissions - FIXED to use GetAtt for ARN
               - Effect: Allow
@@ -474,7 +471,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # CodePipeline
+  # CodePipeline - UPDATED to use parameter
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -496,7 +493,8 @@ Resources:
                 Provider: CodeStarSourceConnection
                 Version: '1'
               Configuration:
-                ConnectionArn: !Ref GitHubConnection
+                # UPDATED: Use parameter instead of resource reference
+                ConnectionArn: !Ref CodeStarConnectionArn
                 FullRepositoryId: !Sub '${GitHubRepositoryOwner}/${GitHubRepositoryName}'
                 BranchName: !Ref GitHubBranchName
                 DetectChanges: true
@@ -548,17 +546,19 @@ Resources:
           Value: !Ref Environment
 
 Outputs:
-  GitHubConnectionArn:
+  # UPDATED: Output parameter value instead of resource reference
+  CodeStarConnectionArn:
     Description: 'ARN of the CodeStar Connection to GitHub'
-    Value: !Ref GitHubConnection
+    Value: !Ref CodeStarConnectionArn
     Export:
       Name: !Sub '${AWS::StackName}-GitHubConnection'
 
-  GitHubConnectionStatus:
-    Description: 'Status of the CodeStar Connection (will be PENDING initially)'
-    Value: !GetAtt GitHubConnection.ConnectionStatus
-    Export:
-      Name: !Sub '${AWS::StackName}-GitHubConnectionStatus'
+  # REMOVED: Can't get status from parameter
+  # GitHubConnectionStatus:
+  #   Description: 'Status of the CodeStar Connection (will be PENDING initially)'
+  #   Value: !GetAtt GitHubConnection.ConnectionStatus
+  #   Export:
+  #     Name: !Sub '${AWS::StackName}-GitHubConnectionStatus'
 
   PipelineName:
     Description: 'Name of the created CodePipeline'
