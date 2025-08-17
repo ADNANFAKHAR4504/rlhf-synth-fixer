@@ -169,7 +169,7 @@ resource "random_string" "suffix" {
 
 locals {
   # Use current timestamp for naming based on provided time
-  timestamp   = "161850"  # Based on 18:50 UTC
+  timestamp   = "014323"  # Based on 01:43:23 UTC
   name_prefix = "${var.project_name}-${var.environment}-${local.timestamp}-${random_string.suffix.result}"
   
   common_tags = {
@@ -742,8 +742,12 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-profile"
+    Type = "iam"
+  })
 }
-  
 
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
   name        = "${local.name_prefix}-cloudwatch-logs-policy"
@@ -931,11 +935,36 @@ resource "aws_launch_template" "app" {
     }
   }
 
-  # Enhanced user data script with better error handling and faster startup
-  user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
-    ec2_log_group_name = aws_cloudwatch_log_group.ec2_logs.name
-    timestamp          = local.timestamp
-  }))
+    # Enhanced user data script with inline content (no template file needed)
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y httpd
+    
+    # Start and enable httpd
+    systemctl start httpd
+    systemctl enable httpd
+    
+    # Create health check endpoint
+    echo "OK" > /var/www/html/health
+    
+    # Create simple index page
+    cat > /var/www/html/index.html <<HTML
+    <!DOCTYPE html>
+    <html>
+    <head><title>TAP App - ${local.timestamp}</title></head>
+    <body>
+        <h1>TAP Application</h1>
+        <p>Instance launched at: ${local.timestamp}</p>
+        <p>Environment: ${var.environment}</p>
+    </body>
+    </html>
+HTML
+    
+    # Ensure httpd is running
+    systemctl restart httpd
+  EOF
+  )
 
   depends_on = [aws_nat_gateway.main]
 
