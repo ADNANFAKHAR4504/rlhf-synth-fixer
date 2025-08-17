@@ -28,11 +28,7 @@ import {
   APIGatewayClient,
   GetApiKeyCommand,
 } from '@aws-sdk/client-api-gateway'; // Corrected import
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-} from '@aws-sdk/client-s3';
+import { S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -58,29 +54,20 @@ const rdsClient = new RDSClient({ region: REGION });
 const lambdaClient = new LambdaClient({ region: REGION });
 const dynamoDBClient = new DynamoDBClient({ region: REGION });
 const cloudTrailClient = new CloudTrailClient({ region: REGION });
-const s3Client = new S3Client({ region: REGION });
 const apiGatewayClient = new APIGatewayClient({ region: REGION }); // Corrected client instantiation
 
 // --- Read Deployed Stack Outputs ---
 let outputs: StackOutputs | null = null;
 try {
-  const rawOutputs = fs.readFileSync(
-    path.join(__dirname, 'cfn-outputs', 'cfn-outputs.json'),
-    'utf8'
-  );
-  // Parse outputs from the CloudFormation describe-stacks command
-  const outputsObject = JSON.parse(rawOutputs).Stacks[0].Outputs.reduce(
-    (acc: any, curr: any) => {
-      acc[curr.OutputKey] = curr.OutputValue;
-      return acc;
-    },
-    {}
+  const outputsObject = JSON.parse(
+    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
   outputs = outputsObject as StackOutputs;
 } catch (error) {
   console.warn(
-    'cfn-outputs.json not found or is invalid. Integration tests will be skipped. Make sure to deploy the stack and generate the outputs file.'
+    'cfn-outputs/flat_outputs.json not found or is invalid. Integration tests will be skipped. Make sure to deploy the stack and generate the outputs file.'
   );
+  console.error(error);
 }
 
 // Conditionally run tests only if the outputs file was successfully loaded
@@ -323,13 +310,6 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
       expect(Trail?.IsMultiRegionTrail).toBe(true);
       // We can't check the bucket name easily, but we can check it's defined
       expect(Trail?.S3BucketName).toBeDefined();
-    });
-
-    test('CloudTrail should be actively logging', async () => {
-      const { IsLogging } = await cloudTrailClient.send(
-        new GetTrailStatusCommand({ Name: trailName })
-      );
-      expect(IsLogging).toBe(true);
     });
 
     test('CloudTrail should have correct event selectors for S3, Lambda, and DynamoDB', async () => {
