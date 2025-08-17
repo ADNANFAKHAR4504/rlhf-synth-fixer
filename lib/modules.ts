@@ -429,12 +429,18 @@ export class CloudTrailModule extends Construct {
   public readonly trail: cloudtrail.Cloudtrail;
   public readonly eventDataStore: cloudtrailEventDataStore.CloudtrailEventDataStore;
   public readonly bucketPolicy: S3BucketPolicy;
+  public readonly accountId: string;
+  public readonly region: string;
 
   constructor(scope: Construct, id: string, config: CloudTrailModuleConfig) {
     super(scope, id);
 
-    const callerIdentity = new DataAwsCallerIdentity(this, 'caller-identity');
-    const region = new DataAwsRegion(this, 'current');
+    // Get current AWS account ID and region
+    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
+    const currentRegion = new DataAwsRegion(this, 'current-region');
+
+    this.accountId = callerIdentity.accountId;
+    this.region = currentRegion.name;
 
     // Create S3 bucket policy to allow CloudTrail access
     this.bucketPolicy = new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
@@ -452,7 +458,7 @@ export class CloudTrailModule extends Construct {
             Resource: `arn:aws:s3:::${config.s3BucketName}`,
             Condition: {
               StringEquals: {
-                'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${callerIdentity.accountId}:trail/${config.name}`,
+                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/${config.s3BucketName}`,
               },
             },
           },
@@ -467,7 +473,7 @@ export class CloudTrailModule extends Construct {
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
-                'AWS:SourceArn': `arn:aws:cloudtrail:${region.name}:${callerIdentity.accountId}:trail/${config.name}`,
+                'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.accountId}:trail/${config.s3BucketName}`,
               },
             },
           },
