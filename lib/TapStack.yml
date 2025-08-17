@@ -22,8 +22,35 @@ Parameters:
       - ERROR
     Description: Log level for Lambda functions
 
+  ApiRateLimit:
+    Type: Number
+    Default: 1000
+    MinValue: 100
+    MaxValue: 10000
+    Description: API Gateway rate limit per second
+
+  ApiBurstLimit:
+    Type: Number
+    Default: 2000
+    MinValue: 200
+    MaxValue: 20000
+    Description: API Gateway burst limit
+
+  NotificationEmail:
+    Type: String
+    Default: admin@example.com
+    Description: Email for budget and alarm notifications
+
+  BudgetLimit:
+    Type: Number
+    Default: 100
+    MinValue: 10
+    MaxValue: 10000
+    Description: Monthly budget limit in USD
+
 Conditions:
   IsProd: !Equals [!Ref Environment, 'prod']
+  IsNotProd: !Not [!Equals [!Ref Environment, 'prod']]
 
 Globals:
   Function:
@@ -37,7 +64,39 @@ Globals:
         DYNAMODB_TABLE: !Ref UserTable
 
 Resources:
-  # DynamoDB Table for storing user data with encryption
+  # Customer-managed KMS key for enhanced encryption control
+  DynamoDBKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Customer-managed KMS key for DynamoDB encryption
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow DynamoDB to use the key
+            Effect: Allow
+            Principal:
+              Service: dynamodb.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  DynamoDBKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${Environment}-dynamodb-key'
+      TargetKeyId: !Ref DynamoDBKMSKey
+
+  # DynamoDB Table with customer-managed KMS encryption
   UserTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -52,12 +111,12 @@ Resources:
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
-        KMSMasterKeyId: alias/aws/dynamodb
+        KMSMasterKeyId: !Ref DynamoDBKMSKey
       Tags:
         - Key: Environment
           Value: !Ref Environment
 
-  # IAM Role for Lambda functions
+  # IAM Role for Lambda functions with enhanced permissions
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -70,6 +129,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - !If [IsNotProd, 'arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess', !Ref 'AWS::NoValue']
       Policies:
         - PolicyName: DynamoDBAccess
           PolicyDocument:
@@ -84,6 +144,26 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:Scan
                 Resource: !GetAtt UserTable.Arn
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt DynamoDBKMSKey.Arn
+        - PolicyName: SQSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueAttributes
+                Resource:
+                  - !GetAtt CreateUserDLQ.Arn
+                  - !GetAtt GetUserDLQ.Arn
 
   # API Gateway REST API
   UserApi:
@@ -105,13 +185,315 @@ Resources:
       RestApiId: !Ref UserApi
       Description: API deployment
 
-  # API Gateway Stage
+  # API Gateway Stage with usage plan
   UserApiStage:
     Type: AWS::ApiGateway::Stage
     Properties:
       RestApiId: !Ref UserApi
       DeploymentId: !Ref UserApiDeployment
       StageName: !Ref Environment
+
+  # API Gateway Usage Plan for rate limiting
+  UserApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: !Sub '${Environment}-user-api-usage-plan'
+      Description: Usage plan for user API with rate limiting
+      ApiStages:
+        - ApiId: !Ref UserApi
+          Stage: !Ref UserApiStage
+      Throttle:
+        RateLimit: !Ref ApiRateLimit
+        BurstLimit: !Ref ApiBurstLimit
+
+  # API Gateway API Key
+  UserApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub '${Environment}-user-api-key'
+      Description: API Key for user management API
+      Enabled: true
+
+  # API Gateway Usage Plan Key
+  UserApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref UserApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UserApiUsagePlan
+
+  # SNS Topic for alarms and notifications
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-user-api-alarms'
+      DisplayName: User API Alarms and Notifications
+
+  # SNS Subscription for email notifications
+  AlarmNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref AlarmNotificationTopic
+      Endpoint: !Ref NotificationEmail
+
+  # Dead Letter Queues
+  CreateUserDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${Environment}-create-user-dlq'
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  GetUserDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub '${Environment}-get-user-dlq'
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Log Groups for enhanced logging
+  CreateUserLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Environment}-create-user'
+      RetentionInDays: 30
+
+  GetUserLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Environment}-get-user'
+      RetentionInDays: 30
+
+  # CloudWatch Alarms
+  # Lambda Error Alarms
+  CreateUserFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-create-user-errors'
+      AlarmDescription: CreateUser Lambda function errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CreateUserFunction
+
+  GetUserFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-get-user-errors'
+      AlarmDescription: GetUser Lambda function errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GetUserFunction
+
+  # Lambda Throttle Alarms
+  CreateUserFunctionThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-create-user-throttles'
+      AlarmDescription: CreateUser Lambda function throttles
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CreateUserFunction
+
+  GetUserFunctionThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-get-user-throttles'
+      AlarmDescription: GetUser Lambda function throttles
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GetUserFunction
+
+  # DynamoDB Throttle Alarms
+  DynamoDBReadThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-dynamodb-read-throttles'
+      AlarmDescription: DynamoDB read throttles
+      MetricName: ReadThrottledEvents
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: TableName
+          Value: !Ref UserTable
+
+  DynamoDBWriteThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-dynamodb-write-throttles'
+      AlarmDescription: DynamoDB write throttles
+      MetricName: WriteThrottledEvents
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: TableName
+          Value: !Ref UserTable
+
+  # API Gateway Error Alarms
+  ApiGateway4XXErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-api-gateway-4xx-errors'
+      AlarmDescription: API Gateway 4XX errors
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref UserApi
+        - Name: Stage
+          Value: !Ref Environment
+
+  ApiGateway5XXErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-api-gateway-5xx-errors'
+      AlarmDescription: API Gateway 5XX errors
+      MetricName: 5XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref UserApi
+        - Name: Stage
+          Value: !Ref Environment
+
+  # SQS DLQ Message Alarms
+  CreateUserDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-create-user-dlq-messages'
+      AlarmDescription: Messages in CreateUser DLQ
+      MetricName: ApproximateNumberOfVisibleMessages
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt CreateUserDLQ.QueueName
+
+  GetUserDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-get-user-dlq-messages'
+      AlarmDescription: Messages in GetUser DLQ
+      MetricName: ApproximateNumberOfVisibleMessages
+      Namespace: AWS/SQS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt GetUserDLQ.QueueName
+
+  # AWS Budget for cost monitoring
+  ProjectBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub '${Environment}-user-api-budget'
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref BudgetLimit
+          Unit: USD
+        CostFilters:
+          TagKey:
+            - Environment
+          TagValue:
+            - !Ref Environment
+        TimePeriod:
+          Start: '2023-01-01_00:00'
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - SubscriptionType: EMAIL
+              Address: !Ref NotificationEmail
 
   # API Gateway Resources and Methods
   UserResource:
@@ -227,7 +609,7 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: false
             method.response.header.Access-Control-Allow-Origin: false
 
-  # Lambda function to create users
+  # Lambda function to create users with enhanced features
   CreateUserFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -237,12 +619,18 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       MemorySize: 128
+      ReservedConcurrentExecutions: !If [IsProd, 20, 10]
+      TracingConfig:
+        Mode: !If [IsNotProd, Active, PassThrough]
+      DeadLetterConfig:
+        TargetArn: !GetAtt CreateUserDLQ.Arn
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
           LOG_LEVEL: !Ref LogLevel
           DYNAMODB_TABLE: !Ref UserTable
           FEATURE_FLAG_VALIDATION: 'true'
+          DLQ_URL: !Ref CreateUserDLQ
       Code:
         ZipFile: |
           import json
@@ -250,7 +638,24 @@ Resources:
           import uuid
           import boto3
           import re
+          import logging
+          import sys
           from datetime import datetime
+
+          # Configure structured logging
+          logger = logging.getLogger()
+          logger.setLevel(getattr(logging, os.environ.get('LOG_LEVEL', 'INFO')))
+
+          # Remove default handlers and add custom formatter
+          for handler in logger.handlers:
+              logger.removeHandler(handler)
+
+          handler = logging.StreamHandler(sys.stdout)
+          formatter = logging.Formatter(
+              '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s", "correlation_id": "%(correlation_id)s"}'
+          )
+          handler.setFormatter(formatter)
+          logger.addHandler(handler)
 
           def validate_input(name, email):
               """Validate user input with security checks"""
@@ -276,33 +681,75 @@ Resources:
               
               return errors
 
+          def validate_request_size(body_str, max_size_mb=1):
+              """Validate request payload size"""
+              max_size_bytes = max_size_mb * 1024 * 1024
+              body_size = len(body_str.encode('utf-8')) if body_str else 0
+              
+              if body_size > max_size_bytes:
+                  return False, f"Request payload too large. Maximum size is {max_size_mb}MB"
+              return True, None
+
           def lambda_handler(event, context):
+              # Generate correlation ID for request tracing
+              correlation_id = str(uuid.uuid4())
+              
+              # Add correlation ID to logger context
+              old_factory = logging.getLogRecordFactory()
+              def record_factory(*args, **kwargs):
+                  record = old_factory(*args, **kwargs)
+                  record.correlation_id = correlation_id
+                  return record
+              logging.setLogRecordFactory(record_factory)
+              
+              logger.info(f"CreateUser request started", extra={'correlation_id': correlation_id})
+              
               # Feature flag check
               if os.environ.get('FEATURE_FLAG_VALIDATION', 'false').lower() == 'true':
-                  print("Feature flag validation is enabled")
+                  logger.info("Feature flag validation is enabled", extra={'correlation_id': correlation_id})
               
               cors_origin = '*'
               if os.environ.get('ENVIRONMENT') == 'prod':
                   cors_origin = 'https://yourdomain.com'
               
               try:
+                  # Validate request size first
+                  body_str = event.get('body', '{}')
+                  size_valid, size_error = validate_request_size(body_str)
+                  
+                  if not size_valid:
+                      logger.warning(f"Request size validation failed: {size_error}", extra={'correlation_id': correlation_id})
+                      return {
+                          'statusCode': 413,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': cors_origin,
+                              'X-Correlation-ID': correlation_id
+                          },
+                          'body': json.dumps({'error': size_error})
+                      }
+                  
                   # Parse request body
-                  body = json.loads(event.get('body', '{}'))
+                  body = json.loads(body_str)
                   
                   # Extract and validate input
                   name = body.get('name', '').strip()
                   email = body.get('email', '').strip()
                   
+                  logger.info(f"Processing user creation request", extra={'correlation_id': correlation_id})
+                  
                   # Validate input
                   validation_errors = validate_input(name, email)
                   if validation_errors:
+                      logger.warning(f"Input validation failed: {validation_errors}", extra={'correlation_id': correlation_id})
                       return {
                           'statusCode': 400,
                           'headers': {
                               'Content-Type': 'application/json',
                               'Access-Control-Allow-Origin': cors_origin,
                               'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                              'Access-Control-Allow-Methods': 'POST,OPTIONS'
+                              'Access-Control-Allow-Methods': 'POST,OPTIONS',
+                              'X-Correlation-ID': correlation_id
                           },
                           'body': json.dumps({'errors': validation_errors})
                       }
@@ -325,36 +772,43 @@ Resources:
                   table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
                   table.put_item(Item=user_data)
                   
+                  logger.info(f"User created successfully: {user_id}", extra={'correlation_id': correlation_id})
+                  
                   return {
                       'statusCode': 201,
                       'headers': {
                           'Content-Type': 'application/json',
                           'Access-Control-Allow-Origin': cors_origin,
                           'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'POST,OPTIONS'
+                          'Access-Control-Allow-Methods': 'POST,OPTIONS',
+                          'X-Correlation-ID': correlation_id
                       },
                       'body': json.dumps(user_data)
                   }
-              except json.JSONDecodeError:
+              except json.JSONDecodeError as e:
+                  logger.error(f"JSON decode error: {str(e)}", extra={'correlation_id': correlation_id})
                   return {
                       'statusCode': 400,
                       'headers': {
                           'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': cors_origin
+                          'Access-Control-Allow-Origin': cors_origin,
+                          'X-Correlation-ID': correlation_id
                       },
                       'body': json.dumps({'error': 'Invalid JSON in request body'})
                   }
               except Exception as e:
+                  logger.error(f"Unexpected error: {str(e)}", extra={'correlation_id': correlation_id})
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': cors_origin
+                          'Access-Control-Allow-Origin': cors_origin,
+                          'X-Correlation-ID': correlation_id
                       },
                       'body': json.dumps({'error': 'Internal server error'})
                   }
 
-  # Lambda function to get users
+  # Lambda function to get users with enhanced features
   GetUserFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -364,19 +818,43 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       MemorySize: 128
+      ReservedConcurrentExecutions: !If [IsProd, 30, 15]
+      TracingConfig:
+        Mode: !If [IsNotProd, Active, PassThrough]
+      DeadLetterConfig:
+        TargetArn: !GetAtt GetUserDLQ.Arn
       Environment:
         Variables:
           ENVIRONMENT: !Ref Environment
           LOG_LEVEL: !Ref LogLevel
           DYNAMODB_TABLE: !Ref UserTable
           FEATURE_FLAG_CACHING: 'false'
+          DLQ_URL: !Ref GetUserDLQ
       Code:
         ZipFile: |
           import json
           import os
           import boto3
           import re
+          import logging
+          import sys
+          import uuid
           from boto3.dynamodb.conditions import Key
+
+          # Configure structured logging
+          logger = logging.getLogger()
+          logger.setLevel(getattr(logging, os.environ.get('LOG_LEVEL', 'INFO')))
+
+          # Remove default handlers and add custom formatter
+          for handler in logger.handlers:
+              logger.removeHandler(handler)
+
+          handler = logging.StreamHandler(sys.stdout)
+          formatter = logging.Formatter(
+              '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "message": "%(message)s", "correlation_id": "%(correlation_id)s"}'
+          )
+          handler.setFormatter(formatter)
+          logger.addHandler(handler)
 
           def validate_user_id(user_id):
               """Validate user ID format (UUID)"""
@@ -388,9 +866,22 @@ Resources:
               return bool(re.match(uuid_pattern, user_id.lower()))
 
           def lambda_handler(event, context):
+              # Generate correlation ID for request tracing
+              correlation_id = str(uuid.uuid4())
+              
+              # Add correlation ID to logger context
+              old_factory = logging.getLogRecordFactory()
+              def record_factory(*args, **kwargs):
+                  record = old_factory(*args, **kwargs)
+                  record.correlation_id = correlation_id
+                  return record
+              logging.setLogRecordFactory(record_factory)
+              
+              logger.info(f"GetUser request started", extra={'correlation_id': correlation_id})
+              
               # Feature flag check
               if os.environ.get('FEATURE_FLAG_CACHING', 'false').lower() == 'true':
-                  print("Feature flag caching is enabled")
+                  logger.info("Feature flag caching is enabled", extra={'correlation_id': correlation_id})
               
               cors_origin = '*'
               if os.environ.get('ENVIRONMENT') == 'prod':
@@ -401,12 +892,16 @@ Resources:
                   path_params = event.get('pathParameters') or {}
                   user_id = path_params.get('id')
                   
+                  logger.info(f"Processing get user request for ID: {user_id}", extra={'correlation_id': correlation_id})
+                  
                   if not validate_user_id(user_id):
+                      logger.warning(f"Invalid user ID format: {user_id}", extra={'correlation_id': correlation_id})
                       return {
                           'statusCode': 400,
                           'headers': {
                               'Content-Type': 'application/json',
-                              'Access-Control-Allow-Origin': cors_origin
+                              'Access-Control-Allow-Origin': cors_origin,
+                              'X-Correlation-ID': correlation_id
                           },
                           'body': json.dumps({'error': 'Invalid user ID format. Must be a valid UUID.'})
                       }
@@ -418,31 +913,37 @@ Resources:
                   response = table.get_item(Key={'id': user_id})
                   
                   if 'Item' in response:
+                      logger.info(f"User found: {user_id}", extra={'correlation_id': correlation_id})
                       return {
                           'statusCode': 200,
                           'headers': {
                               'Content-Type': 'application/json',
                               'Access-Control-Allow-Origin': cors_origin,
                               'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                              'Access-Control-Allow-Methods': 'GET,OPTIONS'
+                              'Access-Control-Allow-Methods': 'GET,OPTIONS',
+                              'X-Correlation-ID': correlation_id
                           },
                           'body': json.dumps(response['Item'], default=str)
                       }
                   else:
+                      logger.warning(f"User not found: {user_id}", extra={'correlation_id': correlation_id})
                       return {
                           'statusCode': 404,
                           'headers': {
                               'Content-Type': 'application/json',
-                              'Access-Control-Allow-Origin': cors_origin
+                              'Access-Control-Allow-Origin': cors_origin,
+                              'X-Correlation-ID': correlation_id
                           },
                           'body': json.dumps({'error': 'User not found'})
                       }
               except Exception as e:
+                  logger.error(f"Unexpected error: {str(e)}", extra={'correlation_id': correlation_id})
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': cors_origin
+                          'Access-Control-Allow-Origin': cors_origin,
+                          'X-Correlation-ID': correlation_id
                       },
                       'body': json.dumps({'error': 'Internal server error'})
                   }
@@ -488,3 +989,51 @@ Outputs:
     Value: !Ref UserTable
     Export:
       Name: !Sub '${AWS::StackName}-UserTable'
+
+  KMSKeyId:
+    Description: 'Customer-managed KMS Key ID for encryption'
+    Value: !Ref DynamoDBKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKey'
+
+  KMSKeyAlias:
+    Description: 'Customer-managed KMS Key Alias'
+    Value: !Ref DynamoDBKMSKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyAlias'
+
+  UsagePlanId:
+    Description: 'API Gateway Usage Plan ID'
+    Value: !Ref UserApiUsagePlan
+    Export:
+      Name: !Sub '${AWS::StackName}-UsagePlan'
+
+  ApiKeyId:
+    Description: 'API Gateway API Key ID'
+    Value: !Ref UserApiKey
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiKey'
+
+  CreateUserDLQUrl:
+    Description: 'CreateUser Dead Letter Queue URL'
+    Value: !Ref CreateUserDLQ
+    Export:
+      Name: !Sub '${AWS::StackName}-CreateUserDLQ'
+
+  GetUserDLQUrl:
+    Description: 'GetUser Dead Letter Queue URL'
+    Value: !Ref GetUserDLQ
+    Export:
+      Name: !Sub '${AWS::StackName}-GetUserDLQ'
+
+  AlarmTopicArn:
+    Description: 'SNS Topic ARN for alarm notifications'
+    Value: !Ref AlarmNotificationTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-AlarmTopic'
+
+  BudgetName:
+    Description: 'AWS Budget Name'
+    Value: !Sub '${Environment}-user-api-budget'
+    Export:
+      Name: !Sub '${AWS::StackName}-Budget'
