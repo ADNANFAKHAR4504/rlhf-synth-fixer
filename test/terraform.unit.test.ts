@@ -6,9 +6,9 @@ const stackPath = path.resolve(__dirname, STACK_REL);
 
 describe("Terraform Infrastructure Plan: main.json", () => {
   test("main.json exists", () => {
-    const exists = fs.existsSync(planPath);
+    const exists = fs.existsSync(stackPath);
     if (!exists) {
-      console.error(`[unit] Expected Terraform plan at: ${planPath}`);
+      console.error(`[unit] Expected Terraform plan at: ${stackPath}`);
     }
     expect(exists).toBe(true);
   });
@@ -16,7 +16,7 @@ describe("Terraform Infrastructure Plan: main.json", () => {
   // Load and parse the plan JSON (only once)
   let plan: any;
   beforeAll(() => {
-    const planData = fs.readFileSync(planPath, "utf8");
+    const planData = fs.readFileSync(stackPath, "utf8");
     plan = JSON.parse(planData);
   });
 
