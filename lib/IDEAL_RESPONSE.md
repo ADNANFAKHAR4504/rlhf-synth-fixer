@@ -373,10 +373,10 @@ resource "random_password" "db_password" {
 
 # AWS Secrets Manager for database credentials
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret-manager"
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret-manager-v3"
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret-manager"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secret-manager-v3"
   }
 }
 
@@ -399,7 +399,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-vpc"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-vpc-v3"
   }
 }
 
@@ -408,7 +408,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-igw"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-igw-v3"
   }
 }
 
@@ -422,7 +422,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-public-subnet-${count.index + 1}"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-public-subnet-${count.index + 1}-v3"
     Type = "Public"
   }
 }
@@ -435,7 +435,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-private-subnet-${count.index + 1}"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-private-subnet-${count.index + 1}-v3"
     Type = "Private"
   }
 }
@@ -446,7 +446,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-eip-${count.index + 1}"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-eip-${count.index + 1}-v3"
   }
 }
 
@@ -457,7 +457,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-gateway-${count.index + 1}"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-nat-gateway-${count.index + 1}-v3"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -473,7 +473,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-public-rt"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-public-rt-v3"
   }
 }
 
@@ -488,7 +488,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-private-rt-${count.index + 1}"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-private-rt-${count.index + 1}-v3"
   }
 }
 
@@ -511,7 +511,7 @@ resource "aws_route_table_association" "private" {
 
 # Web Security Group
 resource "aws_security_group" "web" {
-  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-"
+  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-v3-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -547,13 +547,13 @@ resource "aws_security_group" "web" {
   }
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-sg"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-sg-v3"
   }
 }
 
 # Database Security Group
 resource "aws_security_group" "database" {
-  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-"
+  name_prefix = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-v3-"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -573,7 +573,7 @@ resource "aws_security_group" "database" {
   }
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-sg"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-sg-v3"
   }
 }
 
@@ -583,7 +583,7 @@ resource "aws_security_group" "database" {
 
 # EC2 Instance Role
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-role"
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-role-v3"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -599,13 +599,13 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-role"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-role-v3"
   }
 }
 
 # EC2 Policy
 resource "aws_iam_policy" "ec2_policy" {
-  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-policy"
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-policy-v3"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -643,7 +643,7 @@ resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
 
 # Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-profile"
+  name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-ec2-profile-v3"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -801,7 +801,7 @@ EOF
   }
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-${count.index + 1}"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-web-${count.index + 1}-v3"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -809,7 +809,7 @@ EOF
 
 # Application Load Balancer
 resource "aws_lb" "web" {
-  name               = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-alb"
+  name               = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-alb-v3"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web.id]
@@ -818,13 +818,13 @@ resource "aws_lb" "web" {
   enable_deletion_protection = false
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-alb"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-alb-v3"
   }
 }
 
 # Target Group
 resource "aws_lb_target_group" "web" {
-  name     = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-tg"
+  name     = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-tg-v3"
   port     = var.http_port
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -868,18 +868,18 @@ resource "aws_lb_target_group_attachment" "web" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-manager"
+  name       = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-manager-v3"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-manager"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-subnet-group-manager-v3"
   }
 }
 
 # RDS Parameter Group
 resource "aws_db_parameter_group" "main" {
   family = "mysql8.0"
-  name   = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-params-manager"
+  name   = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-params-manager-v3"
 
   parameter {
     name  = "character_set_server"
@@ -894,7 +894,7 @@ resource "aws_db_parameter_group" "main" {
 
 # RDS Instance with Secrets Manager Integration
 resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secrets-manager"
+  identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-secrets-manager-v3"
 
   engine         = "mysql"
   engine_version = "8.0"
@@ -919,12 +919,12 @@ resource "aws_db_instance" "main" {
   maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot       = false
-  final_snapshot_identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-final-snapshot"
+  final_snapshot_identifier = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-final-snapshot-v3"
 
   deletion_protection = var.enable_deletion_protection
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-database"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-database-v3"
   }
 }
 
@@ -941,10 +941,10 @@ resource "random_string" "bucket_suffix" {
 
 # S3 Bucket for Application Data
 resource "aws_s3_bucket" "data" {
-  bucket = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-data-${random_string.bucket_suffix.result}"
+  bucket = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-data-v3-${random_string.bucket_suffix.result}"
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-data-bucket"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-data-bucket-v3"
   }
 }
 
@@ -1015,13 +1015,13 @@ resource "aws_cloudwatch_log_group" "application" {
   retention_in_days = var.cloudwatch_log_retention_days
 
   tags = {
-    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-logs"
+    Name = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-logs-v3"
   }
 }
 
 # CloudWatch Alarm for CPU
 resource "aws_cloudwatch_metric_alarm" "cpu" {
-  alarm_name          = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-cpu-alarm"
+  alarm_name          = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-cpu-alarm-v3"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = var.cloudwatch_evaluation_periods
   metric_name         = "CPUUtilization"
@@ -1038,7 +1038,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu" {
 
 # CloudWatch Alarm for Database
 resource "aws_cloudwatch_metric_alarm" "database_cpu" {
-  alarm_name          = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-cpu-alarm"
+  alarm_name          = "${var.project_name}${var.environment_suffix != "" ? "-${var.environment_suffix}" : ""}-db-cpu-alarm-v3"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = var.cloudwatch_evaluation_periods
   metric_name         = "CPUUtilization"
