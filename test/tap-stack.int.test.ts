@@ -7,8 +7,8 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Get environment and project name from environment variables (set by CI/CD pipeline)
-const environment = process.env.ENVIRONMENT || 'dev';
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const projectName = process.env.PROJECT_NAME || 'myapp';
 
 // AWS SDK Configuration
@@ -27,7 +27,7 @@ const cloudtrail = new AWS.CloudTrail();
 const iam = new AWS.IAM();
 
 // Helper function to make HTTP requests
-const makeHttpRequest = (url) => {
+const makeHttpRequest = (url: string): Promise<{statusCode: number; body: string; headers: any}> => {
   return new Promise((resolve, reject) => {
     const request = https.get(url, (response) => {
       let data = '';
@@ -36,7 +36,7 @@ const makeHttpRequest = (url) => {
       });
       response.on('end', () => {
         resolve({
-          statusCode: response.statusCode,
+          statusCode: response.statusCode || 0,
           body: data,
           headers: response.headers
         });
@@ -54,18 +54,18 @@ describe('AWS Infrastructure Integration Tests', () => {
   
   describe('VPC and Networking', () => {
     test('VPC should exist and be properly configured', async () => {
-      const vpcId = outputs[`${projectName}-${environment}-vpc-id`];
+      const vpcId = outputs[`${projectName}-${environmentSuffix}-vpc-id`];
       expect(vpcId).toBeDefined();
       
       const vpc = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
       expect(vpc.Vpcs).toHaveLength(1);
-      expect(vpc.Vpcs[0].State).toBe('available');
-      expect(vpc.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.Vpcs?.[0]?.State).toBe('available');
+      expect(vpc.Vpcs?.[0]?.CidrBlock).toBe('10.0.0.0/16');
     });
 
     test('Public and private subnets should exist', async () => {
-      const publicSubnets = outputs[`${projectName}-${environment}-public-subnets`].split(',');
-      const privateSubnets = outputs[`${projectName}-${environment}-private-subnets`].split(',');
+      const publicSubnets = outputs[`${projectName}-${environmentSuffix}-public-subnets`].split(',');
+      const privateSubnets = outputs[`${projectName}-${environmentSuffix}-private-subnets`].split(',');
       
       expect(publicSubnets).toHaveLength(2);
       expect(privateSubnets).toHaveLength(2);
@@ -74,7 +74,7 @@ describe('AWS Infrastructure Integration Tests', () => {
       const subnets = await ec2.describeSubnets({ SubnetIds: allSubnets }).promise();
       
       expect(subnets.Subnets).toHaveLength(4);
-      subnets.Subnets.forEach(subnet => {
+      subnets.Subnets?.forEach(subnet => {
         expect(subnet.State).toBe('available');
       });
     });
@@ -82,7 +82,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
   describe('S3 Buckets', () => {
     test('Application bucket should exist with proper configuration', async () => {
-      const bucketName = outputs[`${projectName}-${environment}-app-bucket`];
+      const bucketName = outputs[`${projectName}-${environmentSuffix}-app-bucket`];
       expect(bucketName).toBeDefined();
       
       // Check bucket exists
@@ -91,8 +91,8 @@ describe('AWS Infrastructure Integration Tests', () => {
       
       // Check encryption
       const encryption = await s3.getBucketEncryption({ Bucket: bucketName }).promise();
-      expect(encryption.ServerSideEncryptionConfiguration.Rules).toHaveLength(1);
-      expect(encryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(encryption.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
+      expect(encryption.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
       
       // Check versioning
       const versioning = await s3.getBucketVersioning({ Bucket: bucketName }).promise();
@@ -100,127 +100,126 @@ describe('AWS Infrastructure Integration Tests', () => {
       
       // Check public access block
       const publicAccessBlock = await s3.getPublicAccessBlock({ Bucket: bucketName }).promise();
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(publicAccessBlock.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
     });
   });
 
   describe('RDS Database', () => {
     test('Database should exist and be properly configured', async () => {
-      const dbEndpoint = outputs[`${projectName}-${environment}-db-endpoint`];
+      const dbEndpoint = outputs[`${projectName}-${environmentSuffix}-db-endpoint`];
       expect(dbEndpoint).toBeDefined();
       
-      // Extract DB identifier from endpoint
-      const dbIdentifier = dbEndpoint.split('.')[0];
       const dbInstances = await rds.describeDBInstances({
-        DBInstanceIdentifier: dbIdentifier
+        DBInstanceIdentifier: `${projectName}-${environmentSuffix}-db`
       }).promise();
       
       expect(dbInstances.DBInstances).toHaveLength(1);
-      const dbInstance = dbInstances.DBInstances[0];
+      const dbInstance = dbInstances.DBInstances?.[0];
       
-      expect(dbInstance.DBInstanceStatus).toBe('available');
-      expect(dbInstance.Engine).toBe('mysql');
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.DeletionProtection).toBe(false);
-      expect(dbInstance.MultiAZ).toBe(true);
-      expect(dbInstance.BackupRetentionPeriod).toBe(7);
+      expect(dbInstance?.DBInstanceStatus).toBe('available');
+      expect(dbInstance?.Engine).toBe('mysql');
+      expect(dbInstance?.StorageEncrypted).toBe(true);
+      expect(dbInstance?.DeletionProtection).toBe(true);
+      expect(dbInstance?.MultiAZ).toBe(true);
+      expect(dbInstance?.BackupRetentionPeriod).toBe(7);
     }, 30000);
   });
 
   describe('Application Load Balancer', () => {
     test('ALB should exist and be accessible', async () => {
-      const albDns = outputs[`${projectName}-${environment}-alb-dns`];
+      const albDns = outputs[`${projectName}-${environmentSuffix}-alb-dns`];
       expect(albDns).toBeDefined();
       
       // Check ALB status
       const loadBalancers = await elbv2.describeLoadBalancers().promise();
-      const alb = loadBalancers.LoadBalancers.find(lb => 
+      const alb = loadBalancers.LoadBalancers?.find(lb => 
         lb.DNSName === albDns
       );
       
       expect(alb).toBeDefined();
-      expect(alb.State.Code).toBe('active');
-      expect(alb.Scheme).toBe('internet-facing');
-      expect(alb.Type).toBe('application');
+      expect(alb?.State?.Code).toBe('active');
+      expect(alb?.Scheme).toBe('internet-facing');
+      expect(alb?.Type).toBe('application');
       
       // Test HTTP connectivity (should work)
       try {
         const response = await makeHttpRequest(`http://${albDns}`);
         expect(response.statusCode).toBeLessThan(500);
-      } catch (error) {
+      } catch (error: any) {
         // ALB might take time to be fully ready, log but don't fail
-        console.warn(`ALB not yet accessible: ${error.message}`);
+        console.warn(`ALB not yet accessible: ${error.message || 'Unknown error'}`);
       }
     }, 30000);
 
     test('Target group should be healthy', async () => {
-      // Get target groups for our load balancer
-      const loadBalancers = await elbv2.describeLoadBalancers().promise();
-      const alb = loadBalancers.LoadBalancers.find(lb => 
-        lb.DNSName === albDns
-      );
-      
       const targetGroups = await elbv2.describeTargetGroups({
-        LoadBalancerArn: alb.LoadBalancerArn
+        Names: [`${projectName}-${environmentSuffix}-tg`]
       }).promise();
       
       expect(targetGroups.TargetGroups).toHaveLength(1);
-      const targetGroup = targetGroups.TargetGroups[0];
+      const targetGroup = targetGroups.TargetGroups?.[0];
       
-      const targetHealth = await elbv2.describeTargetHealth({
-        TargetGroupArn: targetGroup.TargetGroupArn
-      }).promise();
-      
-      expect(targetHealth.TargetHealthDescriptions.length).toBeGreaterThan(0);
+      if (targetGroup?.TargetGroupArn) {
+        const targetHealth = await elbv2.describeTargetHealth({
+          TargetGroupArn: targetGroup.TargetGroupArn
+        }).promise();
+        
+        expect(targetHealth.TargetHealthDescriptions?.length).toBeGreaterThan(0);
+      }
     }, 30000);
   });
 
   describe('CloudFront Distribution', () => {
     test('CloudFront distribution should exist and be deployed', async () => {
-      const cfDomain = outputs[`${projectName}-${environment}-cf-domain`];
+      const cfDomain = outputs[`${projectName}-${environmentSuffix}-cf-domain`];
       expect(cfDomain).toBeDefined();
       
       const distributions = await cloudfront.listDistributions().promise();
-      const distribution = distributions.DistributionList.Items.find(d => 
+      const distribution = distributions.DistributionList?.Items?.find(d => 
         d.DomainName === cfDomain
       );
       
       expect(distribution).toBeDefined();
-      expect(distribution.Status).toBe('Deployed');
-      expect(distribution.Enabled).toBe(true);
+      expect(distribution?.Status).toBe('Deployed');
+      expect(distribution?.Enabled).toBe(true);
     }, 45000);
   });
 
   describe('WAF Web ACL', () => {
     test('WAF should exist and be associated with ALB', async () => {
-      const wafArn = outputs[`${projectName}-${environment}-waf-arn`];
+      const wafArn = outputs[`${projectName}-${environmentSuffix}-waf-arn`];
       expect(wafArn).toBeDefined();
       
-      const webACLId = wafArn.split('/').pop();
-      const webACL = await wafv2.getWebACL({
-        Scope: 'REGIONAL',
-        Id: webACLId
-      }).promise();
+      const wafId = wafArn.split('/').pop();
+      const wafName = `${projectName}-${environmentSuffix}-waf`;
       
-      expect(webACL.WebACL).toBeDefined();
-      expect(webACL.WebACL.Rules.length).toBeGreaterThanOrEqual(1);
-      
-      // Check association with ALB
-      const associations = await wafv2.listResourcesForWebACL({
-        WebACLArn: wafArn,
-        ResourceType: 'APPLICATION_LOAD_BALANCER'
-      }).promise();
-      
-      expect(associations.ResourceArns.length).toBeGreaterThan(0);
+      if (wafId) {
+        const webACL = await wafv2.getWebACL({
+          Scope: 'REGIONAL',
+          Id: wafId,
+          Name: wafName
+        }).promise();
+        
+        expect(webACL.WebACL).toBeDefined();
+        expect(webACL.WebACL?.Rules?.length).toBeGreaterThanOrEqual(2);
+        
+        // Check association with ALB
+        const associations = await wafv2.listResourcesForWebACL({
+          WebACLArn: wafArn,
+          ResourceType: 'APPLICATION_LOAD_BALANCER'
+        }).promise();
+        
+        expect(associations.ResourceArns?.length).toBeGreaterThan(0);
+      }
     });
   });
 
   describe('CloudTrail', () => {
     test('CloudTrail should be active and logging', async () => {
-      const cloudtrailArn = outputs[`${projectName}-${environment}-cloudtrail-arn`];
+      const cloudtrailArn = outputs[`${projectName}-${environmentSuffix}-cloudtrail-arn`];
       expect(cloudtrailArn).toBeDefined();
       
       const trails = await cloudtrail.describeTrails({
@@ -228,11 +227,11 @@ describe('AWS Infrastructure Integration Tests', () => {
       }).promise();
       
       expect(trails.trailList).toHaveLength(1);
-      const trail = trails.trailList[0];
+      const trail = trails.trailList?.[0];
       
-      expect(trail.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail.IsMultiRegionTrail).toBe(true);
-      expect(trail.LogFileValidationEnabled).toBe(true);
+      expect(trail?.IncludeGlobalServiceEvents).toBe(true);
+      expect(trail?.IsMultiRegionTrail).toBe(true);
+      expect(trail?.LogFileValidationEnabled).toBe(true);
       
       // Check if logging is enabled
       const status = await cloudtrail.getTrailStatus({
@@ -245,7 +244,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
   describe('GuardDuty', () => {
     test('GuardDuty should be enabled', async () => {
-      const detectorId = outputs[`${projectName}-${environment}-guardduty-id`];
+      const detectorId = outputs[`${projectName}-${environmentSuffix}-guardduty-id`];
       expect(detectorId).toBeDefined();
       
       const detector = await guardduty.getDetector({
@@ -259,33 +258,33 @@ describe('AWS Infrastructure Integration Tests', () => {
 
   describe('Security Groups', () => {
     test('Security groups should have proper rules', async () => {
-      const vpcId = outputs[`${projectName}-${environment}-vpc-id`];
+      const vpcId = outputs[`${projectName}-${environmentSuffix}-vpc-id`];
       
       const securityGroups = await ec2.describeSecurityGroups({
         Filters: [
           { Name: 'vpc-id', Values: [vpcId] },
-          { Name: 'group-name', Values: [`*web*`] }
+          { Name: 'group-name', Values: [`${projectName}-${environmentSuffix}-web-sg`] }
         ]
       }).promise();
       
       expect(securityGroups.SecurityGroups).toHaveLength(1);
-      const webSG = securityGroups.SecurityGroups[0];
+      const webSG = securityGroups.SecurityGroups?.[0];
       
       // Check ingress rules
-      const ingressRules = webSG.IpPermissions;
-      const sshRule = ingressRules.find(rule => rule.FromPort === 22);
-      const httpRule = ingressRules.find(rule => rule.FromPort === 80);
+      const ingressRules = webSG?.IpPermissions;
+      const sshRule = ingressRules?.find(rule => rule.FromPort === 22);
+      const httpRule = ingressRules?.find(rule => rule.FromPort === 80);
       
       expect(sshRule).toBeDefined();
       expect(httpRule).toBeDefined();
-      expect(sshRule.IpRanges[0].CidrIp).toBe('0.0.0.0/0');
-      expect(httpRule.IpRanges[0].CidrIp).toBe('0.0.0.0/0');
+      expect(sshRule?.IpRanges?.[0]?.CidrIp).toBe('0.0.0.0/0');
+      expect(httpRule?.IpRanges?.[0]?.CidrIp).toBe('0.0.0.0/0');
     });
   });
 
   describe('IAM Roles and Policies', () => {
     test('EC2 role should exist with proper permissions', async () => {
-      const roleName = `${projectName}-${environment}-ec2-role`;
+      const roleName = `${projectName}-${environmentSuffix}-ec2-role`;
       
       const role = await iam.getRole({ RoleName: roleName }).promise();
       expect(role.Role).toBeDefined();
@@ -293,21 +292,25 @@ describe('AWS Infrastructure Integration Tests', () => {
       const rolePolicies = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
       const inlinePolicies = await iam.listRolePolicies({ RoleName: roleName }).promise();
       
-      const hasBasicPolicy = rolePolicies.AttachedPolicies.some(p => p.PolicyName.includes('Basic')) || 
-                            inlinePolicies.PolicyNames.some(p => p.includes('Basic'));
+      const hasBasicPolicy = rolePolicies.AttachedPolicies?.some(p => p.PolicyName?.includes('Basic')) ||
+                            inlinePolicies.PolicyNames?.includes('EC2BasicPolicy');
+      
       expect(hasBasicPolicy).toBe(true);
     });
 
     test('MFA enforcement policy should exist', async () => {
-      const policyName = `${projectName}-${environment}-mfa-enforcement-policy`;
+      const policyName = `${projectName}-${environmentSuffix}-mfa-enforcement`;
       
       try {
-        // First try to get the policy directly if we know the account ID
-        const policies = await iam.listPolicies({ Scope: 'Local' }).promise();
-        const mfaPolicy = policies.Policies.find(p => p.PolicyName === policyName);
-        expect(mfaPolicy).toBeDefined();
+        const policy = await iam.getPolicy({
+          PolicyArn: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID}:policy/${policyName}`
+        }).promise();
+        expect(policy.Policy).toBeDefined();
       } catch (error) {
-        console.warn('Could not verify MFA policy:', error.message);
+        // Policy might not be attached to current user, check if it exists
+        const policies = await iam.listPolicies({ Scope: 'Local' }).promise();
+        const mfaPolicy = policies.Policies?.find(p => p.PolicyName === policyName);
+        expect(mfaPolicy).toBeDefined();
       }
     });
   });
@@ -317,24 +320,24 @@ describe('AWS Infrastructure Integration Tests', () => {
       const cloudwatch = new AWS.CloudWatch();
       
       const alarms = await cloudwatch.describeAlarms({
-        AlarmNames: [`${projectName}-${environment}-cpu-alarm`]
+        AlarmNames: [`${projectName}-${environmentSuffix}-cpu-alarm`]
       }).promise();
       
       expect(alarms.MetricAlarms).toHaveLength(1);
-      const alarm = alarms.MetricAlarms[0];
+      const alarm = alarms.MetricAlarms?.[0];
       
-      expect(alarm.MetricName).toBe('CPUUtilization');
-      expect(alarm.Threshold).toBe(80);
-      expect(alarm.ComparisonOperator).toBe('GreaterThanThreshold');
-      expect(alarm.StateValue).toMatch(/^(OK|ALARM|INSUFFICIENT_DATA)$/);
+      expect(alarm?.MetricName).toBe('CPUUtilization');
+      expect(alarm?.Threshold).toBe(80);
+      expect(alarm?.ComparisonOperator).toBe('GreaterThanThreshold');
+      expect(alarm?.StateValue).toMatch(/^(OK|ALARM|INSUFFICIENT_DATA)$/);
     });
 
     test('SNS topic for alarms should exist', async () => {
       const sns = new AWS.SNS();
       
       const topics = await sns.listTopics().promise();
-      const alarmTopic = topics.Topics.find(topic => 
-        topic.TopicArn.includes(`${projectName}-${environment}-alarms`)
+      const alarmTopic = topics.Topics?.find(topic => 
+        topic.TopicArn?.includes(`${projectName}-${environmentSuffix}-alarms`)
       );
       
       expect(alarmTopic).toBeDefined();
@@ -342,28 +345,27 @@ describe('AWS Infrastructure Integration Tests', () => {
   });
 
   describe('Lambda Function', () => {
-    test('Sample Lambda function should exist', async () => {
+    test('Sample Lambda function should exist and be invokable', async () => {
       const lambda = new AWS.Lambda();
       
-      // Get function name from stack resources since it's not in outputs
-      const functionName = `${projectName}-${environment}-sample-function`;
+      const functionName = `${projectName}-${environmentSuffix}-sample-function`;
+      const func = await lambda.getFunction({ FunctionName: functionName }).promise();
       
-      try {
-        const func = await lambda.getFunction({ FunctionName: functionName }).promise();
-        expect(func.Configuration.Runtime).toBe('python3.11');
-        expect(func.Configuration.Timeout).toBe(30);
-        expect(func.Configuration.State).toBe('Active');
-      } catch (error) {
-        // Function might have a different name, try to list functions
-        const functions = await lambda.listFunctions().promise();
-        const sampleFunction = functions.Functions.find(f => 
-          f.FunctionName.includes(projectName) && f.FunctionName.includes(environment)
-        );
-        expect(sampleFunction).toBeDefined();
-        if (sampleFunction) {
-          expect(sampleFunction.Runtime).toBe('python3.11');
-          expect(sampleFunction.Timeout).toBe(30);
-        }
+      expect(func.Configuration?.Runtime).toBe('python3.11');
+      expect(func.Configuration?.Timeout).toBe(30);
+      expect(func.Configuration?.State).toBe('Active');
+      
+      // Test invocation
+      const result = await lambda.invoke({
+        FunctionName: functionName,
+        InvocationType: 'RequestResponse'
+      }).promise();
+      
+      expect(result.StatusCode).toBe(200);
+      if (result.Payload) {
+        const payload = JSON.parse(result.Payload.toString());
+        expect(payload.statusCode).toBe(200);
+        expect(JSON.parse(payload.body)).toBe('Hello from Lambda!');
       }
     });
   });
@@ -371,16 +373,16 @@ describe('AWS Infrastructure Integration Tests', () => {
   describe('Overall Infrastructure Health', () => {
     test('All critical outputs should be present', () => {
       const requiredOutputs = [
-        `${projectName}-${environment}-vpc-id`,
-        `${projectName}-${environment}-public-subnets`,
-        `${projectName}-${environment}-private-subnets`,
-        `${projectName}-${environment}-app-bucket`,
-        `${projectName}-${environment}-db-endpoint`,
-        `${projectName}-${environment}-alb-dns`,
-        `${projectName}-${environment}-cf-domain`,
-        `${projectName}-${environment}-waf-arn`,
-        `${projectName}-${environment}-cloudtrail-arn`,
-        `${projectName}-${environment}-guardduty-id`
+        `${projectName}-${environmentSuffix}-vpc-id`,
+        `${projectName}-${environmentSuffix}-public-subnets`,
+        `${projectName}-${environmentSuffix}-private-subnets`,
+        `${projectName}-${environmentSuffix}-app-bucket`,
+        `${projectName}-${environmentSuffix}-db-endpoint`,
+        `${projectName}-${environmentSuffix}-alb-dns`,
+        `${projectName}-${environmentSuffix}-cf-domain`,
+        `${projectName}-${environmentSuffix}-waf-arn`,
+        `${projectName}-${environmentSuffix}-cloudtrail-arn`,
+        `${projectName}-${environmentSuffix}-guardduty-id`
       ];
       
       requiredOutputs.forEach(output => {
@@ -392,7 +394,7 @@ describe('AWS Infrastructure Integration Tests', () => {
     test('Resources should follow naming convention', () => {
       Object.keys(outputs).forEach(key => {
         if (!key.includes('ComplianceStatus') && !key.includes('SecurityFeatures')) {
-          expect(key).toMatch(new RegExp(`^${projectName}-${environment}-`));
+          expect(key).toMatch(new RegExp(`^${projectName}-${environmentSuffix}-`));
         }
       });
     });
