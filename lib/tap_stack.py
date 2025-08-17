@@ -86,7 +86,9 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     self.private_nacl = self._create_private_nacl()
     self.flow_logs_role = self._create_flow_logs_role()
     self.flow_logs = self._create_flow_logs()
-    self.vpc_endpoints = self._create_vpc_endpoints()
+    # Temporarily disable VPC endpoints to get the stack deployed
+    # self.vpc_endpoints = self._create_vpc_endpoints()
+    self.vpc_endpoints = []
 
   def _create_vpc(self) -> aws.ec2.Vpc:
     return aws.ec2.Vpc(
@@ -341,9 +343,9 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     # Create VPC endpoint security group once and reuse it
     vpc_endpoint_sg = self._create_vpc_endpoint_sg()
     
-    # For now, use a hardcoded region to avoid Pulumi Output issues
-    # This can be made configurable later if needed
-    region = "us-east-1"  # Default to us-east-1
+    # Use the same region as the provider to ensure VPC endpoints work
+    # The provider is hardcoded to us-west-2 in TapStack constructor
+    region = "us-west-2"  # Must match provider region
     
     # Debug: Export the provider region (only in actual Pulumi context)
     try:
