@@ -742,7 +742,7 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
-
+}
   
 
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
