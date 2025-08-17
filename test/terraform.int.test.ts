@@ -49,10 +49,89 @@ describe('Terraform integration tests (outputs + standards)', () => {
       tfSource = fs.readFileSync(tfPath, 'utf8');
     }
 
+    // Helper: convert CamelCase or PascalCase to snake_case
+    const toSnakeCase = (s: string) =>
+      s
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+        .replace(/[-\s]+/g, '_')
+        .toLowerCase();
+
+    // Normalize various possible shapes into a flat key -> primitive/array map
+    const postShape = (key: string, value: any): any => {
+      const k = toSnakeCase(key);
+      // Keys that represent ID lists
+      if (/(^|_)subnet_ids$/.test(k) || /_ids$/.test(k)) {
+        if (Array.isArray(value)) return value;
+        if (typeof value === 'string') {
+          const parts = value
+            .split(/[,\s]+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          return parts;
+        }
+      }
+      // For non-array primitives expected as strings (ids, arns, names, urls)
+      if (
+        typeof value !== 'string' &&
+        !Array.isArray(value) &&
+        value != null
+      ) {
+        return String(value);
+      }
+      return value;
+    };
+
+    const normalizeOutputs = (raw: any): Record<string, any> => {
+      if (!raw) return {};
+
+      // Case 1: { Outputs: [ { OutputKey, OutputValue }, ... ] } (CFN DescribeStacks)
+      if (Array.isArray(raw.Outputs)) {
+        const map: Record<string, any> = {};
+        for (const o of raw.Outputs) {
+          if (o && typeof o === 'object' && o.OutputKey) {
+            const val = o.OutputValue ?? o.Value ?? o.outputValue ?? '';
+            const key = toSnakeCase(String(o.OutputKey));
+            map[key] = postShape(key, val);
+          }
+        }
+        return map;
+      }
+
+      // Case 2: [ { OutputKey, OutputValue }, ... ]
+      if (Array.isArray(raw) && raw.every((o) => o && typeof o === 'object' && 'OutputKey' in o)) {
+        const map: Record<string, any> = {};
+        for (const o of raw) {
+          const key = toSnakeCase(String(o.OutputKey));
+          const val = o.OutputValue ?? o.Value ?? o.outputValue ?? '';
+          map[key] = postShape(key, val);
+        }
+        return map;
+      }
+
+      // Case 3: { key: { value: X } } or { key: { Value: X } }
+      if (raw && typeof raw === 'object') {
+        const map: Record<string, any> = {};
+        for (const [k, v] of Object.entries(raw)) {
+          const key = toSnakeCase(k);
+          if (v && typeof v === 'object' && !Array.isArray(v)) {
+            // Common wrappers
+            const unwrapped = (v as any).value ?? (v as any).Value ?? (v as any).OutputValue ?? v;
+            map[key] = postShape(key, unwrapped);
+          } else {
+            map[key] = postShape(key, v as any);
+          }
+        }
+        return map;
+      }
+
+      return raw;
+    };
+
     // Load outputs JSON if present
     try {
       const raw = fs.readFileSync(outputsPath, 'utf8');
-      outputs = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      outputs = normalizeOutputs(parsed);
     } catch (e) {
       // If not present or invalid, mark outputs tests to be skipped
       // eslint-disable-next-line no-console
