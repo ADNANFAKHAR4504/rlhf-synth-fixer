@@ -22,6 +22,16 @@
             "Description": "Name of the SSM Parameter Store parameter containing the database password",
             "AllowedPattern": "^[a-zA-Z0-9/_-]+$"
         },
+        "AZ1": {
+            "Type": "String",
+            "Default": "us-west-2a",
+            "Description": "Primary AZ"
+        },
+        "AZ2": {
+            "Type": "String",
+            "Default": "us-west-2b",
+            "Description": "Secondary AZ (set same as AZ1 if only one AZ is enabled)"
+        },
         "Environment": {
             "Type": "String",
             "Default": "production",
@@ -94,12 +104,7 @@
                 },
                 "CidrBlock": "10.0.1.0/24",
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
+                    "Ref": "AZ1"
                 },
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
@@ -126,12 +131,7 @@
                 },
                 "CidrBlock": "10.0.2.0/24",
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
+                    "Ref": "AZ2"
                 },
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
@@ -158,12 +158,7 @@
                 },
                 "CidrBlock": "10.0.3.0/24",
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
+                    "Ref": "AZ1"
                 },
                 "Tags": [
                     {
@@ -189,12 +184,7 @@
                 },
                 "CidrBlock": "10.0.4.0/24",
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
+                    "Ref": "AZ2"
                 },
                 "Tags": [
                     {
@@ -467,11 +457,11 @@
         },
         "MyAppS3AccessLogsBucket": {
             "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
+            "DeletionPolicy": "Delete",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "myapp-access-logs-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "myapp-access-logs-${Environment}-${AWS::AccountId}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -645,11 +635,11 @@
         },
         "MyAppS3Bucket": {
             "Type": "AWS::S3::Bucket",
-            "DeletionPolicy": "Retain",
+            "DeletionPolicy": "Delete",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "myapp-primary-${Environment}-${AWS::AccountId}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -675,19 +665,6 @@
                         }
                     ]
                 },
-                "NotificationConfiguration": {
-                    "LambdaConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "Function": {
-                                "Fn::GetAtt": [
-                                    "MyAppLambdaFunction",
-                                    "Arn"
-                                ]
-                            }
-                        }
-                    ]
-                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -706,8 +683,14 @@
                     "Ref": "MyAppLambdaFunction"
                 },
                 "Principal": "s3.amazonaws.com",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                },
                 "SourceArn": {
-                    "Fn::Sub": "${MyAppS3Bucket}/*"
+                    "Fn::GetAtt": [
+                        "MyAppS3Bucket",
+                        "Arn"
+                    ]
                 }
             }
         },
@@ -781,7 +764,7 @@
         },
         "MyAppRDSInstance": {
             "Type": "AWS::RDS::DBInstance",
-            "DeletionPolicy": "Retain",
+            "DeletionPolicy": "Delete",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "DBInstanceIdentifier": {
@@ -794,7 +777,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:ssm:${DBPassword}}}"
+                    "Fn::Sub": "{{resolve:ssm-secure:${DBPassword}}}"
                 },
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
@@ -811,7 +794,7 @@
                 "BackupRetentionPeriod": 7,
                 "PreferredBackupWindow": "03:00-04:00",
                 "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-                "DeletionProtection": true,
+                "DeletionProtection": false,
                 "Tags": [
                     {
                         "Key": "Name",

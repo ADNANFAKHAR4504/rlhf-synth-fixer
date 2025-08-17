@@ -112,15 +112,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(privateSubnet1.Properties.CidrBlock).toBe('10.0.3.0/24');
     });
 
-    test('should use dynamic availability zones', () => {
+    test('should use parameter-based availability zones', () => {
       const publicSubnet1 = template.Resources.PublicSubnet1;
       const publicSubnet2 = template.Resources.PublicSubnet2;
       
       expect(publicSubnet1.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+        'Ref': 'AZ1'
       });
       expect(publicSubnet2.Properties.AvailabilityZone).toEqual({
-        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+        'Ref': 'AZ2'
       });
     });
   });
@@ -180,7 +180,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.MyAppS3AccessLogsBucket).toBeDefined();
       const bucket = template.Resources.MyAppS3AccessLogsBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.DeletionPolicy).toBe('Retain');
+      expect(bucket.DeletionPolicy).toBe('Delete');
       expect(bucket.UpdateReplacePolicy).toBe('Retain');
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
@@ -190,7 +190,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.MyAppS3Bucket).toBeDefined();
       const bucket = template.Resources.MyAppS3Bucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.DeletionPolicy).toBe('Retain');
+      expect(bucket.DeletionPolicy).toBe('Delete');
       expect(bucket.UpdateReplacePolicy).toBe('Retain');
       expect(bucket.Properties.LoggingConfiguration.DestinationBucketName).toEqual({ Ref: 'MyAppS3AccessLogsBucket' });
     });
@@ -200,10 +200,10 @@ describe('TapStack CloudFormation Template', () => {
       const primaryBucket = template.Resources.MyAppS3Bucket;
       
       expect(accessLogsBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'myapp-access-logs-${Environment}-${AWS::AccountId}-${AWS::Region}'
+        'Fn::Sub': 'myapp-access-logs-${Environment}-${AWS::AccountId}'
       });
       expect(primaryBucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'myapp-primary-${Environment}-${AWS::AccountId}-${AWS::Region}'
+        'Fn::Sub': 'myapp-primary-${Environment}-${AWS::AccountId}'
       });
     });
   });
@@ -246,7 +246,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(permission.Type).toBe('AWS::Lambda::Permission');
       expect(permission.Properties.Action).toBe('lambda:InvokeFunction');
       expect(permission.Properties.Principal).toBe('s3.amazonaws.com');
-      expect(permission.Properties.SourceArn).toEqual({ 'Fn::Sub': '${MyAppS3Bucket}/*' });
+      expect(permission.Properties.SourceAccount).toEqual({ 'Ref': 'AWS::AccountId' });
+      expect(permission.Properties.SourceArn).toEqual({ 'Fn::GetAtt': ['MyAppS3Bucket', 'Arn'] });
     });
   });
 
@@ -284,14 +285,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.MyAppRDSInstance).toBeDefined();
       const rds = template.Resources.MyAppRDSInstance;
       expect(rds.Type).toBe('AWS::RDS::DBInstance');
-      expect(rds.DeletionPolicy).toBe('Retain');
+      expect(rds.DeletionPolicy).toBe('Delete');
       expect(rds.UpdateReplacePolicy).toBe('Retain');
       expect(rds.Properties.Engine).toBe('postgres');
       expect(rds.Properties.EngineVersion).toBe('13.15');
       expect(rds.Properties.DBInstanceClass).toBe('db.t3.medium');
       expect(rds.Properties.StorageEncrypted).toBe(true);
       expect(rds.Properties.MultiAZ).toBe(true);
-      expect(rds.Properties.DeletionProtection).toBe(true);
+      expect(rds.Properties.DeletionProtection).toBe(false);
     });
 
     test('should use SSM parameter for database password', () => {
@@ -406,9 +407,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(rds.Properties.StorageEncrypted).toBe(true);
     });
 
-    test('should have RDS deletion protection enabled', () => {
+    test('should have RDS deletion protection disabled', () => {
       const rds = template.Resources.MyAppRDSInstance;
-      expect(rds.Properties.DeletionProtection).toBe(true);
+      expect(rds.Properties.DeletionProtection).toBe(false);
     });
 
     test('should use private subnets for RDS', () => {
@@ -451,7 +452,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have proper dependency for Lambda permission', () => {
       const permission = template.Resources.LambdaInvokePermission;
       // Lambda permission references S3 bucket directly, no explicit DependsOn needed
-      expect(permission.Properties.SourceArn).toEqual({ 'Fn::Sub': '${MyAppS3Bucket}/*' });
+      expect(permission.Properties.SourceArn).toEqual({ 'Fn::GetAtt': ['MyAppS3Bucket', 'Arn'] });
     });
   });
 
@@ -477,7 +478,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4); // DBUsername, DBPassword, DBPasswordParameterName, Environment
+      expect(parameterCount).toBe(6); // DBUsername, DBPassword, DBPasswordParameterName, AZ1, AZ2, Environment
     });
 
     test('should have expected number of outputs', () => {
