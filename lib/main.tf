@@ -62,7 +62,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "nova-ec2-instance-profile"
+  name = "nova-ec2-instance-profile-291844"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -91,7 +91,7 @@ resource "aws_kms_key" "app_key_eu_north_1" {
 
 resource "aws_kms_alias" "app_key_alias_eu_north_1" {
   provider      = aws.eu-north-1
-  name          = "alias/nova-app-key"
+  name          = "alias/nova-app-key-291844"
   target_key_id = aws_kms_key.app_key_eu_north_1.id
 }
 
@@ -190,13 +190,13 @@ resource "aws_kms_key" "app_key_us_west_2" {
 
 resource "aws_kms_alias" "app_key_alias_us_west_2" {
   provider      = aws.us-west-2
-  name          = "alias/nova-app-key"
+  name          = "alias/nova-app-key-291844"
   target_key_id = aws_kms_key.app_key_us_west_2.id
 }
 
 resource "aws_s3_bucket" "data_bucket_us_west_2" {
   provider = aws.us-west-2
-  bucket   = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-us-west-2"
+  bucket   = "nova-data-bucket-${data.aws_caller_identity.current.account_id}-us-west-2-291844"
   tags     = local.common_tags
 }
 

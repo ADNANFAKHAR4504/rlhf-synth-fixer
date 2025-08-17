@@ -66,7 +66,9 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
       );
       expect(profileBlock).not.toBeNull();
       const normalizedProfile = normalize(profileBlock![0]);
-      expect(normalizedProfile).toContain('name = "nova-ec2-instance-profile"');
+      expect(normalizedProfile).toContain(
+        'name = "nova-ec2-instance-profile-291844"'
+      );
       expect(normalizedProfile).toContain('role = aws_iam_role.ec2_role.name');
     });
   });
@@ -144,7 +146,7 @@ describe('Multi-Region Terraform Configuration: ../lib/main.tf', () => {
         expect(aliasBlock).not.toBeNull();
         const normalizedAlias = normalize(aliasBlock![0]);
         expect(normalizedAlias).toContain(`provider = ${provider}`);
-        expect(normalizedAlias).toContain('name = "alias/nova-app-key"');
+        expect(normalizedAlias).toContain('name = "alias/nova-app-key-291844"');
         expect(normalizedAlias).toContain(
           `target_key_id = aws_kms_key.app_key_${regionSuffix}.id`
         );

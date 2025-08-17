@@ -130,7 +130,7 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
               new ListAliasesCommand({ KeyId: regionOutputs.kms_key_arn })
             )
           );
-          const expectedAlias = 'alias/nova-app-key';
+          const expectedAlias = 'alias/nova-app-key-291844';
           const alias = aliasData.Aliases?.find(
             a => a.AliasName === expectedAlias
           );
@@ -204,7 +204,7 @@ describe('LIVE: Multi-Region AWS Infrastructure Integration Tests', () => {
 
           // 2. Check for IAM Instance Profile
           expect(instance?.IamInstanceProfile?.Arn).toContain(
-            'nova-ec2-instance-profile'
+            'nova-ec2-instance-profile-291844'
           );
 
           // 3. Check for encrypted root volume
