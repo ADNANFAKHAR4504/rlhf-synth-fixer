@@ -338,29 +338,46 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     """
     endpoints = []
     
+    # Create VPC endpoint security group once and reuse it
+    vpc_endpoint_sg = self._create_vpc_endpoint_sg()
+    
+    # Get current region for dynamic endpoint creation
+    current_region = aws.get_region()
+    
     # EKS VPC endpoints for cluster communication
     eks_endpoints = [
-        "com.amazonaws.us-west-2.ec2",
-        "com.amazonaws.us-west-2.ecr.api",
-        "com.amazonaws.us-west-2.ecr.dkr",
-        "com.amazonaws.us-west-2.logs",
-        "com.amazonaws.us-west-2.s3",
-        "com.amazonaws.us-west-2.sts",
-        "com.amazonaws.us-west-2.ec2messages",
-        "com.amazonaws.us-west-2.ssm",
-        "com.amazonaws.us-west-2.ssmmessages"
+        "com.amazonaws.{}.ec2".format(current_region.name),
+        "com.amazonaws.{}.ecr.api".format(current_region.name),
+        "com.amazonaws.{}.ecr.dkr".format(current_region.name),
+        "com.amazonaws.{}.logs".format(current_region.name),
+        "com.amazonaws.{}.s3".format(current_region.name),
+        "com.amazonaws.{}.sts".format(current_region.name),
+        "com.amazonaws.{}.ec2messages".format(current_region.name),
+        "com.amazonaws.{}.ssm".format(current_region.name),
+        "com.amazonaws.{}.ssmmessages".format(current_region.name)
     ]
     
     for endpoint_service in eks_endpoints:
+        # Create shorter, unique names for endpoints
+        service_short_name = endpoint_service.split('.')[-1]
+        if service_short_name == "api":
+            service_short_name = "ecr-api"
+        elif service_short_name == "dkr":
+            service_short_name = "ecr-dkr"
+        elif service_short_name == "messages":
+            service_short_name = "ec2-msg"
+        elif service_short_name == "ssmmessages":
+            service_short_name = "ssm-msg"
+            
         endpoint = aws.ec2.VpcEndpoint(
-            f"{self.name_prefix}-{endpoint_service.split('.')[-1]}-endpoint",
+            f"{self.name_prefix}-{service_short_name}-ep",
             vpc_id=self.vpc.id,
             service_name=endpoint_service,
             vpc_endpoint_type="Interface",
             subnet_ids=[s.id for s in self.private_subnets],
-            security_group_ids=[self._create_vpc_endpoint_sg().id],
+            security_group_ids=[vpc_endpoint_sg.id],
             private_dns_enabled=True,
-            tags={**self.tags, "Name": f"{self.name_prefix}-{endpoint_service.split('.')[-1]}-endpoint"},
+            tags={**self.tags, "Name": f"{self.name_prefix}-{service_short_name}-endpoint"},
             opts=ResourceOptions(provider=self.provider)
         )
         endpoints.append(endpoint)
@@ -440,7 +457,8 @@ def create_kms_key(tags: Dict[str, str],
 
 
 def create_security_groups(
-    vpc: aws.ec2.Vpc, tags: Dict[str, str], provider: aws.Provider
+    vpc: aws.ec2.Vpc, tags: Dict[str, str], provider: aws.Provider,
+    name_prefix: str = "corp"
 ) -> Dict[str, aws.ec2.SecurityGroup]:
   """
   Create permissive security groups for EKS testing - allows all traffic within VPC.
@@ -448,7 +466,7 @@ def create_security_groups(
 
   # ALB Security Group - Allow all traffic for testing
   alb_sg = aws.ec2.SecurityGroup(
-      "corp-alb-sg",
+      f"{name_prefix}-alb-sg",
       vpc_id=vpc.id,
       description="ALB - Allow all traffic for testing",
       ingress=[
@@ -461,13 +479,13 @@ def create_security_groups(
               protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
           )
       ],
-      tags={**tags, "Name": "corp-alb-sg"},
+      tags={**tags, "Name": f"{name_prefix}-alb-sg"},
       opts=ResourceOptions(provider=provider)
   )
 
   # EKS Cluster Security Group - Allow all traffic for testing
   eks_cluster_sg = aws.ec2.SecurityGroup(
-      "corp-eks-cluster-sg",
+      f"{name_prefix}-eks-cluster-sg",
       vpc_id=vpc.id,
       description="EKS Control Plane Security Group - Testing mode",
       ingress=[
@@ -480,13 +498,13 @@ def create_security_groups(
               protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
           )
       ],
-      tags={**tags, "Name": "corp-eks-cluster-sg"},
+      tags={**tags, "Name": f"{name_prefix}-eks-cluster-sg"},
       opts=ResourceOptions(provider=provider)
   )
 
   # EKS Node Security Group - Allow all traffic for testing
   eks_node_sg = aws.ec2.SecurityGroup(
-      "corp-eks-node-sg",
+      f"{name_prefix}-eks-node-sg",
       vpc_id=vpc.id,
       description="EKS Worker Nodes Security Group - Testing mode",
       ingress=[
@@ -499,13 +517,13 @@ def create_security_groups(
               protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
           )
       ],
-      tags={**tags, "Name": "corp-eks-node-sg"},
+      tags={**tags, "Name": f"{name_prefix}-eks-node-sg"},
       opts=ResourceOptions(provider=provider)
   )
 
   # Database Security Group - Allow all traffic for testing
   db_sg = aws.ec2.SecurityGroup(
-      "corp-db-sg",
+      f"{name_prefix}-db-sg",
       vpc_id=vpc.id,
       description="RDS PostgreSQL - Allow all traffic for testing",
       ingress=[
@@ -518,7 +536,7 @@ def create_security_groups(
               protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
           )
       ],
-      tags={**tags, "Name": "corp-db-sg"},
+      tags={**tags, "Name": f"{name_prefix}-db-sg"},
       opts=ResourceOptions(provider=provider)
   )
 
@@ -1329,7 +1347,7 @@ class TapStack(pulumi.ComponentResource):
     vpc_module = SecureVPC(
         f"{prefix}-{args.environment_suffix}", "10.0.0.0/16", tags, provider)
 
-    sgs = create_security_groups(vpc_module.vpc, tags, provider)
+    sgs = create_security_groups(vpc_module.vpc, tags, provider, f"{prefix}-{args.environment_suffix}")
     db_sg = sgs["db_sg"]
     eks_cluster_sg = sgs["eks_cluster_sg"]
     alb_sg = sgs["alb_sg"]
