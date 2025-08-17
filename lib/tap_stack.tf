@@ -81,14 +81,9 @@ locals {
   }
 }
 
-# Lookup existing Config role when provided
-data "aws_iam_role" "existing_config" {
-  count = var.config_role_name != null ? 1 : 0
-  name  = var.config_role_name
-}
-
-locals {
-  config_role_arn_effective = var.config_role_name != null ? data.aws_iam_role.existing_config[0].arn : aws_iam_role.config_role[0].arn
+# Ensure the AWS Config service-linked role exists and use it for the recorder
+resource "aws_iam_service_linked_role" "config" {
+  aws_service_name = "config.amazonaws.com"
 }
 
 ############################################
@@ -424,7 +419,7 @@ resource "aws_iam_role" "config_role" {
 }
 
 resource "aws_iam_role_policy_attachment" "config_role_attach" {
-  count      = var.config_role_name == null ? 1 : 0
+  count      = 0
   role       = aws_iam_role.config_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigServiceRolePolicy"
 }
@@ -433,7 +428,7 @@ resource "aws_iam_role_policy_attachment" "config_role_attach" {
 resource "aws_config_configuration_recorder" "rec_us_east_1" {
   provider = aws.us_east_1
   name     = "${local.name_prefix}-recorder"
-  role_arn = local.config_role_arn_effective
+  role_arn = aws_iam_service_linked_role.config.arn
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
@@ -470,7 +465,7 @@ resource "aws_config_configuration_recorder" "rec_eu_west_1" {
   count    = var.enable_config_eu_west_1 ? 1 : 0
   provider = aws.eu_west_1
   name     = "${local.name_prefix}-recorder"
-  role_arn = local.config_role_arn_effective
+  role_arn = aws_iam_service_linked_role.config.arn
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
