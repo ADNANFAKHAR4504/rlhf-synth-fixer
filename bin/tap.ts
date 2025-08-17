@@ -45,7 +45,3 @@ export const vpcId = stack.networkStack.vpc.id;
 export const albDnsName = stack.computeStack.applicationLoadBalancer.dnsName;
 export const dbEndpoint = stack.databaseStack.dbCluster.endpoint;
 export const logsBucketName = stack.storageStack.logsBucket.id;
-
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
