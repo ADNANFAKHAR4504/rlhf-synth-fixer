@@ -9,6 +9,7 @@ pulumi-aws = "<8.0.0,>=6.0.0"
 pulumi-awsx = "<4.0.0,>=2.0.0"
 
 [dev-packages]
+pylint = "*"
 
 [requires]
 python_version = "3.12"
