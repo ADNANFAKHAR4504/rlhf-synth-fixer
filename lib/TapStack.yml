@@ -22,9 +22,12 @@ Parameters:
       - ERROR
     Description: Log level for Lambda functions
 
+Conditions:
+  IsProd: !Equals [!Ref Environment, 'prod']
+
 Globals:
   Function:
-    Runtime: python3.9
+    Runtime: python3.11
     Timeout: 30
     MemorySize: 128
     Environment:
@@ -34,7 +37,7 @@ Globals:
         DYNAMODB_TABLE: !Ref UserTable
 
 Resources:
-  # DynamoDB Table for storing user data
+  # DynamoDB Table for storing user data with encryption
   UserTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -46,6 +49,10 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: alias/aws/dynamodb
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -128,7 +135,7 @@ Resources:
       RestApiId: !Ref UserApi
       ResourceId: !Ref UserResource
       HttpMethod: POST
-      AuthorizationType: NONE
+      AuthorizationType: AWS_IAM
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
@@ -147,7 +154,7 @@ Resources:
       RestApiId: !Ref UserApi
       ResourceId: !Ref UserIdResource
       HttpMethod: GET
-      AuthorizationType: NONE
+      AuthorizationType: AWS_IAM
       RequestParameters:
         method.request.path.id: true
       Integration:
@@ -176,7 +183,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Origin: !If [IsProd, "'https://yourdomain.com'", "'*'"]
             ResponseTemplates:
               application/json: ''
         PassthroughBehavior: WHEN_NO_MATCH
@@ -205,7 +212,7 @@ Resources:
             ResponseParameters:
               method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Origin: !If [IsProd, "'https://yourdomain.com'", "'*'"]
             ResponseTemplates:
               application/json: ''
         PassthroughBehavior: WHEN_NO_MATCH
@@ -225,7 +232,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-create-user'
-      Runtime: python3.9
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
@@ -242,16 +249,63 @@ Resources:
           import os
           import uuid
           import boto3
+          import re
           from datetime import datetime
+
+          def validate_input(name, email):
+              """Validate user input with security checks"""
+              errors = []
+              
+              # Name validation
+              if not name or not isinstance(name, str):
+                  errors.append("Name is required and must be a string")
+              elif len(name.strip()) < 2 or len(name.strip()) > 50:
+                  errors.append("Name must be between 2 and 50 characters")
+              elif not re.match(r"^[a-zA-Z\s'-]+$", name.strip()):
+                  errors.append("Name can only contain letters, spaces, hyphens, and apostrophes")
+              
+              # Email validation
+              if not email or not isinstance(email, str):
+                  errors.append("Email is required and must be a string")
+              else:
+                  email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                  if not re.match(email_pattern, email.strip()):
+                      errors.append("Email must be a valid email address")
+                  elif len(email.strip()) > 254:
+                      errors.append("Email must be less than 254 characters")
+              
+              return errors
 
           def lambda_handler(event, context):
               # Feature flag check
               if os.environ.get('FEATURE_FLAG_VALIDATION', 'false').lower() == 'true':
                   print("Feature flag validation is enabled")
               
+              cors_origin = '*'
+              if os.environ.get('ENVIRONMENT') == 'prod':
+                  cors_origin = 'https://yourdomain.com'
+              
               try:
                   # Parse request body
                   body = json.loads(event.get('body', '{}'))
+                  
+                  # Extract and validate input
+                  name = body.get('name', '').strip()
+                  email = body.get('email', '').strip()
+                  
+                  # Validate input
+                  validation_errors = validate_input(name, email)
+                  if validation_errors:
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': cors_origin,
+                              'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                              'Access-Control-Allow-Methods': 'POST,OPTIONS'
+                          },
+                          'body': json.dumps({'errors': validation_errors})
+                      }
                   
                   # Generate user ID and timestamp
                   user_id = str(uuid.uuid4())
@@ -260,8 +314,8 @@ Resources:
                   # Create user record
                   user_data = {
                       'id': user_id,
-                      'name': body.get('name', ''),
-                      'email': body.get('email', ''),
+                      'name': name,
+                      'email': email.lower(),  # Normalize email to lowercase
                       'created_at': timestamp,
                       'updated_at': timestamp
                   }
@@ -275,20 +329,29 @@ Resources:
                       'statusCode': 201,
                       'headers': {
                           'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Origin': cors_origin,
                           'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
                           'Access-Control-Allow-Methods': 'POST,OPTIONS'
                       },
                       'body': json.dumps(user_data)
+                  }
+              except json.JSONDecodeError:
+                  return {
+                      'statusCode': 400,
+                      'headers': {
+                          'Content-Type': 'application/json',
+                          'Access-Control-Allow-Origin': cors_origin
+                      },
+                      'body': json.dumps({'error': 'Invalid JSON in request body'})
                   }
               except Exception as e:
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
+                          'Access-Control-Allow-Origin': cors_origin
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Internal server error'})
                   }
 
   # Lambda function to get users
@@ -296,7 +359,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${Environment}-get-user'
-      Runtime: python3.9
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
@@ -312,16 +375,41 @@ Resources:
           import json
           import os
           import boto3
+          import re
           from boto3.dynamodb.conditions import Key
+
+          def validate_user_id(user_id):
+              """Validate user ID format (UUID)"""
+              if not user_id or not isinstance(user_id, str):
+                  return False
+              
+              # Check if it's a valid UUID format
+              uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              return bool(re.match(uuid_pattern, user_id.lower()))
 
           def lambda_handler(event, context):
               # Feature flag check
               if os.environ.get('FEATURE_FLAG_CACHING', 'false').lower() == 'true':
                   print("Feature flag caching is enabled")
               
+              cors_origin = '*'
+              if os.environ.get('ENVIRONMENT') == 'prod':
+                  cors_origin = 'https://yourdomain.com'
+              
               try:
-                  # Extract user ID from path parameters
-                  user_id = event['pathParameters']['id']
+                  # Extract and validate user ID from path parameters
+                  path_params = event.get('pathParameters') or {}
+                  user_id = path_params.get('id')
+                  
+                  if not validate_user_id(user_id):
+                      return {
+                          'statusCode': 400,
+                          'headers': {
+                              'Content-Type': 'application/json',
+                              'Access-Control-Allow-Origin': cors_origin
+                          },
+                          'body': json.dumps({'error': 'Invalid user ID format. Must be a valid UUID.'})
+                      }
                   
                   # Get user from DynamoDB
                   dynamodb = boto3.resource('dynamodb')
@@ -334,7 +422,7 @@ Resources:
                           'statusCode': 200,
                           'headers': {
                               'Content-Type': 'application/json',
-                              'Access-Control-Allow-Origin': '*',
+                              'Access-Control-Allow-Origin': cors_origin,
                               'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
                               'Access-Control-Allow-Methods': 'GET,OPTIONS'
                           },
@@ -345,27 +433,18 @@ Resources:
                           'statusCode': 404,
                           'headers': {
                               'Content-Type': 'application/json',
-                              'Access-Control-Allow-Origin': '*'
+                              'Access-Control-Allow-Origin': cors_origin
                           },
                           'body': json.dumps({'error': 'User not found'})
                       }
-              except KeyError as e:
-                  return {
-                      'statusCode': 400,
-                      'headers': {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
-                      },
-                      'body': json.dumps({'error': f'Missing parameter: {str(e)}'})
-                  }
               except Exception as e:
                   return {
                       'statusCode': 500,
                       'headers': {
                           'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
+                          'Access-Control-Allow-Origin': cors_origin
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': json.dumps({'error': 'Internal server error'})
                   }
 
   # Lambda permissions for API Gateway - FIXED SourceArn patterns

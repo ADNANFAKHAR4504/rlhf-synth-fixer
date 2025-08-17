@@ -25,9 +25,19 @@
             "Description": "Log level for Lambda functions"
         }
     },
+    "Conditions": {
+        "IsProd": {
+            "Fn::Equals": [
+                {
+                    "Ref": "Environment"
+                },
+                "prod"
+            ]
+        }
+    },
     "Globals": {
         "Function": {
-            "Runtime": "python3.9",
+            "Runtime": "python3.11",
             "Timeout": 30,
             "MemorySize": 128,
             "Environment": {
@@ -65,6 +75,11 @@
                         "KeyType": "HASH"
                     }
                 ],
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": "alias/aws/dynamodb"
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -200,7 +215,7 @@
                     "Ref": "UserResource"
                 },
                 "HttpMethod": "POST",
-                "AuthorizationType": "NONE",
+                "AuthorizationType": "AWS_IAM",
                 "Integration": {
                     "Type": "AWS_PROXY",
                     "IntegrationHttpMethod": "POST",
@@ -230,7 +245,7 @@
                     "Ref": "UserIdResource"
                 },
                 "HttpMethod": "GET",
-                "AuthorizationType": "NONE",
+                "AuthorizationType": "AWS_IAM",
                 "RequestParameters": {
                     "method.request.path.id": true
                 },
@@ -272,7 +287,13 @@
                             "ResponseParameters": {
                                 "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
                                 "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
-                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                                "method.response.header.Access-Control-Allow-Origin": {
+                                    "Fn::If": [
+                                        "IsProd",
+                                        "'https://yourdomain.com'",
+                                        "'*'"
+                                    ]
+                                }
                             },
                             "ResponseTemplates": {
                                 "application/json": ""
@@ -318,7 +339,13 @@
                             "ResponseParameters": {
                                 "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
                                 "method.response.header.Access-Control-Allow-Methods": "'GET,POST,OPTIONS'",
-                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                                "method.response.header.Access-Control-Allow-Origin": {
+                                    "Fn::If": [
+                                        "IsProd",
+                                        "'https://yourdomain.com'",
+                                        "'*'"
+                                    ]
+                                }
                             },
                             "ResponseTemplates": {
                                 "application/json": ""
@@ -351,7 +378,7 @@
                 "FunctionName": {
                     "Fn::Sub": "${Environment}-create-user"
                 },
-                "Runtime": "python3.9",
+                "Runtime": "python3.11",
                 "Handler": "index.lambda_handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -376,7 +403,7 @@
                     }
                 },
                 "Code": {
-                    "ZipFile": "import json\nimport os\nimport uuid\nimport boto3\nfrom datetime import datetime\n\ndef lambda_handler(event, context):\n    # Feature flag check\n    if os.environ.get('FEATURE_FLAG_VALIDATION', 'false').lower() == 'true':\n        print(\"Feature flag validation is enabled\")\n    \n    try:\n        # Parse request body\n        body = json.loads(event.get('body', '{}'))\n        \n        # Generate user ID and timestamp\n        user_id = str(uuid.uuid4())\n        timestamp = datetime.utcnow().isoformat()\n        \n        # Create user record\n        user_data = {\n            'id': user_id,\n            'name': body.get('name', ''),\n            'email': body.get('email', ''),\n            'created_at': timestamp,\n            'updated_at': timestamp\n        }\n        \n        # Store in DynamoDB\n        dynamodb = boto3.resource('dynamodb')\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        table.put_item(Item=user_data)\n        \n        return {\n            'statusCode': 201,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                'Access-Control-Allow-Methods': 'POST,OPTIONS'\n            },\n            'body': json.dumps(user_data)\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                    "ZipFile": "import json\nimport os\nimport uuid\nimport boto3\nimport re\nfrom datetime import datetime\n\ndef validate_input(name, email):\n    \"\"\"Validate user input with security checks\"\"\"\n    errors = []\n    \n    # Name validation\n    if not name or not isinstance(name, str):\n        errors.append(\"Name is required and must be a string\")\n    elif len(name.strip()) < 2 or len(name.strip()) > 50:\n        errors.append(\"Name must be between 2 and 50 characters\")\n    elif not re.match(r\"^[a-zA-Z\\s'-]+$\", name.strip()):\n        errors.append(\"Name can only contain letters, spaces, hyphens, and apostrophes\")\n    \n    # Email validation\n    if not email or not isinstance(email, str):\n        errors.append(\"Email is required and must be a string\")\n    else:\n        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'\n        if not re.match(email_pattern, email.strip()):\n            errors.append(\"Email must be a valid email address\")\n        elif len(email.strip()) > 254:\n            errors.append(\"Email must be less than 254 characters\")\n    \n    return errors\n\ndef lambda_handler(event, context):\n    # Feature flag check\n    if os.environ.get('FEATURE_FLAG_VALIDATION', 'false').lower() == 'true':\n        print(\"Feature flag validation is enabled\")\n    \n    cors_origin = '*'\n    if os.environ.get('ENVIRONMENT') == 'prod':\n        cors_origin = 'https://yourdomain.com'\n    \n    try:\n        # Parse request body\n        body = json.loads(event.get('body', '{}'))\n        \n        # Extract and validate input\n        name = body.get('name', '').strip()\n        email = body.get('email', '').strip()\n        \n        # Validate input\n        validation_errors = validate_input(name, email)\n        if validation_errors:\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': cors_origin,\n                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                    'Access-Control-Allow-Methods': 'POST,OPTIONS'\n                },\n                'body': json.dumps({'errors': validation_errors})\n            }\n        \n        # Generate user ID and timestamp\n        user_id = str(uuid.uuid4())\n        timestamp = datetime.utcnow().isoformat()\n        \n        # Create user record\n        user_data = {\n            'id': user_id,\n            'name': name,\n            'email': email.lower(),  # Normalize email to lowercase\n            'created_at': timestamp,\n            'updated_at': timestamp\n        }\n        \n        # Store in DynamoDB\n        dynamodb = boto3.resource('dynamodb')\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        table.put_item(Item=user_data)\n        \n        return {\n            'statusCode': 201,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': cors_origin,\n                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                'Access-Control-Allow-Methods': 'POST,OPTIONS'\n            },\n            'body': json.dumps(user_data)\n        }\n    except json.JSONDecodeError:\n        return {\n            'statusCode': 400,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': cors_origin\n            },\n            'body': json.dumps({'error': 'Invalid JSON in request body'})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': cors_origin\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
                 }
             }
         },
@@ -386,7 +413,7 @@
                 "FunctionName": {
                     "Fn::Sub": "${Environment}-get-user"
                 },
-                "Runtime": "python3.9",
+                "Runtime": "python3.11",
                 "Handler": "index.lambda_handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -411,7 +438,7 @@
                     }
                 },
                 "Code": {
-                    "ZipFile": "import json\nimport os\nimport boto3\nfrom boto3.dynamodb.conditions import Key\n\ndef lambda_handler(event, context):\n    # Feature flag check\n    if os.environ.get('FEATURE_FLAG_CACHING', 'false').lower() == 'true':\n        print(\"Feature flag caching is enabled\")\n    \n    try:\n        # Extract user ID from path parameters\n        user_id = event['pathParameters']['id']\n        \n        # Get user from DynamoDB\n        dynamodb = boto3.resource('dynamodb')\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        \n        response = table.get_item(Key={'id': user_id})\n        \n        if 'Item' in response:\n            return {\n                'statusCode': 200,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*',\n                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                    'Access-Control-Allow-Methods': 'GET,OPTIONS'\n                },\n                'body': json.dumps(response['Item'], default=str)\n            }\n        else:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': '*'\n                },\n                'body': json.dumps({'error': 'User not found'})\n            }\n    except KeyError as e:\n        return {\n            'statusCode': 400,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': f'Missing parameter: {str(e)}'})\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({'error': str(e)})\n        }\n"
+                    "ZipFile": "import json\nimport os\nimport boto3\nimport re\nfrom boto3.dynamodb.conditions import Key\n\ndef validate_user_id(user_id):\n    \"\"\"Validate user ID format (UUID)\"\"\"\n    if not user_id or not isinstance(user_id, str):\n        return False\n    \n    # Check if it's a valid UUID format\n    uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'\n    return bool(re.match(uuid_pattern, user_id.lower()))\n\ndef lambda_handler(event, context):\n    # Feature flag check\n    if os.environ.get('FEATURE_FLAG_CACHING', 'false').lower() == 'true':\n        print(\"Feature flag caching is enabled\")\n    \n    cors_origin = '*'\n    if os.environ.get('ENVIRONMENT') == 'prod':\n        cors_origin = 'https://yourdomain.com'\n    \n    try:\n        # Extract and validate user ID from path parameters\n        path_params = event.get('pathParameters') or {}\n        user_id = path_params.get('id')\n        \n        if not validate_user_id(user_id):\n            return {\n                'statusCode': 400,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': cors_origin\n                },\n                'body': json.dumps({'error': 'Invalid user ID format. Must be a valid UUID.'})\n            }\n        \n        # Get user from DynamoDB\n        dynamodb = boto3.resource('dynamodb')\n        table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])\n        \n        response = table.get_item(Key={'id': user_id})\n        \n        if 'Item' in response:\n            return {\n                'statusCode': 200,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': cors_origin,\n                    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                    'Access-Control-Allow-Methods': 'GET,OPTIONS'\n                },\n                'body': json.dumps(response['Item'], default=str)\n            }\n        else:\n            return {\n                'statusCode': 404,\n                'headers': {\n                    'Content-Type': 'application/json',\n                    'Access-Control-Allow-Origin': cors_origin\n                },\n                'body': json.dumps({'error': 'User not found'})\n            }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': cors_origin\n            },\n            'body': json.dumps({'error': 'Internal server error'})\n        }\n"
                 }
             }
         },

@@ -89,15 +89,13 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive In
       expect([200, 204, 404]).toContain(response.status); // OPTIONS might return 404 if not explicitly handled
     }, 30000);
 
-    test(`${generateUniqueTestId('create_user_api')}: should create user via API Gateway`, async () => {
+    test(`${generateUniqueTestId('create_user_api')}: should require authentication for API Gateway`, async () => {
       if (!outputs.ApiGatewayUrl || outputs.ApiGatewayUrl.includes('mock')) {
         console.log('Skipping API tests - using mock outputs');
         return;
       }
 
       const uniqueUserId = generateUniqueUserId();
-      testUsers.push(uniqueUserId);
-      
       const userData = {
         id: uniqueUserId,
         name: `Test User ${randomBytes(4).toString('hex')}`,
@@ -113,35 +111,19 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive In
         body: JSON.stringify(userData)
       });
 
-      expect([200, 201]).toContain(response.status);
-      
-      if (response.ok) {
-        const responseData = await response.json();
-        expect(responseData).toBeDefined();
-      }
+      // Should require authentication (AWS_IAM) - expect 401 Unauthorized or 403 Forbidden
+      expect([401, 403]).toContain(response.status);
     }, 30000);
 
-    test(`${generateUniqueTestId('get_user_api')}: should retrieve user via API Gateway`, async () => {
+    test(`${generateUniqueTestId('get_user_api')}: should require authentication for user retrieval`, async () => {
       if (!outputs.ApiGatewayUrl || outputs.ApiGatewayUrl.includes('mock')) {
         console.log('Skipping API tests - using mock outputs');
         return;
       }
 
-      const uniqueUserId = generateUniqueUserId();
-      testUsers.push(uniqueUserId);
+      const uniqueUserId = uuidv4();
       
-      // First create a user directly in DynamoDB
-      await dynamoClient.send(new PutItemCommand({
-        TableName: outputs.DynamoDBTableName,
-        Item: {
-          id: { S: uniqueUserId },
-          name: { S: `Integration Test User ${randomBytes(4).toString('hex')}` },
-          email: { S: `${uniqueUserId}@integration-test.com` },
-          timestamp: { S: new Date().toISOString() }
-        }
-      }));
-
-      // Now try to retrieve via API
+      // Now try to retrieve via API without authentication
       const response = await fetch(`${outputs.ApiGatewayUrl}/user/${uniqueUserId}`, {
         method: 'GET',
         headers: {
@@ -149,12 +131,8 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive In
         }
       });
 
-      expect([200, 404]).toContain(response.status); // 404 is acceptable if user doesn't exist
-      
-      if (response.ok) {
-        const responseData = await response.json();
-        expect(responseData).toBeDefined();
-      }
+      // Should require authentication (AWS_IAM) - expect 401 Unauthorized or 403 Forbidden
+      expect([401, 403]).toContain(response.status);
     }, 30000);
   });
 
@@ -394,23 +372,23 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive In
         return;
       }
 
-      // Test 1: Get non-existent user
+      // Test 1: Get non-existent user (should require authentication)
       const nonExistentUserId = `nonexistent_${randomBytes(8).toString('hex')}`;
       const getResponse = await fetch(`${outputs.ApiGatewayUrl}/user/${nonExistentUserId}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
 
-      expect([404, 500]).toContain(getResponse.status); // Either not found or internal error is acceptable
+      expect([401, 403, 404, 500]).toContain(getResponse.status); // Authentication error, not found, or internal error
 
-      // Test 2: Invalid request body
+      // Test 2: Invalid request body (should require authentication)
       const invalidCreateResponse = await fetch(`${outputs.ApiGatewayUrl}/user`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ invalid: 'data' })
       });
 
-      expect([400, 422, 500, 200, 201]).toContain(invalidCreateResponse.status); // The API might accept invalid data or return error codes
+      expect([401, 403, 400, 422, 500]).toContain(invalidCreateResponse.status); // Authentication or validation errors
     }, 30000);
   });
 
@@ -467,9 +445,9 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive In
 
       const responses = await Promise.all(promises);
       
-      // At least some requests should succeed
-      const successfulResponses = responses.filter(r => r.ok);
-      expect(successfulResponses.length).toBeGreaterThan(0);
+      // All requests should require authentication (401/403) since API Gateway now requires AWS_IAM
+      const authenticationErrors = responses.filter(r => [401, 403].includes(r.status));
+      expect(authenticationErrors.length).toBe(concurrentRequests);
     }, 60000);
 
     test(`${generateUniqueTestId('response_time')}: API responses should be reasonably fast`, async () => {
@@ -538,8 +516,8 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive In
         body: JSON.stringify(maliciousData)
       });
 
-      // Should reject malicious input or handle gracefully
-      expect([400, 422, 500, 200, 201]).toContain(response.status);
+      // Should require authentication first, then potentially reject malicious input
+      expect([401, 403, 400, 422, 500]).toContain(response.status);
     }, 30000);
   });
 });

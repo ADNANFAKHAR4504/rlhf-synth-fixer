@@ -73,13 +73,19 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       const parameterCount = Object.keys(template.Parameters).length;
       expect(parameterCount).toBe(2);
     });
+
+    test(`${generateUniqueTestId('conditions')}: should have conditions for environment-aware configuration`, () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.IsProd).toBeDefined();
+      expect(template.Conditions.IsProd['Fn::Equals']).toEqual([{ Ref: 'Environment' }, 'prod']);
+    });
   });
 
   describe(`${generateUniqueTestId('globals')}: Global Configuration Tests`, () => {
     test(`${generateUniqueTestId('global_function')}: should have proper global function configuration`, () => {
       const globalFunction = template.Globals.Function;
       expect(globalFunction).toBeDefined();
-      expect(globalFunction.Runtime).toBe('python3.9');
+      expect(globalFunction.Runtime).toBe('python3.11');
       expect(globalFunction.Timeout).toBe(30);
       expect(globalFunction.MemorySize).toBe(128);
     });
@@ -112,6 +118,11 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       expect(props.KeySchema).toHaveLength(1);
       expect(props.KeySchema[0].AttributeName).toBe('id');
       expect(props.KeySchema[0].KeyType).toBe('HASH');
+      // Check encryption configuration
+      expect(props.SSESpecification).toBeDefined();
+      expect(props.SSESpecification.SSEEnabled).toBe(true);
+      expect(props.SSESpecification.SSEType).toBe('KMS');
+      expect(props.SSESpecification.KMSMasterKeyId).toBe('alias/aws/dynamodb');
       expect(props.Tags).toEqual([{ Key: 'Environment', Value: { Ref: 'Environment' } }]);
     });
 
@@ -135,7 +146,9 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       
       const props = lambda.Properties;
       expect(props.FunctionName).toEqual({ 'Fn::Sub': '${Environment}-create-user' });
+      expect(props.Runtime).toBe('python3.11');
       expect(props.Code.ZipFile).toBeDefined();
+      expect(props.Code.ZipFile).toContain('validate_input'); // Check input validation is present
       expect(props.Handler).toBe('index.lambda_handler');
       expect(props.Role).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
       expect(props.Environment.Variables.FEATURE_FLAG_VALIDATION).toBe('true');
@@ -148,7 +161,9 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       
       const props = lambda.Properties;
       expect(props.FunctionName).toEqual({ 'Fn::Sub': '${Environment}-get-user' });
+      expect(props.Runtime).toBe('python3.11');
       expect(props.Code.ZipFile).toBeDefined();
+      expect(props.Code.ZipFile).toContain('validate_user_id'); // Check input validation is present
       expect(props.Handler).toBe('index.lambda_handler');
       expect(props.Role).toEqual({ 'Fn::GetAtt': ['LambdaExecutionRole', 'Arn'] });
       expect(props.Environment.Variables.FEATURE_FLAG_CACHING).toBe('false');
@@ -285,7 +300,23 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       
       expect(optionsIntegration.IntegrationResponses[0].ResponseParameters['method.response.header.Access-Control-Allow-Methods']).toBe("'GET,POST,OPTIONS'");
       expect(optionsIntegration.IntegrationResponses[0].ResponseParameters['method.response.header.Access-Control-Allow-Headers']).toBe("'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'");
-      expect(optionsIntegration.IntegrationResponses[0].ResponseParameters['method.response.header.Access-Control-Allow-Origin']).toBe("'*'");
+      // CORS origin is now environment-aware
+      const corsOrigin = optionsIntegration.IntegrationResponses[0].ResponseParameters['method.response.header.Access-Control-Allow-Origin'];
+      expect(corsOrigin).toBeDefined();
+      expect(corsOrigin['Fn::If']).toBeDefined(); // Should be a conditional
+    });
+
+    test(`${generateUniqueTestId('api_authentication')}: should have proper API Gateway authentication`, () => {
+      const postMethod = template.Resources.UserApiPostMethod;
+      const getMethod = template.Resources.UserApiGetMethod;
+      
+      // Check that POST and GET methods require AWS_IAM authentication
+      expect(postMethod.Properties.AuthorizationType).toBe('AWS_IAM');
+      expect(getMethod.Properties.AuthorizationType).toBe('AWS_IAM');
+      
+      // OPTIONS methods should remain NONE for CORS preflight
+      const optionsMethod = template.Resources.UserApiOptionsMethod;
+      expect(optionsMethod.Properties.AuthorizationType).toBe('NONE');
     });
 
     test(`${generateUniqueTestId('lambda_timeouts')}: should have reasonable Lambda timeouts`, () => {
@@ -380,7 +411,7 @@ describe(`${uniqueTestPrefix}: TapStack CloudFormation Template Comprehensive Un
       const globalConfig = template.Globals.Function;
       expect(globalConfig.MemorySize).toBe(128); // Minimum for cost efficiency
       expect(globalConfig.Timeout).toBe(30); // Reasonable timeout
-      expect(globalConfig.Runtime).toBe('python3.9');
+      expect(globalConfig.Runtime).toBe('python3.11');
     });
   });
 });
