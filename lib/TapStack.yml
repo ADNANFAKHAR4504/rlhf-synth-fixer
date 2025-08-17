@@ -286,10 +286,10 @@
                             "Action": "s3:*",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${SecureLogsBucket}/*"
+                                    "Fn::Sub": "arn:aws:s3:::tapstack-secure-logs-${AWS::AccountId}/*"
                                 },
                                 {
-                                    "Fn::Sub": "${SecureLogsBucket}"
+                                    "Fn::Sub": "arn:aws:s3:::tapstack-secure-logs-${AWS::AccountId}"
                                 }
                             ],
                             "Condition": {
@@ -305,10 +305,10 @@
                             "Action": "s3:*",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${SecureLogsBucket}/*"
+                                    "Fn::Sub": "arn:aws:s3:::tapstack-secure-logs-${AWS::AccountId}/*"
                                 },
                                 {
-                                    "Fn::Sub": "${SecureLogsBucket}"
+                                    "Fn::Sub": "arn:aws:s3:::tapstack-secure-logs-${AWS::AccountId}"
                                 }
                             ],
                             "Condition": {
@@ -352,7 +352,7 @@
                                         "s3:GetObjectVersion"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${SecureLogsBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::tapstack-secure-logs-${AWS::AccountId}/*"
                                     }
                                 },
                                 {
@@ -361,7 +361,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "SecureLogsBucket"
+                                        "Fn::Sub": "arn:aws:s3:::tapstack-secure-logs-${AWS::AccountId}"
                                     }
                                 }
                             ]
