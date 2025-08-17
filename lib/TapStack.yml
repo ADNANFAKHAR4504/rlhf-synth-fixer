@@ -402,7 +402,7 @@ Resources:
             Resource: '*'
             Condition:
               StringEquals:
-                kms:ViaService: !Sub cloudtrail.${AWS::Region}.amazonaws.com
+                kms:ViaService: !Sub kms.cloudtrail.${AWS::Region}.amazonaws.com
                 kms:CallerAccount: !Ref AWS::AccountId
       Tags:
         - Key: Name
@@ -453,7 +453,7 @@ Resources:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
                 # aws:SourceArn: !Sub arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/prod-cloudtrail
-                # aws:SourceAccount: !Ref AWS::AccountId
+                aws:SourceAccount: !Ref AWS::AccountId
 
   #############################
   # CloudTrail
