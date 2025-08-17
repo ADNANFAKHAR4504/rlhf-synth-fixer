@@ -906,85 +906,86 @@ class TapStack(ComponentResource):
         )
     
     def _create_waf(self):
-        """Create WAF to protect against OWASP top 10 threats."""
-        # WAF Web ACL
-        self.waf_web_acl = aws.wafv2.WebAcl(
-            f"{self.name_prefix}-waf",
-            name=f"{self.name_prefix}-waf",
-            scope="REGIONAL",
-            default_action=aws.wafv2.WebAclDefaultActionArgs(allow={}),
-            rules=[
-                # AWS Managed Core Rule Set
-                aws.wafv2.WebAclRuleArgs(
-                    name="AWSManagedRulesCommonRuleSet",
-                    priority=1,
-                    override_action=aws.wafv2.WebAclRuleOverrideActionArgs(none={}),
-                    statement=aws.wafv2.WebAclRuleStatementArgs(
-                        managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
-                            name="AWSManagedRulesCommonRuleSet",
-                            vendor_name="AWS",
-                        )
-                    ),
-                    visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
-                        cloudwatch_metrics_enabled=True,
-                        metric_name="AWSManagedRulesCommonRuleSetMetric",
-                        sampled_requests_enabled=True,
-                    ),
-                ),
-                # AWS Managed Known Bad Inputs Rule Set
-                aws.wafv2.WebAclRuleArgs(
-                    name="AWSManagedRulesKnownBadInputsRuleSet",
-                    priority=2,
-                    override_action=aws.wafv2.WebAclRuleOverrideActionArgs(none={}),
-                    statement=aws.wafv2.WebAclRuleStatementArgs(
-                        managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
-                            name="AWSManagedRulesKnownBadInputsRuleSet",
-                            vendor_name="AWS",
-                        )
-                    ),
-                    visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
-                        cloudwatch_metrics_enabled=True,
-                        metric_name="AWSManagedRulesKnownBadInputsRuleSetMetric",
-                        sampled_requests_enabled=True,
-                    ),
-                ),
-                # AWS Managed SQL Injection Rule Set
-                aws.wafv2.WebAclRuleArgs(
-                    name="AWSManagedRulesSQLiRuleSet",
-                    priority=3,
-                    override_action=aws.wafv2.WebAclRuleOverrideActionArgs(none={}),
-                    statement=aws.wafv2.WebAclRuleStatementArgs(
-                        managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
-                            name="AWSManagedRulesSQLiRuleSet",
-                            vendor_name="AWS",
-                        )
-                    ),
-                    visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
-                        cloudwatch_metrics_enabled=True,
-                        metric_name="AWSManagedRulesSQLiRuleSetMetric",
-                        sampled_requests_enabled=True,
-                    ),
-                ),
-            ],
-            tags={
-                "Name": f"{self.name_prefix}-waf",
-                "Environment": self.environment_suffix,
-            },
-            visibility_config=aws.wafv2.WebAclVisibilityConfigArgs(
-                cloudwatch_metrics_enabled=True,
-                metric_name=f"{self.name_prefix}WebAcl",
-                sampled_requests_enabled=True,
-            ),
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # Associate WAF with ALB
-        self.waf_association = aws.wafv2.WebAclAssociation(
-            f"{self.name_prefix}-waf-association",
-            resource_arn=self.alb.arn,
-            web_acl_arn=self.waf_web_acl.arn,
-            opts=ResourceOptions(parent=self)
-        )
+      """Create WAF to protect against OWASP top 10 threats, with unique name to avoid collision."""
+      # Create a unique WAF name by adding the unique suffix
+      unique_waf_name = f"{self.name_prefix}-waf-{self.unique_suffix}"
+
+      # WAF Web ACL
+      self.waf_web_acl = aws.wafv2.WebAcl(
+          f"{self.name_prefix}-waf",
+          name=unique_waf_name,  # Use unique name here!
+          scope="REGIONAL",
+          default_action=aws.wafv2.WebAclDefaultActionArgs(allow={}),
+          rules=[
+              aws.wafv2.WebAclRuleArgs(
+                  name="AWSManagedRulesCommonRuleSet",
+                  priority=1,
+                  override_action=aws.wafv2.WebAclRuleOverrideActionArgs(none={}),
+                  statement=aws.wafv2.WebAclRuleStatementArgs(
+                      managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+                          name="AWSManagedRulesCommonRuleSet",
+                          vendor_name="AWS",
+                      )
+                  ),
+                  visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+                      cloudwatch_metrics_enabled=True,
+                      metric_name="AWSManagedRulesCommonRuleSetMetric",
+                      sampled_requests_enabled=True,
+                  ),
+              ),
+              aws.wafv2.WebAclRuleArgs(
+                  name="AWSManagedRulesKnownBadInputsRuleSet",
+                  priority=2,
+                  override_action=aws.wafv2.WebAclRuleOverrideActionArgs(none={}),
+                  statement=aws.wafv2.WebAclRuleStatementArgs(
+                      managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+                          name="AWSManagedRulesKnownBadInputsRuleSet",
+                          vendor_name="AWS",
+                      )
+                  ),
+                  visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+                      cloudwatch_metrics_enabled=True,
+                      metric_name="AWSManagedRulesKnownBadInputsRuleSetMetric",
+                      sampled_requests_enabled=True,
+                  ),
+              ),
+              aws.wafv2.WebAclRuleArgs(
+                  name="AWSManagedRulesSQLiRuleSet",
+                  priority=3,
+                  override_action=aws.wafv2.WebAclRuleOverrideActionArgs(none={}),
+                  statement=aws.wafv2.WebAclRuleStatementArgs(
+                      managed_rule_group_statement=aws.wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs(
+                          name="AWSManagedRulesSQLiRuleSet",
+                          vendor_name="AWS",
+                      )
+                  ),
+                  visibility_config=aws.wafv2.WebAclRuleVisibilityConfigArgs(
+                      cloudwatch_metrics_enabled=True,
+                      metric_name="AWSManagedRulesSQLiRuleSetMetric",
+                      sampled_requests_enabled=True,
+                  ),
+              ),
+          ],
+          tags={
+              "Name": unique_waf_name,
+              "Environment": self.environment_suffix,
+          },
+          visibility_config=aws.wafv2.WebAclVisibilityConfigArgs(
+              cloudwatch_metrics_enabled=True,
+              metric_name=f"{unique_waf_name}WebAcl",
+              sampled_requests_enabled=True,
+          ),
+          opts=ResourceOptions(parent=self)
+      )
+
+      # Associate WAF with ALB
+      self.waf_association = aws.wafv2.WebAclAssociation(
+          f"{self.name_prefix}-waf-association",
+          resource_arn=self.alb.arn,
+          web_acl_arn=self.waf_web_acl.arn,
+          opts=ResourceOptions(parent=self)
+      )
+
     
     def _create_fargate_cluster(self):
         """Create ECS Fargate cluster."""
