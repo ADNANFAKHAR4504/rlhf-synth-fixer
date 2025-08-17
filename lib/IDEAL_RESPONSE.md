@@ -112,13 +112,7 @@ override_special = "!#$%&\*()-*=+[]{}<>:?"
 #######################
 
 locals {
-
-# Use current timestamp: 2025-08-17 06:21:27
-
-timestamp = "062127"
-
-# Create unique name prefix to avoid conflicts with existing resources
-
+timestamp = "064031" # 2025-08-17 06:40:31
 name_prefix = "${var.project_name}-${var.environment}-${local.timestamp}-${random_string.suffix.result}"
 
 common_tags = {
@@ -135,14 +129,10 @@ Backup = "Daily"
 Retention = "90days"
 }
 
-# Enable features based on compliance level
-
 enable_encryption = true
 enable_vpc_endpoints = true
 log_retention_days = var.compliance_level == "strict" ? 365 : 90
 backup_retention_days = var.compliance_level == "strict" ? 90 : 30
-
-# Database configuration
 
 db_engine_full_name = var.db_engine == "mysql" ? "mysql" : "postgres"
 db_port = var.db_engine == "mysql" ? 3306 : 5432
@@ -216,7 +206,7 @@ target_key_id = aws_kms_key.main.key_id
 
 #######################
 
-# VPC and Network with Full Compliance
+# VPC and Network
 
 #######################
 
@@ -234,8 +224,6 @@ create_before_destroy = true
 }
 }
 
-# Public subnets - for NAT gateways and load balancers
-
 resource "aws_subnet" "public" {
 count = 2
 
@@ -250,8 +238,6 @@ Tier = "public"
 })
 }
 
-# Private subnets - for EC2 instances
-
 resource "aws_subnet" "private" {
 count = 2
 
@@ -265,8 +251,6 @@ Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
 Tier = "private"
 })
 }
-
-# Database subnets - for RDS
 
 resource "aws_subnet" "database" {
 count = 2
@@ -290,8 +274,6 @@ Name = "${local.name_prefix}-igw"
 })
 }
 
-# Elastic IP addresses for NAT gateways
-
 resource "aws_eip" "nat" {
 count = 2
 domain = "vpc"
@@ -302,8 +284,6 @@ Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
 
 depends_on = [aws_internet_gateway.main]
 }
-
-# NAT Gateways for private subnet internet access
 
 resource "aws_nat_gateway" "main" {
 count = 2
@@ -318,8 +298,6 @@ Name = "${local.name_prefix}-nat-${count.index + 1}"
 depends_on = [aws_internet_gateway.main]
 }
 
-# Route table for public subnets
-
 resource "aws_route_table" "public" {
 vpc_id = aws_vpc.main.id
 
@@ -328,15 +306,11 @@ Name = "${local.name_prefix}-public-rt"
 })
 }
 
-# Route to Internet Gateway for public subnets
-
 resource "aws_route" "public_internet_gateway" {
 route_table_id = aws_route_table.public.id
 destination_cidr_block = "0.0.0.0/0"
 gateway_id = aws_internet_gateway.main.id
 }
-
-# Route tables for private subnets
 
 resource "aws_route_table" "private" {
 count = 2
@@ -348,8 +322,6 @@ Name = "${local.name_prefix}-private-rt-${count.index + 1}"
 })
 }
 
-# Routes to NAT Gateway for private subnets
-
 resource "aws_route" "private_nat_gateway" {
 count = 2
 
@@ -358,8 +330,6 @@ destination_cidr_block = "0.0.0.0/0"
 nat_gateway_id = aws_nat_gateway.main[count.index].id
 }
 
-# Route table for database subnets - no internet access
-
 resource "aws_route_table" "database" {
 vpc_id = aws_vpc.main.id
 
@@ -367,8 +337,6 @@ tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-database-rt"
 })
 }
-
-# Route table associations
 
 resource "aws_route_table_association" "public" {
 count = 2
@@ -390,8 +358,6 @@ count = 2
 subnet_id = aws_subnet.database[count.index].id
 route_table_id = aws_route_table.database.id
 }
-
-# VPC Flow Logs for Compliance
 
 resource "aws_flow_log" "vpc_flow_log" {
 log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
@@ -458,8 +424,6 @@ Resource = "${aws_cloudwatch_log_group.vpc_flow_logs.arn}:\*"
 })
 }
 
-# VPC Endpoints for private traffic
-
 resource "aws_vpc_endpoint" "s3" {
 vpc_id = aws_vpc.main.id
 service_name = "com.amazonaws.${var.aws_region}.s3"
@@ -487,8 +451,6 @@ Name = "${local.name_prefix}-dynamodb-endpoint"
 # Security Groups
 
 #######################
-
-# Security Group for ALB
 
 resource "aws_security_group" "alb" {
 name = "${local.name_prefix}-alb-sg"
@@ -534,8 +496,6 @@ cidr_blocks = ["0.0.0.0/0"]
 description = "Allow all outbound traffic"
 }
 
-# Security Group for Web instances
-
 resource "aws_security_group" "web" {
 name = "${local.name_prefix}-web-sg"
 description = "Security group for web servers"
@@ -580,8 +540,6 @@ cidr_blocks = ["0.0.0.0/0"]
 description = "Allow all outbound traffic"
 }
 
-# Security Group for Database
-
 resource "aws_security_group" "database" {
 name = "${local.name_prefix}-db-sg"
 description = "Security group for database"
@@ -618,11 +576,9 @@ description = "Allow all outbound traffic"
 
 #######################
 
-# IAM Resources with Least Privilege
+# IAM Resources
 
 #######################
-
-# MFA Policy - Enforce MFA for console access
 
 resource "aws_iam_policy" "enforce_mfa" {
 name = "${local.name_prefix}-enforce-mfa"
@@ -707,8 +663,6 @@ tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-enforce-mfa-policy"
 })
 }
-
-# EC2 Instance Role
 
 resource "aws_iam_role" "ec2_role" {
 name = "${local.name_prefix}-ec2-role"
@@ -817,6 +771,8 @@ sse_algorithm = "aws:kms"
 }
 }
 
+# FIXED: Use filter { prefix = "" } to resolve provider warning
+
 resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 bucket = aws_s3_bucket.logs.id
 
@@ -824,16 +780,18 @@ rule {
 id = "log-lifecycle"
 status = "Enabled"
 
+    filter {
+      prefix = "" # Apply to all objects
+    }
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
     }
-
     transition {
       days          = 60
       storage_class = "GLACIER"
     }
-
     expiration {
       days = local.backup_retention_days
     }
@@ -877,8 +835,6 @@ Name = "${local.name_prefix}-cloudtrail"
 })
 }
 
-# Allow CloudTrail to use the KMS key
-
 resource "aws_kms_key_policy" "cloudtrail" {
 key_id = aws_kms_key.main.id
 policy = jsonencode({
@@ -909,8 +865,6 @@ Resource = "\*"
 ]
 })
 }
-
-# S3 bucket policy for CloudTrail
 
 resource "aws_s3_bucket_policy" "cloudtrail" {
 bucket = aws_s3_bucket.logs.id
@@ -972,7 +926,7 @@ Name = "${local.name_prefix}-alerts"
 resource "aws_sns_topic_subscription" "email" {
 topic_arn = aws_sns_topic.alerts.arn
 protocol = "email"
-endpoint = "ngwakoleslieelijah@example.com" # Replace with actual email
+endpoint = "ngwakoleslieelijah@example.com"
 }
 
 #######################
@@ -1030,12 +984,8 @@ backup_retention_period = local.backup_retention_days
 deletion_protection = var.environment == "prod" ? true : false
 copy_tags_to_snapshot = true
 
-# Enhanced monitoring
-
 monitoring_interval = 60
 monitoring_role_arn = aws_iam_role.rds_monitoring_role.arn
-
-# Enable performance insights
 
 performance_insights_enabled = true
 performance_insights_retention_period = 7
@@ -1148,15 +1098,11 @@ subnet_id = aws_subnet.private[count.index].id
 vpc_security_group_ids = [aws_security_group.web.id]
 iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
-# Compliance: Require IMDSv2
-
 metadata_options {
 http_endpoint = "enabled"
 http_tokens = "required"
 http_put_response_hop_limit = 1
 }
-
-# Encrypt root volume
 
 root_block_device {
 volume_type = "gp3"
@@ -1171,74 +1117,65 @@ kms_key_id = aws_kms_key.main.arn
 }
 
 user_data = <<-EOF
-#!/bin/bash # Update system
+#!/bin/bash
 yum update -y
 yum install -y httpd mysql amazon-cloudwatch-agent awslogs
-
-    # Configure CloudWatch agent
-    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWAGENTCONFIG'
-    {
-      "agent": {
-        "metrics_collection_interval": 60,
-        "run_as_user": "root"
-      },
-      "logs": {
-        "logs_collected": {
-          "files": {
-            "collect_list": [
-              {
-                "file_path": "/var/log/httpd/access_log",
-                "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
-                "log_stream_name": "{instance_id}/httpd/access.log",
-                "retention_in_days": ${local.log_retention_days}
-              },
-              {
-                "file_path": "/var/log/httpd/error_log",
-                "log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
-                "log_stream_name": "{instance_id}/httpd/error.log",
-                "retention_in_days": ${local.log_retention_days}
-              }
-            ]
-          }
-        }
-      },
-      "metrics": {
-        "metrics_collected": {
-          "disk": {
-            "measurement": ["used_percent"],
-            "resources": ["*"],
-            "append_dimensions": {
-              "InstanceId": "$${aws:InstanceId}"
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWAGENTCONFIG'
+{
+"agent": {
+"metrics_collection_interval": 60,
+"run_as_user": "root"
+},
+"logs": {
+"logs_collected": {
+"files": {
+"collect_list": [
+{
+"file_path": "/var/log/httpd/access_log",
+"log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
+"log_stream_name": "{instance_id}/httpd/access.log",
+"retention_in_days": ${local.log_retention_days}
+},
+{
+"file_path": "/var/log/httpd/error_log",
+"log_group_name": "${aws_cloudwatch_log_group.ec2_logs.name}",
+"log_stream_name": "{instance_id}/httpd/error.log",
+"retention_in_days": ${local.log_retention_days}
+}
+]
+}
+}
+},
+"metrics": {
+"metrics_collected": {
+"disk": {
+"measurement": ["used_percent"],
+"resources": ["*"],
+"append_dimensions": {
+"InstanceId": "$${aws:InstanceId}"
             }
           },
           "mem": {
             "measurement": ["used_percent"],
             "append_dimensions": {
               "InstanceId": "$${aws:InstanceId}"
-            }
-          },
-          "cpu": {
-            "resources": ["*"],
-            "measurement": ["cpu_usage_idle", "cpu_usage_user", "cpu_usage_system"],
-            "append_dimensions": {
-              "InstanceId": "$${aws:InstanceId}"
-            }
-          }
-        }
-      }
-    }
-
+}
+},
+"cpu": {
+"resources": ["*"],
+"measurement": ["cpu_usage_idle", "cpu_usage_user", "cpu_usage_system"],
+"append_dimensions": {
+"InstanceId": "$${aws:InstanceId}"
+}
+}
+}
+}
+}
 CWAGENTCONFIG
-
-    # Start and enable services
-    systemctl start httpd amazon-cloudwatch-agent
-    systemctl enable httpd amazon-cloudwatch-agent
-
-    # Create health check endpoint
-    echo "OK" > /var/www/html/health
-
-    # Create sample database connection test script
-    cat > /var/www/html/db-test.php <<'PHP'
+systemctl start httpd amazon-cloudwatch-agent
+systemctl enable httpd amazon-cloudwatch-agent
+echo "OK" > /var/www/html/health
+cat > /var/www/html/db-test.php <<'PHP'
 
 <?php
 $host = '${aws_db_instance.main.address}';
@@ -1246,9 +1183,7 @@ $username = '${var.db_username}';
 $password = '${var.db_password}';
 $dbname = '${aws_db_instance.main.db_name}';
 $port = ${local.db_port};
-
 $conn = new mysqli($host, $username, $password, $dbname, $port);
-
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
@@ -1257,9 +1192,7 @@ $conn->close();
 ?>
 
 PHP
-
-    # Create webpage
-    cat > /var/www/html/index.html <<'HTML'
+cat > /var/www/html/index.html <<'HTML'
 
 <!DOCTYPE html>
 <html>
@@ -1277,11 +1210,10 @@ PHP
 <body>
     <div class="container">
         <h1 class="heading">Fully Compliant Infrastructure</h1>
-        <p class="timestamp">Deployed: 2025-08-17 06:21:27 UTC</p>
+        <p class="timestamp">Deployed: 2025-08-17 06:40:31 UTC</p>
         <p>Deployment ID: ${local.name_prefix}</p>
         <p>User: ngwakoleslieelijah</p>
         <p>Instance ID: <span id="instance-id">Loading...</span></p>
-        
         <div class="compliance">
             <h2>Compliance Features</h2>
             <ul>
@@ -1294,7 +1226,6 @@ PHP
                 <li>✅ MFA Enforcement</li>
             </ul>
         </div>
-        
         <div class="security">
             <h2>Security Features</h2>
             <ul>
@@ -1307,10 +1238,8 @@ PHP
                 <li>✅ CloudWatch Monitoring & Alerts</li>
             </ul>
         </div>
-        
         <p><a href="/db-test.php">Test Database Connection</a></p>
     </div>
-    
     <script>
         fetch('http://169.254.169.254/latest/meta-data/instance-id', {
             method: 'GET',
@@ -1323,11 +1252,7 @@ PHP
 </body>
 </html>
 HTML
-    
-    # Set permissions
     chown -R apache:apache /var/www/html/
-    
-    # Apply security hardening
     echo "net.ipv4.conf.all.send_redirects = 0" >> /etc/sysctl.conf
     echo "net.ipv4.conf.default.send_redirects = 0" >> /etc/sysctl.conf
     sysctl -p
@@ -1443,7 +1368,7 @@ name = "${local.name_prefix}-backup-plan"
 rule {
 rule_name = "${local.name_prefix}-daily-backup"
 target_vault_name = aws_backup_vault.main.name
-schedule = "cron(0 1 \* _ ? _)" # 1 AM UTC daily
+schedule = "cron(0 1 \* _ ? _)"
 
     lifecycle {
       delete_after = local.backup_retention_days
@@ -1456,6 +1381,8 @@ Name = "${local.name_prefix}-backup-plan"
 })
 }
 
+# FIXED: Removed the tags argument from aws_backup_selection
+
 resource "aws_backup_selection" "main" {
 name = "${local.name_prefix}-backup-selection"
 iam_role_arn = aws_iam_role.backup_role.arn
@@ -1466,10 +1393,6 @@ aws_instance.web[0].arn,
 aws_instance.web[1].arn,
 aws_db_instance.main.arn
 ]
-
-tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-backup-selection"
-})
 }
 
 resource "aws_iam_role" "backup_role" {
@@ -1533,7 +1456,7 @@ value = aws_vpc.main.id
 output "deployment_info" {
 description = "Deployment information"
 value = {
-timestamp = "2025-08-17 06:21:27"
+timestamp = "2025-08-17 06:40:31"
 user = "ngwakoleslieelijah"
 prefix = local.name_prefix
 compliance_level = var.compliance_level
