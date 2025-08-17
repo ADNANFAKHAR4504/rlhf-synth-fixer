@@ -1,42 +1,40 @@
-You are an expert AWS DevOps Engineer specializing in Infrastructure as Code (IaC) and cloud security. Your task is to generate a single, comprehensive CloudFormation YAML template that provisions a secure AWS infrastructure.
+I need your help setting up a secure AWS infrastructure for our NovaModel project.
 
-The template must be entirely self-contained, deployable within a single AWS account in the `us-east-1` region, and satisfy all the security and configuration requirements listed below.
+Could you create a complete, self-contained CloudFormation YAML template for our production environment in `us-east-1`? We've got some specific requirements to make sure everything is secure and consistent. Here's a breakdown:
 
-### General Requirements
+---
+### A Few Ground Rules
 
-* **Naming Convention**: All resources must adhere to the naming convention: `novamodel-sec-prod-<resource-type>` (e.g., `novamodel-sec-prod-app-sg`).
-* **Tagging**: All created resources must be tagged with the following key-value pairs:
+* **Naming:** Everything should follow this format: `novamodel-sec-prod-<resource-type>`. For example, a security group would be `novamodel-sec-prod-app-sg`.
+* **Tagging:** Let's make sure every resource gets these tags:
     * `Project`: `NovaModelBreaking`
     * `Environment`: `Production`
     * `Owner`: `DevSecOpsTeam`
 
-### Specific Infrastructure and Security Requirements
+---
+### Core Infrastructure Details
 
-1.  **VPC and Networking**:
-    * Create a foundational VPC with at least two private subnets and two public subnets across different Availability Zones.
-    * Ensure RDS instances and Lambda functions are placed within the private subnets.
+1.  **VPC Setup:** We need a VPC with two public and two private subnets across different AZs for high availability. The database and Lambda functions should **only** be in the private subnets.
 
-2.  **IAM (Identity and Access Management)**:
-    * Define all IAM roles using `AWS::IAM::Role` and strictly adhere to the **principle of least privilege**. For example, create a specific role for a Lambda function that only allows it to write to a specific DynamoDB table.
-    * Ensure that any IAM policies are attached only to roles or groups, with no policies attached directly to users.
+2.  **IAM Roles:** Let's stick to the principle of least privilege. All roles should be defined with `AWS::IAM::Role` and have the absolute minimum permissions they need to function. For instance, the Lambda role should only be able to write to its specific DynamoDB table. Also, no policies directly on users, please—only on roles.
 
-3.  **Data Storage and Encryption**:
-    * **S3 Buckets**: All defined `AWS::S3::Bucket` resources must have server-side default encryption enabled using `AES-256`.
-    * **RDS Instances**: Provision an `AWS::RDS::DBInstance` within the VPC, using a properly configured `DBSubnetGroup`.
-    * **EBS Volumes**: Create a customer-managed `AWS::KMS::Key` specifically for encrypting EBS volumes. Any EC2 instances defined should use this key for their volumes.
-    * **DynamoDB Tables**: For any `AWS::DynamoDB::Table` resources, ensure Point-in-Time Recovery (PITR) is enabled.
+3.  **Data & Encryption:**
+    * **S3 Buckets:** Any S3 buckets must have server-side encryption (`AES-256`) enabled by default.
+    * **RDS Database:** The database instance needs to be provisioned inside our private subnets.
+    * **EBS Volumes:** We need a customer-managed KMS key created specifically for encrypting the EC2 volumes.
+    * **DynamoDB:** Any tables should have Point-in-Time Recovery (PITR) enabled.
 
-4.  **Compute and API**:
-    * **Lambda Functions**: Configure any `AWS::Lambda::Function` to have VPC access, placing them within the private subnets and assigning them a dedicated security group.
-    * **API Gateway**: Configure an `AWS::ApiGateway::Stage` to require an API key for access management.
+4.  **Compute & API:**
+    * **Lambda:** Any functions need VPC access, placing them in the private subnets with their own dedicated security group.
+    * **API Gateway:** The API stage needs to be configured to require an API key.
 
-5.  **Logging and Monitoring**:
-    * **CloudTrail**: Enable an `AWS::CloudTrail::Trail` to log all management and data events for the entire account. Configure it to deliver logs to a dedicated, encrypted S3 bucket.
-    * **CloudFormation Logs**: Include an `AWS::Logs::LogGroup` to specifically record logs generated during the CloudFormation stack's creation, update, and deletion events.
+5.  **Logging is key, so:**
+    * **CloudTrail:** Let's set up a trail to log all management and data events for the whole account, with the logs going to a dedicated, encrypted S3 bucket.
+    * **CloudFormation Logs:** We should also have a specific log group just for the stack's lifecycle events (create, update, delete).
 
-6.  **Network Security**:
-    * Define `AWS::EC2::SecurityGroup` resources that allow traffic **only on essential ports**. For example, a web server security group should only allow inbound traffic on ports 80 and 443 from the internet (`0.0.0.0/0`), while an RDS security group should only allow inbound traffic on the database port from the application's security group.
+6.  **Network Security:** Security groups should be locked down. The web tier should only allow inbound traffic on ports 80 and 443 from the internet, and the database security group should only allow traffic from the application's security group on the database port.
 
-### Expected Output
+---
+### The Final Result
 
-Produce a single, complete, and valid CloudFormation YAML file that meets all the constraints listed above. The template must correctly reference all resources and manage dependencies to ensure the stack can be created successfully without any errors. The YAML should be well-formatted and include comments where necessary to clarify complex configurations.
+The goal is a single, clean YAML file that's ready to deploy without errors. Good comments to explain any tricky parts would be a huge help. Thanks!
