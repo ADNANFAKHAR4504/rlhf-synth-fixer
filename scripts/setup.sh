@@ -23,12 +23,17 @@ echo "  Upload artifacts: $UPLOAD_ARTIFACTS"
 
 # Install Python dependencies
 echo "📦 Installing Python dependencies..."
-if [ -f "Pipfile" ]; then
-  echo "Installing dependencies from Pipfile..."
-  pipenv install --dev
-elif [ -f "requirements.txt" ]; then
+if [ -f "requirements.txt" ]; then
   echo "Installing dependencies from requirements.txt..."
   pip install -r requirements.txt
+elif [ -f "Pipfile" ]; then
+  echo "Installing dependencies from Pipfile..."
+  # Install pipenv if not available
+  if ! command -v pipenv &> /dev/null; then
+    echo "Installing pipenv..."
+    pip install pipenv
+  fi
+  pipenv install --dev
 else
   echo "No Python dependency files found, skipping Python setup"
 fi
