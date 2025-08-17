@@ -3,6 +3,7 @@ CodePipeline for deployment
 """
 import json
 from typing import Dict
+import pulumi
 import pulumi_aws as aws
 
 
@@ -47,7 +48,10 @@ def setup_codepipeline(stack: str) -> Dict:
   # Pipeline service role policy
   pipeline_policy = aws.iam.Policy(
     f"pipeline-policy-{stack}",
-    policy=json.dumps({
+    policy=pulumi.Output.all(
+      artifact_bucket_arn=artifact_bucket.arn,
+      source_bucket_arn=source_bucket.arn
+    ).apply(lambda args: json.dumps({
       "Version": "2012-10-17",
       "Statement": [
         {
@@ -61,10 +65,10 @@ def setup_codepipeline(stack: str) -> Dict:
             "s3:ListBucket"
           ],
           "Resource": [
-            artifact_bucket.arn,
-            f"{artifact_bucket.arn}/*",
-            source_bucket.arn,
-            f"{source_bucket.arn}/*"
+            args["artifact_bucket_arn"],
+            f"{args['artifact_bucket_arn']}/*",
+            args["source_bucket_arn"],
+            f"{args['source_bucket_arn']}/*"
           ]
         },
         {
@@ -83,7 +87,7 @@ def setup_codepipeline(stack: str) -> Dict:
           "Resource": "*"
         }
       ]
-    })
+    }))
   )
 
   aws.iam.RolePolicyAttachment(
