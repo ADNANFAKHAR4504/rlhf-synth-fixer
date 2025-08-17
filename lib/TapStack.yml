@@ -26,6 +26,11 @@ Resources:
   # =================================================================
   # Logging & Monitoring
   # =================================================================
+  ApiGatewayAccountSettings:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+
   CloudFormationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
