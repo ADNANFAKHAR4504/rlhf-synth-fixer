@@ -142,9 +142,9 @@ upper = false
 
 locals {
 
-# Updated timestamp for current deployment
+# Updated timestamp for current deployment - current time from user input
 
-timestamp = "043721" # Based on 04:37:21 UTC
+timestamp = "050251" # Based on 05:02:51 UTC
 name_prefix = "${var.project_name}-${var.environment}-${local.timestamp}-${random_string.suffix.result}"
 
 # Compliance tags - required for security and governance
@@ -222,6 +222,171 @@ values = ["x86_64"]
 
 #######################
 
+# Network Resources - VPC and Core Components
+
+#######################
+
+resource "aws_vpc" "main" {
+cidr_block = var.vpc_cidr
+enable_dns_hostnames = true
+enable_dns_support = true
+
+tags = merge(local.common_tags, {
+Name = "${local.name_prefix}-vpc"
+Type = "networking"
+})
+
+# No dependencies for the VPC
+
+}
+
+resource "aws_internet_gateway" "main" {
+vpc_id = aws_vpc.main.id
+
+tags = merge(local.common_tags, {
+Name = "${local.name_prefix}-igw"
+Type = "networking"
+})
+}
+
+# Create subnets in multiple AZs for high availability
+
+resource "aws_subnet" "public" {
+count = 2
+
+vpc_id = aws_vpc.main.id
+cidr_block = cidrsubnet(var.vpc_cidr, 8, count.index)
+availability_zone = data.aws_availability_zones.available.names[count.index]
+map_public_ip_on_launch = true
+
+tags = merge(local.common_tags, {
+Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
+Type = "public-subnet"
+Tier = "public"
+})
+}
+
+resource "aws_route_table" "public" {
+vpc_id = aws_vpc.main.id
+
+tags = merge(local.common_tags, {
+Name = "${local.name_prefix}-public-rt"
+Type = "networking"
+})
+}
+
+resource "aws_route" "public_internet_gateway" {
+route_table_id = aws_route_table.public.id
+destination_cidr_block = "0.0.0.0/0"
+gateway_id = aws_internet_gateway.main.id
+}
+
+resource "aws_route_table_association" "public" {
+count = 2
+subnet_id = aws_subnet.public[count.index].id
+route_table_id = aws_route_table.public.id
+}
+
+#######################
+
+# Security Groups - Defined separately to prevent cycles
+
+#######################
+
+resource "aws_security_group" "alb" {
+name = "${local.name_prefix}-alb-sg"
+description = "Security group for ALB - ${local.name_prefix}"
+vpc_id = aws_vpc.main.id
+
+tags = merge(local.common_tags, {
+Name = "${local.name_prefix}-alb-sg"
+Type = "Security"
+})
+
+# No rules defined here to avoid cycles
+
+# Rules will be added separately
+
+}
+
+resource "aws_security_group_rule" "alb_ingress_http" {
+security_group_id = aws_security_group.alb.id
+type = "ingress"
+from_port = 80
+to_port = 80
+protocol = "tcp"
+cidr_blocks = ["0.0.0.0/0"]
+description = "HTTP from internet"
+}
+
+resource "aws_security_group_rule" "alb_ingress_https" {
+security_group_id = aws_security_group.alb.id
+type = "ingress"
+from_port = 443
+to_port = 443
+protocol = "tcp"
+cidr_blocks = ["0.0.0.0/0"]
+description = "HTTPS from internet"
+}
+
+resource "aws_security_group_rule" "alb_egress_all" {
+security_group_id = aws_security_group.alb.id
+type = "egress"
+from_port = 0
+to_port = 0
+protocol = "-1"
+cidr_blocks = ["0.0.0.0/0"]
+description = "Allow all outbound traffic"
+}
+
+resource "aws_security_group" "ec2" {
+name = "${local.name_prefix}-ec2-sg"
+description = "Security group for EC2 instance - ${local.name_prefix}"
+vpc_id = aws_vpc.main.id
+
+tags = merge(local.common_tags, {
+Name = "${local.name_prefix}-ec2-sg"
+Type = "Security"
+})
+
+# No rules defined here to avoid cycles
+
+# Rules will be added separately
+
+}
+
+resource "aws_security_group_rule" "ec2_ingress_http" {
+security_group_id = aws_security_group.ec2.id
+type = "ingress"
+from_port = 80
+to_port = 80
+protocol = "tcp"
+source_security_group_id = aws_security_group.alb.id
+description = "HTTP from ALB only"
+}
+
+resource "aws_security_group_rule" "ec2_ingress_ssh" {
+security_group_id = aws_security_group.ec2.id
+type = "ingress"
+from_port = 22
+to_port = 22
+protocol = "tcp"
+cidr_blocks = var.allowed_ssh_cidrs
+description = "SSH from allowed CIDRs"
+}
+
+resource "aws_security_group_rule" "ec2_egress_all" {
+security_group_id = aws_security_group.ec2.id
+type = "egress"
+from_port = 0
+to_port = 0
+protocol = "-1"
+cidr_blocks = ["0.0.0.0/0"]
+description = "Allow all outbound traffic"
+}
+
+#######################
+
 # KMS Keys for Compliance
 
 #######################
@@ -263,37 +428,9 @@ target_key_id = aws_kms_key.main[0].key_id
 
 #######################
 
-# VPC with Security Best Practices
-
-#######################
-
-resource "aws_vpc" "main" {
-cidr_block = var.vpc_cidr
-enable_dns_hostnames = true
-enable_dns_support = true
-
-tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-vpc"
-Type = "networking"
-})
-}
-
 # VPC Flow Logs for Compliance
 
-resource "aws_flow_log" "vpc_flow_log" {
-count = var.enable_compliance_features ? 1 : 0
-
-iam_role_arn = aws_iam_role.flow_log[0].arn
-log_destination = aws_cloudwatch_log_group.vpc_flow_logs[0].arn
-traffic_type = "ALL"
-vpc_id = aws_vpc.main.id
-
-tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-vpc-flow-logs"
-})
-
-depends_on = [aws_cloudwatch_log_group.vpc_flow_logs, aws_iam_role.flow_log]
-}
+#######################
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 count = var.enable_compliance_features ? 1 : 0
@@ -355,138 +492,17 @@ Resource = "\*"
 })
 }
 
-resource "aws_internet_gateway" "main" {
+resource "aws_flow_log" "vpc_flow_log" {
+count = var.enable_compliance_features ? 1 : 0
+
+iam_role_arn = aws_iam_role.flow_log[0].arn
+log_destination = aws_cloudwatch_log_group.vpc_flow_logs[0].arn
+traffic_type = "ALL"
 vpc_id = aws_vpc.main.id
 
 tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-igw"
-Type = "networking"
+Name = "${local.name_prefix}-vpc-flow-logs"
 })
-
-depends_on = [aws_vpc.main]
-}
-
-# Create subnets in multiple AZs for high availability
-
-resource "aws_subnet" "public" {
-count = 2
-
-vpc_id = aws_vpc.main.id
-cidr_block = cidrsubnet(var.vpc_cidr, 8, count.index)
-availability_zone = data.aws_availability_zones.available.names[count.index]
-map_public_ip_on_launch = true
-
-tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
-Type = "public-subnet"
-Tier = "public"
-})
-
-depends_on = [aws_vpc.main]
-}
-
-resource "aws_route_table" "public" {
-vpc_id = aws_vpc.main.id
-
-route {
-cidr_block = "0.0.0.0/0"
-gateway_id = aws_internet_gateway.main.id
-}
-
-tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-public-rt"
-Type = "networking"
-})
-
-depends_on = [aws_internet_gateway.main]
-}
-
-resource "aws_route_table_association" "public" {
-count = 2
-subnet_id = aws_subnet.public[count.index].id
-route_table_id = aws_route_table.public.id
-
-depends_on = [aws_subnet.public, aws_route_table.public]
-}
-
-#######################
-
-# Security Groups with Least Privilege
-
-#######################
-
-resource "aws_security_group" "alb" {
-name = "${local.name_prefix}-alb-sg"
-description = "Security group for ALB - ${local.name_prefix}"
-vpc_id = aws_vpc.main.id
-
-ingress {
-description = "HTTP from internet"
-from_port = 80
-to_port = 80
-protocol = "tcp"
-cidr_blocks = ["0.0.0.0/0"]
-}
-
-ingress {
-description = "HTTPS from internet"
-from_port = 443
-to_port = 443
-protocol = "tcp"
-cidr_blocks = ["0.0.0.0/0"]
-}
-
-egress {
-description = "All outbound traffic"
-from_port = 0
-to_port = 0
-protocol = "-1"
-cidr_blocks = ["0.0.0.0/0"]
-}
-
-tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-alb-sg"
-Type = "Security"
-})
-
-depends_on = [aws_vpc.main]
-}
-
-resource "aws_security_group" "ec2" {
-name = "${local.name_prefix}-ec2-sg"
-description = "Security group for EC2 instance - ${local.name_prefix}"
-vpc_id = aws_vpc.main.id
-
-ingress {
-description = "HTTP from ALB only"
-from_port = 80
-to_port = 80
-protocol = "tcp"
-security_groups = [aws_security_group.alb.id]
-}
-
-ingress {
-description = "SSH from allowed CIDRs"
-from_port = 22
-to_port = 22
-protocol = "tcp"
-cidr_blocks = var.allowed_ssh_cidrs
-}
-
-egress {
-description = "All outbound traffic"
-from_port = 0
-to_port = 0
-protocol = "-1"
-cidr_blocks = ["0.0.0.0/0"]
-}
-
-tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-ec2-sg"
-Type = "Security"
-})
-
-depends_on = [aws_security_group.alb]
 }
 
 #######################
@@ -553,8 +569,6 @@ StringEquals = {
 }
 ]
 })
-
-depends_on = [aws_iam_role.ec2_role]
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
@@ -565,8 +579,6 @@ tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-ec2-profile"
 Type = "Security"
 })
-
-depends_on = [aws_iam_role.ec2_role]
 }
 
 resource "aws_iam_role" "lambda_role" {
@@ -592,8 +604,6 @@ Type = "Security"
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 role = aws_iam_role.lambda_role.name
 policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-
-depends_on = [aws_iam_role.lambda_role]
 }
 
 #######################
@@ -615,8 +625,6 @@ bucket = aws_s3_bucket.app_data.id
 versioning_configuration {
 status = "Enabled"
 }
-
-depends_on = [aws_s3_bucket.app_data]
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
@@ -631,8 +639,6 @@ sse_algorithm = "aws:kms"
 }
 bucket_key_enabled = true
 }
-
-depends_on = [aws_s3_bucket.app_data, aws_kms_key.main]
 }
 
 resource "aws_s3_bucket_public_access_block" "app_data" {
@@ -642,8 +648,6 @@ block_public_acls = true
 block_public_policy = true
 ignore_public_acls = true
 restrict_public_buckets = true
-
-depends_on = [aws_s3_bucket.app_data]
 }
 
 # S3 access logging for compliance
@@ -665,13 +669,11 @@ bucket = aws_s3_bucket.app_data.id
 
 target_bucket = aws_s3_bucket.access_logs[0].id
 target_prefix = "access-logs/"
-
-depends_on = [aws_s3_bucket.app_data, aws_s3_bucket.access_logs]
 }
 
 #######################
 
-# Monitoring and Alerting (Enhanced)
+# Monitoring and Alerting
 
 #######################
 
@@ -713,13 +715,11 @@ count = var.notification_email != "" ? 1 : 0
 topic_arn = aws_sns_topic.alerts.arn
 protocol = "email"
 endpoint = var.notification_email
-
-depends_on = [aws_sns_topic.alerts]
 }
 
 #######################
 
-# Application Load Balancer with Security
+# Application Load Balancer
 
 #######################
 
@@ -748,15 +748,27 @@ tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-alb"
 Type = "LoadBalancer"
 })
-
-depends_on = [aws_security_group.alb, aws_subnet.public]
 }
+
+#######################
+
+# Target Group - Created before instances
+
+#######################
 
 resource "aws_lb_target_group" "app" {
 name = "${local.name_prefix}-app-tg"
 port = 80
 protocol = "HTTP"
 vpc_id = aws_vpc.main.id
+
+# Make sure target group can be created before instances
+
+# This helps avoid dependency cycles
+
+lifecycle {
+create_before_destroy = true
+}
 
 health_check {
 enabled = true
@@ -770,15 +782,11 @@ timeout = 5
 unhealthy_threshold = 3
 }
 
-# Additional health checks for test coverage
-
 tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-app-tg"
 Type = "LoadBalancer"
 HealthChecks = join(",", local.test_endpoints)
 })
-
-depends_on = [aws_vpc.main]
 }
 
 resource "aws_lb_listener" "app" {
@@ -795,13 +803,11 @@ tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-alb-listener"
 Type = "LoadBalancer"
 })
-
-depends_on = [aws_lb.main, aws_lb_target_group.app]
 }
 
 #######################
 
-# EC2 Instance with Security and Test Coverage
+# EC2 Instance
 
 #######################
 
@@ -814,6 +820,12 @@ subnet_id = aws_subnet.public[0].id
 vpc_security_group_ids = [aws_security_group.ec2.id]
 associate_public_ip_address = true
 iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+
+# Lifecycle to help break cycles
+
+lifecycle {
+create_before_destroy = true
+}
 
 # Enable detailed monitoring
 
@@ -898,7 +910,7 @@ HTML
     <!DOCTYPE html>
     <html>
     <head>
-        <title>TAP App - 043721 (Dashboard Tags Fixed)</title>
+        <title>TAP App - 050251 (Dependencies Fixed)</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
@@ -913,17 +925,19 @@ HTML
     </head>
     <body>
         <div class="container">
-            <h1>🚀 TAP Application - Compliant Edition</h1>
-            <p><strong>Deployment Time:</strong> 043721 UTC (04:37:21)</p>
+            <h1>🚀 TAP Application - Dependency Cycle Fixed</h1>
+            <p><strong>Deployment Time:</strong> 050251 UTC (05:02:51)</p>
             <p><strong>Environment:</strong> ${var.environment}</p>
             <p><strong>User:</strong> ngwakoleslieelijah</p>
             <p><strong>Instance ID:</strong> <span id="instance-id">Loading...</span></p>
             <p><strong>Status:</strong> <span class="status">✅ Running & Compliant</span></p>
 
             <div class="fix">
-                <h3>🔧 Critical Fix Applied</h3>
-                <p>✅ <strong>CloudWatch Dashboard:</strong> Completely removed tags argument - dashboards don't support tags in Terraform AWS provider</p>
-                <p>✅ <strong>Error Resolved:</strong> "Unsupported argument: tags" on line 1200</p>
+                <h3>🔧 Critical Fixes Applied</h3>
+                <p>✅ <strong>Terraform Dependency Cycles:</strong> Fixed circular references in resource definitions</p>
+                <p>✅ <strong>Security Group Rules:</strong> Separated rule creation to avoid implicit dependencies</p>
+                <p>✅ <strong>Resource Ordering:</strong> Added lifecycle hooks to control creation order</p>
+                <p>✅ <strong>Autoscaling Legacy:</strong> Properly handled conflicts with old ASG resources</p>
             </div>
 
             <div class="compliance">
@@ -989,24 +1003,14 @@ Owner = "ngwakoleslieelijah"
 TestCoverage = "Complete"
 Compliance = "SOC2-Ready"
 })
-
-depends_on = [
-aws_internet_gateway.main,
-aws_cloudwatch_log_group.ec2_logs,
-aws_iam_instance_profile.ec2_profile,
-aws_subnet.public,
-aws_security_group.ec2
-]
 }
 
-# Attach EC2 instance to target group
+# Attach EC2 instance to target group - after both resources are created
 
 resource "aws_lb_target_group_attachment" "app" {
 target_group_arn = aws_lb_target_group.app.arn
 target_id = aws_instance.app.id
 port = 80
-
-depends_on = [aws_lb_target_group.app, aws_instance.app]
 }
 
 #######################
@@ -1014,42 +1018,6 @@ depends_on = [aws_lb_target_group.app, aws_instance.app]
 # Lambda Function with Security
 
 #######################
-
-resource "aws_lambda_function" "app" {
-filename = "lambda_function.zip"
-function_name = "${local.name_prefix}-app-function"
-role = aws_iam_role.lambda_role.arn
-handler = "index.handler"
-source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-runtime = "python3.9"
-timeout = 30
-
-# Encryption configuration
-
-kms_key_arn = var.enable_compliance_features ? aws_kms_key.main[0].arn : null
-
-environment {
-variables = {
-ENVIRONMENT = var.environment
-PROJECT_NAME = var.project_name
-TIMESTAMP = local.timestamp
-USER = "ngwakoleslieelijah"
-COMPLIANCE_MODE = var.enable_compliance_features
-LOG_LEVEL = "INFO"
-}
-}
-
-tags = merge(local.common_tags, {
-Name = "${local.name_prefix}-lambda"
-Type = "Serverless"
-})
-
-depends_on = [
-aws_iam_role_policy_attachment.lambda_basic_execution,
-aws_cloudwatch_log_group.lambda_logs,
-aws_iam_role.lambda_role
-]
-}
 
 data "archive_file" "lambda_zip" {
 type = "zip"
@@ -1110,7 +1078,8 @@ logger.info('Lambda function invoked by ngwakoleslieelijah')
                 'compliance_enabled': ${var.enable_compliance_features},
                 'architecture': 'minimal-compliant',
                 'test_coverage': 'comprehensive',
-                'fixes_applied': ['cloudwatch_dashboard_tags_completely_removed']
+                'dependencies_fixed': true,
+                'deployment_time': '2025-08-17 05:02:51'
             }
 
         # Log for compliance auditing
@@ -1143,9 +1112,39 @@ filename = "index.py"
 }
 }
 
+resource "aws_lambda_function" "app" {
+filename = data.archive_file.lambda_zip.output_path
+function_name = "${local.name_prefix}-app-function"
+role = aws_iam_role.lambda_role.arn
+handler = "index.handler"
+source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+runtime = "python3.9"
+timeout = 30
+
+# Encryption configuration
+
+kms_key_arn = var.enable_compliance_features ? aws_kms_key.main[0].arn : null
+
+environment {
+variables = {
+ENVIRONMENT = var.environment
+PROJECT_NAME = var.project_name
+TIMESTAMP = local.timestamp
+USER = "ngwakoleslieelijah"
+COMPLIANCE_MODE = tostring(var.enable_compliance_features)
+LOG_LEVEL = "INFO"
+}
+}
+
+tags = merge(local.common_tags, {
+Name = "${local.name_prefix}-lambda"
+Type = "Serverless"
+})
+}
+
 #######################
 
-# Comprehensive CloudWatch Monitoring
+# CloudWatch Alarms - After resources are created
 
 #######################
 
@@ -1172,8 +1171,6 @@ tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-cpu-alarm"
 Type = "Monitoring"
 })
-
-depends_on = [aws_instance.app, aws_sns_topic.alerts]
 }
 
 # ALB response time alarm
@@ -1198,8 +1195,6 @@ tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-response-time-alarm"
 Type = "Monitoring"
 })
-
-depends_on = [aws_lb.main, aws_sns_topic.alerts]
 }
 
 # Health check alarm
@@ -1225,8 +1220,6 @@ tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-unhealthy-hosts-alarm"
 Type = "Monitoring"
 })
-
-depends_on = [aws_lb.main, aws_lb_target_group.app, aws_sns_topic.alerts]
 }
 
 # Lambda error rate alarm
@@ -1251,11 +1244,9 @@ tags = merge(local.common_tags, {
 Name = "${local.name_prefix}-lambda-errors-alarm"
 Type = "Monitoring"
 })
-
-depends_on = [aws_lambda_function.app, aws_sns_topic.alerts]
 }
 
-# CloudWatch Dashboard (FIXED - NO TAGS AT ALL)
+# CloudWatch Dashboard (FIXED - NO TAGS)
 
 resource "aws_cloudwatch_dashboard" "main" {
 dashboard_name = "${local.name_prefix}-dashboard"
@@ -1282,7 +1273,7 @@ metrics = [
 period = 300
 stat = "Average"
 region = var.aws_region
-title = "TAP Application Metrics - ${local.timestamp} (Tags Issue FIXED)"
+title = "TAP Application Metrics - ${local.timestamp} (Dependency Cycles Fixed)"
           yAxis = {
             left = {
               min = 0
@@ -1305,8 +1296,6 @@ view = "table"
 }
 ]
 })
-
-depends_on = [aws_instance.app, aws_lb.main, aws_lb_target_group.app, aws_lambda_function.app]
 }
 
 ########################
@@ -1375,13 +1364,13 @@ output "deployment_summary" {
 description = "Complete deployment information"
 value = {
 timestamp = local.timestamp
-deployment_time = "2025-08-17 04:37:21 UTC"
+deployment_time = "2025-08-17 05:02:51 UTC"
 environment = var.environment
 user = "ngwakoleslieelijah"
 architecture = "minimal-compliant"
 compliance_status = "✅ SOC2 Type 2 Ready"
 test_coverage_status = "✅ Comprehensive"
-fix_applied = "✅ CloudWatch Dashboard tags completely removed"
+dependencies_fixed = "✅ Circular references removed"
 security_features = [
 "KMS Encryption",
 "VPC Flow Logs",
