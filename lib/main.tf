@@ -168,6 +168,50 @@ resource "aws_config_config_rule" "ebs_encryption_eu_north_1" {
 # /-----------------------------------------------------------------------------
 # | US-WEST-2 Regional Resources
 # |-----------------------------------------------------------------------------
+data "aws_vpc" "default_us_west_2" {
+  provider = aws.us-west-2
+  default  = true
+}
+
+resource "aws_vpc" "nova_vpc_291844_us_west_2" {
+  provider             = aws.us-west-2
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags                 = merge(local.common_tags, { Name = "nova-vpc-291844-us-west-2" })
+}
+
+resource "aws_subnet" "nova_subnet_291844_us_west_2" {
+  provider          = aws.us-west-2
+  vpc_id            = data.aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id if creating new VPC
+  cidr_block        = "10.0.1.0/24"                     # Adjust CIDR as needed
+  availability_zone = "us-west-2a"                      # Choose an AZ
+  tags              = merge(local.common_tags, { Name = "nova-subnet-291844-us-west-2" })
+}
+
+resource "aws_internet_gateway" "nova_igw_291844_us_west_2" {
+  provider = aws.us-west-2
+  vpc_id   = data.aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id
+  tags     = merge(local.common_tags, { Name = "nova-igw-291844-us-west-2" })
+}
+
+resource "aws_route_table" "nova_rt_291844_us_west_2" {
+  provider = aws.us-west-2
+  vpc_id   = data.aws_vpc.default_us_west_2.id # or aws_vpc.nova_vpc_us_west_2.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.nova_igw_291844_us_west_2.id
+  }
+
+  tags = merge(local.common_tags, { Name = "nova-rt-291844-us-west-2" })
+}
+
+resource "aws_route_table_association" "nova_rta_291844_us_west_2" {
+  provider       = aws.us-west-2
+  subnet_id      = aws_subnet.nova_subnet_291844_us_west_2.id
+  route_table_id = aws_route_table.nova_rt_291844_us_west_2.id
+}
 
 data "aws_ami" "amazon_linux_2_us_west_2" {
   provider = aws.us-west-2
@@ -222,10 +266,10 @@ resource "aws_s3_bucket_public_access_block" "data_bucket_pac_us_west_2" {
 }
 
 resource "aws_instance" "app_server_us_west_2" {
-  provider = aws.us-west-2
-
+  provider             = aws.us-west-2
   ami                  = data.aws_ami.amazon_linux_2_us_west_2.id
   instance_type        = "t3.micro"
+  subnet_id            = aws_subnet.nova_subnet_291844_us_west_2.id
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   ebs_block_device {
