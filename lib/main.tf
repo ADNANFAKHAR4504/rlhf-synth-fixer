@@ -514,7 +514,16 @@ resource "aws_api_gateway_deployment" "main" {
   ]
 
   rest_api_id = aws_api_gateway_rest_api.main.id
-  stage_name  = var.environment
+}
+
+resource "aws_api_gateway_stage" "main" {
+  deployment_id = aws_api_gateway_deployment.main.id
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  stage_name    = var.environment
+
+  tags = {
+    Name = "${var.project_name}-api-stage"
+  }
 }
 
 # Lambda Permissions for API Gateway
