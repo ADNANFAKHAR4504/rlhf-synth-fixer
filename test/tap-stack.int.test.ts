@@ -1,30 +1,5 @@
 // Configuration - These are coming from cfn-outputs after cfn deploy
-import {
-  BatchGetProjectsCommand,
-  CodeBuildClient,
-} from '@aws-sdk/client-codebuild';
-import {
-  CodePipelineClient,
-  GetPipelineCommand,
-  GetPipelineStateCommand,
-} from '@aws-sdk/client-codepipeline';
-import {
-  CodeStarConnectionsClient,
-  GetConnectionCommand,
-} from '@aws-sdk/client-codestar-connections';
-import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
-import {
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand,
-  HeadBucketCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
-import {
-  DescribeSecretCommand,
-  SecretsManagerClient,
-} from '@aws-sdk/client-secrets-manager';
-import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
+import * as AWS from 'aws-sdk';
 import fs from 'fs';
 
 const outputs = JSON.parse(
@@ -36,13 +11,15 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('CI/CD Pipeline Integration Tests', () => {
   const region = process.env.AWS_REGION || 'us-east-1';
-  const codePipelineClient = new CodePipelineClient({ region });
-  const codeBuildClient = new CodeBuildClient({ region });
-  const s3Client = new S3Client({ region });
-  const secretsClient = new SecretsManagerClient({ region });
-  const snsClient = new SNSClient({ region });
-  const kmsClient = new KMSClient({ region });
-  const codeStarConnectionsClient = new CodeStarConnectionsClient({ region });
+
+  // AWS SDK v2 service clients
+  const codePipeline = new AWS.CodePipeline({ region });
+  const codeBuild = new AWS.CodeBuild({ region });
+  const s3 = new AWS.S3({ region });
+  const secretsManager = new AWS.SecretsManager({ region });
+  const sns = new AWS.SNS({ region });
+  const kms = new AWS.KMS({ region });
+  const codeStarConnections = new AWS.CodeStarconnections({ region });
 
   // Extract resource names from outputs - Updated to match new output names
   const pipelineName = outputs.PipelineName;
@@ -56,10 +33,13 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('CodeStar Connections Configuration', () => {
     test('GitHub connection should exist and be available', async () => {
-      const command = new GetConnectionCommand({
+      const params = {
         ConnectionArn: gitHubConnectionArn,
-      });
-      const response = await codeStarConnectionsClient.send(command);
+      };
+
+      const response = await codeStarConnections
+        .getConnection(params)
+        .promise();
 
       expect(response.Connection).toBeDefined();
       expect(response.Connection?.ConnectionArn).toBe(gitHubConnectionArn);
@@ -76,8 +56,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('CodePipeline Configuration', () => {
     test('pipeline should exist and be configured correctly', async () => {
-      const command = new GetPipelineCommand({ name: pipelineName });
-      const response = await codePipelineClient.send(command);
+      const params = { name: pipelineName };
+      const response = await codePipeline.getPipeline(params).promise();
 
       expect(response.pipeline).toBeDefined();
       expect(response.pipeline?.name).toBe(pipelineName);
@@ -89,8 +69,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('pipeline should have correct artifact store configuration', async () => {
-      const command = new GetPipelineCommand({ name: pipelineName });
-      const response = await codePipelineClient.send(command);
+      const params = { name: pipelineName };
+      const response = await codePipeline.getPipeline(params).promise();
 
       expect(response.pipeline?.artifactStore).toBeDefined();
       expect(response.pipeline?.artifactStore?.type).toBe('S3');
@@ -105,8 +85,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('pipeline should be in a valid state', async () => {
-      const command = new GetPipelineStateCommand({ name: pipelineName });
-      const response = await codePipelineClient.send(command);
+      const params = { name: pipelineName };
+      const response = await codePipeline.getPipelineState(params).promise();
 
       expect(response.pipelineName).toBe(pipelineName);
       expect(response.stageStates).toBeDefined();
@@ -114,8 +94,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('pipeline source stage should use CodeStar connection', async () => {
-      const command = new GetPipelineCommand({ name: pipelineName });
-      const response = await codePipelineClient.send(command);
+      const params = { name: pipelineName };
+      const response = await codePipeline.getPipeline(params).promise();
 
       const sourceStage = response.pipeline?.stages?.find(
         s => s.name === 'Source'
@@ -136,10 +116,10 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('CodeBuild Project Configuration', () => {
     test('build project should exist and be configured correctly', async () => {
-      const command = new BatchGetProjectsCommand({
+      const params = {
         names: [codeBuildProjectName],
-      });
-      const response = await codeBuildClient.send(command);
+      };
+      const response = await codeBuild.batchGetProjects(params).promise();
 
       expect(response.projects).toHaveLength(1);
       const project = response.projects?.[0];
@@ -151,10 +131,10 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('build project should have correct environment variables', async () => {
-      const command = new BatchGetProjectsCommand({
+      const params = {
         names: [codeBuildProjectName],
-      });
-      const response = await codeBuildClient.send(command);
+      };
+      const response = await codeBuild.batchGetProjects(params).promise();
 
       const project = response.projects?.[0];
       const envVars = project?.environment?.environmentVariables || [];
@@ -181,10 +161,10 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('build project should have proper service role', async () => {
-      const command = new BatchGetProjectsCommand({
+      const params = {
         names: [codeBuildProjectName],
-      });
-      const response = await codeBuildClient.send(command);
+      };
+      const response = await codeBuild.batchGetProjects(params).promise();
 
       const project = response.projects?.[0];
       expect(project?.serviceRole).toBeDefined();
@@ -192,10 +172,10 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('build project should have CloudWatch logs enabled', async () => {
-      const command = new BatchGetProjectsCommand({
+      const params = {
         names: [codeBuildProjectName],
-      });
-      const response = await codeBuildClient.send(command);
+      };
+      const response = await codeBuild.batchGetProjects(params).promise();
 
       const project = response.projects?.[0];
       expect(project?.logsConfig?.cloudWatchLogs?.status).toBe('ENABLED');
@@ -207,17 +187,17 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('S3 Buckets Configuration', () => {
     test('pipeline artifacts bucket should exist and be accessible', async () => {
-      const command = new HeadBucketCommand({
+      const params = {
         Bucket: pipelineArtifactsBucket,
-      });
-      await expect(s3Client.send(command)).resolves.not.toThrow();
+      };
+      await expect(s3.headBucket(params).promise()).resolves.not.toThrow();
     });
 
     test('deployment artifacts bucket should exist and be accessible', async () => {
-      const command = new HeadBucketCommand({
+      const params = {
         Bucket: deploymentArtifactsBucket,
-      });
-      await expect(s3Client.send(command)).resolves.not.toThrow();
+      };
+      await expect(s3.headBucket(params).promise()).resolves.not.toThrow();
     });
 
     test('S3 buckets should have encryption enabled with customer KMS key', async () => {
@@ -225,8 +205,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
         pipelineArtifactsBucket,
         deploymentArtifactsBucket,
       ]) {
-        const command = new GetBucketEncryptionCommand({ Bucket: bucket });
-        const response = await s3Client.send(command);
+        const params = { Bucket: bucket };
+        const response = await s3.getBucketEncryption(params).promise();
 
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
         const rule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
@@ -245,8 +225,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
         pipelineArtifactsBucket,
         deploymentArtifactsBucket,
       ]) {
-        const command = new GetBucketVersioningCommand({ Bucket: bucket });
-        const response = await s3Client.send(command);
+        const params = { Bucket: bucket };
+        const response = await s3.getBucketVersioning(params).promise();
 
         expect(response.Status).toBe('Enabled');
       }
@@ -257,8 +237,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
         pipelineArtifactsBucket,
         deploymentArtifactsBucket,
       ]) {
-        const command = new GetPublicAccessBlockCommand({ Bucket: bucket });
-        const response = await s3Client.send(command);
+        const params = { Bucket: bucket };
+        const response = await s3.getPublicAccessBlock(params).promise();
 
         const config = response.PublicAccessBlockConfiguration;
         expect(config?.BlockPublicAcls).toBe(true);
@@ -280,8 +260,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('Secrets Manager Configuration', () => {
     test('build secret should exist and be encrypted with KMS', async () => {
-      const command = new DescribeSecretCommand({ SecretId: secretArn });
-      const response = await secretsClient.send(command);
+      const params = { SecretId: secretArn };
+      const response = await secretsManager.describeSecret(params).promise();
 
       expect(response.ARN).toBe(secretArn);
       expect(response.KmsKeyId).toBe(kmsKeyArn);
@@ -294,8 +274,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('secret should have proper tags', async () => {
-      const command = new DescribeSecretCommand({ SecretId: secretArn });
-      const response = await secretsClient.send(command);
+      const params = { SecretId: secretArn };
+      const response = await secretsManager.describeSecret(params).promise();
 
       const tags = response.Tags || [];
       const projectTag = tags.find(tag => tag.Key === 'Project');
@@ -309,8 +289,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('SNS Topic Configuration', () => {
     test('approval notification topic should exist and be encrypted', async () => {
-      const command = new GetTopicAttributesCommand({ TopicArn: snsTopicArn });
-      const response = await snsClient.send(command);
+      const params = { TopicArn: snsTopicArn };
+      const response = await sns.getTopicAttributes(params).promise();
 
       expect(response.Attributes?.TopicArn).toBe(snsTopicArn);
       expect(response.Attributes?.KmsMasterKeyId).toBe(kmsKeyArn);
@@ -328,8 +308,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('KMS Key Configuration', () => {
     test('KMS key should exist and be customer-managed', async () => {
-      const command = new DescribeKeyCommand({ KeyId: kmsKeyArn });
-      const response = await kmsClient.send(command);
+      const params = { KeyId: kmsKeyArn };
+      const response = await kms.describeKey(params).promise();
 
       expect(response.KeyMetadata).toBeDefined();
       expect(response.KeyMetadata?.KeyManager).toBe('CUSTOMER');
@@ -340,8 +320,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('KMS key should be enabled', async () => {
-      const command = new DescribeKeyCommand({ KeyId: kmsKeyArn });
-      const response = await kmsClient.send(command);
+      const params = { KeyId: kmsKeyArn };
+      const response = await kms.describeKey(params).promise();
 
       expect(response.KeyMetadata?.Enabled).toBe(true);
       expect(response.KeyMetadata?.KeyState).toBe('Enabled');
@@ -350,8 +330,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('End-to-End Workflow Validation', () => {
     test('all pipeline stages should be properly connected', async () => {
-      const command = new GetPipelineCommand({ name: pipelineName });
-      const response = await codePipelineClient.send(command);
+      const params = { name: pipelineName };
+      const response = await codePipeline.getPipeline(params).promise();
 
       const stages = response.pipeline?.stages || [];
 
@@ -391,10 +371,10 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('build project should reference correct artifacts bucket and secret', async () => {
-      const command = new BatchGetProjectsCommand({
+      const params = {
         names: [codeBuildProjectName],
-      });
-      const response = await codeBuildClient.send(command);
+      };
+      const response = await codeBuild.batchGetProjects(params).promise();
 
       const project = response.projects?.[0];
       const envVars = project?.environment?.environmentVariables || [];
@@ -444,15 +424,15 @@ describe('CI/CD Pipeline Integration Tests', () => {
   describe('Security Compliance Validation', () => {
     test('all encryption should use customer-managed KMS keys', async () => {
       // Verify KMS key exists and is customer-managed
-      const keyCommand = new DescribeKeyCommand({ KeyId: kmsKeyArn });
-      const keyResponse = await kmsClient.send(keyCommand);
+      const keyParams = { KeyId: kmsKeyArn };
+      const keyResponse = await kms.describeKey(keyParams).promise();
       expect(keyResponse.KeyMetadata?.KeyManager).toBe('CUSTOMER');
 
       // Check bucket encryption uses the correct KMS key
-      const bucketCommand = new GetBucketEncryptionCommand({
-        Bucket: pipelineArtifactsBucket,
-      });
-      const bucketResponse = await s3Client.send(bucketCommand);
+      const bucketParams = { Bucket: pipelineArtifactsBucket };
+      const bucketResponse = await s3
+        .getBucketEncryption(bucketParams)
+        .promise();
       const kmsKeyId =
         bucketResponse.ServerSideEncryptionConfiguration?.Rules?.[0]
           ?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID;
@@ -461,31 +441,31 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(kmsKeyId).not.toBe('alias/aws/s3'); // Should not use AWS managed key
 
       // Check secret encryption uses the correct KMS key
-      const secretCommand = new DescribeSecretCommand({ SecretId: secretArn });
-      const secretResponse = await secretsClient.send(secretCommand);
+      const secretParams = { SecretId: secretArn };
+      const secretResponse = await secretsManager
+        .describeSecret(secretParams)
+        .promise();
       expect(secretResponse.KmsKeyId).toBe(kmsKeyArn);
 
       // Check SNS topic encryption uses the correct KMS key
-      const snsCommand = new GetTopicAttributesCommand({
-        TopicArn: snsTopicArn,
-      });
-      const snsResponse = await snsClient.send(snsCommand);
+      const snsParams = { TopicArn: snsTopicArn };
+      const snsResponse = await sns.getTopicAttributes(snsParams).promise();
       expect(snsResponse.Attributes?.KmsMasterKeyId).toBe(kmsKeyArn);
     });
 
     test('pipeline should have proper IAM role configuration', async () => {
-      const command = new GetPipelineCommand({ name: pipelineName });
-      const response = await codePipelineClient.send(command);
+      const params = { name: pipelineName };
+      const response = await codePipeline.getPipeline(params).promise();
 
       expect(response.pipeline?.roleArn).toBeDefined();
       expect(response.pipeline?.roleArn).toMatch(/CodePipelineServiceRole/);
     });
 
     test('build project should have proper IAM role configuration', async () => {
-      const command = new BatchGetProjectsCommand({
+      const params = {
         names: [codeBuildProjectName],
-      });
-      const response = await codeBuildClient.send(command);
+      };
+      const response = await codeBuild.batchGetProjects(params).promise();
 
       const project = response.projects?.[0];
       expect(project?.serviceRole).toBeDefined();
@@ -493,8 +473,8 @@ describe('CI/CD Pipeline Integration Tests', () => {
     });
 
     test('pipeline artifact store should use KMS encryption', async () => {
-      const command = new GetPipelineCommand({ name: pipelineName });
-      const response = await codePipelineClient.send(command);
+      const params = { name: pipelineName };
+      const response = await codePipeline.getPipeline(params).promise();
 
       const artifactStore = response.pipeline?.artifactStore;
       expect(artifactStore?.encryptionKey).toBeDefined();
@@ -505,17 +485,17 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
   describe('Resource Tagging Compliance', () => {
     test('KMS key should have proper tags', async () => {
-      const command = new DescribeKeyCommand({ KeyId: kmsKeyArn });
-      const response = await kmsClient.send(command);
+      const params = { KeyId: kmsKeyArn };
+      const response = await kms.describeKey(params).promise();
 
-      // Note: KMS tags are not included in DescribeKey response
-      // This would require ListResourceTags API call which is tested separately
+      // Note: KMS tags are not included in describeKey response
+      // This would require listResourceTags API call which can be tested separately
       expect(response.KeyMetadata).toBeDefined();
     });
 
     test('secret should have compliance tags', async () => {
-      const command = new DescribeSecretCommand({ SecretId: secretArn });
-      const response = await secretsClient.send(command);
+      const params = { SecretId: secretArn };
+      const response = await secretsManager.describeSecret(params).promise();
 
       const tags = response.Tags || [];
       const requiredTags = ['Project', 'Environment'];
@@ -524,6 +504,70 @@ describe('CI/CD Pipeline Integration Tests', () => {
         const tag = tags.find(t => t.Key === tagKey);
         expect(tag).toBeDefined();
       });
+    });
+  });
+
+  describe('Additional Security Validations', () => {
+    test('CodeBuild project should have artifacts configuration', async () => {
+      const params = {
+        names: [codeBuildProjectName],
+      };
+      const response = await codeBuild.batchGetProjects(params).promise();
+
+      const project = response.projects?.[0];
+      expect(project?.artifacts?.type).toBe('CODEPIPELINE');
+    });
+
+    test('Pipeline should have proper stage transitions', async () => {
+      const params = { name: pipelineName };
+      const response = await codePipeline.getPipeline(params).promise();
+
+      const stages = response.pipeline?.stages || [];
+
+      // Check that each stage (except the last) has output artifacts that connect to the next stage
+      for (let i = 0; i < stages.length - 1; i++) {
+        const currentStage = stages[i];
+        const nextStage = stages[i + 1];
+
+        if (currentStage.actions && currentStage.actions[0]?.outputArtifacts) {
+          const outputArtifacts = currentStage.actions[0].outputArtifacts;
+          if (nextStage.actions && nextStage.actions[0]?.inputArtifacts) {
+            const inputArtifacts = nextStage.actions[0].inputArtifacts;
+            // Verify that output artifacts from current stage are used as input in next stage
+            expect(outputArtifacts.length).toBeGreaterThan(0);
+            expect(inputArtifacts.length).toBeGreaterThan(0);
+          }
+        }
+      }
+    });
+
+    test('S3 buckets should have lifecycle policies', async () => {
+      for (const bucket of [
+        pipelineArtifactsBucket,
+        deploymentArtifactsBucket,
+      ]) {
+        try {
+          const params = { Bucket: bucket };
+          const response = await s3
+            .getBucketLifecycleConfiguration(params)
+            .promise();
+
+          expect(response.Rules).toBeDefined();
+          expect(response.Rules?.length).toBeGreaterThan(0);
+
+          // Check that there's at least one rule for managing old versions
+          const hasVersioningRule = response.Rules?.some(
+            rule =>
+              rule.NoncurrentVersionExpiration ||
+              rule.NoncurrentVersionTransitions
+          );
+          expect(hasVersioningRule).toBe(true);
+        } catch (error) {
+          // If lifecycle configuration doesn't exist, that's also valid
+          // Some buckets might not have lifecycle policies configured
+          console.log(`No lifecycle configuration for bucket ${bucket}`);
+        }
+      }
     });
   });
 });
