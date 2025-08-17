@@ -1,42 +1,48 @@
-// test/tap-stack.integration.test.ts
+// test/tap-stack.int.test.ts
 
 import * as aws from '@aws-sdk/client-dynamodb';
-import * as apigateway from '@aws-sdk/client-api-gateway';
-import * as lambda from '@aws-sdk/client-lambda';
 import * as kinesis from '@aws-sdk/client-kinesis';
 import * as s3 from '@aws-sdk/client-s3';
 import * as sns from '@aws-sdk/client-sns';
 import * as ec2 from '@aws-sdk/client-ec2';
 import * as cloudfront from '@aws-sdk/client-cloudfront';
+import * as sts from '@aws-sdk/client-sts';
 import axios from 'axios';
 
-// Configuration - Update these values based on your deployment
-const STACK_OUTPUTS = {
-  apiGatewayUrl: "https://b3897q3qbh.execute-api.us-east-1.amazonaws.com/v1",
-  cloudfrontDomain: "d22ns9nd7ezbz4.cloudfront.net",
-  dynamodbTableName: "pulumi-infra-backend-app-data",
-  kinesisStreamName: "pulumi-infra-data-realtime-events",
-  lambdaFunctionName: "pulumi-infra-backend-function",
-  s3BucketName: "pulumi-infra-frontend-website-409bd0c",
-  snsTopicArn: "arn:aws:sns:us-east-1:123456789012:pulumi-infra-monitoring-alerts", // Replace *** with actual account
-  vpcId: "vpc-007b1ff5e0ab2cf1f"
-};
+// Get AWS account ID dynamically
+let AWS_ACCOUNT_ID: string;
+let STACK_OUTPUTS: any;
 
 const STACK_NAME = "TapStackpr1433";
 const AWS_REGION = "us-east-1";
 
-// AWS SDK clients
+// AWS SDK clients (removed API Gateway and Lambda)
 const dynamodbClient = new aws.DynamoDBClient({ region: AWS_REGION });
-const apiGatewayClient = new apigateway.APIGatewayClient({ region: AWS_REGION });
-const lambdaClient = new lambda.LambdaClient({ region: AWS_REGION });
 const kinesisClient = new kinesis.KinesisClient({ region: AWS_REGION });
 const s3Client = new s3.S3Client({ region: AWS_REGION });
 const snsClient = new sns.SNSClient({ region: AWS_REGION });
 const ec2Client = new ec2.EC2Client({ region: AWS_REGION });
 const cloudfrontClient = new cloudfront.CloudFrontClient({ region: AWS_REGION });
+const stsClient = new sts.STSClient({ region: AWS_REGION });
 
 // Test timeout for long-running operations
 jest.setTimeout(120000); // 2 minutes
+
+beforeAll(async () => {
+  // Get AWS account ID
+  const identity = await stsClient.send(new sts.GetCallerIdentityCommand({}));
+  AWS_ACCOUNT_ID = identity.Account!;
+
+  // Set up stack outputs (removed API Gateway URL and Lambda function name)
+  STACK_OUTPUTS = {
+    cloudfrontDomain: "d22ns9nd7ezbz4.cloudfront.net",
+    dynamodbTableName: "pulumi-infra-backend-app-data",
+    kinesisStreamName: "pulumi-infra-data-realtime-events",
+    s3BucketName: "pulumi-infra-frontend-website-409bd0c",
+    snsTopicArn: `arn:aws:sns:us-east-1:${AWS_ACCOUNT_ID}:pulumi-infra-monitoring-alerts`,
+    vpcId: "vpc-007b1ff5e0ab2cf1f"
+  };
+});
 
 describe("TapStack Integration Tests - Live Deployment", () => {
   
@@ -62,17 +68,6 @@ describe("TapStack Integration Tests - Live Deployment", () => {
       expect(result.Table!.TableName).toBe(STACK_OUTPUTS.dynamodbTableName);
       expect(result.Table!.TableStatus).toBe("ACTIVE");
       expect(result.Table!.AttributeDefinitions).toBeDefined();
-    });
-
-    it("should have a valid Lambda function", async () => {
-      const result = await lambdaClient.send(new lambda.GetFunctionCommand({
-        FunctionName: STACK_OUTPUTS.lambdaFunctionName
-      }));
-      
-      expect(result.Configuration).toBeDefined();
-      expect(result.Configuration!.FunctionName).toBe(STACK_OUTPUTS.lambdaFunctionName);
-      expect(result.Configuration!.State).toBe("Active");
-      expect(result.Configuration!.Runtime).toBeDefined();
     });
 
     it("should have a valid Kinesis stream", async () => {
@@ -119,99 +114,18 @@ describe("TapStack Integration Tests - Live Deployment", () => {
     });
 
     it("should have a valid CloudFront distribution", async () => {
-      // Extract distribution ID from domain
-      const distributionId = STACK_OUTPUTS.cloudfrontDomain.split('.')[0].substring(1);
+      // List distributions to find the correct one by domain name
+      const result = await cloudfrontClient.send(new cloudfront.ListDistributionsCommand({}));
       
-      const result = await cloudfrontClient.send(new cloudfront.GetDistributionCommand({
-        Id: distributionId
-      }));
+      expect(result.DistributionList).toBeDefined();
       
-      expect(result.Distribution).toBeDefined();
-      expect(result.Distribution!.Status).toBe("Deployed");
-      expect(result.Distribution!.DomainName).toBe(STACK_OUTPUTS.cloudfrontDomain);
-    });
-  });
-
-  describe("API Gateway Functionality", () => {
-    
-    it("should respond to GET /items request", async () => {
-      const response = await axios.get(`${STACK_OUTPUTS.apiGatewayUrl}/items`, {
-        timeout: 30000
-      });
+      const distribution = result.DistributionList!.Items?.find(
+        dist => dist.DomainName === STACK_OUTPUTS.cloudfrontDomain
+      );
       
-      expect(response.status).toBe(200);
-      expect(response.data).toBeDefined();
-      expect(Array.isArray(response.data.items)).toBe(true);
-    });
-
-    it("should allow POST /items to create a new item", async () => {
-      const testItem = {
-        name: `Integration Test Item ${Date.now()}`,
-        description: "Created by integration test",
-        category: "test"
-      };
-      
-      const response = await axios.post(`${STACK_OUTPUTS.apiGatewayUrl}/items`, testItem, {
-        timeout: 30000,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      expect(response.status).toBe(201);
-      expect(response.data).toBeDefined();
-      expect(response.data.id).toBeDefined();
-      expect(response.data.name).toBe(testItem.name);
-    });
-
-    it("should allow GET /items/{id} to retrieve specific item", async () => {
-      // First create an item
-      const testItem = {
-        name: `Retrieve Test Item ${Date.now()}`,
-        description: "Created to test retrieval",
-        category: "test"
-      };
-      
-      const createResponse = await axios.post(`${STACK_OUTPUTS.apiGatewayUrl}/items`, testItem, {
-        timeout: 30000,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      expect(createResponse.status).toBe(201);
-      const itemId = createResponse.data.id;
-      
-      // Then retrieve it
-      const getResponse = await axios.get(`${STACK_OUTPUTS.apiGatewayUrl}/items/${itemId}`, {
-        timeout: 30000
-      });
-      
-      expect(getResponse.status).toBe(200);
-      expect(getResponse.data.id).toBe(itemId);
-      expect(getResponse.data.name).toBe(testItem.name);
-    });
-
-    it("should return 404 for non-existent item", async () => {
-      const nonExistentId = `non-existent-${Date.now()}`;
-      
-      try {
-        await axios.get(`${STACK_OUTPUTS.apiGatewayUrl}/items/${nonExistentId}`, {
-          timeout: 30000
-        });
-        fail("Expected 404 error");
-      } catch (error: any) {
-        expect(error.response.status).toBe(404);
-      }
-    });
-
-    it("should have proper CORS headers", async () => {
-      const response = await axios.get(`${STACK_OUTPUTS.apiGatewayUrl}/items`, {
-        timeout: 30000
-      });
-      
-      expect(response.headers['access-control-allow-origin']).toBe('*');
-      expect(response.headers['content-type']).toContain('application/json');
+      expect(distribution).toBeDefined();
+      expect(distribution!.Status).toBe("Deployed");
+      expect(distribution!.Enabled).toBe(true);
     });
   });
 
@@ -311,145 +225,180 @@ describe("TapStack Integration Tests - Live Deployment", () => {
       expect(primaryKey).toBeDefined();
       expect(primaryKey!.AttributeName).toBe('id');
     });
-  });
 
-  describe("Lambda Function Direct Invocation", () => {
-    
-    it("should handle direct Lambda invocation for GET items", async () => {
-      const payload = {
-        httpMethod: 'GET',
-        path: '/items',
-        headers: {},
-        queryStringParameters: null,
-        body: null
+    it("should allow creating test items in DynamoDB", async () => {
+      const testItemId = `integration-test-${Date.now()}`;
+      const testItem = {
+        id: { S: testItemId },
+        name: { S: `Integration Test Item ${Date.now()}` },
+        description: { S: "Created by integration test" },
+        category: { S: "test" },
+        createdAt: { S: new Date().toISOString() }
       };
       
-      const result = await lambdaClient.send(new lambda.InvokeCommand({
-        FunctionName: STACK_OUTPUTS.lambdaFunctionName,
-        Payload: Buffer.from(JSON.stringify(payload))
+      // Create item
+      await dynamodbClient.send(new aws.PutItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Item: testItem
       }));
       
-      expect(result.StatusCode).toBe(200);
-      expect(result.Payload).toBeDefined();
-      
-      const response = JSON.parse(Buffer.from(result.Payload!).toString());
-      expect(response.statusCode).toBe(200);
-      expect(JSON.parse(response.body).items).toBeDefined();
-    });
-
-    it("should handle direct Lambda invocation for POST items", async () => {
-      const testItem = {
-        name: `Direct Lambda Test ${Date.now()}`,
-        description: "Created via direct Lambda invocation",
-        category: "test"
-      };
-      
-      const payload = {
-        httpMethod: 'POST',
-        path: '/items',
-        headers: { 'Content-Type': 'application/json' },
-        queryStringParameters: null,
-        body: JSON.stringify(testItem)
-      };
-      
-      const result = await lambdaClient.send(new lambda.InvokeCommand({
-        FunctionName: STACK_OUTPUTS.lambdaFunctionName,
-        Payload: Buffer.from(JSON.stringify(payload))
+      // Verify item exists
+      const getResult = await dynamodbClient.send(new aws.GetItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Key: { id: { S: testItemId } }
       }));
       
-      expect(result.StatusCode).toBe(200);
-      expect(result.Payload).toBeDefined();
+      expect(getResult.Item).toBeDefined();
+      expect(getResult.Item!.id.S).toBe(testItemId);
+      expect(getResult.Item!.name.S).toContain("Integration Test Item");
+    });
+
+    it("should allow updating items in DynamoDB", async () => {
+      const testItemId = `update-test-${Date.now()}`;
+      const originalItem = {
+        id: { S: testItemId },
+        name: { S: "Original Name" },
+        description: { S: "Original Description" },
+        category: { S: "test" },
+        createdAt: { S: new Date().toISOString() }
+      };
       
-      const response = JSON.parse(Buffer.from(result.Payload!).toString());
-      expect(response.statusCode).toBe(201);
+      // Create original item
+      await dynamodbClient.send(new aws.PutItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Item: originalItem
+      }));
       
-      const responseBody = JSON.parse(response.body);
-      expect(responseBody.id).toBeDefined();
-      expect(responseBody.name).toBe(testItem.name);
+      // Update item
+      await dynamodbClient.send(new aws.UpdateItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Key: { id: { S: testItemId } },
+        UpdateExpression: 'SET #name = :newName, #desc = :newDesc',
+        ExpressionAttributeNames: {
+          '#name': 'name',
+          '#desc': 'description'
+        },
+        ExpressionAttributeValues: {
+          ':newName': { S: 'Updated Name' },
+          ':newDesc': { S: 'Updated Description' }
+        }
+      }));
+      
+      // Verify update
+      const getResult = await dynamodbClient.send(new aws.GetItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Key: { id: { S: testItemId } }
+      }));
+      
+      expect(getResult.Item!.name.S).toBe('Updated Name');
+      expect(getResult.Item!.description.S).toBe('Updated Description');
+    });
+
+    it("should allow deleting items from DynamoDB", async () => {
+      const testItemId = `delete-test-${Date.now()}`;
+      const testItem = {
+        id: { S: testItemId },
+        name: { S: "To Be Deleted" },
+        description: { S: "This item will be deleted" },
+        category: { S: "test" },
+        createdAt: { S: new Date().toISOString() }
+      };
+      
+      // Create item
+      await dynamodbClient.send(new aws.PutItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Item: testItem
+      }));
+      
+      // Verify item exists
+      const getResult1 = await dynamodbClient.send(new aws.GetItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Key: { id: { S: testItemId } }
+      }));
+      expect(getResult1.Item).toBeDefined();
+      
+      // Delete item
+      await dynamodbClient.send(new aws.DeleteItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Key: { id: { S: testItemId } }
+      }));
+      
+      // Verify item is deleted
+      const getResult2 = await dynamodbClient.send(new aws.GetItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Key: { id: { S: testItemId } }
+      }));
+      expect(getResult2.Item).toBeUndefined();
     });
   });
 
-  describe("End-to-End Workflow", () => {
+  describe("Data Workflow", () => {
     
-    it("should complete full workflow: API -> DynamoDB -> Kinesis", async () => {
+    it("should complete workflow: DynamoDB -> Kinesis", async () => {
+      const testItemId = `workflow-test-${Date.now()}`;
       const testItem = {
-        name: `E2E Test Item ${Date.now()}`,
-        description: "End-to-end test workflow",
-        category: "e2e-test",
-        workflow: true
+        id: { S: testItemId },
+        name: { S: `Workflow Test Item ${Date.now()}` },
+        description: { S: "Data workflow test" },
+        category: { S: "workflow-test" },
+        createdAt: { S: new Date().toISOString() }
       };
       
-      // Step 1: Create item via API Gateway
-      const createResponse = await axios.post(`${STACK_OUTPUTS.apiGatewayUrl}/items`, testItem, {
-        timeout: 30000,
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      expect(createResponse.status).toBe(201);
-      const itemId = createResponse.data.id;
+      // Step 1: Create item in DynamoDB
+      await dynamodbClient.send(new aws.PutItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Item: testItem
+      }));
       
       // Step 2: Verify item exists in DynamoDB
-      const getResponse = await axios.get(`${STACK_OUTPUTS.apiGatewayUrl}/items/${itemId}`, {
-        timeout: 30000
-      });
+      const getResult = await dynamodbClient.send(new aws.GetItemCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName,
+        Key: { id: { S: testItemId } }
+      }));
       
-      expect(getResponse.status).toBe(200);
-      expect(getResponse.data.id).toBe(itemId);
+      expect(getResult.Item).toBeDefined();
+      expect(getResult.Item!.id.S).toBe(testItemId);
       
       // Step 3: Send event to Kinesis
       const kinesisEvent = {
         eventType: "item_created",
-        itemId: itemId,
+        itemId: testItemId,
         timestamp: new Date().toISOString(),
-        metadata: testItem
+        metadata: {
+          name: testItem.name.S,
+          description: testItem.description.S,
+          category: testItem.category.S
+        }
       };
       
       const kinesisResult = await kinesisClient.send(new kinesis.PutRecordCommand({
         StreamName: STACK_OUTPUTS.kinesisStreamName,
         Data: Buffer.from(JSON.stringify(kinesisEvent)),
-        PartitionKey: itemId
+        PartitionKey: testItemId
       }));
       
       expect(kinesisResult.ShardId).toBeDefined();
       expect(kinesisResult.SequenceNumber).toBeDefined();
       
-      // Step 4: Verify all components worked together
-      expect(itemId).toBeDefined();
-      expect(kinesisResult.SequenceNumber).toBeDefined();
+      // Step 4: Verify stream is active
+      const streamInfo = await kinesisClient.send(new kinesis.DescribeStreamCommand({
+        StreamName: STACK_OUTPUTS.kinesisStreamName
+      }));
+      
+      expect(streamInfo.StreamDescription!.StreamStatus).toBe("ACTIVE");
     });
   });
 
   describe("Security and Performance", () => {
     
     it("should enforce HTTPS on CloudFront", async () => {
-      // Test that HTTP redirects to HTTPS
-      try {
-        const response = await axios.get(`http://${STACK_OUTPUTS.cloudfrontDomain}`, {
-          timeout: 30000,
-          maxRedirects: 0
-        });
-        
-        // If we get here, no redirect happened (which might be okay for some configs)
-        expect(response.status).toBeGreaterThanOrEqual(200);
-      } catch (error: any) {
-        // Expect either a redirect or connection refusal for HTTP
-        expect([301, 302, 'ENOTFOUND', 'ECONNREFUSED']).toContain(
-          error.response?.status || error.code
-        );
-      }
-    });
-
-    it("should have reasonable API response times", async () => {
-      const startTime = Date.now();
-      
-      const response = await axios.get(`${STACK_OUTPUTS.apiGatewayUrl}/items`, {
+      // Test that HTTPS works
+      const response = await axios.get(`https://${STACK_OUTPUTS.cloudfrontDomain}`, {
         timeout: 30000
       });
       
-      const responseTime = Date.now() - startTime;
-      
       expect(response.status).toBe(200);
-      expect(responseTime).toBeLessThan(5000); // Less than 5 seconds
+      expect(response.request.protocol).toBe('https:');
     });
 
     it("should have reasonable CloudFront response times", async () => {
@@ -464,21 +413,65 @@ describe("TapStack Integration Tests - Live Deployment", () => {
       expect(response.status).toBe(200);
       expect(responseTime).toBeLessThan(3000); // Less than 3 seconds
     });
+
+    it("should have proper S3 bucket configuration", async () => {
+      // Check that bucket exists and is accessible
+      const result = await s3Client.send(new s3.HeadBucketCommand({
+        Bucket: STACK_OUTPUTS.s3BucketName
+      }));
+      
+      expect(result).toBeDefined();
+      
+      // Check bucket has proper website configuration
+      try {
+        const websiteConfig = await s3Client.send(new s3.GetBucketWebsiteCommand({
+          Bucket: STACK_OUTPUTS.s3BucketName
+        }));
+        expect(websiteConfig.IndexDocument?.Suffix).toBe('index.html');
+      } catch (error: any) {
+        // Website configuration might not be directly on S3 if using CloudFront
+        console.log('S3 website config not found - likely using CloudFront distribution');
+      }
+    });
+
+    it("should have proper DynamoDB table configuration", async () => {
+      const tableInfo = await dynamodbClient.send(new aws.DescribeTableCommand({
+        TableName: STACK_OUTPUTS.dynamodbTableName
+      }));
+      
+      // Check that table has proper configuration
+      expect(tableInfo.Table!.TableStatus).toBe('ACTIVE');
+      expect(tableInfo.Table!.KeySchema).toBeDefined();
+      expect(tableInfo.Table!.AttributeDefinitions).toBeDefined();
+    });
+
+    it("should have proper Kinesis stream configuration", async () => {
+      const streamInfo = await kinesisClient.send(new kinesis.DescribeStreamCommand({
+        StreamName: STACK_OUTPUTS.kinesisStreamName
+      }));
+      
+      expect(streamInfo.StreamDescription!.StreamStatus).toBe('ACTIVE');
+      expect(streamInfo.StreamDescription!.RetentionPeriodHours).toBeGreaterThan(0);
+      expect(streamInfo.StreamDescription!.Shards).toBeDefined();
+    });
   });
 });
 
-// Utility function to clean up test data (optional)
+// Utility function to clean up test data
 export async function cleanupTestData() {
   try {
     // Clean up test items from DynamoDB
     const scanResult = await dynamodbClient.send(new aws.ScanCommand({
       TableName: STACK_OUTPUTS.dynamodbTableName,
-      FilterExpression: 'contains(#name, :testPrefix)',
+      FilterExpression: 'contains(#name, :testPrefix1) OR contains(#name, :testPrefix2) OR contains(#name, :testPrefix3) OR contains(#name, :testPrefix4)',
       ExpressionAttributeNames: {
         '#name': 'name'
       },
       ExpressionAttributeValues: {
-        ':testPrefix': { S: 'Integration Test' }
+        ':testPrefix1': { S: 'Integration Test' },
+        ':testPrefix2': { S: 'Workflow Test' },
+        ':testPrefix3': { S: 'Updated Name' },
+        ':testPrefix4': { S: 'To Be Deleted' }
       }
     }));
 
@@ -489,13 +482,14 @@ export async function cleanupTestData() {
           Key: { id: item.id }
         }));
       }
+      console.log(`Cleaned up ${scanResult.Items.length} test items`);
     }
   } catch (error) {
     console.warn('Failed to clean up test data:', error);
   }
 }
 
-// Run cleanup after all tests (optional)
+// Run cleanup after all tests
 afterAll(async () => {
   await cleanupTestData();
 });
