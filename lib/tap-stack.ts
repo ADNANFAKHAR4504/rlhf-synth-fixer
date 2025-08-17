@@ -80,7 +80,8 @@ export class TapStack extends cdk.Stack {
     const configConstruct = new ConfigConstruct(
       this,
       'ConfigConstruct',
-      kmsConstruct.cloudTrailKey
+      kmsConstruct.cloudTrailKey,
+      false // Disable delivery channel by default
     );
 
     // Create WAF for web application protection

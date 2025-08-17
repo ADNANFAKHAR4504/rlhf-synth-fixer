@@ -14,7 +14,7 @@ export class ConfigConstruct extends Construct {
   public readonly configBucket: s3.Bucket;
   public readonly configRole: iam.Role;
 
-  constructor(scope: Construct, id: string, encryptionKey: kms.Key) {
+  constructor(scope: Construct, id: string, encryptionKey: kms.Key, enableDeliveryChannel: boolean = false) {
     super(scope, id);
 
     // S3 bucket for AWS Config logs
@@ -81,21 +81,7 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    // Delivery Channel - must be created before Configuration Recorder
-    const deliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      `${SecurityConfig.RESOURCE_PREFIX}-DeliveryChannel`,
-      {
-        name: 'default',
-        s3BucketName: this.configBucket.bucketName,
-        s3KeyPrefix: 'config-logs', // Removed trailing slash as AWS Config doesn't allow it
-        configSnapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
-      }
-    );
-
-    // Configuration Recorder - depends on delivery channel
+    // Configuration Recorder
     const configRecorder = new config.CfnConfigurationRecorder(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-ConfigRecorder`,
@@ -109,10 +95,26 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    // Ensure configuration recorder depends on delivery channel
-    configRecorder.addDependency(deliveryChannel);
+    // Optional Delivery Channel - only create if enabled
+    if (enableDeliveryChannel) {
+      const deliveryChannel = new config.CfnDeliveryChannel(
+        this,
+        `${SecurityConfig.RESOURCE_PREFIX}-DeliveryChannel`,
+        {
+          name: 'default',
+          s3BucketName: this.configBucket.bucketName,
+          s3KeyPrefix: 'config-logs',
+          configSnapshotDeliveryProperties: {
+            deliveryFrequency: 'TwentyFour_Hours',
+          },
+        }
+      );
 
-    // Security-related Config rules - create after recorder and delivery channel
+      // Ensure configuration recorder depends on delivery channel when enabled
+      configRecorder.addDependency(deliveryChannel);
+    }
+
+    // Security-related Config rules - create after recorder
     const s3BucketPublicReadProhibited = new config.ManagedRule(
       this,
       `${SecurityConfig.RESOURCE_PREFIX}-S3BucketPublicReadProhibited`,
@@ -179,26 +181,13 @@ export class ConfigConstruct extends Construct {
       }
     );
 
-    // Set up dependencies - rules depend on recorder and delivery channel
+    // Set up dependencies - rules depend on recorder
     s3BucketPublicReadProhibited.node.addDependency(configRecorder);
-    s3BucketPublicReadProhibited.node.addDependency(deliveryChannel);
-
     s3BucketPublicWriteProhibited.node.addDependency(configRecorder);
-    s3BucketPublicWriteProhibited.node.addDependency(deliveryChannel);
-
     rdsStorageEncrypted.node.addDependency(configRecorder);
-    rdsStorageEncrypted.node.addDependency(deliveryChannel);
-
     iamPasswordPolicy.node.addDependency(configRecorder);
-    iamPasswordPolicy.node.addDependency(deliveryChannel);
-
     rootAccountMFAEnabled.node.addDependency(configRecorder);
-    rootAccountMFAEnabled.node.addDependency(deliveryChannel);
-
     cloudTrailEnabled.node.addDependency(configRecorder);
-    cloudTrailEnabled.node.addDependency(deliveryChannel);
-
     vpcDefaultSecurityGroupClosed.node.addDependency(configRecorder);
-    vpcDefaultSecurityGroupClosed.node.addDependency(deliveryChannel);
   }
 }
