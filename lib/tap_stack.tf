@@ -565,11 +565,32 @@ resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs[0].id
 
   
-  bucket = aws_s3_bucket.app_data.id
+    policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs[0].arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs[0].arn
+      }
+    ]
+  })
+}
 
-  
-
-resource "aws_security_group" "alb" {
+resource "aws_security_group" "alb" {" {
   name        = "${local.name_prefix}-alb-sg"
   description = "Security group for Application Load Balancer - ${local.name_prefix}"
   vpc_id      = local.vpc_id
