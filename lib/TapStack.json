@@ -82,10 +82,16 @@
     "Mappings": {
         "RegionMap": {
             "us-east-1": {
-                "AMI": "ami-0c02fb55956c7d316"
+                "AMI": "ami-0c55b159cbfafe1d0"
             },
             "us-west-2": {
-                "AMI": "ami-0841edc20334f9287"
+                "AMI": "ami-0d70546e43a941d70"
+            },
+            "us-west-1": {
+                "AMI": "ami-0827b3b7daf20c616"
+            },
+            "eu-west-1": {
+                "AMI": "ami-0d71ea30463e0ff8d"
             }
         }
     },
@@ -555,6 +561,7 @@
                     "Ref": "CloudTrailBucket"
                 },
                 "PolicyDocument": {
+                    "Version": "2012-10-17",
                     "Statement": [
                         {
                             "Sid": "AWSCloudTrailAclCheck",
@@ -630,6 +637,7 @@
                     "Fn::Sub": "${ProjectName}-${Environment}-ec2-role"
                 },
                 "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
                     "Statement": [
                         {
                             "Effect": "Allow",
@@ -644,6 +652,7 @@
                     {
                         "PolicyName": "EC2BasicPolicy",
                         "PolicyDocument": {
+                            "Version": "2012-10-17",
                             "Statement": [
                                 {
                                     "Effect": "Allow",
@@ -689,6 +698,7 @@
                 },
                 "Description": "Enforces MFA for all operations",
                 "PolicyDocument": {
+                    "Version": "2012-10-17",
                     "Statement": [
                         {
                             "Sid": "AllowViewAccountInfo",
@@ -1193,6 +1203,7 @@
                     "Fn::Sub": "${ProjectName}-${Environment}-lambda-role"
                 },
                 "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
                     "Statement": [
                         {
                             "Effect": "Allow",
@@ -1214,7 +1225,7 @@
                 "FunctionName": {
                     "Fn::Sub": "${ProjectName}-${Environment}-sample-function"
                 },
-                "Runtime": "python3.9",
+                "Runtime": "python3.11",
                 "Handler": "index.lambda_handler",
                 "Role": {
                     "Fn::GetAtt": [
@@ -1389,7 +1400,7 @@
         },
         "SecurityFeatures": {
             "Description": "Security features implemented",
-            "Value": "Encryption: S3 (AES256), EBS (encrypted), RDS (encrypted)\nNetwork: VPC with public/private subnets, NAT Gateway, Security Groups\nMonitoring: CloudTrail, GuardDuty, CloudWatch Alarms\nProtection: WAF, MFA enforcement, Deletion protection\nCompliance: All 15 constraints\n"
+            "Value": "Encryption: S3 (AES256), EBS (encrypted), RDS (encrypted)\nNetwork: VPC with public/private subnets, NAT Gateway, Security Groups\nMonitoring: CloudTrail, GuardDuty, CloudWatch Alarms\nProtection: WAF, MFA enforcement, Deletion protection\nCompliance: All 15 constraints"
         }
     }
 }

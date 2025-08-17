@@ -62,9 +62,13 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
+      AMI: ami-0c55b159cbfafe1d0  # Updated Amazon Linux 2023 AMI
     us-west-2:
-      AMI: ami-0841edc20334f9287  # Amazon Linux 2 AMI
+      AMI: ami-0d70546e43a941d70  # Updated Amazon Linux 2023 AMI
+    us-west-1:
+      AMI: ami-0827b3b7daf20c616  # Amazon Linux 2023 AMI
+    eu-west-1:
+      AMI: ami-0d71ea30463e0ff8d  # Amazon Linux 2023 AMI
 
 Resources:
   VPC:
@@ -308,6 +312,7 @@ Resources:
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
@@ -350,6 +355,7 @@ Resources:
     Properties:
       RoleName: !Sub '${ProjectName}-${Environment}-ec2-role'
       AssumeRolePolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -358,6 +364,7 @@ Resources:
       Policies:
         - PolicyName: EC2BasicPolicy
           PolicyDocument:
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -384,6 +391,7 @@ Resources:
       ManagedPolicyName: !Sub '${ProjectName}-${Environment}-mfa-enforcement'
       Description: Enforces MFA for all operations
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: AllowViewAccountInfo
             Effect: Allow
@@ -660,6 +668,7 @@ Resources:
     Properties:
       RoleName: !Sub '${ProjectName}-${Environment}-lambda-role'
       AssumeRolePolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -672,7 +681,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-${Environment}-sample-function'
-      Runtime: python3.9
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
@@ -776,4 +785,3 @@ Outputs:
       Monitoring: CloudTrail, GuardDuty, CloudWatch Alarms
       Protection: WAF, MFA enforcement, Deletion protection
       Compliance: All 15 constraints
-      
