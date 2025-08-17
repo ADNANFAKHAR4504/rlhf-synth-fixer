@@ -176,7 +176,7 @@ locals {
 
 # Use current timestamp for naming based on provided time
 
-timestamp = "161850" # Based on 18:50 UTC
+timestamp = "015246" # Based on 01:52:46 UTC
 name_prefix = "${var.project_name}-${var.environment}-${local.timestamp}-${random_string.suffix.result}"
 
 common_tags = {
@@ -762,6 +762,12 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 name = "${local.name_prefix}-ec2-profile"
 role = aws_iam_role.ec2_role.name
 
+tags = merge(local.common_tags, {
+Name = "${local.name_prefix}-ec2-profile"
+Type = "iam"
+})
+}
+
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
 name = "${local.name_prefix}-cloudwatch-logs-policy"
   description = "Policy for services to write to CloudWatch Logs - ${local.name_prefix}"
@@ -954,13 +960,6 @@ encrypted = true
 kms_key_id = aws_kms_key.ebs_key.arn
 }
 }
-
-# Enhanced user data script with better error handling and faster startup
-
-user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
-ec2_log_group_name = aws_cloudwatch_log_group.ec2_logs.name
-timestamp = local.timestamp
-}))
 
 depends_on = [aws_nat_gateway.main]
 
@@ -1254,7 +1253,7 @@ return {
 'body': json.dumps({
 'message': 'Hello from ${var.project_name} ${var.environment} Lambda - ${local.timestamp}!',
             'timestamp': '${local.timestamp}',
-'environment': '${local.environment}',
+'environment': '${var.environment}',
 'event': event
 })
 }
