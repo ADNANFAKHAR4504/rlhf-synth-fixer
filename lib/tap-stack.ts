@@ -104,25 +104,25 @@ export class TapStack extends TerraformStack {
 
     // Create S3 bucket for application data
     const appDataBucket = new S3Module(this, 'app-data-bucket', {
-      bucketName: `${projectName}-app-data-${Date.now()}`,
+      bucketName: `${projectName}-app-data-${environmentSuffix}`,
       enableVersioning: true,
     });
 
     // Create S3 bucket for CloudTrail logs
     const cloudtrailBucket = new S3Module(this, 'cloudtrail-bucket', {
-      bucketName: `${projectName}-cloudtrail-logs-${Date.now()}`,
+      bucketName: `${projectName}-cloudtrail-logs-${environmentSuffix}`,
       enableVersioning: true,
     });
 
     // Create S3 bucket for access logs
     const accessLogsBucket = new S3Module(this, 'access-logs-bucket', {
-      bucketName: `${projectName}-access-logs-${Date.now()}`,
+      bucketName: `${projectName}-access-logs-${environmentSuffix}`,
       enableVersioning: false,
     });
 
     // Configure logging for app data bucket
     new S3Module(this, 'app-data-bucket-with-logging', {
-      bucketName: `${projectName}-app-data-logged-${Date.now()}`,
+      bucketName: `${projectName}-app-data-logged-${environmentSuffix}`,
       enableVersioning: true,
       enableLogging: true,
       loggingTargetBucket: accessLogsBucket.bucket.id,
