@@ -411,6 +411,7 @@ export class Ec2Module extends Construct {
  */
 export interface S3ModuleConfig {
   bucketNames: string[];
+  forceDestroy?: boolean;
   tags: { [key: string]: string };
 }
 
@@ -449,6 +450,7 @@ export class S3Module extends Construct {
     // Create S3 bucket
     const bucket = new S3Bucket(this, `bucket-${name}`, {
       bucket: `corp-${name}-${Math.random().toString(36).substr(2, 8)}`, // Ensure uniqueness
+      forceDestroy: true, // Allow deletion for testing (remove in production)
       tags: tags,
     });
 
