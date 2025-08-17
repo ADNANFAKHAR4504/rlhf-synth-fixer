@@ -83,6 +83,7 @@ locals {
 
   dr_public_cidrs  = [for i in range(2) : cidrsubnet(var.dr_vpc_cidr, 8, i)]
   dr_private_cidrs = [for i in range(2) : cidrsubnet(var.dr_vpc_cidr, 8, i + 10)]
+  dr_azs           = slice(data.aws_availability_zones.dr.names, 0, 2)
 
   common_tags = merge(
     var.tags,
@@ -292,7 +293,7 @@ data "aws_ssm_parameter" "al2023_ami" {
 
 module "asg" {
   source  = "terraform-aws-modules/autoscaling/aws"
-  version = "~> 9.7"
+  version = "~> 9.0"
 
   name                      = "${var.name_prefix}-asg"
   vpc_zone_identifier       = module.vpc.private_subnets
@@ -716,8 +717,6 @@ data "aws_availability_zones" "dr" {
   state    = "available"
 }
 
-locals { dr_azs = slice(data.aws_availability_zones.dr.names, 0, 2) }
-
 module "vpc_dr" {
   providers = { aws = aws.secondary }
   source    = "terraform-aws-modules/vpc/aws"
@@ -837,7 +836,7 @@ data "aws_ssm_parameter" "al2023_ami_dr" {
 module "asg_dr" {
   providers = { aws = aws.secondary }
   source    = "terraform-aws-modules/autoscaling/aws"
-  version   = "~> 9.7"
+  version   = "~> 9.0"
 
   name                = "${var.name_prefix}-asg-dr"
   vpc_zone_identifier = module.vpc_dr.private_subnets
