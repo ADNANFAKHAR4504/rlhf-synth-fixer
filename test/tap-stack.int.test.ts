@@ -41,11 +41,16 @@ async function validateS3Bucket(bucketName: string) {
   const encryption = await s3
     .getBucketEncryption({ Bucket: bucketName })
     .promise();
-  if (!encryption.ServerSideEncryptionConfiguration)
-    throw new Error('Bucket encryption not configured');
+  if (
+    !encryption.ServerSideEncryptionConfiguration ||
+    !encryption.ServerSideEncryptionConfiguration.Rules ||
+    encryption.ServerSideEncryptionConfiguration.Rules.length === 0
+  ) {
+    throw new Error('Bucket encryption rules not configured');
+  }
   expect(
     encryption.ServerSideEncryptionConfiguration.Rules[0]
-      ?.ApplyServerSideEncryptionByDefault.SSEAlgorithm
+      .ApplyServerSideEncryptionByDefault.SSEAlgorithm
   ).toBe('aws:kms');
 }
 
