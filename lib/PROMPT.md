@@ -1,5 +1,5 @@
 ```
-You are an expert Prompt Engineer, Your task is to generate IAC code using CLOUDFORMATION YAML. Please make sure that the provided data should remain intact and it should not change in anyway, use the below data to generate the IAC:
+Your task is to generate IAC code using CLOUDFORMATION YAML. Please make sure that the provided data should remain intact and it should not change in anyway, use the below data to generate the IAC:
 
 Contraints:
 
