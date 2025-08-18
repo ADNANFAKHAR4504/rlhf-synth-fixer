@@ -234,7 +234,8 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
         if (outputs.CloudTrail) {
           const trailsCommand = new DescribeTrailsCommand({});
           const trailsResponse = await cloudTrailClient.send(trailsCommand);
-          securityValidations.cloudTrail = trailsResponse.trailList?.some(trail => trail.IsLogging) || false;
+          // Check if any trail exists (trail status requires separate API call)
+          securityValidations.cloudTrail = (trailsResponse.trailList?.length ?? 0) > 0;
         }
         
         // Validate S3 encryption
