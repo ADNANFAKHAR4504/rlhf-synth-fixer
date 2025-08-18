@@ -930,7 +930,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-assets-${AWS::AccountId}-${Environment}"
+                    "Fn::Sub": "tapstack-assets-${AWS::AccountId}-${Environment}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -1414,7 +1414,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-cloudtrail-${AWS::AccountId}-${Environment}"
+                    "Fn::Sub": "tapstack-cloudtrail-${AWS::AccountId}-${Environment}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [

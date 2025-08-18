@@ -488,7 +488,7 @@ Resources:
   ApplicationS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-assets-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'tapstack-assets-${AWS::AccountId}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -743,7 +743,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'tapstack-cloudtrail-${AWS::AccountId}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

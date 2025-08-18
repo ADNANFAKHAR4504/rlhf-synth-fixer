@@ -311,7 +311,7 @@ describe('TapStack CloudFormation Template - Production AWS Infrastructure', () 
     test('S3 bucket globally unique naming', () => {
       const bucket = template.Resources.ApplicationS3Bucket;
       expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': '${AWS::StackName}-assets-${AWS::AccountId}-${Environment}'
+        'Fn::Sub': 'tapstack-assets-${AWS::AccountId}-${Environment}'
       });
     });
 
