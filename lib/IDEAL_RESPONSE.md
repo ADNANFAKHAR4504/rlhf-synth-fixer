@@ -110,7 +110,7 @@ variable "alarm_email" {
 variable "acm_certificate_arn" {
   description = "ACM certificate ARN for ALB HTTPS listener"
   type        = string
-  default     = "arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000"
+  default     = ""
 }
 
 variable "enable_config" {
@@ -659,7 +659,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = var.acm_certificate_arn
+  certificate_arn   = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
@@ -671,11 +671,20 @@ resource "aws_lb_listener" "http" {
   port              = 80
   protocol          = "HTTP"
   default_action {
-    type = "redirect"
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+    type = var.acm_certificate_arn != "" ? "redirect" : "forward"
+    dynamic "redirect" {
+      for_each = var.acm_certificate_arn != "" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+    dynamic "forward" {
+      for_each = var.acm_certificate_arn == "" ? [1] : []
+      content {
+        target_group_arn = aws_lb_target_group.main.arn
+      }
     }
   }
 }
@@ -768,9 +777,9 @@ data "aws_ami" "amazon_linux" {
 
 resource "aws_autoscaling_group" "main" {
   name_prefix         = "${local.name_prefix}-asg-"
-  min_size            = var.min_size
-  max_size            = var.max_size
-  desired_capacity    = var.desired_capacity
+  min_size            = 1
+  max_size            = max(1, var.max_size)
+  desired_capacity    = 1
   vpc_zone_identifier = aws_subnet.private[*].id
   health_check_type   = "EC2"
   target_group_arns   = [aws_lb_target_group.main.arn]
@@ -786,6 +795,7 @@ resource "aws_autoscaling_group" "main" {
     propagate_at_launch = true
   }
 
+  wait_for_capacity_timeout = "0"
   lifecycle { create_before_destroy = true }
 }
 
