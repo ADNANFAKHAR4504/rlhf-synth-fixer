@@ -338,7 +338,7 @@ describe('Terraform Unit Tests', () => {
     });
 
     test('pins Terraform and AWS provider versions', () => {
-      expect(providerContent).toMatch(/required_version\s*=\s*"~>\s*1\.4\.0"/);
+      expect(providerContent).toMatch(/required_version\s*=\s*">=\s*1\.4\.0"/);
       expect(providerContent).toMatch(/version\s*=\s*"~>\s*5\.0"/);
     });
   });

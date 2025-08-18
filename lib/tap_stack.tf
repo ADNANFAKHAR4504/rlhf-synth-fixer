@@ -28,7 +28,10 @@ variable "notification_email" {
     error_message = "Must be a valid email address."
   }
 }
-variable "allowed_ssh_cidrs" { type = list(string); default = [] }
+variable "allowed_ssh_cidrs" { 
+  type = list(string)
+  default = [] 
+}
 variable "instance_type" { 
   type = string 
   default = "t3.micro"
@@ -37,13 +40,23 @@ variable "instance_type" {
     error_message = "Instance type must be one of: t3.micro, t3.small, t3.medium, t3.large."
   }
 }
-variable "enable_vpc_flow_logs" { type = bool; default = true }
-variable "tags" { type = map(string); default = {} }
+variable "enable_vpc_flow_logs" { 
+  type = bool
+  default = true 
+}
+variable "tags" { 
+  type = map(string)
+  default = {} 
+}
 
 # Data Sources
-data "aws_availability_zones" "available" { state = "available" }
+data "aws_availability_zones" "available" { 
+  state = "available" 
+}
 data "aws_caller_identity" "current" {}
-data "aws_ssm_parameter" "al2023_ami" { name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64" }
+data "aws_ssm_parameter" "al2023_ami" { 
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64" 
+}
 
 # Locals
 locals {
@@ -119,14 +132,20 @@ resource "aws_nat_gateway" "main" {
 # Route Tables
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  route { cidr_block = "0.0.0.0/0"; gateway_id = aws_internet_gateway.main.id }
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
   tags = merge(local.common_tags, { Name = "${var.project_name}-public-rt" })
 }
 
 resource "aws_route_table" "private" {
   for_each = local.private_subnets
   vpc_id   = aws_vpc.main.id
-  route { cidr_block = "0.0.0.0/0"; nat_gateway_id = aws_nat_gateway.main[each.key].id }
+  route {
+    cidr_block = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[each.key].id
+  }
   tags = merge(local.common_tags, { Name = "${var.project_name}-private-rt-${each.key}" })
 }
 
@@ -147,7 +166,9 @@ resource "aws_s3_bucket" "logging" {
   bucket        = "${var.project_name}-${var.environment_name}-logging-${random_id.bucket_suffix.hex}"
   force_destroy = false
   tags          = local.common_tags
-  lifecycle { prevent_destroy = true }
+  lifecycle { 
+    prevent_destroy = true 
+  }
 }
 
 resource "aws_s3_bucket" "data" {
@@ -156,26 +177,40 @@ resource "aws_s3_bucket" "data" {
   tags          = local.common_tags
 }
 
-resource "random_id" "bucket_suffix" { byte_length = 4 }
+resource "random_id" "bucket_suffix" { 
+  byte_length = 4 
+}
 
 resource "aws_s3_bucket_versioning" "logging" {
   bucket = aws_s3_bucket.logging.id
-  versioning_configuration { status = "Enabled" }
+  versioning_configuration { 
+    status = "Enabled" 
+  }
 }
 
 resource "aws_s3_bucket_versioning" "data" {
   bucket = aws_s3_bucket.data.id
-  versioning_configuration { status = "Enabled" }
+  versioning_configuration { 
+    status = "Enabled" 
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "logging" {
   bucket = aws_s3_bucket.logging.id
-  rule { apply_server_side_encryption_by_default { sse_algorithm = "AES256" } }
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
   bucket = aws_s3_bucket.data.id
-  rule { apply_server_side_encryption_by_default { sse_algorithm = "AES256" } }
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "logging" {
@@ -204,10 +239,17 @@ data "aws_iam_policy_document" "s3_tls_only" {
   statement {
     sid       = "DenyInsecureConnections"
     effect    = "Deny"
-    principals { type = "*"; identifiers = ["*"] }
+    principals {
+      type = "*"
+      identifiers = ["*"]
+    }
     actions   = ["s3:*"]
     resources = [aws_s3_bucket.data.arn, "${aws_s3_bucket.data.arn}/*"]
-    condition { test = "Bool"; variable = "aws:SecureTransport"; values = ["false"] }
+    condition {
+      test = "Bool"
+      variable = "aws:SecureTransport"
+      values = ["false"]
+    }
   }
 }
 
@@ -234,7 +276,10 @@ resource "aws_cloudwatch_log_group" "vpc_flow" {
 data "aws_iam_policy_document" "cloudtrail_assume" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service"; identifiers = ["cloudtrail.amazonaws.com"] }
+    principals {
+      type = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
   }
 }
 
@@ -248,7 +293,10 @@ data "aws_iam_policy_document" "cloudtrail_policy" {
 data "aws_iam_policy_document" "vpc_flow_assume" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service"; identifiers = ["vpc-flow-logs.amazonaws.com"] }
+    principals {
+      type = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
   }
 }
 
@@ -262,7 +310,10 @@ data "aws_iam_policy_document" "vpc_flow_policy" {
 data "aws_iam_policy_document" "ec2_assume" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service"; identifiers = ["ec2.amazonaws.com"] }
+    principals {
+      type = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
   }
 }
 
@@ -276,7 +327,10 @@ data "aws_iam_policy_document" "ec2_policy" {
 data "aws_iam_policy_document" "lambda_assume" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service"; identifiers = ["lambda.amazonaws.com"] }
+    principals {
+      type = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
   }
 }
 
@@ -367,16 +421,34 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
     sid       = "AWSCloudTrailAclCheck"
     actions   = ["s3:GetBucketAcl"]
     resources = [aws_s3_bucket.logging.arn]
-    principals { type = "Service"; identifiers = ["cloudtrail.amazonaws.com"] }
-    condition { test = "StringEquals"; variable = "AWS:SourceArn"; values = ["arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_name}-trail"] }
+    principals {
+      type = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    condition {
+      test = "StringEquals"
+      variable = "AWS:SourceArn"
+      values = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_name}-trail"]
+    }
   }
   statement {
     sid       = "AWSCloudTrailWrite"
     actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.logging.arn}/cloudtrail/*"]
-    principals { type = "Service"; identifiers = ["cloudtrail.amazonaws.com"] }
-    condition { test = "StringEquals"; variable = "s3:x-amz-acl"; values = ["bucket-owner-full-control"] }
-    condition { test = "StringEquals"; variable = "AWS:SourceArn"; values = ["arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_name}-trail"] }
+    principals {
+      type = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+    condition {
+      test = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values = ["bucket-owner-full-control"]
+    }
+    condition {
+      test = "StringEquals"
+      variable = "AWS:SourceArn"
+      values = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_name}-trail"]
+    }
   }
 }
 
@@ -427,7 +499,9 @@ resource "aws_launch_template" "main" {
   
   vpc_security_group_ids = [aws_security_group.ec2.id]
   
-  iam_instance_profile { name = aws_iam_instance_profile.ec2.name }
+  iam_instance_profile { 
+    name = aws_iam_instance_profile.ec2.name 
+  }
   
   user_data = base64encode(<<-EOF
     #!/bin/bash

@@ -43,6 +43,11 @@
 - notification_email (email format validation)
 - instance_type (restricted to allowed t3 types)
 
+### 8. Terraform Version Constraint Too Restrictive
+
+**Issue**: Terraform version constraint "~> 1.4.0" was too restrictive and didn't support newer versions like 1.12.2.
+**Fix**: Changed to ">= 1.4.0" to support all versions from 1.4.0 onwards while maintaining compatibility.
+
 ## Security Improvements Made
 
 1. **Enhanced Variable Validation**: Added strict validation rules to prevent misconfigurations
