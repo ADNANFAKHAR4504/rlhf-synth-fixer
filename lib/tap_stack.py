@@ -916,58 +916,58 @@ def create_eks_node_group(
               "Action": "sts:AssumeRole",
           }]
       }),
-              managed_policy_arns=[
-            "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-            "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
-            "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-            "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-            # Additional permissions for troubleshooting
-            "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
-            "arn:aws:iam::aws:policy/AmazonVPCFullAccess",
-        ],
-        tags={**tags, "Name": f"{name_prefix}-eks-node-role"},
-        opts=ResourceOptions(provider=provider)
-    )
-    
-    # Add comprehensive inline policy for EKS node operations
-    aws.iam.RolePolicy(
-        f"{name_prefix}-eks-node-comprehensive-policy",
-        role=node_role.id,
-        policy=json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "eks:*",
-                        "ec2:*",
-                        "ecr:*",
-                        "logs:*",
-                        "iam:*",
-                        "elasticloadbalancing:*",
-                        "autoscaling:*",
-                        "cloudwatch:*",
-                        "s3:*",
-                        "sns:*",
-                        "sqs:*",
-                        "kms:*",
-                        "tag:*"
-                    ],
-                    "Resource": "*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "sts:AssumeRole",
-                        "sts:AssumeRoleWithWebIdentity"
-                    ],
-                    "Resource": "*"
-                }
-            ]
-        }),
-        opts=ResourceOptions(provider=provider)
-    )
-    
+      managed_policy_arns=[
+          "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+          "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+          "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+          # Additional permissions for troubleshooting
+          "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
+          "arn:aws:iam::aws:policy/AmazonVPCFullAccess",
+      ],
+      tags={**tags, "Name": f"{name_prefix}-eks-node-role"},
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  # Add comprehensive inline policy for EKS node operations
+  aws.iam.RolePolicy(
+      f"{name_prefix}-eks-node-comprehensive-policy",
+      role=node_role.id,
+      policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [
+              {
+                  "Effect": "Allow",
+                  "Action": [
+                      "eks:*",
+                      "ec2:*",
+                      "ecr:*",
+                      "logs:*",
+                      "iam:*",
+                      "elasticloadbalancing:*",
+                      "autoscaling:*",
+                      "cloudwatch:*",
+                      "s3:*",
+                      "sns:*",
+                      "sqs:*",
+                      "kms:*",
+                      "tag:*"
+                  ],
+                  "Resource": "*"
+              },
+              {
+                  "Effect": "Allow",
+                  "Action": [
+                      "sts:AssumeRole",
+                      "sts:AssumeRoleWithWebIdentity"
+                  ],
+                  "Resource": "*"
+              }
+          ]
+      }),
+      opts=ResourceOptions(provider=provider)
+  )
+  
   # Create/Update aws-auth ConfigMap to allow nodes to join the cluster
   # This is CRITICAL for node registration
   account_id = aws.get_caller_identity().account_id
