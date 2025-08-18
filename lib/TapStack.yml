@@ -67,7 +67,6 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "webapp-logs-${AWS::AccountId}-${AWS::Region}"
-      # Removed legacy AccessControl property
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -89,10 +88,11 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Only need s3:PutObject for access logs, the principal is correct
+          # Changed Principal to use a regionalized service principal, which is more robust
+          # and avoids the "endpoint" validation error.
           - Effect: Allow
             Principal:
-              Service: 'elasticloadbalancing.amazonaws.com'
+              Service: !Sub 'elb.${AWS::Region}.amazonaws.com'
             Action: 's3:PutObject'
             Resource: !Sub '${WebAppLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
 
