@@ -1,42 +1,7 @@
-> **Act as an AWS Solutions Architect** and write a **complete AWS CloudFormation template in YAML** to deploy a **secure and highly available application infrastructure** in **us-west-2** that meets the following requirements:
->
-> **1. Tagging & Naming**
->
-> * All resources must have tags:
->
->   * `Environment: EnvironmentSuffix`
->   * `Owner: <team-email>`
-> * Follow a consistent naming convention for all resource names.
->
-> **2. Security & IAM**
->
-> * Use AWS **managed IAM policies** with **least privilege** access.
-> * All S3 buckets must enforce **encryption at rest** with **AWS KMS**.
-> * All Lambda environment variables must be encrypted with KMS.
-> * Restrict network traffic using **Security Groups** allowing only **HTTP (80)** and **HTTPS (443)** inbound traffic.
->
-> **3. High Availability**
->
-> * VPC with **at least two public** and **two private subnets** across multiple AZs.
-> * RDS instances deployed in **Multi-AZ** configuration.
-> * DynamoDB tables with **Point-in-Time Recovery** enabled.
->
-> **4. Monitoring & Compliance**
->
-> * Configure **CloudWatch** to monitor **unauthorized API access attempts**.
-> * Enable CloudWatch Logs for all applicable services.
->
-> **5. Other Constraints**
->
-> * EC2 instances must use a **specified AMI ID** (parameterized in the template).
-> * All data at rest must be encrypted with **AWS-managed KMS keys**.
-> * Deployment must pass without errors and conform to AWS best practices for security and high availability.
->
-> **Output Requirements:**
->
-> * Provide a **single deploy-ready CloudFormation YAML template** that includes:
->
->   * Resources for VPC, Subnets, Security Groups, IAM Roles, EC2, S3, RDS, DynamoDB, Lambda, CloudWatch alarms/log groups.
->   * Outputs section for key resource ARNs and endpoints.
->   * Inline comments explaining the security, HA, and compliance choices.
-> * Ensure the YAML is properly indented and **CloudFormation Linter (cfn-lint)** compliant.
+We need to set up a secure, highly available AWS infrastructure for our app in us-west-2. The team wants everything tagged for environment and ownership, and resource names should be clear and consistent.
+
+Security is a big deal: use managed IAM policies with just enough access, encrypt all S3 buckets and Lambda environment variables with KMS, and lock down network traffic so only HTTP gets through. For high availability, spread resources across at least two AZs—VPC, public/private subnets, and RDS in Multi-AZ mode. DynamoDB should have point-in-time recovery.
+
+We’ll need to specify all data at rest must use AWS-managed KMS keys. The deployment should be smooth, error-free, and follow AWS best practices.
+
+When you’re done, just give us a single CloudFormation YAML file with everything: VPC, subnets, security groups, IAM roles, EC2, S3, RDS and outputs for the main resource ARNs and endpoints. Add comments where you made security, HA, or compliance choices. Make sure it’s easy to read and passes

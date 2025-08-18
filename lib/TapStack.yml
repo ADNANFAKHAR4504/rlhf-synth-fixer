@@ -6,7 +6,6 @@ Parameters:
     Type: String
     Default: 'dev'
     Description: 'Environment suffix for resource naming and tagging'
-    AllowedValues: ['dev', 'staging', 'prod']
 
   TeamEmail:
     Type: String
@@ -97,6 +96,7 @@ Resources:
     Properties:
       VpcId: !Ref ApplicationVPC
       CidrBlock: '10.0.11.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub 'app-private-subnet-1-${EnvironmentSuffix}'
@@ -110,6 +110,7 @@ Resources:
     Properties:
       VpcId: !Ref ApplicationVPC
       CidrBlock: '10.0.12.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: !Sub 'app-private-subnet-2-${EnvironmentSuffix}'
@@ -229,7 +230,7 @@ Resources:
       DBInstanceIdentifier: !Sub "app-database-${EnvironmentSuffix}"
       DBInstanceClass: "db.t3.micro"
       Engine: "mysql"
-      EngineVersion: "8.0.36"
+      EngineVersion: "8.0.37"
       AllocatedStorage: 20
       StorageType: "gp2"
       StorageEncrypted: true
@@ -239,7 +240,11 @@ Resources:
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+      MasterUserPassword: !Join 
+        - ''
+        - - '{{resolve:secretsmanager:'
+          - !Ref DBSecret
+          - ':SecretString:password}}'
       BackupRetentionPeriod: 7
       Tags:
         - Key: Name
@@ -256,14 +261,46 @@ Outputs:
     Value: !Ref ApplicationVPC
     Export:
       Name: !Sub "${AWS::StackName}-VpcId"
+
   S3BucketName:
     Description: "Name of the S3 bucket"
     Value: !Ref ApplicationS3Bucket
     Export:
       Name: !Sub "${AWS::StackName}-S3BucketName"
+
   DatabaseEndpoint:
     Description: "RDS endpoint"
     Value: !GetAtt ApplicationDatabase.Endpoint.Address
     Export:
       Name: !Sub "${AWS::StackName}-DatabaseEndpoint"
+
+  PrivateSubnet1:
+    Description: "Private Subnet 1"
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet1"
+
+  PrivateSubnet2:
+    Description: "Private Subnet 2"
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet2"
+
+  WebServerSecurityGroup:
+    Description: "Web Server Security Group"
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-WebServerSecurityGroup"
+
+  DatabaseSecurityGroup:
+    Description: "Database Security Group"
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-DatabaseSecurityGroup"
+
+  DBSecret:
+    Description: "DB Secret Name"
+    Value: !Ref DBSecret
+    Export:
+      Name: !Sub "${AWS::StackName}-DBSecret"
 
