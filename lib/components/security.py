@@ -1,6 +1,7 @@
 import json
 
 import pulumi
+import pulumi_tls as tls
 import pulumi_aws as aws
 from pulumi import ComponentResource, ResourceOptions
 from ..config import InfrastructureConfig, ComponentDependencies
@@ -17,6 +18,9 @@ class SecurityComponent(ComponentResource):
     # Create security groups
     self._create_security_groups(name, config, dependencies.vpc_id)
 
+    # Create SSL certificate
+    self._create_ssl_certificate(name, config)
+
     # Create WAF
     self._create_waf(name, config)
 
@@ -27,6 +31,7 @@ class SecurityComponent(ComponentResource):
       "alb_sg_id": self.alb_sg.id,
       "ec2_sg_id": self.ec2_sg.id,
       "database_sg_id": self.database_sg.id,
+      "certificate_arn": self.certificate.arn,
       "waf_arn": self.waf.arn,
       "ec2_instance_profile_name": self.ec2_instance_profile.name
     })
@@ -178,6 +183,50 @@ class SecurityComponent(ComponentResource):
       tags={
         **config.tags,
         "Name": f"{config.app_name}-{config.environment}-db-sg"
+      },
+      opts=ResourceOptions(parent=self)
+    )
+
+  def _create_ssl_certificate(self, name: str, config: InfrastructureConfig):
+    # Generate private key
+    private_key = tls.PrivateKey("cert-key", algorithm="RSA", rsa_bits=2048)
+
+    # Self-signed certificate
+    self_signed_cert = tls.SelfSignedCert(
+      "self-signed-cert",
+      private_key_pem=private_key.private_key_pem,
+      subject={
+        "common_name": "turing.com",
+        "organization": "Turing",
+        "organizational_unit": "IT Department",
+        "street_addresses": ["123 Main St"],
+        "localities": ["San Francisco"],
+        "provinces": ["CA"],
+        "country": "US",
+      },
+      dns_names=[
+        "turing.com",
+        "*.turing.com",
+        "api.turing.com"
+      ],
+      ip_addresses=["127.0.0.1"],
+      validity_period_hours=8760,
+      is_ca_certificate=False,
+      allowed_uses=[
+        "key_encipherment",
+        "digital_signature",
+        "server_auth",
+      ]
+    )
+
+    # Create ACM certificate with email validation for CI environments
+    self.certificate = aws.acm.Certificate(
+      f"{name}-cert",
+      private_key=private_key.private_key_pem,
+      certificate_body=self_signed_cert.cert_pem,
+      tags={
+        **config.tags,
+        "Name": f"{config.app_name}-{config.environment}-cert"
       },
       opts=ResourceOptions(parent=self)
     )
