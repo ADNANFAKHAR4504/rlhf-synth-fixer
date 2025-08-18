@@ -94,8 +94,23 @@ describe('TapStack.yml (unit, no extra deps)', () => {
   });
 
   it('CloudTrail streams to CloudWatch Logs and is logging with validation', () => {
-    const t = /Trail:[\s\S]*?Type:\s*AWS::CloudTrail::Trail[\s\S]*?CloudWatchLogsLogGroupArn:[\s\S]*?CloudWatchLogsRoleArn:[\s\S]*?IsLogging:\s*true[\s\S]*?EnableLogFileValidation:\s*true/m;
-    expect(has(t)).toBe(true);
+    // Extract the entire Trail resource block (up to next top-level resource or EOF)
+    const blockMatch = raw.match(
+      /^\s{2}Trail:\s*[\s\S]*?(?=^\s{2}[A-Za-z][A-Za-z0-9]*:\s*$|\Z)/m
+    );
+    expect(blockMatch).toBeTruthy();
+    const block = blockMatch![0];
+
+    // Must be a CloudTrail resource
+    expect(/Type:\s*AWS::CloudTrail::Trail/.test(block)).toBe(true);
+
+    // Order-independent assertions inside the same resource block
+    expect(/IsLogging:\s*true/.test(block)).toBe(true);
+    expect(/EnableLogFileValidation:\s*true/.test(block)).toBe(true);
+    expect(/CloudWatchLogsLogGroupArn:/.test(block)).toBe(true);
+    expect(/CloudWatchLogsRoleArn:/.test(block)).toBe(true);
+    expect(/IncludeGlobalServiceEvents:\s*true/.test(block)).toBe(true);
+    expect(/IsMultiRegionTrail:\s*true/.test(block)).toBe(true);
   });
 
   it('Lambda role has least-priv SSM read to specific param via !If', () => {
