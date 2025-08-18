@@ -165,10 +165,12 @@ export class ComputeStack extends pulumi.ComponentResource {
     );
 
     // Key Pair for EC2 instances
-    const keyPair = new aws.ec2.KeyPair(
+    new aws.ec2.KeyPair(
       `tap-key-${region}-${environmentSuffix}`,
       {
         keyName: `tap-key-${region}-${environmentSuffix}`,
+        publicKey:
+          'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDGH1ZBhp4E5YxP9vYwQHC8+J8qB0wF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qG tap-demo-key',
         tags: {
           ...tags,
           Name: `tap-key-${region}-${environmentSuffix}`,
