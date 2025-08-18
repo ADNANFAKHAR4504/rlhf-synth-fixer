@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "prod- secure baseline in us-west-2: VPC, subnets, NAT, S3 (SSE), CloudTrail (90d), IAM (least privilege + MFA), KMS CMK, WAFv2 (regional), VPC Flow Logs, RDS (encrypted)."
+Description: "prod- secure baseline in us-west-2: VPC, subnets, S3 (SSE), IAM (least privilege + MFA), KMS CMK, WAFv2 (regional), VPC Flow Logs, RDS (encrypted)."
 
 Conditions:
   IsUsWest2: !Equals [ !Ref "AWS::Region", "us-west-2" ]
@@ -82,44 +82,6 @@ Resources:
       VpcId: !Ref ProdVPC
       InternetGatewayId: !Ref ProdInternetGateway
 
-  ProdElasticIPNatAZ1:
-    Type: AWS::EC2::EIP
-    Condition: IsUsWest2
-    Properties:
-      Domain: vpc
-      Tags:
-        - { Key: Name, Value: prod-nat-eip-az1 }
-        - { Key: Environment, Value: Production }
-
-  ProdElasticIPNatAZ2:
-    Type: AWS::EC2::EIP
-    Condition: IsUsWest2
-    Properties:
-      Domain: vpc
-      Tags:
-        - { Key: Name, Value: prod-nat-eip-az2 }
-        - { Key: Environment, Value: Production }
-
-  ProdNatGatewayAZ1:
-    Type: AWS::EC2::NatGateway
-    Condition: IsUsWest2
-    Properties:
-      AllocationId: !GetAtt ProdElasticIPNatAZ1.AllocationId
-      SubnetId: !Ref ProdSubnetPublicAZ1
-      Tags:
-        - { Key: Name, Value: prod-nat-az1 }
-        - { Key: Environment, Value: Production }
-
-  ProdNatGatewayAZ2:
-    Type: AWS::EC2::NatGateway
-    Condition: IsUsWest2
-    Properties:
-      AllocationId: !GetAtt ProdElasticIPNatAZ2.AllocationId
-      SubnetId: !Ref ProdSubnetPublicAZ2
-      Tags:
-        - { Key: Name, Value: prod-nat-az2 }
-        - { Key: Environment, Value: Production }
-
   ProdPublicRouteTable:
     Type: AWS::EC2::RouteTable
     Condition: IsUsWest2
@@ -155,22 +117,6 @@ Resources:
       Tags:
         - { Key: Name, Value: prod-private-rt-az2 }
         - { Key: Environment, Value: Production }
-
-  ProdPrivateRouteAZ1:
-    Type: AWS::EC2::Route
-    Condition: IsUsWest2
-    Properties:
-      RouteTableId: !Ref ProdPrivateRouteTableAZ1
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref ProdNatGatewayAZ1
-
-  ProdPrivateRouteAZ2:
-    Type: AWS::EC2::Route
-    Condition: IsUsWest2
-    Properties:
-      RouteTableId: !Ref ProdPrivateRouteTableAZ2
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref ProdNatGatewayAZ2
 
   PublicSubnetRouteAssocAZ1:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -256,7 +202,7 @@ Resources:
     Type: AWS::KMS::Key
     Condition: IsUsWest2
     Properties:
-      Description: "prod- CMK for CloudTrail and Flow Logs"
+      Description: "prod- CMK for logs"
       EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
@@ -267,10 +213,10 @@ Resources:
               AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
             Action: "kms:*"
             Resource: "*"
-          - Sid: AllowCloudTrailUse
+          - Sid: AllowCWLogsUse
             Effect: Allow
             Principal:
-              Service: cloudtrail.amazonaws.com
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -278,10 +224,10 @@ Resources:
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: "*"
-          - Sid: AllowCWLogsUse
+          - Sid: AllowCloudTrailServiceToEncryptIfUsed
             Effect: Allow
             Principal:
-              Service: !Sub logs.${AWS::Region}.amazonaws.com
+              Service: cloudtrail.amazonaws.com
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -301,19 +247,21 @@ Resources:
       TargetKeyId: !Ref ProdLogsKey
 
   #############################################
-  # CloudTrail -> S3 + CloudWatch Logs (90 days)
+  # CloudWatch (log groups for metrics & flow)
   #############################################
   ProdTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: IsUsWest2
     Properties:
-      LogGroupName: prod-cloudtrail-logs
       RetentionInDays: 90
       KmsKeyId: !GetAtt ProdLogsKey.Arn
       Tags:
         - { Key: Environment, Value: Production }
 
-  ProdTrailCWLogsRole:
+  #############################
+  # VPC Flow Logs -> CloudWatch Logs
+  #############################
+  ProdFlowLogsRole:
     Type: AWS::IAM::Role
     Condition: IsUsWest2
     Properties:
@@ -321,44 +269,48 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
+            Principal: { Service: vpc-flow-logs.amazonaws.com }
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: prod-cloudtrail-to-cwlogs
+        - PolicyName: prod-flowlogs-policy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource:
-                  - !GetAtt ProdTrailLogGroup.Arn
-                  - !Sub "${ProdTrailLogGroup.Arn}:*"
+                Resource: "*"
+      Tags:
+        - { Key: Name, Value: prod-flowlogs-role }
+        - { Key: Environment, Value: Production }
+
+  ProdFlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsUsWest2
+    Properties:
+      RetentionInDays: 90
+      KmsKeyId: !GetAtt ProdLogsKey.Arn
       Tags:
         - { Key: Environment, Value: Production }
 
-  ProdCloudTrail:
-    Type: AWS::CloudTrail::Trail
+  ProdVPCFlowLogs:
+    Type: AWS::EC2::FlowLog
     Condition: IsUsWest2
-    DependsOn:
-      - ProdLogsBucketPolicy
-      - ProdLogsKeyAlias
     Properties:
-      TrailName: prod-cloudtrail
-      S3BucketName: !Ref ProdLogsBucket
-      IsLogging: true
-      IsMultiRegionTrail: false
-      IncludeGlobalServiceEvents: true
-      EnableLogFileValidation: true
-      KMSKeyId: !GetAtt ProdLogsKey.Arn
-      CloudWatchLogsLogGroupArn: !GetAtt ProdTrailLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt ProdTrailCWLogsRole.Arn
+      ResourceId: !Ref ProdVPC
+      ResourceType: VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref ProdFlowLogsLogGroup
+      DeliverLogsPermissionArn: !GetAtt ProdFlowLogsRole.Arn
       Tags:
+        - { Key: Name, Value: prod-vpc-flowlogs }
         - { Key: Environment, Value: Production }
 
   #####################################################
-  # CloudWatch Alarms for root usage & login monitoring
+  # CloudWatch Metric Filters & Alarms (root/MFA logins)
   #####################################################
   ProdSecurityAlertsTopic:
     Type: AWS::SNS::Topic
@@ -460,8 +412,6 @@ Resources:
   ProdMFAGroup:
     Type: AWS::IAM::Group
     Condition: IsUsWest2
-    Properties:
-      GroupName: prod-iam-users-mfa-required
 
   DenyUnlessMFA:
     Type: AWS::IAM::Policy
@@ -492,7 +442,6 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
     Condition: IsUsWest2
     Properties:
-      ManagedPolicyName: prod-ec2-readonly
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -507,62 +456,9 @@ Resources:
     Type: AWS::IAM::User
     Condition: IsUsWest2
     Properties:
-      UserName: prod-user
       Groups: [ !Ref ProdMFAGroup ]
       ManagedPolicyArns: [ !Ref ProdReadOnlyPolicy ]
       Tags:
-        - { Key: Environment, Value: Production }
-
-  ############################################
-  # VPC Flow Logs -> CloudWatch Logs (KMS CMK)
-  ############################################
-  ProdFlowLogsRole:
-    Type: AWS::IAM::Role
-    Condition: IsUsWest2
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal: { Service: vpc-flow-logs.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: prod-flowlogs-policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: "*"
-      Tags:
-        - { Key: Name, Value: prod-flowlogs-role }
-        - { Key: Environment, Value: Production }
-
-  ProdFlowLogsLogGroup:
-    Type: AWS::Logs::LogGroup
-    Condition: IsUsWest2
-    Properties:
-      LogGroupName: prod-vpc-flowlogs
-      RetentionInDays: 90
-      KmsKeyId: !GetAtt ProdLogsKey.Arn
-      Tags:
-        - { Key: Environment, Value: Production }
-
-  ProdVPCFlowLogs:
-    Type: AWS::EC2::FlowLog
-    Condition: IsUsWest2
-    Properties:
-      ResourceId: !Ref ProdVPC
-      ResourceType: VPC
-      TrafficType: ALL
-      LogDestinationType: cloud-watch-logs
-      LogGroupName: !Ref ProdFlowLogsLogGroup
-      DeliverLogsPermissionArn: !GetAtt ProdFlowLogsRole.Arn
-      Tags:
-        - { Key: Name, Value: prod-vpc-flowlogs }
         - { Key: Environment, Value: Production }
 
   #############################
@@ -656,12 +552,8 @@ Outputs:
     Value: !Join [ ",", [ !Ref ProdSubnetPrivateAZ1, !Ref ProdSubnetPrivateAZ2 ] ]
   LogsBucketName:
     Condition: IsUsWest2
-    Description: prod- CloudTrail S3 bucket name (SSE enabled)
+    Description: prod- S3 bucket name (SSE enabled)
     Value: !Ref ProdLogsBucket
-  CloudTrailArn:
-    Condition: IsUsWest2
-    Description: prod- CloudTrail ARN
-    Value: !Ref ProdCloudTrail
   FlowLogsLogGroup:
     Condition: IsUsWest2
     Description: prod- VPC Flow Logs log group
