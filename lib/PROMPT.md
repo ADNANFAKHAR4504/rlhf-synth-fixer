@@ -8,7 +8,7 @@ Consistencies – Use consistent environment variable naming across environments
 
 Reusability – Implement Terraform modules to abstract and reuse common configurations, reducing redundancies.
 
-Shared Outputs – Implement output values that can be accessed and shared between environments to support deployment processes.
+Shared Output – Implement output values that can be accessed and shared between environments to support deployment processes.
 
 Multi-Region Deployment – Deploy to two AWS regions: us-west-2 and eu-west-1, using distinct Terraform workspaces for each environment.
 

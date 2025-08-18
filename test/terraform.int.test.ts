@@ -193,7 +193,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
     test('database port is configured', () => {
       expect(outputs.db_port).toBeDefined();
-      expect(outputs.db_port).toBe('3306');
+      expect(String(outputs.db_port)).toBe('3306');
     });
     test('database name is set', () => {
       expect(outputs.db_name).toBeDefined();
