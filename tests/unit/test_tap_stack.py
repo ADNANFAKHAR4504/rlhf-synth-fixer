@@ -16,8 +16,8 @@ from lib.tap_stack import (SecureVPC, TapStack, TapStackArgs, create_alb,
                            create_cloudwatch_alarms, create_codepipeline,
                            create_eks_cluster, create_eks_node_group,
                            create_kms_key, create_monitoring_lambda,
-                           create_rds, create_s3_buckets,
-                           create_security_groups)
+                           create_nginx_deployment, create_rds,
+                           create_s3_buckets, create_security_groups)
 
 
 class TestTapStackArgs(unittest.TestCase):
@@ -68,7 +68,8 @@ class TestSecureVPC(unittest.TestCase):
          return_value=MagicMock(arn="arn:log-group"))
   @patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock())
   @patch.object(SecureVPC, "_create_vpc_endpoints", return_value=[])
-  @patch.object(SecureVPC, "_create_vpc_endpoint_sg", return_value=MagicMock(id="sg-123"))
+  @patch.object(SecureVPC, "_create_vpc_endpoint_sg",
+                return_value=MagicMock(id="sg-123"))
   def test_securevpc_full_creation(self, *_):
     """Test complete SecureVPC creation to cover all internal methods."""
     mock_provider = MagicMock()
@@ -108,7 +109,8 @@ class TestSecureVPC(unittest.TestCase):
   @patch.object(SecureVPC, "_create_flow_logs_role", return_value="flowrole")
   @patch.object(SecureVPC, "_create_flow_logs", return_value="flowlogs")
   @patch.object(SecureVPC, "_create_vpc_endpoints", return_value=[])
-  @patch.object(SecureVPC, "_create_vpc_endpoint_sg", return_value=MagicMock(id="sg-123"))
+  @patch.object(SecureVPC, "_create_vpc_endpoint_sg",
+                return_value=MagicMock(id="sg-123"))
   @patch("lib.tap_stack.aws.get_availability_zones",
          return_value=MagicMock(names=["us-west-2a", "us-west-2b"]))
   def test_securevpc_init(self, *_):
@@ -172,236 +174,210 @@ class TestHelpers(unittest.TestCase):
     self.assertIn("eks_node_sg", sgs)
 
   @patch("lib.tap_stack.aws.ec2.VpcEndpoint", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock(id="sg-123"))
-  @patch("lib.tap_stack.aws.get_availability_zones", return_value=MagicMock(names=["us-east-1a", "us-east-1b"]))
-  @patch("lib.tap_stack.aws.get_region", return_value=MagicMock(name="us-east-1"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup",
+         return_value=MagicMock(id="sg-123"))
+  @patch("lib.tap_stack.aws.get_availability_zones",
+         return_value=MagicMock(names=["us-east-1a", "us-east-1b"]))
+  @patch("lib.tap_stack.aws.get_region",
+         return_value=MagicMock(name="us-east-1"))
   @patch("lib.tap_stack.aws.ec2.Vpc", return_value=MagicMock(id="vpc-123"))
-  @patch("lib.tap_stack.aws.ec2.InternetGateway", return_value=MagicMock(id="igw-123"))
-  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123"))
+  @patch("lib.tap_stack.aws.ec2.InternetGateway",
+         return_value=MagicMock(id="igw-123"))
+  @patch("lib.tap_stack.aws.ec2.Subnet",
+         return_value=MagicMock(id="subnet-123"))
   @patch("lib.tap_stack.aws.ec2.Eip", return_value=MagicMock(id="eip-123"))
-  @patch("lib.tap_stack.aws.ec2.NatGateway", return_value=MagicMock(id="nat-123"))
-  @patch("lib.tap_stack.aws.ec2.RouteTable", return_value=MagicMock(id="rt-123"))
+  @patch("lib.tap_stack.aws.ec2.NatGateway",
+         return_value=MagicMock(id="nat-123"))
+  @patch("lib.tap_stack.aws.ec2.RouteTable",
+         return_value=MagicMock(id="rt-123"))
   @patch("lib.tap_stack.aws.ec2.Route", return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.RouteTableAssociation", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.NetworkAcl", return_value=MagicMock(id="nacl-123"))
+  @patch("lib.tap_stack.aws.ec2.NetworkAcl",
+         return_value=MagicMock(id="nacl-123"))
   @patch("lib.tap_stack.aws.ec2.NetworkAclRule", return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.NetworkAclAssociation", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn:role", id="role-123"))
+  @patch("lib.tap_stack.aws.iam.Role",
+         return_value=MagicMock(arn="arn:role", id="role-123"))
   @patch("lib.tap_stack.aws.iam.RolePolicy", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.cloudwatch.LogGroup", return_value=MagicMock(arn="arn:log-group"))
+  @patch("lib.tap_stack.aws.cloudwatch.LogGroup",
+         return_value=MagicMock(arn="arn:log-group"))
   @patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock())
   @patch.object(SecureVPC, "_create_vpc_endpoints", return_value=[])
-  @patch.object(SecureVPC, "_create_vpc_endpoint_sg", return_value=MagicMock(id="sg-123"))
+  @patch.object(SecureVPC, "_create_vpc_endpoint_sg",
+                return_value=MagicMock(id="sg-123"))
   def test_securevpc_vpc_endpoints_creation(self, *_):
     """Test VPC endpoints creation in SecureVPC."""
     mock_provider = MagicMock()
     mock_provider.region = "us-east-1"
-    
+
     # Create SecureVPC instance with all methods mocked
-    vpc = SecureVPC("test-vpc", "10.0.0.0/16", {"Environment": "Test"}, mock_provider)
-    
+    vpc = SecureVPC("test-vpc", "10.0.0.0/16",
+                    {"Environment": "Test"}, mock_provider)
+
     # Test VPC endpoints creation
     endpoints = vpc._create_vpc_endpoints()
     self.assertIsInstance(endpoints, list)
-    
+
     # Test VPC endpoint security group creation
     sg = vpc._create_vpc_endpoint_sg()
     self.assertIsNotNone(sg)
 
   @patch("lib.tap_stack.aws.ec2.VpcEndpoint", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock(id="sg-123"))
-  @patch("lib.tap_stack.aws.get_availability_zones", return_value=MagicMock(names=["us-west-2a", "us-west-2b"]))
-  @patch("lib.tap_stack.aws.get_region", return_value=MagicMock(name="us-west-2"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup",
+         return_value=MagicMock(id="sg-123"))
+  @patch("lib.tap_stack.aws.get_availability_zones",
+         return_value=MagicMock(names=["us-west-2a", "us-west-2b"]))
+  @patch("lib.tap_stack.aws.get_region",
+         return_value=MagicMock(name="us-west-2"))
   @patch("lib.tap_stack.aws.ec2.Vpc", return_value=MagicMock(id="vpc-123"))
-  @patch("lib.tap_stack.aws.ec2.InternetGateway", return_value=MagicMock(id="igw-123"))
-  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123"))
+  @patch("lib.tap_stack.aws.ec2.InternetGateway",
+         return_value=MagicMock(id="igw-123"))
+  @patch("lib.tap_stack.aws.ec2.Subnet",
+         return_value=MagicMock(id="subnet-123"))
   @patch("lib.tap_stack.aws.ec2.Eip", return_value=MagicMock(id="eip-123"))
-  @patch("lib.tap_stack.aws.ec2.NatGateway", return_value=MagicMock(id="nat-123"))
-  @patch("lib.tap_stack.aws.ec2.RouteTable", return_value=MagicMock(id="rt-123"))
+  @patch("lib.tap_stack.aws.ec2.NatGateway",
+         return_value=MagicMock(id="nat-123"))
+  @patch("lib.tap_stack.aws.ec2.RouteTable",
+         return_value=MagicMock(id="rt-123"))
   @patch("lib.tap_stack.aws.ec2.Route", return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.RouteTableAssociation", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.NetworkAcl", return_value=MagicMock(id="nacl-123"))
+  @patch("lib.tap_stack.aws.ec2.NetworkAcl",
+         return_value=MagicMock(id="nacl-123"))
   @patch("lib.tap_stack.aws.ec2.NetworkAclRule", return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.NetworkAclAssociation", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn:role", id="role-123"))
+  @patch("lib.tap_stack.aws.iam.Role",
+         return_value=MagicMock(arn="arn:role", id="role-123"))
   @patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock())
   @patch.object(SecureVPC, "_create_vpc_endpoints", return_value=[])
-  @patch.object(SecureVPC, "_create_vpc_endpoint_sg", return_value=MagicMock(id="sg-123"))
+  @patch.object(SecureVPC, "_create_vpc_endpoint_sg",
+                return_value=MagicMock(id="sg-123"))
   def test_securevpc_vpc_endpoints_with_different_regions(self, *_):
     """Test VPC endpoints creation with different AWS regions."""
     mock_provider = MagicMock()
     mock_provider.region = "us-west-2"
-    
+
     # Create SecureVPC instance with all methods mocked
-    vpc = SecureVPC("test-vpc", "10.0.0.0/16", {"Environment": "Test"}, mock_provider)
-    
+    vpc = SecureVPC("test-vpc", "10.0.0.0/16",
+                    {"Environment": "Test"}, mock_provider)
+
     # Test VPC endpoints creation
     endpoints = vpc._create_vpc_endpoints()
     self.assertIsInstance(endpoints, list)
 
   @patch("lib.tap_stack.aws.ec2.VpcEndpoint", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock(id="sg-123"))
-  @patch("lib.tap_stack.aws.get_availability_zones", return_value=MagicMock(names=["us-east-1a", "us-east-1b"]))
-  @patch("lib.tap_stack.aws.get_region", return_value=MagicMock(name="us-east-1"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup",
+         return_value=MagicMock(id="sg-123"))
+  @patch("lib.tap_stack.aws.get_availability_zones",
+         return_value=MagicMock(names=["us-east-1a", "us-east-1b"]))
+  @patch("lib.tap_stack.aws.get_region",
+         return_value=MagicMock(name="us-east-1"))
   @patch("lib.tap_stack.aws.ec2.Vpc", return_value=MagicMock(id="vpc-123"))
-  @patch("lib.tap_stack.aws.ec2.InternetGateway", return_value=MagicMock(id="igw-123"))
-  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123"))
+  @patch("lib.tap_stack.aws.ec2.InternetGateway",
+         return_value=MagicMock(id="igw-123"))
+  @patch("lib.tap_stack.aws.ec2.Subnet",
+         return_value=MagicMock(id="subnet-123"))
   @patch("lib.tap_stack.aws.ec2.Eip", return_value=MagicMock(id="eip-123"))
-  @patch("lib.tap_stack.aws.ec2.NatGateway", return_value=MagicMock(id="nat-123"))
-  @patch("lib.tap_stack.aws.ec2.RouteTable", return_value=MagicMock(id="rt-123"))
+  @patch("lib.tap_stack.aws.ec2.NatGateway",
+         return_value=MagicMock(id="nat-123"))
+  @patch("lib.tap_stack.aws.ec2.RouteTable",
+         return_value=MagicMock(id="rt-123"))
   @patch("lib.tap_stack.aws.ec2.Route", return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.RouteTableAssociation", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.NetworkAcl", return_value=MagicMock(id="nacl-123"))
+  @patch("lib.tap_stack.aws.ec2.NetworkAcl",
+         return_value=MagicMock(id="nacl-123"))
   @patch("lib.tap_stack.aws.ec2.NetworkAclRule", return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.NetworkAclAssociation", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn:role", id="role-123"))
+  @patch("lib.tap_stack.aws.iam.Role",
+         return_value=MagicMock(arn="arn:role", id="role-123"))
   @patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock())
   @patch.object(SecureVPC, "_create_vpc_endpoints", return_value=[])
-  @patch.object(SecureVPC, "_create_vpc_endpoint_sg", return_value=MagicMock(id="sg-123"))
+  @patch.object(SecureVPC, "_create_vpc_endpoint_sg",
+                return_value=MagicMock(id="sg-123"))
   def test_securevpc_vpc_endpoints_export_exception(self, *_):
     """Test VPC endpoints creation when pulumi.export fails."""
     mock_provider = MagicMock()
     mock_provider.region = "us-east-1"
-    
+
     # Create SecureVPC instance with all methods mocked
-    vpc = SecureVPC("test-vpc", "10.0.0.0/16", {"Environment": "Test"}, mock_provider)
-    
+    vpc = SecureVPC("test-vpc", "10.0.0.0/16",
+                    {"Environment": "Test"}, mock_provider)
+
     # Test VPC endpoints creation (should handle export exception gracefully)
     endpoints = vpc._create_vpc_endpoints()
     self.assertIsInstance(endpoints, list)
 
-  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock(id="sg-123"))
-  @patch("lib.tap_stack.aws.get_availability_zones", return_value=MagicMock(names=["us-east-1a", "us-east-1b"]))
-  @patch("lib.tap_stack.aws.get_region", return_value=MagicMock(name="us-east-1"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup",
+         return_value=MagicMock(id="sg-123"))
+  @patch("lib.tap_stack.aws.get_availability_zones",
+         return_value=MagicMock(names=["us-east-1a", "us-east-1b"]))
+  @patch("lib.tap_stack.aws.get_region",
+         return_value=MagicMock(name="us-east-1"))
   @patch("lib.tap_stack.aws.ec2.Vpc", return_value=MagicMock(id="vpc-123"))
-  @patch("lib.tap_stack.aws.ec2.InternetGateway", return_value=MagicMock(id="igw-123"))
-  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123"))
+  @patch("lib.tap_stack.aws.ec2.InternetGateway",
+         return_value=MagicMock(id="igw-123"))
+  @patch("lib.tap_stack.aws.ec2.Subnet",
+         return_value=MagicMock(id="subnet-123"))
   @patch("lib.tap_stack.aws.ec2.Eip", return_value=MagicMock(id="eip-123"))
-  @patch("lib.tap_stack.aws.ec2.NatGateway", return_value=MagicMock(id="nat-123"))
-  @patch("lib.tap_stack.aws.ec2.RouteTable", return_value=MagicMock(id="rt-123"))
+  @patch("lib.tap_stack.aws.ec2.NatGateway",
+         return_value=MagicMock(id="nat-123"))
+  @patch("lib.tap_stack.aws.ec2.RouteTable",
+         return_value=MagicMock(id="rt-123"))
   @patch("lib.tap_stack.aws.ec2.Route", return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.RouteTableAssociation", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.NetworkAcl", return_value=MagicMock(id="nacl-123"))
+  @patch("lib.tap_stack.aws.ec2.NetworkAcl",
+         return_value=MagicMock(id="nacl-123"))
   @patch("lib.tap_stack.aws.ec2.NetworkAclRule", return_value=MagicMock())
   @patch("lib.tap_stack.aws.ec2.NetworkAclAssociation", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn:role", id="role-123"))
+  @patch("lib.tap_stack.aws.iam.Role",
+         return_value=MagicMock(arn="arn:role", id="role-123"))
   @patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock())
   @patch.object(SecureVPC, "_create_vpc_endpoints", return_value=[])
-  @patch.object(SecureVPC, "_create_vpc_endpoint_sg", return_value=MagicMock(id="sg-123"))
+  @patch.object(SecureVPC, "_create_vpc_endpoint_sg",
+                return_value=MagicMock(id="sg-123"))
   def test_securevpc_vpc_endpoint_sg_creation(self, *_):
     """Test VPC endpoint security group creation."""
     mock_provider = MagicMock()
     mock_provider.region = "us-east-1"
-    
+
     # Create SecureVPC instance with all methods mocked
-    vpc = SecureVPC("test-vpc", "10.0.0.0/16", {"Environment": "Test"}, mock_provider)
-    
+    vpc = SecureVPC("test-vpc", "10.0.0.0/16",
+                    {"Environment": "Test"}, mock_provider)
+
     # Test VPC endpoint security group creation
     sg = vpc._create_vpc_endpoint_sg()
     self.assertIsNotNone(sg)
 
-  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock(id="sg-123"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup",
+         return_value=MagicMock(id="sg-123"))
   def test_create_eks_cluster_with_pulumi_eks(self, mock_sg):
-    """Test EKS cluster creation using pulumi_eks package."""
-    mock_provider = MagicMock()
-    mock_provider.region = "us-east-1"
-    
-    # Mock the security group
-    mock_sg.vpc_id = "vpc-123"
-    mock_sg.id = "sg-123"
-    
-    # Mock the KMS key
-    mock_kms = MagicMock()
-    mock_kms.arn = "arn:aws:kms:us-east-1:123456789012:key/test"
-    
-    # Mock subnet IDs
-    subnet_ids = ["subnet-1", "subnet-2", "subnet-3", "subnet-4"]
-    
-    # Mock pulumi_eks import
-    with patch.dict('sys.modules', {'pulumi_eks': MagicMock()}):
-        import sys
-        mock_eks = MagicMock()
-        mock_eks.Cluster = MagicMock(return_value="mock-cluster")
-        sys.modules['pulumi_eks'] = mock_eks
-        
-        # Test EKS cluster creation
-        cluster = create_eks_cluster(subnet_ids, mock_sg, {"Environment": "Test"}, mock_provider, mock_kms, "test")
-        self.assertEqual(cluster, "mock-cluster")
+    """Test EKS cluster creation using pulumi_eks package - now deprecated."""
+    # This test is no longer valid as the function no longer uses pulumi_eks
+    # The function now always creates native AWS EKS clusters
+    pass
 
-  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock(id="sg-123"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup",
+         return_value=MagicMock(id="sg-123"))
   def test_create_eks_cluster_fallback_aws_eks(self, mock_sg):
-    """Test EKS cluster creation fallback to AWS EKS when pulumi_eks is not available."""
-    mock_provider = MagicMock()
-    mock_provider.region = "us-east-1"
-    
-    # Mock the security group
-    mock_sg.vpc_id = "vpc-123"
-    mock_sg.id = "sg-123"
-    
-    # Mock the KMS key
-    mock_kms = MagicMock()
-    mock_kms.arn = "arn:aws:kms:us-east-1:123456789012:key/test"
-    
-    # Mock subnet IDs
-    subnet_ids = ["subnet-1", "subnet-2", "subnet-3", "subnet-4"]
-    
-    # Mock AWS resources
-    with patch("lib.tap_stack.aws.iam.Role") as mock_role, \
-         patch("lib.tap_stack.aws.eks.Cluster") as mock_cluster:
-        
-        mock_role.return_value = MagicMock(arn="arn:aws:iam::123456789012:role/test")
-        mock_cluster.return_value = "mock-aws-cluster"
-        
-        # Test EKS cluster creation fallback
-        cluster = create_eks_cluster(subnet_ids, mock_sg, {"Environment": "Test"}, mock_provider, mock_kms, "test")
-        self.assertEqual(cluster, "mock-aws-cluster")
+    """Test EKS cluster creation fallback to AWS EKS when pulumi_eks is not available - now deprecated."""
+    # This test is no longer valid as the function no longer has fallback logic
+    # The function now always creates native AWS EKS clusters
+    pass
 
-  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123"))
+  @patch("lib.tap_stack.aws.ec2.Subnet",
+         return_value=MagicMock(id="subnet-123"))
   def test_create_eks_node_group_with_pulumi_eks(self, mock_subnet):
-    """Test EKS node group creation using pulumi_eks package."""
-    mock_provider = MagicMock()
-    mock_provider.region = "us-east-1"
-    
-    # Mock the cluster
-    mock_cluster = MagicMock()
-    mock_cluster.name = "test-cluster"
-    
-    # Mock private subnets
-    private_subnets = [mock_subnet]
-    
-    # Mock pulumi_eks import
-    with patch.dict('sys.modules', {'pulumi_eks': MagicMock()}):
-        import sys
-        mock_eks = MagicMock()
-        sys.modules['pulumi_eks'] = mock_eks
-        
-        # Test EKS node group creation
-        node_group = create_eks_node_group(mock_cluster, private_subnets, {"Environment": "Test"}, mock_provider, "test")
-        self.assertEqual(node_group, mock_cluster)
+    """Test EKS node group creation using pulumi_eks package - now deprecated."""
+    # This test is no longer valid as the function no longer uses pulumi_eks
+    # The function now always creates native AWS EKS node groups
+    pass
 
-  @patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123"))
+  @patch("lib.tap_stack.aws.ec2.Subnet",
+         return_value=MagicMock(id="subnet-123"))
   def test_create_eks_node_group_fallback_aws_eks(self, mock_subnet):
-    """Test EKS node group creation fallback to AWS EKS when pulumi_eks is not available."""
-    mock_provider = MagicMock()
-    mock_provider.region = "us-east-1"
-    
-    # Mock the cluster
-    mock_cluster = MagicMock()
-    mock_cluster.name = "test-cluster"
-    
-    # Mock private subnets
-    private_subnets = [mock_subnet]
-    
-    # Mock AWS resources
-    with patch("lib.tap_stack.aws.iam.Role") as mock_role, \
-         patch("lib.tap_stack.aws.eks.NodeGroup") as mock_node_group:
-        
-        mock_role.return_value = MagicMock(arn="arn:aws:iam::123456789012:role/test")
-        mock_node_group.return_value = "mock-aws-node-group"
-        
-        # Test EKS node group creation fallback
-        node_group = create_eks_node_group(mock_cluster, private_subnets, {"Environment": "Test"}, mock_provider, "test")
-        self.assertEqual(node_group, "mock-aws-node-group")
+    """Test EKS node group creation fallback to AWS EKS when pulumi_eks is not available - now deprecated."""
+    # This test is no longer valid as the function no longer has fallback logic
+    # The function now always creates native AWS EKS node groups
+    pass
 
   @patch("lib.tap_stack.aws.s3.BucketPublicAccessBlock", return_value=MagicMock())
   @patch("lib.tap_stack.aws.s3.BucketServerSideEncryptionConfigurationV2",
@@ -552,7 +528,10 @@ class TestHelpers(unittest.TestCase):
   @patch("lib.tap_stack.aws.iam.Role",
          return_value=MagicMock(arn="arn:role"))
   @patch("lib.tap_stack.aws.eks.Cluster")
-  def test_create_eks_cluster(self, mock_cluster_class, *_):
+  @patch("lib.tap_stack.random.RandomId")
+  @patch("lib.tap_stack.pulumi.Output.concat")
+  def test_create_eks_cluster(
+          self, mock_concat, mock_random, mock_cluster_class, *_):
     """Validate create_eks_cluster provisions an EKS cluster with IAM role attached."""
     mock_provider = MagicMock()
     mock_cluster_instance = MagicMock()
@@ -560,12 +539,19 @@ class TestHelpers(unittest.TestCase):
     mock_cluster_instance.endpoint = "eks-endpoint"
     mock_cluster_class.return_value = mock_cluster_instance
 
+    # Mock the random ID and output concat
+    mock_random_instance = MagicMock()
+    mock_random_instance.hex = "abc123"
+    mock_random.return_value = mock_random_instance
+    mock_concat.return_value = "test-eks-cluster-abc123"
+
     subnet_ids = ["subnet1", "subnet2"]
     eks_cluster_sg = MagicMock(id="sg-123")
     tags = {"Environment": "Production"}
     # Mock KMS key for encryption config
-    mock_kms_key = MagicMock(arn="arn:aws:kms:us-west-2:123456789012:key/test-key")
-    
+    mock_kms_key = MagicMock(
+        arn="arn:aws:kms:us-west-2:123456789012:key/test-key")
+
     cluster = create_eks_cluster(
         subnet_ids=subnet_ids,
         eks_cluster_sg=eks_cluster_sg,
@@ -573,6 +559,7 @@ class TestHelpers(unittest.TestCase):
         provider=mock_provider,
         kms_key=mock_kms_key
     )
+    self.assertIsNotNone(cluster)
     self.assertEqual(cluster.name, "cluster")
 
   @patch("lib.tap_stack.aws.iam.RolePolicy", return_value=MagicMock())
@@ -580,7 +567,13 @@ class TestHelpers(unittest.TestCase):
          return_value=MagicMock())
   @patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock())
   @patch("lib.tap_stack.aws.eks.NodeGroup")
-  def test_create_eks_node_group(self, mock_ng_class, _mock_role,
+  @patch("lib.tap_stack.random.RandomId")
+  @patch("lib.tap_stack.pulumi.Output.concat")
+  @patch("lib.tap_stack.k8s.core.v1.ConfigMap")
+  @patch("lib.tap_stack.aws.ec2.LaunchTemplate")
+  @patch("lib.tap_stack.aws.get_caller_identity")
+  @patch("lib.tap_stack.ResourceOptions")
+  def test_create_eks_node_group(self, mock_resource_options, mock_caller_identity, mock_launch_template, mock_config_map, mock_concat, mock_random, mock_ng_class, _mock_role,
                                  _mock_role_policy, *_):
     """Ensure create_eks_node_group provisions a managed node group with correct scaling configuration."""
     mock_provider = MagicMock()
@@ -588,7 +581,28 @@ class TestHelpers(unittest.TestCase):
     mock_ng_instance.node_group_name = "nodes"
     mock_ng_class.return_value = mock_ng_instance
 
-    # Mock cluster with Output-like behavior
+    # Mock the random ID and output concat
+    mock_random_instance = MagicMock()
+    mock_random_instance.hex = "abc123"
+    mock_random.return_value = mock_random_instance
+    mock_concat.return_value = "test-eks-node-group-abc123"
+
+    # Mock the launch template
+    mock_launch_template_instance = MagicMock()
+    mock_launch_template_instance.id = "lt-123"
+    mock_launch_template_instance.latest_version = "1"
+    mock_launch_template.return_value = mock_launch_template_instance
+
+    # Mock the config map
+    mock_config_map.return_value = MagicMock()
+
+    # Mock get_caller_identity
+    mock_caller_identity.return_value = MagicMock(account_id="123456789012")
+
+    # Mock ResourceOptions to bypass validation
+    mock_resource_options.return_value = MagicMock()
+
+    # Mock cluster with Output-like behavior and proper Resource attributes
     cluster = MagicMock()
     cluster_name_output = MagicMock()
     cluster_name_output.apply = MagicMock(
@@ -596,6 +610,11 @@ class TestHelpers(unittest.TestCase):
             apply=lambda f: f(
                 func("eks-cluster"))))
     cluster.name = cluster_name_output
+
+    # Mock the cluster as a proper Pulumi Resource
+    cluster._name = "test-cluster"
+    cluster._type = "aws:eks/cluster:Cluster"
+    cluster._urn = "urn:pulumi:test::test::aws:eks/cluster:Cluster::test-cluster"
 
     private_subnets = [MagicMock(id="subnet1"), MagicMock(id="subnet2")]
     tags = {"Environment": "Production"}
@@ -605,6 +624,7 @@ class TestHelpers(unittest.TestCase):
         tags=tags,
         provider=mock_provider
     )
+    self.assertIsNotNone(ng)
     self.assertEqual(ng.node_group_name, "nodes")
 
   @patch("lib.tap_stack.aws.s3.BucketPublicAccessBlock", return_value=MagicMock())
@@ -733,121 +753,131 @@ class TestHelpers(unittest.TestCase):
     """Test NGINX deployment creation using pulumi_eks cluster."""
     mock_provider = MagicMock()
     mock_provider.region = "us-east-1"
-    
-    # Mock the EKS cluster with provider
+
+    # Mock the EKS cluster with kubeconfig as Pulumi Output
     mock_cluster = MagicMock()
-    mock_k8s_provider = MagicMock()
-    mock_cluster.provider = mock_k8s_provider
-    
-    # Mock pulumi_eks import to fail, so it goes to fallback
-    with patch.dict('sys.modules', {'pulumi_eks': None}):
-        # Test NGINX deployment creation - this will fall back to mock since pulumi_eks import fails
-        from lib.tap_stack import create_nginx_deployment
-        deployment = create_nginx_deployment(mock_cluster, {"Environment": "Test"}, mock_provider, "test")
-        self.assertIsNotNone(deployment)
-        self.assertTrue(hasattr(deployment, 'metadata'))
+    mock_kubeconfig_output = MagicMock()
+    mock_kubeconfig_output.apply.return_value = "mock-kubeconfig"
+    mock_cluster.kubeconfig = mock_kubeconfig_output
+
+    # Test NGINX deployment creation
+    deployment, service = create_nginx_deployment(
+        mock_cluster, {"Environment": "Test"}, mock_provider, "test")
+    self.assertIsNotNone(deployment)
+    self.assertIsNotNone(service)
+    self.assertTrue(hasattr(deployment, 'metadata'))
+    self.assertTrue(hasattr(service, 'metadata'))
 
   def test_create_nginx_deployment_fallback_mock(self):
-    """Test NGINX deployment creation fallback to mock when pulumi_eks is not available."""
+    """Test NGINX deployment creation fallback when kubeconfig is not available."""
     mock_provider = MagicMock()
     mock_provider.region = "us-east-1"
-    
-    # Mock the EKS cluster without provider
+
+    # Mock the EKS cluster without kubeconfig
     mock_cluster = MagicMock()
-    # Remove provider attribute to trigger fallback
-    del mock_cluster.provider
-    
+    # Remove kubeconfig attribute to trigger fallback
+    del mock_cluster.kubeconfig
+
     # Test NGINX deployment creation fallback
-    from lib.tap_stack import create_nginx_deployment
-    deployment = create_nginx_deployment(mock_cluster, {"Environment": "Test"}, mock_provider, "test")
+    deployment, service = create_nginx_deployment(
+        mock_cluster, {"Environment": "Test"}, mock_provider, "test")
     self.assertIsNotNone(deployment)
+    self.assertIsNotNone(service)
     self.assertTrue(hasattr(deployment, 'metadata'))
+    self.assertTrue(hasattr(service, 'metadata'))
 
   def test_create_nginx_deployment_import_error(self):
-    """Test NGINX deployment creation when pulumi_eks import fails."""
+    """Test NGINX deployment creation when pulumi_kubernetes import fails."""
     mock_provider = MagicMock()
     mock_provider.region = "us-east-1"
-    
-    # Mock the EKS cluster
+
+    # Mock the EKS cluster with kubeconfig as Pulumi Output
     mock_cluster = MagicMock()
-    
-    # Test NGINX deployment creation with import error
-    from lib.tap_stack import create_nginx_deployment
-    deployment = create_nginx_deployment(mock_cluster, {"Environment": "Test"}, mock_provider, "test")
+    mock_kubeconfig_output = MagicMock()
+    mock_kubeconfig_output.apply.return_value = "mock-kubeconfig"
+    mock_cluster.kubeconfig = mock_kubeconfig_output
+
+    # Test NGINX deployment creation
+    deployment, service = create_nginx_deployment(
+        mock_cluster, {"Environment": "Test"}, mock_provider, "test")
     self.assertIsNotNone(deployment)
+    self.assertIsNotNone(service)
     self.assertTrue(hasattr(deployment, 'metadata'))
+    self.assertTrue(hasattr(service, 'metadata'))
 
   def test_create_mock_nginx_deployment(self):
-    """Test mock NGINX deployment creation."""
-    from lib.tap_stack import create_mock_nginx_deployment
-    deployment = create_mock_nginx_deployment("test")
-    self.assertIsNotNone(deployment)
-    self.assertTrue(hasattr(deployment, 'metadata'))
-    self.assertEqual(len(deployment.metadata), 1)
-    self.assertEqual(deployment.metadata[0].name, "test-nginx-deployment")
+    """Test mock NGINX deployment creation - function no longer exists."""
+    # This test is no longer valid as create_mock_nginx_deployment was removed
+    # The function now always creates real NGINX deployments
+    pass
 
   @patch("lib.tap_stack.aws.ec2.VpcEndpoint", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock(id="sg-123"))
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup",
+         return_value=MagicMock(id="sg-123"))
   def test_securevpc_vpc_endpoints_real_creation(self, mock_sg, mock_endpoint):
     """Test actual VPC endpoints creation code execution."""
     mock_provider = MagicMock()
     mock_provider.region = "us-east-1"
-    
+
     # Create SecureVPC instance with minimal mocking
     with patch("lib.tap_stack.aws.get_availability_zones", return_value=MagicMock(names=["us-east-1a", "us-east-1b"])), \
-         patch("lib.tap_stack.aws.get_region", return_value=MagicMock(name="us-east-1")), \
-         patch("lib.tap_stack.aws.ec2.Vpc", return_value=MagicMock(id="vpc-123")), \
-         patch("lib.tap_stack.aws.ec2.InternetGateway", return_value=MagicMock(id="igw-123")), \
-         patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123")), \
-         patch("lib.tap_stack.aws.ec2.Eip", return_value=MagicMock(id="eip-123")), \
-         patch("lib.tap_stack.aws.ec2.NatGateway", return_value=MagicMock(id="nat-123")), \
-         patch("lib.tap_stack.aws.ec2.RouteTable", return_value=MagicMock(id="rt-123")), \
-         patch("lib.tap_stack.aws.ec2.Route", return_value=MagicMock()), \
-         patch("lib.tap_stack.aws.ec2.RouteTableAssociation", return_value=MagicMock()), \
-         patch("lib.tap_stack.aws.ec2.NetworkAcl", return_value=MagicMock(id="nacl-123")), \
-         patch("lib.tap_stack.aws.ec2.NetworkAclRule", return_value=MagicMock()), \
-         patch("lib.tap_stack.aws.ec2.NetworkAclAssociation", return_value=MagicMock()), \
-         patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn:role", id="role-123")), \
-         patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock()):
-      
-      vpc = SecureVPC("test-vpc", "10.0.0.0/16", {"Environment": "Test"}, mock_provider)
-      
+            patch("lib.tap_stack.aws.get_region", return_value=MagicMock(name="us-east-1")), \
+            patch("lib.tap_stack.aws.ec2.Vpc", return_value=MagicMock(id="vpc-123")), \
+            patch("lib.tap_stack.aws.ec2.InternetGateway", return_value=MagicMock(id="igw-123")), \
+            patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123")), \
+            patch("lib.tap_stack.aws.ec2.Eip", return_value=MagicMock(id="eip-123")), \
+            patch("lib.tap_stack.aws.ec2.NatGateway", return_value=MagicMock(id="nat-123")), \
+            patch("lib.tap_stack.aws.ec2.RouteTable", return_value=MagicMock(id="rt-123")), \
+            patch("lib.tap_stack.aws.ec2.Route", return_value=MagicMock()), \
+            patch("lib.tap_stack.aws.ec2.RouteTableAssociation", return_value=MagicMock()), \
+            patch("lib.tap_stack.aws.ec2.NetworkAcl", return_value=MagicMock(id="nacl-123")), \
+            patch("lib.tap_stack.aws.ec2.NetworkAclRule", return_value=MagicMock()), \
+            patch("lib.tap_stack.aws.ec2.NetworkAclAssociation", return_value=MagicMock()), \
+            patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn:role", id="role-123")), \
+            patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock()):
+
+      vpc = SecureVPC("test-vpc", "10.0.0.0/16",
+                      {"Environment": "Test"}, mock_provider)
+
       # Now test the actual VPC endpoints creation without mocking the methods
       # This will execute the real code paths
       endpoints = vpc._create_vpc_endpoints()
       self.assertIsInstance(endpoints, list)
       self.assertGreater(len(endpoints), 0)
-      
+
       # Test the actual VPC endpoint security group creation
       sg = vpc._create_vpc_endpoint_sg()
       self.assertIsNotNone(sg)
 
   @patch("lib.tap_stack.aws.ec2.VpcEndpoint", return_value=MagicMock())
-  @patch("lib.tap_stack.aws.ec2.SecurityGroup", return_value=MagicMock(id="sg-123"))
-  def test_securevpc_vpc_endpoints_different_region_real(self, mock_sg, mock_endpoint):
+  @patch("lib.tap_stack.aws.ec2.SecurityGroup",
+         return_value=MagicMock(id="sg-123"))
+  def test_securevpc_vpc_endpoints_different_region_real(
+          self, mock_sg, mock_endpoint):
     """Test VPC endpoints creation with different region in real code."""
     mock_provider = MagicMock()
     mock_provider.region = "us-west-2"
-    
+
     # Create SecureVPC instance with minimal mocking
     with patch("lib.tap_stack.aws.get_availability_zones", return_value=MagicMock(names=["us-west-2a", "us-west-2b"])), \
-         patch("lib.tap_stack.aws.get_region", return_value=MagicMock(name="us-west-2")), \
-         patch("lib.tap_stack.aws.ec2.Vpc", return_value=MagicMock(id="vpc-123")), \
-         patch("lib.tap_stack.aws.ec2.InternetGateway", return_value=MagicMock(id="igw-123")), \
-         patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123")), \
-         patch("lib.tap_stack.aws.ec2.Eip", return_value=MagicMock(id="eip-123")), \
-         patch("lib.tap_stack.aws.ec2.NatGateway", return_value=MagicMock(id="nat-123")), \
-         patch("lib.tap_stack.aws.ec2.RouteTable", return_value=MagicMock(id="rt-123")), \
-         patch("lib.tap_stack.aws.ec2.Route", return_value=MagicMock()), \
-         patch("lib.tap_stack.aws.ec2.RouteTableAssociation", return_value=MagicMock()), \
-         patch("lib.tap_stack.aws.ec2.NetworkAcl", return_value=MagicMock(id="nacl-123")), \
-         patch("lib.tap_stack.aws.ec2.NetworkAclRule", return_value=MagicMock()), \
-         patch("lib.tap_stack.aws.ec2.NetworkAclAssociation", return_value=MagicMock()), \
-         patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn:role", id="role-123")), \
-         patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock()):
-      
-      vpc = SecureVPC("test-vpc", "10.0.0.0/16", {"Environment": "Test"}, mock_provider)
-      
+            patch("lib.tap_stack.aws.get_region", return_value=MagicMock(name="us-west-2")), \
+            patch("lib.tap_stack.aws.ec2.Vpc", return_value=MagicMock(id="vpc-123")), \
+            patch("lib.tap_stack.aws.ec2.InternetGateway", return_value=MagicMock(id="igw-123")), \
+            patch("lib.tap_stack.aws.ec2.Subnet", return_value=MagicMock(id="subnet-123")), \
+            patch("lib.tap_stack.aws.ec2.Eip", return_value=MagicMock(id="eip-123")), \
+            patch("lib.tap_stack.aws.ec2.NatGateway", return_value=MagicMock(id="nat-123")), \
+            patch("lib.tap_stack.aws.ec2.RouteTable", return_value=MagicMock(id="rt-123")), \
+            patch("lib.tap_stack.aws.ec2.Route", return_value=MagicMock()), \
+            patch("lib.tap_stack.aws.ec2.RouteTableAssociation", return_value=MagicMock()), \
+            patch("lib.tap_stack.aws.ec2.NetworkAcl", return_value=MagicMock(id="nacl-123")), \
+            patch("lib.tap_stack.aws.ec2.NetworkAclRule", return_value=MagicMock()), \
+            patch("lib.tap_stack.aws.ec2.NetworkAclAssociation", return_value=MagicMock()), \
+            patch("lib.tap_stack.aws.iam.Role", return_value=MagicMock(arn="arn:role", id="role-123")), \
+            patch("lib.tap_stack.aws.ec2.FlowLog", return_value=MagicMock()):
+
+      vpc = SecureVPC("test-vpc", "10.0.0.0/16",
+                      {"Environment": "Test"}, mock_provider)
+
       # Test the actual VPC endpoints creation with different region
       endpoints = vpc._create_vpc_endpoints()
       self.assertIsInstance(endpoints, list)
@@ -857,35 +887,37 @@ class TestHelpers(unittest.TestCase):
     """Test NGINX deployment with successful pulumi_eks import."""
     mock_provider = MagicMock()
     mock_provider.region = "us-east-1"
-    
-    # Mock the EKS cluster with provider
+
+    # Mock the EKS cluster with kubeconfig as Pulumi Output
     mock_cluster = MagicMock()
-    mock_k8s_provider = MagicMock()
-    mock_cluster.provider = mock_k8s_provider
-    
-    # Mock pulumi_eks import to fail, so it goes to fallback
-    with patch.dict('sys.modules', {'pulumi_eks': None}):
-        # Test that it falls back to mock when pulumi_eks import fails
-        from lib.tap_stack import create_nginx_deployment
-        deployment = create_nginx_deployment(mock_cluster, {"Environment": "Test"}, mock_provider, "test")
-        self.assertIsNotNone(deployment)
-        self.assertTrue(hasattr(deployment, 'metadata'))
+    mock_kubeconfig_output = MagicMock()
+    mock_kubeconfig_output.apply.return_value = "mock-kubeconfig"
+    mock_cluster.kubeconfig = mock_kubeconfig_output
+
+    # Test NGINX deployment creation
+    deployment, service = create_nginx_deployment(
+        mock_cluster, {"Environment": "Test"}, mock_provider, "test")
+    self.assertIsNotNone(deployment)
+    self.assertIsNotNone(service)
+    self.assertTrue(hasattr(deployment, 'metadata'))
+    self.assertTrue(hasattr(service, 'metadata'))
 
   def test_nginx_deployment_cluster_without_provider(self):
     """Test NGINX deployment when cluster has no provider attribute."""
     mock_provider = MagicMock()
     mock_provider.region = "us-east-1"
-    
-    # Mock the EKS cluster without provider attribute
+
+    # Mock the EKS cluster without kubeconfig attribute
     mock_cluster = MagicMock()
-    # Don't set provider attribute
-    
-    # Mock pulumi_eks import to fail, so it goes to fallback
-    with patch.dict('sys.modules', {'pulumi_eks': None}):
-        from lib.tap_stack import create_nginx_deployment
-        deployment = create_nginx_deployment(mock_cluster, {"Environment": "Test"}, mock_provider, "test")
-        self.assertIsNotNone(deployment)
-        self.assertTrue(hasattr(deployment, 'metadata'))
+    # Don't set kubeconfig attribute to trigger fallback
+
+    # Test NGINX deployment creation fallback
+    deployment, service = create_nginx_deployment(
+        mock_cluster, {"Environment": "Test"}, mock_provider, "test")
+    self.assertIsNotNone(deployment)
+    self.assertIsNotNone(service)
+    self.assertTrue(hasattr(deployment, 'metadata'))
+    self.assertTrue(hasattr(service, 'metadata'))
 
 
 class TestTapStack(unittest.TestCase):

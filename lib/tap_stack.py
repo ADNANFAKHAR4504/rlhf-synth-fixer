@@ -340,21 +340,21 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     This is critical for EKS node group creation and cluster communication.
     """
     endpoints = []
-    
+
     # Create VPC endpoint security group once and reuse it
     vpc_endpoint_sg = self._create_vpc_endpoint_sg()
-    
+
     # Use the same region as the provider to ensure VPC endpoints work
     # The provider is hardcoded to us-west-2 in TapStack constructor
     region = "us-west-2"  # Must match provider region
-    
+
     # Debug: Export the provider region (only in actual Pulumi context)
     try:
-        pulumi.export("provider_region", region)
+      pulumi.export("provider_region", region)
     except Exception:
-        # Skip export during unit tests
-        pass
-    
+      # Skip export during unit tests
+      pass
+
     # EKS VPC endpoints for cluster communication
     # Using only essential endpoints that are definitely needed
     # S3 uses gateway endpoint, not interface endpoint
@@ -364,40 +364,45 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
         f"com.amazonaws.{region}.ecr.dkr",
         f"com.amazonaws.{region}.sts",
     ]
-    
+
     for endpoint_service in interface_endpoints:
-        # Create shorter, unique names for endpoints
-        service_short_name = endpoint_service.split('.')[-1]
-        if service_short_name == "api":
-            service_short_name = "ecr-api"
-        elif service_short_name == "dkr":
-            service_short_name = "ecr-dkr"
-            
-        endpoint = aws.ec2.VpcEndpoint(
-            f"{self.name_prefix}-{service_short_name}-ep",
-            vpc_id=self.vpc.id,
-            service_name=endpoint_service,
-            vpc_endpoint_type="Interface",
-            subnet_ids=[s.id for s in self.private_subnets],
-            security_group_ids=[vpc_endpoint_sg.id],
-            private_dns_enabled=True,
-            tags={**self.tags, "Name": f"{self.name_prefix}-{service_short_name}-endpoint"},
-            opts=ResourceOptions(provider=self.provider)
-        )
-        endpoints.append(endpoint)
-    
+      # Create shorter, unique names for endpoints
+      service_short_name = endpoint_service.split('.')[-1]
+      if service_short_name == "api":
+        service_short_name = "ecr-api"
+      elif service_short_name == "dkr":
+        service_short_name = "ecr-dkr"
+
+      endpoint = aws.ec2.VpcEndpoint(
+          f"{self.name_prefix}-{service_short_name}-ep",
+          vpc_id=self.vpc.id,
+          service_name=endpoint_service,
+          vpc_endpoint_type="Interface",
+          subnet_ids=[s.id for s in self.private_subnets],
+          security_group_ids=[vpc_endpoint_sg.id],
+          private_dns_enabled=True,
+          tags={
+              **self.tags,
+              "Name": f"{
+                  self.name_prefix}-{service_short_name}-endpoint"},
+          opts=ResourceOptions(provider=self.provider)
+      )
+      endpoints.append(endpoint)
+
     # Create S3 gateway endpoint (not interface endpoint)
     s3_endpoint = aws.ec2.VpcEndpoint(
         f"{self.name_prefix}-s3-gateway-ep",
         vpc_id=self.vpc.id,
         service_name=f"com.amazonaws.{region}.s3",
         vpc_endpoint_type="Gateway",
-        route_table_ids=[self.private_route_tables[0].id, self.private_route_tables[1].id],
+        route_table_ids=[
+            self.private_route_tables[0].id,
+            self.private_route_tables[1].id],
         tags={**self.tags, "Name": f"{self.name_prefix}-s3-gateway-endpoint"},
         opts=ResourceOptions(provider=self.provider)
     )
     endpoints.append(s3_endpoint)
-    
+
     return endpoints
 
   def _create_vpc_endpoint_sg(self) -> aws.ec2.SecurityGroup:
@@ -559,7 +564,7 @@ def create_security_groups(
       description="Allow nodes to communicate with cluster API",
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # Allow cluster API to communicate with nodes
   aws.ec2.SecurityGroupRule(
       f"{name_prefix}-node-ingress-cluster",
@@ -572,7 +577,7 @@ def create_security_groups(
       description="Allow cluster to communicate with nodes",
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # Allow nodes to communicate with each other
   aws.ec2.SecurityGroupRule(
       f"{name_prefix}-node-ingress-self",
@@ -585,7 +590,7 @@ def create_security_groups(
       description="Allow nodes to communicate with each other",
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # Allow ALB to reach nodes
   aws.ec2.SecurityGroupRule(
       f"{name_prefix}-node-ingress-alb",
@@ -598,7 +603,7 @@ def create_security_groups(
       description="Allow ALB to reach nodes",
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # CRITICAL: Additional rules for EKS node registration
   # Allow cluster to communicate with nodes on ALL ports for bootstrap
   aws.ec2.SecurityGroupRule(
@@ -612,7 +617,7 @@ def create_security_groups(
       description="Allow nodes full access to cluster",
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # Allow nodes to communicate with cluster on ALL ports
   aws.ec2.SecurityGroupRule(
       f"{name_prefix}-node-ingress-cluster-all",
@@ -625,7 +630,7 @@ def create_security_groups(
       description="Allow cluster full access to nodes",
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # Allow nodes to communicate with each other on ALL ports
   aws.ec2.SecurityGroupRule(
       f"{name_prefix}-node-ingress-node-all",
@@ -638,7 +643,7 @@ def create_security_groups(
       description="Allow nodes to communicate with each other",
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # Allow all outbound traffic from nodes
   aws.ec2.SecurityGroupRule(
       f"{name_prefix}-node-egress-all",
@@ -651,7 +656,7 @@ def create_security_groups(
       description="Allow all outbound traffic from nodes",
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # Allow all outbound traffic from cluster
   aws.ec2.SecurityGroupRule(
       f"{name_prefix}-cluster-egress-all",
@@ -744,10 +749,10 @@ def create_eks_cluster(
 ):
   """
   Create EKS cluster using native AWS resources.
-  
-  Note: We use native AWS EKS instead of pulumi_eks to avoid deprecated 
+
+  Note: We use native AWS EKS instead of pulumi_eks to avoid deprecated
   LaunchConfiguration issues and have better control over managed node groups.
-  
+
   Naming strategy:
   - Random suffixes with timestamp-based keepers to ensure uniqueness
   - delete_before_replace to handle resource replacements cleanly
@@ -757,7 +762,7 @@ def create_eks_cluster(
   # Use a timestamp-based approach to ensure uniqueness
   import time
   timestamp = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
-  
+
   cluster_random = random.RandomId(
       f"{name_prefix}-eks-cluster-random-{timestamp}",
       byte_length=4,
@@ -766,9 +771,10 @@ def create_eks_cluster(
       },
       opts=ResourceOptions(provider=provider)
   )
-  
-  cluster_name = pulumi.Output.concat(f"{name_prefix}-eks-cluster-", cluster_random.hex)
-  
+
+  cluster_name = pulumi.Output.concat(
+      f"{name_prefix}-eks-cluster-", cluster_random.hex)
+
   # Create EKS cluster IAM role
   eks_role = aws.iam.Role(
       f"{name_prefix}-eks-cluster-role",
@@ -815,58 +821,58 @@ def create_eks_cluster(
           delete_before_replace=True  # Ensure old cluster is deleted before creating new one
       )
   )
-  
+
   # Generate kubeconfig for the cluster
   def generate_kubeconfig(args):
-      cluster_name, endpoint, certificate = args
-      return json.dumps({
-          "apiVersion": "v1",
-          "clusters": [{
-              "cluster": {
-                  "server": endpoint,
-                  "certificate-authority-data": certificate
-              },
-              "name": "kubernetes"
-          }],
-          "contexts": [{
-              "context": {
-                  "cluster": "kubernetes",
-                  "user": "aws"
-              },
-              "name": "aws"
-          }],
-          "current-context": "aws",
-          "kind": "Config",
-          "users": [{
-              "name": "aws",
-              "user": {
-                  "exec": {
-                      "apiVersion": "client.authentication.k8s.io/v1beta1",
-                      "command": "aws",
-                      "args": [
-                          "eks",
-                          "get-token",
-                          "--cluster-name",
-                          cluster_name,
-                          "--region",
-                          provider.region or "us-west-2"
-                      ],
-                      "env": None
-                  }
-              }
-          }]
-      })
-  
+    cluster_name, endpoint, certificate = args
+    return json.dumps({
+        "apiVersion": "v1",
+        "clusters": [{
+            "cluster": {
+                "server": endpoint,
+                "certificate-authority-data": certificate
+            },
+            "name": "kubernetes"
+        }],
+        "contexts": [{
+            "context": {
+                "cluster": "kubernetes",
+                "user": "aws"
+            },
+            "name": "aws"
+        }],
+        "current-context": "aws",
+        "kind": "Config",
+        "users": [{
+            "name": "aws",
+            "user": {
+                "exec": {
+                    "apiVersion": "client.authentication.k8s.io/v1beta1",
+                    "command": "aws",
+                    "args": [
+                        "eks",
+                        "get-token",
+                        "--cluster-name",
+                        cluster_name,
+                        "--region",
+                        provider.region or "us-west-2"
+                    ],
+                    "env": None
+                }
+            }
+        }]
+    })
+
   # Add kubeconfig as a property
   cluster.kubeconfig = pulumi.Output.all(
       cluster.name,
       cluster.endpoint,
       cluster.certificate_authority.data
   ).apply(generate_kubeconfig)
-  
+
   # Store cluster info for later use
   cluster.name_prefix = name_prefix
-  
+
   return cluster
 
 
@@ -879,7 +885,7 @@ def create_eks_node_group(
 ):
   """
   Create EKS managed node group using native AWS resources.
-  
+
   Benefits of EKS managed node groups:
   - No LaunchConfiguration or LaunchTemplate needed (AWS handles it)
   - Automatic updates and patching
@@ -887,13 +893,14 @@ def create_eks_node_group(
   - Built-in health checks and recovery
   """
   # Always create EKS managed node groups, regardless of whether pulumi_eks is available
-  # This avoids the LaunchConfiguration issue with pulumi_eks's default node groups
-  
+  # This avoids the LaunchConfiguration issue with pulumi_eks's default node
+  # groups
+
   # Add random suffix to avoid naming conflicts
   # Use a timestamp-based approach to ensure uniqueness
   import time
   timestamp = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
-  
+
   node_group_random = random.RandomId(
       f"{name_prefix}-eks-node-group-random-{timestamp}",
       byte_length=4,
@@ -902,9 +909,11 @@ def create_eks_node_group(
       },
       opts=ResourceOptions(provider=provider)
   )
-  
-  node_group_name = pulumi.Output.concat(f"{name_prefix}-eks-node-group-", node_group_random.hex)
-  
+
+  node_group_name = pulumi.Output.concat(
+      f"{name_prefix}-eks-node-group-",
+      node_group_random.hex)
+
   # Create IAM role for EKS node group
   node_role = aws.iam.Role(
       f"{name_prefix}-eks-node-role",
@@ -928,7 +937,7 @@ def create_eks_node_group(
       tags={**tags, "Name": f"{name_prefix}-eks-node-role"},
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # Add comprehensive inline policy for EKS node operations
   aws.iam.RolePolicy(
       f"{name_prefix}-eks-node-comprehensive-policy",
@@ -967,7 +976,7 @@ def create_eks_node_group(
       }),
       opts=ResourceOptions(provider=provider)
   )
-  
+
   # Create/Update aws-auth ConfigMap to allow nodes to join the cluster
   # This is CRITICAL for node registration
   account_id = aws.get_caller_identity().account_id
@@ -1076,11 +1085,15 @@ echo "Bootstrap completed at $(date)" | tee -a /var/log/eks-bootstrap.log
       tags={**tags, "Name": f"{name_prefix}-eks-nodegroup"},
       opts=ResourceOptions(
           provider=provider,
-          depends_on=[cluster, launch_template, aws_auth_config_map],  # Ensure all dependencies are ready
+          depends_on=[
+              cluster,
+              launch_template,
+              aws_auth_config_map],
+          # Ensure all dependencies are ready
           delete_before_replace=True  # Ensure old node group is deleted before creating new one
       )
   )
-  
+
   return node_group
 
 
@@ -1452,21 +1465,24 @@ def create_nginx_deployment(
   # Create a Kubernetes provider using the EKS cluster
   # Handle different cluster types for kubeconfig access
   if hasattr(eks_cluster, 'kubeconfig'):
-      # aws.eks.Cluster or pulumi_eks with direct kubeconfig
-      kubeconfig = eks_cluster.kubeconfig
+    # aws.eks.Cluster or pulumi_eks with direct kubeconfig
+    kubeconfig = eks_cluster.kubeconfig
   elif hasattr(eks_cluster, 'kubeconfig_json'):
-      # Some versions expose kubeconfig as kubeconfig_json
-      kubeconfig = eks_cluster.kubeconfig_json
+    # Some versions expose kubeconfig as kubeconfig_json
+    kubeconfig = eks_cluster.kubeconfig_json
   else:
-      # Try to generate kubeconfig if not directly available
-      pulumi.log.warn("Kubeconfig not directly available, cluster may not be fully initialized")
-      kubeconfig = pulumi.Output.from_input("{}")
-  
+    # Try to generate kubeconfig if not directly available
+    pulumi.log.warn(
+        "Kubeconfig not directly available, cluster may not be fully initialized")
+    kubeconfig = pulumi.Output.from_input("{}")
+
   k8s_provider = k8s.Provider(
       f"{name_prefix}-k8s-provider",
-      kubeconfig=kubeconfig.apply(lambda kc: kc if isinstance(kc, str) else str(kc))
+      kubeconfig=kubeconfig.apply(
+          lambda kc: kc if isinstance(
+              kc, str) else str(kc))
   )
-  
+
   # Create NGINX deployment
   nginx_deployment = k8s.apps.v1.Deployment(
       f"{name_prefix}-nginx-deployment",
@@ -1500,7 +1516,7 @@ def create_nginx_deployment(
                               "cpu": "250m"
                           },
                           limits={
-                              "memory": "128Mi", 
+                              "memory": "128Mi",
                               "cpu": "500m"
                           }
                       )
@@ -1510,7 +1526,7 @@ def create_nginx_deployment(
       ),
       opts=ResourceOptions(provider=k8s_provider)
   )
-  
+
   # Create a service to expose NGINX
   nginx_service = k8s.core.v1.Service(
       f"{name_prefix}-nginx-service",
@@ -1533,11 +1549,8 @@ def create_nginx_deployment(
       ),
       opts=ResourceOptions(provider=k8s_provider)
   )
-  
+
   return nginx_deployment, nginx_service
-
-
-
 
 
 def create_monitoring_lambda(
@@ -1739,7 +1752,8 @@ class TapStack(pulumi.ComponentResource):
     vpc_module = SecureVPC(
         f"{prefix}-{args.environment_suffix}", "10.0.0.0/16", tags, provider)
 
-    sgs = create_security_groups(vpc_module.vpc, tags, provider, f"{prefix}-{args.environment_suffix}")
+    sgs = create_security_groups(
+        vpc_module.vpc, tags, provider, f"{prefix}-{args.environment_suffix}")
     db_sg = sgs["db_sg"]
     eks_cluster_sg = sgs["eks_cluster_sg"]
     alb_sg = sgs["alb_sg"]
@@ -1839,32 +1853,32 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("kms_key_id", kms_key.id)
     # Handle different cluster types for name access
     if hasattr(eks_cluster, 'name'):
-        pulumi.export("eks_cluster_name", eks_cluster.name)
+      pulumi.export("eks_cluster_name", eks_cluster.name)
     elif hasattr(eks_cluster, 'eks_cluster') and hasattr(eks_cluster.eks_cluster, 'name'):
-        pulumi.export("eks_cluster_name", eks_cluster.eks_cluster.name)
+      pulumi.export("eks_cluster_name", eks_cluster.eks_cluster.name)
     else:
-        pulumi.export("eks_cluster_name", f"{name_prefix}-eks-cluster")
+      pulumi.export("eks_cluster_name", f"{name_prefix}-eks-cluster")
     # Handle different cluster types for endpoint access
     # pulumi_eks.Cluster stores the actual EKS cluster in eks_cluster attribute
     if hasattr(eks_cluster, 'eks_cluster'):
-        # pulumi_eks.Cluster has the actual cluster under eks_cluster
-        pulumi.export("eks_cluster_endpoint", eks_cluster.eks_cluster.endpoint)
+      # pulumi_eks.Cluster has the actual cluster under eks_cluster
+      pulumi.export("eks_cluster_endpoint", eks_cluster.eks_cluster.endpoint)
     elif hasattr(eks_cluster, 'core') and hasattr(eks_cluster.core, 'endpoint'):
-        # Another way pulumi_eks might expose the endpoint
-        pulumi.export("eks_cluster_endpoint", eks_cluster.core.endpoint)
+      # Another way pulumi_eks might expose the endpoint
+      pulumi.export("eks_cluster_endpoint", eks_cluster.core.endpoint)
     elif hasattr(eks_cluster, 'endpoint'):
-        # aws.eks.Cluster has endpoint directly
-        pulumi.export("eks_cluster_endpoint", eks_cluster.endpoint)
+      # aws.eks.Cluster has endpoint directly
+      pulumi.export("eks_cluster_endpoint", eks_cluster.endpoint)
     else:
-        # Fallback
-        pulumi.export("eks_cluster_endpoint", "endpoint-not-available")
+      # Fallback
+      pulumi.export("eks_cluster_endpoint", "endpoint-not-available")
     # Handle different node group types
     if hasattr(eks_node_group, 'node_group_name'):
-        pulumi.export("eks_node_group_name", eks_node_group.node_group_name)
+      pulumi.export("eks_node_group_name", eks_node_group.node_group_name)
     elif hasattr(eks_node_group, 'name'):
-        pulumi.export("eks_node_group_name", eks_node_group.name)
+      pulumi.export("eks_node_group_name", eks_node_group.name)
     else:
-        pulumi.export("eks_node_group_name", f"{name_prefix}-eks-node-group")
+      pulumi.export("eks_node_group_name", f"{name_prefix}-eks-node-group")
     pulumi.export("alb_dns_name", alb.dns_name)
     pulumi.export("alb_target_group_arn", target_group.arn)
     pulumi.export("s3_app_bucket_name", s3_buckets["app_bucket"].bucket)
@@ -1877,16 +1891,16 @@ class TapStack(pulumi.ComponentResource):
     # Debug outputs for troubleshooting
     # Handle different cluster types for version and vpc_config
     if hasattr(eks_cluster, 'version'):
-        pulumi.export("eks_cluster_version", eks_cluster.version)
+      pulumi.export("eks_cluster_version", eks_cluster.version)
     else:
-        pulumi.export("eks_cluster_version", "1.29")  # Default version
-    
+      pulumi.export("eks_cluster_version", "1.29")  # Default version
+
     if hasattr(eks_cluster, 'vpc_config'):
-        pulumi.export("eks_cluster_vpc_config", eks_cluster.vpc_config)
+      pulumi.export("eks_cluster_vpc_config", eks_cluster.vpc_config)
     elif hasattr(eks_cluster, 'core') and hasattr(eks_cluster.core, 'vpc_config'):
-        pulumi.export("eks_cluster_vpc_config", eks_cluster.core.vpc_config)
+      pulumi.export("eks_cluster_vpc_config", eks_cluster.core.vpc_config)
     else:
-        pulumi.export("eks_cluster_vpc_config", "vpc-config-not-available")
+      pulumi.export("eks_cluster_vpc_config", "vpc-config-not-available")
     pulumi.export("eks_node_group_subnets",
                   [s.id for s in vpc_module.private_subnets])
     pulumi.export("eks_node_group_instance_types", ["t3.medium"])
@@ -1894,7 +1908,8 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("eks_node_group_ami_type", "AL2_x86_64")
 
     # NGINX deployment status
-    pulumi.export("nginx_deployment_status", "NGINX deployed automatically with LoadBalancer service")
+    pulumi.export("nginx_deployment_status",
+                  "NGINX deployed automatically with LoadBalancer service")
 
     self.register_outputs(
         {
