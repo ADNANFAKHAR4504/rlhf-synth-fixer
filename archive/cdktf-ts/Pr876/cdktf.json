@@ -1,0 +1,14 @@
+{
+  "language": "typescript",
+  "app": "npm run build && node bin/tap.js",
+  "projectId": "tap-infrastructure",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~>5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}
