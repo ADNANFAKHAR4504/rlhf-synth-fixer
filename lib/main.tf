@@ -69,6 +69,18 @@ variable "resource_suffix" {
   default     = ""
 }
 
+variable "domain_name" {
+  description = "Domain name for SSL certificate (optional - for production use)"
+  type        = string
+  default     = ""
+}
+
+variable "create_ssl_certificate" {
+  description = "Whether to create SSL certificate (set to false for CI/CD to avoid DNS validation delays)"
+  type        = bool
+  default     = false
+}
+
 
 # Random resource for unique naming
 resource "random_id" "suffix" {
@@ -402,6 +414,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "vpc_flow_logs" {
   rule {
     id     = "vpc_flow_logs_lifecycle"
     status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
 
     expiration {
       days = 90
@@ -1158,6 +1174,81 @@ resource "aws_cloudfront_distribution" "main" {
   })
 }
 
+########################
+# Optional SSL Certificate (for production with custom domain)
+########################
+
+# Route53 Hosted Zone (only if domain provided and SSL enabled)
+resource "aws_route53_zone" "main" {
+  count = var.create_ssl_certificate && var.domain_name != "" ? 1 : 0
+  name  = var.domain_name
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-zone-${local.suffix}"
+  })
+}
+
+# ACM Certificate (only if domain provided and SSL enabled)
+resource "aws_acm_certificate" "main" {
+  count             = var.create_ssl_certificate && var.domain_name != "" ? 1 : 0
+  domain_name       = var.domain_name
+  validation_method = "DNS"
+
+  subject_alternative_names = [
+    "*.${var.domain_name}"
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-cert-${local.suffix}"
+  })
+}
+
+# Certificate validation DNS records (only if SSL enabled)
+locals {
+  # Only create validation records if certificate exists
+  cert_validation_options = var.create_ssl_certificate && var.domain_name != "" ? aws_acm_certificate.main[0].domain_validation_options : []
+  
+  validation_records = var.create_ssl_certificate && var.domain_name != "" ? {
+    for dvo in local.cert_validation_options :
+    dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  } : {}
+}
+
+resource "aws_route53_record" "cert_validation" {
+  for_each = local.validation_records
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = aws_route53_zone.main[0].zone_id
+}
+
+# Certificate validation (with longer timeout for CI/CD)
+resource "aws_acm_certificate_validation" "main" {
+  count                   = var.create_ssl_certificate && var.domain_name != "" ? 1 : 0
+  certificate_arn         = aws_acm_certificate.main[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+
+  timeouts {
+    create = "15m"  # Extended timeout for CI/CD environments
+  }
+
+  depends_on = [
+    aws_route53_record.cert_validation,
+    aws_route53_zone.main
+  ]
+}
+
 # IAM User with MFA requirement
 resource "aws_iam_user" "app_user" {
   name = "${var.project}-app-user-${local.suffix}"
@@ -1394,4 +1485,24 @@ output "common_tags" {
 output "resource_suffix" {
   description = "Random suffix used for resource naming"
   value       = local.suffix
+}
+
+output "ssl_certificate_arn" {
+  description = "ACM certificate ARN (if SSL enabled)"
+  value       = var.create_ssl_certificate && var.domain_name != "" ? aws_acm_certificate_validation.main[0].certificate_arn : ""
+}
+
+output "route53_zone_id" {
+  description = "Route53 hosted zone ID (if SSL enabled)"
+  value       = var.create_ssl_certificate && var.domain_name != "" ? aws_route53_zone.main[0].zone_id : ""
+}
+
+output "domain_name" {
+  description = "Domain name configured"
+  value       = var.domain_name
+}
+
+output "ssl_enabled" {
+  description = "Whether SSL certificate is enabled"
+  value       = var.create_ssl_certificate
 }
