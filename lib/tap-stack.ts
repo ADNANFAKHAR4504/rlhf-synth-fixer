@@ -24,6 +24,8 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
+  // NEW: Add a domain name property to the stack props
+  domainName?: string;
 }
 
 export class TapStack extends TerraformStack {
@@ -45,8 +47,8 @@ export class TapStack extends TerraformStack {
           },
         ];
 
-    // Configure AWS Provider with a hardcoded region.
-    // The previous dynamic logic has been replaced.
+    // Configure the AWS Provider. The 'region' specified here
+    // will be used by all resources in all modules.
     new AwsProvider(this, 'aws', {
       region: 'us-east-1',
       defaultTags: defaultTags,
@@ -68,7 +70,10 @@ export class TapStack extends TerraformStack {
     const instanceType = 't3.micro';
     const sshKeyName = 'ssh-key-aug';
     const myIp = '206.84.231.196/32';
-    const domainName = 'example.com';
+    // Use the domain name from the props, or a placeholder if none is provided.
+    // NOTE: You must replace 'your-actual-domain.com' with a domain that
+    // has a Hosted Zone in your AWS account. Otherwise, the deployment will fail.
+    const domainName = props?.domainName || 'your-actual-domain.com';
 
     // --- Module Instantiation and Composition ---
     // 1. Create a secure VPC with public and private subnets across multiple AZs.
