@@ -1,26 +1,22 @@
-You are an expert Prompt Engineer with 10 years of experience. Your task is to create prompts for AI so that the AI will generate a response (IAC code).
-
-Help me write a prompt for creating Infrastructure as Code (IAC) in CDKTF. Please make sure that the provided data should remain intact and it should not change in any way.
+You are a highly experienced Prompt Engineer. Your task is to generate Terraform HCL code for Infrastructure as Code (IaC) that satisfies the following requirements.
 
 **Constraints:**
-- Use Terraform version 1.0.0 or greater.
-- Ensure all security groups are configured with specified inbound and outbound rules.
-- The configuration must support multiple environments using workspaces.
-- Integrate AWS IAM roles and policies to adhere to the principle of least privilege.
-- Use Terraform modules to encapsulate reusable components.
-- Implement a logging mechanism for auditing configuration changes.
+- Resource names must strictly follow the pattern `projectname-resource`, where `projectname` is a variable in your configuration. The provided data must remain intact and must not be altered in any way.
+- The setup must include an S3 bucket with versioning enabled, located in the `us-east-1` AWS region.
+- A DynamoDB table must be created with on-demand capacity and a partition key named `id`.
 
-**Environment:**
-Create a Terraform HCL configuration that implements a secure cloud infrastructure. The requirements are as follows:
-1. Define and deploy Security Groups with strict inbound and outbound rules in AWS across multiple regions using AWS VPC.
-2. Utilize Terraform workspaces to manage multiple environments (development, staging, production) with isolated settings.
-3. Implement AWS IAM policies and roles to restrict access in line with the principle of least privilege. These roles should be assigned to specific EC2 instances depending on the workspace.
-4. Use Terraform modules to define reusable components for security groups and IAM configurations.
-5. Include detailed resource tagging for cost monitoring and organization.
-6. Ensure all configuration changes are logged for audit purposes.
+**Environment and Requirements:**
+- Create a Terraform configuration to set up a basic cloud environment.
+- The environment must contain:
+  1. An S3 bucket with versioning enabled, located in the `us-east-1` region.
+  2. A DynamoDB table with on-demand capacity and a partition key named `id`.
+- Ensure all resource names follow the pattern `projectname-resource`, with `projectname` defined as a configurable variable within the script.
+- The resulting configuration must be valid Terraform HCL, suitable for a single AWS account in the `us-east-1` region.
+- The configuration should be easily replicable across environments and allow for straightforward future expansion of resources.
+- Output should be a single `.tf` file containing all necessary code to deploy the resources without errors.
 
-**Expected output:**  
-The solution should include well-commented HCL files with correct implementations of all required security groups, IAM roles, workspace configurations, and necessary modules. Passing tests must validate the deployment in multiple environments and regions, ensuring all security constraints are met without errors.
+**Proposed Statement:**
+The setup is intended for a single AWS account in the `us-east-1` region. The configuration should allow easy replication into other environments and enable future expansion of resources. All resource naming must use a specific variable for the project name.
 
-**Proposed Statement:**  
-The infrastructure environment consists of multiple AWS accounts distinguished by Terraform workspaces. Resources must be deployed in the us-east-1 and us-west-2 regions, using standard naming conventions with environment-specific prefixes (e.g., dev-, prod-). Each workspace should have its own state file, and backend configurations must be set up for remote state management. Security groups should allow traffic only from known IP ranges, and all ports should be closed by default. IAM roles should have permissions limited to the minimum required actions and resources.
+**Instructions:**
+Generate a complete, functional Terraform HCL configuration that satisfies all requirements above. Do not modify the constraints or data in any way. Ensure the output is ready to be saved as a `.tf` file and applied directly.

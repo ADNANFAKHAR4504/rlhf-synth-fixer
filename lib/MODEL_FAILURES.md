@@ -1,34 +1,25 @@
-# Model Failures
+## Model Failures: Terraform HCL IaC Prompt
 
-## 1. Multi-Region Deployment
-- **Failure:** The solution only deploys resources to a single region (from `AWS_REGION` env var). The prompt requires deployment in both `us-east-1` and `us-west-2`.
+1. **Resource Naming Pattern Not Enforced**
+	- The model sometimes generates resource names that do not strictly follow the required `projectname-resource` pattern, or omits the use of the `projectname` variable in all resource names.
 
-## 2. Workspace Isolation
-- **Failure:** No explicit use of Terraform workspaces for environment isolation. The solution uses environment variables, but does not show workspace configuration or switching.
+2. **Region Constraint Not Applied to All Resources**
+	- The S3 bucket is correctly placed in `us-east-1`, but other resources (e.g., DynamoDB) may lack explicit region configuration, risking deployment in a default or unintended region.
 
-## 3. Remote State Management
-- **Failure:** No backend configuration for remote state management or per-workspace state files.
+3. **Variable Definition and Usage Issues**
+	- The model may define the `projectname` variable but fail to use it consistently in all resource names, outputs, or tags.
 
-## 4. Security Group Rules
-- **Failure:** Security groups allow HTTP/HTTPS from `0.0.0.0/0` (the entire internet). The prompt requires only known IP ranges and all ports closed by default.
+4. **Incomplete Resource Configuration**
+	- The DynamoDB table may be missing required attributes (e.g., partition key `id`), or may not use on-demand capacity mode as specified.
 
-## 5. IAM Least Privilege
-- **Failure:** IAM roles use broad managed policies (e.g., `AmazonSSMManagedInstanceCore`, `CloudWatchAgentServerPolicy`). The prompt requires permissions limited to minimum required actions and resources.
+5. **Output Section Missing or Incomplete**
+	- The model may omit outputs for key resources, making it harder to reference them in other modules or environments.
 
-## 6. Logging/Auditing
-- **Failure:** No logging mechanism for auditing configuration changes is implemented.
+6. **Replicability and Expansion Not Addressed**
+	- The configuration may not be modular or easily extendable, lacking structure for future resource additions or environment replication.
 
-## 7. Terraform Version
-- **Failure:** The `cdktf.json` only specifies AWS provider version, not Terraform version (`>= 1.0.0`).
+7. **Syntax or Validation Errors**
+	- Generated HCL may contain syntax errors, missing required blocks, or invalid resource arguments, causing Terraform plan/apply failures.
 
-## 8. Resource Naming
-- **Failure:** No standard naming convention with environment-specific prefixes for all resources (e.g., `dev-`, `prod-`).
-
-## 9. Module Usage
-- **Failure:** No explicit use of Terraform modules for reusable components; constructs are used, but not modules as required by the prompt.
-
-## 10. Resource Tagging
-- **Failure:** Tagging is present, but not validated for completeness (e.g., cost monitoring tags).
-
-## 11. Testing
-- **Failure:** No tests are provided to validate deployment in multiple regions, workspace isolation, or other critical functionalities.
+8. **Documentation and Comments Insufficient**
+	- The model may not provide adequate comments or documentation within the `.tf` file, reducing maintainability and clarity for future users.
