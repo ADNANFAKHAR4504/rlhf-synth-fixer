@@ -9,6 +9,7 @@ import {
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
   DescribeSecurityGroupsCommand,
+  DescribeVpcAttributeCommand,
 } from '@aws-sdk/client-ec2';
 import {
   RDSClient,
@@ -69,11 +70,18 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(vpc.CidrBlock).toBe('10.0.0.0/16');
         expect(vpc.State).toBe('available');
 
-        // Check DNS settings
-        // @ts-ignore - AWS SDK type definition issue
-        expect(vpc.EnableDnsHostnames).toBe(true);
-        // @ts-ignore - AWS SDK type definition issue
-        expect(vpc.EnableDnsSupport).toBe(true);
+        // Check DNS settings using DescribeVpcAttributeCommand
+        const dnsHostnamesAttr = await ec2ClientPrimary.send(new DescribeVpcAttributeCommand({
+          VpcId: outputs.primary_vpc_id,
+          Attribute: 'enableDnsHostnames',
+        }));
+        expect(dnsHostnamesAttr.EnableDnsHostnames?.Value).toBe(true);
+
+        const dnsSupportAttr = await ec2ClientPrimary.send(new DescribeVpcAttributeCommand({
+          VpcId: outputs.primary_vpc_id,
+          Attribute: 'enableDnsSupport',
+        }));
+        expect(dnsSupportAttr.EnableDnsSupport?.Value).toBe(true);
 
         // Check tags
         const nameTag = vpc.Tags?.find(tag => tag.Key === 'Name');
@@ -199,11 +207,18 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(vpc.CidrBlock).toBe('10.0.0.0/16');
         expect(vpc.State).toBe('available');
 
-        // Check DNS settings
-        // @ts-ignore - AWS SDK type definition issue
-        expect(vpc.EnableDnsHostnames).toBe(true);
-        // @ts-ignore - AWS SDK type definition issue
-        expect(vpc.EnableDnsSupport).toBe(true);
+        // Check DNS settings using DescribeVpcAttributeCommand
+        const dnsHostnamesAttr = await ec2ClientSecondary.send(new DescribeVpcAttributeCommand({
+          VpcId: outputs.secondary_vpc_id,
+          Attribute: 'enableDnsHostnames',
+        }));
+        expect(dnsHostnamesAttr.EnableDnsHostnames?.Value).toBe(true);
+
+        const dnsSupportAttr = await ec2ClientSecondary.send(new DescribeVpcAttributeCommand({
+          VpcId: outputs.secondary_vpc_id,
+          Attribute: 'enableDnsSupport',
+        }));
+        expect(dnsSupportAttr.EnableDnsSupport?.Value).toBe(true);
 
         // Check tags
         const nameTag = vpc.Tags?.find(tag => tag.Key === 'Name');
