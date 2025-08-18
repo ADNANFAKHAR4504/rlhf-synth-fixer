@@ -503,52 +503,8 @@ data "aws_iam_user" "app_user" {
 }
 
 # MFA Policy for IAM User
-resource "aws_iam_policy" "mfa_policy" {
-  name        = "${var.project_name}-mfa-policy"
-  description = "Policy to enforce MFA for all operations"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowViewAccountInfo"
-        Effect = "Allow"
-        Action = [
-          "iam:GetAccountPasswordPolicy",
-          "iam:GetAccountSummary",
-          "iam:ListVirtualMFADevices"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "AllowManageOwnPasswords"
-        Effect = "Allow"
-        Action = [
-          "iam:ChangePassword",
-          "iam:GetUser"
-        ]
-        Resource = "arn:aws:iam::*:user/$${aws:username}"
-      },
-      {
-        Sid    = "AllowManageOwnMFA"
-        Effect = "Allow"
-        Action = [
-          "iam:CreateVirtualMfaDevice",
-          "iam:EnableMfaDevice",
-          "iam:ResyncMfaDevice",
-          "iam:DeactivateMfaDevice",
-          "iam:DeleteVirtualMfaDevice",
-          "iam:ListVirtualMfaDevices",
-          "iam:ListMfaDevices",
-          "iam:GetUser",
-          "iam:ListUsers"
-        ],
-        Resource = [
-          "arn:aws:iam::*:user/$${aws:username}",
-          "arn:aws:iam::*:mfa/$${aws:username}"
-        ]
-      }
-    ]})
+data "aws_iam_policy" "mfa_policy" {
+  arn = "arn:aws:iam::${var.account_id}:policy/${var.project_name}-mfa-policy"
 }
 
 output "ec2_instance_profile_name" {
