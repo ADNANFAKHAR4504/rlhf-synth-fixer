@@ -9,7 +9,7 @@ variable "projectname" {
 variable "aws_region" {
   description = "AWS region for provider"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-1"
 }
 
 ############################################################
