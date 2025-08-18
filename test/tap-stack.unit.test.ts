@@ -85,7 +85,7 @@ describe('TapStack Unit Tests', () => {
       expect(parsed.terraform.backend.s3).toBeDefined();
       expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
       expect(parsed.terraform.backend.s3.key).toBe('dev/TestBackend.tfstate');
-      expect(parsed.terraform.backend.s3.region).toBe('us-west-2'); // <-- updated
+      expect(parsed.terraform.backend.s3.region).toBe('us-east-1'); // <- updated
       expect(parsed.terraform.backend.s3.encrypt).toBe(true);
     });
 

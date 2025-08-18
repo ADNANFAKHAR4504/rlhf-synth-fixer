@@ -51,7 +51,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
         "bucket": "my-custom-state-bucket",
         "encrypt": true,
         "key": "prod/TestCustomStack.tfstate",
-        "region": "us-west-2",
+        "region": "us-east-1",
         "use_lockfile": true
       }
     },
@@ -115,7 +115,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should u
         "bucket": "iac-rlhf-tf-states",
         "encrypt": true,
         "key": "dev/TestDefaultStack.tfstate",
-        "region": "us-west-2",
+        "region": "us-east-1",
         "use_lockfile": true
       }
     },

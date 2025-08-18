@@ -24,7 +24,10 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
+// --- Deployment region for AWS resources ---
 const AWS_REGION_OVERRIDE = 'us-west-2';
+// --- Actual region where S3 bucket exists ---
+const STATE_BUCKET_REGION = 'us-east-1';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -32,10 +35,7 @@ export class TapStack extends TerraformStack {
 
     const project = 'tap';
     const env = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = awsRegion; // <-- fixed: always match provider region
+    const awsRegion = AWS_REGION_OVERRIDE;
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
@@ -50,7 +50,7 @@ export class TapStack extends TerraformStack {
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${env}/${id}.tfstate`,
-      region: stateBucketRegion,
+      region: STATE_BUCKET_REGION, // <- use bucket’s actual region
       encrypt: true,
     });
     this.addOverride('terraform.backend.s3.use_lockfile', true);
