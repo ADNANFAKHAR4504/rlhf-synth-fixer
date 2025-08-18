@@ -49,6 +49,7 @@ variable "private_subnet_cidrs" {
 variable "environment" {
   description = "Environment name"
   type        = string
+  default     = "dev"
 }
 
 variable "availability_zones" {
