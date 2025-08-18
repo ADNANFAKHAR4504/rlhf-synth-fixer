@@ -574,11 +574,13 @@ echo "<h1>Production Web Server</h1>" > /var/www/html/index.html
       { parent: this }
     );
 
-    // Create SSL certificate from ACM
+    // SSL certificate is commented out to avoid validation timeout issues
+    // In production, create a certificate with a domain you own and proper DNS validation
+    /*
     const certificate = new aws.acm.Certificate(
       `prod-cert-${environmentSuffix}`,
       {
-        domainName: 'example.com',
+        domainName: 'yourdomain.com', // Replace with your actual domain
         validationMethod: 'DNS',
         tags: {
           Name: `prod-cert-${environmentSuffix}`,
@@ -588,7 +590,7 @@ echo "<h1>Production Web Server</h1>" > /var/www/html/index.html
       { parent: this }
     );
 
-    // Create ALB listener for HTTPS
+    // Create ALB listener for HTTPS - uncomment when certificate is ready
     new aws.lb.Listener(
       `prod-alb-listener-https-${environmentSuffix}`,
       {
@@ -606,8 +608,10 @@ echo "<h1>Production Web Server</h1>" > /var/www/html/index.html
       },
       { parent: this }
     );
+    */
 
-    // Create ALB listener for HTTP (redirect to HTTPS)
+    // Create ALB listener for HTTP (serving content directly)
+    // In production with SSL certificate, change this back to redirect to HTTPS
     new aws.lb.Listener(
       `prod-alb-listener-http-${environmentSuffix}`,
       {
@@ -616,12 +620,8 @@ echo "<h1>Production Web Server</h1>" > /var/www/html/index.html
         protocol: 'HTTP',
         defaultActions: [
           {
-            type: 'redirect',
-            redirect: {
-              port: '443',
-              protocol: 'HTTPS',
-              statusCode: 'HTTP_301',
-            },
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
           },
         ],
       },
