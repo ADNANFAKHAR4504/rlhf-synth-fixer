@@ -1,39 +1,40 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Note: These are mock integration tests since deployment was blocked by AWS quota limits
-// In a real scenario with successful deployment, these would test against actual deployed resources
+// Helper function to read stack outputs
+function getStackOutputs(): Record<string, any> {
+  const outputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+  if (!fs.existsSync(outputsPath)) {
+    // Fallback to flat-outputs.json if all-outputs.json doesn't exist
+    const flatOutputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+    if (!fs.existsSync(flatOutputsPath)) {
+      throw new Error(`No outputs file found. Expected: ${outputsPath} or ${flatOutputsPath}`);
+    }
+    
+    const outputsContent = fs.readFileSync(flatOutputsPath, 'utf8');
+    return JSON.parse(outputsContent);
+  }
 
-// Load deployment outputs (using mock data for testing)
-const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
-let outputs: any;
+  const outputsContent = fs.readFileSync(outputsPath, 'utf8');
+  const outputs = JSON.parse(outputsContent);
 
-try {
-  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
-} catch (error) {
-  console.warn('Using mock outputs for testing due to deployment issues');
-  outputs = {
-    BucketName: 'tap-app-bucket-synthtrainr135-primary-tapstacksynthtrainr135',
-    DBInstanceId: 'tap-db-synthtrainr135',
-    DBEndpoint:
-      'tap-db-synthtrainr135.c3l4mfxx4xyj.us-west-2.rds.amazonaws.com:3306',
-    LambdaFunctionName: 'tap-lambda-synthtrainr135',
-    LambdaFunctionArn:
-      'arn:aws:lambda:us-west-2:718240086340:function:tap-lambda-synthtrainr135',
-    VPCId: 'vpc-0b094aa4091786d92',
-    EventBusName: 'tap-application-events-synthtrainr135',
-    EventBusArn:
-      'arn:aws:events:us-west-2:718240086340:event-bus/tap-application-events-synthtrainr135',
-    MonitoringLogGroupName: '/aws/events/tap-application-synthtrainr135',
-    DBEndpointParamName: '/tap/synthtrainr135/database/endpoint',
-    DBUsernameParamName: '/tap/synthtrainr135/database/username',
-    DBPasswordParamName: '/tap/synthtrainr135/database/password',
-    DBNameParamName: '/tap/synthtrainr135/database/name',
-    ParameterStorePrefix: '/tap/synthtrainr135/',
-  };
+  // Find the first stack (agnostic to stack name)
+  const stackName = Object.keys(outputs)[0];
+  if (!stackName) {
+    throw new Error('No stack outputs found');
+  }
+
+  return outputs[stackName];
 }
 
 describe('TAP Infrastructure Integration Tests', () => {
+  let outputs: Record<string, any>;
+
+  beforeAll(() => {
+    outputs = getStackOutputs();
+    console.log('Stack outputs loaded:', Object.keys(outputs));
+  });
+
   describe('S3 Bucket', () => {
     test('should have valid bucket name output', () => {
       expect(outputs.bucketName).toBeDefined();
