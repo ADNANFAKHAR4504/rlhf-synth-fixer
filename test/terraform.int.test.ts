@@ -313,8 +313,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
 
     itIfReady('CloudWatch alarm exists for unauthorized access', async () => {
+      // Extract resource prefix from one of the outputs to build the correct alarm name prefix
+      const webAppRoleArn = outputs.web_app_role_arn || '';
+      const roleNameMatch = webAppRoleArn.match(/role\/(.+)-web-app-role-(.+)$/);
+      const resourcePrefix = roleNameMatch ? `${roleNameMatch[1]}` : 'securitydemo-dev';
+      
       const alarms = await cloudWatch.describeAlarms({
-        AlarmNamePrefix: 'securitydemo-synthtrainr867-unauthorized'
+        AlarmNamePrefix: `${resourcePrefix}-unauthorized-secret-access`
       }).promise();
       
       expect(alarms.MetricAlarms).toBeDefined();
