@@ -109,6 +109,12 @@ variable "acm_certificate_arn" {
   default     = "arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000"
 }
 
+variable "enable_config" {
+  description = "Enable AWS Config resources (guard against account recorder limits)"
+  type        = bool
+  default     = false
+}
+
 ########################
 # Data sources
 ########################
@@ -150,33 +156,33 @@ resource "aws_kms_key" "main" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid: "EnableIAMUserPermissions",
-        Effect: "Allow",
-        Principal: { AWS: "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" },
-        Action: "kms:*",
-        Resource: "*"
+        Sid : "EnableIAMUserPermissions",
+        Effect : "Allow",
+        Principal : { AWS : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" },
+        Action : "kms:*",
+        Resource : "*"
       },
       {
-        Sid: "AllowCloudWatchLogs",
-        Effect: "Allow",
-        Principal: { Service: "logs.${var.aws_region}.amazonaws.com" },
-        Action: [
+        Sid : "AllowCloudWatchLogs",
+        Effect : "Allow",
+        Principal : { Service : "logs.${var.aws_region}.amazonaws.com" },
+        Action : [
           "kms:Encrypt",
           "kms:Decrypt",
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
           "kms:DescribeKey"
         ],
-        Resource: "*",
-        Condition: {
-          ArnEquals: {
-            "kms:EncryptionContext:aws:logs:arn": "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+        Resource : "*",
+        Condition : {
+          ArnEquals : {
+            "kms:EncryptionContext:aws:logs:arn" : "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
           }
         }
       }
     ]
   })
-  tags                    = merge(local.common_tags, { Name = "${local.name_prefix}-kms" })
+  tags = merge(local.common_tags, { Name = "${local.name_prefix}-kms" })
 }
 
 resource "aws_kms_alias" "main" {
@@ -484,14 +490,23 @@ resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
   policy = jsonencode({
     Version = "2012-10-17",
-    Statement = [{
-      Sid       = "AllowELBLogDelivery",
-      Effect    = "Allow",
-      Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
-      Action    = ["s3:PutObject"],
-      Resource  = "${aws_s3_bucket.logs.arn}/*",
-      Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
-    }]
+    Statement = [
+      {
+        Sid       = "AWSLogDeliveryWrite",
+        Effect    = "Allow",
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
+        Action    = ["s3:PutObject", "s3:PutObjectAcl"],
+        Resource  = "${aws_s3_bucket.logs.arn}/*",
+        Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
+      },
+      {
+        Sid       = "AWSLogDeliveryCheck",
+        Effect    = "Allow",
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
+        Action    = ["s3:GetBucketAcl", "s3:ListBucket"],
+        Resource  = aws_s3_bucket.logs.arn
+      }
+    ]
   })
 }
 
@@ -774,7 +789,7 @@ resource "aws_db_subnet_group" "main" {
 
 resource "aws_db_parameter_group" "main" {
   name        = "${local.name_prefix}-pg"
-  family      = "postgres15"
+  family      = "postgres17"
   description = "Parameter group for ${local.name_prefix}"
   tags        = merge(local.common_tags, { Name = "${local.name_prefix}-pg" })
 }
@@ -807,6 +822,7 @@ resource "aws_db_instance" "main" {
 # AWS Config (recorder, delivery, rules)
 ########################
 resource "aws_config_configuration_recorder" "main" {
+  count    = var.enable_config ? 1 : 0
   name     = "${local.name_prefix}-recorder"
   role_arn = local.config_service_linked_role_arn
   recording_group {
@@ -816,19 +832,22 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
+  count          = var.enable_config ? 1 : 0
   name           = "${local.name_prefix}-delivery"
   s3_bucket_name = aws_s3_bucket.config.bucket
   depends_on     = [aws_config_configuration_recorder.main]
 }
 
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count      = var.enable_config ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.main]
 }
 
 resource "aws_config_config_rule" "s3_encryption" {
-  name = "${local.name_prefix}-s3-bucket-sse"
+  count = var.enable_config ? 1 : 0
+  name  = "${local.name_prefix}-s3-bucket-sse"
   source {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
@@ -837,7 +856,8 @@ resource "aws_config_config_rule" "s3_encryption" {
 }
 
 resource "aws_config_config_rule" "s3_public_read" {
-  name = "${local.name_prefix}-s3-public-read-prohibited"
+  count = var.enable_config ? 1 : 0
+  name  = "${local.name_prefix}-s3-public-read-prohibited"
   source {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
@@ -846,7 +866,8 @@ resource "aws_config_config_rule" "s3_public_read" {
 }
 
 resource "aws_config_config_rule" "iam_password_policy" {
-  name = "${local.name_prefix}-iam-password-policy"
+  count = var.enable_config ? 1 : 0
+  name  = "${local.name_prefix}-iam-password-policy"
   source {
     owner             = "AWS"
     source_identifier = "IAM_PASSWORD_POLICY"
