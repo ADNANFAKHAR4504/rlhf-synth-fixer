@@ -66,6 +66,12 @@ variable "notification_email" {
   default     = "dev@example.com" # replace with actual email address
 }
 
+variable "saml_metadata_document" {
+  description = "SAML metadata document for the identity provider"
+  type        = string
+  default     = "" # replace with actual SAML metadata document
+}
+
 # Outputs
 
 output "vpc_id" {
@@ -118,6 +124,26 @@ output "sns_topic_arn" {
   value       = module.monitoring.sns_topic_arn
 }
 
+output "saml_provider_arn" {
+  description = "ARN of the SAML provider"
+  value       = module.iam.saml_provider_arn
+}
+
+output "admin_role_arn" {
+  description = "ARN of the admin role"
+  value       = module.iam.admin_role_arn
+}
+
+output "readonly_role_arn" {
+  description = "ARN of the readonly role"
+  value       = module.iam.readonly_role_arn
+}
+
+output "saml_role_arn" {
+  description = "ARN of the SAML role"
+  value       = module.iam.saml_role_arn
+}
+
 # Data sources
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
@@ -142,9 +168,15 @@ module "iam" {
   project_name = var.project_name
   environment  = var.environment
 
-  idp_arn        = var.idp_arn
-  idp_url        = var.idp_url
-  idp_thumbprint = var.idp_thumbprint
+  idp_arn                = var.idp_arn
+  idp_url                = var.idp_url
+  idp_thumbprint         = var.idp_thumbprint
+  saml_metadata_document = var.saml_metadata_document
+  common_tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
 
   depends_on = [module.vpc]
 }

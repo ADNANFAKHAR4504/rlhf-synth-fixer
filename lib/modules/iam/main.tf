@@ -1,31 +1,50 @@
-# SAML Identity Provider (commented out - requires metadata file)
-# resource "aws_iam_saml_provider" "main" {
-#   name                   = "${var.project_name}-saml-provider-${var.environment}"
-#   saml_metadata_document = file("${path.module}/saml-metadata.xml")
-# }
+# SAML Identity Provider (only create if metadata is provided)
+resource "aws_iam_saml_provider" "main" {
+  count                  = var.saml_metadata_document != "" ? 1 : 0
+  name                   = "${var.project_name}-saml-provider-${var.environment}"
+  saml_metadata_document = var.saml_metadata_document
 
-# IAM Role for SAML Federation (commented out - requires SAML provider)
-# resource "aws_iam_role" "saml_role" {
-#   name = "${var.project_name}-saml-role-${var.environment}"
-# 
-#   assume_role_policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [
-#       {
-#         Effect = "Allow"
-#         Principal = {
-#           Federated = aws_iam_saml_provider.main.arn
-#         }
-#         Action = "sts:AssumeRoleWithSAML"
-#         Condition = {
-#           StringEquals = {
-#             "SAML:aud" = "https://signin.aws.amazon.com/saml"
-#           }
-#         }
-#       }
-#     ]
-#   })
-# }
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-saml-provider-${var.environment}"
+    Type = "identity-provider"
+  })
+}
+
+# IAM Role for SAML Federation (only create if SAML provider exists)
+resource "aws_iam_role" "saml_role" {
+  count = var.saml_metadata_document != "" ? 1 : 0
+  name  = "${var.project_name}-saml-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_saml_provider.main[0].arn
+        }
+        Action = "sts:AssumeRoleWithSAML"
+        Condition = {
+          StringEquals = {
+            "SAML:aud" = "https://signin.aws.amazon.com/saml"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-saml-role-${var.environment}"
+    Type = "iam-role"
+  })
+}
+
+# Attach MFA policy to SAML role
+resource "aws_iam_role_policy_attachment" "saml_mfa_policy" {
+  count      = var.saml_metadata_document != "" ? 1 : 0
+  role       = aws_iam_role.saml_role[0].name
+  policy_arn = aws_iam_policy.mfa_policy.arn
+}
 
 # IAM Policy requiring MFA
 resource "aws_iam_policy" "mfa_policy" {
@@ -124,33 +143,47 @@ resource "aws_iam_role_policy_attachment" "admin_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
-# ReadOnly Role (commented out - requires SAML provider)
-# resource "aws_iam_role" "readonly_role" {
-#   name = "${var.project_name}-readonly-role-${var.environment}"
-# 
-#   assume_role_policy = jsonencode({
-#     Version = "2012-10-17"
-#     Statement = [
-#       {
-#         Effect = "Allow"
-#         Principal = {
-#           Federated = aws_iam_saml_provider.main.arn
-#         }
-#         Action = "sts:AssumeRoleWithSAML"
-#         Condition = {
-#           StringEquals = {
-#             "SAML:aud" = "https://signin.aws.amazon.com/saml"
-#           }
-#         }
-#       }
-#     ]
-#   })
-# }
-# 
-# resource "aws_iam_role_policy_attachment" "readonly_policy" {
-#   role       = aws_iam_role.readonly_role.name
-#   policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
-# }
+# ReadOnly Role for SAML Federation (only create if SAML provider exists)
+resource "aws_iam_role" "readonly_role" {
+  count = var.saml_metadata_document != "" ? 1 : 0
+  name  = "${var.project_name}-readonly-role-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Federated = aws_iam_saml_provider.main[0].arn
+        }
+        Action = "sts:AssumeRoleWithSAML"
+        Condition = {
+          StringEquals = {
+            "SAML:aud" = "https://signin.aws.amazon.com/saml"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(var.common_tags, {
+    Name = "${var.project_name}-readonly-role-${var.environment}"
+    Type = "iam-role"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "readonly_policy" {
+  count      = var.saml_metadata_document != "" ? 1 : 0
+  role       = aws_iam_role.readonly_role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+# Attach MFA policy to readonly role
+resource "aws_iam_role_policy_attachment" "readonly_mfa_policy" {
+  count      = var.saml_metadata_document != "" ? 1 : 0
+  role       = aws_iam_role.readonly_role[0].name
+  policy_arn = aws_iam_policy.mfa_policy.arn
+}
 
 # Data source for current AWS account
 data "aws_caller_identity" "current" {}

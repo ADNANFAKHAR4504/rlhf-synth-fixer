@@ -58,6 +58,14 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
       expect(fs.existsSync(path.join(storagePath, "variables.tf"))).toBe(true);
       expect(fs.existsSync(path.join(storagePath, "outputs.tf"))).toBe(true);
     });
+
+    test("iam module exists and has required files", () => {
+      const iamPath = path.join(modulesPath, "iam");
+      expect(fs.existsSync(iamPath)).toBe(true);
+      expect(fs.existsSync(path.join(iamPath, "main.tf"))).toBe(true);
+      expect(fs.existsSync(path.join(iamPath, "variables.tf"))).toBe(true);
+      expect(fs.existsSync(path.join(iamPath, "outputs.tf"))).toBe(true);
+    });
   });
 
   describe("Monitoring Module Configuration", () => {
@@ -145,9 +153,49 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_iam_role"\s+"config_role"\s*{/);
     });
 
+    test("has AWS managed policy attachment for Config", () => {
+      expect(complianceContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"config_managed_policy"\s*{/);
+      expect(complianceContent).toMatch(/policy_arn\s*=\s*"arn:aws:iam::aws:policy\/service-role\/AWS_ConfigRole"/);
+    });
+
     test("has existing recorder configuration", () => {
       expect(complianceContent).toMatch(/config_recorder_name\s*=\s*var\.use_existing_config_recorder\s*\?\s*"prod-sec-config-recorder-main"/);
       expect(complianceContent).toMatch(/locals\s*{/);
+    });
+  });
+
+  describe("IAM Module Configuration", () => {
+    let iamContent: string;
+
+    beforeAll(() => {
+      const iamPath = path.join(modulesPath, "iam", "main.tf");
+      iamContent = fs.readFileSync(iamPath, "utf8");
+    });
+
+    test("has SAML Identity Provider", () => {
+      expect(iamContent).toMatch(/resource\s+"aws_iam_saml_provider"\s+"main"\s*{/);
+      expect(iamContent).toMatch(/saml_metadata_document\s*=\s*var\.saml_metadata_document/);
+    });
+
+    test("has SAML Federation Role", () => {
+      expect(iamContent).toMatch(/resource\s+"aws_iam_role"\s+"saml_role"\s*{/);
+      expect(iamContent).toMatch(/Federated\s*=\s*aws_iam_saml_provider\.main\[0\]\.arn/);
+    });
+
+    test("has ReadOnly Role for SAML", () => {
+      expect(iamContent).toMatch(/resource\s+"aws_iam_role"\s+"readonly_role"\s*{/);
+      expect(iamContent).toMatch(/sts:AssumeRoleWithSAML/);
+      expect(iamContent).toMatch(/Federated\s*=\s*aws_iam_saml_provider\.main\[0\]\.arn/);
+    });
+
+    test("has MFA Policy", () => {
+      expect(iamContent).toMatch(/resource\s+"aws_iam_policy"\s+"mfa_policy"\s*{/);
+      expect(iamContent).toMatch(/aws:MultiFactorAuthPresent/);
+    });
+
+    test("has Admin Role with MFA requirement", () => {
+      expect(iamContent).toMatch(/resource\s+"aws_iam_role"\s+"admin_role"\s*{/);
+      expect(iamContent).toMatch(/aws:MultiFactorAuthPresent.*true/);
     });
   });
 
@@ -249,6 +297,9 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
       expect(monitoringContent).toMatch(/event_selector\s*{/);
       expect(monitoringContent).toMatch(/read_write_type\s*=\s*"All"/);
       expect(monitoringContent).toMatch(/include_management_events\s*=\s*true/);
+      expect(monitoringContent).toMatch(/data_resource\s*{/);
+      expect(monitoringContent).toMatch(/type\s*=\s*"AWS::S3::Object"/);
+      expect(monitoringContent).toMatch(/values\s*=\s*\["arn:aws:s3:::\$\{var\.cloudtrail_s3_bucket\}\/\*"\]/);
     });
 
     test("S3 buckets have proper encryption", () => {

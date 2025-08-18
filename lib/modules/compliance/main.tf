@@ -58,32 +58,20 @@ resource "aws_iam_role" "config_role" {
   })
 }
 
-# IAM Policy for AWS Config
-resource "aws_iam_role_policy" "config_policy" {
-  name = "${var.project_name}-config-policy-${var.environment}"
+# Attach AWS managed policy for Config
+resource "aws_iam_role_policy_attachment" "config_managed_policy" {
+  role       = aws_iam_role.config_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+}
+
+# Additional IAM Policy for AWS Config (for SNS and CloudWatch)
+resource "aws_iam_role_policy" "config_additional_policy" {
+  name = "${var.project_name}-config-additional-policy-${var.environment}"
   role = aws_iam_role.config_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:GetBucketAcl",
-          "s3:GetBucketLocation",
-          "s3:ListBucket",
-          "s3:ListBucketMultipartUploads",
-          "s3:ListMultipartUploadParts",
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:AbortMultipartUpload"
-        ]
-        Resource = [
-          "arn:aws:s3:::${var.config_s3_bucket}",
-          "arn:aws:s3:::${var.config_s3_bucket}/*"
-        ]
-      },
       {
         Effect = "Allow"
         Action = [
