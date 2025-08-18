@@ -6,21 +6,21 @@ import { TapStack } from '../lib/tap-stack';
 // --- Mocking the Modules ---
 jest.mock('../lib/modules', () => {
   return {
-    NetworkModule: jest.fn(() => ({
+    NetworkModule: jest.fn((scope: any, id: string, provider?: any) => ({
       vpc: { id: 'mock-vpc-id' },
       privateSubnetIds: ['mock-private-subnet-id'],
     })),
-    KmsModule: jest.fn(() => ({
+    KmsModule: jest.fn((scope: any, id: string, opts?: any) => ({
       kmsKey: { arn: 'mock-kms-arn' },
     })),
-    ComputeModule: jest.fn(() => ({
+    ComputeModule: jest.fn((scope: any, id: string, opts?: any) => ({
       instance: { id: 'mock-instance-id', privateIp: 'mock-private-ip' },
     })),
-    DatabaseModule: jest.fn(() => ({
+    DatabaseModule: jest.fn((scope: any, id: string, opts?: any) => ({
       db: { endpoint: 'mock-rds-endpoint' },
-      dbSecret: { arn: 'mock-rds-secret-arn' }, // ✅ Add dbSecret for outputs
+      dbSecret: { arn: 'mock-rds-secret-arn' },
     })),
-    StorageModule: jest.fn(() => ({
+    StorageModule: jest.fn((scope: any, id: string, opts?: any) => ({
       bucket: { bucket: 'mock-s3-bucket' },
     })),
   };
@@ -72,7 +72,7 @@ describe('TapStack Unit Tests', () => {
 
       expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
       expect(parsed.terraform.backend.s3.key).toBe('dev/TestDefaultStack.tfstate');
-      expect(parsed.provider.aws[0].region).toBe('us-west-2'); // AWS_REGION_OVERRIDE
+      expect(parsed.provider.aws[0].region).toBe('us-west-2');
       expect(synthesized).toMatchSnapshot();
     });
 
@@ -85,7 +85,7 @@ describe('TapStack Unit Tests', () => {
       expect(parsed.terraform.backend.s3).toBeDefined();
       expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
       expect(parsed.terraform.backend.s3.key).toBe('dev/TestBackend.tfstate');
-      expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
+      expect(parsed.terraform.backend.s3.region).toBe('us-west-2'); // <-- updated
       expect(parsed.terraform.backend.s3.encrypt).toBe(true);
     });
 
@@ -111,7 +111,11 @@ describe('TapStack Unit Tests', () => {
 
     test('should create NetworkModule instance', () => {
       expect(NetworkModule).toHaveBeenCalledTimes(1);
-      expect(NetworkModule).toHaveBeenCalledWith(expect.anything(), 'network');
+      expect(NetworkModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'network',
+        expect.anything() // <-- accept provider argument
+      );
     });
 
     test('should create KmsModule instance', () => {
@@ -185,7 +189,7 @@ describe('TapStack Unit Tests', () => {
       expect(outputs.ec2InstanceId.value).toBe('mock-instance-id');
       expect(outputs.ec2PrivateIp.value).toBe('mock-private-ip');
       expect(outputs.rdsInstanceEndpoint.value).toBe('mock-rds-endpoint');
-      expect(outputs.rdsSecretArn.value).toBe('mock-rds-secret-arn'); // ✅ dbSecret output
+      expect(outputs.rdsSecretArn.value).toBe('mock-rds-secret-arn');
       expect(outputs.s3BucketName.value).toBe('mock-s3-bucket');
 
       expect(outputs.rdsInstanceEndpoint.sensitive).toBe(true);

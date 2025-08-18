@@ -30,6 +30,13 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
   "provider": {
     "aws": [
       {
+        "default_tags": [
+          {
+            "tags": {
+              "Project": "TAP"
+            }
+          }
+        ],
         "region": "us-west-2"
       }
     ],
@@ -44,7 +51,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
         "bucket": "my-custom-state-bucket",
         "encrypt": true,
         "key": "prod/TestCustomStack.tfstate",
-        "region": "us-east-1",
+        "region": "us-west-2",
         "use_lockfile": true
       }
     },
@@ -92,6 +99,8 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should u
   "provider": {
     "aws": [
       {
+        "default_tags": [
+        ],
         "region": "us-west-2"
       }
     ],
@@ -106,7 +115,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should u
         "bucket": "iac-rlhf-tf-states",
         "encrypt": true,
         "key": "dev/TestDefaultStack.tfstate",
-        "region": "us-east-1",
+        "region": "us-west-2",
         "use_lockfile": true
       }
     },

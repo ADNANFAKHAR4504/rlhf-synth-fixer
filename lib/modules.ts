@@ -1,4 +1,5 @@
 import { Construct } from 'constructs';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 
 // AWS Provider resources
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -29,12 +30,13 @@ export class KmsModule extends Construct {
   constructor(
     scope: Construct,
     id: string,
-    props: { project: string; env: string }
+    props: { project: string; env: string; provider: AwsProvider }
   ) {
     super(scope, id);
     this.kmsKey = new KmsKey(this, 'KmsKey', {
       description: `${props.project}-${props.env} KMS Key`,
       enableKeyRotation: true,
+      provider: props.provider,
     });
   }
 }
@@ -45,21 +47,23 @@ export class KmsModule extends Construct {
 export class VpcModule extends Construct {
   public readonly vpc: Vpc;
   public readonly privateSubnetIds: string[];
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, provider: AwsProvider) {
     super(scope, id);
 
-    this.vpc = new Vpc(this, 'Vpc', { cidrBlock: '10.0.0.0/16' });
+    this.vpc = new Vpc(this, 'Vpc', { cidrBlock: '10.0.0.0/16', provider });
 
     const privateSubnet1 = new Subnet(this, 'PrivateSubnet1', {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.1.0/24',
-      availabilityZone: 'us-west-2a', // ✅ changed from us-west-1a
+      availabilityZone: 'us-west-2a',
+      provider,
     });
 
     const privateSubnet2 = new Subnet(this, 'PrivateSubnet2', {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.2.0/24',
-      availabilityZone: 'us-west-2b', // ✅ changed from us-west-1c
+      availabilityZone: 'us-west-2b',
+      provider,
     });
 
     this.privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
@@ -74,7 +78,12 @@ export class S3Module extends Construct {
   constructor(
     scope: Construct,
     id: string,
-    props: { project: string; env: string; kmsKeyArn: string }
+    props: {
+      project: string;
+      env: string;
+      kmsKeyArn: string;
+      provider: AwsProvider;
+    }
   ) {
     super(scope, id);
 
@@ -89,12 +98,13 @@ export class S3Module extends Construct {
         },
       },
       versioning: { enabled: true },
+      provider: props.provider,
     });
   }
 }
 
 // -----------------
-// 🗄️ RDS Module with Secrets Manager (Fixed)
+// 🗄️ RDS Module with Secrets Manager
 // -----------------
 export class RdsModule extends Construct {
   public readonly db: DbInstance;
@@ -108,6 +118,7 @@ export class RdsModule extends Construct {
       env: string;
       subnetIds: string[];
       kmsKeyArn: string;
+      provider: AwsProvider;
     }
   ) {
     super(scope, id);
@@ -115,31 +126,30 @@ export class RdsModule extends Construct {
     const subnetGroup = new DbSubnetGroup(this, 'DbSubnetGroup', {
       name: `${props.project}-${props.env}-dbsubnet`,
       subnetIds: props.subnetIds,
+      provider: props.provider,
     });
 
-    // Generate a random password
     const password = new RandomPassword(this, 'DbPassword', {
       length: 16,
       special: true,
     });
 
-    // Create Secrets Manager secret
     this.dbSecret = new SecretsmanagerSecret(this, 'DbSecret', {
       name: `${props.project}-${props.env}-rds-secret`,
       description: `RDS credentials for ${props.project}-${props.env}`,
       kmsKeyId: props.kmsKeyArn,
+      provider: props.provider,
     });
 
-    // Attach the username and generated password to the secret version
     new SecretsmanagerSecretVersion(this, 'DbSecretVersion', {
       secretId: this.dbSecret.id,
       secretString: JSON.stringify({
-        username: 'admin', // static username
-        password: password.result, // dynamic password
+        username: 'admin',
+        password: password.result,
       }),
+      provider: props.provider,
     });
 
-    // Create RDS instance using the generated password
     this.db = new DbInstance(this, 'RdsInstance', {
       engine: 'postgres',
       instanceClass: 'db.t3.micro',
@@ -150,6 +160,7 @@ export class RdsModule extends Construct {
       publiclyAccessible: false,
       username: 'admin',
       password: password.result,
+      provider: props.provider,
     });
   }
 }
@@ -168,6 +179,7 @@ export class Ec2Module extends Construct {
       vpcId: string;
       subnetId: string;
       kmsKeyId: string;
+      provider: AwsProvider;
     }
   ) {
     super(scope, id);
@@ -182,14 +194,16 @@ export class Ec2Module extends Construct {
           cidrBlocks: ['10.0.0.0/16'],
         },
       ],
+      provider: props.provider,
     });
 
     this.instance = new Instance(this, 'Ec2Instance', {
-      ami: 'ami-04e08e36e17a21b56', // keep your existing AMI
+      ami: 'ami-04e08e36e17a21b56',
       instanceType: 't3.micro',
       subnetId: props.subnetId,
       vpcSecurityGroupIds: [sg.id],
       associatePublicIpAddress: false,
+      provider: props.provider,
     });
   }
 }

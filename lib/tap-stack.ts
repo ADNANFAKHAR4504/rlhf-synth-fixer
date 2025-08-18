@@ -1,10 +1,11 @@
+// lib/tap-stack.ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { RandomProvider } from '@cdktf/provider-random/lib/provider';
-import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 
 // Import custom modules
 import {
@@ -31,16 +32,19 @@ export class TapStack extends TerraformStack {
 
     const project = 'tap';
     const env = props?.environmentSuffix || 'dev';
-
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
       : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+    const stateBucketRegion = awsRegion; // <-- fixed: always match provider region
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // --- Providers ---
-    new AwsProvider(this, 'aws', { region: awsRegion });
-    new RandomProvider(this, 'random'); // ✅ Add Random provider for RandomPassword
+    const awsProvider = new AwsProvider(this, 'aws', {
+      region: awsRegion,
+      defaultTags: defaultTags,
+    });
+    new RandomProvider(this, 'random');
 
     // --- S3 Backend ---
     new S3Backend(this, {
@@ -49,12 +53,15 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // --- Instantiate Modules ---
-    const network = new NetworkModule(this, 'network');
-    const kms = new KmsModule(this, 'kms', { project, env });
+    const network = new NetworkModule(this, 'network', awsProvider);
+    const kms = new KmsModule(this, 'kms', {
+      project,
+      env,
+      provider: awsProvider,
+    });
 
     const compute = new ComputeModule(this, 'compute', {
       project,
@@ -62,6 +69,7 @@ export class TapStack extends TerraformStack {
       vpcId: network.vpc.id,
       subnetId: network.privateSubnetIds[0],
       kmsKeyId: kms.kmsKey.arn,
+      provider: awsProvider,
     });
 
     const database = new DatabaseModule(this, 'database', {
@@ -69,12 +77,14 @@ export class TapStack extends TerraformStack {
       env,
       subnetIds: network.privateSubnetIds,
       kmsKeyArn: kms.kmsKey.arn,
+      provider: awsProvider,
     });
 
     const storage = new StorageModule(this, 'storage', {
       project,
       env,
       kmsKeyArn: kms.kmsKey.arn,
+      provider: awsProvider,
     });
 
     // --- Outputs ---
