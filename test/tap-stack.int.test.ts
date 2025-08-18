@@ -203,8 +203,8 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
-      // Basic DNS resolution check
-      expect(outputs.RDSEndpoint).toMatch(/^[a-z0-9-]+\.[\w-]+\.rds\.amazonaws\.com$/);
+      // Basic DNS resolution check - AWS RDS endpoints have format: {db-instance-id}.{cluster-id}.{region}.rds.amazonaws.com
+      expect(outputs.RDSEndpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
       expect(outputs.RDSEndpoint.length).toBeGreaterThan(10);
     });
   });
