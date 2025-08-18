@@ -50,12 +50,14 @@ export class NetworkingInfrastructure extends ComponentResource {
     this.vpcCidr = args.isPrimary ? '10.0.0.0/16' : '10.1.0.0/16';
 
     this.vpc = this.createVpc();
-    this.createSubnets();
     this.igw = this.createInternetGateway();
-    this.createNatGateways();
-    this.publicRt = this.createRouteTablesAndAssociations();
     this.albSecurityGroup = this.createAlbSecurityGroup();
     this.ebSecurityGroup = this.createEbSecurityGroup();
+
+    // Create subnets and route tables synchronously to avoid readonly issues
+    this.createSubnets();
+    this.createNatGateways();
+    this.publicRt = this.createRouteTablesAndAssociations();
 
     this.registerOutputs({
       vpcId: this.vpc.id,
@@ -84,19 +86,54 @@ export class NetworkingInfrastructure extends ComponentResource {
   }
 
   /**
-   * Create public and private subnets across multiple AZs (synchronous for testing)
+   * Get availability zones for the region with fallback
+   */
+  private getAvailabilityZones(): string[] {
+    // Region-specific AZ mapping for reliable deployments
+    const regionAzMap: Record<string, string[]> = {
+      'us-east-1': ['us-east-1a', 'us-east-1b'],
+      'us-east-2': ['us-east-2a', 'us-east-2b'],
+      'us-west-1': ['us-west-1a', 'us-west-1c'], // us-west-1 doesn't have 'b'
+      'us-west-2': ['us-west-2a', 'us-west-2b'],
+      'us-gov-east-1': ['us-gov-east-1a', 'us-gov-east-1b'],
+      'us-gov-west-1': ['us-gov-west-1a', 'us-gov-west-1b'],
+      'eu-west-1': ['eu-west-1a', 'eu-west-1b'],
+      'eu-central-1': ['eu-central-1a', 'eu-central-1b'],
+      'ap-southeast-1': ['ap-southeast-1a', 'ap-southeast-1b'],
+      'ap-northeast-1': ['ap-northeast-1a', 'ap-northeast-1c'],
+    };
+
+    const availableAzs = regionAzMap[this.region];
+    if (availableAzs) {
+      console.log(`📍 Using known AZs for ${this.region}:`, availableAzs);
+      return availableAzs;
+    }
+
+    // Fallback for unknown regions
+    console.log(`⚠️  Unknown region ${this.region}, using fallback AZs`);
+    return [`${this.region}a`, `${this.region}c`];
+  }
+
+  /**
+   * Create public and private subnets across multiple AZs
    */
   private createSubnets(): void {
-    // Create subnets synchronously for 2 AZs
-    const numAzsToUse = 2;
+    const availableAzs = this.getAvailabilityZones();
+    const numAzsToUse = Math.min(2, availableAzs.length);
     const base = this.isPrimary ? 0 : 1;
     const publicBase = 100;
     const privateBase = 120;
 
+    console.log(
+      `🏗️  Creating subnets in ${numAzsToUse} AZs for ${this.region}`
+    );
+
     for (let i = 0; i < numAzsToUse; i++) {
-      const azName = `${this.region}${String.fromCharCode(97 + i)}`; // us-east-1a, us-east-1b
+      const azName = availableAzs[i];
       const publicCidr = `10.${base}.${publicBase + i}.0/24`;
       const privateCidr = `10.${base}.${privateBase + i}.0/24`;
+
+      console.log(`   📍 Creating subnets in AZ: ${azName}`);
 
       const publicSubnet = new aws.ec2.Subnet(
         `public-subnet-${i}-${this.regionSuffix}`,
@@ -134,6 +171,10 @@ export class NetworkingInfrastructure extends ComponentResource {
       );
       this.privateSubnets.push(privateSubnet);
     }
+
+    console.log(
+      `✅ Created ${this.publicSubnets.length} public and ${this.privateSubnets.length} private subnets`
+    );
   }
 
   /**
@@ -154,6 +195,8 @@ export class NetworkingInfrastructure extends ComponentResource {
    * Create NAT Gateways for private subnet internet access
    */
   private createNatGateways(): void {
+    console.log(`🔌 Creating ${this.publicSubnets.length} NAT Gateways...`);
+
     // Create one NAT Gateway per public subnet
     for (let i = 0; i < this.publicSubnets.length; i++) {
       const publicSubnet = this.publicSubnets[i];
@@ -189,12 +232,16 @@ export class NetworkingInfrastructure extends ComponentResource {
       );
       this.natGateways.push(natGw);
     }
+
+    console.log(`✅ Created ${this.natGateways.length} NAT Gateways`);
   }
 
   /**
    * Create and configure route tables
    */
   private createRouteTablesAndAssociations(): aws.ec2.RouteTable {
+    console.log('🛣️  Creating route tables and associations...');
+
     const publicRt = new aws.ec2.RouteTable(
       `public-rt-${this.regionSuffix}`,
       {
@@ -261,6 +308,9 @@ export class NetworkingInfrastructure extends ComponentResource {
       );
     }
 
+    console.log(
+      `✅ Created public route table and ${this.privateRts.length} private route tables`
+    );
     return publicRt;
   }
 
