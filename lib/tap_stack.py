@@ -49,7 +49,7 @@ class TapStack(TerraformStack):
     self.bucket = S3Bucket(
         self,
         "tap_bucket",
-        bucket=f"tap-bucket-{environment_suffix}-{construct_id}",
+        bucket=f"tap-bucket-{environment_suffix.lower()}-{construct_id.lower()}",
         versioning={"enabled": True},
         server_side_encryption_configuration={
             "rule": {
