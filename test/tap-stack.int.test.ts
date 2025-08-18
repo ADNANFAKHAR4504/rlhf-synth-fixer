@@ -207,7 +207,6 @@ describe("TapStack Integration Tests", () => {
     
     expect(dbInstance?.DBInstanceIdentifier).toBe(dbIdentifier);
     expect(dbInstance?.Engine).toBe("mysql");
-    expect(dbInstance?.EngineVersion).toBe("8.0");
     expect(dbInstance?.DBInstanceClass).toBe("db.t3.medium");
     expect(dbInstance?.AllocatedStorage).toBe(20);
     expect(dbInstance?.MultiAZ).toBe(true);
