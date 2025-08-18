@@ -2,17 +2,13 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, Fn } from 'cdktf';
+import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-import { TerraformOutput } from 'cdktf';
-// Import your custom modules
 import {
   VpcModule,
   SecurityGroupModule,
-  LaunchTemplateModule,
-  AutoScalingGroupModule,
-  S3Module,
+  AutoScalingModule,
+  S3BucketModule,
 } from './modules';
 
 interface TapStackProps {
@@ -37,7 +33,7 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // Configure AWS Provider
+    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
@@ -50,136 +46,73 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
+    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
+    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // --- Start of Resource Configuration ---
-    // Define the resource configuration directly within the stack.
-    // These values are either hardcoded or derived from the existing props.
-    // This is necessary because we cannot modify the `bin/tap.ts` file to pass a 'config' object.
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
 
-    const environment: 'dev' | 'qa' | 'prod' = environmentSuffix as
-      | 'dev'
-      | 'qa'
-      | 'prod';
-    const project = 'your-project-name'; // Hardcoded project name
-    const namePrefix = `${environment}-${project}`;
+    const project = 'tap';
+    const env = environmentSuffix as 'dev' | 'qa' | 'prod';
 
-    const tags = {
-      Environment: environment,
-      Project: project,
-      ...(props?.defaultTags?.tags || {}),
-    };
-
-    // Configuration for the modules
-    const vpcCidr = '10.0.0.0/16';
-    const instanceType = 't2.micro';
-    const amiNameFilter = 'amzn2-ami-hvm-*-x86_64-gp2';
-    const keyName = 'your-key-pair-name'; // Replace with a valid key pair name
-    const minSize = 1;
-    const maxSize = 3;
-    const desiredCapacity = 1;
-
-    // Find the latest Amazon Linux 2 AMI
-    const ami = new DataAwsAmi(this, 'amazonLinuxAmi', {
-      mostRecent: true,
-      owners: ['amazon'],
-      filter: [
-        {
-          name: 'name',
-          values: [amiNameFilter],
-        },
-      ],
+    // 1. Create a multi-AZ VPC.
+    const tapVpc = new VpcModule(this, 'tap-vpc', {
+      cidrBlock: '10.0.0.0/16',
+      env,
+      project,
     });
 
-    // VPC Module
-    const vpc = new VpcModule(this, 'vpcModule', {
-      name: namePrefix,
-      environment: environment,
-      cidrBlock: vpcCidr,
-      tags,
-    });
-
-    // Security Group Module for EC2 instances
-    const ec2Sg = new SecurityGroupModule(this, 'ec2SecurityGroup', {
-      name: `${namePrefix}-ec2`,
-      environment: environment,
-      vpcId: vpc.vpc.id,
+    // 2. Create a Security Group for the web server.
+    const webServerSg = new SecurityGroupModule(this, 'web-server-sg', {
+      vpcId: tapVpc.vpc.id,
+      env,
+      project,
+      name: 'web-server',
+      description: 'Allows HTTP and SSH access',
       ingressRules: [
-        {
-          fromPort: 22,
-          toPort: 22,
-          protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
         {
           fromPort: 80,
           toPort: 80,
           protocol: 'tcp',
           cidrBlocks: ['0.0.0.0/0'],
+          ipv6CidrBlocks: ['::/0'],
         },
-      ],
-      egressRules: [
         {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
           cidrBlocks: ['0.0.0.0/0'],
+          ipv6CidrBlocks: ['::/0'],
         },
       ],
     });
 
-    // Launch Template Module
-    const launchTemplate = new LaunchTemplateModule(
-      this,
-      'launchTemplateModule',
-      {
-        name: namePrefix,
-        environment: environment,
-        instanceType: instanceType,
-        amiId: ami.id,
-        keyName: keyName,
-        securityGroupIds: [ec2Sg.securityGroup.id],
-        userData: Fn.base64encode(
-          Fn.rawString(
-            `#!/bin/bash
-          echo "Hello, World! from EC2" > index.html
-          nohup busybox httpd -f -p 80 &`
-          )
-        ),
-      }
-    );
-
-    // Auto Scaling Group Module
-    new AutoScalingGroupModule(this, 'autoScalingGroupModule', {
-      name: namePrefix,
-      environment: environment,
-      launchTemplateId: launchTemplate.launchTemplate.id,
-      subnetIds: [Fn.element(vpc.publicSubnets, 0)],
-      minSize: minSize,
-      maxSize: maxSize,
-      desiredCapacity: desiredCapacity,
-      tags,
+    // 3. Create an EC2 Auto Scaling Group and Launch Template.
+    new AutoScalingModule(this, 'web-asg', {
+      env,
+      project,
+      subnetIds: tapVpc.publicSubnets.map(subnet => subnet.id),
+      securityGroupIds: [webServerSg.securityGroup.id],
+      amiId: 'ami-0c55b159cbfafe1f0', // IMPORTANT: Replace with a valid AMI ID for us-west-2.
+      instanceType: 't2.micro',
+      minSize: 1,
+      maxSize: 3,
+      desiredCapacity: 1,
+      userData: `#!/bin/bash
+                sudo yum update -y
+                sudo yum install httpd -y
+                sudo systemctl start httpd
+                sudo systemctl enable httpd
+                echo "<h1>Hello from ${project} ${env}</h1>" > /var/www/html/index.html`,
     });
 
-    // S3 Bucket Module
-    new S3Module(this, 's3BucketModule', {
-      name: `${namePrefix}-data`,
-      environment: environment,
-      bucketName: `${namePrefix}-data-${this.node.id}`.toLowerCase(),
-      tags,
-    });
-
-    // --- Terraform Outputs ---
-    new TerraformOutput(this, 'vpc_id', {
-      value: vpc.vpc.id,
-      description: 'The ID of the main VPC.',
-    });
-    new TerraformOutput(this, 'public_subnet_ids', {
-      value: vpc.publicSubnets,
-    });
-    new TerraformOutput(this, 'ec2_security_group_id', {
-      value: ec2Sg.securityGroup.id,
-      description: 'The ID of the EC2 security group.',
+    // 4. Create a private S3 Bucket for application assets.
+    new S3BucketModule(this, 'app-bucket', {
+      env,
+      project,
+      name: 'app-assets',
     });
   }
 }

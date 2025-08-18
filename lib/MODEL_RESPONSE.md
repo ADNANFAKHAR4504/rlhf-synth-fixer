@@ -1,4 +1,6 @@
-I'll create a production-ready CDKTF project in TypeScript for a multi-availability zone AWS environment. Here's the complete implementation:
+```typescript
+
+ I'll create a production-ready CDKTF project in TypeScript for a multi-availability zone AWS environment. Here's the complete implementation:
 
 ## lib/modules.ts
 
