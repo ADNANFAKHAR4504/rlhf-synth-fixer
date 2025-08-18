@@ -8,8 +8,8 @@ class NetworkingComponent(ComponentResource):
                opts: ResourceOptions = None):
     super().__init__('custom:networking:NetworkingComponent', name, None, opts)
 
-    # Get availability zones
-    azs = aws.get_availability_zones(state="available")
+    # Get availability zones for the specific region
+    azs = aws.get_availability_zones(state="available", opts=opts)
 
     # Create VPC
     self.vpc = aws.ec2.Vpc(
