@@ -1,16 +1,4 @@
 ########################
-# Providers
-########################
-provider "aws" {
-  region = var.aws_region
-}
-
-provider "aws" {
-  alias  = "secondary"
-  region = var.dr_region
-}
-
-########################
 # Variables
 ########################
 variable "aws_region" {
