@@ -96,7 +96,7 @@ export class TapStack extends TerraformStack {
       project,
       subnetIds: tapVpc.publicSubnets.map(subnet => subnet.id),
       securityGroupIds: [webServerSg.securityGroup.id],
-      amiId: 'ami-0c55b159cbfafe1f0', // IMPORTANT: Replace with a valid AMI ID for us-west-2.
+      amiId: 'ami-04e08e36e17a21b56', // IMPORTANT: Replace with a valid AMI ID for us-west-2.
       instanceType: 't2.micro',
       minSize: 1,
       maxSize: 3,
