@@ -1,4 +1,4 @@
-// test/tap-stack.test.ts
+// test/tap-stack.unit.test.ts
 import { App, Testing } from 'cdktf';
 import 'cdktf/lib/testing/adapters/jest';
 import { TapStack } from '../lib/tap-stack';
@@ -11,7 +11,7 @@ jest.mock('../lib/modules', () => {
       privateSubnetIds: ['mock-private-subnet-id'],
     })),
     KmsModule: jest.fn(() => ({
-      kmsKey: { id: 'mock-kms-key-id' },
+      kmsKey: { arn: 'mock-kms-arn' },
     })),
     ComputeModule: jest.fn(() => ({
       instance: { id: 'mock-instance-id', privateIp: 'mock-private-ip' },
@@ -127,7 +127,7 @@ describe('TapStack Unit Tests', () => {
         expect.objectContaining({
           vpcId: network.vpc.id,
           subnetId: network.privateSubnetIds[0],
-          kmsKeyId: kms.kmsKey.id,
+          kmsKeyId: kms.kmsKey.arn, // ✅ updated to arn
         })
       );
     });
@@ -143,7 +143,7 @@ describe('TapStack Unit Tests', () => {
         expect.objectContaining({
           vpcId: network.vpc.id,
           subnetIds: network.privateSubnetIds,
-          kmsKeyId: kms.kmsKey.id,
+          kmsKeyArn: kms.kmsKey.arn, // ✅ updated to arn
         })
       );
     });
@@ -158,7 +158,7 @@ describe('TapStack Unit Tests', () => {
         expect.objectContaining({
           project: 'tap',
           env: 'dev',
-          kmsKeyId: kms.kmsKey.id,
+          kmsKeyArn: kms.kmsKey.arn, // ✅ updated to arn
         })
       );
     });

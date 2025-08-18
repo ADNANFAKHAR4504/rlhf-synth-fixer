@@ -62,7 +62,7 @@ export class TapStack extends TerraformStack {
       env,
       vpcId: network.vpc.id,
       subnetId: network.privateSubnetIds[0],
-      kmsKeyId: kms.kmsKey.id,
+      kmsKeyId: kms.kmsKey.arn,
     });
 
     const database = new DatabaseModule(this, 'database', {
@@ -70,13 +70,13 @@ export class TapStack extends TerraformStack {
       env,
       vpcId: network.vpc.id,
       subnetIds: network.privateSubnetIds,
-      kmsKeyId: kms.kmsKey.id,
+      kmsKeyArn: kms.kmsKey.arn,
     });
 
     const storage = new StorageModule(this, 'storage', {
       project,
       env,
-      kmsKeyId: kms.kmsKey.id,
+      kmsKeyArn: kms.kmsKey.arn,
     });
 
     // --- Outputs ---

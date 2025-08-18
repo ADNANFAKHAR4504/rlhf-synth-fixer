@@ -35,9 +35,6 @@ export class KmsModule extends Construct {
 // -----------------
 // 🌐 VPC Module
 // -----------------
-// -----------------
-// 🌐 VPC Module
-// -----------------
 export class VpcModule extends Construct {
   public readonly vpc: Vpc;
   public readonly privateSubnetIds: string[];
@@ -48,16 +45,17 @@ export class VpcModule extends Construct {
       cidrBlock: '10.0.0.0/16',
     });
 
+    // Create 2 private subnets in different AZs
     const privateSubnet1 = new Subnet(this, 'PrivateSubnet1', {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.1.0/24',
-      availabilityZone: 'us-east-1a', // ✅ explicitly place in AZ a
+      availabilityZone: 'us-west-1a',
     });
 
     const privateSubnet2 = new Subnet(this, 'PrivateSubnet2', {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.2.0/24',
-      availabilityZone: 'us-east-1b', // ✅ second AZ
+      availabilityZone: 'us-west-1b',
     });
 
     this.privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
@@ -72,7 +70,7 @@ export class S3Module extends Construct {
   constructor(
     scope: Construct,
     id: string,
-    props: { project: string; env: string; kmsKeyId: string }
+    props: { project: string; env: string; kmsKeyArn: string } // renamed to kmsKeyArn
   ) {
     super(scope, id);
 
@@ -82,7 +80,7 @@ export class S3Module extends Construct {
         rule: {
           applyServerSideEncryptionByDefault: {
             sseAlgorithm: 'aws:kms',
-            kmsMasterKeyId: props.kmsKeyId,
+            kmsMasterKeyId: props.kmsKeyArn, // uses ARN
           },
         },
       },
@@ -104,7 +102,7 @@ export class RdsModule extends Construct {
       env: string;
       vpcId: string;
       subnetIds: string[];
-      kmsKeyId: string;
+      kmsKeyArn: string; // renamed to kmsKeyArn
     }
   ) {
     super(scope, id);
@@ -119,7 +117,7 @@ export class RdsModule extends Construct {
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageEncrypted: true,
-      kmsKeyId: props.kmsKeyId,
+      kmsKeyId: props.kmsKeyArn, // now explicitly expects ARN
       dbSubnetGroupName: subnetGroup.name,
       publiclyAccessible: false,
     });
@@ -157,7 +155,7 @@ export class Ec2Module extends Construct {
     });
 
     this.instance = new Instance(this, 'Ec2Instance', {
-      ami: 'ami-084a7d336e816906b',
+      ami: 'ami-084a7d336e816906b', // valid AMI
       instanceType: 't3.micro',
       subnetId: props.subnetId,
       vpcSecurityGroupIds: [sg.id],
@@ -169,8 +167,6 @@ export class Ec2Module extends Construct {
 // -----------------
 // 🌍 CloudFront Module
 // -----------------
-// 🌍 CloudFront Module
-// -------------------
 export class CloudFrontModule extends Construct {
   constructor(
     scope: Construct,
@@ -231,7 +227,7 @@ export class CloudTrailModule extends Construct {
 }
 
 // -----------------
-// 👤 IAM Module (MFA Enforcement)
+// 👤 IAM Module
 // -----------------
 export class IamModule extends Construct {
   constructor(
