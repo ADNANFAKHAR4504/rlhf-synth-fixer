@@ -5,5 +5,20 @@
   "turn_type": "multi",
   "po_id": "291731",
   "team": "6",
-  "startedAt": "2025-08-18T09:23:01.038Z"
+  "startedAt": "2025-08-18T09:23:01.038Z",
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [
+    "DevOps",
+    "Infrastructure as Code",
+    "Pulumi",
+    "AWS",
+    "CI/CD"
+  ],
+  "training_quality": "high",
+  "aws_services": [
+    "Lambda",
+    "CloudWatch",
+    "IAM",
+    "S3"
+  ]
 }

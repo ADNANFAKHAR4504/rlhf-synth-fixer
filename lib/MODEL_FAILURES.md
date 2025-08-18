@@ -43,3 +43,7 @@ The rollback Lambda uses `"Resource": "*"` in its IAM policy, granting overly br
 ### 7. Async/concurrent patterns are complex for Pulumi
 
 The rollback Lambda leverages Python concurrency (`ThreadPoolExecutor`) for health checks. While clever, this adds unnecessary complexity, making the solution harder to maintain and test.
+
+## Summary
+
+This Pulumi Python program provisions a fully AWS-native, multi-region serverless CI/CD pipeline across us-east-1, us-west-2, and eu-central-1. Key features include centralized Pulumi state management via a secure S3 bucket (SSE-KMS, versioning, ownership enforced, public access blocked), per-region Lambda functions running Python 3.12 with aliased zero-downtime deployment using CodeDeploy with automatic rollback, API Gateway HTTP APIs integrated with Lambda aliases, region-specific CodeDeploy applications and deployment groups for traffic shifting, a global AWS CodePipeline orchestrating source, build (CodeBuild), and deploy stages with per-region artifacts, and coordinated rollback via an EventBridge-triggered Lambda that restores previous function versions on failures across regions. The program applies consistent tagging (Environment, Project) across all resources and sets up a centralized CloudWatch dashboard in the primary region aggregating key Lambda metrics and recent logs from all deployment regions. This solution operates fully within an isolated Pulumi stack and enables integration into existing CI/CD pipelines without requiring external service dependencies or source control outside AWS CodeCommit.
