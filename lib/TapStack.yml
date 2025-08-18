@@ -1,10 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'High Availability Web Application with Multi-AZ deployment, Auto Scaling, RDS, S3 replication, WAF, and comprehensive monitoring'
+Description: 'High Availability Web Application with Multi-AZ deployment, Auto Scaling, RDS, KMS-encrypted S3, WAF (no in-template association), and monitoring — us-east-1 only'
 
 Mappings:
   Existing:
     ARNs:
-      TargetGroupArn: "arn:aws:elasticloadbalancing:us-east-1:718240086340:targetgroup/prod-tg/d14cd720976c6062"
       AlbArn: "arn:aws:elasticloadbalancing:us-east-1:718240086340:loadbalancer/app/prod-alb/41e6894136de4a2a"
     ALB:
       DnsName: "prod-alb-300581770.us-east-1.elb.amazonaws.com"
@@ -221,8 +220,7 @@ Resources:
       Path: /
 
   ############################################
-  # Web Tier: ASG (CPU target tracking)
-  # Attaches to EXISTING Target Group from Mapping
+  # Web Tier: TG + LT + ASG (CPU target tracking)
   ############################################
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -260,14 +258,16 @@ Resources:
   ASG:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      VPCZoneIdentifier: [ !Ref PrivateSubnetA, !Ref PrivateSubnetB ]
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
-      HealthCheckType: ELB
+      HealthCheckType: ELB                # use target group health
       HealthCheckGracePeriod: 300
       TargetGroupARNs:
         - !Ref TargetGroup
@@ -301,6 +301,8 @@ Resources:
 
   DBSecret:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Description: RDS master credentials (auto-generated password)
       GenerateSecretString:
@@ -334,6 +336,8 @@ Resources:
   ############################################
   S3KmsKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Description: CMK for S3 server-side encryption
       EnableKeyRotation: true
@@ -350,6 +354,8 @@ Resources:
 
   PrimaryBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VersioningConfiguration: { Status: Enabled }
       BucketEncryption:
@@ -366,7 +372,7 @@ Resources:
         - { Key: Name, Value: !Sub '${AWS::StackName}-primary' }
 
   ############################################
-  # WAFv2: Protect EXISTING ALB
+  # WAFv2: Create WebACL (association done outside to avoid NotFound)
   ############################################
   WebACL:
     Type: AWS::WAFv2::WebACL
@@ -390,12 +396,6 @@ Resources:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesCommonRuleSet
-
-  WebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    Properties:
-      ResourceArn: !FindInMap [ Existing, ARNs, AlbArn ]
-      WebACLArn: !GetAtt WebACL.Arn
 
   ############################################
   # Route 53: Hosted Zone + Alias A records to existing ALB
@@ -489,7 +489,7 @@ Outputs:
     Description: In-stack Target Group ARN used by ASG
     Value: !Ref TargetGroup
   AlbReused:
-    Description: Existing ALB ARN associated with WAF
+    Description: Existing ALB ARN (not associated by this stack)
     Value: !FindInMap [ Existing, ARNs, AlbArn ]
   AlbDNS:
     Description: Existing ALB DNS name aliased in Route53
