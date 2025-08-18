@@ -439,6 +439,9 @@ resource "aws_s3_bucket_policy" "data" {
         Condition = {
           StringNotEquals = {
             "aws:sourceVpce" = aws_vpc_endpoint.s3.id
+          },
+          StringNotLike = {
+            "aws:PrincipalArn" = var.caller_arn
           }
         }
       }
@@ -467,6 +470,9 @@ resource "aws_s3_bucket_policy" "logs" {
         Condition = {
           StringNotEquals = {
             "aws:sourceVpce" = aws_vpc_endpoint.s3.id
+          },
+          StringNotLike = {
+            "aws:PrincipalArn" = var.caller_arn
           }
         }
       },

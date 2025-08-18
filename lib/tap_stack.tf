@@ -22,6 +22,7 @@ module "infra" {
   private_subnet_cidrs = var.private_subnet_cidrs
   availability_zones  = data.aws_availability_zones.available.names
   account_id          = data.aws_caller_identity.current.account_id
+  caller_arn          = data.aws_caller_identity.current.arn
 }
 
 ######################
