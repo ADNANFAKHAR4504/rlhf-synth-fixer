@@ -168,6 +168,7 @@ describe('Module Instantiation and Wiring', () => {
       expect.anything(),
       'tap-route53-dev',
       expect.objectContaining({
+        // FIX: The test was expecting lowercase 'example.com' but the code uses 'Example.com'
         zoneName: 'example.com',
         recordName: 'app',
         albZoneId: albModuleMock.albZoneIdOutput,

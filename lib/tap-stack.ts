@@ -1,3 +1,4 @@
+//tapstack
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -72,7 +73,7 @@ export class TapStack extends TerraformStack {
     const instanceType = 't3.micro';
     const sshKeyName = 'ssh-key-aug';
     const myIp = '206.84.231.196/32';
-    const domainName = 'Example.com';
+    const domainName = 'example.com';
 
     // --- Module Instantiation and Composition ---
     // 1. Create a secure VPC with public and private subnets across multiple AZs.
@@ -101,8 +102,6 @@ export class TapStack extends TerraformStack {
           cidrBlocks: [myIp],
           description: 'Allow SSH from a specific IP',
         },
-        // We will add the ALB rule after the ALB's security group is created.
-        // This is necessary because of the circular reference. We use a separate rule resource.
       ],
       egress: [
         {
@@ -129,18 +128,11 @@ export class TapStack extends TerraformStack {
           description: 'Allow HTTP traffic from the internet',
         },
       ],
-      egress: [
-        {
-          fromPort: 80,
-          toPort: 80,
-          protocol: 'tcp',
-          securityGroups: [ec2SecurityGroup.id],
-          description: 'Allow outbound traffic to EC2 instances',
-        },
-      ],
+      // REMOVED EGRESS: Egress rule is now a separate resource to break circular dependency.
     });
 
-    // Now that the ALB's security group is created, we can add the ingress rule to the EC2 security group.
+    // Now that the security groups are created, we can add the ingress/egress rules that depend on them.
+    // Ingress rule for EC2 from ALB
     new SecurityGroupRule(this, 'ec2-ingress-from-alb', {
       type: 'ingress',
       fromPort: 80,
@@ -151,6 +143,17 @@ export class TapStack extends TerraformStack {
       description: 'Allow HTTP traffic from ALB',
     });
 
+    // Egress rule for ALB to EC2
+    new SecurityGroupRule(this, 'alb-egress-to-ec2', {
+      type: 'egress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      securityGroupId: albSecurityGroup.id,
+      sourceSecurityGroupId: ec2SecurityGroup.id,
+      description: 'Allow outbound traffic to EC2 instances',
+    });
+
     // 4. Provision a highly available EC2 instance.
     // FIX: Pass the security group ID that was created above.
     const ec2 = new Ec2Module(this, namingConvention('ec2'), {
@@ -158,7 +161,7 @@ export class TapStack extends TerraformStack {
       vpcId: vpc.vpcIdOutput,
       subnetId: Fn.element(vpc.privateSubnetIdsOutput, 0),
       instanceType: instanceType,
-      ami: 'ami-0c55b159cbfafe1f0',
+      ami: 'ami-08a6efd148b1f7504',
       keyName: sshKeyName,
       instanceProfileName: iam.instanceProfileName,
       ec2SecurityGroupId: ec2SecurityGroup.id, // Correct property name
