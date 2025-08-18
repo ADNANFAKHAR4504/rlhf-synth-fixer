@@ -63,7 +63,7 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
         expect(vpcBlock).toMatch(new RegExp(`provider\\s*=\\s*${provider}`));
         expect(vpcBlock).toMatch(
           new RegExp(
-            `Name\\s*=\\s*"vpc-${region}-\\$\\{local\\.deployment_id\\}"`
+            `Name\\s*=\\s*"vpc-${region}-\\$\\{local\\.deployment_suffix\\}"`
           )
         );
       }
