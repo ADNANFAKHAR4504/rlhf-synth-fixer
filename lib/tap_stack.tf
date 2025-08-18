@@ -695,16 +695,16 @@ resource "aws_iam_role" "ec2_role" {
   tags = local.common_tags
 }
 
-resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
-  role       = aws_iam_role.ec2_role.name
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${local.name_prefix}-ec2-instance-profile"
   role = aws_iam_role.ec2_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
   
-  depends_on = [aws_iam_role_policy_attachment.ec2_ssm_core]
+  depends_on = [aws_iam_instance_profile.ec2_profile]
 }
 
 resource "aws_instance" "app" {
@@ -730,8 +730,6 @@ resource "aws_instance" "app" {
     kms_key_id  = aws_kms_key.main.arn
     volume_type = "gp3"
   }
-
-  depends_on = [aws_iam_instance_profile.ec2_profile]
 
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-ec2", SSMManaged = "true" })
 }
