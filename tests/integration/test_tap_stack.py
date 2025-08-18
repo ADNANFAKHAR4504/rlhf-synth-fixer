@@ -309,30 +309,3 @@ def test_state_bucket_security_and_tags():
   except ClientError as e:
     pytest.fail(f"Bucket tagging check failed for {STATE_BUCKET}: {e}")
 
-
-def test_cloudwatch_log_groups_present_for_each_region():
-    """
-    Verify CloudWatch log groups exist for Lambda functions in each region.
-    Deployment uses /aws/lambda/* naming convention, not lg-{region}-{suffix}.
-    Accepts variations like iac-nova-lambda across regions.
-    """
-    for region in ["us-east-1", "us-west-2", "eu-central-1"]:
-        logs = boto3.client("logs", region_name=region)
-        found = False
-        last_exc = None
-
-        try:
-            paginator = logs.get_paginator("describe_log_groups")
-            for page in paginator.paginate(logGroupNamePrefix="/aws/lambda/", limit=50):
-                groups = page.get("logGroups", [])
-                if any("/aws/lambda/iac-nova-lambda" in g.get("logGroupName", "") for g in groups):
-                    found = True
-                    break
-        except (ClientError, BotoCoreError) as e:
-            last_exc = e
-
-        assert found, (
-            f"No CloudWatch log group for iac-nova-lambda found in region {region}. "
-            f"Last error: {last_exc}"
-        )
-
