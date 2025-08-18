@@ -1,11 +1,11 @@
 output "config_recorder_name" {
   description = "AWS Config recorder name"
-  value       = aws_config_configuration_recorder.main.name
+  value       = local.config_recorder_name
 }
 
 output "config_recorder_arn" {
   description = "AWS Config recorder ARN"
-  value       = aws_config_configuration_recorder.main.id
+  value       = local.config_recorder_arn
 }
 
 output "guardduty_detector_id" {
