@@ -4,329 +4,343 @@ Here's a production-ready CloudFormation template that implements robust IAM sec
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-ready IAM security configuration with MFA enforcement and least privilege access'
-
-Parameters:
-  DeploymentEnv:
-    Type: String
-    Default: 'pr'
-    AllowedValues: ['development', 'staging', 'production', 'pr']
-    Description: 'Environment name for resource tagging and configuration (must be lowercase)'
-    AllowedPattern: '[a-z]+'
-    ConstraintDescription: 'Must contain only lowercase letters'
-  
-  MFAMaxSessionDuration:
-    Type: Number
-    Default: 3600
-    MinValue: 900
-    MaxValue: 43200
-    Description: 'Maximum session duration in seconds (15 minutes to 12 hours)'
+Description: 'Secure IAM configuration with MFA enforcement and least privilege access'
 
 Resources:
-  # CloudTrail for security auditing and compliance 
-  SecurityAuditTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: SecurityAuditBucketPolicy
-    Properties:
-      TrailName: !Sub '${DeploymentEnv}-security-audit-trail'
-      S3BucketName: 
-        Fn::Sub: '${AWS::AccountId}-${DeploymentEnv}-security-audit-logs'
-      S3KeyPrefix: 'cloudtrail-logs'
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      IsLogging: true # Required property for CloudTrail
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-      Tags:
-        - Key: Environment
-          Value: !Ref DeploymentEnv
-        - Key: Purpose
-          Value: 'Security Audit Trail'
-        - Key: Compliance
-          Value: 'MFA-Enforcement-Tracking'
-
-  # S3 bucket for CloudTrail logs
-  SecurityAuditBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: 
-        Fn::Sub: '${AWS::AccountId}-${DeploymentEnv}-security-audit-logs'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: 'SecurityLogRetention'
-            Status: Enabled
-            ExpirationInDays: 2555 # 7 years retention for compliance
-            NoncurrentVersionExpirationInDays: 90
-      Tags:
-        - Key: Environment
-          Value: !Ref DeploymentEnv
-        - Key: Purpose
-          Value: 'Security Audit Storage'
-
-  # S3 bucket policy for CloudTrail
-  SecurityAuditBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref SecurityAuditBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSCloudTrailAclCheck20150319
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource:
-              Fn::Sub: arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs
-          - Sid: AWSCloudTrailWrite20150319
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource:
-              - Fn::Sub: arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*
-              - Fn::Sub: arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/cloudtrail-logs/AWSLogs/*
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-
-  # IAM Role with strict MFA enforcement
-  SecureAccessRole:
+  # IAM Role for Developers with MFA enforcement
+  SecureDeveloperRole:
     Type: AWS::IAM::Role
     Properties:
-      Description: 'Production IAM role with mandatory MFA enforcement and least privilege access'
-      MaxSessionDuration: !Ref MFAMaxSessionDuration
-      # Trust policy requiring MFA for role assumption
+      RoleName: SecureDeveloperRole
+      Description: 'Developer role with MFA enforcement and least privilege permissions'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: 'RequireMFAForRoleAssumption'
-            Effect: Allow
+          - Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+              AWS:
+                Fn::Sub: 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'sts:AssumeRole'
-            Condition:
-              Bool:
-                'aws:MultiFactorAuthPresent': 'true'
-              NumericLessThan:
-                'aws:MultiFactorAuthAge': '3600' # MFA must be within 1 hour
-          - Sid: 'DenyAssumeRoleWithoutMFA'
-            Effect: Deny
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'sts:AssumeRole'
-            Condition:
-              BoolIfExists:
-                'aws:MultiFactorAuthPresent': 'false'
-      ManagedPolicyArns:
-        - !Ref ReadOnlyAccessPolicy
-        - !Ref LimitedS3AccessPolicy
-      Tags:
-        - Key: Environment
-          Value: !Ref DeploymentEnv
-        - Key: MFARequired
-          Value: 'true'
-        - Key: AccessLevel
-          Value: 'LeastPrivilege'
-        - Key: Purpose
-          Value: 'Secure Production Access'
-
-  # Custom policy for read-only access with MFA enforcement
-  ReadOnlyAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      ManagedPolicyName: !Sub '${DeploymentEnv}-readonly-access-policy'
-      Description: 'Read-only access policy with MFA enforcement for security operations'
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          # Allow read-only access to most AWS services
-          - Sid: 'ReadOnlyAccessWithMFA'
-            Effect: Allow
-            Action:
-              - 'ec2:Describe*'
-              - 'ec2:List*'
-              - 's3:GetObject'
-              - 's3:ListBucket'
-              - 'iam:Get*'
-              - 'iam:List*'
-              - 'cloudtrail:LookupEvents'
-              - 'cloudwatch:Get*'
-              - 'cloudwatch:List*'
-              - 'cloudwatch:Describe*'
-              - 'logs:Describe*'
-              - 'logs:Get*'
-              - 'logs:List*'
-              - 'logs:FilterLogEvents'
-            Resource: '*'
             Condition:
               Bool:
                 'aws:MultiFactorAuthPresent': 'true'
               NumericLessThan:
                 'aws:MultiFactorAuthAge': '3600'
-          
-          # Explicitly deny sensitive IAM actions even with MFA
-          - Sid: 'DenySensitiveIAMActions'
-            Effect: Deny
-            Action:
-              - 'iam:CreateRole'
-              - 'iam:DeleteRole'
-              - 'iam:CreatePolicy'
-              - 'iam:DeletePolicy'
-              - 'iam:AttachRolePolicy'
-              - 'iam:DetachRolePolicy'
-              - 'iam:PutRolePolicy'
-              - 'iam:DeleteRolePolicy'
-              - 'iam:CreateUser'
-              - 'iam:DeleteUser'
-              - 'iam:CreateAccessKey'
-              - 'iam:DeleteAccessKey'
-            Resource: '*'
+      ManagedPolicyArns:
+        - Ref: DeveloperManagedPolicy
+      Tags:
+        - Key: Purpose
+          Value: Development
+        - Key: MFARequired
+          Value: 'true'
 
-  # Limited S3 access policy with specific bucket restrictions
-  LimitedS3AccessPolicy:
+  # IAM Role for Read-Only Access with MFA enforcement
+  SecureReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SecureReadOnlyRole
+      Description: 'Read-only role with MFA enforcement for auditing and monitoring'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                Fn::Sub: 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              Bool:
+                'aws:MultiFactorAuthPresent': 'true'
+              NumericLessThan:
+                'aws:MultiFactorAuthAge': '7200'
+      ManagedPolicyArns:
+        - Ref: ReadOnlyManagedPolicy
+      Tags:
+        - Key: Purpose
+          Value: ReadOnly
+        - Key: MFARequired
+          Value: 'true'
+
+  # IAM Role for Operations with MFA enforcement
+  SecureOperationsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SecureOperationsRole
+      Description: 'Operations role with MFA enforcement and specific operational permissions'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                Fn::Sub: 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              Bool:
+                'aws:MultiFactorAuthPresent': 'true'
+              NumericLessThan:
+                'aws:MultiFactorAuthAge': '1800'
+      ManagedPolicyArns:
+        - Ref: OperationsManagedPolicy
+      Tags:
+        - Key: Purpose
+          Value: Operations
+        - Key: MFARequired
+          Value: 'true'
+
+  # Managed Policy for Developer Role
+  DeveloperManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub '${DeploymentEnv}-limited-s3-access-policy'
-      Description: 'Limited S3 access policy for specific operational needs with MFA enforcement'
+      ManagedPolicyName: SecureDeveloperPolicy
+      Description: 'Least privilege policy for developers'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Allow access to specific S3 buckets only
-          - Sid: 'LimitedS3AccessWithMFA'
+          # EC2 permissions for development
+          - Sid: EC2DevelopmentAccess
+            Effect: Allow
+            Action:
+              - 'ec2:DescribeInstances'
+              - 'ec2:DescribeImages'
+              - 'ec2:DescribeSecurityGroups'
+              - 'ec2:DescribeVpcs'
+              - 'ec2:DescribeSubnets'
+              - 'ec2:RunInstances'
+              - 'ec2:TerminateInstances'
+              - 'ec2:StartInstances'
+              - 'ec2:StopInstances'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'ec2:InstanceType':
+                  - 't3.micro'
+                  - 't3.small'
+                  - 't3.medium'
+          
+          # S3 permissions for specific development buckets
+          - Sid: S3DevelopmentAccess
             Effect: Allow
             Action:
               - 's3:GetObject'
               - 's3:PutObject'
+              - 's3:DeleteObject'
               - 's3:ListBucket'
-              - 's3:GetBucketLocation'
             Resource:
-              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/*'
-              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs'
-            Condition:
-              Bool:
-                'aws:MultiFactorAuthPresent': 'true'
-              NumericLessThan:
-                'aws:MultiFactorAuthAge': '3600'
+              - 'arn:aws:s3:::dev-*'
+              - 'arn:aws:s3:::dev-*/*'
           
-          # Deny access to all other S3 buckets
-          - Sid: 'DenyAccessToOtherS3Buckets'
-            Effect: Deny
-            Action: 's3:*'
-            NotResource:
-              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs/*'
-              - Fn::Sub: 'arn:aws:s3:::${AWS::AccountId}-${DeploymentEnv}-security-audit-logs'
-
-  # Additional security role for emergency access with stricter MFA requirements
-  EmergencyAccessRole:
-    Type: AWS::IAM::Role
-    Properties:
-      Description: 'Emergency access role with enhanced MFA requirements and time-limited access'
-      MaxSessionDuration: 3600 # Minimum allowed session duration (1 hour)
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: 'RequireRecentMFAForEmergencyAccess'
+          # CloudFormation permissions for development stacks
+          - Sid: CloudFormationDevelopmentAccess
             Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'sts:AssumeRole'
-            Condition:
-              Bool:
-                'aws:MultiFactorAuthPresent': 'true'
-              NumericLessThan:
-                'aws:MultiFactorAuthAge': '900' # MFA must be within 15 minutes
-              DateGreaterThan:
-                'aws:CurrentTime': '2024-01-01T00:00:00Z'
-              DateLessThan:
-                'aws:CurrentTime': '2030-12-31T23:59:59Z'
-      ManagedPolicyArns:
-        - !Ref EmergencyAccessPolicy
-      Tags:
-        - Key: Environment
-          Value: !Ref DeploymentEnv
-        - Key: AccessType
-          Value: 'Emergency'
-        - Key: MFARequired
-          Value: 'true'
-        - Key: MaxSessionDuration
-          Value: '1800'
+            Action:
+              - 'cloudformation:CreateStack'
+              - 'cloudformation:UpdateStack'
+              - 'cloudformation:DeleteStack'
+              - 'cloudformation:DescribeStacks'
+              - 'cloudformation:DescribeStackResources'
+              - 'cloudformation:ValidateTemplate'
+            Resource: 'arn:aws:cloudformation:*:*:stack/dev-*'
+          
+          # Lambda permissions for development
+          - Sid: LambdaDevelopmentAccess
+            Effect: Allow
+            Action:
+              - 'lambda:CreateFunction'
+              - 'lambda:UpdateFunctionCode'
+              - 'lambda:UpdateFunctionConfiguration'
+              - 'lambda:DeleteFunction'
+              - 'lambda:GetFunction'
+              - 'lambda:ListFunctions'
+              - 'lambda:InvokeFunction'
+            Resource: 'arn:aws:lambda:*:*:function:dev-*'
 
-  # Emergency access policy with limited permissions
-  EmergencyAccessPolicy:
+  # Managed Policy for Read-Only Role
+  ReadOnlyManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub '${DeploymentEnv}-emergency-access-policy'
-      Description: 'Emergency access policy with time-limited and MFA-enforced permissions'
+      ManagedPolicyName: SecureReadOnlyPolicy
+      Description: 'Read-only access policy for auditing and monitoring'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Allow emergency access to critical resources
-          - Sid: 'EmergencyAccessWithStrictMFA'
+          # General read-only permissions
+          - Sid: GeneralReadOnlyAccess
             Effect: Allow
             Action:
-              - 'ec2:StopInstances'
-              - 'ec2:StartInstances'
-              - 'ec2:RebootInstances'
-              - 'rds:StopDBInstance'
-              - 'rds:StartDBInstance'
-              - 'rds:RebootDBInstance'
-              - 'cloudwatch:PutMetricAlarm'
-              - 'sns:Publish'
+              - 'ec2:Describe*'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:GetBucketLocation'
+              - 's3:GetBucketVersioning'
+              - 'lambda:GetFunction'
+              - 'lambda:ListFunctions'
+              - 'cloudformation:DescribeStacks'
+              - 'cloudformation:DescribeStackResources'
+              - 'cloudformation:ListStacks'
+              - 'iam:GetRole'
+              - 'iam:GetPolicy'
+              - 'iam:ListRoles'
+              - 'iam:ListPolicies'
+              - 'logs:DescribeLogGroups'
+              - 'logs:DescribeLogStreams'
+              - 'logs:GetLogEvents'
+            Resource: '*'
+          
+          # CloudTrail read access for audit purposes
+          - Sid: CloudTrailReadAccess
+            Effect: Allow
+            Action:
+              - 'cloudtrail:DescribeTrails'
+              - 'cloudtrail:GetTrailStatus'
+              - 'cloudtrail:LookupEvents'
+            Resource: '*'
+
+  # Managed Policy for Operations Role
+  OperationsManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: SecureOperationsPolicy
+      Description: 'Operations policy with specific operational permissions'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # EC2 operational permissions
+          - Sid: EC2OperationalAccess
+            Effect: Allow
+            Action:
+              - 'ec2:*'
             Resource: '*'
             Condition:
-              Bool:
-                'aws:MultiFactorAuthPresent': 'true'
-              NumericLessThan:
-                'aws:MultiFactorAuthAge': '900'
               StringEquals:
-                'aws:RequestedRegion': !Ref 'AWS::Region'
+                'aws:RequestedRegion':
+                  - Ref: 'AWS::Region'
+          
+          # S3 operational permissions for production buckets
+          - Sid: S3OperationalAccess
+            Effect: Allow
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+              - 's3:ListBucket'
+              - 's3:GetBucketVersioning'
+              - 's3:PutBucketVersioning'
+            Resource:
+              - 'arn:aws:s3:::prod-*'
+              - 'arn:aws:s3:::prod-*/*'
+              - 'arn:aws:s3:::backup-*'
+              - 'arn:aws:s3:::backup-*/*'
+          
+          # CloudWatch permissions for monitoring
+          - Sid: CloudWatchAccess
+            Effect: Allow
+            Action:
+              - 'cloudwatch:GetMetricStatistics'
+              - 'cloudwatch:ListMetrics'
+              - 'cloudwatch:PutMetricData'
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              - 'logs:DescribeLogGroups'
+              - 'logs:DescribeLogStreams'
+            Resource: '*'
+          
+          # Systems Manager permissions for operational tasks
+          - Sid: SystemsManagerAccess
+            Effect: Allow
+            Action:
+              - 'ssm:GetParameter'
+              - 'ssm:GetParameters'
+              - 'ssm:PutParameter'
+              - 'ssm:SendCommand'
+              - 'ssm:ListCommandInvocations'
+              - 'ssm:DescribeInstanceInformation'
+            Resource: '*'
+
+  # CloudTrail bucket policy for existing bucket
+  CloudTrailLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Fn::Sub: 'security-audit-logs-${AWS::AccountId}'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: 
+              Fn::Sub: 'arn:aws:s3:::security-audit-logs-${AWS::AccountId}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: 
+              Fn::Sub: 'arn:aws:s3:::security-audit-logs-${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  # CloudTrail for audit logging
+  SecurityAuditTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailLogsBucketPolicy
+    Properties:
+      TrailName: 
+        Fn::Sub: 'SecurityAuditTrail-${AWS::AccountId}'
+      S3BucketName:
+        Fn::Sub: 'security-audit-logs-${AWS::AccountId}'
+      S3KeyPrefix: 'security-audit-logs/'
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      IsLogging: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values:
+                - Fn::Sub: 'arn:aws:s3:::security-audit-logs-${AWS::AccountId}/*'
+            - Type: 'AWS::Lambda::Function'
+              Values:
+                - 'arn:aws:lambda'
 
 Outputs:
-  SecureAccessRoleArn:
-    Description: 'ARN of the secure access role with MFA enforcement'
-    Value: !GetAtt SecureAccessRole.Arn
+  SecureDeveloperRoleArn:
+    Description: 'ARN of the Secure Developer Role with MFA enforcement'
+    Value: { "Fn::GetAtt": ["SecureDeveloperRole", "Arn"] }
     Export:
-      Name: !Ref AWS::StackName
+      Name: 'SecureDeveloperRoleArn'
 
-  EmergencyAccessRoleArn:
-    Description: 'ARN of the emergency access role with enhanced MFA requirements'
-    Value: !GetAtt EmergencyAccessRole.Arn
+  SecureReadOnlyRoleArn:
+    Description: 'ARN of the Secure Read-Only Role with MFA enforcement'
+    Value: { "Fn::GetAtt": ["SecureReadOnlyRole", "Arn"] }
     Export:
-      Name: !Ref AWS::StackName
+      Name: 'SecureReadOnlyRoleArn'
 
-  SecurityAuditTrailArn:
-    Description: 'ARN of the CloudTrail for security auditing'
-    Value: !GetAtt SecurityAuditTrail.Arn
+  SecureOperationsRoleArn:
+    Description: 'ARN of the Secure Operations Role with MFA enforcement'
+    Value: { "Fn::GetAtt": ["SecureOperationsRole", "Arn"] }
     Export:
-      Name: !Sub '${DeploymentEnv}-security-audit-trail-arn'
+      Name: 'SecureOperationsRoleArn'
 
-  SecurityAuditBucketName:
-    Description: 'Name of the S3 bucket storing security audit logs'
-    Value: !Ref SecurityAuditBucket
+  CloudTrailArn:
+    Description: 'ARN of the Security Audit CloudTrail'
+    Value: { "Fn::GetAtt": ["SecurityAuditTrail", "Arn"] }
     Export:
-      Name: !Sub '${DeploymentEnv}-security-audit-bucket-name'
+      Name: 'CloudTrailArn'
 
-  MFAComplianceStatus:
-    Description: 'Confirmation that all roles enforce MFA authentication'
-    Value: 'All IAM roles in this template enforce MFA with time-based validation'
-
-  SecurityValidationChecklist:
-    Description: 'Security validation checklist for deployment verification'
-    Value: 'Verify: 1) MFA enforcement active, 2) Least privilege policies applied, 3) CloudTrail logging enabled, 4) S3 bucket encryption enabled'
+  CloudTrailLogsBucketName:
+    Description: 'Name of the S3 bucket storing CloudTrail logs'
+    Value:
+      Fn::Sub: 'security-audit-logs-${AWS::AccountId}'
+    Export:
+      Name: 'CloudTrailLogsBucketName'
 ```
 
 ## Key Security Features Implemented
