@@ -118,21 +118,6 @@
                         {
                             "Effect": "Allow",
                             "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "WebAppLogBucket",
-                                    "Arn"
-                                ]
-                            }
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
                                 "Service": "elasticloadbalancing.amazonaws.com"
                             },
                             "Action": "s3:PutObject",
@@ -233,6 +218,12 @@
                         "Key": "access_logs.s3.bucket",
                         "Value": {
                             "Ref": "WebAppLogBucket"
+                        }
+                    },
+                    {
+                        "Key": "access_logs.s3.prefix",
+                        "Value": {
+                            "Fn::Sub": "AWSLogs/${AWS::AccountId}/"
                         }
                     }
                 ]
@@ -357,6 +348,30 @@
                     "WebAppLoadBalancer",
                     "DNSName"
                 ]
+            }
+        },
+        "WebAppLogBucketName": {
+            "Description": "The name of the S3 bucket used for logs.",
+            "Value": {
+                "Ref": "WebAppLogBucket"
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "The name of the Auto Scaling Group.",
+            "Value": {
+                "Ref": "WebAppAutoScalingGroup"
+            }
+        },
+        "LoadBalancerSecurityGroupId": {
+            "Description": "The ID of the Security Group for the Load Balancer.",
+            "Value": {
+                "Ref": "LoadBalancerSecurityGroup"
+            }
+        },
+        "WebServerSecurityGroupId": {
+            "Description": "The ID of the Security Group for the web servers.",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
             }
         }
     }
