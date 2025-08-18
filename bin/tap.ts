@@ -16,16 +16,16 @@ Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
-// Primary stack in us-east-1
-new TapStack(app, `TapStack-${environmentSuffix}-use1`, {
-  stackName: `TapStack-${environmentSuffix}-use1`,
+// Primary stack in ap-south-1
+new TapStack(app, `TapStack-${environmentSuffix}-aps1`, {
+  stackName: `TapStack-${environmentSuffix}-aps1`,
   environmentSuffix,
   domainName,
   hostedZoneId,
   isPrimaryRegion: true,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-1',
+    region: 'ap-south-1',
   },
 });
 
