@@ -130,24 +130,6 @@ resource "aws_security_group" "ec2" {
   vpc_id      = aws_vpc.main.id
   description = "Security group for EC2 instances"
 
-  # HTTP from ALB
-  ingress {
-    description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  # HTTPS from ALB
-  ingress {
-    description     = "HTTPS from ALB"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
   # SSH ONLY from VPC CIDR - NEVER from 0.0.0.0/0
   ingress {
     description = "SSH from VPC"
@@ -175,6 +157,28 @@ resource "aws_security_group" "ec2" {
   }
 }
 
+# Allow HTTP from ALB to EC2
+resource "aws_security_group_rule" "ec2_ingress_http_from_alb" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  security_group_id = aws_security_group.ec2.id
+  source_security_group_id = aws_security_group.alb.id
+  description       = "Allow HTTP from ALB"
+}
+
+# Allow HTTPS from ALB to EC2
+resource "aws_security_group_rule" "ec2_ingress_https_from_alb" {
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  security_group_id = aws_security_group.ec2.id
+  source_security_group_id = aws_security_group.alb.id
+  description       = "Allow HTTPS from ALB"
+}
+
 # ALB Security Group
 resource "aws_security_group" "alb" {
   name_prefix = "${var.project_name}-alb-"
@@ -199,23 +203,6 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Outbound to EC2 security group only
-  egress {
-    description     = "HTTP to EC2"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]
-  }
-
-  egress {
-    description     = "HTTPS to EC2"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]
-  }
-
   tags = {
     Name = "${var.project_name}-alb-sg"
   }
@@ -223,6 +210,28 @@ resource "aws_security_group" "alb" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+# Allow HTTP from ALB to EC2
+resource "aws_security_group_rule" "alb_egress_http_to_ec2" {
+  type              = "egress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  security_group_id = aws_security_group.alb.id
+  source_security_group_id = aws_security_group.ec2.id
+  description       = "Allow HTTP to EC2"
+}
+
+# Allow HTTPS from ALB to EC2
+resource "aws_security_group_rule" "alb_egress_https_to_ec2" {
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  security_group_id = aws_security_group.alb.id
+  source_security_group_id = aws_security_group.ec2.id
+  description       = "Allow HTTPS to EC2"
 }
 
 # RDS Security Group
