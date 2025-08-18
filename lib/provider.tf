@@ -14,7 +14,12 @@ terraform {
   backend "s3" {}
 }
 
-# Primary AWS provider for general resources
 provider "aws" {
-  region = var.aws_region
+  region = var.primary_region
+}
+
+# Secondary provider (e.g., us-west-2)
+provider "aws" {
+  alias  = "secondary"
+  region = var.secondary_region
 }
