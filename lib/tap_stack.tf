@@ -334,11 +334,6 @@ resource "aws_kms_key" "state_key" {
   tags                = local.common_tags
 }
 
-resource "aws_kms_alias" "state_key_alias" {
-  name          = "alias/${var.project_name}-state-key"
-  target_key_id = aws_kms_key.state_key.id
-}
-
 ########################################
 # S3 BUCKET
 ########################################
