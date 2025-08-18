@@ -253,20 +253,22 @@ module "alb" {
   subnets            = module.vpc.public_subnets
   security_groups    = [aws_security_group.alb.id]
 
-  listeners = [
-    {
-      port               = 80
-      protocol           = "HTTP"
-      target_group_index = 0
+  listeners = {
+    http = {
+      port     = 80
+      protocol = "HTTP"
+      forward = {
+        target_group_key = "app"
+      }
     }
-  ]
+  }
 
-  target_groups = [
-    {
-      name             = "${var.name_prefix}-tg"
-      backend_protocol = "HTTP"
-      backend_port     = 80
-      target_type      = "instance"
+  target_groups = {
+    app = {
+      name        = "${var.name_prefix}-tg"
+      protocol    = "HTTP"
+      port        = 80
+      target_type = "instance"
       health_check = {
         path                = "/"
         protocol            = "HTTP"
@@ -277,7 +279,7 @@ module "alb" {
         unhealthy_threshold = 2
       }
     }
-  ]
+  }
 
   # Access logs to S3 disabled to avoid ACL constraints in minimal setup
 
@@ -321,7 +323,7 @@ resource "aws_autoscaling_group" "app" {
   desired_capacity          = var.desired_capacity
   health_check_type         = "EC2"
   health_check_grace_period = 120
-  target_group_arns         = [module.alb.target_group_arns[0]]
+  target_group_arns         = [module.alb.target_groups["app"].arn]
 
   launch_template {
     id      = aws_launch_template.app.id
@@ -674,7 +676,7 @@ resource "aws_cloudfront_distribution" "this" {
   default_root_object = ""
 
   origin {
-    domain_name = module.alb.this_lb_dns_name
+    domain_name = module.alb.dns_name
     origin_id   = "alb-origin"
     custom_origin_config {
       http_port              = 80
@@ -806,26 +808,28 @@ module "alb_dr" {
   subnets            = module.vpc_dr.public_subnets
   security_groups    = [aws_security_group.alb_dr.id]
 
-  listeners = [
-    {
-      port               = 80
-      protocol           = "HTTP"
-      target_group_index = 0
+  listeners = {
+    http = {
+      port     = 80
+      protocol = "HTTP"
+      forward = {
+        target_group_key = "app"
+      }
     }
-  ]
+  }
 
-  target_groups = [
-    {
-      name             = "${var.name_prefix}-tg-dr"
-      backend_protocol = "HTTP"
-      backend_port     = 80
-      target_type      = "instance"
+  target_groups = {
+    app = {
+      name        = "${var.name_prefix}-tg-dr"
+      protocol    = "HTTP"
+      port        = 80
+      target_type = "instance"
       health_check = {
         path     = "/"
         protocol = "HTTP"
       }
     }
-  ]
+  }
 
   # Access logs disabled in DR for minimal setup
 
@@ -865,7 +869,7 @@ resource "aws_autoscaling_group" "app_dr" {
   min_size                 = 1
   max_size                 = var.max_capacity
   desired_capacity         = 1
-  target_group_arns        = [module.alb_dr.target_group_arns[0]]
+  target_group_arns        = [module.alb_dr.target_groups["app"].arn]
   health_check_type        = "EC2"
   health_check_grace_period = 120
 
@@ -889,7 +893,7 @@ output "vpc_id" {
 }
 
 output "alb_dns_name" {
-  value = module.alb.this_lb_dns_name
+  value = module.alb.dns_name
 }
 
 output "api_invoke_url" {
