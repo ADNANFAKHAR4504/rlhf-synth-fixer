@@ -37,6 +37,18 @@ variable "db_password" {
   }
 }
 
+variable "enable_ssl_certificate" {
+  description = "Enable SSL certificate creation (set to false for CI/CD to avoid DNS validation delays)"
+  type        = bool
+  default     = false
+}
+
+variable "certificate_validation_timeout" {
+  description = "Certificate validation timeout (increase for slower DNS propagation)"
+  type        = string
+  default     = "5m"
+}
+
 ########################
 # Data Sources
 ########################
@@ -548,9 +560,10 @@ resource "aws_db_instance" "main" {
 }
 
 ########################
-# SSL Certificate
+# SSL Certificate (Conditional)
 ########################
 resource "aws_acm_certificate" "main" {
+  count             = var.enable_ssl_certificate ? 1 : 0
   domain_name       = "${local.suffix}.${var.domain_name}"
   validation_method = "DNS"
 
@@ -565,36 +578,37 @@ resource "aws_acm_certificate" "main" {
   tags = local.common_tags
 }
 
-# Build a static-keyed map
+# Build a static-keyed map (only if SSL enabled)
 locals {
-  validation_records = {
+  validation_records = var.enable_ssl_certificate ? {
     main = {
       domain = "${local.suffix}.${var.domain_name}"
     }
     wildcard = {
       domain = "*.${local.suffix}.${var.domain_name}"
     }
-  }
+  } : {}
 }
 
-# Route53 DNS validation records
+# Route53 DNS validation records (only if SSL enabled)
 resource "aws_route53_record" "cert_validation" {
-  for_each = local.validation_records   # ✅ keys = static: "main", "wildcard"
+  for_each = local.validation_records
 
   allow_overwrite = true
-  name    = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_name if dvo.domain_name == each.value.domain][0]
-  records = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_value if dvo.domain_name == each.value.domain]
+  name    = [for dvo in aws_acm_certificate.main[0].domain_validation_options : dvo.resource_record_name if dvo.domain_name == each.value.domain][0]
+  records = [for dvo in aws_acm_certificate.main[0].domain_validation_options : dvo.resource_record_value if dvo.domain_name == each.value.domain]
   ttl     = 60
-  type    = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_type if dvo.domain_name == each.value.domain][0]
+  type    = [for dvo in aws_acm_certificate.main[0].domain_validation_options : dvo.resource_record_type if dvo.domain_name == each.value.domain][0]
   zone_id = aws_route53_zone.main.zone_id
 }
 
 resource "aws_acm_certificate_validation" "main" {
-  certificate_arn         = aws_acm_certificate.main.arn
+  count                   = var.enable_ssl_certificate ? 1 : 0
+  certificate_arn         = aws_acm_certificate.main[0].arn
   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 
   timeouts {
-    create = "10m"
+    create = var.certificate_validation_timeout
   }
 
   depends_on = [
@@ -645,22 +659,28 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type = "redirect"
+    type = var.enable_ssl_certificate ? "redirect" : "forward"
 
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+    dynamic "redirect" {
+      for_each = var.enable_ssl_certificate ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
     }
+
+    target_group_arn = var.enable_ssl_certificate ? null : aws_lb_target_group.main.arn
   }
 }
 
 resource "aws_lb_listener" "https" {
+  count             = var.enable_ssl_certificate ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate_validation.main.certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.main[0].certificate_arn
 
   default_action {
     type             = "forward"
