@@ -313,11 +313,6 @@ resource "aws_cloudtrail" "security_trail" {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.logs_bucket.arn}/*"]
     }
-
-    data_resource {
-      type   = "AWS::S3::Bucket"
-      values = [aws_s3_bucket.logs_bucket.arn]
-    }
   }
 
   depends_on = [aws_s3_bucket_policy.cloudtrail_policy]
