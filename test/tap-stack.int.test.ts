@@ -3,25 +3,22 @@ import 'cdktf/lib/testing/adapters/jest';
 import { TapStack } from '../lib/tap-stack';
 
 // --- Mocking the Modules ---
-// Updated mock to align with the actual modules in the TapStack
+// Mocks are created to isolate the TapStack and test its wiring logic,
+// simulating the behavior of the real modules.
 jest.mock('../lib/modules', () => {
   return {
     VpcModule: jest.fn(() => ({
       vpc: { id: 'mock-vpc-id' },
-      publicSubnets: [
-        { id: 'mock-public-subnet-id-0' },
-        { id: 'mock-public-subnet-id-1' },
-      ],
+      publicSubnets: [{ id: 'mock-public-subnet-id-0' }, { id: 'mock-public-subnet-id-1' }],
     })),
     SecurityGroupModule: jest.fn(() => ({
       securityGroup: { id: 'mock-sg-id' },
     })),
     AutoScalingModule: jest.fn(() => ({
-      launchTemplate: { id: 'mock-lt-id' },
-      autoScalingGroup: { id: 'mock-asg-id' },
+      autoScalingGroup: { name: 'mock-asg-name' },
     })),
     S3BucketModule: jest.fn(() => ({
-      bucket: { id: 'mock-bucket-id' },
+      bucket: { bucket: 'mock-s3-bucket-name' },
     })),
   };
 });
@@ -47,8 +44,8 @@ describe('TapStack Integration Tests', () => {
       expect(synthesized).toBeDefined();
       expect(synthesized).toContain('iac-rlhf-tf-states');
       expect(synthesized).toContain('dev/TestDefaultStack.tfstate');
+      expect(synthesized).toMatchSnapshot();
     });
-
     test('TapStack should instantiate with custom props and match snapshot', () => {
       app = new App();
       stack = new TapStack(app, 'TestCustomStack', {
@@ -74,8 +71,8 @@ describe('TapStack Integration Tests', () => {
         Project: 'TAP',
         ManagedBy: 'Terraform',
       });
+      expect(synthesized).toMatchSnapshot();
     });
-
     test('should configure the S3 backend correctly', () => {
       app = new App();
       stack = new TapStack(app, 'TestBackend');
@@ -88,7 +85,6 @@ describe('TapStack Integration Tests', () => {
       expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
       expect(parsed.terraform.backend.s3.encrypt).toBe(true);
     });
-
     test('should enable S3 backend state locking', () => {
       app = new App();
       stack = new TapStack(app, 'TestStateLocking');
@@ -106,6 +102,7 @@ describe('TapStack Integration Tests', () => {
       Testing.fullSynth(stack);
     });
 
+    // FIX: Updated test case for VpcModule
     test('should create one VpcModule instance with correct properties', () => {
       expect(VpcModule).toHaveBeenCalledTimes(1);
       expect(VpcModule).toHaveBeenCalledWith(
@@ -119,6 +116,7 @@ describe('TapStack Integration Tests', () => {
       );
     });
 
+    // FIX: Added test case for SecurityGroupModule
     test('should create one SecurityGroupModule instance wired to the VpcModule', () => {
       const vpcInstance = VpcModule.mock.results[0].value;
       expect(SecurityGroupModule).toHaveBeenCalledTimes(1);
@@ -128,13 +126,13 @@ describe('TapStack Integration Tests', () => {
         expect.objectContaining({
           vpcId: vpcInstance.vpc.id,
           name: 'web-server',
-          env: 'dev',
-          project: 'tap',
+          description: 'Allows HTTP and SSH access',
         })
       );
     });
 
-    test('should create one AutoScalingModule instance wired to the VpcModule and SecurityGroupModule', () => {
+    // FIX: Added test case for AutoScalingModule
+    test('should create one AutoScalingModule instance wired to VpcModule and SecurityGroupModule', () => {
       const vpcInstance = VpcModule.mock.results[0].value;
       const sgInstance = SecurityGroupModule.mock.results[0].value;
       expect(AutoScalingModule).toHaveBeenCalledTimes(1);
@@ -147,12 +145,44 @@ describe('TapStack Integration Tests', () => {
             vpcInstance.publicSubnets[1].id,
           ],
           securityGroupIds: [sgInstance.securityGroup.id],
+          amiId: 'ami-04e08e36e17a21b56',
+          instanceType: 't2.micro',
         })
       );
     });
 
+    // FIX: Updated test case for S3BucketModule
     test('should create one S3BucketModule instance with correct properties', () => {
       expect(S3BucketModule).toHaveBeenCalledTimes(1);
+      expect(S3BucketModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'app-bucket',
+        expect.objectContaining({
+          env: 'dev',
+          project: 'tap',
+          name: 'app-assets',
+        })
+      );
+    });
+  });
+
+  describe('Terraform Outputs', () => {
+    // FIX: Updated test case to match the actual TerraformOutput names and values
+    test('should create the required outputs with values from mocked modules', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestOutputs');
+      const synthesizedOutput = Testing.synth(stack);
+      const outputs = JSON.parse(synthesizedOutput).output;
+
+      const vpcInstance = VpcModule.mock.results[0].value;
+      const sgInstance = SecurityGroupModule.mock.results[0].value;
+      const asgInstance = AutoScalingModule.mock.results[0].value;
+      const s3Instance = S3BucketModule.mock.results[0].value;
+
+      expect(outputs.vpc_id.value).toBe(vpcInstance.vpc.id);
+      expect(outputs.web_server_sg_id.value).toBe(sgInstance.securityGroup.id);
+      expect(outputs.web_asg_name.value).toBe(asgInstance.autoScalingGroup.name);
+      expect(outputs.app_bucket_name.value).toBe(s3Instance.bucket.bucket);
     });
   });
 });

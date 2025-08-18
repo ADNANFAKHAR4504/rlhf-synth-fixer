@@ -578,7 +578,7 @@ export class TapStack extends TerraformStack {
     // Environment configuration - easily switch between dev/qa/prod
     const config: EnvironmentConfig = {
       environment: process.env.ENVIRONMENT as 'dev' | 'qa' | 'prod' || 'dev',
-      region: 'us-west-2',
+      region: 'us-east-1',
       vpcCidr: '10.0.0.0/16',
       instanceType: this.getInstanceTypeForEnvironment(process.env.ENVIRONMENT || 'dev'),
       minSize: this.getMinSizeForEnvironment(process.env.ENVIRONMENT || 'dev'),

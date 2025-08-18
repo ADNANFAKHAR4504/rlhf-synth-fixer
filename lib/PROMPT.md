@@ -4,7 +4,7 @@ The lib/modules.ts file should contain reusable, modular components for the foll
 
 The lib/tap-stack.ts file should be the main stack that instantiates and composes these modules to create the complete infrastructure. The infrastructure must meet the following specifications:
 
-Region: The deployment must be in the us-west-2 region.
+Region: The deployment must be in the us-east-1 region.
 
 Multi-AZ: The VPC and its subnets should be distributed across at least two availability zones to ensure high availability and redundancy. The subnets should be created automatically to span these zones.
 

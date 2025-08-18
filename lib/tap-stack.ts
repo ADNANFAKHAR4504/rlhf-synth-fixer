@@ -11,6 +11,7 @@ import {
   S3BucketModule,
 } from './modules';
 import { Fn } from 'cdktf';
+import { TerraformOutput } from 'cdktf';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -29,7 +30,7 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-west-2';
+      : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
@@ -91,7 +92,7 @@ export class TapStack extends TerraformStack {
     });
 
     // 3. Create an EC2 Auto Scaling Group and Launch Template.
-    new AutoScalingModule(this, 'web-asg', {
+    const webAsg = new AutoScalingModule(this, 'web-asg', {
       env,
       project,
       subnetIds: tapVpc.publicSubnets.map(subnet => subnet.id),
@@ -110,10 +111,35 @@ export class TapStack extends TerraformStack {
     });
 
     // 4. Create a private S3 Bucket for application assets.
-    new S3BucketModule(this, 'app-bucket', {
+    const appBucket = new S3BucketModule(this, 'app-bucket', {
       env,
       project,
       name: 'app-assets',
+    });
+
+    new TerraformOutput(this, 'vpc_id', {
+      value: tapVpc.vpc.id,
+      description: 'The ID of the created VPC',
+    });
+
+    new TerraformOutput(this, 'public_subnet_ids', {
+      value: tapVpc.publicSubnets.map(subnet => subnet.id),
+      description: 'The IDs of the public subnets',
+    });
+
+    new TerraformOutput(this, 'web_server_sg_id', {
+      value: webServerSg.securityGroup.id,
+      description: 'The ID of the web server security group',
+    });
+
+    new TerraformOutput(this, 'web_asg_name', {
+      value: webAsg.autoScalingGroup.name,
+      description: 'The name of the web server Auto Scaling Group',
+    });
+
+    new TerraformOutput(this, 'app_bucket_name', {
+      value: appBucket.bucket.bucket,
+      description: 'The name of the application S3 bucket',
     });
   }
 }
