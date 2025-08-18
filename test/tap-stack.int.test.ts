@@ -11,12 +11,18 @@ import {
   SimulatePrincipalPolicyCommand,
 } from '@aws-sdk/client-iam';
 import {
+  GetResourcesCommand,
+  ResourceGroupsTaggingAPIClient,
+} from '@aws-sdk/client-resource-groups-tagging-api';
+import {
   GetBucketEncryptionCommand,
+  GetBucketLocationCommand,
   GetBucketPolicyCommand,
   GetPublicAccessBlockCommand,
   HeadObjectCommand,
-  S3Client,
+  S3Client
 } from '@aws-sdk/client-s3';
+
 import fs from 'fs';
 
 type Statement = {
@@ -129,7 +135,7 @@ describeIf(infraDeployed)('Secure Production Infrastructure Integration Tests', 
       
       expect(denyInsecureStatement).toBeDefined();
       expect(denyInsecureStatement.Effect).toBe('Deny');
-      expect(denyInsecureStatement.Principal).toBe('*');
+      expect(denyInsecureStatement.Principal).toEqual({ AWS: '*' });
       expect(denyInsecureStatement.Condition.Bool['aws:SecureTransport']).toBe('false');
     }, 30000);
 
@@ -148,7 +154,8 @@ describeIf(infraDeployed)('Secure Production Infrastructure Integration Tests', 
         );
       } catch (error: any) {
         // We expect this to either not exist or be blocked by policy
-        expect(['NoSuchKey', 'AccessDenied', 'Forbidden']).toContain(error.name);
+        expect(['NoSuchKey', 'AccessDenied', 'Forbidden', 'NotFound']).toContain(error.name);
+
       }
     }, 30000);
   });
@@ -338,8 +345,7 @@ describeIf(infraDeployed)('Secure Production Infrastructure Integration Tests', 
 
   describe('Resource Tagging Compliance', () => {
     test('should verify all resources are tagged with Environment=Production', async () => {
-      // Test S3 bucket tags through resource tagging API
-      const { ResourceGroupsTaggingAPIClient, GetResourcesCommand } = await import('@aws-sdk/client-resource-groups-tagging-api');
+      // Test S3 bucket tags through resource tagging API      
       const taggingClient = new ResourceGroupsTaggingAPIClient({ region: 'us-east-1' });
       
       const command = new GetResourcesCommand({
@@ -374,7 +380,6 @@ describeIf(infraDeployed)('Secure Production Infrastructure Integration Tests', 
       expect(bucketName).toContain('us-east-1');
       
       // Verify bucket region explicitly
-      const { S3Client, GetBucketLocationCommand } = await import('@aws-sdk/client-s3');
       const locationClient = new S3Client({ region: 'us-east-1' });
       
       const locationCommand = new GetBucketLocationCommand({ Bucket: bucketName });
