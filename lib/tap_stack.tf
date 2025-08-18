@@ -117,8 +117,7 @@ resource "aws_kms_key" "primary" {
         Resource = "*"
         Condition = {
           StringLike = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*",
-            "AWS:SourceArn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
           }
         }
       }
@@ -171,8 +170,7 @@ resource "aws_kms_key" "secondary" {
         Resource = "*"
         Condition = {
           StringLike = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*",
-            "AWS:SourceArn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
           }
         }
       }
@@ -982,6 +980,14 @@ resource "aws_s3_bucket_policy" "logging" {
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.logging.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = [
+              "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/*",
+              "arn:aws:cloudtrail:eu-west-1:${data.aws_caller_identity.current.account_id}:trail/*"
+            ]
+          }
+        }
       },
       {
         Sid    = "AWSCloudTrailWrite"
@@ -994,6 +1000,27 @@ resource "aws_s3_bucket_policy" "logging" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
+            "AWS:SourceArn" = [
+              "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/*",
+              "arn:aws:cloudtrail:eu-west-1:${data.aws_caller_identity.current.account_id}:trail/*"
+            ]
+          }
+        }
+      },
+      {
+        Sid    = "AWSCloudTrailGetBucketLocation"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketLocation"
+        Resource = aws_s3_bucket.logging.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = [
+              "arn:aws:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/*",
+              "arn:aws:cloudtrail:eu-west-1:${data.aws_caller_identity.current.account_id}:trail/*"
+            ]
           }
         }
       }
