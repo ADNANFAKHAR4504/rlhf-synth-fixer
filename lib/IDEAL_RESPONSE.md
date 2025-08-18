@@ -315,16 +315,46 @@ const guardDutyDetector = new aws.guardduty.Detector(
   }
 );
 
-// 8. Certificate Manager with modern security (placeholder for post-quantum support)
+// 8. Certificate Manager with DNS validation and Route53 automation
 const certificate = new aws.acm.Certificate(
   `myproject-prod-certificate-${environmentSuffix}`,
   {
     domainName: `myproject-${environmentSuffix}.example.com`,
     validationMethod: 'DNS',
     tags: commonTags,
-  },
+  }
+);
+
+// Find the Route53 hosted zone for the domain
+const hostedZone = aws.route53.getZone({
+  name: `example.com`,
+  privateZone: false,
+});
+
+// Create DNS validation record automatically
+const validationRecord = pulumi
+  .all([certificate.domainValidationOptions, hostedZone])
+  .apply(([options, zone]) => {
+    return new aws.route53.Record(
+      `myproject-prod-cert-validation-${environmentSuffix}`,
+      {
+        name: options[0].resourceRecordName,
+        zoneId: zone.zoneId,
+        type: options[0].resourceRecordType,
+        records: [options[0].resourceRecordValue],
+        ttl: 60,
+      }
+    );
+  });
+
+// ACM Certificate Validation resource
+const certValidation = new aws.acm.CertificateValidation(
+  `myproject-prod-cert-validation-final-${environmentSuffix}`,
   {
-    // Note: ML-KEM support is automatic in newer ACM certificates
+    certificateArn: certificate.arn,
+    validationRecordFqdns: pulumi
+      .all([validationRecord])
+      .apply(([record]) => [record.fqdn]),
   }
 );
 
@@ -335,6 +365,7 @@ export const lambdaFunctionArn = lambdaFunction.arn;
 export const secretArn = dbSecret.arn;
 export const guardDutyDetectorId = guardDutyDetector.id;
 export const certificateArn = certificate.arn;
+export const certificateValidationId = certValidation.id;
 export const kmsKeyId = s3KmsKey.keyId;
 export const kmsKeyArn = s3KmsKey.arn;
 export const lambdaRoleArn = lambdaRole.arn;
@@ -344,12 +375,12 @@ export const lambdaRoleArn = lambdaRole.arn;
 
 1. **Environment Suffix Support**: All resources include `environmentSuffix` for multi-environment deployments and avoiding resource name conflicts
 
-2. **Destroyable Resources**: 
+2. **Destroyable Resources**:
    - S3 buckets have `forceDestroy: true` for testing environments
    - KMS key has `deletionWindowInDays: 7` for deletion
    - Secrets Manager has `recoveryWindowInDays: 0` for immediate deletion
 
-3. **Modern API Usage**: 
+3. **Modern API Usage**:
    - Updated from deprecated `BucketVersioningV2` to `BucketVersioning`
    - Updated from deprecated `BucketServerSideEncryptionConfigurationV2` to `BucketServerSideEncryptionConfiguration`
 
@@ -358,7 +389,7 @@ export const lambdaRoleArn = lambdaRole.arn;
    - Proper error handling and secure logging implementation
    - GuardDuty configured with finding publishing frequency
 
-5. **Better Resource Exports**: 
+5. **Better Resource Exports**:
    - Added more comprehensive outputs including ARNs for integration testing
    - Exported Lambda role ARN and KMS key ARN for testing IAM permissions
 
@@ -366,3 +397,7 @@ export const lambdaRoleArn = lambdaRole.arn;
    - Proper tagging on all resources
    - Consistent naming convention across all resources
    - Complete error handling in Lambda function
+
+```
+
+```
