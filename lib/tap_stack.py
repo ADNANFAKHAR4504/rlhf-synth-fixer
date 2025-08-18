@@ -28,6 +28,7 @@ from typing import Dict, List, Optional
 import pulumi
 import pulumi_aws as aws
 import pulumi_random as random
+import pulumi_kubernetes as k8s
 from pulumi import ResourceOptions
 
 
@@ -356,23 +357,21 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     
     # EKS VPC endpoints for cluster communication
     # Using only essential endpoints that are definitely needed
-    eks_endpoints = [
-        f"com.amazonaws.{region}.ec2",  # Regional
-        f"com.amazonaws.{region}.ecr.api",  # Regional
-        f"com.amazonaws.{region}.ecr.dkr",  # Regional
-        f"com.amazonaws.{region}.s3",  # Regional
-        f"com.amazonaws.{region}.sts",  # Regional
+    # S3 uses gateway endpoint, not interface endpoint
+    interface_endpoints = [
+        f"com.amazonaws.{region}.ec2",
+        f"com.amazonaws.{region}.ecr.api",
+        f"com.amazonaws.{region}.ecr.dkr",
+        f"com.amazonaws.{region}.sts",
     ]
     
-    for endpoint_service in eks_endpoints:
+    for endpoint_service in interface_endpoints:
         # Create shorter, unique names for endpoints
         service_short_name = endpoint_service.split('.')[-1]
         if service_short_name == "api":
             service_short_name = "ecr-api"
         elif service_short_name == "dkr":
             service_short_name = "ecr-dkr"
-        elif service_short_name == "s3":
-            service_short_name = "s3"  # Global S3 endpoint
             
         endpoint = aws.ec2.VpcEndpoint(
             f"{self.name_prefix}-{service_short_name}-ep",
@@ -386,6 +385,18 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
             opts=ResourceOptions(provider=self.provider)
         )
         endpoints.append(endpoint)
+    
+    # Create S3 gateway endpoint (not interface endpoint)
+    s3_endpoint = aws.ec2.VpcEndpoint(
+        f"{self.name_prefix}-s3-gateway-ep",
+        vpc_id=self.vpc.id,
+        service_name=f"com.amazonaws.{region}.s3",
+        vpc_endpoint_type="Gateway",
+        route_table_ids=[self.private_route_tables[0].id, self.private_route_tables[1].id],
+        tags={**self.tags, "Name": f"{self.name_prefix}-s3-gateway-endpoint"},
+        opts=ResourceOptions(provider=self.provider)
+    )
+    endpoints.append(s3_endpoint)
     
     return endpoints
 
@@ -488,16 +499,11 @@ def create_security_groups(
       opts=ResourceOptions(provider=provider)
   )
 
-  # EKS Cluster Security Group - Allow all traffic for testing
+  # EKS Cluster Security Group - Proper rules for node communication
   eks_cluster_sg = aws.ec2.SecurityGroup(
       f"{name_prefix}-eks-cluster-sg",
       vpc_id=vpc.id,
-      description="EKS Control Plane Security Group - Testing mode",
-      ingress=[
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
-          ),
-      ],
+      description="EKS Control Plane Security Group",
       egress=[
           aws.ec2.SecurityGroupEgressArgs(
               protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
@@ -507,16 +513,11 @@ def create_security_groups(
       opts=ResourceOptions(provider=provider)
   )
 
-  # EKS Node Security Group - Allow all traffic for testing
+  # EKS Node Security Group - Proper rules for cluster communication
   eks_node_sg = aws.ec2.SecurityGroup(
       f"{name_prefix}-eks-node-sg",
       vpc_id=vpc.id,
-      description="EKS Worker Nodes Security Group - Testing mode",
-      ingress=[
-          aws.ec2.SecurityGroupIngressArgs(
-              protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
-          ),
-      ],
+      description="EKS Worker Nodes Security Group",
       egress=[
           aws.ec2.SecurityGroupEgressArgs(
               protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"]
@@ -542,6 +543,59 @@ def create_security_groups(
           )
       ],
       tags={**tags, "Name": f"{name_prefix}-db-sg"},
+      opts=ResourceOptions(provider=provider)
+  )
+
+  # Add security group rules for EKS cluster and node communication
+  # Allow nodes to communicate with cluster API
+  aws.ec2.SecurityGroupRule(
+      f"{name_prefix}-cluster-ingress-node-https",
+      type="ingress",
+      security_group_id=eks_cluster_sg.id,
+      source_security_group_id=eks_node_sg.id,
+      from_port=443,
+      to_port=443,
+      protocol="tcp",
+      description="Allow nodes to communicate with cluster API",
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  # Allow cluster API to communicate with nodes
+  aws.ec2.SecurityGroupRule(
+      f"{name_prefix}-node-ingress-cluster",
+      type="ingress",
+      security_group_id=eks_node_sg.id,
+      source_security_group_id=eks_cluster_sg.id,
+      from_port=0,
+      to_port=65535,
+      protocol="tcp",
+      description="Allow cluster to communicate with nodes",
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  # Allow nodes to communicate with each other
+  aws.ec2.SecurityGroupRule(
+      f"{name_prefix}-node-ingress-self",
+      type="ingress",
+      security_group_id=eks_node_sg.id,
+      source_security_group_id=eks_node_sg.id,
+      from_port=0,
+      to_port=65535,
+      protocol="-1",
+      description="Allow nodes to communicate with each other",
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  # Allow ALB to reach nodes
+  aws.ec2.SecurityGroupRule(
+      f"{name_prefix}-node-ingress-alb",
+      type="ingress",
+      security_group_id=eks_node_sg.id,
+      source_security_group_id=alb_sg.id,
+      from_port=1,
+      to_port=65535,
+      protocol="tcp",
+      description="Allow ALB to reach nodes",
       opts=ResourceOptions(provider=provider)
   )
 
@@ -700,6 +754,54 @@ def create_eks_cluster(
           opts=ResourceOptions(provider=provider)
       )
       
+      # Generate kubeconfig for the cluster
+      def generate_kubeconfig(args):
+          cluster_name, endpoint, certificate = args
+          return json.dumps({
+              "apiVersion": "v1",
+              "clusters": [{
+                  "cluster": {
+                      "server": endpoint,
+                      "certificate-authority-data": certificate
+                  },
+                  "name": "kubernetes"
+              }],
+              "contexts": [{
+                  "context": {
+                      "cluster": "kubernetes",
+                      "user": "aws"
+                  },
+                  "name": "aws"
+              }],
+              "current-context": "aws",
+              "kind": "Config",
+              "users": [{
+                  "name": "aws",
+                  "user": {
+                      "exec": {
+                          "apiVersion": "client.authentication.k8s.io/v1beta1",
+                          "command": "aws",
+                          "args": [
+                              "eks",
+                              "get-token",
+                              "--cluster-name",
+                              cluster_name,
+                              "--region",
+                              provider.region or "us-west-2"
+                          ],
+                          "env": None
+                      }
+                  }
+              }]
+          })
+      
+      # Add kubeconfig as a property
+      cluster.kubeconfig = pulumi.Output.all(
+          cluster.name,
+          cluster.endpoint,
+          cluster.certificate_authority.data
+      ).apply(generate_kubeconfig)
+      
       return cluster
 
 
@@ -745,7 +847,7 @@ def create_eks_node_group(
           opts=ResourceOptions(provider=provider)
       )
 
-      # Create EKS managed node group
+      # Create EKS managed node group - Let AWS handle the configuration!
       node_group = aws.eks.NodeGroup(
           f"{name_prefix}-eks-node-group",
           cluster_name=cluster.name,
@@ -759,15 +861,18 @@ def create_eks_node_group(
           scaling_config=aws.eks.NodeGroupScalingConfigArgs(
               desired_size=1,
               min_size=1,
-              max_size=2
+              max_size=3
           ),
-          force_update_version=True,
+          # No launch template - let EKS handle it!
           labels={
-              "node.kubernetes.io/role": "worker",
-              f"kubernetes.io/cluster-autoscaler/{name_prefix}-eks-cluster": "owned",
+              "role": "worker",
+              "environment": tags.get("Environment", "production").lower(),
           },
           tags={**tags, "Name": f"{name_prefix}-eks-nodegroup"},
-          opts=ResourceOptions(provider=provider)
+          opts=ResourceOptions(
+              provider=provider,
+              depends_on=[cluster]
+          )
       )
       
       return node_group
@@ -1136,62 +1241,86 @@ def create_nginx_deployment(
     name_prefix: str = "corp"
 ):
   """
-  Deploy NGINX to EKS cluster using pulumi_eks approach
+  Deploy NGINX to EKS cluster using pulumi_kubernetes
   """
-  try:
-      import pulumi_eks as eks
-
-      # If using pulumi_eks, the cluster has a provider we can use
-      if hasattr(eks_cluster, 'provider'):
-          k8s_provider = eks_cluster.provider
-          
-          # Create NGINX deployment
-          nginx_deployment = k8s_provider.apps.v1.Deployment(
-                  f"{name_prefix}-nginx-deployment",
-                  metadata=k8s_provider.meta.v1.ObjectMetaArgs(
-                      name="nginx-deployment",
-                      labels={"app": "nginx"}
-                  ),
-                  spec=k8s_provider.apps.v1.DeploymentSpecArgs(
-                      replicas=2,
-                      selector=k8s_provider.meta.v1.LabelSelectorArgs(
-                          match_labels={"app": "nginx"}
-                      ),
-                      template=k8s_provider.core.v1.PodTemplateSpecArgs(
-                          metadata=k8s_provider.meta.v1.ObjectMetaArgs(
-                              labels={"app": "nginx"}
-                          ),
-                          spec=k8s_provider.core.v1.PodSpecArgs(
-                              containers=[k8s_provider.core.v1.ContainerArgs(
-                                  name="nginx",
-                                  image="nginx:latest",
-                                  ports=[k8s_provider.core.v1.ContainerPortArgs(
-                                      container_port=80
-                                  )]
-                              )]
-                          )
-                      )
-                  ),
-                  opts=ResourceOptions(provider=k8s_provider)
-              )
-          
-          return nginx_deployment
-      else:
-          # Fallback for basic AWS EKS
-          return create_mock_nginx_deployment(name_prefix)
-          
-  except ImportError:
-      # Fallback to mock deployment
-      return create_mock_nginx_deployment(name_prefix)
-
-
-def create_mock_nginx_deployment(name_prefix: str):
-  """Create a mock NGINX deployment for testing"""
-  class MockDeployment:
-      def __init__(self):
-          self.metadata = [type('obj', (object,), {'name': f'{name_prefix}-nginx-deployment'})()]
+  # Create a Kubernetes provider using the EKS cluster
+  k8s_provider = k8s.Provider(
+      f"{name_prefix}-k8s-provider",
+      kubeconfig=eks_cluster.kubeconfig.apply(lambda kc: kc),
+      opts=ResourceOptions(provider=provider)
+  )
   
-  return MockDeployment()
+  # Create NGINX deployment
+  nginx_deployment = k8s.apps.v1.Deployment(
+      f"{name_prefix}-nginx-deployment",
+      metadata=k8s.meta.v1.ObjectMetaArgs(
+          name=f"{name_prefix}-nginx-deployment",
+          namespace="default",
+          labels={
+              "app": "nginx",
+              **tags
+          }
+      ),
+      spec=k8s.apps.v1.DeploymentSpecArgs(
+          replicas=2,
+          selector=k8s.meta.v1.LabelSelectorArgs(
+              match_labels={"app": "nginx"}
+          ),
+          template=k8s.core.v1.PodTemplateSpecArgs(
+              metadata=k8s.meta.v1.ObjectMetaArgs(
+                  labels={"app": "nginx"}
+              ),
+              spec=k8s.core.v1.PodSpecArgs(
+                  containers=[k8s.core.v1.ContainerArgs(
+                      name="nginx",
+                      image="nginx:latest",
+                      ports=[k8s.core.v1.ContainerPortArgs(
+                          container_port=80
+                      )],
+                      resources=k8s.core.v1.ResourceRequirementsArgs(
+                          requests={
+                              "memory": "64Mi",
+                              "cpu": "250m"
+                          },
+                          limits={
+                              "memory": "128Mi", 
+                              "cpu": "500m"
+                          }
+                      )
+                  )]
+              )
+          )
+      ),
+      opts=ResourceOptions(provider=k8s_provider)
+  )
+  
+  # Create a service to expose NGINX
+  nginx_service = k8s.core.v1.Service(
+      f"{name_prefix}-nginx-service",
+      metadata=k8s.meta.v1.ObjectMetaArgs(
+          name=f"{name_prefix}-nginx-service",
+          namespace="default",
+          labels={
+              "app": "nginx",
+              **tags
+          }
+      ),
+      spec=k8s.core.v1.ServiceSpecArgs(
+          type="LoadBalancer",
+          selector={"app": "nginx"},
+          ports=[k8s.core.v1.ServicePortArgs(
+              port=80,
+              target_port=80,
+              protocol="TCP"
+          )]
+      ),
+      opts=ResourceOptions(provider=k8s_provider)
+  )
+  
+  return nginx_deployment, nginx_service
+
+
+
 
 
 def create_monitoring_lambda(
@@ -1471,7 +1600,7 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # Deploy NGINX to EKS cluster
-    nginx_deployment = create_nginx_deployment(
+    nginx_deployment, nginx_service = create_nginx_deployment(
         eks_cluster=eks_cluster,
         tags=tags,
         provider=provider,
@@ -1500,7 +1629,8 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("codepipeline_name", pipeline.name)
     pulumi.export("health_lambda_name", health_lambda.name)
     pulumi.export("health_lambda_arn", health_lambda.arn)
-    pulumi.export("nginx_deployment_name", nginx_deployment.metadata[0].name)
+    pulumi.export("nginx_service_name", nginx_service.metadata.name)
+    pulumi.export("nginx_deployment_name", nginx_deployment.metadata.name)
 
     # Debug outputs for troubleshooting
     pulumi.export("eks_cluster_version", eks_cluster.version)
