@@ -106,5 +106,5 @@ output "vpc_endpoint_s3_id" {
 
 output "instance_profile_name" {
   description = "Name of the EC2 instance profile"
-  value       = aws_iam_user.app_user.name
+  value       = data.aws_iam_user.app_user.user_name
 }
