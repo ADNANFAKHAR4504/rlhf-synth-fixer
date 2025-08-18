@@ -573,23 +573,27 @@ resource "aws_acm_certificate" "main" {
   tags = local.common_tags
 }
 
-# Define domains statically (plan-time safe)
+# Build a static-keyed map
 locals {
-  validation_domains = toset([
-    "${local.suffix}.${var.domain_name}",
-    "*.${local.suffix}.${var.domain_name}"
-  ])
+  validation_records = {
+    main = {
+      domain = "${local.suffix}.${var.domain_name}"
+    }
+    wildcard = {
+      domain = "*.${local.suffix}.${var.domain_name}"
+    }
+  }
 }
 
 # Route53 DNS validation records
 resource "aws_route53_record" "cert_validation" {
-  for_each = local.validation_domains   # ✅ keys known at plan time
+  for_each = local.validation_records   # ✅ keys = static: "main", "wildcard"
 
   allow_overwrite = true
-  name    = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_name if dvo.domain_name == each.key][0]
-  records = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_value if dvo.domain_name == each.key]
+  name    = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_name if dvo.domain_name == each.value.domain][0]
+  records = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_value if dvo.domain_name == each.value.domain]
   ttl     = 60
-  type    = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_type if dvo.domain_name == each.key][0]
+  type    = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_type if dvo.domain_name == each.value.domain][0]
   zone_id = aws_route53_zone.main.zone_id
 }
 
