@@ -270,9 +270,9 @@ export class NetworkStack extends pulumi.ComponentResource {
     );
 
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(
-      `tap-rds-sg-${region}-${environmentSuffix}`,
+      `tap-rds-sg-${region}-${environmentSuffix}-primary`,
       {
-        name: `tap-rds-sg-${region}-${environmentSuffix}`,
+        name: `tap-rds-sg-${region}-${environmentSuffix}-primary`,
         description: 'Security group for RDS database',
         vpcId: vpc.id,
         ingress: [
@@ -286,7 +286,7 @@ export class NetworkStack extends pulumi.ComponentResource {
         ],
         tags: {
           ...tags,
-          Name: `tap-rds-sg-${region}-${environmentSuffix}`,
+          Name: `tap-rds-sg-${region}-${environmentSuffix}-primary`,
         },
       },
       { parent: this }
