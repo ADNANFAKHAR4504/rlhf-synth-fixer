@@ -85,18 +85,18 @@ class TestCompletelyIndependentDeployment(unittest.TestCase):
   self.assertEqual(ACTUAL_PROJECT_NAME, "tap-ds-demo")
   # Match ENVIRONMENT to value from tap_stack.py
   self.assertEqual(ACTUAL_ENVIRONMENT, "pr430")
-    
-    # Test resource naming for independence
-    def get_resource_name(resource_type: str) -> str:
-      return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}-1234"
-      
-    vpc_name = get_resource_name("vpc")
-    igw_name = get_resource_name("igw")
-    
-    # Verify naming includes independence markers
-    self.assertIn(PROJECT_NAME, vpc_name)
-    self.assertIn(ENVIRONMENT, vpc_name)
-    self.assertIn(PROJECT_NAME, igw_name)
+
+  # Test resource naming for independence
+  def get_resource_name(resource_type: str) -> str:
+    return f"{PROJECT_NAME}-{ENVIRONMENT}-{resource_type}-1234"
+
+  vpc_name = get_resource_name("vpc")
+  igw_name = get_resource_name("igw")
+
+  # Verify naming includes independence markers
+  self.assertIn(PROJECT_NAME, vpc_name)
+  self.assertIn(ENVIRONMENT, vpc_name)
+  self.assertIn(PROJECT_NAME, igw_name)
     
   def test_deployment_success_indicators(self):
     """Test deployment success indicators are present."""
