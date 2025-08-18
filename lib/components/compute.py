@@ -1,7 +1,7 @@
 import base64
 
 import pulumi_aws as aws
-from pulumi import ComponentResource, ResourceOptions
+from pulumi import ComponentResource, ResourceOptions, InvokeOptions
 
 
 class ComputeComponent(ComponentResource):
@@ -12,14 +12,16 @@ class ComputeComponent(ComponentResource):
     self.config = config_data['config']
     self.dependencies = config_data['dependencies']
 
-    # Get latest Amazon Linux 2 AMI
+    # Get latest Amazon Linux 2 AMI for the specific region
+    invoke_opts = InvokeOptions(provider=opts.provider) if opts and opts.provider else None
     ami = aws.ec2.get_ami(
       most_recent=True,
       owners=["amazon"],
       filters=[
         {"name": "name", "values": ["amzn2-ami-hvm-*"]},
         {"name": "architecture", "values": ["x86_64"]}
-      ]
+      ],
+      opts=invoke_opts
     )
     self.ami_id = ami.id
 

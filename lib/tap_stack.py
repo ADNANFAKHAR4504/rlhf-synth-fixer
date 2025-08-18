@@ -109,20 +109,20 @@ class TapStack(pulumi.ComponentResource):
         opts=pulumi.ResourceOptions(provider=provider)
       )
 
-      # Deploy database (primary region only)
-      if i == 0:
-        database_deps = ComponentDependencies(
-          vpc_id=networking.vpc.id,
-          private_subnet_ids=networking.private_subnet_ids,
-          database_sg_id=security.database_sg.id,
-          backup_bucket_name=storage.backup_bucket.bucket
-        )
-        DatabaseComponent(
-          f"database-{region}",
-          config=config,
-          dependencies=database_deps,
-          opts=pulumi.ResourceOptions(provider=provider)
-        )
+      # # Deploy database (primary region only)
+      # if i == 0:
+      #   database_deps = ComponentDependencies(
+      #     vpc_id=networking.vpc.id,
+      #     private_subnet_ids=networking.private_subnet_ids,
+      #     database_sg_id=security.database_sg.id,
+      #     backup_bucket_name=storage.backup_bucket.bucket
+      #   )
+      #   DatabaseComponent(
+      #     f"database-{region}",
+      #     config=config,
+      #     dependencies=database_deps,
+      #     opts=pulumi.ResourceOptions(provider=provider)
+      #   )
 
       # Deploy compute infrastructure
       compute_deps = ComponentDependencies(
