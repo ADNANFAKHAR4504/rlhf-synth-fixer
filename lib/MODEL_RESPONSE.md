@@ -1,5 +1,3 @@
-Here's a complete Terraform configuration that meets all your requirements:
-
 ```hcl
 # Variables
 variable "vpc_cidr" {
