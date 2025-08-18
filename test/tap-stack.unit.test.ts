@@ -45,6 +45,7 @@ describe('Terraform S3 and DynamoDB Stack', () => {
   });
 
   test('Tags are set for both resources', () => {
-    expect(tfConfig).toMatch(/tags\s*=\s*{[^}]*Name[^}]*Project[^}]*ManagedBy[^}]*}/s);
+    expect(tfConfig).toMatch(/resource\s+"aws_s3_bucket"\s+"main"[\s\S]*tags\s*=\s*{[^}]*Name[^}]*Project[^}]*ManagedBy[^}]*}/);
+    expect(tfConfig).toMatch(/resource\s+"aws_dynamodb_table"\s+"main"[\s\S]*tags\s*=\s*{[^}]*Name[^}]*Project[^}]*ManagedBy[^}]*}/);
   });
 });
