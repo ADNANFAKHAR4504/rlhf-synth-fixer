@@ -112,6 +112,7 @@ Resources:
   # Secure S3 Bucket with encryption
   SecureS3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       # BucketName will be auto-generated to ensure uniqueness
       BucketEncryption:
@@ -126,6 +127,16 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: DeleteNonCurrentVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 1
       # Removed invalid CloudWatchConfigurations
 
   # Apply the security policy to the S3 bucket
@@ -158,6 +169,7 @@ Resources:
   # S3 Bucket for CloudTrail logs
   CloudTrailLogsBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Ref CloudTrailBucketName
       BucketEncryption:
@@ -171,6 +183,16 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: DeleteNonCurrentVersions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 1
 
   # CloudTrail Bucket Policy
   CloudTrailBucketPolicy:
@@ -213,8 +235,8 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${SecureS3Bucket}/*'
-                - !Sub '${CloudTrailLogsBucket}/*'
+                - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+                - !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}/*'
 
   # SCP-style policy to restrict EC2 to us-west-2 (implemented as IAM policy)
   RegionalRestrictionPolicy:

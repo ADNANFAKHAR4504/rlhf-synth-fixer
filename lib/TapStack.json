@@ -150,6 +150,7 @@
         },
         "SecureS3Bucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -169,6 +170,24 @@
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteIncompleteMultipartUploads",
+                            "Status": "Enabled",
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        },
+                        {
+                            "Id": "DeleteNonCurrentVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpiration": {
+                                "NoncurrentDays": 1
+                            }
+                        }
+                    ]
                 }
             }
         },
@@ -220,6 +239,7 @@
         },
         "CloudTrailLogsBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Ref": "CloudTrailBucketName"
@@ -241,6 +261,24 @@
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteIncompleteMultipartUploads",
+                            "Status": "Enabled",
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 1
+                            }
+                        },
+                        {
+                            "Id": "DeleteNonCurrentVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpiration": {
+                                "NoncurrentDays": 1
+                            }
+                        }
+                    ]
                 }
             }
         },
@@ -307,10 +345,10 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${SecureS3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
                                     },
                                     {
-                                        "Fn::Sub": "${CloudTrailLogsBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${CloudTrailLogsBucket}/*"
                                     }
                                 ]
                             }
