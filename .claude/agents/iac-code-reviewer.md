@@ -1,7 +1,7 @@
 ---
 name: iac-code-reviewer
 description: Reviews Infrastructure as Code for quality, compliance, test coverage, and security. Validates against requirements and best practices.
-color: green
+color: lime
 model: sonnet
 ---
 
@@ -78,3 +78,13 @@ test live resource and it should not use any mocks)
 - **Best Practices**: Design patterns, naming, configuration
 - **Security**: Access control, encryption, secrets management
 - **Performance**: Resource sizing, scaling, efficiency
+
+
+### Agent-Specific Reporting
+- Report prerequisites check results with specific files being analyzed
+- Report compliance analysis progress and percentage with current compliance rule
+- Report any compliance violations or security issues found
+- Report test coverage analysis completion with coverage percentage
+- Report blocking conditions if critical compliance failures prevent approval
+- Report final readiness recommendation with specific issues to resolve
+- Report the final `lib/MODEL_FAILURES.md` content.
