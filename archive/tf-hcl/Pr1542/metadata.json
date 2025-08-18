@@ -25,5 +25,11 @@
     "AWS Secrets Manager",
     "Amazon CloudWatch",
     "AWS Systems Manager"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
