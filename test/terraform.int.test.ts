@@ -63,7 +63,7 @@ const getOutput = (outputs: any, key: string, fallbackKey?: string): any => {
 };
 
 // Initialize AWS clients
-const region = process.env.AWS_REGION || 'us-east-1';
+const region = 'us-east-1';
 const ec2Client = new EC2Client({ region });
 const s3Client = new S3Client({ region });
 const kmsClient = new KMSClient({ region });
