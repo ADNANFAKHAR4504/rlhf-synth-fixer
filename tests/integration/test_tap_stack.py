@@ -50,7 +50,8 @@ FULL_STACK = f"{PULUMI_ORG}/{PROJECT}/{STACK}" if PULUMI_ORG else STACK
 # Mock tap_stack constants for integration testing
 class TapStackConfig:
   PROJECT_NAME = "tap-ds-demo"
-  ENVIRONMENT = ENVIRONMENT_SUFFIX
+  # Match ENVIRONMENT to value from tap_stack.py
+  ENVIRONMENT = "pr430"
   AWS_REGION = AWS_REGION
   INSTANCE_TYPE = "t3.micro"
   DEPLOYMENT_ID = "1234"

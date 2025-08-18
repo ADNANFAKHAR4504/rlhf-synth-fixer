@@ -82,8 +82,9 @@ class TestCompletelyIndependentDeployment(unittest.TestCase):
     from lib.constants import PROJECT_NAME as ACTUAL_PROJECT_NAME, ENVIRONMENT as ACTUAL_ENVIRONMENT
     
     # Verify project configuration
-    self.assertEqual(ACTUAL_PROJECT_NAME, "tap-ds-demo")
-    self.assertEqual(ACTUAL_ENVIRONMENT, "dev")
+  self.assertEqual(ACTUAL_PROJECT_NAME, "tap-ds-demo")
+  # Match ENVIRONMENT to value from tap_stack.py
+  self.assertEqual(ACTUAL_ENVIRONMENT, "pr430")
     
     # Test resource naming for independence
     def get_resource_name(resource_type: str) -> str:
