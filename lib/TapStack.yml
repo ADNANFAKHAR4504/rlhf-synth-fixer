@@ -507,6 +507,7 @@ Resources:
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: S3BucketPolicy
     Properties:
       Name: !Sub '${AWS::StackName}-ALB'
       Scheme: internet-facing

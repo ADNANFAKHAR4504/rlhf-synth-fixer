@@ -970,6 +970,7 @@
     },
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "DependsOn": "S3BucketPolicy",
       "Properties": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-ALB"
