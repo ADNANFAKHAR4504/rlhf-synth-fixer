@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Scalable and secure web application infrastructure with VPC, ALB, Auto Scaling, RDS, and S3",
+  "Description": "Scalable and secure web application infrastructure with VPC, ALB, Auto Scaling, RDS, and S3 - Self-sufficient stack for us-east-1",
   "Parameters": {
     "DBUsername": {
       "Type": "String",
@@ -10,9 +10,28 @@
       "MaxLength": 16,
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "Production",
+      "Description": "Environment name for resource tagging",
+      "AllowedValues": [
+        "Production",
+        "Staging",
+        "Development"
+      ]
     }
   },
-  "Conditions": {},
+  "Conditions": {
+    "IsProduction": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "Production"
+      ]
+    }
+  },
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
@@ -23,11 +42,89 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-VPC"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-VPC"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "WebApp"
+          }
+        ]
+      }
+    },
+    "VPCFlowLogRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${AWS::StackName}-VPC-Flow-Log-Role"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "vpc-flow-logs.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/VPCFlowLogsPublisher"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "VPCFlowLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/vpc/flowlogs/${AWS::StackName}"
+        },
+        "RetentionInDays": 30,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "VPCFlowLogsPolicy": {
+      "Type": "AWS::EC2::FlowLog",
+      "Properties": {
+        "ResourceType": "VPC",
+        "ResourceId": {
+          "Ref": "VPC"
+        },
+        "TrafficType": "ALL",
+        "LogDestinationType": "cloud-watch-logs",
+        "LogDestination": {
+          "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${VPCFlowLogs}"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -38,11 +135,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-IGW"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-IGW"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -77,11 +178,19 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Public-Subnet-1"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Public-Subnet-1"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Type",
+            "Value": "Public"
           }
         ]
       }
@@ -105,11 +214,19 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Public-Subnet-2"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Public-Subnet-2"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Type",
+            "Value": "Public"
           }
         ]
       }
@@ -132,11 +249,19 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Private-Subnet-1"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Private-Subnet-1"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Type",
+            "Value": "Private"
           }
         ]
       }
@@ -159,11 +284,19 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Private-Subnet-2"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Private-Subnet-2"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Type",
+            "Value": "Private"
           }
         ]
       }
@@ -176,11 +309,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-NAT-EIP-1"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-NAT-EIP-1"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -193,11 +330,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-NAT-EIP-2"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-NAT-EIP-2"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -206,7 +347,10 @@
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
-          "Fn::GetAtt": "NatGateway1EIP.AllocationId"
+          "Fn::GetAtt": [
+            "NatGateway1EIP",
+            "AllocationId"
+          ]
         },
         "SubnetId": {
           "Ref": "PublicSubnet1"
@@ -214,11 +358,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-NAT-Gateway-1"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-NAT-Gateway-1"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -227,7 +375,10 @@
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
         "AllocationId": {
-          "Fn::GetAtt": "NatGateway2EIP.AllocationId"
+          "Fn::GetAtt": [
+            "NatGateway2EIP",
+            "AllocationId"
+          ]
         },
         "SubnetId": {
           "Ref": "PublicSubnet2"
@@ -235,11 +386,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-NAT-Gateway-2"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-NAT-Gateway-2"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -253,11 +408,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Public-Routes"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Public-Routes"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -306,11 +465,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Private-Routes-1"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Private-Routes-1"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -347,11 +510,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Private-Routes-2"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Private-Routes-2"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -382,7 +549,9 @@
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": "WebApp-ALB-SecurityGroup",
+        "GroupName": {
+          "Fn::Sub": "${AWS::StackName}-ALB-SecurityGroup"
+        },
         "GroupDescription": "Security group for Application Load Balancer",
         "VpcId": {
           "Ref": "VPC"
@@ -392,23 +561,36 @@
             "IpProtocol": "tcp",
             "FromPort": 80,
             "ToPort": 80,
-            "CidrIp": "0.0.0.0/0"
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTP access from anywhere"
           },
           {
             "IpProtocol": "tcp",
             "FromPort": 443,
             "ToPort": 443,
-            "CidrIp": "0.0.0.0/0"
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTPS access from anywhere"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": -1,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-ALB-SecurityGroup"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-ALB-SecurityGroup"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -416,7 +598,9 @@
     "WebServerSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": "WebApp-WebServer-SecurityGroup",
+        "GroupName": {
+          "Fn::Sub": "${AWS::StackName}-WebServer-SecurityGroup"
+        },
         "GroupDescription": "Security group for web servers",
         "VpcId": {
           "Ref": "VPC"
@@ -428,7 +612,8 @@
             "ToPort": 80,
             "SourceSecurityGroupId": {
               "Ref": "ALBSecurityGroup"
-            }
+            },
+            "Description": "HTTP access from ALB only"
           },
           {
             "IpProtocol": "tcp",
@@ -436,17 +621,59 @@
             "ToPort": 443,
             "SourceSecurityGroupId": {
               "Ref": "ALBSecurityGroup"
-            }
+            },
+            "Description": "HTTPS access from ALB only"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.0.0.0/16",
+            "Description": "SSH access from VPC only (for debugging)"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "10.0.3.0/24",
+            "Description": "Database access to private subnet 1"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "10.0.4.0/24",
+            "Description": "Database access to private subnet 2"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTPS outbound for AWS services"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "HTTP outbound for package updates"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-WebServer-SecurityGroup"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-WebServer-SecurityGroup"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -454,7 +681,9 @@
     "DatabaseSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": "WebApp-Database-SecurityGroup",
+        "GroupName": {
+          "Fn::Sub": "${AWS::StackName}-Database-SecurityGroup"
+        },
         "GroupDescription": "Security group for RDS database",
         "VpcId": {
           "Ref": "VPC"
@@ -464,19 +693,36 @@
             "IpProtocol": "tcp",
             "FromPort": 3306,
             "ToPort": 3306,
-            "SourceSecurityGroupId": {
-              "Ref": "WebServerSecurityGroup"
-            }
+            "CidrIp": "10.0.3.0/24",
+            "Description": "MySQL access from private subnet 1"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 3306,
+            "ToPort": 3306,
+            "CidrIp": "10.0.4.0/24",
+            "Description": "MySQL access from private subnet 2"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": -1,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Database-SecurityGroup"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Database-SecurityGroup"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -484,7 +730,9 @@
     "EC2Role": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": "WebApp-EC2-Role",
+        "RoleName": {
+          "Fn::Sub": "${AWS::StackName}-EC2-Role"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -513,6 +761,13 @@
                   ],
                   "Resource": {
                     "Ref": "DatabaseSecret"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "aws:RequestTag/Environment": {
+                        "Ref": "Environment"
+                      }
+                    }
                   }
                 }
               ]
@@ -532,6 +787,13 @@
                   ],
                   "Resource": {
                     "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "aws:RequestTag/Environment": {
+                        "Ref": "Environment"
+                      }
+                    }
                   }
                 }
               ]
@@ -541,7 +803,9 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -549,7 +813,9 @@
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": "WebApp-EC2-InstanceProfile",
+        "InstanceProfileName": {
+          "Fn::Sub": "${AWS::StackName}-EC2-InstanceProfile"
+        },
         "Roles": [
           {
             "Ref": "EC2Role"
@@ -560,7 +826,9 @@
     "DatabaseSecret": {
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
-        "Name": "WebApp-Database-Credentials",
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Database-Credentials"
+        },
         "Description": "Database credentials for web application",
         "GenerateSecretString": {
           "SecretStringTemplate": {
@@ -573,7 +841,13 @@
         "Tags": [
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "WebApp"
           }
         ]
       }
@@ -581,7 +855,9 @@
     "DatabaseSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": "webapp-database-subnet-group",
+        "DBSubnetGroupName": {
+          "Fn::Sub": "${AWS::StackName}-database-subnet-group"
+        },
         "DBSubnetGroupDescription": "Subnet group for RDS database",
         "SubnetIds": [
           {
@@ -594,11 +870,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Database-SubnetGroup"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Database-SubnetGroup"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -608,7 +888,9 @@
       "DeletionPolicy": "Snapshot",
       "UpdateReplacePolicy": "Snapshot",
       "Properties": {
-        "DBInstanceIdentifier": "webapp-database",
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "${AWS::StackName}-database"
+        },
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
         "EngineVersion": "8.0.43",
@@ -633,15 +915,26 @@
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-        "DeletionProtection": true,
+        "DeletionProtection": {
+          "Fn::If": [
+            "IsProduction",
+            true,
+            false
+          ]
+        },
+        "PubliclyAccessible": false,
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Database"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Database"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -649,7 +942,9 @@
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": "WebApp-ALB",
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALB"
+        },
         "Scheme": "internet-facing",
         "Type": "application",
         "Subnets": [
@@ -665,14 +960,38 @@
             "Ref": "ALBSecurityGroup"
           }
         ],
+        "LoadBalancerAttributes": [
+          {
+            "Key": "idle_timeout.timeout_seconds",
+            "Value": "60"
+          },
+          {
+            "Key": "access_logs.s3.enabled",
+            "Value": "true"
+          },
+          {
+            "Key": "access_logs.s3.bucket",
+            "Value": {
+              "Ref": "S3Bucket"
+            }
+          },
+          {
+            "Key": "access_logs.s3.prefix",
+            "Value": "alb-logs"
+          }
+        ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-ALB"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-ALB"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -680,7 +999,9 @@
     "ALBTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": "WebApp-TargetGroup",
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TargetGroup"
+        },
         "Port": 80,
         "Protocol": "HTTP",
         "VpcId": {
@@ -692,19 +1013,29 @@
         "HealthCheckTimeoutSeconds": 5,
         "HealthyThresholdCount": 2,
         "UnhealthyThresholdCount": 5,
+        "TargetGroupAttributes": [
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "30"
+          }
+        ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-TargetGroup"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-TargetGroup"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
     },
-    "ALBListener": {
+    "ALBListenerHTTP": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
       "Properties": {
         "DefaultActions": [
@@ -718,71 +1049,25 @@
         "LoadBalancerArn": {
           "Ref": "ApplicationLoadBalancer"
         },
-        "Port": 443,
-        "Protocol": "HTTPS",
-        "Certificates": [
-          {
-            "CertificateArn": {
-              "Ref": "SSLCertificate"
-            }
-          }
-        ]
-      }
-    },
-    "ALBListenerHTTP": {
-      "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Properties": {
-        "DefaultActions": [
-          {
-            "Type": "redirect",
-            "RedirectConfig": {
-              "Protocol": "HTTPS",
-              "Port": 443,
-              "StatusCode": "HTTP_301"
-            }
-          }
-        ],
-        "LoadBalancerArn": {
-          "Ref": "ApplicationLoadBalancer"
-        },
         "Port": 80,
         "Protocol": "HTTP"
-      }
-    },
-    "SSLCertificate": {
-      "Type": "AWS::ACM::Certificate",
-      "Properties": {
-        "DomainName": {
-          "Fn::Sub": "${AWS::StackName}.example.com"
-        },
-        "ValidationMethod": "DNS",
-        "SubjectAlternativeNames": [
-          {
-            "Fn::Sub": "*.${AWS::StackName}.example.com"
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "WebApp-SSL-Certificate"
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          }
-        ]
       }
     },
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "LaunchTemplateName": "WebApp-LaunchTemplate",
+        "LaunchTemplateName": {
+          "Fn::Sub": "${AWS::StackName}-LaunchTemplate"
+        },
         "LaunchTemplateData": {
           "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
           "InstanceType": "t3.micro",
           "IamInstanceProfile": {
             "Arn": {
-              "Fn::GetAtt": "EC2InstanceProfile.Arn"
+              "Fn::GetAtt": [
+                "EC2InstanceProfile",
+                "Arn"
+              ]
             }
           },
           "SecurityGroupIds": [
@@ -791,7 +1076,9 @@
             }
           ],
           "UserData": {
-            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Web Application Server</h1>\" > /var/www/html/index.html\necho \"<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" >> /var/www/html/index.html\necho \"<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>\" >> /var/www/html/index.html"
+            "Fn::Base64": {
+              "Fn::Sub": "#!/bin/bash\n# Update system\nyum update -y\n\n# Install required packages\nyum install -y httpd php php-mysqlnd mysql\n\n# Start and enable Apache\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create a simple PHP application\ncat > /var/www/html/index.php << 'EOF'\n<!DOCTYPE html>\n<html>\n<head>\n    <title>Web Application</title>\n    <style>\n        body { font-family: Arial, sans-serif; margin: 40px; }\n        .container { max-width: 800px; margin: 0 auto; }\n        .info { background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <h1>Web Application Server</h1>\n        <div class=\"info\">\n            <h3>Instance Information:</h3>\n            <p><strong>Instance ID:</strong> <?php echo file_get_contents('http://169.254.169.254/latest/meta-data/instance-id'); ?></p>\n            <p><strong>Availability Zone:</strong> <?php echo file_get_contents('http://169.254.169.254/latest/meta-data/placement/availability-zone'); ?></p>\n            <p><strong>Region:</strong> <?php echo file_get_contents('http://169.254.169.254/latest/meta-data/placement/region'); ?></p>\n            <p><strong>Launch Time:</strong> <?php echo file_get_contents('http://169.254.169.254/latest/meta-data/launch-time'); ?></p>\n        </div>\n        <div class=\"info\">\n            <h3>Stack Information:</h3>\n            <p><strong>Stack Name:</strong> ${AWS::StackName}</p>\n            <p><strong>Environment:</strong> ${Environment}</p>\n        </div>\n    </div>\n</body>\n</html>\nEOF\n\n# Set proper permissions\nchown apache:apache /var/www/html/index.php\nchmod 644 /var/www/html/index.php\n\n# Create health check endpoint\necho \"OK\" > /var/www/html/health\nchown apache:apache /var/www/html/health\nchmod 644 /var/www/html/health\n\n# Configure CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard\n"
+            }
           },
           "TagSpecifications": [
             {
@@ -799,11 +1086,19 @@
               "Tags": [
                 {
                   "Key": "Name",
-                  "Value": "WebApp-Instance"
+                  "Value": {
+                    "Fn::Sub": "${AWS::StackName}-Instance"
+                  }
                 },
                 {
                   "Key": "Environment",
-                  "Value": "Production"
+                  "Value": {
+                    "Ref": "Environment"
+                  }
+                },
+                {
+                  "Key": "Project",
+                  "Value": "WebApp"
                 }
               ]
             }
@@ -814,7 +1109,9 @@
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
-        "AutoScalingGroupName": "WebApp-ASG",
+        "AutoScalingGroupName": {
+          "Fn::Sub": "${AWS::StackName}-ASG"
+        },
         "VPCZoneIdentifier": [
           {
             "Ref": "PrivateSubnet1"
@@ -828,7 +1125,10 @@
             "Ref": "LaunchTemplate"
           },
           "Version": {
-            "Fn::GetAtt": "LaunchTemplate.LatestVersionNumber"
+            "Fn::GetAtt": [
+              "LaunchTemplate",
+              "LatestVersionNumber"
+            ]
           }
         },
         "MinSize": 2,
@@ -841,24 +1141,36 @@
         ],
         "HealthCheckType": "ELB",
         "HealthCheckGracePeriod": 300,
+        "Cooldown": 300,
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-ASG-Instance",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-ASG-Instance"
+            },
             "PropagateAtLaunch": true
           },
           {
             "Key": "Environment",
-            "Value": "Production",
+            "Value": {
+              "Ref": "Environment"
+            },
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Project",
+            "Value": "WebApp",
             "PropagateAtLaunch": true
           }
         ]
       }
     },
-    "CPUAlarm": {
+    "CPUAlarmHigh": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": "WebApp-High-CPU-Usage",
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-High-CPU-Usage"
+        },
         "AlarmDescription": "Alarm when CPU exceeds 70%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/EC2",
@@ -879,35 +1191,23 @@
           {
             "Ref": "ScaleUpPolicy"
           }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
         ]
-      }
-    },
-    "ScaleUpPolicy": {
-      "Type": "AWS::AutoScaling::ScalingPolicy",
-      "Properties": {
-        "AdjustmentType": "ChangeInCapacity",
-        "AutoScalingGroupName": {
-          "Ref": "AutoScalingGroup"
-        },
-        "Cooldown": 300,
-        "ScalingAdjustment": 1
-      }
-    },
-    "ScaleDownPolicy": {
-      "Type": "AWS::AutoScaling::ScalingPolicy",
-      "Properties": {
-        "AdjustmentType": "ChangeInCapacity",
-        "AutoScalingGroupName": {
-          "Ref": "AutoScalingGroup"
-        },
-        "Cooldown": 300,
-        "ScalingAdjustment": -1
       }
     },
     "CPUAlarmLow": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": "WebApp-Low-CPU-Usage",
+        "AlarmName": {
+          "Fn::Sub": "${AWS::StackName}-Low-CPU-Usage"
+        },
         "AlarmDescription": "Alarm when CPU is below 25%",
         "MetricName": "CPUUtilization",
         "Namespace": "AWS/EC2",
@@ -928,14 +1228,50 @@
           {
             "Ref": "ScaleDownPolicy"
           }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
         ]
+      }
+    },
+    "ScaleUpPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "${AWS::StackName}-ScaleUp"
+        },
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "AutoScalingGroup"
+        },
+        "Cooldown": 300,
+        "ScalingAdjustment": 1
+      }
+    },
+    "ScaleDownPolicy": {
+      "Type": "AWS::AutoScaling::ScalingPolicy",
+      "Properties": {
+        "PolicyName": {
+          "Fn::Sub": "${AWS::StackName}-ScaleDown"
+        },
+        "AdjustmentType": "ChangeInCapacity",
+        "AutoScalingGroupName": {
+          "Ref": "AutoScalingGroup"
+        },
+        "Cooldown": 300,
+        "ScalingAdjustment": -1
       }
     },
     "S3Bucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "webapp-static-content-tapstackpr1569${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "${AWS::StackName}-static-content-${AWS::AccountId}-${AWS::Region}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -955,14 +1291,103 @@
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
         },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "ALBLogsLifecycle",
+              "Status": "Enabled",
+              "Transitions": [
+                {
+                  "StorageClass": "STANDARD_IA",
+                  "TransitionInDays": 30
+                },
+                {
+                  "StorageClass": "GLACIER",
+                  "TransitionInDays": 90
+                }
+              ],
+              "ExpirationInDays": 2555
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": "WebApp-Static-Content"
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-Static-Content"
+            }
           },
           {
             "Key": "Environment",
-            "Value": "Production"
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "S3BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "S3Bucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": [
+                "s3:PutObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "${S3Bucket}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": [
+                "s3:PutObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "${S3Bucket}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ApplicationLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/ec2/${AWS::StackName}"
+        },
+        "RetentionInDays": 30,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -972,7 +1397,10 @@
     "ApplicationLoadBalancerDNS": {
       "Description": "DNS name of the Application Load Balancer",
       "Value": {
-        "Fn::GetAtt": "ApplicationLoadBalancer.DNSName"
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
       },
       "Export": {
         "Name": {
@@ -983,31 +1411,11 @@
     "ApplicationLoadBalancerURL": {
       "Description": "URL to access the Application Load Balancer",
       "Value": {
-        "Fn::Sub": "https://${ApplicationLoadBalancer.DNSName}"
+        "Fn::Sub": "http://${ApplicationLoadBalancer.DNSName}"
       },
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-ALB-URL"
-        }
-      }
-    },
-    "SSLCertificateArn": {
-      "Description": "ARN of the SSL certificate created in this stack",
-      "Value": {
-        "Ref": "SSLCertificate"
-      },
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-SSL-Certificate-ARN"
-        }
-      }
-    },
-    "SSLCertificateConfigured": {
-      "Description": "Whether SSL certificate is configured",
-      "Value": "true",
-      "Export": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-SSL-Configured"
         }
       }
     },
@@ -1034,13 +1442,35 @@
       }
     },
     "S3BucketName": {
-      "Description": "S3 Bucket Name for Static Content",
+      "Description": "S3 Bucket Name for Static Content and ALB Logs",
       "Value": {
         "Ref": "S3Bucket"
       },
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-S3-Bucket"
+        }
+      }
+    },
+    "AutoScalingGroupName": {
+      "Description": "Name of the Auto Scaling Group",
+      "Value": {
+        "Ref": "AutoScalingGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ASG-Name"
+        }
+      }
+    },
+    "StackRegion": {
+      "Description": "AWS Region where the stack is deployed",
+      "Value": {
+        "Ref": "AWS::Region"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-Region"
         }
       }
     }

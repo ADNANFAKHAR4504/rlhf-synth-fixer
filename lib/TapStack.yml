@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Scalable and secure web application infrastructure with VPC, ALB, Auto Scaling, RDS, and S3'
+Description: 'Scalable and secure web application infrastructure with VPC, ALB, Auto Scaling, RDS, and S3 - Self-sufficient stack for us-east-1'
 
 Parameters:
   DBUsername:
@@ -10,7 +10,18 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
+  
+  Environment:
+    Type: String
+    Default: 'Production'
+    Description: 'Environment name for resource tagging'
+    AllowedValues:
+      - Production
+      - Staging
+      - Development
 
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'Production']
 
 Resources:
   # VPC Configuration
@@ -22,9 +33,50 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: WebApp-VPC
+          Value: !Sub '${AWS::StackName}-VPC'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
+        - Key: Project
+          Value: WebApp
+
+  # VPC Flow Logs for security and compliance
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-VPC-Flow-Log-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/VPCFlowLogsPublisher
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  VPCFlowLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}'
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  VPCFlowLogsPolicy:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogDestination: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${VPCFlowLogs}'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
   # Internet Gateway
   InternetGateway:
@@ -32,9 +84,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: WebApp-IGW
+          Value: !Sub '${AWS::StackName}-IGW'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -52,9 +104,11 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: WebApp-Public-Subnet-1
+          Value: !Sub '${AWS::StackName}-Public-Subnet-1'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
+        - Key: Type
+          Value: Public
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -65,9 +119,11 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: WebApp-Public-Subnet-2
+          Value: !Sub '${AWS::StackName}-Public-Subnet-2'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
+        - Key: Type
+          Value: Public
 
   # Private Subnets
   PrivateSubnet1:
@@ -78,9 +134,11 @@ Resources:
       CidrBlock: 10.0.3.0/24
       Tags:
         - Key: Name
-          Value: WebApp-Private-Subnet-1
+          Value: !Sub '${AWS::StackName}-Private-Subnet-1'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
+        - Key: Type
+          Value: Private
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -90,9 +148,11 @@ Resources:
       CidrBlock: 10.0.4.0/24
       Tags:
         - Key: Name
-          Value: WebApp-Private-Subnet-2
+          Value: !Sub '${AWS::StackName}-Private-Subnet-2'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
+        - Key: Type
+          Value: Private
 
   # NAT Gateways
   NatGateway1EIP:
@@ -102,9 +162,9 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: WebApp-NAT-EIP-1
+          Value: !Sub '${AWS::StackName}-NAT-EIP-1'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
@@ -113,9 +173,9 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: WebApp-NAT-EIP-2
+          Value: !Sub '${AWS::StackName}-NAT-EIP-2'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -124,9 +184,9 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: WebApp-NAT-Gateway-1
+          Value: !Sub '${AWS::StackName}-NAT-Gateway-1'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
@@ -135,9 +195,9 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: WebApp-NAT-Gateway-2
+          Value: !Sub '${AWS::StackName}-NAT-Gateway-2'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   # Route Tables
   PublicRouteTable:
@@ -146,9 +206,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: WebApp-Public-Routes
+          Value: !Sub '${AWS::StackName}-Public-Routes'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -176,9 +236,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: WebApp-Private-Routes-1
+          Value: !Sub '${AWS::StackName}-Private-Routes-1'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -199,9 +259,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: WebApp-Private-Routes-2
+          Value: !Sub '${AWS::StackName}-Private-Routes-2'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -220,7 +280,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: WebApp-ALB-SecurityGroup
+      GroupName: !Sub '${AWS::StackName}-ALB-SecurityGroup'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -228,20 +288,26 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: HTTP access from anywhere
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
+          Description: HTTPS access from anywhere
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: WebApp-ALB-SecurityGroup
+          Value: !Sub '${AWS::StackName}-ALB-SecurityGroup'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: WebApp-WebServer-SecurityGroup
+      GroupName: !Sub '${AWS::StackName}-WebServer-SecurityGroup'
       GroupDescription: Security group for web servers
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -249,38 +315,76 @@ Resources:
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: HTTP access from ALB only
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: HTTPS access from ALB only
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/16
+          Description: SSH access from VPC only (for debugging)
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.3.0/24
+          Description: Database access to private subnet 1
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.4.0/24
+          Description: Database access to private subnet 2
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS outbound for AWS services
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP outbound for package updates
       Tags:
         - Key: Name
-          Value: WebApp-WebServer-SecurityGroup
+          Value: !Sub '${AWS::StackName}-WebServer-SecurityGroup'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: WebApp-Database-SecurityGroup
+      GroupName: !Sub '${AWS::StackName}-Database-SecurityGroup'
       GroupDescription: Security group for RDS database
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          CidrIp: 10.0.3.0/24
+          Description: MySQL access from private subnet 1
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.4.0/24
+          Description: MySQL access from private subnet 2
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
       Tags:
         - Key: Name
-          Value: WebApp-Database-SecurityGroup
+          Value: !Sub '${AWS::StackName}-Database-SecurityGroup'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   # IAM Role for EC2 instances
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: WebApp-EC2-Role
+      RoleName: !Sub '${AWS::StackName}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -299,6 +403,9 @@ Resources:
                 Action:
                   - secretsmanager:GetSecretValue
                 Resource: !Ref DatabaseSecret
+                Condition:
+                  StringEquals:
+                    'aws:RequestTag/Environment': !Ref Environment
         - PolicyName: S3Access
           PolicyDocument:
             Version: '2012-10-17'
@@ -309,14 +416,17 @@ Resources:
                   - s3:PutObject
                   - s3:DeleteObject
                 Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+                Condition:
+                  StringEquals:
+                    'aws:RequestTag/Environment': !Ref Environment
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: WebApp-EC2-InstanceProfile
+      InstanceProfileName: !Sub '${AWS::StackName}-EC2-InstanceProfile'
       Roles:
         - !Ref EC2Role
 
@@ -324,7 +434,7 @@ Resources:
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: WebApp-Database-Credentials
+      Name: !Sub '${AWS::StackName}-Database-Credentials'
       Description: Database credentials for web application
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
@@ -333,22 +443,24 @@ Resources:
         ExcludeCharacters: '"@/\'
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
+        - Key: Project
+          Value: WebApp
 
   # RDS Subnet Group
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: webapp-database-subnet-group
+      DBSubnetGroupName: !Sub '${AWS::StackName}-database-subnet-group'
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: WebApp-Database-SubnetGroup
+          Value: !Sub '${AWS::StackName}-Database-SubnetGroup'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   # RDS Database
   Database:
@@ -356,7 +468,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: webapp-database
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -372,18 +484,19 @@ Resources:
       BackupRetentionPeriod: 7
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      DeletionProtection: true
+      DeletionProtection: !If [IsProduction, true, false]
+      PubliclyAccessible: false
       Tags:
         - Key: Name
-          Value: WebApp-Database
+          Value: !Sub '${AWS::StackName}-Database'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: WebApp-ALB
+      Name: !Sub '${AWS::StackName}-ALB'
       Scheme: internet-facing
       Type: application
       Subnets:
@@ -391,17 +504,26 @@ Resources:
         - !Ref PublicSubnet2
       SecurityGroups:
         - !Ref ALBSecurityGroup
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref S3Bucket
+        - Key: access_logs.s3.prefix
+          Value: 'alb-logs'
       Tags:
         - Key: Name
-          Value: WebApp-ALB
+          Value: !Sub '${AWS::StackName}-ALB'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
   # ALB Target Group
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: WebApp-TargetGroup
+      Name: !Sub '${AWS::StackName}-TargetGroup'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -411,35 +533,22 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 5
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
       Tags:
         - Key: Name
-          Value: WebApp-TargetGroup
+          Value: !Sub '${AWS::StackName}-TargetGroup'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
-  # ALB Listener (HTTPS) - Only created when SSL certificate is available (us-east-1)
-  ALBListener:
+  # ALB Listener (HTTP - forward to target group)
+  ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref SSLCertificate
-
-  # ALB Listener (HTTP - redirect to HTTPS when SSL is available)
-  ALBListenerHTTP:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: 443
-            StatusCode: HTTP_301
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
@@ -448,7 +557,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: WebApp-LaunchTemplate
+      LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.micro
@@ -457,28 +566,76 @@ Resources:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: |
+          Fn::Base64: !Sub |
             #!/bin/bash
+            # Update system
             yum update -y
-            yum install -y httpd
+            
+            # Install required packages
+            yum install -y httpd php php-mysqlnd mysql
+            
+            # Start and enable Apache
             systemctl start httpd
             systemctl enable httpd
-            echo "<h1>Web Application Server</h1>" > /var/www/html/index.html
-            echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
-            echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+            
+            # Create a simple PHP application
+            cat > /var/www/html/index.php << 'EOF'
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Web Application</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 40px; }
+                    .container { max-width: 800px; margin: 0 auto; }
+                    .info { background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Web Application Server</h1>
+                    <div class="info">
+                        <h3>Instance Information:</h3>
+                        <p><strong>Instance ID:</strong> <?php echo file_get_contents('http://169.254.169.254/latest/meta-data/instance-id'); ?></p>
+                        <p><strong>Availability Zone:</strong> <?php echo file_get_contents('http://169.254.169.254/latest/meta-data/placement/availability-zone'); ?></p>
+                        <p><strong>Region:</strong> <?php echo file_get_contents('http://169.254.169.254/latest/meta-data/placement/region'); ?></p>
+                        <p><strong>Launch Time:</strong> <?php echo file_get_contents('http://169.254.169.254/latest/meta-data/launch-time'); ?></p>
+                    </div>
+                    <div class="info">
+                        <h3>Stack Information:</h3>
+                        <p><strong>Stack Name:</strong> ${AWS::StackName}</p>
+                        <p><strong>Environment:</strong> ${Environment}</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            EOF
+            
+            # Set proper permissions
+            chown apache:apache /var/www/html/index.php
+            chmod 644 /var/www/html/index.php
+            
+            # Create health check endpoint
+            echo "OK" > /var/www/html/health
+            chown apache:apache /var/www/html/health
+            chmod 644 /var/www/html/health
+            
+            # Configure CloudWatch agent
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
         TagSpecifications:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: WebApp-Instance
+                Value: !Sub '${AWS::StackName}-Instance'
               - Key: Environment
-                Value: Production
+                Value: !Ref Environment
+              - Key: Project
+                Value: WebApp
 
   # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: WebApp-ASG
+      AutoScalingGroupName: !Sub '${AWS::StackName}-ASG'
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -492,19 +649,23 @@ Resources:
         - !Ref ALBTargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
+      Cooldown: 300
       Tags:
         - Key: Name
-          Value: WebApp-ASG-Instance
+          Value: !Sub '${AWS::StackName}-ASG-Instance'
           PropagateAtLaunch: true
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: WebApp
           PropagateAtLaunch: true
 
-  # CloudWatch Alarm for CPU Usage
-  CPUAlarm:
+  # CloudWatch Alarms for Auto Scaling
+  CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: WebApp-High-CPU-Usage
+      AlarmName: !Sub '${AWS::StackName}-High-CPU-Usage'
       AlarmDescription: Alarm when CPU exceeds 70%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -518,29 +679,14 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleUpPolicy
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
-  # Auto Scaling Policies
-  ScaleUpPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref AutoScalingGroup
-      Cooldown: 300
-      ScalingAdjustment: 1
-
-  ScaleDownPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref AutoScalingGroup
-      Cooldown: 300
-      ScalingAdjustment: -1
-
-  # CloudWatch Alarm for Scale Down
   CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: WebApp-Low-CPU-Usage
+      AlarmName: !Sub '${AWS::StackName}-Low-CPU-Usage'
       AlarmDescription: Alarm when CPU is below 25%
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -554,12 +700,34 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleDownPolicy
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
 
-  # S3 Bucket for Static Content
+  # Auto Scaling Policies
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-ScaleUp'
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: 1
+
+  ScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-ScaleDown'
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref AutoScalingGroup
+      Cooldown: 300
+      ScalingAdjustment: -1
+
+  # S3 Bucket for Static Content and ALB Logs
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'webapp-static-content-tapstackpr1569${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${AWS::StackName}-static-content-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -571,28 +739,58 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ALBLogsLifecycle
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+            ExpirationInDays: 2555
       Tags:
         - Key: Name
-          Value: WebApp-Static-Content
+          Value: !Sub '${AWS::StackName}-Static-Content'
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
-  # ACM Certificate for ALB (self-signed for testing)
-  # Note: ACM certificates for ALB must be created in us-east-1 region
-  # This template will only create the certificate when deployed in us-east-1
-  # For other regions, deploy this template in us-east-1 first, then reference the certificate ARN
-  SSLCertificate:
-    Type: AWS::ACM::Certificate
+  # S3 Bucket Policy for ALB Logs
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
     Properties:
-      DomainName: !Sub '${AWS::StackName}.example.com'
-      ValidationMethod: DNS
-      SubjectAlternativeNames:
-        - !Sub '*.${AWS::StackName}.example.com'
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - s3:PutObject
+            Resource: !Sub '${S3Bucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub '${S3Bucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  # CloudWatch Logs for Application Logs
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/${AWS::StackName}'
+      RetentionInDays: 30
       Tags:
-        - Key: Name
-          Value: WebApp-SSL-Certificate
         - Key: Environment
-          Value: Production
+          Value: !Ref Environment
 
 Outputs:
   ApplicationLoadBalancerDNS:
@@ -603,21 +801,9 @@ Outputs:
 
   ApplicationLoadBalancerURL:
     Description: URL to access the Application Load Balancer
-    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
     Export:
       Name: !Sub '${AWS::StackName}-ALB-URL'
-
-  SSLCertificateArn:
-    Description: ARN of the SSL certificate created in this stack
-    Value: !Ref SSLCertificate
-    Export:
-      Name: !Sub '${AWS::StackName}-SSL-Certificate-ARN'
-
-  SSLCertificateConfigured:
-    Description: Whether SSL certificate is configured
-    Value: 'true'
-    Export:
-      Name: !Sub '${AWS::StackName}-SSL-Configured'
 
   VPCId:
     Description: VPC ID
@@ -632,7 +818,19 @@ Outputs:
       Name: !Sub '${AWS::StackName}-DB-Endpoint'
 
   S3BucketName:
-    Description: S3 Bucket Name for Static Content
+    Description: S3 Bucket Name for Static Content and ALB Logs
     Value: !Ref S3Bucket
     Export:
       Name: !Sub '${AWS::StackName}-S3-Bucket'
+
+  AutoScalingGroupName:
+    Description: Name of the Auto Scaling Group
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ASG-Name'
+
+  StackRegion:
+    Description: AWS Region where the stack is deployed
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub '${AWS::StackName}-Region'
