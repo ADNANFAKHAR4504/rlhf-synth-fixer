@@ -1,8 +1,8 @@
 // LIVE integration tests for secure AWS data storage infrastructure
 // Tests actual deployed resources using AWS SDK v3
-// Requires AWS credentials with READ permissions and Terraform outputs
+// Requires AWS credentials with READ permissions and CDK outputs
 // Run: npx jest --runInBand --detectOpenHandles --testTimeout=180000 --testPathPattern=\.int\.test\.ts$
-// Outputs file expected at: terraform-outputs/outputs.json
+// Outputs file expected at: cfn-outputs/outputs.json
 
 import { CloudTrailClient, DescribeTrailsCommand, GetTrailStatusCommand } from '@aws-sdk/client-cloudtrail';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
@@ -39,13 +39,13 @@ type StructuredOutputs = {
 /* ----------------------------- Output Loading ----------------------------- */
 
 function loadOutputs(): SecureDataStorageOutputs {
-  // Try terraform-outputs/outputs.json (Terraform format)
-  const outputsPath = path.resolve(process.cwd(), 'terraform-outputs/outputs.json');
+  // Try cfn-outputs/outputs.json (CDK CloudFormation format)
+  const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/outputs.json');
   if (fs.existsSync(outputsPath)) {
     const data = JSON.parse(fs.readFileSync(outputsPath, 'utf8')) as StructuredOutputs;
-    console.log('✓ Loaded outputs from terraform-outputs/outputs.json');
+    console.log('✓ Loaded outputs from cfn-outputs/outputs.json');
     
-    // Extract values from Terraform output format
+    // Extract values from CDK output format
     const extractedOutputs: SecureDataStorageOutputs = {};
     for (const [key, valueObj] of Object.entries(data)) {
       if (valueObj && typeof valueObj === 'object' && 'value' in valueObj) {
@@ -56,10 +56,10 @@ function loadOutputs(): SecureDataStorageOutputs {
   }
 
   // Try flat outputs format as fallback
-  const flatOutputsPath = path.resolve(process.cwd(), 'terraform-outputs/flat-outputs.json');
+  const flatOutputsPath = path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json');
   if (fs.existsSync(flatOutputsPath)) {
     const data = JSON.parse(fs.readFileSync(flatOutputsPath, 'utf8'));
-    console.log('✓ Loaded outputs from flat-outputs.json');
+    console.log('✓ Loaded outputs from cfn-outputs/flat-outputs.json');
     return {
       primary_bucket_name: data.PrimaryBucketName,
       logs_bucket_name: data.LogsBucketName,
@@ -520,10 +520,10 @@ describe('Pre-flight Checks', () => {
     const outputs = loadOutputs();
     
     if (Object.keys(outputs).length === 0) {
-      console.warn('⚠ No Terraform outputs found.');
+      console.warn('⚠ No CDK outputs found.');
       console.warn('To run live infrastructure tests:');
-      console.warn('1. Deploy infrastructure: terraform apply');
-      console.warn('2. Generate outputs: terraform output -json > terraform-outputs/outputs.json');
+      console.warn('1. Deploy infrastructure: npm run deploy or cdk deploy');
+      console.warn('2. Generate outputs: cdk outputs --json > cfn-outputs/outputs.json');
       console.warn('3. Re-run tests: npm run test:integration');
       
       // Don't fail the test, just skip
