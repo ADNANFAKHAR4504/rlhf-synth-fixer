@@ -25,8 +25,6 @@ class StorageComponent(ComponentResource):
     # Main application S3 bucket
     self.app_bucket = aws.s3.Bucket(
       f"{name}-app-bucket",
-      bucket=f"{config.app_name}-{config.environment}-app-"
-             f"{aws.get_caller_identity().account_id}".lower().replace('_', '-'),
       tags={
         **config.tags,
         "Name": f"{config.app_name}-{config.environment}-app",
@@ -97,8 +95,6 @@ class StorageComponent(ComponentResource):
     # Backup S3 bucket
     self.backup_bucket = aws.s3.Bucket(
       f"{name}-backup-bucket",
-      bucket=f"{config.app_name}-{config.environment}-backup-"
-             f"{aws.get_caller_identity().account_id}".lower().replace('_', '-'),
       tags={
         "Name": f"{config.app_name}-{config.environment}-backup".lower(),
         **config.tags,
@@ -163,8 +159,6 @@ class StorageComponent(ComponentResource):
     # ALB logs S3 bucket
     self.logs_bucket = aws.s3.Bucket(
       f"{name}-logs-bucket",
-      bucket=f"{config.app_name}-{config.environment}-alb-logs-"
-             f"{aws.get_caller_identity().account_id}".lower().replace('_', '-'),
       tags={
         "Name": f"{config.app_name}-{config.environment}-alb-logs".lower(),
         **config.tags,
