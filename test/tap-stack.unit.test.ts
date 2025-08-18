@@ -36,6 +36,8 @@ describe('TapStack CloudFormation Template', () => {
       expect(templateContent).toContain('Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
       expect(templateContent).toContain('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
     });
+
+
   });
 
   describe('Parameters', () => {
@@ -55,6 +57,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have NotificationEmail parameter', () => {
       expect(templateContent).toContain('NotificationEmail:');
+      expect(templateContent).toContain('Default: \'admin@example.com\'');
     });
   });
 
@@ -149,10 +152,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(templateContent).toContain('Type: AWS::S3::Bucket');
     });
 
-    test('should have S3 bucket policy', () => {
-      expect(templateContent).toContain('TapS3BucketPolicy:');
-      expect(templateContent).toContain('Type: AWS::S3::BucketPolicy');
-    });
+
+
+
 
     test('should have Secrets Manager secret', () => {
       expect(templateContent).toContain('TapDBSecret:');

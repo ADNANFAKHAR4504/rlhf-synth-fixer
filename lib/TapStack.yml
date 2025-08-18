@@ -21,6 +21,7 @@ Parameters:
   NotificationEmail:
     Type: String
     Description: 'Email address for CloudWatch alarm notifications'
+    Default: 'admin@example.com'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: 'Must be a valid email address'
   
@@ -300,7 +301,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: S3Access
           PolicyDocument:
@@ -392,10 +393,7 @@ Resources:
   
   TapS3Bucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${AWS::StackName}-bucket-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -407,35 +405,13 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt TapLambdaFunction.Arn
+
       Tags:
         - Key: Environment
           Value: Production
 
-  TapS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref TapS3Bucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: VPCEndpointAccess
-            Effect: Allow
-            Principal: '*'
-            Action:
-              - s3:GetObject
-              - s3:PutObject
-              - s3:DeleteObject
-              - s3:ListBucket
-            Resource:
-              - !Sub '${TapS3Bucket}/*'
-              - !Ref TapS3Bucket
-            Condition:
-              StringEquals:
-                'aws:SourceVpc': !Ref TapVPC
+
+
 
   # ==================== SECRETS ====================
   
@@ -476,13 +452,11 @@ Resources:
 
   TapRDSInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.42'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -510,12 +484,7 @@ Resources:
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt TapLambdaExecutionRole.Arn
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref TapLambdaSecurityGroup
-        SubnetIds:
-          - !Ref TapPrivateSubnet1
-          - !Ref TapPrivateSubnet2
+
       Code:
         ZipFile: |
           import json
@@ -550,7 +519,9 @@ Resources:
       FunctionName: !Ref TapLambdaFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub 'arn:aws:s3:::${AWS::StackName}-bucket-${AWS::AccountId}-${AWS::Region}/*'
+      SourceArn: !Sub 'arn:aws:s3:::${TapS3Bucket}/*'
+
+
 
   # ==================== MONITORING & ALERTS ====================
   
