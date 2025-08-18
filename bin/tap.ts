@@ -20,10 +20,16 @@ new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
+    account:
+      process.env.CDK_DEFAULT_ACCOUNT ||
+      process.env.AWS_ACCOUNT_ID ||
+      '123456789012',
+    region:
+      process.env.CDK_DEFAULT_REGION ||
+      process.env.AWS_DEFAULT_REGION ||
+      'us-east-1',
   },
   allowedIpCidr: '203.0.113.0/24',
   permittedUserName: 'prod-ops-user',
-  bucketBaseName: 'prod-secure'
+  bucketBaseName: 'prod-secure',
 });
