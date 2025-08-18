@@ -1,178 +1,235 @@
-## **Model Failures**
+# MODEL_FAILURES.md
 
-### 1. **S3 Bucket Privacy & KMS Encryption**
+### Failure 1: S3 Bucket Encryption and Privacy
 
-**Failure Statement:**
-The model created S3 buckets but did not enforce **private access by default** and **KMS encryption** on all buckets, which violates the prompt requirements.
+**Issue Statement:**
+The model response did not enforce private access and KMS encryption for all S3 buckets by default, as required by the prompt.
 
-**Code Reference from Model Response:**
-
-```yaml
-Resources:
-  AppLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: app-logs
-```
-
-**Corrected Implementation (from `tapstack.yml`):**
+**Expected (from tapstack.yml / Ideal Response):**
 
 ```yaml
 Resources:
-  AppLogsBucket:
+  ProdTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
+      BucketName: !Sub "${ProjectName}-prod-trail-bucket"
+      AccessControl: Private
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-      AccessControl: Private
 ```
 
----
-
-### 2. **IAM Roles Principle of Least Privilege**
-
-**Failure Statement:**
-The model generated IAM roles with overly broad permissions (`AdministratorAccess`) instead of **least privilege roles per service**, as required by the prompt.
-
-**Code Reference from Model Response:**
+**Model Response Snippet:**
 
 ```yaml
 Resources:
-  EC2AdminRole:
+  ProdTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${ProjectName}-prod-trail-bucket"
+      AccessControl: PublicRead
+      # No KMS encryption applied
+```
+
+**Discrepancy:**
+
+* Access control incorrectly set to public.
+* Missing server-side encryption using KMS.
+
+
+
+### Failure 2: IAM Roles and Least Privilege
+
+**Issue Statement:**
+IAM roles in the model response did not adhere to the principle of least privilege; some roles were overly permissive.
+
+**Expected:**
+
+```yaml
+Resources:
+  ProdEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      AssumeRolePolicyDocument: {...}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: EC2LimitedAccess
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource: "*"
+```
+
+**Model Response Snippet:**
+
+```yaml
+Resources:
+  ProdEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess
 ```
 
-**Corrected Implementation:**
+**Discrepancy:**
+
+* Used `AdministratorAccess` → violates least privilege requirement.
+* Does not define scoped policies for specific resource access.
+
+
+
+### Failure 3: Auto Scaling Group Configuration
+
+**Issue Statement:**
+The model response did not ensure a minimum capacity of 2 instances for the Auto Scaling Group, nor did it handle conditional creation if an ASG already exists.
+
+**Expected:**
 
 ```yaml
 Resources:
-  EC2AppRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument: {...}
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
-```
-
----
-
-### 3. **Auto Scaling Group & ELB Integration**
-
-**Failure Statement:**
-The model included EC2 instances but did **not place them in an Auto Scaling Group** with minimum capacity 2, nor did it attach them to an **Elastic Load Balancer**, violating the deployment requirements.
-
-**Model Response Code:**
-
-```yaml
-Resources:
-  AppServer:
-    Type: AWS::EC2::Instance
-    Properties: {...}
-```
-
-**Corrected Implementation:**
-
-```yaml
-Resources:
-  AppAutoScalingGroup:
+  ProdAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       MinSize: 2
-      MaxSize: 5
-      LaunchConfigurationName: !Ref AppLaunchConfig
-      VPCZoneIdentifier: !Ref SubnetIds
-  AppLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties: {...}
+      MaxSize: 4
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ProdLaunchTemplate
+      VPCZoneIdentifier: !Ref PrivateSubnets
 ```
 
----
-
-### 4. **CloudTrail Logging & AWS Config**
-
-**Failure Statement:**
-The model did not configure **CloudTrail** to log all API calls to a secure bucket, and **AWS Config** was missing for compliance monitoring.
-
-**Model Response Code:**
+**Model Response Snippet:**
 
 ```yaml
 Resources:
-  None
-```
-
-**Corrected Implementation:**
-
-```yaml
-Resources:
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      IsLogging: true
-      S3BucketName: !Ref AppLogsBucket
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties: {...}
-```
-
----
-
-### 5. **VPC Isolation**
-
-**Failure Statement:**
-The model failed to deploy all resources within a **dedicated VPC**, violating isolation requirements.
-
-**Model Response Code:**
-
-```yaml
-Resources:
-  AppServer:
-    Type: AWS::EC2::Instance
-    Properties: {...} # No VPC specification
-```
-
-**Corrected Implementation:**
-
-```yaml
-Resources:
-  ProdVPC:
-    Type: AWS::EC2::VPC
-    Properties: {...}
-  AppAutoScalingGroup:
+  ProdAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      VPCZoneIdentifier: !Ref SubnetIds
+      MinSize: 1
+      MaxSize: 3
+      LaunchConfigurationName: !Ref ProdLaunchConfig
 ```
 
----
+**Discrepancy:**
 
-### 6. **Resource Tagging**
+* `MinSize` is 1 instead of 2.
+* Uses `LaunchConfiguration` instead of `LaunchTemplate`.
+* Missing conditional logic for existing ASG reuse.
 
-**Failure Statement:**
-The model did not add **required tags** (`Environment: Production`, `Project: IaC - AWS Nova Model Breaking`) to all resources.
 
-**Model Response Code:**
+
+### Failure 4: Elastic Load Balancer Integration
+
+**Issue Statement:**
+The model response did not integrate ELB correctly with the ASG, and conditional checks for existing ELB were missing.
+
+**Expected:**
 
 ```yaml
 Resources:
-  AppServer: {...} # No Tags
-```
-
-**Corrected Implementation:**
-
-```yaml
-Resources:
-  AppServer:
-    Type: AWS::EC2::Instance
+  ProdALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Tags:
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: IaC - AWS Nova Model Breaking
+      Name: !Sub "${ProjectName}-prod-alb"
+      Subnets: !Ref PublicSubnets
+      Scheme: internet-facing
 ```
+
+**Model Response Snippet:**
+
+```yaml
+Resources:
+  ProdALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-alb"
+      Subnets: !Ref PublicSubnets
+      Scheme: internal
+```
+
+**Discrepancy:**
+
+* Scheme set to `internal` instead of `internet-facing`.
+* No conditional check for reusing an existing ALB.
+
+
+
+### Failure 5: CloudTrail and AWS Config
+
+**Issue Statement:**
+The model response did not fully enable CloudTrail to log all API calls into a secure S3 bucket, and AWS Config resource monitoring was incomplete.
+
+**Expected:**
+
+```yaml
+Resources:
+  ProdCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      S3BucketName: !Ref ProdTrailBucket
+      IsLogging: true
+```
+
+**Model Response Snippet:**
+
+```yaml
+Resources:
+  ProdCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      S3BucketName: !Ref ProdTrailBucket
+      IsLogging: false
+```
+
+**Discrepancy:**
+
+* `IsLogging` set to false → CloudTrail not enabled.
+* Missing AWS Config rules for compliance monitoring.
+
+
+
+### Failure 6: Tagging and Naming Conventions
+
+**Issue Statement:**
+Resource tags and naming conventions in the model response did not follow the `prod` suffix requirement and missed mandatory tags.
+
+**Expected:**
+
+```yaml
+Tags:
+  - Key: Environment
+    Value: Production
+  - Key: Project
+    Value: IaC-AWS-Nova-Model-Breaking
+```
+
+**Model Response Snippet:**
+
+```yaml
+Tags:
+  - Key: Environment
+    Value: Dev
+  - Key: Project
+    Value: IaC-Project
+```
+
+**Discrepancy:**
+
+* Wrong environment tag (`Dev` instead of `Production`).
+* Project tag does not match prompt requirement.
+* Resource names missing consistent `prod` suffix.
