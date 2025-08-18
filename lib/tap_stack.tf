@@ -93,7 +93,7 @@ resource "aws_s3_bucket" "logs_bucket" {
   force_destroy = true # Allow destruction for testing
 
   tags = {
-    Name        = "corpSec-logs-bucket-${var.environment_suffix}"
+    Name        = "corpsec-logs-bucket-${var.environment_suffix}"
     Environment = var.environment_suffix
     Purpose     = "Secure log storage"
     ManagedBy   = "terraform"
