@@ -19,6 +19,12 @@ variable "name_prefix" {
   default     = "tap"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix to avoid resource name conflicts"
+  type        = string
+  default     = ""
+}
+
 variable "vpc_cidr" {
   description = "Primary VPC CIDR"
   type        = string
@@ -76,7 +82,16 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_availability_zones" "dr" {
+  provider = aws.secondary
+  state    = "available"
+}
+
 locals {
+  # Environment suffix handling
+  env_suffix       = var.environment_suffix != "" ? "-${var.environment_suffix}" : ""
+  name_with_suffix = "${var.name_prefix}${local.env_suffix}"
+
   azs           = slice(data.aws_availability_zones.available.names, 0, 2)
   public_cidrs  = [for i in range(2) : cidrsubnet(var.vpc_cidr, 8, i)]
   private_cidrs = [for i in range(2) : cidrsubnet(var.vpc_cidr, 8, i + 10)]
@@ -109,7 +124,7 @@ resource "aws_kms_key" "rds" {
 }
 
 resource "aws_kms_alias" "rds" {
-  name          = "alias/${var.name_prefix}-rds"
+  name          = "alias/${local.name_with_suffix}-rds"
   target_key_id = aws_kms_key.rds.key_id
 }
 
@@ -120,18 +135,18 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
 
-  name = "${var.name_prefix}-vpc"
+  name = "${local.name_with_suffix}-vpc"
   cidr = var.vpc_cidr
 
   azs             = local.azs
   public_subnets  = local.public_cidrs
   private_subnets = local.private_cidrs
 
-  enable_nat_gateway       = true
-  single_nat_gateway       = true
-  enable_dns_hostnames     = true
-  enable_dns_support       = true
-  map_public_ip_on_launch  = false
+  enable_nat_gateway      = true
+  single_nat_gateway      = true
+  enable_dns_hostnames    = true
+  enable_dns_support      = true
+  map_public_ip_on_launch = false
 
   tags = local.common_tags
 }
@@ -140,7 +155,7 @@ module "vpc" {
 # Security Groups (Primary)
 ########################
 resource "aws_security_group" "alb" {
-  name        = "${var.name_prefix}-alb-sg"
+  name        = "${local.name_with_suffix}-alb-sg"
   description = "ALB ingress"
   vpc_id      = module.vpc.vpc_id
 
@@ -166,7 +181,7 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "app" {
-  name        = "${var.name_prefix}-app-sg"
+  name        = "${local.name_with_suffix}-app-sg"
   description = "Allow from ALB"
   vpc_id      = module.vpc.vpc_id
 
@@ -191,7 +206,7 @@ resource "aws_security_group" "app" {
 }
 
 resource "aws_security_group" "lambda" {
-  name        = "${var.name_prefix}-lambda-sg"
+  name        = "${local.name_with_suffix}-lambda-sg"
   description = "Lambda VPC access"
   vpc_id      = module.vpc.vpc_id
 
@@ -208,7 +223,7 @@ resource "aws_security_group" "lambda" {
 }
 
 resource "aws_security_group" "rds" {
-  name        = "${var.name_prefix}-rds-sg"
+  name        = "${local.name_with_suffix}-rds-sg"
   description = "MySQL ingress from app and lambda"
   vpc_id      = module.vpc.vpc_id
 
@@ -247,7 +262,7 @@ module "alb" {
   source  = "terraform-aws-modules/alb/aws"
   version = "~> 8.7"
 
-  name               = "${var.name_prefix}-alb"
+  name               = "${local.name_with_suffix}-alb"
   load_balancer_type = "application"
   vpc_id             = module.vpc.vpc_id
   subnets            = module.vpc.public_subnets
@@ -263,7 +278,7 @@ module "alb" {
 
   target_groups = [
     {
-      name             = "${var.name_prefix}-tg"
+      name             = "${local.name_with_suffix}-tg"
       backend_protocol = "HTTP"
       backend_port     = 80
       target_type      = "instance"
@@ -292,16 +307,16 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 resource "aws_launch_template" "app" {
-  name_prefix   = "${var.name_prefix}-lt-"
-  image_id      = data.aws_ssm_parameter.al2023_ami.value
-  instance_type = var.instance_type
+  name_prefix            = "${local.name_with_suffix}-lt-"
+  image_id               = data.aws_ssm_parameter.al2023_ami.value
+  instance_type          = var.instance_type
   vpc_security_group_ids = [aws_security_group.app.id]
   user_data = base64encode(<<-EOT
     #!/bin/bash
     dnf update -y
     dnf install -y nginx
     cat <<'HTML' >/usr/share/nginx/html/index.html
-    <html><body><h1>${var.name_prefix} - Hello from ASG</h1></body></html>
+    <html><body><h1>${local.name_with_suffix} - Hello from ASG</h1></body></html>
     HTML
     systemctl enable nginx
     systemctl start nginx
@@ -309,12 +324,12 @@ resource "aws_launch_template" "app" {
   )
   tag_specifications {
     resource_type = "instance"
-    tags = local.common_tags
+    tags          = local.common_tags
   }
 }
 
 resource "aws_autoscaling_group" "app" {
-  name                      = "${var.name_prefix}-asg"
+  name                      = "${local.name_with_suffix}-asg"
   vpc_zone_identifier       = module.vpc.private_subnets
   min_size                  = 1
   max_size                  = var.max_capacity
@@ -330,7 +345,7 @@ resource "aws_autoscaling_group" "app" {
 
   tag {
     key                 = "Name"
-    value               = "${var.name_prefix}-app"
+    value               = "${local.name_with_suffix}-app"
     propagate_at_launch = true
   }
 }
@@ -339,19 +354,19 @@ resource "aws_autoscaling_group" "app" {
 # RDS MySQL (Multi-AZ + KMS)
 ########################
 data "aws_secretsmanager_random_password" "db" {
-  password_length = 20
-  exclude_characters = "\"'\\/`$"
+  password_length            = 20
+  exclude_characters         = "\"'\\/`$"
   require_each_included_type = true
 }
 
 resource "aws_secretsmanager_secret" "db" {
-  name        = "${var.name_prefix}/rds/mysql"
+  name        = "${local.name_with_suffix}/rds/mysql"
   description = "RDS master credentials"
   tags        = local.common_tags
 }
 
 resource "aws_secretsmanager_secret_version" "db" {
-  secret_id     = aws_secretsmanager_secret.db.id
+  secret_id = aws_secretsmanager_secret.db.id
   secret_string = jsonencode({
     username = var.db_username
     password = data.aws_secretsmanager_random_password.db.random_password
@@ -362,7 +377,7 @@ module "rds" {
   source  = "terraform-aws-modules/rds/aws"
   version = "~> 6.6"
 
-  identifier = "${var.name_prefix}-mysql"
+  identifier = "${local.name_with_suffix}-mysql"
 
   engine               = "mysql"
   engine_version       = "8.0"
@@ -370,15 +385,15 @@ module "rds" {
   major_engine_version = "8.0"
   instance_class       = "db.t4g.micro"
 
-  allocated_storage      = 20
-  max_allocated_storage  = 100
-  multi_az               = true
-  storage_encrypted      = true
-  kms_key_id             = aws_kms_key.rds.arn
-  deletion_protection    = true
-  skip_final_snapshot    = true
+  allocated_storage       = 20
+  max_allocated_storage   = 100
+  multi_az                = true
+  storage_encrypted       = true
+  kms_key_id              = aws_kms_key.rds.arn
+  deletion_protection     = true
+  skip_final_snapshot     = true
   backup_retention_period = 7
-  publicly_accessible    = false
+  publicly_accessible     = false
 
   username = var.db_username
   password = data.aws_secretsmanager_random_password.db.random_password
@@ -399,13 +414,13 @@ module "rds" {
 # Lambda (inline zip) + IAM
 ########################
 resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/${var.name_prefix}-handler"
+  name              = "/aws/lambda/${local.name_with_suffix}-handler"
   retention_in_days = 14
   tags              = local.common_tags
 }
 
 resource "aws_iam_role" "lambda" {
-  name               = "${var.name_prefix}-lambda-role"
+  name               = "${local.name_with_suffix}-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
   tags               = local.common_tags
 }
@@ -436,7 +451,7 @@ resource "aws_iam_role_policy_attachment" "lambda_xray" {
 }
 
 resource "aws_iam_role_policy" "lambda_secrets_read" {
-  name   = "${var.name_prefix}-lambda-secrets-read"
+  name   = "${local.name_with_suffix}-lambda-secrets-read"
   role   = aws_iam_role.lambda.id
   policy = data.aws_iam_policy_document.lambda_db_secret.json
 }
@@ -478,11 +493,11 @@ data "archive_file" "lambda_zip" {
 }
 
 resource "aws_lambda_function" "handler" {
-  function_name = "${var.name_prefix}-handler"
-  role          = aws_iam_role.lambda.arn
-  runtime       = "python3.11"
-  handler       = "index.handler"
-  filename      = data.archive_file.lambda_zip.output_path
+  function_name    = "${local.name_with_suffix}-handler"
+  role             = aws_iam_role.lambda.arn
+  runtime          = "python3.11"
+  handler          = "index.handler"
+  filename         = data.archive_file.lambda_zip.output_path
   source_code_hash = filebase64sha256(data.archive_file.lambda_zip.output_path)
 
   environment {
@@ -509,7 +524,7 @@ resource "aws_lambda_function" "handler" {
 # API Gateway + Cognito authorizer
 ########################
 resource "aws_cognito_user_pool" "this" {
-  name = "${var.name_prefix}-users"
+  name = "${local.name_with_suffix}-users"
   password_policy {
     minimum_length    = 12
     require_lowercase = true
@@ -518,14 +533,14 @@ resource "aws_cognito_user_pool" "this" {
     require_uppercase = true
   }
   mfa_configuration = "OFF"
-  tags = local.common_tags
+  tags              = local.common_tags
 }
 
 resource "aws_cognito_user_pool_client" "this" {
-  name                    = "${var.name_prefix}-client"
-  user_pool_id            = aws_cognito_user_pool.this.id
-  generate_secret         = true
-  explicit_auth_flows     = [
+  name            = "${local.name_with_suffix}-client"
+  user_pool_id    = aws_cognito_user_pool.this.id
+  generate_secret = true
+  explicit_auth_flows = [
     "ALLOW_USER_PASSWORD_AUTH",
     "ALLOW_REFRESH_TOKEN_AUTH",
     "ALLOW_USER_SRP_AUTH"
@@ -534,14 +549,14 @@ resource "aws_cognito_user_pool_client" "this" {
 }
 
 resource "aws_api_gateway_rest_api" "api" {
-  name        = "${var.name_prefix}-api"
+  name        = "${local.name_with_suffix}-api"
   description = "API Gateway fronting Lambda"
   endpoint_configuration { types = ["REGIONAL"] }
   tags = local.common_tags
 }
 
 resource "aws_api_gateway_authorizer" "cognito" {
-  name            = "${var.name_prefix}-authorizer"
+  name            = "${local.name_with_suffix}-authorizer"
   rest_api_id     = aws_api_gateway_rest_api.api.id
   type            = "COGNITO_USER_POOLS"
   provider_arns   = [aws_cognito_user_pool.this.arn]
@@ -583,7 +598,7 @@ resource "aws_api_gateway_deployment" "api" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   triggers    = { redeploy = timestamp() }
   lifecycle { create_before_destroy = true }
-  
+
   depends_on = [
     aws_api_gateway_method.hello_any,
     aws_api_gateway_integration.hello_integration
@@ -591,9 +606,9 @@ resource "aws_api_gateway_deployment" "api" {
 }
 
 resource "aws_api_gateway_stage" "prod" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  deployment_id = aws_api_gateway_deployment.api.id
-  stage_name    = "prod"
+  rest_api_id          = aws_api_gateway_rest_api.api.id
+  deployment_id        = aws_api_gateway_deployment.api.id
+  stage_name           = "prod"
   xray_tracing_enabled = true
   tags                 = local.common_tags
 
@@ -617,7 +632,7 @@ data "aws_iam_policy_document" "apigw_logs_assume" {
 }
 
 resource "aws_iam_role" "apigw_logs" {
-  name               = "${var.name_prefix}-apigw-logs-role"
+  name               = "${local.name_with_suffix}-apigw-logs-role"
   assume_role_policy = data.aws_iam_policy_document.apigw_logs_assume.json
   tags               = local.common_tags
 }
@@ -639,13 +654,13 @@ data "aws_iam_policy_document" "apigw_logs" {
 }
 
 resource "aws_iam_role_policy" "apigw_logs" {
-  name   = "${var.name_prefix}-apigw-logs-policy"
+  name   = "${local.name_with_suffix}-apigw-logs-policy"
   role   = aws_iam_role.apigw_logs.id
   policy = data.aws_iam_policy_document.apigw_logs.json
 }
 
 resource "aws_cloudwatch_log_group" "api_access" {
-  name              = "/aws/apigateway/${var.name_prefix}-prod"
+  name              = "/aws/apigateway/${local.name_with_suffix}-prod"
   retention_in_days = 14
   tags              = local.common_tags
 }
@@ -654,7 +669,7 @@ resource "aws_api_gateway_account" "this" {
   cloudwatch_role_arn = aws_iam_role.apigw_logs.arn
 }
 
- 
+
 
 resource "aws_api_gateway_method_settings" "all_methods" {
   rest_api_id = aws_api_gateway_rest_api.api.id
@@ -662,9 +677,9 @@ resource "aws_api_gateway_method_settings" "all_methods" {
   method_path = "*/*"
 
   settings {
-    metrics_enabled      = true
-    logging_level        = "OFF"
-    data_trace_enabled   = false
+    metrics_enabled        = true
+    logging_level          = "OFF"
+    data_trace_enabled     = false
     throttling_burst_limit = 1000
     throttling_rate_limit  = 500
   }
@@ -675,7 +690,7 @@ resource "aws_api_gateway_method_settings" "all_methods" {
 ########################
 resource "aws_cloudfront_distribution" "this" {
   enabled             = true
-  comment             = "${var.name_prefix} distribution"
+  comment             = "${local.name_with_suffix} distribution"
   default_root_object = ""
 
   origin {
@@ -721,35 +736,30 @@ resource "aws_cloudfront_distribution" "this" {
 ########################
 # DR Region (minimal): VPC + ALB + ASG
 ########################
-data "aws_availability_zones" "dr" {
-  provider = aws.secondary
-  state    = "available"
-}
-
 module "vpc_dr" {
   providers = { aws = aws.secondary }
   source    = "terraform-aws-modules/vpc/aws"
   version   = "~> 5.0"
 
-  name = "${var.name_prefix}-vpc-dr"
+  name = "${local.name_with_suffix}-vpc-dr"
   cidr = var.dr_vpc_cidr
 
   azs             = local.dr_azs
   public_subnets  = local.dr_public_cidrs
   private_subnets = local.dr_private_cidrs
 
-  enable_nat_gateway       = true
-  single_nat_gateway       = true
-  enable_dns_hostnames     = true
-  enable_dns_support       = true
-  map_public_ip_on_launch  = false
+  enable_nat_gateway      = true
+  single_nat_gateway      = true
+  enable_dns_hostnames    = true
+  enable_dns_support      = true
+  map_public_ip_on_launch = false
 
   tags = merge(local.common_tags, { Region = var.dr_region })
 }
 
 resource "aws_security_group" "alb_dr" {
   provider    = aws.secondary
-  name        = "${var.name_prefix}-alb-sg-dr"
+  name        = "${local.name_with_suffix}-alb-sg-dr"
   description = "ALB ingress DR"
   vpc_id      = module.vpc_dr.vpc_id
 
@@ -776,7 +786,7 @@ resource "aws_security_group" "alb_dr" {
 
 resource "aws_security_group" "app_dr" {
   provider    = aws.secondary
-  name        = "${var.name_prefix}-app-sg-dr"
+  name        = "${local.name_with_suffix}-app-sg-dr"
   description = "Allow from ALB (DR)"
   vpc_id      = module.vpc_dr.vpc_id
 
@@ -805,7 +815,7 @@ module "alb_dr" {
   source    = "terraform-aws-modules/alb/aws"
   version   = "~> 8.7"
 
-  name               = "${var.name_prefix}-alb-dr"
+  name               = "${local.name_with_suffix}-alb-dr"
   load_balancer_type = "application"
   vpc_id             = module.vpc_dr.vpc_id
   subnets            = module.vpc_dr.public_subnets
@@ -821,7 +831,7 @@ module "alb_dr" {
 
   target_groups = [
     {
-      name             = "${var.name_prefix}-tg-dr"
+      name             = "${local.name_with_suffix}-tg-dr"
       backend_protocol = "HTTP"
       backend_port     = 80
       target_type      = "instance"
@@ -843,35 +853,35 @@ data "aws_ssm_parameter" "al2023_ami_dr" {
 }
 
 resource "aws_launch_template" "app_dr" {
-  provider      = aws.secondary
-  name_prefix   = "${var.name_prefix}-lt-dr-"
-  image_id      = data.aws_ssm_parameter.al2023_ami_dr.value
-  instance_type = var.instance_type
+  provider               = aws.secondary
+  name_prefix            = "${local.name_with_suffix}-lt-dr-"
+  image_id               = data.aws_ssm_parameter.al2023_ami_dr.value
+  instance_type          = var.instance_type
   vpc_security_group_ids = [aws_security_group.app_dr.id]
   user_data = base64encode(<<-EOT
     #!/bin/bash
     dnf update -y
     dnf install -y nginx
-    echo "<html><body><h1>${var.name_prefix} - DR</h1></body></html>" >/usr/share/nginx/html/index.html
+    echo "<html><body><h1>${local.name_with_suffix} - DR</h1></body></html>" >/usr/share/nginx/html/index.html
     systemctl enable nginx
     systemctl start nginx
   EOT
   )
   tag_specifications {
     resource_type = "instance"
-    tags = local.common_tags
+    tags          = local.common_tags
   }
 }
 
 resource "aws_autoscaling_group" "app_dr" {
-  provider                 = aws.secondary
-  name                     = "${var.name_prefix}-asg-dr"
-  vpc_zone_identifier      = module.vpc_dr.private_subnets
-  min_size                 = 1
-  max_size                 = var.max_capacity
-  desired_capacity         = 1
-  target_group_arns        = module.alb_dr.target_group_arns
-  health_check_type        = "EC2"
+  provider                  = aws.secondary
+  name                      = "${local.name_with_suffix}-asg-dr"
+  vpc_zone_identifier       = module.vpc_dr.private_subnets
+  min_size                  = 1
+  max_size                  = var.max_capacity
+  desired_capacity          = 1
+  target_group_arns         = module.alb_dr.target_group_arns
+  health_check_type         = "EC2"
   health_check_grace_period = 120
 
   launch_template {
@@ -881,7 +891,7 @@ resource "aws_autoscaling_group" "app_dr" {
 
   tag {
     key                 = "Name"
-    value               = "${var.name_prefix}-app-dr"
+    value               = "${local.name_with_suffix}-app-dr"
     propagate_at_launch = true
   }
 }
