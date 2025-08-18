@@ -13,7 +13,7 @@ You are an AWS Cloud Infrastructure Engineer specializing in highly available, d
     - `lib/tap-stack.ts`: Stack definition and all AWS resources.
     - `cdk.json`: CDK project configuration.
   - The solution must:
-    1. Deploy infrastructure spanning both `us-west-2` and `us-east-2` regions to guarantee availability.
+    1. Deploy infrastructure spanning both `ap-southeast-2` and `ap-northeast-2` regions to guarantee availability.
     2. Provision S3 buckets for backup storage, encrypted with AWS KMS.
     3. Create independent Amazon RDS instances in each region (with automated backups). Cross‑region replication is not required.
     4. Define AWS Lambda functions for data processing tasks.
