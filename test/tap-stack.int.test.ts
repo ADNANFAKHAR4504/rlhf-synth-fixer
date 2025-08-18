@@ -62,9 +62,9 @@ const stsClient = new STSClient({ region });
 
 // Helper function to load TapStack CloudFormation outputs
 function loadTapStackOutputs() {
-  const tapStackOutputsPath = path.join(__dirname, '../cfn-outputs/tapstack-outputs.json');
-  if (fs.existsSync(tapStackOutputsPath)) {
-    return JSON.parse(fs.readFileSync(tapStackOutputsPath, 'utf8'));
+  const allOutputsPath = path.join(__dirname, '../cfn-outputs/all-outputs.json');
+  if (fs.existsSync(allOutputsPath)) {
+    return JSON.parse(fs.readFileSync(allOutputsPath, 'utf8'));
   }
   return {};
 }
@@ -81,29 +81,63 @@ const getAwsAccountId = async (): Promise<string> => {
   return awsAccountId;
 };
 
-const getResourceNames = async () => {
-  const accountId = await getAwsAccountId();
+const getResourceNames = (stackOutputs: any) => {
+  // Extract the first (and likely only) stack from outputs
+  const stackName = Object.keys(stackOutputs)[0];
+  const outputs = stackOutputs[stackName] || [];
+  
+  // Helper function to find output value by key
+  const getOutputValue = (key: string) => {
+    const output = outputs.find((o: any) => o.OutputKey === key);
+    return output?.OutputValue || '';
+  };
+  
+  // Extract actual resource names from CloudFormation outputs
+  const dynamoTableName = getOutputValue('TurnAroundPromptTableName');
+  const rdsEndpoint = getOutputValue('RDSEndpoint');
+  const rdsInstanceId = rdsEndpoint.split('.')[0]; // Extract instance ID from endpoint
+  const appDataBucket = getOutputValue('ApplicationDataBucket');
+  const vpcId = getOutputValue('VPCId');
+  const kmsKeyId = getOutputValue('KMSKeyId');
+  const cloudTrailArn = getOutputValue('CloudTrailArn');
+  const cloudTrailName = cloudTrailArn.split('/')[1]; // Extract trail name from ARN
+  const applicationRoleArn = getOutputValue('ApplicationRoleArn');
+  const iamRoleName = applicationRoleArn.split('/')[1]; // Extract role name from ARN
+  const environmentSuffixFromOutputs = getOutputValue('EnvironmentSuffix');
+  
+  // Extract bucket names directly from outputs where available
+  // For buckets not in outputs, we'll construct them based on the pattern
+  const appDataBucketPrefix = appDataBucket.replace(`-${environmentSuffixFromOutputs}`, '').replace(/app-data-/, '');
+  
   return {
-    dynamoTableName: `TurnAroundPromptTable${environmentSuffix}`,
-    rdsInstanceId: `secure-db-${environmentSuffix}`,
-    cloudTrailBucket: `cloudtrail-logs-${accountId}-${environmentSuffix}`,
-    accessLogsBucket: `access-logs-${accountId}-${environmentSuffix}`,
-    appDataBucket: `app-data-${accountId}-${environmentSuffix}`,
-    vpcName: `secure-vpc-${environmentSuffix}`,
-    kmsAlias: `alias/rds-${environmentSuffix}-key`,
-    cloudTrailName: `security-trail-${environmentSuffix}`,
-    iamRoleName: `ApplicationRole-${environmentSuffix}`
+    dynamoTableName,
+    rdsInstanceId,
+    cloudTrailBucket: `cloudtrail-logs-${appDataBucketPrefix}-${environmentSuffixFromOutputs}`,
+    accessLogsBucket: `access-logs-${appDataBucketPrefix}-${environmentSuffixFromOutputs}`,
+    appDataBucket,
+    vpcId,
+    vpcName: `secure-vpc-${environmentSuffixFromOutputs}`,
+    kmsAlias: `alias/rds-${environmentSuffixFromOutputs}-key`,
+    kmsKeyId,
+    cloudTrailName,
+    iamRoleName,
+    environmentSuffix: environmentSuffixFromOutputs
   };
 };
 
+
+
 describe('TapStack Live Infrastructure Integration Tests', () => {
   let stackOutputs: any;
-  let resourceNames: Awaited<ReturnType<typeof getResourceNames>>;
+  let resourceNames: ReturnType<typeof getResourceNames>;
 
   beforeAll(async () => {
     stackOutputs = loadTapStackOutputs();
-    resourceNames = await getResourceNames();
-    console.log(`Testing infrastructure with environment suffix: ${environmentSuffix}`);
+    resourceNames = getResourceNames(stackOutputs);
+    
+    console.log(`Testing infrastructure with environment suffix: ${resourceNames.environmentSuffix}`);
+    console.log(`Resource names loaded from CloudFormation outputs:`);
+    console.log(JSON.stringify(resourceNames, null, 2));
   }, 30000);
 
   describe('DynamoDB Table Tests', () => {
@@ -243,9 +277,7 @@ describe('TapStack Live Infrastructure Integration Tests', () => {
   describe('VPC and Networking Tests', () => {
     test('should verify VPC exists with correct configuration', async () => {
       const command = new DescribeVpcsCommand({
-        Filters: [
-          { Name: 'tag:Name', Values: [resourceNames.vpcName] }
-        ]
+        VpcIds: [resourceNames.vpcId]
       });
 
       const response = await ec2Client.send(command);
@@ -262,7 +294,7 @@ describe('TapStack Live Infrastructure Integration Tests', () => {
     test('should verify security groups exist with correct rules', async () => {
       const command = new DescribeSecurityGroupsCommand({
         Filters: [
-          { Name: 'group-name', Values: [`rds-sg-${environmentSuffix}`, `app-sg-${environmentSuffix}`] }
+          { Name: 'group-name', Values: [`rds-sg-${resourceNames.environmentSuffix}`, `app-sg-${resourceNames.environmentSuffix}`] }
         ]
       });
 
@@ -271,7 +303,7 @@ describe('TapStack Live Infrastructure Integration Tests', () => {
       expect(response.SecurityGroups).toBeDefined();
       expect(response.SecurityGroups?.length).toBeGreaterThanOrEqual(2);
       
-      const rdsSecGroup = response.SecurityGroups?.find(sg => sg.GroupName === `rds-sg-${environmentSuffix}`);
+      const rdsSecGroup = response.SecurityGroups?.find(sg => sg.GroupName === `rds-sg-${resourceNames.environmentSuffix}`);
       expect(rdsSecGroup).toBeDefined();
       
       // Verify RDS security group allows MySQL access (port 3306)
@@ -284,22 +316,22 @@ describe('TapStack Live Infrastructure Integration Tests', () => {
 
   describe('KMS Key Tests', () => {
     test('should verify KMS key exists and is accessible', async () => {
-      // Find the KMS key by alias
-      const aliasCommand = new ListAliasesCommand({});
-      const aliasResponse = await kmsClient.send(aliasCommand);
-      
-      const alias = aliasResponse.Aliases?.find(a => a.AliasName === resourceNames.kmsAlias);
-      expect(alias).toBeDefined();
-      expect(alias?.TargetKeyId).toBeDefined();
-
-      // Describe the key
-      const keyCommand = new DescribeKeyCommand({ KeyId: alias!.TargetKeyId! });
+      // Describe the key using the key ID from outputs
+      const keyCommand = new DescribeKeyCommand({ KeyId: resourceNames.kmsKeyId });
       const keyResponse = await kmsClient.send(keyCommand);
       
       expect(keyResponse.KeyMetadata).toBeDefined();
       expect(keyResponse.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
       expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
       expect(keyResponse.KeyMetadata?.Description).toBe('KMS Key for RDS Database encryption');
+      
+      // Also verify the alias exists
+      const aliasCommand = new ListAliasesCommand({});
+      const aliasResponse = await kmsClient.send(aliasCommand);
+      
+      const alias = aliasResponse.Aliases?.find(a => a.AliasName === resourceNames.kmsAlias);
+      expect(alias).toBeDefined();
+      expect(alias?.TargetKeyId).toBe(resourceNames.kmsKeyId);
     }, 30000);
   });
 
