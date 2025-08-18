@@ -224,6 +224,23 @@ Resources:
   # Web Tier: ASG (CPU target tracking)
   # Attaches to EXISTING Target Group from Mapping
   ############################################
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      HealthCheckPath: /
+      Matcher:
+        HttpCode: '200-399'
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-tg'
+
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -250,10 +267,10 @@ Resources:
       MinSize: 2
       MaxSize: 6
       DesiredCapacity: 2
-      HealthCheckType: EC2
+      HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       TargetGroupARNs:
-        - !FindInMap [ Existing, ARNs, TargetGroupArn ]
+        - !Ref TargetGroup
       MetricsCollection:
         - Granularity: '1Minute'
       Tags:
@@ -468,9 +485,9 @@ Resources:
         }
 
 Outputs:
-  TargetGroupReused:
-    Description: Existing Target Group ARN used by ASG
-    Value: !FindInMap [ Existing, ARNs, TargetGroupArn ]
+  TargetGroupArn:
+    Description: In-stack Target Group ARN used by ASG
+    Value: !Ref TargetGroup
   AlbReused:
     Description: Existing ALB ARN associated with WAF
     Value: !FindInMap [ Existing, ARNs, AlbArn ]
