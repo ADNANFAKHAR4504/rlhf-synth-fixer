@@ -87,6 +87,34 @@ variable "tfstate_lock_table" {
 }
 
 ########################################
+# DATA SOURCES (For Existing Resources)
+########################################
+
+data "aws_kms_alias" "state_key_alias" {
+  name = "alias/prod-state-key"
+}
+
+data "aws_iam_role" "app_role" {
+  name = "prod-app-role"
+}
+
+data "aws_iam_policy" "app_s3_policy" {
+  name = "prod-app-s3-policy"
+}
+
+data "aws_iam_role" "bastion_role" {
+  name = "prod-bastion-role"
+}
+
+data "aws_key_pair" "existing_key" {
+  key_name = var.ssh_key_name
+}
+
+data "aws_dynamodb_table" "tf_lock" {
+  name = var.tfstate_lock_table
+}
+
+########################################
 # LOCALS
 ########################################
 
@@ -264,14 +292,68 @@ resource "aws_vpc_endpoint" "ssmmessages" {
   tags                = merge(local.common_tags, { Name = "${var.project_name}-ssmmessages-endpoint" })
 }
 
-resource "aws_kms_alias" "state_key_alias" {
-  name          = "alias/prod-state-key"
-  target_key_id = aws_kms_key.state_key.id
+resource "aws_kms_key" "state_key" {
+  count         = data.aws_kms_alias.state_key_alias.target_key_arn == null ? 1 : 0
+  description   = "KMS key for encrypting S3 and Terraform state"
+  enable_key_rotation = true
+  tags          = local.common_tags
+}
 
-  lifecycle {
-    prevent_destroy = true
-    ignore_changes  = [name]
-  }
+########################################
+# IAM (Updated to use existing roles/policies)
+########################################
+
+resource "aws_iam_role_policy_attachment" "app_attach_s3" {
+  role       = data.aws_iam_role.app_role.name
+  policy_arn = data.aws_iam_policy.app_s3_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "app_attach_ssm" {
+  role       = data.aws_iam_role.app_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "app_profile" {
+  name = "${var.project_name}-app-profile"
+  role = data.aws_iam_role.app_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "bastion_attach_ssm" {
+  role       = data.aws_iam_role.bastion_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "bastion_profile" {
+  name = "${var.project_name}-bastion-profile"
+  role = data.aws_iam_role.bastion_role.name
+}
+
+########################################
+# EC2 INSTANCES (Updated key reference)
+########################################
+
+resource "aws_instance" "bastion" {
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.bastion_instance_type
+  subnet_id                   = aws_subnet.public.id
+  key_name                    = local.effective_key_name # Uses existing key
+  vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
+  associate_public_ip_address = true
+  iam_instance_profile        = aws_iam_instance_profile.bastion_profile.name
+  monitoring                  = true
+  tags                        = merge(local.common_tags, { Name = "${var.project_name}-bastion" })
+}
+
+resource "aws_instance" "app" {
+  ami                         = data.aws_ami.ubuntu.id
+  instance_type               = var.app_instance_type
+  subnet_id                   = aws_subnet.private_a.id
+  key_name                    = local.effective_key_name # Uses existing key
+  vpc_security_group_ids      = [aws_security_group.private_sg.id]
+  associate_public_ip_address = false
+  iam_instance_profile        = aws_iam_instance_profile.app_profile.name
+  monitoring                  = true
+  tags                        = merge(local.common_tags, { Name = "${var.project_name}-app" })
 }
 
 ########################################
@@ -537,6 +619,14 @@ resource "aws_dynamodb_table" "tf_lock" {
 ########################################
 # OUTPUTS
 ########################################
+
+output "kms_key_arn" {
+  value = data.aws_kms_alias.state_key_alias.target_key_arn
+}
+
+output "ssh_key_name_effective" {
+  value = local.effective_key_name
+}
 
 output "vpc_id" {
   value = aws_vpc.main.id
