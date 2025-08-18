@@ -1,27 +1,4 @@
-# Variables to control whether to create new resources or use existing ones
-variable "use_existing_config_recorder" {
-  description = "Whether to use existing configuration recorder instead of creating new one"
-  type        = bool
-  default     = true
-}
 
-variable "use_existing_config_delivery_channel" {
-  description = "Whether to use existing configuration delivery channel instead of creating new one"
-  type        = bool
-  default     = true
-}
-
-variable "use_existing_guardduty_detector" {
-  description = "Whether to use existing GuardDuty detector instead of creating new one"
-  type        = bool
-  default     = true
-}
-
-variable "use_existing_securityhub" {
-  description = "Whether to use existing Security Hub instead of creating new one"
-  type        = bool
-  default     = true
-}
 
 # AWS Config Recorder (only create if not using existing)
 resource "aws_config_configuration_recorder" "main" {
