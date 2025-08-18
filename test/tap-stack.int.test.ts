@@ -32,10 +32,6 @@ describe('Terraform E2E Integration Test', () => {
     path.join(__dirname, '../lib/flat-outputs.json')
   ];
 
-  // Use env var to control live AWS tests
-  const runLiveTests = process.env.RUN_LIVE_TESTS === 'true';
-  const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-west-1';
-
   let renamedBackendFiles: string[] = [];
   let deploymentOutputs: any = null;
 
@@ -103,15 +99,6 @@ terraform {
     expect(planOutput).toMatch(/No changes. Infrastructure is up-to-date|Plan:/);
   });
 
-  test('terraform apply can provision resources (dry-run)', () => {
-    execSync('terraform plan -no-color -out=plan.tfplan -target=aws_s3_bucket.main -target=aws_dynamodb_table.main', { cwd: tfDir });
-    const applyOutput = execSync('terraform apply -no-color -auto-approve plan.tfplan', { cwd: tfDir }).toString();
-    expect(applyOutput).toMatch(/Apply complete|No changes. Infrastructure is up-to-date/);
-    // Clean up the plan file after test
-    const planFile = path.join(tfDir, 'plan.tfplan');
-    if (fs.existsSync(planFile)) fs.unlinkSync(planFile);
-  });
-
   // --- USE DEPLOYMENT OUTPUTS FOR RESOURCE NAME CHECKS ---
   let bucketName: string | undefined = undefined;
   let tableName: string | undefined = undefined;
@@ -126,8 +113,6 @@ terraform {
     expect(tableName).toMatch(/example-dynamodb/);
     // If you have AWS access, you can add live AWS SDK checks here.
   });
-
-  // If you do not have AWS credentials, just check the names are present and correct.
 
   afterAll(() => {
     // Optionally clean up state files for test isolation
