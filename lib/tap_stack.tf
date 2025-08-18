@@ -88,7 +88,7 @@ locals {
   common_tags = merge(
     var.tags,
     {
-      Region    = data.aws_region.current.name
+      Region    = data.aws_region.current.region
       ManagedBy = "terraform"
     }
   )
@@ -531,7 +531,6 @@ resource "aws_cognito_user_pool_client" "this" {
     "ALLOW_USER_SRP_AUTH"
   ]
   supported_identity_providers = ["COGNITO"]
-  tags = local.common_tags
 }
 
 resource "aws_api_gateway_rest_api" "api" {
@@ -675,7 +674,7 @@ resource "aws_cloudfront_distribution" "this" {
   default_root_object = ""
 
   origin {
-    domain_name = module.alb.lb_dns_name
+    domain_name = module.alb.this_lb_dns_name
     origin_id   = "alb-origin"
     custom_origin_config {
       http_port              = 80
@@ -890,11 +889,11 @@ output "vpc_id" {
 }
 
 output "alb_dns_name" {
-  value = module.alb.lb_dns_name
+  value = module.alb.this_lb_dns_name
 }
 
 output "api_invoke_url" {
-  value = "https://${aws_api_gateway_rest_api.api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_stage.prod.stage_name}/hello"
+  value = "https://${aws_api_gateway_rest_api.api.id}.execute-api.${data.aws_region.current.region}.amazonaws.com/${aws_api_gateway_stage.prod.stage_name}/hello"
 }
 
 output "cloudfront_domain_name" {
