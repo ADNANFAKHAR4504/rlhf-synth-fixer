@@ -11,10 +11,6 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
 
-Conditions:
-  # Always create SSL since certificate is created in the stack
-  HasSSLCertificate: true
-  NoSSLCertificate: false
 
 Resources:
   # VPC Configuration
@@ -421,7 +417,7 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # ALB Listener (HTTPS) - Always created since certificate is in the stack
+  # ALB Listener (HTTPS) - Only created when SSL certificate is available (us-east-1)
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -434,7 +430,7 @@ Resources:
       Certificates:
         - CertificateArn: !Ref SSLCertificate
 
-  # ALB Listener (HTTP - redirect to HTTPS)
+  # ALB Listener (HTTP - redirect to HTTPS when SSL is available)
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -582,13 +578,16 @@ Resources:
           Value: Production
 
   # ACM Certificate for ALB (self-signed for testing)
+  # Note: ACM certificates for ALB must be created in us-east-1 region
+  # This template will only create the certificate when deployed in us-east-1
+  # For other regions, deploy this template in us-east-1 first, then reference the certificate ARN
   SSLCertificate:
     Type: AWS::ACM::Certificate
     Properties:
-      DomainName: !Sub '${AWS::StackName}.${AWS::Region}.${AWS::AccountId}.internal'
+      DomainName: !Sub '${AWS::StackName}.example.com'
       ValidationMethod: DNS
       SubjectAlternativeNames:
-        - !Sub '*.${AWS::StackName}.${AWS::Region}.${AWS::AccountId}.internal'
+        - !Sub '*.${AWS::StackName}.example.com'
       Tags:
         - Key: Name
           Value: WebApp-SSL-Certificate

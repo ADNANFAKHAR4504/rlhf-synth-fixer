@@ -12,10 +12,7 @@
       "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
     }
   },
-  "Conditions": {
-    "HasSSLCertificate": true,
-    "NoSSLCertificate": false
-  },
+  "Conditions": {},
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
@@ -756,12 +753,12 @@
       "Type": "AWS::ACM::Certificate",
       "Properties": {
         "DomainName": {
-          "Fn::Sub": "${AWS::StackName}.${AWS::Region}.${AWS::AccountId}.internal"
+          "Fn::Sub": "${AWS::StackName}.example.com"
         },
         "ValidationMethod": "DNS",
         "SubjectAlternativeNames": [
           {
-            "Fn::Sub": "*.${AWS::StackName}.${AWS::Region}.${AWS::AccountId}.internal"
+            "Fn::Sub": "*.${AWS::StackName}.example.com"
           }
         ],
         "Tags": [

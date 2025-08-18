@@ -35,30 +35,28 @@ describe('TapStack CloudFormation Template - Unit', () => {
       expect(template.Parameters.SSLCertificateArn).toBeUndefined();
     });
 
-    test('has conditions for SSL certificate', () => {
-      expect(template.Conditions).toBeDefined();
-      expect(template.Conditions.HasSSLCertificate).toBe(true);
-      expect(template.Conditions.NoSSLCertificate).toBe(false);
+    test('does not define regional conditions (us-east-1 only template)', () => {
+      const conditions = template.Conditions || {};
+      expect(Object.keys(conditions)).toHaveLength(0);
     });
   });
 
   describe('SSL Certificate Resource', () => {
-    test('defines ACM certificate resource', () => {
+    test('defines ACM certificate resource unconditionally', () => {
       const cert = template.Resources.SSLCertificate;
       expect(cert).toBeDefined();
       expect(cert.Type).toBe('AWS::ACM::Certificate');
       expect(cert.Properties.DomainName['Fn::Sub']).toContain(
         '${AWS::StackName}'
       );
-      expect(cert.Properties.DomainName['Fn::Sub']).toContain('${AWS::Region}');
-      expect(cert.Properties.DomainName['Fn::Sub']).toContain(
-        '${AWS::AccountId}'
-      );
-      expect(cert.Properties.DomainName['Fn::Sub']).toContain('.internal');
+      expect(cert.Properties.DomainName['Fn::Sub']).toContain('.example.com');
       expect(cert.Properties.ValidationMethod).toBe('DNS');
       expect(Array.isArray(cert.Properties.SubjectAlternativeNames)).toBe(true);
       expect(cert.Properties.SubjectAlternativeNames[0]['Fn::Sub']).toContain(
         '*.${AWS::StackName}'
+      );
+      expect(cert.Properties.SubjectAlternativeNames[0]['Fn::Sub']).toContain(
+        '.example.com'
       );
     });
 
@@ -273,7 +271,7 @@ describe('TapStack CloudFormation Template - Unit', () => {
   });
 
   describe('Load Balancer', () => {
-    test('ALB is configured with HTTPS listener and HTTP->HTTPS redirect', () => {
+    test('ALB is configured with conditional HTTPS listener and HTTP->HTTPS redirect', () => {
       const r = template.Resources;
       expect(r.ApplicationLoadBalancer).toBeDefined();
       expect(r.ApplicationLoadBalancer.Type).toBe(
@@ -299,14 +297,14 @@ describe('TapStack CloudFormation Template - Unit', () => {
       expect(r.ALBTargetGroup.Properties.VpcId.Ref).toBe('VPC');
       expect(r.ALBTargetGroup.Properties.HealthCheckPath).toBe('/');
 
-      // HTTPS listener should always be created
+      // HTTPS listener always created
       const https = r.ALBListener.Properties;
       expect(https.Port).toBe(443);
       expect(https.Protocol).toBe('HTTPS');
       expect(Array.isArray(https.Certificates)).toBe(true);
       expect(https.Certificates[0].CertificateArn.Ref).toBe('SSLCertificate');
 
-      // HTTP redirect listener should always be created
+      // HTTP redirect listener always created
       const http = r.ALBListenerHTTP.Properties;
       expect(http.Port).toBe(80);
       expect(http.Protocol).toBe('HTTP');
