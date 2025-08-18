@@ -563,7 +563,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'webapp-static-content-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${AWS::StackName}-webapp-static-content-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
