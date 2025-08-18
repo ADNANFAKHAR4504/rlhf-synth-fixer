@@ -39,7 +39,7 @@ variable "instance_type" {
 variable "domain_name" {
   description = "Domain name for Route53 failover"
   type        = string
-  default     = "example.com"
+  domain      = "example1484.com"
 }
 variable "subdomain" {
   description = "Subdomain for failover record"
@@ -406,7 +406,7 @@ resource "aws_security_group" "secondary_ec2" {
 
 # = IAM ROLES AND POLICIES =
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.environment}-ec2-role"
+  name = "${var.environment}-ec2-role-1484"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -616,6 +616,11 @@ resource "aws_s3_bucket_replication_configuration" "primary" {
       storage_class  = "STANDARD"
       encryption_configuration {
         replica_kms_key_id = aws_kms_key.secondary.arn
+      }
+    }
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        enabled = true
       }
     }
   }
