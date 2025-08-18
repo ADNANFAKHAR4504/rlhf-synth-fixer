@@ -60,6 +60,7 @@
   },
   "devDependencies": {
     "2": "^3.0.0",
+    "@aws-cdk/assert": "^2.68.0",
     "@aws-sdk/client-api-gateway": "^3.855.0",
     "@aws-sdk/client-apigatewayv2": "^3.856.0",
     "@aws-sdk/client-application-auto-scaling": "^3.856.0",
@@ -121,6 +122,7 @@
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "aws-cdk": "2.1020.2",
+    "aws-cdk-lib": "^2.211.0",
     "aws-sdk": "^2.1692.0",
     "aws-sdk-client-mock": "^4.1.0",
     "aws4": "^1.13.2",
@@ -167,7 +169,6 @@
     "@pulumi/pulumi": "^3.188.0",
     "@types/archiver": "^6.0.3",
     "archiver": "^7.0.1",
-    "aws-cdk-lib": "2.204.0",
     "cdktf": "^0.21.0",
     "cdktf-cli": "0.21.0",
     "constructs": "10.4.2",
