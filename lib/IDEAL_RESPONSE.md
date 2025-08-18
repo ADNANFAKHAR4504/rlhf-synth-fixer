@@ -1,56 +1,74 @@
+"""
+TapStack Pulumi Component - Dual-stack AWS infrastructure with IPv4/IPv6 support.
 
-# IDEAL Pulumi Python Response: Dual-Stack AWS Web Infrastructure
+Fresh Pulumi Python stack: Dual-stack (IPv4/IPv6) web app infra on AWS.
 
-## Overview
-This Pulumi Python stack provisions a production-ready, dual-stack (IPv4/IPv6) web application infrastructure on AWS. It is clean, minimal, and fully configurable for region, project name, and environment. It also safely adopts legacy VPCs to prevent deletion errors.
+Goals:
+- Clean, minimal, production-ready implementation
+- Region changed to us-east-1 by default (configurable)
+- Project name changed to tap-ds-demo (configurable)
+- Prevent legacy VPC deletion error by adopting existing VPC in state (web-vpc)
+  so Pulumi stops trying to delete it (fixes exit code 255 during updates)
 
-## Key Features
-- **Region:** Defaults to `us-east-1` (configurable via Pulumi config or environment variables)
-- **Project Name:** Defaults to `tap-ds-demo` (configurable)
-- **Legacy VPC Adoption:** Prevents deletion errors by importing an existing VPC if specified
-- **Dual-Stack Networking:** VPC, subnets, and ALB support both IPv4 and IPv6
-- **Security:** Least privilege IAM, security groups restrict access appropriately
-- **Monitoring:** CloudWatch dashboard for ALB and EC2 metrics
-
-## Resources Created
+Resources:
 - VPC (IPv4 + auto-assigned IPv6)
-- Two public subnets in separate AZs (dual-stack)
-- Internet Gateway (IGW)
-- Public route table with IPv4/IPv6 default routes
-- Security Groups:
-    - ALB: open to world on port 80 (IPv4/IPv6)
-    - EC2: port 80 only from ALB
-- IAM Role & Instance Profile for EC2 (CloudWatch policy)
-- EC2 Instance (Amazon Linux 2, t3.micro, Nginx via user-data)
-- Application Load Balancer (ALB, dualstack, HTTP listener, target group)
-- CloudWatch Dashboard (ALB + EC2 metrics)
+- 2x public dual-stack subnets in different AZs
+- IGW + public route table with IPv4/IPv6 default routes
+- IAM role + instance profile for EC2 (CloudWatch policy)
+- Security groups (ALB open to world on :80; EC2 :80 only from ALB)
+- EC2 t3.micro with Amazon Linux 2 + Nginx via user-data
+- ALB (dualstack) + HTTP listener + target group
+- CloudWatch dashboard for ALB + EC2 metrics
 
-## Outputs
-- `alb_dns_name`: ALB DNS name
-- `vpc_id`: VPC ID
-- `public_subnet_1_id`, `public_subnet_2_id`: Subnet IDs
-- `ec2_instance_id`, `ec2_instance_public_ip`, `ec2_instance_ipv6_addresses`: EC2 details
-- `dashboard_url`: CloudWatch dashboard URL
-- `target_group_arn`, `alb_arn`: ARNs for ALB and target group
-- `verification_instructions`: How to test IPv4/IPv6 connectivity
+Exports:
+- alb_dns_name, vpc_id, subnet_ids, instance info, dashboard URL
 
-## Configuration & Safety
-- Uses Pulumi config and environment variables for region, project, environment, and legacy VPC ID
-- Adopts legacy VPC (if specified) using `import_` and `protect=True` to prevent deletion (avoids DependencyViolation errors)
-- All resources use a single, region-pinned provider
+Notes:
+- Uses Pulumi config where possible; safe defaults provided.
+- Optionally adopts a legacy VPC named "web-vpc" using its ID to stop Pulumi
+  from attempting to delete it (handles DependencyViolation cleanup errors).
+  Configure via config key `legacyVpcId` or env `LEGACY_VPC_ID`. Default is
+  the ID seen in prior logs.
+"""
 
-## Example Verification Instructions
-- Open: `http://<alb_dns_name>`
-- Test IPv4: `curl -4 http://<alb_dns_name>`
-- Test IPv6: `curl -6 http://<alb_dns_name>`
+# Import constants from the constants module
+from .constants import (
+    PROJECT_NAME, AWS_REGION, ENVIRONMENT, INSTANCE_TYPE, DEPLOYMENT_ID,
+    get_resource_name, get_short_name, calculate_ipv6_cidr
+)
 
----
 
-See the implementation for full resource definitions, configuration, and output exports. This format ensures clarity, completeness, and production-readiness for Pulumi Python AWS dual-stack infrastructure.
-
+from dataclasses import dataclass
 import os
 import ipaddress
 import pulumi
+import pulumi_aws as aws
+from pulumi import Config, Output, export
+
+@dataclass
+class TapStackArgs:
+    """Arguments for TapStack component."""
+    environment_suffix: str = "dev"
+
+class TapStack(pulumi.ComponentResource):
+    """TapStack Pulumi component for dual-stack AWS infrastructure."""
+    
+    def __init__(self, name: str, args: TapStackArgs = None, opts: pulumi.ResourceOptions = None):
+        super().__init__('custom:TapStack', name, {}, opts)
+        
+        if args is None:
+            args = TapStackArgs()
+            
+        global ENVIRONMENT
+        ENVIRONMENT = args.environment_suffix
+        
+        # Create the infrastructure using the existing script logic
+        self._create_infrastructure()
+        
+    def _create_infrastructure(self):
+        """Create the infrastructure resources."""
+        # The existing infrastructure will be created by the script below
+        pass
 import pulumi_aws as aws
 from pulumi import Config, Output, export
 
@@ -446,3 +464,69 @@ export(
         "Test IPv6 (if your network supports it): curl -6 http://", alb.dns_name,
     ),
 )
+
+---
+
+## Documentation & Usage Notes
+
+### Overview
+This stack provisions a dual-stack (IPv4/IPv6) AWS web infrastructure using Pulumi Python. It demonstrates best practices for:
+- Clean, single-file Pulumi implementation
+- Safe legacy VPC adoption to avoid deletion errors
+- Dynamic IPv6 subnet calculation using Python's `ipaddress` module
+- Minimal, production-ready security group rules
+- Automated CloudWatch dashboard for ALB and EC2 metrics
+- Exporting all key outputs for integration and verification
+
+### How to Use
+1. **Configure your stack:**
+   - Set `aws:region`, `projectName`, `environment`, and optionally `legacyVpcId` in Pulumi config or environment variables.
+2. **Deploy:**
+   - Run `pulumi up` to provision all resources.
+3. **Verify:**
+   - Use the exported `alb_dns_name` and `dashboard_url` for access and monitoring.
+   - Follow `verification_instructions` for IPv4/IPv6 connectivity tests.
+
+### Key Implementation Highlights
+- **IPv6 Subnet Calculation:**
+  ```python
+  def ipv6_subnet_from_vpc_cidr(vpc_ipv6_cidr: Output[str], idx: int) -> Output[str]:
+      def compute(cidr: str) -> str:
+          net = ipaddress.IPv6Network(cidr)
+          subnets = list(net.subnets(new_prefix=64))
+          return str(subnets[idx])
+      return vpc_ipv6_cidr.apply(compute)
+  ```
+- **Legacy VPC Adoption:**
+  ```python
+  legacy_vpc = aws.ec2.Vpc(
+      "web-vpc",
+      ...,
+      opts=pulumi.ResourceOptions(
+          provider=provider,
+          import_=legacy_vpc_id,
+          protect=True,
+          retain_on_delete=True,
+          ignore_changes=["*"]
+      ),
+  )
+  ```
+- **CloudWatch Dashboard Export:**
+  ```python
+  export(
+      "dashboard_url",
+      Output.concat(
+          "https://", aws_region, ".console.aws.amazon.com/cloudwatch/home?region=", aws_region,
+          "#dashboards:name=", f"{project_name}-{environment}-dashboard"
+      ),
+  )
+  ```
+
+### Best Practices
+- Use Pulumi config for all environment-specific values
+- Export all resource IDs and endpoints
+- Protect legacy resources to avoid accidental deletion
+- Use dynamic Python logic for networking calculations
+- Keep the stack minimal and readable
+
+---

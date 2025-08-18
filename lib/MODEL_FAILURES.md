@@ -123,3 +123,32 @@ The actual implementation needs to be updated to properly construct IPv6 subnet 
 
 ## Summary
 While the model's response was overly complex and included many unnecessary components like Route53, multiple instances, complex configuration files, and enterprise-grade features that weren't required, **the model actually identified and correctly solved a critical IPv6 networking bug** that exists in the current implementation. The model's IPv6 CIDR handling was superior to the actual implementation.
+
+---
+
+## Model Failures
+
+- Overly complex, multi-file structure with unnecessary domain/Route53 assumptions
+- Dynamic IPv6 subnet logic was correct, but AZ/subnet handling was convoluted
+- Security groups allowed SSH from anywhere and had overly complex rules
+- EC2 configuration included multiple instances and verbose user data
+- Load balancer setup was more complex than needed
+- Custom IAM policies and hardcoded ARNs in CloudWatch dashboard
+- Outputs were exported, but not always concise or clear
+- No handling for legacy VPC adoption, risking deletion errors
+
+### Notable Model Failure
+- **IPv6 Subnet CIDR Block:**
+  - Model: `vpc.ipv6_cidr_block.apply(lambda cidr: f"{cidr[:-2]}{i + 1}::/64")` (correct logic)
+  - Ideal: Uses Python's `ipaddress` for robust calculation
+
+---
+
+## Recommendations
+- Favor simplicity and Pulumi idioms
+- Avoid unnecessary AWS features
+- Protect legacy resources
+- Export all key outputs
+- Use dynamic logic for networking and monitoring
+
+---
