@@ -573,28 +573,24 @@ resource "aws_acm_certificate" "main" {
   tags = local.common_tags
 }
 
-# Build cert_domains map AFTER ACM is created
+# Define domains statically (plan-time safe)
 locals {
-  cert_domains = {
-    for dvo in aws_acm_certificate.main.domain_validation_options :
-    dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
+  validation_domains = toset([
+    "${local.suffix}.${var.domain_name}",
+    "*.${local.suffix}.${var.domain_name}"
+  ])
 }
 
 # Route53 DNS validation records
 resource "aws_route53_record" "cert_validation" {
-  for_each = local.cert_domains   # ✅ keys = domain_name (known at apply)
+  for_each = local.validation_domains   # ✅ keys known at plan time
 
   allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
-  ttl             = 60
-  type            = each.value.type
-  zone_id         = aws_route53_zone.main.zone_id
+  name    = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_name if dvo.domain_name == each.key][0]
+  records = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_value if dvo.domain_name == each.key]
+  ttl     = 60
+  type    = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_type if dvo.domain_name == each.key][0]
+  zone_id = aws_route53_zone.main.zone_id
 }
 
 resource "aws_acm_certificate_validation" "main" {
