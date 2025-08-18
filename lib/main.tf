@@ -22,7 +22,7 @@ variable "environment" {
 variable "domain_name" {
   description = "Domain name for the application"
   type        = string
-  default     = "example.com"
+  default     = "myapp-test.com"
 }
 
 variable "db_password" {
@@ -418,16 +418,8 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_role.name
 }
 
-# Auto Scaling Service Role
-resource "aws_iam_service_linked_role" "autoscaling" {
-  aws_service_name = "autoscaling.amazonaws.com"
-  description      = "Service role for Auto Scaling"
-
-  # Only create if it doesn't exist
-  lifecycle {
-    ignore_changes = [aws_service_name]
-  }
-}
+# Auto Scaling Service Role - AWS creates this automatically when needed
+# No explicit resource required as AWS Auto Scaling will create it automatically
 
 ########################
 # S3 Bucket for Logs
@@ -529,7 +521,7 @@ resource "aws_db_instance" "main" {
   identifier = "${var.app_name}-db-${local.suffix}"
 
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15.7"
   instance_class = "db.t3.micro"
 
   allocated_storage     = 20
@@ -602,8 +594,13 @@ resource "aws_acm_certificate_validation" "main" {
   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 
   timeouts {
-    create = "5m"
+    create = "10m"
   }
+
+  depends_on = [
+    aws_route53_record.cert_validation,
+    aws_route53_zone.main
+  ]
 }
 
 ########################
