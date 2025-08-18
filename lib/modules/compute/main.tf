@@ -96,13 +96,13 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 60
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
+    timeout             = 10
+    unhealthy_threshold = 3
   }
 
   tags = merge(var.common_tags, {
@@ -126,6 +126,15 @@ resource "aws_lb_listener" "main" {
     Name = "${var.name_prefix}-listener"
     Type = "load-balancer-listener"
   })
+}
+
+# User Data Template
+data "template_file" "user_data" {
+  template = file("${path.module}/user_data.sh")
+  vars = {
+    environment = var.environment
+    project     = var.project_name
+  }
 }
 
 # Launch Template
@@ -166,7 +175,7 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier       = var.private_subnet_ids
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600
 
   min_size         = var.min_size
   max_size         = var.max_size
@@ -176,6 +185,8 @@ resource "aws_autoscaling_group" "main" {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
+
+  depends_on = [aws_launch_template.main, aws_lb_target_group.main]
 
   # Instance refresh configuration
   instance_refresh {

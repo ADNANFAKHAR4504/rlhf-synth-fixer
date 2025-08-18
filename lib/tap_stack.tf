@@ -156,7 +156,7 @@ module "compute" {
   instance_type         = "t3.micro"
   min_size              = 1
   max_size              = 10
-  desired_capacity      = 2
+  desired_capacity      = 1
   common_tags           = local.common_tags
 }
 
