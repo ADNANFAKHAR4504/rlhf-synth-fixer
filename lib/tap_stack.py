@@ -18,7 +18,7 @@ from .components.networking import NetworkingComponent
 from .components.security import SecurityComponent
 from .components.compute import ComputeComponent
 from .components.storage import StorageComponent
-from .components.database import DatabaseComponent
+# from .components.database import DatabaseComponent  # Disabled due to SCP restrictions
 from .components.monitoring import MonitoringComponent
 from .components.secrets import SecretsComponent
 
@@ -90,7 +90,7 @@ class TapStack(pulumi.ComponentResource):
       )
 
       # Deploy storage
-      storage = StorageComponent(
+      storage = StorageComponent(  # pylint: disable=unused-variable
         f"storage-{region}",
         config=config,
         opts=pulumi.ResourceOptions(provider=provider)
@@ -132,7 +132,8 @@ class TapStack(pulumi.ComponentResource):
         alb_sg_id=security.alb_sg.id,
         ec2_sg_id=security.ec2_sg.id,
         secrets_arn=secrets.app_secrets.arn,
-        instance_profile_name=security.ec2_instance_profile.name
+        instance_profile_name=security.ec2_instance_profile.name,
+        certificate_arn=security.certificate.arn
       )
       compute = ComputeComponent(
         f"compute-{region}",

@@ -218,7 +218,7 @@ class SecurityComponent(ComponentResource):
       DNS.1 = {domain}
       DNS.2 = *.{domain}
       """
-      with open(config_file, 'w') as f:
+      with open(config_file, 'w', encoding='utf-8') as f:
         f.write(config_content)
 
       # Generate certificate using subprocess
@@ -230,10 +230,10 @@ class SecurityComponent(ComponentResource):
       ], check=True)
 
       # Read generated files
-      with open(cert_file, 'r') as f:
+      with open(cert_file, 'r', encoding='utf-8') as f:
         cert_pem = f.read()
 
-      with open(key_file, 'r') as f:
+      with open(key_file, 'r', encoding='utf-8') as f:
         key_pem = f.read()
 
     # Create ACM certificate with email validation for CI environments

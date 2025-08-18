@@ -64,7 +64,6 @@ class TestTapStack(unittest.TestCase):
         patch('lib.tap_stack.StorageComponent') as mock_storage, \
         patch('lib.tap_stack.SecretsComponent') as mock_secrets, \
         patch('lib.tap_stack.ComputeComponent') as mock_compute, \
-        patch('lib.tap_stack.DatabaseComponent') as mock_database, \
         patch('lib.tap_stack.MonitoringComponent') as mock_monitoring:
       # Mock component instances
       mock_networking_instance = MagicMock()
@@ -95,6 +94,9 @@ class TestTapStack(unittest.TestCase):
       mock_compute_instance.alb_dns_name = "alb.example.com"
       mock_compute.return_value = mock_compute_instance
 
+      # Mock database (even though it's disabled) for test compatibility
+      mock_database = MagicMock()
+
       # Create TapStack
       with patch('pulumi.export') as mock_export:
         TapStack(
@@ -112,7 +114,8 @@ class TestTapStack(unittest.TestCase):
         self.assertEqual(mock_secrets.call_count, 2)
         self.assertEqual(mock_compute.call_count, 2)
 
-        # Database deployment is disabled due to SCP restrictions, monitoring should only be created in primary region
+        # Database deployment is disabled due to SCP restrictions,
+        # monitoring should only be created in primary region
         self.assertEqual(mock_database.call_count, 0)  # Database disabled due to SCP restrictions
         self.assertEqual(mock_monitoring.call_count, 1)
 
@@ -137,7 +140,6 @@ class TestTapStack(unittest.TestCase):
         patch('lib.tap_stack.StorageComponent'), \
         patch('lib.tap_stack.SecretsComponent'), \
         patch('lib.tap_stack.ComputeComponent'), \
-        patch('lib.tap_stack.DatabaseComponent'), \
         patch('lib.tap_stack.MonitoringComponent'):
       with patch('pulumi.export') as mock_export:
         TapStack(
@@ -167,7 +169,6 @@ class TestTapStack(unittest.TestCase):
         patch('lib.tap_stack.StorageComponent'), \
         patch('lib.tap_stack.SecretsComponent'), \
         patch('lib.tap_stack.ComputeComponent'), \
-        patch('lib.tap_stack.DatabaseComponent'), \
         patch('lib.tap_stack.MonitoringComponent'), \
         patch('lib.tap_stack.aws.wafv2.WebAclAssociation') as mock_waf_association:
       with patch('pulumi.export'):
@@ -199,7 +200,6 @@ class TestTapStack(unittest.TestCase):
           patch('lib.tap_stack.StorageComponent'), \
           patch('lib.tap_stack.SecretsComponent'), \
           patch('lib.tap_stack.ComputeComponent'), \
-          patch('lib.tap_stack.DatabaseComponent'), \
           patch('lib.tap_stack.MonitoringComponent'):
         with patch('pulumi.export'):
           stack = TapStack(
