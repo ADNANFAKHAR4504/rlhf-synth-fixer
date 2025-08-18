@@ -360,10 +360,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
 
       test('RDS instances have correct MySQL configuration', () => {
         expect(stackContent).toMatch(/engine\s*=\s*"mysql"/);
-        // expect(stackContent).toMatch(/engine_version\s*=\s*"8\.0\.34"/);
-        expect(stackContent).toMatch(
-          /instance_class\s*=\s*var\.db_instance_class/
-        );
+        expect(stackContent).toMatch(/engine_version\s*=\s*"8\.0(\.\d+)?"/);
+        expect(stackContent).toMatch(/instance_class\s*=\s*var\.db_instance_class/);
       });
 
       test('RDS storage is encrypted', () => {
