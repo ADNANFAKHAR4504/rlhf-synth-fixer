@@ -1,8 +1,4 @@
-# Multi-Environment AWS Infrastructure with Terraform
-
-I'll create a complete Terraform solution that meets all your requirements. This solution uses a modular approach with environment-specific configurations and follows enterprise best practices.
-
-## 6. Environment Configurations
+## Environment Configurations
 
 ### Development Environment
 

@@ -4,10 +4,10 @@
 import * as fs from "fs";
 import * as path from "path";
 
-// Prefer env var; else resolve ../lib/main.tf relative to this test file
+// Prefer env var; else resolve ../lib/tap_stack.tf relative to this test file
 const TF_PATH = process.env.TF_MAIN_PATH
   ? path.resolve(process.env.TF_MAIN_PATH)
-  : path.resolve(__dirname, "../lib/main.tf");
+  : path.resolve(__dirname, "../lib/tap_stack.tf");
 
 // Also check vars.tf for variable definitions
 const VARS_PATH = process.env.TF_VARS_PATH
