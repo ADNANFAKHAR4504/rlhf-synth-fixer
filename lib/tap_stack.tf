@@ -497,7 +497,15 @@ resource "aws_s3_bucket_policy" "logs" {
         Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
         Action    = ["s3:PutObject", "s3:PutObjectAcl"],
         Resource  = "${aws_s3_bucket.logs.arn}/*",
-        Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"      = "bucket-owner-full-control",
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          },
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:elasticloadbalancing:${var.aws_region}:${data.aws_caller_identity.current.account_id}:loadbalancer/app/*"
+          }
+        }
       },
       {
         Sid       = "AWSLogDeliveryCheck",
@@ -756,7 +764,7 @@ data "aws_ami" "amazon_linux" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  name                = "${local.name_prefix}-asg"
+  name_prefix         = "${local.name_prefix}-asg-"
   min_size            = var.min_size
   max_size            = var.max_size
   desired_capacity    = var.desired_capacity
