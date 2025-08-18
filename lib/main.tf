@@ -29,6 +29,7 @@ variable "db_password" {
   description = "Database password - must be provided via terraform.tfvars or environment variable"
   type        = string
   sensitive   = true
+  default     = "webapp-db-password-123"
 
   validation {
     condition     = length(var.db_password) >= 12
