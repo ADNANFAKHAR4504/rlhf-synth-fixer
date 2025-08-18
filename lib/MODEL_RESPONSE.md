@@ -1,838 +1,979 @@
-I'll create a comprehensive CDKTF configuration that meets all the specified security and architectural requirements. Here's the complete solution:
+I'll create a comprehensive Terraform configuration that meets all your security requirements. This will be a multi-file setup using best practices for organization and security.
 
-## CDKTF Configuration for Secure AWS Infrastructure
+## Main Configuration Files
 
-### Main Configuration File
+### 1. Provider and Backend Configuration (`providers.tf`)
 
-```typescript
-// main.ts
-import { Construct } from "constructs";
-import { App, TerraformStack, TerraformOutput } from "cdktf";
-import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
-import { Vpc } from "@cdktf/provider-aws/lib/vpc";
-import { Subnet } from "@cdktf/provider-aws/lib/subnet";
-import { InternetGateway } from "@cdktf/provider-aws/lib/internet-gateway";
-import { RouteTable } from "@cdktf/provider-aws/lib/route-table";
-import { Route } from "@cdktf/provider-aws/lib/route";
-import { RouteTableAssociation } from "@cdktf/provider-aws/lib/route-table-association";
-import { NatGateway } from "@cdktf/provider-aws/lib/nat-gateway";
-import { Eip } from "@cdktf/provider-aws/lib/eip";
-import { SecurityGroup } from "@cdktf/provider-aws/lib/security-group";
-import { Instance } from "@cdktf/provider-aws/lib/instance";
-import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
-import { IamRolePolicy } from "@cdktf/provider-aws/lib/iam-role-policy";
-import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
-import { KmsKey } from "@cdktf/provider-aws/lib/kms-key";
-import { KmsAlias } from "@cdktf/provider-aws/lib/kms-alias";
-import { LambdaFunction } from "@cdktf/provider-aws/lib/lambda-function";
-import { CloudwatchLogGroup } from "@cdktf/provider-aws/lib/cloudwatch-log-group";
-import { CloudwatchMetricAlarm } from "@cdktf/provider-aws/lib/cloudwatch-metric-alarm";
-import { SnsTopicSubscription } from "@cdktf/provider-aws/lib/sns-topic-subscription";
-import { SnsTopic } from "@cdktf/provider-aws/lib/sns-topic";
-import { CloudtrailEventDataStore } from "@cdktf/provider-aws/lib/cloudtrail-event-data-store";
-import { Cloudtrail } from "@cdktf/provider-aws/lib/cloudtrail";
-import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
-import { S3BucketEncryption } from "@cdktf/provider-aws/lib/s3-bucket-encryption";
-import { S3BucketPublicAccessBlock } from "@cdktf/provider-aws/lib/s3-bucket-public-access-block";
+```hcl
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
 
-class SecureInfrastructureStack extends TerraformStack {
-  constructor(scope: Construct, id: string) {
-    super(scope, id);
+# Primary region provider
+provider "aws" {
+  alias  = "primary"
+  region = var.primary_region
+  
+  default_tags {
+    tags = {
+      Environment = "secure-env"
+      ManagedBy   = "terraform"
+      Project     = "secure-infrastructure"
+    }
+  }
+}
 
-    // AWS Providers for multiple regions
-    const primaryProvider = new AwsProvider(this, "aws-primary", {
-      region: "us-east-1",
-      alias: "primary",
-    });
+# Secondary region provider
+provider "aws" {
+  alias  = "secondary"
+  region = var.secondary_region
+  
+  default_tags {
+    tags = {
+      Environment = "secure-env"
+      ManagedBy   = "terraform"
+      Project     = "secure-infrastructure"
+    }
+  }
+}
+```
 
-    const secondaryProvider = new AwsProvider(this, "aws-secondary", {
-      region: "us-west-2",
-      alias: "secondary",
-    });
+### 2. Variables (`variables.tf`)
 
-    // KMS Keys for encryption
-    const primaryKmsKey = new KmsKey(this, "secure-env-primary-kms", {
-      provider: primaryProvider,
-      description: "KMS key for secure-env primary region encryption",
-      keyUsage: "ENCRYPT_DECRYPT",
-      keySpec: "SYMMETRIC_DEFAULT",
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Sid: "Enable IAM User Permissions",
-            Effect: "Allow",
-            Principal: { AWS: "arn:aws:iam::*:root" },
-            Action: "kms:*",
-            Resource: "*",
-          },
-        ],
-      }),
-      tags: {
-        Name: "secure-env-primary-kms-key",
-        Environment: "secure-env",
+```hcl
+variable "primary_region" {
+  description = "Primary AWS region"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "secondary_region" {
+  description = "Secondary AWS region"
+  type        = string
+  default     = "us-west-2"
+}
+
+variable "vpc_cidr_primary" {
+  description = "CIDR block for primary VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "vpc_cidr_secondary" {
+  description = "CIDR block for secondary VPC"
+  type        = string
+  default     = "10.1.0.0/16"
+}
+
+variable "allowed_ssh_cidr" {
+  description = "CIDR blocks allowed for SSH access"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]  # Restrict this in production
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "secure-env"
+}
+```
+
+### 3. KMS Configuration (`kms.tf`)
+
+```hcl
+# KMS Key for primary region
+resource "aws_kms_key" "secure_env_primary" {
+  provider                = aws.primary
+  description             = "secure-env KMS key for primary region"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
       },
-    });
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 
-    new KmsAlias(this, "secure-env-primary-kms-alias", {
-      provider: primaryProvider,
-      name: "alias/secure-env-primary",
-      targetKeyId: primaryKmsKey.keyId,
-    });
+  tags = {
+    Name = "secure-env-kms-primary"
+  }
+}
 
-    const secondaryKmsKey = new KmsKey(this, "secure-env-secondary-kms", {
-      provider: secondaryProvider,
-      description: "KMS key for secure-env secondary region encryption",
-      keyUsage: "ENCRYPT_DECRYPT",
-      keySpec: "SYMMETRIC_DEFAULT",
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Sid: "Enable IAM User Permissions",
-            Effect: "Allow",
-            Principal: { AWS: "arn:aws:iam::*:root" },
-            Action: "kms:*",
-            Resource: "*",
-          },
-        ],
-      }),
-      tags: {
-        Name: "secure-env-secondary-kms-key",
-        Environment: "secure-env",
+resource "aws_kms_alias" "secure_env_primary" {
+  provider      = aws.primary
+  name          = "alias/secure-env-primary"
+  target_key_id = aws_kms_key.secure_env_primary.key_id
+}
+
+# KMS Key for secondary region
+resource "aws_kms_key" "secure_env_secondary" {
+  provider                = aws.secondary
+  description             = "secure-env KMS key for secondary region"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
       },
-    });
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 
-    new KmsAlias(this, "secure-env-secondary-kms-alias", {
-      provider: secondaryProvider,
-      name: "alias/secure-env-secondary",
-      targetKeyId: secondaryKmsKey.keyId,
-    });
+  tags = {
+    Name = "secure-env-kms-secondary"
+  }
+}
 
-    // Primary Region Infrastructure
-    const primaryInfra = this.createRegionalInfrastructure(
-      "primary",
-      primaryProvider,
-      "10.0.0.0/16",
-      primaryKmsKey.arn
-    );
+resource "aws_kms_alias" "secure_env_secondary" {
+  provider      = aws.secondary
+  name          = "alias/secure-env-secondary"
+  target_key_id = aws_kms_key.secure_env_secondary.key_id
+}
 
-    // Secondary Region Infrastructure
-    const secondaryInfra = this.createRegionalInfrastructure(
-      "secondary",
-      secondaryProvider,
-      "10.1.0.0/16",
-      secondaryKmsKey.arn
-    );
+data "aws_caller_identity" "current" {}
+```
 
-    // CloudTrail for monitoring and alerting
-    this.setupCloudTrailAndAlerting(primaryProvider, primaryKmsKey.arn);
+### 4. VPC Module (`modules/vpc/main.tf`)
 
-    // Outputs
-    new TerraformOutput(this, "primary-vpc-id", {
-      value: primaryInfra.vpc.id,
-    });
+```hcl
+data "aws_availability_zones" "available" {
+  state = "available"
+}
 
-    new TerraformOutput(this, "secondary-vpc-id", {
-      value: secondaryInfra.vpc.id,
-    });
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name = "${var.name_prefix}-vpc"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.name_prefix}-igw"
+  }
+}
+
+# Public Subnets
+resource "aws_subnet" "public" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  map_public_ip_on_launch = false  # Explicit control over public IPs
+
+  tags = {
+    Name = "${var.name_prefix}-public-subnet-${count.index + 1}"
+    Type = "Public"
+  }
+}
+
+# Private Subnets
+resource "aws_subnet" "private" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+
+  tags = {
+    Name = "${var.name_prefix}-private-subnet-${count.index + 1}"
+    Type = "Private"
+  }
+}
+
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  count  = 2
+  domain = "vpc"
+
+  tags = {
+    Name = "${var.name_prefix}-nat-eip-${count.index + 1}"
   }
 
-  private createRegionalInfrastructure(
-    region: string,
-    provider: AwsProvider,
-    cidrBlock: string,
-    kmsKeyArn: string
-  ) {
-    // VPC
-    const vpc = new Vpc(this, `secure-env-vpc-${region}`, {
-      provider: provider,
-      cidrBlock: cidrBlock,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      tags: {
-        Name: `secure-env-vpc-${region}`,
-        Environment: "secure-env",
+  depends_on = [aws_internet_gateway.main]
+}
+
+# NAT Gateways
+resource "aws_nat_gateway" "main" {
+  count         = 2
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = {
+    Name = "${var.name_prefix}-nat-${count.index + 1}"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Route Table for Public Subnets
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name = "${var.name_prefix}-public-rt"
+  }
+}
+
+# Route Table for Private Subnets
+resource "aws_route_table" "private" {
+  count  = 2
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+
+  tags = {
+    Name = "${var.name_prefix}-private-rt-${count.index + 1}"
+  }
+}
+
+# Route Table Associations
+resource "aws_route_table_association" "public" {
+  count          = 2
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  count          = 2
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
+# VPC Flow Logs
+resource "aws_flow_log" "vpc_flow_log" {
+  iam_role_arn    = var.flow_log_role_arn
+  log_destination = var.flow_log_destination_arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
+}
+```
+
+### 5. VPC Module Variables (`modules/vpc/variables.tf`)
+
+```hcl
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+}
+
+variable "name_prefix" {
+  description = "Name prefix for resources"
+  type        = string
+}
+
+variable "flow_log_role_arn" {
+  description = "IAM role ARN for VPC flow logs"
+  type        = string
+}
+
+variable "flow_log_destination_arn" {
+  description = "CloudWatch log group ARN for VPC flow logs"
+  type        = string
+}
+```
+
+### 6. VPC Module Outputs (`modules/vpc/outputs.tf`)
+
+```hcl
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "public_subnet_ids" {
+  description = "IDs of the public subnets"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of the private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "vpc_cidr_block" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+```
+
+### 7. IAM Roles and Policies (`iam.tf`)
+
+```hcl
+# CloudWatch Logs for VPC Flow Logs
+resource "aws_cloudwatch_log_group" "vpc_flow_logs_primary" {
+  provider          = aws.primary
+  name              = "/aws/vpc/secure-env-primary-flow-logs"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.secure_env_primary.arn
+
+  tags = {
+    Name = "secure-env-vpc-flow-logs-primary"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "vpc_flow_logs_secondary" {
+  provider          = aws.secondary
+  name              = "/aws/vpc/secure-env-secondary-flow-logs"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.secure_env_secondary.arn
+
+  tags = {
+    Name = "secure-env-vpc-flow-logs-secondary"
+  }
+}
+
+# IAM Role for VPC Flow Logs
+resource "aws_iam_role" "vpc_flow_log" {
+  name = "secure-env-vpc-flow-log-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "secure-env-vpc-flow-log-role"
+  }
+}
+
+resource "aws_iam_role_policy" "vpc_flow_log" {
+  name = "secure-env-vpc-flow-log-policy"
+  role = aws_iam_role.vpc_flow_log.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = [
+          aws_cloudwatch_log_group.vpc_flow_logs_primary.arn,
+          aws_cloudwatch_log_group.vpc_flow_logs_secondary.arn,
+          "${aws_cloudwatch_log_group.vpc_flow_logs_primary.arn}:*",
+          "${aws_cloudwatch_log_group.vpc_flow_logs_secondary.arn}:*"
+        ]
+      }
+    ]
+  })
+}
+
+# IAM Role for Lambda
+resource "aws_iam_role" "lambda_role" {
+  name = "secure-env-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "secure-env-lambda-role"
+  }
+}
+
+resource "aws_iam_role_policy" "lambda_policy" {
+  name = "secure-env-lambda-policy"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
       },
-    });
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
 
-    // Internet Gateway
-    const igw = new InternetGateway(this, `secure-env-igw-${region}`, {
-      provider: provider,
-      vpcId: vpc.id,
-      tags: {
-        Name: `secure-env-igw-${region}`,
-        Environment: "secure-env",
+# IAM Role for EC2 instances
+resource "aws_iam_role" "ec2_role" {
+  name = "secure-env-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "secure-env-ec2-role"
+  }
+}
+
+resource "aws_iam_role_policy" "ec2_policy" {
+  name = "secure-env-ec2-policy"
+  role = aws_iam_role.ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
       },
-    });
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
 
-    // Public Subnets
-    const publicSubnet1 = new Subnet(this, `secure-env-public-subnet-1-${region}`, {
-      provider: provider,
-      vpcId: vpc.id,
-      cidrBlock: region === "primary" ? "10.0.1.0/24" : "10.1.1.0/24",
-      availabilityZone: region === "primary" ? "us-east-1a" : "us-west-2a",
-      mapPublicIpOnLaunch: true,
-      tags: {
-        Name: `secure-env-public-subnet-1-${region}`,
-        Environment: "secure-env",
-        Type: "public",
-      },
-    });
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "secure-env-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+```
 
-    const publicSubnet2 = new Subnet(this, `secure-env-public-subnet-2-${region}`, {
-      provider: provider,
-      vpcId: vpc.id,
-      cidrBlock: region === "primary" ? "10.0.2.0/24" : "10.1.2.0/24",
-      availabilityZone: region === "primary" ? "us-east-1b" : "us-west-2b",
-      mapPublicIpOnLaunch: true,
-      tags: {
-        Name: `secure-env-public-subnet-2-${region}`,
-        Environment: "secure-env",
-        Type: "public",
-      },
-    });
+### 8. Security Groups (`security_groups.tf`)
 
-    // Private Subnets
-    const privateSubnet1 = new Subnet(this, `secure-env-private-subnet-1-${region}`, {
-      provider: provider,
-      vpcId: vpc.id,
-      cidrBlock: region === "primary" ? "10.0.3.0/24" : "10.1.3.0/24",
-      availabilityZone: region === "primary" ? "us-east-1a" : "us-west-2a",
-      tags: {
-        Name: `secure-env-private-subnet-1-${region}`,
-        Environment: "secure-env",
-        Type: "private",
-      },
-    });
+```hcl
+# Security Group for Public EC2 instances (bastion hosts)
+resource "aws_security_group" "secure_env_public_ec2_primary" {
+  provider    = aws.primary
+  name        = "secure-env-public-ec2-sg-primary"
+  description = "Security group for public EC2 instances in primary region"
+  vpc_id      = module.vpc_primary.vpc_id
 
-    const privateSubnet2 = new Subnet(this, `secure-env-private-subnet-2-${region}`, {
-      provider: provider,
-      vpcId: vpc.id,
-      cidrBlock: region === "primary" ? "10.0.4.0/24" : "10.1.4.0/24",
-      availabilityZone: region === "primary" ? "us-east-1b" : "us-west-2b",
-      tags: {
-        Name: `secure-env-private-subnet-2-${region}`,
-        Environment: "secure-env",
-        Type: "private",
-      },
-    });
+  ingress {
+    description = "SSH from allowed CIDRs"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ssh_cidr
+  }
 
-    // Elastic IPs for NAT Gateways
-    const natEip1 = new Eip(this, `secure-env-nat-eip-1-${region}`, {
-      provider: provider,
-      domain: "vpc",
-      tags: {
-        Name: `secure-env-nat-eip-1-${region}`,
-        Environment: "secure-env",
-      },
-    });
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    const natEip2 = new Eip(this, `secure-env-nat-eip-2-${region}`, {
-      provider: provider,
-      domain: "vpc",
-      tags: {
-        Name: `secure-env-nat-eip-2-${region}`,
-        Environment: "secure-env",
-      },
-    });
+  tags = {
+    Name = "secure-env-public-ec2-sg-primary"
+  }
+}
 
-    // NAT Gateways
-    const natGw1 = new NatGateway(this, `secure-env-nat-gw-1-${region}`, {
-      provider: provider,
-      allocationId: natEip1.id,
-      subnetId: publicSubnet1.id,
-      tags: {
-        Name: `secure-env-nat-gw-1-${region}`,
-        Environment: "secure-env",
-      },
-    });
+resource "aws_security_group" "secure_env_public_ec2_secondary" {
+  provider    = aws.secondary
+  name        = "secure-env-public-ec2-sg-secondary"
+  description = "Security group for public EC2 instances in secondary region"
+  vpc_id      = module.vpc_secondary.vpc_id
 
-    const natGw2 = new NatGateway(this, `secure-env-nat-gw-2-${region}`, {
-      provider: provider,
-      allocationId: natEip2.id,
-      subnetId: publicSubnet2.id,
-      tags: {
-        Name: `secure-env-nat-gw-2-${region}`,
-        Environment: "secure-env",
-      },
-    });
+  ingress {
+    description = "SSH from allowed CIDRs"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ssh_cidr
+  }
 
-    // Route Tables
-    const publicRouteTable = new RouteTable(this, `secure-env-public-rt-${region}`, {
-      provider: provider,
-      vpcId: vpc.id,
-      tags: {
-        Name: `secure-env-public-rt-${region}`,
-        Environment: "secure-env",
-      },
-    });
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    const privateRouteTable1 = new RouteTable(this, `secure-env-private-rt-1-${region}`, {
-      provider: provider,
-      vpcId: vpc.id,
-      tags: {
-        Name: `secure-env-private-rt-1-${region}`,
-        Environment: "secure-env",
-      },
-    });
+  tags = {
+    Name = "secure-env-public-ec2-sg-secondary"
+  }
+}
 
-    const privateRouteTable2 = new RouteTable(this, `secure-env-private-rt-2-${region}`, {
-      provider: provider,
-      vpcId: vpc.id,
-      tags: {
-        Name: `secure-env-private-rt-2-${region}`,
-        Environment: "secure-env",
-      },
-    });
+# Security Group for Private EC2 instances
+resource "aws_security_group" "secure_env_private_ec2_primary" {
+  provider    = aws.primary
+  name        = "secure-env-private-ec2-sg-primary"
+  description = "Security group for private EC2 instances in primary region"
+  vpc_id      = module.vpc_primary.vpc_id
 
-    // Routes
-    new Route(this, `secure-env-public-route-${region}`, {
-      provider: provider,
-      routeTableId: publicRouteTable.id,
-      destinationCidrBlock: "0.0.0.0/0",
-      gatewayId: igw.id,
-    });
+  ingress {
+    description     = "SSH from public EC2 instances"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.secure_env_public_ec2_primary.id]
+  }
 
-    new Route(this, `secure-env-private-route-1-${region}`, {
-      provider: provider,
-      routeTableId: privateRouteTable1.id,
-      destinationCidrBlock: "0.0.0.0/0",
-      natGatewayId: natGw1.id,
-    });
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    new Route(this, `secure-env-private-route-2-${region}`, {
-      provider: provider,
-      routeTableId: privateRouteTable2.id,
-      destinationCidrBlock: "0.0.0.0/0",
-      natGatewayId: natGw2.id,
-    });
+  tags = {
+    Name = "secure-env-private-ec2-sg-primary"
+  }
+}
 
-    // Route Table Associations
-    new RouteTableAssociation(this, `secure-env-public-rta-1-${region}`, {
-      provider: provider,
-      subnetId: publicSubnet1.id,
-      routeTableId: publicRouteTable.id,
-    });
+resource "aws_security_group" "secure_env_private_ec2_secondary" {
+  provider    = aws.secondary
+  name        = "secure-env-private-ec2-sg-secondary"
+  description = "Security group for private EC2 instances in secondary region"
+  vpc_id      = module.vpc_secondary.vpc_id
 
-    new RouteTableAssociation(this, `secure-env-public-rta-2-${region}`, {
-      provider: provider,
-      subnetId: publicSubnet2.id,
-      routeTableId: publicRouteTable.id,
-    });
+  ingress {
+    description     = "SSH from public EC2 instances"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.secure_env_public_ec2_secondary.id]
+  }
 
-    new RouteTableAssociation(this, `secure-env-private-rta-1-${region}`, {
-      provider: provider,
-      subnetId: privateSubnet1.id,
-      routeTableId: privateRouteTable1.id,
-    });
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    new RouteTableAssociation(this, `secure-env-private-rta-2-${region}`, {
-      provider: provider,
-      subnetId: privateSubnet2.id,
-      routeTableId: privateRouteTable2.id,
-    });
+  tags = {
+    Name = "secure-env-private-ec2-sg-secondary"
+  }
+}
 
-    // Security Groups
-    const webSecurityGroup = new SecurityGroup(this, `secure-env-web-sg-${region}`, {
-      provider: provider,
-      name: `secure-env-web-sg-${region}`,
-      description: "Security group for web servers with restricted access",
-      vpcId: vpc.id,
-      ingress: [
-        {
-          fromPort: 80,
-          toPort: 80,
-          protocol: "tcp",
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "HTTP access",
-        },
-        {
-          fromPort: 443,
-          toPort: 443,
-          protocol: "tcp",
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "HTTPS access",
-        },
-        {
-          fromPort: 22,
-          toPort: 22,
-          protocol: "tcp",
-          cidrBlocks: [cidrBlock],
-          description: "SSH access from VPC only",
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: "-1",
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "All outbound traffic",
-        },
-      ],
-      tags: {
-        Name: `secure-env-web-sg-${region}`,
-        Environment: "secure-env",
-      },
-    });
+# Security Group for Lambda functions
+resource "aws_security_group" "secure_env_lambda_primary" {
+  provider    = aws.primary
+  name        = "secure-env-lambda-sg-primary"
+  description = "Security group for Lambda functions in primary region"
+  vpc_id      = module.vpc_primary.vpc_id
 
-    const privateSecurityGroup = new SecurityGroup(this, `secure-env-private-sg-${region}`, {
-      provider: provider,
-      name: `secure-env-private-sg-${region}`,
-      description: "Security group for private instances",
-      vpcId: vpc.id,
-      ingress: [
-        {
-          fromPort: 0,
-          toPort: 65535,
-          protocol: "tcp",
-          cidrBlocks: [cidrBlock],
-          description: "All traffic from VPC",
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: "-1",
-          cidrBlocks: ["0.0.0.0/0"],
-          description: "All outbound traffic",
-        },
-      ],
-      tags: {
-        Name: `secure-env-private-sg-${region}`,
-        Environment: "secure-env",
-      },
-    });
+  egress {
+    description = "HTTPS outbound"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    // IAM Role for EC2 instances
-    const ec2Role = new IamRole(this, `secure-env-ec2-role-${region}`, {
-      provider: provider,
-      name: `secure-env-ec2-role-${region}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
-            Principal: {
-              Service: "ec2.amazonaws.com",
-            },
-          },
-        ],
-      }),
-      tags: {
-        Name: `secure-env-ec2-role-${region}`,
-        Environment: "secure-env",
-      },
-    });
+  tags = {
+    Name = "secure-env-lambda-sg-primary"
+  }
+}
 
-    // Least privilege policy for EC2 instances
-    new IamRolePolicy(this, `secure-env-ec2-policy-${region}`, {
-      provider: provider,
-      name: `secure-env-ec2-policy-${region}`,
-      role: ec2Role.id,
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-              "logs:DescribeLogStreams",
-            ],
-            Resource: "arn:aws:logs:*:*:*",
-          },
-          {
-            Effect: "Allow",
-            Action: [
-              "kms:Decrypt",
-              "kms:DescribeKey",
-            ],
-            Resource: kmsKeyArn,
-          },
-        ],
-      }),
-    });
+resource "aws_security_group" "secure_env_lambda_secondary" {
+  provider    = aws.secondary
+  name        = "secure-env-lambda-sg-secondary"
+  description = "Security group for Lambda functions in secondary region"
+  vpc_id      = module.vpc_secondary.vpc_id
 
-    // IAM Role for Lambda functions
-    const lambdaRole = new IamRole(this, `secure-env-lambda-role-${region}`, {
-      provider: provider,
-      name: `secure-env-lambda-role-${region}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
-            Principal: {
-              Service: "lambda.amazonaws.com",
-            },
-          },
-        ],
-      }),
-      tags: {
-        Name: `secure-env-lambda-role-${region}`,
-        Environment: "secure-env",
-      },
-    });
+  egress {
+    description = "HTTPS outbound"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-    // Least privilege policy for Lambda functions
-    new IamRolePolicy(this, `secure-env-lambda-policy-${region}`, {
-      provider: provider,
-      name: `secure-env-lambda-policy-${region}`,
-      role: lambdaRole.id,
-      policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-          {
-            Effect: "Allow",
-            Action: [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-            ],
-            Resource: "arn:aws:logs:*:*:*",
-          },
-          {
-            Effect: "Allow",
-            Action: [
-              "ec2:CreateNetworkInterface",
-              "ec2:DescribeNetworkInterfaces",
-              "ec2:DeleteNetworkInterface",
-            ],
-            Resource: "*",
-          },
-          {
-            Effect: "Allow",
-            Action: [
-              "kms:Decrypt",
-              "kms:DescribeKey",
-            ],
-            Resource: kmsKeyArn,
-          },
-        ],
-      }),
-    });
+  tags = {
+    Name = "secure-env-lambda-sg-secondary"
+  }
+}
+```
 
-    // CloudWatch Log Group for Lambda
-    const lambdaLogGroup = new CloudwatchLogGroup(this, `secure-env-lambda-logs-${region}`, {
-      provider: provider,
-      name: `/aws/lambda/secure-env-function-${region}`,
-      retentionInDays: 14,
-      kmsKeyId: kmsKeyArn,
-      tags: {
-        Name: `secure-env-lambda-logs-${region}`,
-        Environment: "secure-env",
-      },
-    });
+### 9. EC2 Instances (`ec2.tf`)
 
-    // Lambda Function with logging enabled
-    const lambdaFunction = new LambdaFunction(this, `secure-env-lambda-${region}`, {
-      provider: provider,
-      functionName: `secure-env-function-${region}`,
-      role: lambdaRole.arn,
-      handler: "index.handler",
-      runtime: "nodejs18.x",
-      filename: "lambda.zip", // This would need to be created separately
-      sourceCodeHash: "placeholder", // This would be calculated from the actual zip file
-      environment: {
-        variables: {
-          ENVIRONMENT: "secure-env",
-          KMS_KEY_ID: kmsKeyArn,
-        },
-      },
-      vpcConfig: {
-        subnetIds: [privateSubnet1.id, privateSubnet2.id],
-        securityGroupIds: [privateSecurityGroup.id],
-      },
-      dependsOn: [lambdaLogGroup],
-      tags: {
-        Name: `secure-env-lambda-${region}`,
-        Environment: "secure-env",
-      },
-    });
+```hcl
+# Data source for latest Amazon Linux 2 AMI
+data "aws_ami" "amazon_linux_primary" {
+  provider    = aws.primary
+  most_recent = true
+  owners      = ["amazon"]
 
-    // EC2 Instance in public subnet (restricted access)
-    const webInstance = new Instance(this, `secure-env-web-instance-${region}`, {
-      provider: provider,
-      ami: "ami-0c02fb55956c7d316", // Amazon Linux 2 AMI (adjust for region)
-      instanceType: "t3.micro",
-      subnetId: publicSubnet1.id,
-      vpcSecurityGroupIds: [webSecurityGroup.id],
-      iamInstanceProfile: ec2Role.name,
-      userData: `#!/bin/bash
-        yum update -y
-        yum install -y awslogs
-        systemctl start awslogsd
-        systemctl enable awslogsd
-      `,
-      tags: {
-        Name: `secure-env-web-instance-${region}`,
-        Environment: "secure-env",
-        Type: "web-server",
-      },
-    });
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
 
-    // EC2 Instance in private subnet
-    const privateInstance = new Instance(this, `secure-env-private-instance-${region}`, {
-      provider: provider,
-      ami: "ami-0c02fb55956c7d316", // Amazon Linux 2 AMI (adjust for region)
-      instanceType: "t3.micro",
-      subnetId: privateSubnet1.id,
-      vpcSecurityGroupIds: [privateSecurityGroup.id],
-      iamInstanceProfile: ec2Role.name,
-      userData: `#!/bin/bash
-        yum update -y
-        yum install -y awslogs
-        systemctl start awslogsd
-        systemctl enable awslogsd
-      `,
-      tags: {
-        Name: `secure-env-private-instance-${region}`,
-        Environment: "secure-env",
-        Type: "private-server",
-      },
-    });
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
 
+data "aws_ami" "amazon_linux_secondary" {
+  provider    = aws.secondary
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# Key Pairs
+resource "aws_key_pair" "secure_env_primary" {
+  provider   = aws.primary
+  key_name   = "secure-env-key-primary"
+  public_key = file("~/.ssh/id_rsa.pub")  # Update path as needed
+
+  tags = {
+    Name = "secure-env-key-primary"
+  }
+}
+
+resource "aws_key_pair" "secure_env_secondary" {
+  provider   = aws.secondary
+  key_name   = "secure-env-key-secondary"
+  public_key = file("~/.ssh/id_rsa.pub")  # Update path as needed
+
+  tags = {
+    Name = "secure-env-key-secondary"
+  }
+}
+
+# Public EC2 instance (bastion) in primary region
+resource "aws_instance" "secure_env_bastion_primary" {
+  provider                    = aws.primary
+  ami                         = data.aws_ami.amazon_linux_primary.id
+  instance_type               = "t3.micro"
+  key_name                    = aws_key_pair.secure_env_primary.key_name
+  subnet_id                   = module.vpc_primary.public_subnet_ids[0]
+  vpc_security_group_ids      = [aws_security_group.secure_env_public_ec2_primary.id]
+  associate_public_ip_address = true
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
+
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = 20
+    encrypted             = true
+    kms_key_id            = aws_kms_key.secure_env_primary.arn
+    delete_on_termination = true
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    log_group_name = "/aws/ec2/secure-env-bastion-primary"
+    region         = var.primary_region
+  }))
+
+  tags = {
+    Name = "secure-env-bastion-primary"
+    Type = "Bastion"
+  }
+}
+
+# Public EC2 instance (bastion) in secondary region
+resource "aws_instance" "secure_env_bastion_secondary" {
+  provider                    = aws.secondary
+  ami                         = data.aws_ami.amazon_linux_secondary.id
+  instance_type               = "t3.micro"
+  key_name                    = aws_key_pair.secure_env_secondary.key_name
+  subnet_id                   = module.vpc_secondary.public_subnet_ids[0]
+  vpc_security_group_ids      = [aws_security_group.secure_env_public_ec2_secondary.id]
+  associate_public_ip_address = true
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
+
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = 20
+    encrypted             = true
+    kms_key_id            = aws_kms_key.secure_env_secondary.arn
+    delete_on_termination = true
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    log_group_name = "/aws/ec2/secure-env-bastion-secondary"
+    region         = var.secondary_region
+  }))
+
+  tags = {
+    Name = "secure-env-bastion-secondary"
+    Type = "Bastion"
+  }
+}
+
+# Private EC2 instances
+resource "aws_instance" "secure_env_private_primary" {
+  provider               = aws.primary
+  ami                    = data.aws_ami.amazon_linux_primary.id
+  instance_type          = "t3.micro"
+  key_name               = aws_key_pair.secure_env_primary.key_name
+  subnet_id              = module.vpc_primary.private_subnet_ids[0]
+  vpc_security_group_ids = [aws_security_group.secure_env_private_ec2_primary.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = 20
+    encrypted             = true
+    kms_key_id            = aws_kms_key.secure_env_primary.arn
+    delete_on_termination = true
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    log_group_name = "/aws/ec2/secure-env-private-primary"
+    region         = var.primary_region
+  }))
+
+  tags = {
+    Name = "secure-env-private-primary"
+    Type = "Private"
+  }
+}
+
+resource "aws_instance" "secure_env_private_secondary" {
+  provider               = aws.secondary
+  ami                    = data.aws_ami.amazon_linux_secondary.id
+  instance_type          = "t3.micro"
+  key_name               = aws_key_pair.secure_env_secondary.key_name
+  subnet_id              = module.vpc_secondary.private_subnet_ids[0]
+  vpc_security_group_ids = [aws_security_group.secure_env_private_ec2_secondary.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
+
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = 20
+    encrypted             = true
+    kms_key_id            = aws_kms_key.secure_env_secondary.arn
+    delete_on_termination = true
+  }
+
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    log_group_name = "/aws/ec2/secure-env-private-secondary"
+    region         = var.secondary_region
+  }))
+
+  tags = {
+    Name = "secure-env-private-secondary"
+    Type = "Private"
+  }
+}
+```
+
+### 10. User Data Script (`user_data.sh`)
+
+```bash
+#!/bin/bash
+yum update -y
+yum install -y awslogs
+
+# Configure CloudWatch agent
+cat > /etc/awslogs/awslogs.conf << EOF
+[general]
+state_file = /var/lib/awslogs/agent-state
+
+[/var/log/messages]
+file = /var/log/messages
+log_group_name = ${log_group_name}
+log_stream_name = {instance_id}/messages
+datetime_format = %b %d %H:%M:%S
+
+[/var/log/secure]
+file = /var/log/secure
+log_group_name = ${log_group_name}
+log_stream_name = {instance_id}/secure
+datetime_format = %b %d %H:%M:%S
+EOF
+
+# Configure region
+sed -i 's/region = us-east-1/region = ${region}/' /etc/awslogs/awscli.conf
+
+# Start and enable CloudWatch logs
+systemctl start awslogsd
+systemctl enable awslogsd
+
+# Install CloudWatch agent for metrics
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+rpm -U ./amazon-cloudwatch-agent.rpm
+
+# Basic security hardening
+systemctl disable postfix
+systemctl stop postfix
+```
+
+### 11. Lambda Functions (`lambda.tf`)
+
+```hcl
+# CloudWatch Log Groups for Lambda functions
+resource "aws_cloudwatch_log_group" "lambda_logs_primary" {
+  provider          = aws.primary
+  name              = "/aws/lambda/secure-env-function-primary"
+  retention_in_days = 14
+  kms_key_id        = aws_kms_key.secure_env_primary.arn
+
+  tags = {
+    Name = "secure-env-lambda-logs-primary"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "lambda_logs_secondary" {
+  provider          = aws.secondary
+  name              = "/aws/lambda/secure-env-function-secondary"
+  retention_in_days = 14
+  kms_key_id        = aws_kms_key.secure_env_secondary.arn
+
+  tags = {
+    Name = "secure-env-lambda-logs-secondary"
+  }
+}
+
+# Lambda function code
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  output_path = "lambda_function.zip"
+  source {
+    content = <<EOF
+import json
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def lambda_handler(event, context):
+    logger.info('Lambda function invoked')
+    logger.info(f'Event: {json.dumps(event)}')
+    
     return {
-      vpc,
-      publicSubnets: [publicSubnet1, publicSubnet2],
-      privateSubnets: [privateSubnet1, privateSubnet2],
-      webInstance,
-      privateInstance,
-      lambdaFunction,
-    };
-  }
-
-  private setupCloudTrailAndAlerting(provider: AwsProvider, kmsKeyArn: string) {
-    // S3 Bucket for CloudTrail logs
-    const cloudtrailBucket = new S3Bucket(this, "secure-env-cloudtrail-bucket", {
-      provider: provider,
-      bucket: "secure-env-cloudtrail-logs-${random_id}",
-      tags: {
-        Name: "secure-env-cloudtrail-bucket",
-        Environment: "secure-env",
-      },
-    });
-
-    // S3 Bucket encryption
-    new S3BucketEncryption(this, "secure-env-cloudtrail-bucket-encryption", {
-      provider: provider,
-      bucket: cloudtrailBucket.id,
-      serverSideEncryptionConfiguration: {
-        rule: {
-          applyServerSideEncryptionByDefault: {
-            kmsMasterKeyId: kmsKeyArn,
-            sseAlgorithm: "aws:kms",
-          },
-        },
-      },
-    });
-
-    // Block public access to S3 bucket
-    new S3BucketPublicAccessBlock(this, "secure-env-cloudtrail-bucket-pab", {
-      provider: provider,
-      bucket: cloudtrailBucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    });
-
-    // CloudTrail for monitoring
-    const cloudtrail = new Cloudtrail(this, "secure-env-cloudtrail", {
-      provider: provider,
-      name: "secure-env-cloudtrail",
-      s3BucketName: cloudtrailBucket.id,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      enableLogging: true,
-      kmsKeyId: kmsKeyArn,
-      eventSelector: [
-        {
-          readWriteType: "All",
-          includeManagementEvents: true,
-          dataResource: [
-            {
-              type: "AWS::S3::Object",
-              values: ["arn:aws:s3:::*/*"],
-            },
-          ],
-        },
-      ],
-      tags: {
-        Name: "secure-env-cloudtrail",
-        Environment: "secure-env",
-      },
-    });
-
-    // SNS Topic for alerts
-    const alertTopic = new SnsTopic(this, "secure-env-security-alerts", {
-      provider: provider,
-      name: "secure-env-security-alerts",
-      kmsKeyId: kmsKeyArn,
-      tags: {
-        Name: "secure-env-security-alerts",
-        Environment: "secure-env",
-      },
-    });
-
-    // CloudWatch Alarm for unauthorized access attempts
-    new CloudwatchMetricAlarm(this, "secure-env-unauthorized-access-alarm", {
-      provider: provider,
-      alarmName: "secure-env-unauthorized-access-attempts",
-      comparisonOperator: "GreaterThanThreshold",
-      evaluationPeriods: "2",
-      metricName: "ErrorCount",
-      namespace: "AWS/CloudTrail",
-      period: "300",
-      statistic: "Sum",
-      threshold: "5",
-      alarmDescription: "Alert on unauthorized access attempts",
-      alarmActions: [alertTopic.arn],
-      dimensions: {
-        ErrorCode: "AccessDenied",
-      },
-      tags: {
-        Name: "secure-env-unauthorized-access-alarm",
-        Environment: "secure-env",
-      },
-    });
-
-    // CloudWatch Alarm for failed login attempts
-    new CloudwatchMetricAlarm(this, "secure-env-failed-login-alarm", {
-      provider: provider,
-      alarmName: "secure-env-failed-login-attempts",
-      comparisonOperator: "GreaterThanThreshold",
-      evaluationPeriods: "1",
-      metricName: "ErrorCount",
-      namespace: "AWS/CloudTrail",
-      period: "300",
-      statistic: "Sum",
-      threshold: "10",
-      alarmDescription: "Alert on multiple failed login attempts",
-      alarmActions: [alertTopic.arn],
-      dimensions: {
-        EventName: "ConsoleLogin",
-      },
-      tags: {
-        Name: "secure-env-failed-login-alarm",
-        Environment: "secure-env",
-      },
-    });
+        'statusCode': 200,
+        'body': json.dumps({
+            'message': 'Hello from secure-env Lambda function!',
+            'event': event
+        })
+    }
+EOF
+    filename = "lambda_function.py"
   }
 }
 
-const app = new App();
-new SecureInfrastructureStack(app, "secure-infrastructure");
-app.synth();
-```
-
-### Package Configuration
-
-```json
-// package.json
-{
-  "name": "secure-infrastructure-cdktf",
-  "version": "1.0.0",
-  "description": "Secure AWS infrastructure using CDKTF",
-  "main": "main.ts",
-  "scripts": {
-    "build": "tsc",
-    "synth": "cdktf synth",
-    "deploy": "cdktf deploy",
-    "destroy": "cdktf destroy",
-    "test": "jest",
-    "get": "cdktf get"
-  },
-  "dependencies": {
-    "@cdktf/provider-aws": "^19.0.0",
-    "cdktf": "^0.19.0",
-    "constructs": "^10.3.0"
-  },
-  "devDependencies": {
-    "@types/jest": "^29.5.0",
-    "@types/node": "^18.15.0",
-    "jest": "^29.5.0",
-    "ts-jest": "^29.1.0",
-    "typescript": "^5.0.0"
-  }
-}
-```
-
-### CDKTF Configuration
-
-```json
-// cdktf.json
-{
-  "language": "typescript",
-  "app": "npx ts-node main.ts",
-  "projectId": "secure-infrastructure",
-  "sendCrashReports": "false",
-  "terraformProviders": [
-    "aws@~>5.0"
-  ],
-  "terraformModules": [],
-  "context": {
-    "excludeStackIdFromLogicalIds": "true",
-    "allowSepCharsInLogicalIds": "true"
-  }
-}
-```
-
-### Test Suite
-
-```typescript
-// tests/infrastructure.test.ts
-import { Testing } from "cdktf";
-import { SecureInfrastructureStack } from "../main";
-
-describe("Secure Infrastructure Stack", () => {
-  let stack: SecureInfrastructureStack;
-
-  beforeEach(() => {
-    const app = Testing.app();
-    stack = new SecureInfrastructureStack(app, "test-stack");
-  });
-
-  test("should create VPCs in multiple regions", () => {
-    const synthesized = Testing.synth(stack);
-    expect(synthesized).toHaveResourceWithProperties("aws_vpc", {
-      cidr_block: "10.0.0.0/16",
-      enable_dns_hostnames: true,
-      enable_dns_support: true,
-      tags: {
-        Name: "secure-env-vpc-primary",
-        Environment: "secure-env",
-      },
-    });
-
-    expect(synthesized).toHaveResourceWithProperties("aws_vpc", {
-      cidr_block: "10.1.0.0/16",
-      enable_dns_hostnames: true,
-      enable_dns_support: true,
-      tags: {
-        Name: "secure-env-vpc-secondary",
-        Environment: "secure-env",
-      },
-    });
-  });
-
-  test("should create KMS keys for encryption", () => {
-    const synthesized = Testing.synth(stack);
-    expect(synthesized).toHaveResourceWithProperties("aws_kms_key", {
-      description: "KMS key for secure-env primary region encryption",
-      key_usage: "ENCRYPT_DECRYPT",
-      key_spec: "SYMMETRIC_DEFAULT",
-    });
-  });
-
-  test("should create IAM roles with explicit policies", () => {
-    const synthesized = Testing.synth(stack);
-    expect(synthesized).toHaveResourceWithProperties("aws_iam_role", {
-      name: expect.stringMatching(/secure-env-ec2-role/),
-    });
+# Lambda function in primary region
+resource "aws_lambda_function" "secure_env_primary" {
+  provider         = aws.primary
+  filename         = data.archive_file.lambda_zip.output_path
+  function_name    = "secure-env-function-primary"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "lambda

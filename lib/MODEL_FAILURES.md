@@ -1,25 +1,17 @@
-**Model Failures for Secure AWS Infrastructure CDKTF Response**
+1. IAM Role Policies Not Explicit or Least-Privilege: The IAM role and policy blocks in iam.tf are incomplete (Statement = [ ]), missing explicit least-privilege policies for each workload.
 
-1. **Sensitive Data Encryption Coverage**:  
-	- The response uses AWS KMS for encrypting S3 buckets and CloudWatch logs, but does not explicitly show encryption for all other sensitive data at rest (e.g., EBS volumes for EC2 instances, RDS, DynamoDB, etc.).
+2. KMS Key Policies Incomplete: The KMS key policy blocks are empty or incomplete (Statement = [ ]), lacking explicit access controls.
 
-2. **Resource Name Prefixing**:  
-	- Most resources are prefixed with 'secure-env', but the S3 bucket for CloudTrail logs uses `"secure-env-cloudtrail-logs-${random_id}"`, which may not guarantee the prefix for all resources if random_id is not handled properly.
+3. Lambda Logging Not Fully Implemented: The Lambda function resource is incomplete and does not show the handler or logging configuration fully. The code snippet is truncated and may not be valid.
 
-3. **Lambda Logging**:  
-	- Logging is enabled for Lambda functions via CloudWatch Log Groups, but the Lambda function configuration uses a placeholder for `filename` and `sourceCodeHash`, which may prevent actual deployment and logging validation.
+4. Alerting for Unauthorized Access Attempts Not Implemented: There is no resource or configuration for alerting (e.g., CloudWatch Alarms, SNS topics, or EventBridge rules) for unauthorized access attempts.
 
-4. **IAM Least Privilege Principle**:  
-	- IAM policies for EC2 and Lambda roles are provided, but may include overly broad permissions (e.g., `"Resource": "*"` for some actions) and do not demonstrate fine-grained least privilege for all required actions.
+5. Resource Naming Consistency: While most resources use the secure-env prefix, some resource names (e.g., log group names, key names) may not consistently apply the prefix or environment variable.
 
-5. **Multi-Region VPC Implementation**:  
-	- VPCs are created in two regions, but there is no cross-region connectivity or peering, which may be required for a truly multi-region setup.
+6. VPC Flow Log Role Policy Missing: The IAM role for VPC flow logs is missing a valid assume role policy and permissions.
 
-6. **Alerts for Unauthorized Access Attempts**:  
-	- CloudWatch alarms are set for unauthorized access attempts, but the metric and dimension configuration may not fully capture all types of unauthorized access (e.g., only `ErrorCode: AccessDenied` and `EventName: ConsoleLogin`).
+7. Public Internet Access Controls: The security group for public EC2 instances allows SSH from 0.0.0.0/0 by default, which is not secure and should be restricted.
 
-7. **Test Coverage**:  
-	- The test suite is incomplete and does not cover all requirements (e.g., encryption for all resources, alerts, least privilege policies).
+8. Verification/Test Code Missing: There are no verification steps or test code confirming correct implementation of IAM roles, encryption, VPC setup, logging, and access controls.
 
-8. **Public Internet Access Restriction**:  
-	- Security groups restrict public access, but there is no explicit check or test to ensure only specific EC2 instances have public access.
+9. Terraform Validation: The configuration is incomplete and may not validate successfully due to missing or incomplete blocks.

@@ -1,134 +1,112 @@
-import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
-import { VpcConstruct } from '../lib/vpc-construct';
-import { SecurityConstruct } from '../lib/security-construct';
-import { ComputeConstruct } from '../lib/compute-construct';
-import { DatabaseConstruct } from '../lib/database-construct';
-import { StorageConstruct } from '../lib/storage-construct';
-import { DynamoDbConstruct } from '../lib/dynamodb-construct';
+import * as fs from 'fs';
+import * as path from 'path';
 
-describe('TapStack Comprehensive Unit Tests', () => {
-  let app: App;
+describe('Secure Env Terraform Stack', () => {
+  let tfConfig: string;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    app = new App();
+  beforeAll(() => {
+    // Read the main Terraform variable file
+    tfConfig = fs.readFileSync(path.join(__dirname, '../lib/tap_stack.tf'), 'utf8');
   });
 
-  test('TapStack instantiates with required arguments', () => {
-    const stack = new TapStack(app, 'TestTapStack');
-    const synthesized = Testing.synth(stack);
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+  test('name_prefix and environment variables are defined and used in resource names', () => {
+    expect(tfConfig).toMatch(/variable\s+"name_prefix"/);
+    expect(tfConfig).toMatch(/variable\s+"environment"/);
+    expect(tfConfig).toMatch(/\${var\.name_prefix}-\${var\.environment}-s3-bucket/);
   });
 
-  test('VpcConstruct creates VPC and subnets', () => {
-    const stack = new TapStack(app, 'VpcTestStack');
-    const vpc = new VpcConstruct(stack, 'VpcTest', {
-      prefix: 'test',
-      regions: ['us-west-2'],
+  test('S3 bucket resource is present with versioning and public access block', () => {
+    expect(tfConfig).toMatch(/resource\s+"aws_s3_bucket"\s+"this"/);
+    expect(tfConfig).toMatch(/versioning_configuration\s*{\s*status\s*=\s*"Enabled"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"this"/);
+    expect(tfConfig).toMatch(/block_public_acls\s*=\s*true/);
+    expect(tfConfig).toMatch(/block_public_policy\s*=\s*true/);
+    expect(tfConfig).toMatch(/restrict_public_buckets\s*=\s*true/);
+  });
+
+  test('Outputs for S3 bucket are present', () => {
+    expect(tfConfig).toMatch(/output\s+"bucket_name"/);
+    expect(tfConfig).toMatch(/output\s+"bucket_tags"/);
+  });
+
+  test('Tags are set for S3 bucket', () => {
+    expect(tfConfig).toMatch(/tags\s*=\s*{[\s\S]*?Project[\s\S]*?Environment[\s\S]*?ManagedBy[\s\S]*?}/);
+  });
+
+  // Additional tests for other .tf files
+  const tfFiles = [
+    'vpc.tf',
+    'kms.tf',
+    'iam.tf',
+    'security_groups.tf',
+    'lambda.tf',
+    'alerting.tf'
+  ];
+
+  tfFiles.forEach((file) => {
+    let config: string;
+    beforeAll(() => {
+      config = fs.readFileSync(path.join(__dirname, `../lib/${file}`), 'utf8');
     });
-    expect(vpc.vpcs['us-west-2']).toBeDefined();
-    expect(vpc.publicSubnets['us-west-2'].length).toBeGreaterThan(0);
-    expect(vpc.privateSubnets['us-west-2'].length).toBeGreaterThan(0);
-  });
 
-  test('SecurityConstruct creates security resources', () => {
-    const stack = new TapStack(app, 'SecurityTestStack');
-    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
-    const security = new SecurityConstruct(stack, 'SecurityTest', {
-      prefix: 'test',
-      vpc,
-    });
-    expect(security).toBeDefined();
-    // Optionally check for specific resources if exposed
-  });
+    if (file === 'vpc.tf') {
+      test('VPC resources are present and named correctly', () => {
+        expect(config).toMatch(/resource\s+"aws_vpc"\s+"primary"/);
+        expect(config).toMatch(/resource\s+"aws_vpc"\s+"secondary"/);
+        expect(config).toMatch(/\${var\.name_prefix}-\${var\.environment}-vpc-primary/);
+        expect(config).toMatch(/\${var\.name_prefix}-\${var\.environment}-vpc-secondary/);
+      });
+    }
 
-  test('ComputeConstruct creates compute resources', () => {
-    const stack = new TapStack(app, 'ComputeTestStack');
-    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
-    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
-    const compute = new ComputeConstruct(stack, 'ComputeTest', {
-      prefix: 'test',
-      vpc,
-      security,
-    });
-    expect(compute).toBeDefined();
-    // Optionally check for EC2/Lambda if exposed
-  });
+    if (file === 'kms.tf') {
+      test('KMS keys and aliases are present and named correctly', () => {
+        expect(config).toMatch(/resource\s+"aws_kms_key"\s+"primary"/);
+        expect(config).toMatch(/resource\s+"aws_kms_key"\s+"secondary"/);
+        expect(config).toMatch(/resource\s+"aws_kms_alias"\s+"primary"/);
+        expect(config).toMatch(/resource\s+"aws_kms_alias"\s+"secondary"/);
+        expect(config).toMatch(/\${var\.name_prefix}-\${var\.environment}-kms-key-primary/);
+        expect(config).toMatch(/\${var\.name_prefix}-\${var\.environment}-kms-key-secondary/);
+      });
+    }
 
-  test('DatabaseConstruct creates RDS resources', () => {
-    const stack = new TapStack(app, 'DatabaseTestStack');
-    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
-    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
-    const database = new DatabaseConstruct(stack, 'DatabaseTest', {
-      prefix: 'test',
-      vpc,
-      security,
-    });
-    expect(database).toBeDefined();
-    // Optionally check for RDS if exposed
-  });
+    if (file === 'iam.tf') {
+      test('IAM roles and policies are present and least-privilege', () => {
+        expect(config).toMatch(/resource\s+"aws_iam_role"\s+"lambda_role"/);
+        expect(config).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
+        expect(config).toMatch(/resource\s+"aws_iam_role_policy"\s+"lambda_policy"/);
+        expect(config).toMatch(/resource\s+"aws_iam_role_policy"\s+"ec2_policy"/);
+        expect(config).toMatch(/logs:CreateLogGroup/);
+        expect(config).toMatch(/kms:Encrypt/);
+      });
+    }
 
-  test('StorageConstruct creates S3 buckets', () => {
-    const stack = new TapStack(app, 'StorageTestStack');
-    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
-    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
-    const storage = new StorageConstruct(stack, 'StorageTest', {
-      prefix: 'test',
-      security,
-    });
-    expect(storage).toBeDefined();
-    // Optionally check for buckets if exposed
-  });
+    if (file === 'security_groups.tf') {
+      test('Security groups for public/private EC2 and Lambda are present', () => {
+        expect(config).toMatch(/resource\s+"aws_security_group"\s+"public_ec2_primary"/);
+        expect(config).toMatch(/resource\s+"aws_security_group"\s+"private_ec2_primary"/);
+        expect(config).toMatch(/resource\s+"aws_security_group"\s+"lambda_primary"/);
+        expect(config).toMatch(/from_port\s*=\s*22/); // SSH
+        expect(config).toMatch(/from_port\s*=\s*443/); // HTTPS
+      });
+    }
 
-  test('DynamoDbConstruct creates DynamoDB tables', () => {
-    const stack = new TapStack(app, 'DynamoDbTestStack');
-    const vpc = new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-2'] });
-    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc });
-    const dynamodb = new DynamoDbConstruct(stack, 'DynamoDbTest', {
-      prefix: 'test',
-      security,
-    });
-    expect(dynamodb).toBeDefined();
-    // Optionally check for tables if exposed
-  });
+    if (file === 'lambda.tf') {
+      test('Lambda function and log group resources are present and named correctly', () => {
+        expect(config).toMatch(/resource\s+"aws_lambda_function"\s+"primary"/);
+        expect(config).toMatch(/resource\s+"aws_lambda_function"\s+"secondary"/);
+        expect(config).toMatch(/handler\s*=\s*"lambda_function.lambda_handler"/);
+        expect(config).toMatch(/runtime\s*=\s*"python3.9"/);
+        expect(config).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"lambda_logs_primary"/);
+      });
+    }
 
-  test('Synthesized output contains expected resource names', () => {
-    const stack = new TapStack(app, 'OutputTestStack');
-    // Add constructs to stack with unique IDs
-  new VpcConstruct(stack, 'VpcTest', { prefix: 'test', regions: ['us-west-1'] });
-  const vpc2 = new VpcConstruct(stack, 'VpcTest2', { prefix: 'test2', regions: ['us-east-1', 'us-west-1'] });
-    const security = new SecurityConstruct(stack, 'SecurityTest', { prefix: 'test', vpc: vpc2 });
-    new StorageConstruct(stack, 'StorageTest', { prefix: 'test', security });
-    const synthesized = Testing.synth(stack);
-  expect(synthesized).toContain('test-vpc-us-west-1');
-  expect(synthesized).toContain('test-public-subnet-1-us-west-1');
-  expect(synthesized).toContain('test-private-subnet-1-us-west-1');
-  expect(synthesized).toContain('test-bucket-us-west-1');
-  expect(synthesized).toContain('test-s3-logs-us-west-1');
-  // Additional checks for multi-region and edge cases
-  expect(synthesized).toContain('test2-vpc-us-east-1');
-  expect(synthesized).toContain('test2-vpc-us-west-1');
-  expect(synthesized).toContain('test2-public-subnet-1-us-east-1');
-  expect(synthesized).toContain('test2-public-subnet-1-us-west-1');
-  expect(synthesized).toContain('test2-private-subnet-1-us-east-1');
-  expect(synthesized).toContain('test2-private-subnet-1-us-west-1');
-  });
-
-  test('VpcConstruct handles empty regions array gracefully', () => {
-    const stack = new TapStack(app, 'EmptyRegionStack');
-    const vpc = new VpcConstruct(stack, 'VpcEmpty', { prefix: 'empty', regions: [] });
-    expect(vpc.vpcs).toEqual({});
-    expect(vpc.publicSubnets).toEqual({});
-    expect(vpc.privateSubnets).toEqual({});
-  });
-
-  test('VpcConstruct throws error for missing prefix', () => {
-    const stack = new TapStack(app, 'MissingPrefixStack');
-    expect(() => {
-      // @ts-expect-error
-      new VpcConstruct(stack, 'VpcNoPrefix', { regions: ['us-west-2'] });
-    }).toThrow();
+    if (file === 'alerting.tf') {
+      test('CloudWatch metric filters and alarms for unauthorized access are present', () => {
+        expect(config).toMatch(/resource\s+"aws_cloudwatch_log_metric_filter"\s+"unauthorized_access_primary"/);
+        expect(config).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"unauthorized_access_alarm_primary"/);
+        expect(config).toMatch(/pattern\s*=\s*"Unauthorized\|AccessDenied\|UserNotAuthorized"/);
+        expect(config).toMatch(/alarm_description/);
+      });
+    }
   });
 });

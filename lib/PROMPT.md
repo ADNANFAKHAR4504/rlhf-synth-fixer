@@ -1,29 +1,28 @@
+This prompt outlines the requirements for generating a secure AWS infrastructure using Terraform HCL.
 
----
-You are an expert in Infrastructure as Code (IAC) using CDKTF. Your task is to generate a CDKTF configuration file for AWS that strictly adheres to the following security and architectural requirements. Do not modify or omit any of the provided constraints or data.
+Requirements:
+- Every AWS IAM role must have explicit policies attached, with permissions limited to the minimum necessary for each workload.
+- Sensitive data at rest must be encrypted with AWS KMS.
+- The architecture includes a VPC with both public and private subnets, spanning more than one AWS region.
+- All AWS Lambda functions must have logging enabled.
+- Public internet access should be restricted to only explicitly designated EC2 instances.
+- All resource names must start with the prefix `secure-env`.
+- The system must provide alerting for any unauthorized access attempts.
 
-**Constraints:**
-- All AWS IAM roles must have explicit policies attached.
-- Apply the least privilege principle to all permissions.
-- Encrypt all sensitive data at rest using AWS KMS.
-- Implement a VPC with both public and private subnets, spanning multiple AWS regions.
-- Enable logging for all AWS Lambda functions.
-- Restrict public internet access to only specific EC2 instances.
-- Prefix all resource names with 'secure-env'.
-- Implement alerts for any unauthorized access attempts.
+Environment:
+Design an AWS environment using Terraform HCL that prioritizes security and uses Terraform modules and resources appropriately. The solution should:
+1. Apply least-privilege, explicit policies to all IAM roles.
+2. Use AWS KMS for all encryption at rest.
+3. Define a VPC with public and private subnets in multiple regions.
+4. Enable logging on every Lambda function.
+5. Ensure only specific EC2 instances have public internet access.
+6. Prefix all resource names with `secure-env`.
+7. Include alerting for unauthorized access attempts.
 
-**Environment:**
-Design a highly secure AWS infrastructure using CDKTF, leveraging its modules and resource types. The solution must:
-1. Attach explicit, least-privilege policies to all IAM roles.
-2. Use AWS KMS for encryption of all sensitive data at rest.
-3. Create a VPC with public and private subnets in multiple regions.
-4. Enable detailed logging for all Lambda functions.
-5. Restrict public internet access to designated EC2 instances only.
-6. Prefix all resource names with 'secure-env'.
-7. Set up alerts for unauthorized access attempts.
+Deliverable:
+Produce a complete, functional Terraform HCL configuration file that satisfies all requirements above. The configuration must validate successfully and be ready for use. Include verification steps or test code confirming correct implementation of IAM roles, encryption, VPC setup, logging, and access controls.
 
-**Expected Output:**
-Submit a CDKTF configuration file that implements all requirements above. The configuration must be functional, pass CDKTF validation, and include tests confirming correct implementation of IAM roles, encryption, VPC setup, logging, and access controls.
-
-**Proposed Statement:**
-You are tasked with setting up a secure and robust AWS infrastructure using CDKTF. The environment spans multiple regions, includes public/private subnet configurations, and must strictly follow organizational security best practices. Resource naming, logging, and monitoring are mandatory.
+Instructions:
+- Do not modify or omit any requirements.
+- Use Terraform idioms and recommended security practices.
+- Resource naming and security controls must be consistent throughout.
