@@ -805,7 +805,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRolePolicy
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
 
   ConfigBucket:
     Type: AWS::S3::Bucket
