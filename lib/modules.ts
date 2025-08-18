@@ -59,7 +59,7 @@ export class VpcModule extends Construct {
       zones.names,
       0,
       config.azCount || 2
-    ).toStringArray();
+    ) as unknown as string[];
 
     this.vpc = new Vpc(this, 'vpc', {
       cidrBlock: config.cidrBlock,
