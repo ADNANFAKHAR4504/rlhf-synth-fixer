@@ -1,3 +1,4 @@
+// module
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -7,7 +8,6 @@ import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
@@ -44,7 +44,6 @@ export class VpcModule extends Construct {
 
   constructor(scope: Construct, id: string, props: VpcModuleProps) {
     super(scope, id);
-    // ... (rest of the VpcModule code is the same) ...
     const azs = new DataAwsAvailabilityZones(this, 'available-azs');
     const numberOfAzs = 2;
     this.cidrBlockOutput = props.cidrBlock;
@@ -141,7 +140,6 @@ export interface S3ModuleProps {
 export class S3Module extends Construct {
   constructor(scope: Construct, id: string, props: S3ModuleProps) {
     super(scope, id);
-    // ... (rest of the S3Module code is the same) ...
     const logBucket = new S3Bucket(this, 'log-bucket', {
       bucket: props.logBucketName,
       acl: 'log-delivery-write',
@@ -192,7 +190,7 @@ export class S3Module extends Construct {
   }
 }
 
-// RDS Module (No Changes)
+// RDS Module (Modified)
 export interface RdsModuleProps {
   name: string;
   engine: string;
@@ -203,8 +201,8 @@ export interface RdsModuleProps {
   allocatedStorage: number;
   vpcId: string;
   privateSubnetIds: string[];
-  dbSgIngressCidrBlock: string;
-  albSecurityGroupId: string;
+  // NEW: Accept the security group ID created in the main stack.
+  dbSecurityGroupId: string;
 }
 
 export class RdsModule extends Construct {
@@ -213,35 +211,11 @@ export class RdsModule extends Construct {
 
   constructor(scope: Construct, id: string, props: RdsModuleProps) {
     super(scope, id);
-    // ... (rest of the RdsModule code is the same) ...
+    // This module no longer creates its own security group.
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       name: props.name,
       subnetIds: props.privateSubnetIds,
       tags: { Name: `${props.name}-db-subnet-group` },
-    });
-
-    const dbSecurityGroup = new SecurityGroup(this, 'db-sg', {
-      name: `${props.name}-db-sg`,
-      vpcId: props.vpcId,
-      description: 'Allow database access from internal resources',
-      tags: { Name: `${props.name}-db-sg` },
-      ingress: [
-        {
-          fromPort: 5432,
-          toPort: 5432,
-          protocol: 'tcp',
-          securityGroups: [props.albSecurityGroupId],
-          description: 'Allow traffic from ALB',
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
     });
 
     const dbInstance = new DbInstance(this, 'db-instance', {
@@ -253,7 +227,8 @@ export class RdsModule extends Construct {
       username: props.username,
       password: props.password || 'please-change-me',
       dbSubnetGroupName: dbSubnetGroup.name,
-      vpcSecurityGroupIds: [dbSecurityGroup.id],
+      // Use the security group ID passed in from the main stack.
+      vpcSecurityGroupIds: [props.dbSecurityGroupId],
       skipFinalSnapshot: true,
       publiclyAccessible: false,
       tags: { Name: props.name },
@@ -264,7 +239,7 @@ export class RdsModule extends Construct {
   }
 }
 
-// EC2 Module (Modified)
+// EC2 Module (No Changes)
 export interface Ec2ModuleProps {
   name: string;
   vpcId: string;
@@ -273,7 +248,6 @@ export interface Ec2ModuleProps {
   ami: string;
   keyName: string;
   instanceProfileName: string;
-  // This prop is required to attach the instance to a security group
   ec2SecurityGroupId: string;
 }
 
@@ -283,9 +257,6 @@ export class Ec2Module extends Construct {
 
   constructor(scope: Construct, id: string, props: Ec2ModuleProps) {
     super(scope, id);
-
-    // This module no longer creates its own Security Group.
-    // It now accepts the ID of the security group to use.
     const ec2Instance = new Ec2Instance(this, 'ec2-instance', {
       ami: props.ami,
       instanceType: props.instanceType,
@@ -320,13 +291,12 @@ export class Ec2Module extends Construct {
   }
 }
 
-// ALB Module (Modified)
+// ALB Module (No Changes)
 export interface AlbModuleProps {
   name: string;
   vpcId: string;
   publicSubnetIds: string[];
   targetGroupArn: string;
-  // This prop is required to attach the ALB to a security group
   albSecurityGroupId: string;
 }
 
@@ -337,9 +307,6 @@ export class AlbModule extends Construct {
 
   constructor(scope: Construct, id: string, props: AlbModuleProps) {
     super(scope, id);
-
-    // This module no longer creates its own Security Group.
-    // It now accepts the ID of the security group to use.
     const alb = new Alb(this, 'main-alb', {
       name: props.name,
       internal: false,
@@ -364,7 +331,7 @@ export class AlbModule extends Construct {
 
     this.albDnsNameOutput = alb.dnsName;
     this.albZoneIdOutput = alb.zoneId;
-    this.albSecurityGroupIdOutput = props.albSecurityGroupId; // Expose the ID passed in
+    this.albSecurityGroupIdOutput = props.albSecurityGroupId;
   }
 }
 
@@ -379,7 +346,6 @@ export interface Route53ModuleProps {
 export class Route53Module extends Construct {
   constructor(scope: Construct, id: string, props: Route53ModuleProps) {
     super(scope, id);
-    // ... (rest of the Route53Module code is the same) ...
     const zone = new DataAwsRoute53Zone(this, 'main-zone', {
       name: `${props.zoneName}.`,
     });
@@ -406,7 +372,6 @@ export interface CloudwatchModuleProps {
 export class CloudwatchModule extends Construct {
   constructor(scope: Construct, id: string, props: CloudwatchModuleProps) {
     super(scope, id);
-    // ... (rest of the CloudwatchModule code is the same) ...
     new CloudwatchMetricAlarm(this, 'ec2-cpu-alarm', {
       alarmName: `${id}-ec2-cpu-high`,
       comparisonOperator: 'GreaterThanOrEqualToThreshold',
@@ -449,7 +414,6 @@ export class IamModule extends Construct {
 
   constructor(scope: Construct, id: string, props: IamModuleProps) {
     super(scope, id);
-    // ... (rest of the IamModule code is the same) ...
     const ec2Role = new IamRole(this, 'ec2-role', {
       name: props.name,
       assumeRolePolicy: JSON.stringify({

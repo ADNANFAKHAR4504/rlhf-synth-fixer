@@ -1,4 +1,3 @@
-//tapstack
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -87,31 +86,13 @@ export class TapStack extends TerraformStack {
       name: namingConvention('ec2-iam-role'),
     });
 
-    // FIX: Break the circular dependency by creating the security groups here.
     // We create the security groups first so their IDs can be passed to the modules.
+    // They are created with no rules to avoid circular dependencies.
     const ec2SecurityGroup = new SecurityGroup(this, 'ec2-sg-main', {
       name: namingConvention('ec2-sg'),
       vpcId: vpc.vpcIdOutput,
       description: 'Security group for EC2 instances',
       tags: { Name: namingConvention('ec2-sg') },
-      ingress: [
-        {
-          fromPort: 22,
-          toPort: 22,
-          protocol: 'tcp',
-          cidrBlocks: [myIp],
-          description: 'Allow SSH from a specific IP',
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow all outbound traffic',
-        },
-      ],
     });
 
     const albSecurityGroup = new SecurityGroup(this, 'alb-sg-main', {
@@ -119,20 +100,37 @@ export class TapStack extends TerraformStack {
       vpcId: vpc.vpcIdOutput,
       description: 'Security group for the Application Load Balancer',
       tags: { Name: namingConvention('alb-sg') },
-      ingress: [
-        {
-          fromPort: 80,
-          toPort: 80,
-          protocol: 'tcp',
-          cidrBlocks: [myIp],
-          description: 'Allow HTTP traffic from the internet',
-        },
-      ],
-      // REMOVED EGRESS: Egress rule is now a separate resource to break circular dependency.
     });
 
-    // Now that the security groups are created, we can add the ingress/egress rules that depend on them.
-    // Ingress rule for EC2 from ALB
+    const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg-main', {
+      name: namingConvention('rds-sg'),
+      vpcId: vpc.vpcIdOutput,
+      description: 'Security group for the RDS database',
+      tags: { Name: namingConvention('rds-sg') },
+    });
+
+    // Define all ingress and egress rules as separate resources to avoid dependency loops.
+    // Ingress rules
+    new SecurityGroupRule(this, 'ec2-ingress-ssh', {
+      type: 'ingress',
+      fromPort: 22,
+      toPort: 22,
+      protocol: 'tcp',
+      securityGroupId: ec2SecurityGroup.id,
+      cidrBlocks: [myIp],
+      description: 'Allow SSH from a specific IP',
+    });
+
+    new SecurityGroupRule(this, 'alb-ingress-http', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      securityGroupId: albSecurityGroup.id,
+      cidrBlocks: ['0.0.0.0/0'],
+      description: 'Allow HTTP traffic from the internet',
+    });
+
     new SecurityGroupRule(this, 'ec2-ingress-from-alb', {
       type: 'ingress',
       fromPort: 80,
@@ -143,7 +141,27 @@ export class TapStack extends TerraformStack {
       description: 'Allow HTTP traffic from ALB',
     });
 
-    // Egress rule for ALB to EC2
+    new SecurityGroupRule(this, 'rds-ingress-from-alb', {
+      type: 'ingress',
+      fromPort: 5432,
+      toPort: 5432,
+      protocol: 'tcp',
+      securityGroupId: rdsSecurityGroup.id,
+      sourceSecurityGroupId: albSecurityGroup.id,
+      description: 'Allow inbound database traffic from ALB',
+    });
+
+    // Egress rules (outbound traffic)
+    new SecurityGroupRule(this, 'ec2-egress-all', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      securityGroupId: ec2SecurityGroup.id,
+      cidrBlocks: ['0.0.0.0/0'],
+      description: 'Allow all outbound traffic',
+    });
+
     new SecurityGroupRule(this, 'alb-egress-to-ec2', {
       type: 'egress',
       fromPort: 80,
@@ -154,8 +172,27 @@ export class TapStack extends TerraformStack {
       description: 'Allow outbound traffic to EC2 instances',
     });
 
+    new SecurityGroupRule(this, 'alb-egress-to-rds', {
+      type: 'egress',
+      fromPort: 5432,
+      toPort: 5432,
+      protocol: 'tcp',
+      securityGroupId: albSecurityGroup.id,
+      sourceSecurityGroupId: rdsSecurityGroup.id,
+      description: 'Allow outbound traffic to RDS',
+    });
+
+    new SecurityGroupRule(this, 'rds-egress-all', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      securityGroupId: rdsSecurityGroup.id,
+      cidrBlocks: ['0.0.0.0/0'],
+      description: 'Allow all outbound traffic',
+    });
+
     // 4. Provision a highly available EC2 instance.
-    // FIX: Pass the security group ID that was created above.
     const ec2 = new Ec2Module(this, namingConvention('ec2'), {
       name: namingConvention('ec2'),
       vpcId: vpc.vpcIdOutput,
@@ -164,17 +201,16 @@ export class TapStack extends TerraformStack {
       ami: 'ami-084a7d336e816906b',
       keyName: sshKeyName,
       instanceProfileName: iam.instanceProfileName,
-      ec2SecurityGroupId: ec2SecurityGroup.id, // Correct property name
+      ec2SecurityGroupId: ec2SecurityGroup.id,
     });
 
     // 5. Deploy an Application Load Balancer.
-    // FIX: Pass the security group ID that was created above.
     const alb = new AlbModule(this, namingConvention('alb'), {
       name: namingConvention('alb'),
       vpcId: vpc.vpcIdOutput,
       publicSubnetIds: vpc.publicSubnetIdsOutput,
       targetGroupArn: ec2.targetGroupArnOutput,
-      albSecurityGroupId: albSecurityGroup.id, // Correct property name
+      albSecurityGroupId: albSecurityGroup.id,
     });
 
     // 6. Set up a secure RDS PostgreSQL database in the private subnets.
@@ -187,8 +223,7 @@ export class TapStack extends TerraformStack {
       allocatedStorage: 20,
       vpcId: vpc.vpcIdOutput,
       privateSubnetIds: vpc.privateSubnetIdsOutput,
-      dbSgIngressCidrBlock: vpc.cidrBlockOutput,
-      albSecurityGroupId: alb.albSecurityGroupIdOutput,
+      dbSecurityGroupId: rdsSecurityGroup.id,
     });
 
     // 7. Configure Route 53 DNS record for the ALB.
