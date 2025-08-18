@@ -326,13 +326,9 @@ data "aws_kms_key" "main" {
 resource "aws_s3_bucket" "data" {
   bucket = "${lower(var.project_name)}-data-${random_string.bucket_suffix.result}"
   force_destroy = true
-  "versioning": [
-              {
-                "enabled": true,
-                "mfa_delete": false
-              }   
-
-  ]
+  versioning {
+    enabled = true
+  }
   tags = {
     Name = "${var.project_name}-data-bucket"
     Type = "Data"
@@ -343,13 +339,9 @@ resource "aws_s3_bucket" "data" {
 resource "aws_s3_bucket" "logs" {
   bucket = "${lower(var.project_name)}-logs-${random_string.bucket_suffix.result}"
   force_destroy = true
- "versioning": [
-              {
-                "enabled": true,
-                "mfa_delete": false
-              }   
-
-  ]
+  versioning {
+    enabled = true
+  }
   tags = {
     Name = "${var.project_name}-logs-bucket"
     Type = "Logs"
