@@ -10,6 +10,7 @@ import {
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
   DescribeNatGatewaysCommand
@@ -89,8 +90,20 @@ describe('Secure Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+
+      // Check DNS hostnames attribute
+      const dnsHostnamesResponse = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsHostnames'
+      }));
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+      // Check DNS support attribute
+      const dnsSupportResponse = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsSupport'
+      }));
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('Subnets should be properly configured', async () => {
