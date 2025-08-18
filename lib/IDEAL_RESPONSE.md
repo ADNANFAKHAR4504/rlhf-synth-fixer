@@ -412,7 +412,6 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -434,8 +433,8 @@ Resources:
                   - 's3:DeleteObject'
                   - 's3:ListBucket'
                 Resource:
-                  - !Sub 'arn:aws:s3:::${AWS::StackName}-assets-${AWS::AccountId}-${Environment}'
-                  - !Sub 'arn:aws:s3:::${AWS::StackName}-assets-${AWS::AccountId}-${Environment}/*'
+                  - !Sub 'arn:aws:s3:::tapstack-assets-${AWS::AccountId}-${Environment}'
+                  - !Sub 'arn:aws:s3:::tapstack-assets-${AWS::AccountId}-${Environment}/*'
         - PolicyName: DynamoDBAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -458,7 +457,6 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${AWS::StackName}-EC2Profile'
       Roles:
         - !Ref EC2InstanceRole
 
@@ -491,7 +489,7 @@ Resources:
   ApplicationS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-assets-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'tapstack-assets-${AWS::AccountId}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -746,7 +744,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'tapstack-cloudtrail-${AWS::AccountId}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

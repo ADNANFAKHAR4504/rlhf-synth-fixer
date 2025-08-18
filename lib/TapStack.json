@@ -786,9 +786,6 @@
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2Role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -820,10 +817,10 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-assets-${AWS::AccountId}-${Environment}"
+                                            "Fn::Sub": "arn:aws:s3:::tapstack-assets-${AWS::AccountId}-${Environment}"
                                         },
                                         {
-                                            "Fn::Sub": "arn:aws:s3:::${AWS::StackName}-assets-${AWS::AccountId}-${Environment}/*"
+                                            "Fn::Sub": "arn:aws:s3:::tapstack-assets-${AWS::AccountId}-${Environment}/*"
                                         }
                                     ]
                                 }
@@ -875,9 +872,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2Profile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2InstanceRole"
