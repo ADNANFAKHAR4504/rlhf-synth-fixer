@@ -142,7 +142,7 @@ async function validateS3BucketComprehensive(bucketName: string) {
 
   // Validate tags
   const tagging = await s3.getBucketTagging({ Bucket: bucketName }).promise();
-  const envTag = tagging.TagSet?.find(tag => tag.Key === 'Environment');
+  const envTag = tagging.TagSet?.find((tag: any) => tag.Key === 'Environment');
   expect(envTag?.Value).toBe('Production');
 }
 
@@ -180,7 +180,7 @@ async function validateAlbComprehensive(albDns: string) {
 
   expect(alb.Scheme).toBe('internet-facing');
   expect(alb.Type).toBe('application');
-  expect(alb.State.Code).toBe('active');
+  expect(alb.State?.Code).toBe('active');
 
   // Validate listeners
   const listeners = await elbv2
@@ -190,13 +190,13 @@ async function validateAlbComprehensive(albDns: string) {
 
   // Check for HTTP listener
   const httpListener = listeners.Listeners?.find(
-    listener => listener.Port === 80
+    (listener: any) => listener.Port === 80
   );
   expect(httpListener).toBeDefined();
 
   // Check for HTTPS listener if certificate is provided
   const httpsListener = listeners.Listeners?.find(
-    listener => listener.Port === 443
+    (listener: any) => listener.Port === 443
   );
   if (outputs.CertificateArn) {
     expect(httpsListener).toBeDefined();
@@ -206,7 +206,7 @@ async function validateAlbComprehensive(albDns: string) {
   // Validate target groups
   const targetGroups = await elbv2.describeTargetGroups({}).promise();
   const prodTargetGroup = targetGroups.TargetGroups?.find(
-    tg => tg.TargetGroupName === 'prod-tg'
+    (tg: any) => tg.TargetGroupName === 'prod-tg'
   );
   expect(prodTargetGroup).toBeDefined();
   expect(prodTargetGroup?.Port).toBe(80);
@@ -265,7 +265,7 @@ async function validateIamRoleComprehensive(
     .promise();
   if (expectedPolicies) {
     const policyNames =
-      attachedPolicies.AttachedPolicies?.map(p => p.PolicyName) || [];
+      attachedPolicies.AttachedPolicies?.map((p: any) => p.PolicyName) || [];
     expectedPolicies.forEach(policy => {
       expect(policyNames).toContain(policy);
     });
@@ -276,6 +276,14 @@ async function validateIamRoleComprehensive(
     .listRolePolicies({ RoleName: roleName })
     .promise();
   expect(inlinePolicies.PolicyNames).toBeDefined();
+}
+
+async function validateInstanceProfile(profileName: string) {
+  const res = await iam
+    .getInstanceProfile({ InstanceProfileName: profileName })
+    .promise();
+  if (!res.InstanceProfile) throw new Error('Instance profile not found');
+  expect(res.InstanceProfile.InstanceProfileName).toBe(profileName);
 }
 
 async function validateAsgComprehensive(asgName: string) {
@@ -303,7 +311,7 @@ async function validateAsgComprehensive(asgName: string) {
   expect(subnetIds.length).toBeGreaterThan(0);
 
   // Validate tags
-  const nameTag = asg.Tags?.find(tag => tag.Key === 'Name');
+  const nameTag = asg.Tags?.find((tag: any) => tag.Key === 'Name');
   expect(nameTag?.Value).toBe('prod-asg');
   expect(nameTag?.PropagateAtLaunch).toBe(true);
 }
@@ -341,22 +349,22 @@ async function validateConfigRecorderComprehensive(name: string) {
     throw new Error('Config recorder not found');
 
   const recorder = res.ConfigurationRecorders[0];
-  expect(recorder.Name).toBe(name);
-  expect(recorder.RoleARN).toBeDefined();
-  expect(recorder.RecordingGroup?.AllSupported).toBe(true);
-  expect(recorder.RecordingGroup?.IncludeGlobalResourceTypes).toBe(true);
+  expect(recorder.name).toBe(name);
+  expect(recorder.roleARN).toBeDefined();
+  expect(recorder.recordingGroup?.allSupported).toBe(true);
+  expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
 
   // Validate delivery channel
   const deliveryChannels = await configservice
     .describeDeliveryChannels({})
     .promise();
   const deliveryChannel = deliveryChannels.DeliveryChannels?.find(
-    dc => dc.Name === 'prod-config-delivery'
+    (dc: any) => dc.name === 'prod-config-delivery'
   );
   expect(deliveryChannel).toBeDefined();
-  expect(deliveryChannel?.S3BucketName).toBeDefined();
+  expect(deliveryChannel?.s3BucketName).toBeDefined();
   expect(
-    deliveryChannel?.ConfigSnapshotDeliveryProperties?.DeliveryFrequency
+    deliveryChannel?.configSnapshotDeliveryProperties?.deliveryFrequency
   ).toBe('TwentyFour_Hours');
 }
 
@@ -375,7 +383,7 @@ async function validateNatGatewayComprehensive(natGatewayId: string) {
   expect(nat.NatGatewayAddresses?.length).toBeGreaterThan(0);
 
   // Validate tags
-  const nameTag = nat.Tags?.find(tag => tag.Key === 'Name');
+  const nameTag = nat.Tags?.find((tag: any) => tag.Key === 'Name');
   expect(nameTag?.Value).toMatch(/prod-nat-gw/);
 }
 
@@ -398,13 +406,15 @@ async function validateRouteTableComprehensive(
   if (isPublic) {
     // Public route table should have internet gateway route
     const igwRoute = routes.find(
-      route => route.GatewayId && route.DestinationCidrBlock === '0.0.0.0/0'
+      (route: any) =>
+        route.GatewayId && route.DestinationCidrBlock === '0.0.0.0/0'
     );
     expect(igwRoute).toBeDefined();
   } else {
     // Private route table should have NAT gateway route
     const natRoute = routes.find(
-      route => route.NatGatewayId && route.DestinationCidrBlock === '0.0.0.0/0'
+      (route: any) =>
+        route.NatGatewayId && route.DestinationCidrBlock === '0.0.0.0/0'
     );
     expect(natRoute).toBeDefined();
   }
@@ -455,7 +465,7 @@ async function validateNetworkConnectivity() {
         expect(routeTable).toBeDefined();
 
         const natRoute = routeTable?.Routes?.find(
-          route =>
+          (route: any) =>
             route.NatGatewayId && route.DestinationCidrBlock === '0.0.0.0/0'
         );
         expect(natRoute).toBeDefined();
@@ -475,7 +485,9 @@ async function validateSecurityCompliance() {
 
   // Check that AWS Config is recording
   if (outputs.ConfigRecorderName) {
-    const status = await configservice.getStatus({}).promise();
+    const status = await configservice
+      .describeConfigurationRecorderStatus({})
+      .promise();
     expect(status.ConfigurationRecordersStatus?.length).toBeGreaterThan(0);
   }
 
@@ -488,11 +500,365 @@ async function validateSecurityCompliance() {
   }
 }
 
+async function validateIamLeastPrivilege(roleName: string) {
+  const res = await iam.getRole({ RoleName: roleName }).promise();
+  if (!res.Role) throw new Error('IAM Role not found');
+
+  const role = res.Role;
+
+  // Validate assume role policy is restrictive
+  const assumeRolePolicy = JSON.parse(role.AssumeRolePolicyDocument || '{}');
+  expect(assumeRolePolicy.Statement).toBeDefined();
+
+  // Check that assume role policy only allows specific services
+  const statements = assumeRolePolicy.Statement || [];
+  statements.forEach((stmt: any) => {
+    expect(stmt.Effect).toBe('Allow');
+    expect(stmt.Principal?.Service).toBeDefined();
+    // Should only allow specific AWS services, not wildcard
+    expect(stmt.Principal?.Service).not.toBe('*');
+  });
+
+  // Validate attached policies are minimal and specific
+  const attachedPolicies = await iam
+    .listAttachedRolePolicies({ RoleName: roleName })
+    .promise();
+  const policyNames =
+    attachedPolicies.AttachedPolicies?.map((p: any) => p.PolicyName) || [];
+
+  // Check for overly permissive policies
+  const overlyPermissivePolicies = [
+    'AdministratorAccess',
+    'PowerUserAccess',
+    'FullAccess',
+  ];
+  overlyPermissivePolicies.forEach(policy => {
+    expect(policyNames).not.toContain(policy);
+  });
+
+  // Validate inline policies don't have wildcard permissions
+  const inlinePolicies = await iam
+    .listRolePolicies({ RoleName: roleName })
+    .promise();
+  for (const policyName of inlinePolicies.PolicyNames || []) {
+    const policy = await iam
+      .getRolePolicy({ RoleName: roleName, PolicyName: policyName })
+      .promise();
+    const policyDoc = JSON.parse(policy.PolicyDocument || '{}');
+
+    policyDoc.Statement?.forEach((stmt: any) => {
+      // Check for overly permissive actions
+      if (stmt.Action) {
+        const actions = Array.isArray(stmt.Action)
+          ? stmt.Action
+          : [stmt.Action];
+        actions.forEach((action: string) => {
+          expect(action).not.toBe('*');
+          expect(action).not.toMatch(/^[a-z-]+:\*$/); // No service:* patterns
+        });
+      }
+
+      // Check for overly permissive resources
+      if (stmt.Resource) {
+        const resources = Array.isArray(stmt.Resource)
+          ? stmt.Resource
+          : [stmt.Resource];
+        resources.forEach((resource: string) => {
+          expect(resource).not.toBe('*');
+        });
+      }
+    });
+  }
+}
+
+async function validateCloudTrailMultiRegionAndEncryption(
+  trailName: string,
+  bucketName: string,
+  kmsKeyId: string
+) {
+  const res = await cloudtrail
+    .describeTrails({ trailNameList: [trailName] })
+    .promise();
+  if (!res.trailList || res.trailList.length === 0)
+    throw new Error('CloudTrail not found');
+
+  const trail = res.trailList[0];
+
+  // Validate multi-region configuration
+  expect(trail.IsMultiRegionTrail).toBe(true);
+  expect(trail.IncludeGlobalServiceEvents).toBe(true);
+
+  // Validate encryption configuration
+  expect(trail.KmsKeyId).toBe(kmsKeyId);
+  expect(trail.LogFileValidationEnabled).toBe(true);
+
+  // Validate S3 bucket configuration
+  expect(trail.S3BucketName).toBe(bucketName);
+
+  // Validate trail status and logging
+  const status = await cloudtrail.getTrailStatus({ Name: trailName }).promise();
+  expect(status.IsLogging).toBe(true);
+
+  // Validate event selectors for comprehensive logging
+  const eventSelectors = await cloudtrail
+    .getEventSelectors({ TrailName: trailName })
+    .promise();
+  expect(eventSelectors.EventSelectors?.length).toBeGreaterThan(0);
+
+  // Check that all management events are logged
+  const managementEvents = eventSelectors.EventSelectors?.find(
+    (selector: any) =>
+      selector.ReadWriteType === 'All' || selector.ReadWriteType === 'WriteOnly'
+  );
+  expect(managementEvents).toBeDefined();
+}
+
+async function validateVpcIsolation(vpcId: string) {
+  const res = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
+  if (!res.Vpcs || res.Vpcs.length === 0) throw new Error('VPC not found');
+
+  const vpc = res.Vpcs[0];
+
+  // Validate VPC CIDR is private
+  const cidr = vpc.CidrBlock;
+  expect(cidr).toMatch(/^10\.|^172\.(1[6-9]|2[0-9]|3[01])\.|^192\.168\./);
+
+  // Validate DNS settings for isolation
+  expect(vpc.EnableDnsSupport).toBe(true);
+  expect(vpc.EnableDnsHostnames).toBe(true);
+
+  // Validate no default VPC (should be custom)
+  expect(vpc.IsDefault).toBe(false);
+
+  // Validate security groups have restrictive rules
+  const securityGroups = await ec2
+    .describeSecurityGroups({
+      Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+    })
+    .promise();
+
+  securityGroups.SecurityGroups?.forEach((sg: any) => {
+    // Check ingress rules are not overly permissive
+    sg.IpPermissions?.forEach((rule: any) => {
+      if (rule.IpRanges) {
+        rule.IpRanges.forEach((ipRange: any) => {
+          // Should not allow 0.0.0.0/0 for all ports except specific ones
+          if (ipRange.CidrIp === '0.0.0.0/0') {
+            expect(rule.FromPort).toBeDefined();
+            expect(rule.ToPort).toBeDefined();
+            // Only allow specific ports like 22, 80, 443
+            const allowedPorts = [22, 80, 443];
+            expect(allowedPorts).toContain(rule.FromPort);
+          }
+        });
+      }
+    });
+  });
+}
+
+async function validateAutoScalingMinimumCapacity(asgName: string) {
+  const res = await autoscaling
+    .describeAutoScalingGroups({ AutoScalingGroupNames: [asgName] })
+    .promise();
+  if (!res.AutoScalingGroups || res.AutoScalingGroups.length === 0)
+    throw new Error('ASG not found');
+
+  const asg = res.AutoScalingGroups[0];
+
+  // Validate minimum capacity requirements
+  expect(asg.MinSize).toBeGreaterThanOrEqual(2);
+  expect(asg.MaxSize).toBeGreaterThan(asg.MinSize);
+  expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(asg.MinSize);
+  expect(asg.DesiredCapacity).toBeLessThanOrEqual(asg.MaxSize);
+
+  // Validate instances are in service
+  const inServiceInstances = asg.Instances?.filter(
+    (instance: any) => instance.LifecycleState === 'InService'
+  );
+  expect(inServiceInstances?.length).toBeGreaterThanOrEqual(asg.MinSize);
+
+  // Validate health check configuration
+  expect(asg.HealthCheckType).toBeDefined();
+  expect(asg.HealthCheckGracePeriod).toBeDefined();
+
+  // Validate launch template configuration
+  expect(asg.LaunchTemplate).toBeDefined();
+  expect(asg.LaunchTemplate?.LaunchTemplateId).toBeDefined();
+}
+
+async function validateResourceTaggingCompliance() {
+  // Validate VPC tagging
+  if (outputs.VPCId && outputs.VPCId !== 'AWS::NoValue') {
+    const vpcRes = await ec2
+      .describeVpcs({ VpcIds: [outputs.VPCId] })
+      .promise();
+    const vpc = vpcRes.Vpcs?.[0];
+    if (vpc) {
+      const requiredTags = ['Name', 'Environment', 'Project'];
+      requiredTags.forEach(tagKey => {
+        const tag = vpc.Tags?.find((t: any) => t.Key === tagKey);
+        expect(tag).toBeDefined();
+        expect(tag?.Value).toBeTruthy();
+      });
+    }
+  }
+
+  // Validate Security Group tagging
+  if (
+    outputs.ProdSecurityGroupId &&
+    outputs.ProdSecurityGroupId !== 'AWS::NoValue'
+  ) {
+    const sgRes = await ec2
+      .describeSecurityGroups({ GroupIds: [outputs.ProdSecurityGroupId] })
+      .promise();
+    const sg = sgRes.SecurityGroups?.[0];
+    if (sg) {
+      const requiredTags = ['Name', 'Environment', 'Project'];
+      requiredTags.forEach(tagKey => {
+        const tag = sg.Tags?.find((t: any) => t.Key === tagKey);
+        expect(tag).toBeDefined();
+        expect(tag?.Value).toBeTruthy();
+      });
+    }
+  }
+
+  // Validate S3 Bucket tagging
+  if (
+    outputs.ProdTrailBucketName &&
+    outputs.ProdTrailBucketName !== 'AWS::NoValue'
+  ) {
+    const tagging = await s3
+      .getBucketTagging({ Bucket: outputs.ProdTrailBucketName })
+      .promise();
+    const requiredTags = ['Name', 'Environment', 'Project'];
+    requiredTags.forEach(tagKey => {
+      const tag = tagging.TagSet?.find((t: any) => t.Key === tagKey);
+      expect(tag).toBeDefined();
+      expect(tag?.Value).toBeTruthy();
+    });
+  }
+
+  // Validate IAM Role tagging
+  if (outputs.EC2RoleName && outputs.EC2RoleName !== 'AWS::NoValue') {
+    const roleRes = await iam
+      .getRole({ RoleName: outputs.EC2RoleName })
+      .promise();
+    const role = roleRes.Role;
+    if (role?.Tags) {
+      const requiredTags = ['Environment', 'Project'];
+      requiredTags.forEach(tagKey => {
+        const tag = role.Tags.find((t: any) => t.Key === tagKey);
+        expect(tag).toBeDefined();
+        expect(tag?.Value).toBeTruthy();
+      });
+    }
+  }
+}
+
+async function validateNamingConventionCompliance() {
+  // Validate VPC naming convention
+  if (outputs.VPCId && outputs.VPCId !== 'AWS::NoValue') {
+    const vpcRes = await ec2
+      .describeVpcs({ VpcIds: [outputs.VPCId] })
+      .promise();
+    const vpc = vpcRes.Vpcs?.[0];
+    if (vpc) {
+      const nameTag = vpc.Tags?.find((t: any) => t.Key === 'Name');
+      expect(nameTag?.Value).toMatch(/^prod-vpc$/);
+    }
+  }
+
+  // Validate Security Group naming convention
+  if (
+    outputs.ProdSecurityGroupId &&
+    outputs.ProdSecurityGroupId !== 'AWS::NoValue'
+  ) {
+    const sgRes = await ec2
+      .describeSecurityGroups({ GroupIds: [outputs.ProdSecurityGroupId] })
+      .promise();
+    const sg = sgRes.SecurityGroups?.[0];
+    if (sg) {
+      const nameTag = sg.Tags?.find((t: any) => t.Key === 'Name');
+      expect(nameTag?.Value).toMatch(/^prod-sg$/);
+    }
+  }
+
+  // Validate Subnet naming conventions
+  if (outputs.PublicSubnets && outputs.PublicSubnets !== 'AWS::NoValue') {
+    const publicSubnets = outputs.PublicSubnets.split(',');
+    for (const subnetId of publicSubnets) {
+      const subnetRes = await ec2
+        .describeSubnets({ SubnetIds: [subnetId] })
+        .promise();
+      const subnet = subnetRes.Subnets?.[0];
+      if (subnet) {
+        const nameTag = subnet.Tags?.find((t: any) => t.Key === 'Name');
+        expect(nameTag?.Value).toMatch(/^prod-public-subnet-[a-z]$/);
+      }
+    }
+  }
+
+  if (outputs.PrivateSubnets && outputs.PrivateSubnets !== 'AWS::NoValue') {
+    const privateSubnets = outputs.PrivateSubnets.split(',');
+    for (const subnetId of privateSubnets) {
+      const subnetRes = await ec2
+        .describeSubnets({ SubnetIds: [subnetId] })
+        .promise();
+      const subnet = subnetRes.Subnets?.[0];
+      if (subnet) {
+        const nameTag = subnet.Tags?.find((t: any) => t.Key === 'Name');
+        expect(nameTag?.Value).toMatch(/^prod-private-subnet-[a-z]$/);
+      }
+    }
+  }
+
+  // Validate IAM Role naming convention
+  if (outputs.EC2RoleName && outputs.EC2RoleName !== 'AWS::NoValue') {
+    expect(outputs.EC2RoleName).toMatch(/^prod-ec2-role$/);
+  }
+
+  // Validate S3 Bucket naming convention
+  if (
+    outputs.ProdTrailBucketName &&
+    outputs.ProdTrailBucketName !== 'AWS::NoValue'
+  ) {
+    expect(outputs.ProdTrailBucketName).toMatch(/^prod-cloudtrail-bucket-\d+$/);
+  }
+
+  // Validate CloudTrail naming convention
+  if (
+    outputs.ProdCloudTrailName &&
+    outputs.ProdCloudTrailName !== 'AWS::NoValue'
+  ) {
+    expect(outputs.ProdCloudTrailName).toMatch(/^prod-cloudtrail$/);
+  }
+
+  // Validate ALB naming convention
+  if (outputs.ALBEndpoint && outputs.ALBEndpoint !== 'AWS::NoValue') {
+    const albRes = await elbv2.describeLoadBalancers({}).promise();
+    const alb = albRes.LoadBalancers?.find(
+      (lb: any) => lb.DNSName === outputs.ALBEndpoint
+    );
+    if (alb) {
+      expect(alb.LoadBalancerName).toMatch(/^prod-alb$/);
+    }
+  }
+
+  // Validate Auto Scaling Group naming convention
+  if (outputs.ProdASGName && outputs.ProdASGName !== 'AWS::NoValue') {
+    expect(outputs.ProdASGName).toMatch(/^prod-asg$/);
+  }
+}
+
 describe('TapStack Comprehensive Integration Tests', () => {
   describe('VPC and Networking', () => {
     if (outputs.VPCId && outputs.VPCId !== 'AWS::NoValue') {
       test('VPC exists with correct configuration and tags', async () => {
         await validateVpcComprehensive(outputs.VPCId as string);
+      });
+
+      test('VPC is properly isolated with private CIDR and restrictive security groups', async () => {
+        await validateVpcIsolation(outputs.VPCId as string);
       });
     }
 
@@ -590,6 +956,10 @@ describe('TapStack Comprehensive Integration Tests', () => {
           'CloudWatchAgentServerPolicy',
         ]);
       });
+
+      test('EC2 IAM Role follows least privilege principle', async () => {
+        await validateIamLeastPrivilege(outputs.EC2RoleName as string);
+      });
     }
 
     if (
@@ -604,6 +974,10 @@ describe('TapStack Comprehensive Integration Tests', () => {
     if (outputs.ConfigRoleName && outputs.ConfigRoleName !== 'AWS::NoValue') {
       test('Config IAM Role exists with correct permissions', async () => {
         await validateIamRoleComprehensive(outputs.ConfigRoleName as string);
+      });
+
+      test('Config IAM Role follows least privilege principle', async () => {
+        await validateIamLeastPrivilege(outputs.ConfigRoleName as string);
       });
     }
   });
@@ -641,6 +1015,10 @@ describe('TapStack Comprehensive Integration Tests', () => {
       test('Auto Scaling Group exists with correct configuration and launch template', async () => {
         await validateAsgComprehensive(outputs.ProdASGName as string);
       });
+
+      test('Auto Scaling Group maintains minimum capacity requirements', async () => {
+        await validateAutoScalingMinimumCapacity(outputs.ProdASGName as string);
+      });
     }
 
     if (
@@ -666,6 +1044,14 @@ describe('TapStack Comprehensive Integration Tests', () => {
     ) {
       test('CloudTrail exists with comprehensive logging configuration', async () => {
         await validateCloudTrailComprehensive(
+          outputs.ProdCloudTrailName as string,
+          outputs.ProdTrailBucketName as string,
+          outputs.CloudTrailKMSKeyId as string
+        );
+      });
+
+      test('CloudTrail is configured for multi-region logging with encryption', async () => {
+        await validateCloudTrailMultiRegionAndEncryption(
           outputs.ProdCloudTrailName as string,
           outputs.ProdTrailBucketName as string,
           outputs.CloudTrailKMSKeyId as string
@@ -706,6 +1092,14 @@ describe('TapStack Comprehensive Integration Tests', () => {
     test('Security compliance requirements are met', async () => {
       await validateSecurityCompliance();
     });
+
+    test('All resources follow proper tagging compliance standards', async () => {
+      await validateResourceTaggingCompliance();
+    });
+
+    test('All resources follow naming convention compliance', async () => {
+      await validateNamingConventionCompliance();
+    });
   });
 
   describe('End-to-End Functionality', () => {
@@ -716,7 +1110,7 @@ describe('TapStack Comprehensive Integration Tests', () => {
           (tg: any) => tg.TargetGroupName === 'prod-tg'
         );
 
-        if (prodTargetGroup) {
+        if (prodTargetGroup && prodTargetGroup.TargetGroupArn) {
           const healthStatus = await elbv2
             .describeTargetHealth({
               TargetGroupArn: prodTargetGroup.TargetGroupArn,
