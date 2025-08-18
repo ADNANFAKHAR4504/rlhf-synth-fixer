@@ -1,5 +1,5 @@
-import AWS from 'aws-sdk';
-import fs from 'fs';
+const AWS = require('aws-sdk');
+const fs = require('fs');
 
 // Load CloudFormation outputs
 const outputs = JSON.parse(
@@ -26,9 +26,18 @@ async function validateVpcComprehensive(vpcId: string) {
   const vpc = res.Vpcs[0];
   expect(vpc.VpcId).toBe(vpcId);
   expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-  expect(vpc.EnableDnsSupport).toBe(true);
-  expect(vpc.EnableDnsHostnames).toBe(true);
   expect(vpc.State).toBe('available');
+
+  // Validate DNS settings using describeVpcAttribute
+  const dnsSupport = await ec2
+    .describeVpcAttribute({ VpcId: vpcId, Attribute: 'enableDnsSupport' })
+    .promise();
+  expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
+
+  const dnsHostnames = await ec2
+    .describeVpcAttribute({ VpcId: vpcId, Attribute: 'enableDnsHostnames' })
+    .promise();
+  expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
 
   // Validate tags
   const nameTag = vpc.Tags?.find((tag: any) => tag.Key === 'Name');
@@ -624,8 +633,15 @@ async function validateVpcIsolation(vpcId: string) {
   expect(cidr).toMatch(/^10\.|^172\.(1[6-9]|2[0-9]|3[01])\.|^192\.168\./);
 
   // Validate DNS settings for isolation
-  expect(vpc.EnableDnsSupport).toBe(true);
-  expect(vpc.EnableDnsHostnames).toBe(true);
+  const dnsSupport = await ec2
+    .describeVpcAttribute({ VpcId: vpcId, Attribute: 'enableDnsSupport' })
+    .promise();
+  expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
+
+  const dnsHostnames = await ec2
+    .describeVpcAttribute({ VpcId: vpcId, Attribute: 'enableDnsHostnames' })
+    .promise();
+  expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
 
   // Validate no default VPC (should be custom)
   expect(vpc.IsDefault).toBe(false);
@@ -747,7 +763,7 @@ async function validateResourceTaggingCompliance() {
     if (role?.Tags) {
       const requiredTags = ['Environment', 'Project'];
       requiredTags.forEach(tagKey => {
-        const tag = role.Tags.find((t: any) => t.Key === tagKey);
+        const tag = role.Tags?.find((t: any) => t.Key === tagKey);
         expect(tag).toBeDefined();
         expect(tag?.Value).toBeTruthy();
       });
