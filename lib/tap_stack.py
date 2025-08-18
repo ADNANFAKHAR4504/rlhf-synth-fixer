@@ -121,7 +121,7 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
                 **self.tags,
                 "Name": f"{self.name_prefix}-public-{i + 1}",
                 "kubernetes.io/role/elb": "1",  # Required for EKS load balancers
-                "kubernetes.io/cluster/corp-eks-cluster": "owned"  # Mark as owned by this cluster
+                # Cluster-specific tags will be added after cluster creation
             },
             opts=ResourceOptions(provider=self.provider)
         )
@@ -140,7 +140,7 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
                 "Name": f"{self.name_prefix}-private-{i + 1}",
                 # Required for internal EKS load balancers
                 "kubernetes.io/role/internal-elb": "1",
-                "kubernetes.io/cluster/corp-eks-cluster": "owned"  # Mark as owned by this cluster
+                # Cluster-specific tags will be added after cluster creation
             },
             opts=ResourceOptions(provider=self.provider)
         )
@@ -685,9 +685,18 @@ def create_eks_cluster(
       import pulumi_eks as eks
 
       # Create EKS cluster using pulumi_eks package
+      # Add random suffix to avoid naming conflicts
+      cluster_random = random.RandomId(
+          f"{name_prefix}-eks-cluster-random",
+          byte_length=4,
+          opts=ResourceOptions(provider=provider)
+      )
+      
+      cluster_name = pulumi.Output.concat(f"{name_prefix}-eks-cluster-", cluster_random.hex)
+      
       cluster = eks.Cluster(
           f"{name_prefix}-eks-cluster",
-          name=f"{name_prefix}-eks-cluster",
+          name=cluster_name,
           version="1.29",
           vpc_id=eks_cluster_sg.vpc_id,
           public_subnet_ids=subnet_ids[:2],  # First 2 subnets as public
@@ -710,6 +719,15 @@ def create_eks_cluster(
       # Fallback to basic AWS EKS if pulumi_eks is not available
       pulumi.log.warn("pulumi_eks not available, using basic AWS EKS")
       
+      # Add random suffix to avoid naming conflicts
+      cluster_random = random.RandomId(
+          f"{name_prefix}-eks-cluster-random",
+          byte_length=4,
+          opts=ResourceOptions(provider=provider)
+      )
+      
+      cluster_name = pulumi.Output.concat(f"{name_prefix}-eks-cluster-", cluster_random.hex)
+      
       # Create EKS cluster IAM role
       eks_role = aws.iam.Role(
           f"{name_prefix}-eks-cluster-role",
@@ -731,7 +749,7 @@ def create_eks_cluster(
       # Create EKS cluster
       cluster = aws.eks.Cluster(
           f"{name_prefix}-eks-cluster",
-          name=f"{name_prefix}-eks-cluster",
+          name=cluster_name,
           version="1.29",
           role_arn=eks_role.arn,
           vpc_config=aws.eks.ClusterVpcConfigArgs(
@@ -819,12 +837,21 @@ def create_eks_node_group(
       import pulumi_eks as eks
 
       # If using pulumi_eks, the cluster already has a default node group
-      # Just return the cluster reference
+      # Just return the cluster object itself as the node group reference
       return cluster
       
   except ImportError:
       # Fallback to manual node group creation
       pulumi.log.warn("pulumi_eks not available, creating manual node group")
+      
+      # Add random suffix to avoid naming conflicts
+      node_group_random = random.RandomId(
+          f"{name_prefix}-eks-node-group-random",
+          byte_length=4,
+          opts=ResourceOptions(provider=provider)
+      )
+      
+      node_group_name = pulumi.Output.concat(f"{name_prefix}-eks-node-group-", node_group_random.hex)
       
       # Create IAM role for EKS node group
       node_role = aws.iam.Role(
@@ -851,7 +878,7 @@ def create_eks_node_group(
       node_group = aws.eks.NodeGroup(
           f"{name_prefix}-eks-node-group",
           cluster_name=cluster.name,
-          node_group_name=f"{name_prefix}-eks-node-group",
+          node_group_name=node_group_name,
           node_role_arn=node_role.arn,
           subnet_ids=[s.id for s in private_subnets],
           instance_types=["t3.medium"],
