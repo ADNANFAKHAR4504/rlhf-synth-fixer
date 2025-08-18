@@ -227,7 +227,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:GetObjectVersion
-                Resource: !Sub '${ArtifactsBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${ArtifactsBucket}/*'
 
   # ============================================================================
   # LAMBDA FUNCTION
