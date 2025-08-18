@@ -9,3 +9,4 @@ Oh, and automation is huge for them. They want Lambda functions watching CloudWa
 One more thing - this has to work across different environments. Dev, staging, prod, the whole deal. And deployment should be straightforward, not some nightmare process.
 
 Can you put together the CDK code for this? Python preferred, and just throw it in app.py. Thanks!
+
