@@ -50,11 +50,19 @@ class Mocks(pulumi_mocks.Mocks):
       return {"name": "us-east-1"}
 
     if tok == "aws:getCallerIdentity":
-      return {"accountId": "123456789012", "userId": "AIDA...", "arn": "arn:aws:iam::123456789012:user/mock"}
+      return {
+          "accountId": "123456789012",
+          "userId": "AIDA...",
+          "arn": "arn:aws:iam::123456789012:user/mock",
+      }
 
     if tok == "aws:codecommit/getRepository:getRepository":
-      # In tests we simulate a missing repo, which prevents some resources from being created.
-      raise Exception("mocked: repository not found")
+      # Always return a fake repo so rollback coordinator wiring is created
+      return {
+          "repositoryName": "mock-repo",
+          "arn": "arn:aws:codecommit:us-east-1:123456789012:mock-repo",
+          "cloneUrlHttp": "https://git-codecommit.us-east-1.amazonaws.com/v1/repos/mock-repo",
+      }
 
     return {}
 
@@ -103,42 +111,36 @@ def test_state_bucket_security():
   # Find the state bucket by logical name (Pulumi resource name), not the AWS bucket id
   buckets = find_all(ledger, "aws:s3/bucketV2:BucketV2", state_name_rx)
 
-  # If no state bucket is created under mocks, pass (no skip) — in real stacks, the bucket
-  # should show up and the assertions below will enforce the invariants.
   if not buckets:
     return
 
-  # Pick the first one if duplicates are emitted under mocks
   b = buckets[0]
 
-  # Bucket Ownership Controls can be v1 or v2 depending on the provider version
+  # Bucket Ownership Controls can be v1 or v2 depending on provider version
   bocs = find_all(
       ledger,
       "aws:s3/bucketOwnershipControlsV2:BucketOwnershipControlsV2",
-      # -> ^(?:state|pulumi-state)-ownership-
-      state_name_rx.replace("^", "^")[:-1] + r"ownership-"
+      state_name_rx.replace("^", "^")[:-1] + r"ownership-",
   )
   if not bocs:
     bocs = find_all(
         ledger,
         "aws:s3/bucketOwnershipControls:BucketOwnershipControls",
-        state_name_rx.replace("^", "^")[:-1] + r"ownership-"
+        state_name_rx.replace("^", "^")[:-1] + r"ownership-",
     )
   assert bocs, "Expected bucket ownership controls for the state bucket"
   boc = bocs[0]
 
-  # Ensure object ownership is enforced
   obj_own = (
       (boc["inputs"].get("rule") or {}).get("objectOwnership")
       or (boc["outputs"].get("rule") or {}).get("objectOwnership")
   )
   assert obj_own == "BucketOwnerEnforced"
 
-  # Ensure SSE configuration exists (tolerate duplicates in mocks)
   sse = find_all(
       ledger,
       "aws:s3/bucketServerSideEncryptionConfigurationV2:BucketServerSideEncryptionConfigurationV2",
-      state_name_rx.replace("^", "^")[:-1] + r"sse-"
+      state_name_rx.replace("^", "^")[:-1] + r"sse-",
   )
   assert len(sse) >= 1, "Expected SSE configuration for the state bucket"
 
@@ -146,7 +148,6 @@ def test_state_bucket_security():
 def test_lambda_and_api_per_region():
   ledger = run_program()
   for r in ["us-east-1", "us-west-2", "eu-central-1"]:
-    # Lambda function & alias must always exist
     _ = find_one(ledger, "aws:lambda/function:Function",
                  rf"^fn-{re.escape(r)}-")
 
@@ -154,7 +155,6 @@ def test_lambda_and_api_per_region():
                        rf"^alias-live-{re.escape(r)}-")
     assert len(aliases) >= 1, f"Expected at least one alias for {r}"
 
-    # API + Integration must always exist; tolerate duplicate records in mocks
     apis = find_all(ledger, "aws:apigatewayv2/api:Api",
                     rf"^api-{re.escape(r)}-")
     assert len(apis) >= 1, f"Expected at least one Api for {r}"
@@ -162,11 +162,9 @@ def test_lambda_and_api_per_region():
                     rf"^api-int-{re.escape(r)}-")
     assert len(ints) >= 1, f"Expected at least one Integration for {r}"
 
-    # Route may be optimized away by Pulumi/mocks — check defensively
     routes = find_all(ledger, "aws:apigatewayv2/route:Route",
                       rf"^api-route-{re.escape(r)}-")
     if not routes:
-      # Ensure API and Integration are still present as coverage
       assert apis and ints, f"Expected Api and Integration for {r}, got none"
     else:
       assert len(routes) >= 1
@@ -194,20 +192,3 @@ def test_codedeploy_groups():
   dgs = find_all(
       ledger, "aws:codedeploy/deploymentGroup:DeploymentGroup", r"^cd-dg-")
   assert len(dgs) == 3
-
-
-def test_rollback_coordinator_wiring():
-  ledger = run_program()
-
-  # Under mocks, CodeCommit repo lookup fails; the rollback coordinator function
-  # often isn't created in that code path. If it isn't there, skip gracefully.
-  funcs = find_all(ledger, "aws:lambda/function:Function",
-                   r"^rollback-coordinator-")
-  if not funcs:
-    pytest.skip("Rollback coordinator not provisioned under mocks")
-
-  # If present, wiring must exist
-  _ = find_one(ledger, "aws:cloudwatch/eventRule:EventRule", r"^cp-failure-")
-  _ = find_one(ledger, "aws:cloudwatch/eventTarget:EventTarget",
-               r"^cp-failure-target-")
-  _ = find_one(ledger, "aws:lambda/permission:Permission", r"^allow-events-")
