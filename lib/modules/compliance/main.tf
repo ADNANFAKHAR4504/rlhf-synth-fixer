@@ -1,6 +1,24 @@
-# Variable to control whether to create new Config resources or use existing ones
+# Variables to control whether to create new resources or use existing ones
 variable "use_existing_config_recorder" {
   description = "Whether to use existing configuration recorder instead of creating new one"
+  type        = bool
+  default     = true
+}
+
+variable "use_existing_config_delivery_channel" {
+  description = "Whether to use existing configuration delivery channel instead of creating new one"
+  type        = bool
+  default     = true
+}
+
+variable "use_existing_guardduty_detector" {
+  description = "Whether to use existing GuardDuty detector instead of creating new one"
+  type        = bool
+  default     = true
+}
+
+variable "use_existing_securityhub" {
+  description = "Whether to use existing Security Hub instead of creating new one"
   type        = bool
   default     = true
 }
@@ -21,8 +39,9 @@ locals {
   config_recorder_name = var.use_existing_config_recorder ? "prod-sec-config-recorder-main" : aws_config_configuration_recorder.main[0].name
 }
 
-# AWS Config Delivery Channel
+# AWS Config Delivery Channel (only create if not using existing)
 resource "aws_config_delivery_channel" "main" {
+  count          = var.use_existing_config_delivery_channel ? 0 : 1
   name           = "${var.project_name}-config-delivery-${var.environment}"
   s3_bucket_name = var.config_s3_bucket
   sns_topic_arn  = var.sns_topic_arn
@@ -110,8 +129,9 @@ resource "aws_iam_role_policy" "config_policy" {
   })
 }
 
-# GuardDuty Detector
+# GuardDuty Detector (only create if not using existing)
 resource "aws_guardduty_detector" "main" {
+  count  = var.use_existing_guardduty_detector ? 0 : 1
   enable = true
 
   tags = merge(var.common_tags, {
@@ -120,26 +140,30 @@ resource "aws_guardduty_detector" "main" {
   })
 }
 
-# GuardDuty Finding Publishing Frequency
+# GuardDuty Finding Publishing Frequency (only create if not using existing detector)
 resource "aws_guardduty_detector_feature" "main" {
-  detector_id = aws_guardduty_detector.main.id
+  count       = var.use_existing_guardduty_detector ? 0 : 1
+  detector_id = aws_guardduty_detector.main[0].id
   name        = "S3_DATA_EVENTS"
   status      = "ENABLED"
 }
 
-# Security Hub
+# Security Hub (only create if not using existing)
 resource "aws_securityhub_account" "main" {
+  count                    = var.use_existing_securityhub ? 0 : 1
   enable_default_standards = true
   auto_enable_controls     = true
 }
 
-# Security Hub Standards
+# Security Hub Standards (only create if not using existing Security Hub)
 resource "aws_securityhub_standards_subscription" "cis_aws_foundations" {
+  count         = var.use_existing_securityhub ? 0 : 1
   depends_on    = [aws_securityhub_account.main]
   standards_arn = "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.2.0"
 }
 
 resource "aws_securityhub_standards_subscription" "pci_dss" {
+  count         = var.use_existing_securityhub ? 0 : 1
   depends_on    = [aws_securityhub_account.main]
   standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standards/pci-dss/v/3.2.1"
 }

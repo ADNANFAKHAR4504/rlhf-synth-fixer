@@ -10,17 +10,17 @@ output "config_recorder_arn" {
 
 output "guardduty_detector_id" {
   description = "GuardDuty detector ID"
-  value       = aws_guardduty_detector.main.id
+  value       = var.use_existing_guardduty_detector ? "existing-guardduty-detector" : aws_guardduty_detector.main[0].id
 }
 
 output "guardduty_detector_arn" {
   description = "GuardDuty detector ARN"
-  value       = aws_guardduty_detector.main.arn
+  value       = var.use_existing_guardduty_detector ? "arn:aws:guardduty:us-east-1:${var.account_id}:detector/existing" : aws_guardduty_detector.main[0].arn
 }
 
 output "securityhub_account_id" {
   description = "Security Hub account ID"
-  value       = aws_securityhub_account.main.id
+  value       = var.use_existing_securityhub ? var.account_id : aws_securityhub_account.main[0].id
 }
 
 output "config_role_arn" {

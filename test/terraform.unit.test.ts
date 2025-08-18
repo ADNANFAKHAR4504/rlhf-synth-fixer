@@ -114,16 +114,18 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
 
     test("has AWS Config Delivery Channel", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_config_delivery_channel"\s+"main"\s*{/);
-      expect(complianceContent).toMatch(/depends_on\s*=\s*\[aws_config_configuration_recorder\.main\]/);
+      expect(complianceContent).toMatch(/count\s*=\s*var\.use_existing_config_delivery_channel/);
     });
 
     test("has GuardDuty Detector", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_guardduty_detector"\s+"main"\s*{/);
+      expect(complianceContent).toMatch(/count\s*=\s*var\.use_existing_guardduty_detector/);
       expect(complianceContent).toMatch(/enable\s*=\s*true/);
     });
 
     test("has Security Hub Account", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_securityhub_account"\s+"main"\s*{/);
+      expect(complianceContent).toMatch(/count\s*=\s*var\.use_existing_securityhub/);
       expect(complianceContent).toMatch(/enable_default_standards\s*=\s*true/);
     });
 
@@ -219,8 +221,11 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
       expect(stackContent).toMatch(/depends_on\s*=\s*\[module\.storage,\s*module\.monitoring\]/);
     });
 
-    test("compliance module uses existing config recorder", () => {
+    test("compliance module uses existing resources", () => {
       expect(stackContent).toMatch(/use_existing_config_recorder\s*=\s*true/);
+      expect(stackContent).toMatch(/use_existing_config_delivery_channel\s*=\s*true/);
+      expect(stackContent).toMatch(/use_existing_guardduty_detector\s*=\s*true/);
+      expect(stackContent).toMatch(/use_existing_securityhub\s*=\s*true/);
     });
 
     test("modules receive required variables", () => {
@@ -324,6 +329,9 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
       expect(complianceVars).toMatch(/variable\s+"config_s3_bucket"/);
       expect(complianceVars).toMatch(/variable\s+"sns_topic_arn"/);
       expect(complianceVars).toMatch(/variable\s+"use_existing_config_recorder"/);
+      expect(complianceVars).toMatch(/variable\s+"use_existing_config_delivery_channel"/);
+      expect(complianceVars).toMatch(/variable\s+"use_existing_guardduty_detector"/);
+      expect(complianceVars).toMatch(/variable\s+"use_existing_securityhub"/);
     });
 
     test("storage module has required variables", () => {
