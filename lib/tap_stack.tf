@@ -39,7 +39,7 @@ variable "instance_type" {
 variable "domain_name" {
   description = "Domain name for Route53 failover"
   type        = string
-  domain      = "example1484.com"
+  default     = "example1484.com"
 }
 variable "subdomain" {
   description = "Subdomain for failover record"
