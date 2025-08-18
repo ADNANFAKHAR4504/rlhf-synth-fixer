@@ -181,6 +181,7 @@ After running the CLI, you'll have:
 - `npm run cfn:destroy-json` destroy CloudFormation JSON stack and all resources
 
 ### Terraform Commands
+
 Quick Note:
 Install terraform cli on your computer: https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli
 
@@ -194,6 +195,7 @@ Install terraform cli on your computer: https://developer.hashicorp.com/terrafor
 - For Quick reminder: `npm run tf:help`
 - For Validate Hashicorp syntax: `npm run tf:validate`
 - For Get TF state in json: `npm run tf:output`
+
 ### CloudFormation (cfn-yaml/cfn-json) S3 Bucket Setup
 
 **Important Note**: When deploying CloudFormation templates to a specific AWS region for the first time, you need to create the S3 bucket that stores the CloudFormation state files.
