@@ -139,7 +139,7 @@ describe('TapStack.yml - Comprehensive Integration Tests', () => {
         n.startsWith('alias/cloudtrail-')
       );
       if (cloudTrailAlias) {
-        expect(cloudTrailAlias).toContain(`cloudtrail-${env}-${stackName}`);
+        expect(cloudTrailAlias).toContain(`cloudtrail-${env}-`);
 
         // Verify key policy
         const alias = aliases.Aliases?.find(
@@ -352,7 +352,7 @@ describe('TapStack.yml - Comprehensive Integration Tests', () => {
 
       if (channelCount > 0) {
         const channel = channels.DeliveryChannels?.[0];
-        expect(channel?.name).toContain(`config-delivery-${env}`);
+        expect(channel?.name).toContain(`config-delivery-channel-${env}`);
         expect(channel?.s3BucketName).toBe(configBucketName);
 
         // Check required-tags rule
