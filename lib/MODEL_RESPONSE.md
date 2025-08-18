@@ -68,7 +68,12 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "webapp-logs-${AWS::AccountId}-${AWS::Region}"
-      AccessControl: Private
+      # Removed legacy AccessControl property
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       LifecycleConfiguration:
         Rules:
           - Id: MoveToGlacier
