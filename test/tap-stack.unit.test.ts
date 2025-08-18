@@ -1,15 +1,26 @@
-import fs from 'fs';
-import path from 'path';
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+import * as fs from 'fs';
+import * as path from 'path';
+
+type CFNTemplate = {
+  AWSTemplateFormatVersion: string;
+  Description?: string;
+  Metadata?: Record<string, unknown>;
+  Parameters: Record<string, any>;
+  Resources: Record<string, any>;
+  Outputs: Record<string, any>;
+};
 
 describe('Secure Baseline CloudFormation Template', () => {
-  let template: any;
+  let template: CFNTemplate;
 
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    template = JSON.parse(templateContent) as CFNTemplate;
   });
 
   describe('Template Structure', () => {
@@ -19,19 +30,28 @@ describe('Secure Baseline CloudFormation Template', () => {
 
     test('should have correct description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe('Minimal secure baseline for us-east-1 - excludes Config/CloudTrail per requirements');
+      expect(template.Description).toBe(
+        'Minimal secure baseline for us-east-1 - excludes Config/CloudTrail per requirements'
+      );
     });
 
     test('should have metadata section', () => {
       expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect((template.Metadata as any)['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
     test('should have required parameters', () => {
-      const expectedParams = ['ResourcePrefix', 'OwnerTag', 'LogRetentionDays', 'BucketNameSuffix', 'EnvironmentSuffix'];
-      expectedParams.forEach(param => {
+      const expectedParams = [
+        'ResourcePrefix',
+        'OwnerTag',
+        'LogRetentionDays',
+        'BucketNameSuffix',
+        'EnvironmentSuffix',
+      ];
+      expectedParams.forEach((param: string) => {
         expect(template.Parameters[param]).toBeDefined();
       });
     });
@@ -70,12 +90,16 @@ describe('Secure Baseline CloudFormation Template', () => {
     test('KMS keys should have aliases with environment suffix', () => {
       expect(template.Resources.LogsKmsKeyAlias).toBeDefined();
       expect(template.Resources.S3KmsKeyAlias).toBeDefined();
-      
+
       const logsAlias = template.Resources.LogsKmsKeyAlias;
       const s3Alias = template.Resources.S3KmsKeyAlias;
-      
-      expect(logsAlias.Properties.AliasName['Fn::Sub']).toBe('alias/${ResourcePrefix}-logs-${EnvironmentSuffix}');
-      expect(s3Alias.Properties.AliasName['Fn::Sub']).toBe('alias/${ResourcePrefix}-s3-${EnvironmentSuffix}');
+
+      expect(logsAlias.Properties.AliasName['Fn::Sub']).toBe(
+        'alias/${ResourcePrefix}-logs-${EnvironmentSuffix}'
+      );
+      expect(s3Alias.Properties.AliasName['Fn::Sub']).toBe(
+        'alias/${ResourcePrefix}-s3-${EnvironmentSuffix}'
+      );
     });
   });
 
@@ -83,7 +107,9 @@ describe('Secure Baseline CloudFormation Template', () => {
     test('should have CentralLogGroup with KMS encryption', () => {
       const logGroup = template.Resources.CentralLogGroup;
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.LogGroupName['Fn::Sub']).toBe('/${ResourcePrefix}/central-${EnvironmentSuffix}');
+      expect(logGroup.Properties.LogGroupName['Fn::Sub']).toBe(
+        '/${ResourcePrefix}/central-${EnvironmentSuffix}'
+      );
       expect(logGroup.Properties.KmsKeyId['Fn::GetAtt']).toEqual(['LogsKmsKey', 'Arn']);
       expect(logGroup.Properties.RetentionInDays.Ref).toBe('LogRetentionDays');
     });
@@ -93,8 +119,10 @@ describe('Secure Baseline CloudFormation Template', () => {
     test('should have SecureBucket with correct naming and encryption', () => {
       const bucket = template.Resources.SecureBucket;
       expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.Properties.BucketName['Fn::Sub']).toBe('prod-${BucketNameSuffix}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}');
-      
+      expect(bucket.Properties.BucketName['Fn::Sub']).toBe(
+        'prod-${BucketNameSuffix}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      );
+
       const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
       expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
       expect(encryption.BucketKeyEnabled).toBe(true);
@@ -103,19 +131,23 @@ describe('Secure Baseline CloudFormation Template', () => {
     test('should have SecureBucketPolicy with security enforcement', () => {
       const policy = template.Resources.SecureBucketPolicy;
       expect(policy.Type).toBe('AWS::S3::BucketPolicy');
-      
-      const statements = policy.Properties.PolicyDocument.Statement;
-      expect(statements).toHaveLength(3);
-      
+
+      const statements: any[] = policy.Properties.PolicyDocument.Statement as any[];
+      expect(statements.length).toBe(3);
+
       // Check for TLS enforcement
-      const tlsStatement = statements.find(s => s.Sid === 'DenyInsecureConnections');
+      const tlsStatement = statements.find((s: any) => s.Sid === 'DenyInsecureConnections');
       expect(tlsStatement).toBeDefined();
       expect(tlsStatement.Condition.Bool['aws:SecureTransport']).toBe(false);
-      
+
       // Check for encryption enforcement
-      const encryptionStatement = statements.find(s => s.Sid === 'DenyUnencryptedObjectUploads');
+      const encryptionStatement = statements.find(
+        (s: any) => s.Sid === 'DenyUnencryptedObjectUploads'
+      );
       expect(encryptionStatement).toBeDefined();
-      expect(encryptionStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']).toBe('aws:kms');
+      expect(
+        encryptionStatement.Condition.StringNotEquals['s3:x-amz-server-side-encryption']
+      ).toBe('aws:kms');
     });
 
     test('should have public access blocked', () => {
@@ -132,16 +164,22 @@ describe('Secure Baseline CloudFormation Template', () => {
     test('should have CentralLogsWriterRole with least privilege', () => {
       const role = template.Resources.CentralLogsWriterRole;
       expect(role.Type).toBe('AWS::IAM::Role');
-      expect(role.Properties.RoleName['Fn::Sub']).toBe('${ResourcePrefix}-CentralLogsWriter-${EnvironmentSuffix}');
-      
+      expect(role.Properties.RoleName['Fn::Sub']).toBe(
+        '${ResourcePrefix}-CentralLogsWriter-${EnvironmentSuffix}'
+      );
+
       const policy = role.Properties.Policies[0];
       expect(policy.PolicyName).toBe('CentralLogsWritePolicy');
-      
-      const statements = policy.PolicyDocument.Statement;
-      expect(statements).toHaveLength(2);
-      
+
+      const statements: any[] = policy.PolicyDocument.Statement as any[];
+      expect(statements.length).toBe(2);
+
       // Verify CreateLogStream and PutLogEvents permissions
-      const writeStatement = statements.find(s => s.Action.includes('logs:CreateLogStream'));
+      const writeStatement = statements.find((s: any) =>
+        Array.isArray(s.Action) ? s.Action.includes('logs:CreateLogStream') : s.Action === 'logs:CreateLogStream'
+      );
+      expect(writeStatement).toBeDefined();
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(writeStatement.Action).toContain('logs:PutLogEvents');
       expect(writeStatement.Resource['Fn::Sub']).toBe('${CentralLogGroup.Arn}:*');
     });
@@ -149,10 +187,14 @@ describe('Secure Baseline CloudFormation Template', () => {
     test('should have MFAEnforcementPolicy with correct restrictions', () => {
       const policy = template.Resources.MFAEnforcementPolicy;
       expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
-      expect(policy.Properties.ManagedPolicyName['Fn::Sub']).toBe('${ResourcePrefix}-DenyWithoutMFA-${EnvironmentSuffix}');
-      
-      const statements = policy.Properties.PolicyDocument.Statement;
-      const denyStatement = statements.find(s => s.Sid === 'DenyAllExceptUnlessSignedInWithMFA');
+      expect(policy.Properties.ManagedPolicyName['Fn::Sub']).toBe(
+        '${ResourcePrefix}-DenyWithoutMFA-${EnvironmentSuffix}'
+      );
+
+      const statements: any[] = policy.Properties.PolicyDocument.Statement as any[];
+      const denyStatement = statements.find(
+        (s: any) => s.Sid === 'DenyAllExceptUnlessSignedInWithMFA'
+      );
       expect(denyStatement).toBeDefined();
       expect(denyStatement.Effect).toBe('Deny');
       expect(denyStatement.Condition.BoolIfExists['aws:MultiFactorAuthPresent']).toBe(false);
@@ -161,19 +203,29 @@ describe('Secure Baseline CloudFormation Template', () => {
     test('should have MFARequiredGroup', () => {
       const group = template.Resources.MFARequiredGroup;
       expect(group.Type).toBe('AWS::IAM::Group');
-      expect(group.Properties.GroupName['Fn::Sub']).toBe('${ResourcePrefix}-MFA-Required-${EnvironmentSuffix}');
+      expect(group.Properties.GroupName['Fn::Sub']).toBe(
+        '${ResourcePrefix}-MFA-Required-${EnvironmentSuffix}'
+      );
       expect(group.Properties.ManagedPolicyArns).toContainEqual({ Ref: 'MFAEnforcementPolicy' });
     });
   });
 
   describe('Tagging', () => {
     test('all resources should have Owner tag', () => {
-      const taggedResources = ['LogsKmsKey', 'S3KmsKey', 'CentralLogGroup', 'SecureBucket', 'CentralLogsWriterRole'];
-      
-      taggedResources.forEach(resourceName => {
+      const taggedResources = [
+        'LogsKmsKey',
+        'S3KmsKey',
+        'CentralLogGroup',
+        'SecureBucket',
+        'CentralLogsWriterRole',
+      ];
+
+      taggedResources.forEach((resourceName: string) => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
-        const ownerTag = resource.Properties.Tags.find(tag => tag.Key === 'Owner');
+        const ownerTag = (resource.Properties.Tags as any[]).find(
+          (tag: any) => tag.Key === 'Owner'
+        );
         expect(ownerTag).toBeDefined();
         expect(ownerTag.Value.Ref).toBe('OwnerTag');
       });
@@ -189,16 +241,16 @@ describe('Secure Baseline CloudFormation Template', () => {
         'LogsKmsKeyArn',
         'S3KmsKeyArn',
         'MFARequiredGroupName',
-        'CentralLogsWriterRoleArn'
+        'CentralLogsWriterRoleArn',
       ];
 
-      expectedOutputs.forEach(outputName => {
+      expectedOutputs.forEach((outputName: string) => {
         expect(template.Outputs[outputName]).toBeDefined();
       });
     });
 
     test('outputs should have proper export names', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
+      Object.keys(template.Outputs).forEach((outputKey: string) => {
         const output = template.Outputs[outputKey];
         expect(output.Export.Name['Fn::Sub']).toBe(`\${AWS::StackName}-${outputKey}`);
       });
@@ -207,14 +259,16 @@ describe('Secure Baseline CloudFormation Template', () => {
 
   describe('Security Compliance', () => {
     test('should not contain any prohibited services', () => {
-      const resourceTypes = Object.values(template.Resources).map((resource: any) => resource.Type);
+      const resourceTypes = Object.values(template.Resources).map(
+        (resource: any) => resource.Type as string
+      );
       const prohibitedTypes = [
         'AWS::Config::ConfigurationRecorder',
         'AWS::Config::DeliveryChannel',
-        'AWS::CloudTrail::Trail'
+        'AWS::CloudTrail::Trail',
       ];
-      
-      prohibitedTypes.forEach(type => {
+
+      prohibitedTypes.forEach((type: string) => {
         expect(resourceTypes).not.toContain(type);
       });
     });
@@ -223,7 +277,7 @@ describe('Secure Baseline CloudFormation Template', () => {
       // S3 bucket encryption
       const bucket = template.Resources.SecureBucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      
+
       // CloudWatch Logs encryption
       const logGroup = template.Resources.CentralLogGroup;
       expect(logGroup.Properties.KmsKeyId).toBeDefined();
@@ -232,20 +286,21 @@ describe('Secure Baseline CloudFormation Template', () => {
     test('should have proper resource naming with environment suffix', () => {
       const suffixedResources = [
         'CentralLogGroup',
-        'SecureBucket', 
+        'SecureBucket',
         'CentralLogsWriterRole',
         'MFAEnforcementPolicy',
-        'MFARequiredGroup'
+        'MFARequiredGroup',
       ];
-      
-      suffixedResources.forEach(resourceName => {
+
+      suffixedResources.forEach((resourceName: string) => {
         const resource = template.Resources[resourceName];
-        const nameProperty = resource.Properties.LogGroupName || 
-                           resource.Properties.BucketName || 
-                           resource.Properties.RoleName ||
-                           resource.Properties.ManagedPolicyName ||
-                           resource.Properties.GroupName;
-        
+        const nameProperty =
+          resource.Properties.LogGroupName ||
+          resource.Properties.BucketName ||
+          resource.Properties.RoleName ||
+          resource.Properties.ManagedPolicyName ||
+          resource.Properties.GroupName;
+
         if (nameProperty && nameProperty['Fn::Sub']) {
           expect(nameProperty['Fn::Sub']).toContain('${EnvironmentSuffix}');
         }
