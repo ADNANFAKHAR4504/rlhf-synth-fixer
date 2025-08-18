@@ -179,12 +179,27 @@ Resources:
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
+          - Sid: AllowCloudTrailPuts
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${LoggingBucket.Arn}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+          - Sid: AllowCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LoggingBucket.Arn
           - Sid: AllowS3LogDelivery
             Effect: Allow
             Principal:
               Service: logging.s3.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub '${LoggingBucket}/*'
+            Action: s3:PutObject
+            Resource: !Sub '${LoggingBucket.Arn}/*'
             Condition:
               ArnEquals:
                 's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt S3KMSKey.Arn
@@ -424,8 +439,8 @@ Resources:
     Properties:
       AlarmName: !Sub '${EnvironmentSuffix}-unauthorized-s3-access'
       AlarmDescription: 'Detects potential unauthorized S3 access attempts'
-      MetricName: 4xxErrors
-      Namespace: AWS/S3
+      MetricName: '4xxErrors'
+      Namespace: 'AWS/S3'
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 2
@@ -462,8 +477,8 @@ Resources:
     Properties:
       AlarmName: !Sub '${EnvironmentSuffix}-high-error-rate'
       AlarmDescription: 'Detects high error rates in application logs'
-      MetricName: ErrorCount
-      Namespace: CWLogs
+      MetricName: 'ErrorCount'
+      Namespace: 'CWLogs'
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 2
@@ -478,8 +493,8 @@ Resources:
     Properties:
       AlarmName: !Sub '${EnvironmentSuffix}-unusual-kms-usage'
       AlarmDescription: 'Detects unusual KMS key usage patterns'
-      MetricName: NumberOfRequestsSucceeded
-      Namespace: AWS/KMS
+      MetricName: 'NumberOfRequestsSucceeded'
+      Namespace: 'AWS/KMS'
       Statistic: Sum
       Period: 3600
       EvaluationPeriods: 1
@@ -549,8 +564,8 @@ Resources:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
       MetricTransformations:
-        - MetricNamespace: Security/Authentication
-          MetricName: FailedLogins
+        - MetricNamespace: 'Security/Authentication'
+          MetricName: 'FailedLogins'
           MetricValue: '1'
           DefaultValue: 0
 
@@ -559,8 +574,8 @@ Resources:
     Properties:
       AlarmName: !Sub '${EnvironmentSuffix}-failed-login-attempts'
       AlarmDescription: 'Detects multiple failed login attempts'
-      MetricName: FailedLogins
-      Namespace: Security/Authentication
+      MetricName: 'FailedLogins'
+      Namespace: 'Security/Authentication'
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
