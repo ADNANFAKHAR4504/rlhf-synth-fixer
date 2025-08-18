@@ -596,7 +596,7 @@ def create_security_groups(
       to_port=65535,
       protocol="tcp",
       description="Allow ALB to reach nodes",
-              opts=ResourceOptions(provider=provider)
+      opts=ResourceOptions(provider=provider)
     )
     
     # CRITICAL: Additional rules for EKS node registration
