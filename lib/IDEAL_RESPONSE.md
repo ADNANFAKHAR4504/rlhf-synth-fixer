@@ -20,7 +20,6 @@
    - Fully supports multi-environment deployments (dev, staging, prod).
   
 ```yaml
-
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Enterprise-Grade Secure AWS Infrastructure Template.
@@ -100,13 +99,13 @@ Parameters:
 
   CreateConfigDeliveryChannel:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Whether to create an AWS Config Delivery Channel (set to 'false' if one already exists in this account/region)
 
   CreateCloudTrailTrail:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Whether to create a CloudTrail trail in this stack (set to 'false' if trail quota is reached or one already exists)
 
@@ -524,7 +523,7 @@ Resources:
     Type: AWS::Lambda::Function
     Condition: CreateLambdaInVpc
     Properties:
-      FunctionName: !Sub 'secure-lambda-${Environment}'
+      FunctionName: !Sub '${Environment}-tap-function-${AWS::StackName}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role:
@@ -743,6 +742,5 @@ Outputs:
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DNS'
-
 
 ```
