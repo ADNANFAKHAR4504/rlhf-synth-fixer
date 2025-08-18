@@ -361,7 +361,7 @@ Resources:
   ApplicationDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-app-data-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketName: !Sub 'app-data-${AWS::StackName}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -386,7 +386,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-logs-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketName: !Sub 'logs-${AWS::StackName}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -439,7 +439,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${EnvironmentSuffix}'
       DBInstanceClass: !Ref DBInstanceClass
       Engine: 'mysql'
-      EngineVersion: '8.4.6'
+      EngineVersion: '8.0.37'
       AllocatedStorage: '100'
       StorageType: 'gp3'
       StorageEncrypted: true
@@ -471,6 +471,7 @@ Resources:
   CriticalOperationsRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${AWS::StackName}-CriticalOperationsRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -687,6 +688,9 @@ Resources:
         - '*'
       ApprovedPatchesComplianceLevel: 'CRITICAL'
       RejectedPatches: []
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'FinancialApp-PatchBaseline-${EnvironmentSuffix}'
 
   MaintenanceWindow:
     Type: AWS::SSM::MaintenanceWindow
