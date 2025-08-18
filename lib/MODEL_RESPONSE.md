@@ -1,4 +1,3 @@
-I'll create a comprehensive multi-tiered, resilient, and secure web application deployment using Pulumi TypeScript. Let me break this down into modular components that work together to create the complete architecture.
 
 Project Structure
 src/
