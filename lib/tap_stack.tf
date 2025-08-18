@@ -44,8 +44,6 @@ module "iam" {
   
   project_name = var.project_name
   environment  = var.environment
-  s3_data_bucket_arn = module.storage.s3_data_bucket_arn
-  s3_logs_bucket_arn = module.storage.s3_logs_bucket_arn
 }
 
 ######################
@@ -90,20 +88,6 @@ module "compute" {
 }
 
 ######################
-# Monitoring
-######################
-
-# Monitoring Module
-module "monitoring" {
-  source = "./modules"
-  
-  project_name = var.project_name
-  environment  = var.environment
-  vpc_id      = module.networking.vpc_id
-  s3_logs_bucket_name = module.storage.s3_logs_bucket_name
-}
-
-######################
 # Outputs
 ######################
 
@@ -112,23 +96,7 @@ output "vpc_id" {
   value       = module.networking.vpc_id
 }
 
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = module.compute.alb_dns_name
-}
-
-output "rds_endpoint" {
-  description = "RDS instance endpoint"
-  value       = module.database.rds_endpoint
-  sensitive   = true
-}
-
 output "s3_data_bucket_name" {
   description = "Name of the S3 data bucket"
   value       = module.storage.s3_data_bucket_name
-}
-
-output "cloudtrail_arn" {
-  description = "ARN of the CloudTrail"
-  value       = module.monitoring.cloudtrail_arn
 }
