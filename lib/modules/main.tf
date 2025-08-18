@@ -556,11 +556,6 @@ resource "aws_iam_policy" "mfa_policy" {
     ]})
 }
 
-output "vpc_id" {
-  description = "ID of the VPC"
-  value       = aws_vpc.main.id
-}
-
 output "ec2_instance_profile_name" {
   description = "Name of the EC2 instance profile"
   value       = aws_iam_user.app_user.name # Assuming app_user is used for instance profile
