@@ -1,0 +1,5 @@
+# Automatically handle package-lock.json conflicts by regenerating
+package-lock.json merge=ours
+
+# Handle package.json conflicts by taking the incoming version and regenerating lock file
+package.json merge=theirs 

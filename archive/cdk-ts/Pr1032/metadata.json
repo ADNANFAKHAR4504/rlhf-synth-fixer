@@ -1,0 +1,15 @@
+{
+  "taskId": "trainr92",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-08-12T11:51:29-05:00",
+  "po_id": "trainr92",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "hernanmog-turing",
+  "dockerS3Location": ""
+}

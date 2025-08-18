@@ -1,0 +1,678 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Unified DynamoDB table deployment for multi-region with configurable capacity settings",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)"
+        },
+        "ApplicationName": {
+            "Type": "String",
+            "Default": "multi-region-app",
+            "Description": "Application name for resource naming and tagging"
+        },
+        "ReadCapacityUnits": {
+            "Type": "Number",
+            "Default": 10,
+            "MinValue": 1,
+            "MaxValue": 1000,
+            "Description": "Read capacity units for the DynamoDB table (us-west-2 only)"
+        },
+        "WriteCapacityUnits": {
+            "Type": "Number",
+            "Default": 10,
+            "MinValue": 1,
+            "MaxValue": 1000,
+            "Description": "Write capacity units for the DynamoDB table (us-west-2 only)"
+        }
+    },
+    "Conditions": {
+        "IsWest1": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-west-1"
+            ]
+        },
+        "IsWest2": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-west-2"
+            ]
+        },
+        "EnableStreams": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-west-2"
+            ]
+        },
+        "HasCrossRegionReference": {
+            "Fn::Equals": [
+                {
+                    "Ref": "AWS::Region"
+                },
+                "us-west-2"
+            ]
+        }
+    },
+    "Resources": {
+        "DynamoDBTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": [
+                        "${ApplicationName}-${EnvironmentSuffix}-${RegionSuffix}-table",
+                        {
+                            "RegionSuffix": {
+                                "Fn::If": [
+                                    "IsWest1",
+                                    "west1",
+                                    "west2"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "BillingMode": "PROVISIONED",
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": {
+                        "Fn::If": [
+                            "IsWest1",
+                            5,
+                            {
+                                "Ref": "ReadCapacityUnits"
+                            }
+                        ]
+                    },
+                    "WriteCapacityUnits": {
+                        "Fn::If": [
+                            "IsWest1",
+                            5,
+                            {
+                                "Ref": "WriteCapacityUnits"
+                            }
+                        ]
+                    }
+                },
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "PrimaryKey",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "SortKey",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "Fn::If": [
+                            "IsWest2",
+                            {
+                                "AttributeName": "GSI1PK",
+                                "AttributeType": "S"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "PrimaryKey",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "SortKey",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "GlobalSecondaryIndexes": {
+                    "Fn::If": [
+                        "IsWest2",
+                        [
+                            {
+                                "IndexName": "GSI1",
+                                "KeySchema": [
+                                    {
+                                        "AttributeName": "GSI1PK",
+                                        "KeyType": "HASH"
+                                    }
+                                ],
+                                "Projection": {
+                                    "ProjectionType": "ALL"
+                                },
+                                "ProvisionedThroughput": {
+                                    "ReadCapacityUnits": {
+                                        "Ref": "ReadCapacityUnits"
+                                    },
+                                    "WriteCapacityUnits": {
+                                        "Ref": "WriteCapacityUnits"
+                                    }
+                                }
+                            }
+                        ],
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Region",
+                        "Value": {
+                            "Fn::Sub": "${AWS::Region}"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "StackName",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}"
+                        }
+                    },
+                    {
+                        "Key": "DeploymentRegion",
+                        "Value": {
+                            "Fn::Sub": "${AWS::Region}"
+                        }
+                    },
+                    {
+                        "Fn::If": [
+                            "IsWest2",
+                            {
+                                "Key": "PrimaryRegionTable",
+                                "Value": {
+                                    "Fn::ImportValue": {
+                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
+                                    }
+                                }
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    {
+                        "Key": "CapacityConfig",
+                        "Value": {
+                            "Fn::If": [
+                                "IsWest2",
+                                {
+                                    "Fn::Sub": "${ReadCapacityUnits}-${WriteCapacityUnits}"
+                                },
+                                "5-5"
+                            ]
+                        }
+                    }
+                ],
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "StreamSpecification": {
+                    "Fn::If": [
+                        "EnableStreams",
+                        {
+                            "StreamViewType": "NEW_AND_OLD_IMAGES"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "DynamoDBAccessRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DynamoDBTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::If": [
+                                                "IsWest2",
+                                                {
+                                                    "Fn::Sub": "${DynamoDBTable.Arn}/index/*"
+                                                },
+                                                {
+                                                    "Ref": "AWS::NoValue"
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "Fn::If": [
+                                                "HasCrossRegionReference",
+                                                {
+                                                    "Fn::ImportValue": {
+                                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
+                                                    }
+                                                },
+                                                {
+                                                    "Ref": "AWS::NoValue"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Region",
+                        "Value": {
+                            "Fn::Sub": "${AWS::Region}"
+                        }
+                    },
+                    {
+                        "Key": "DeploymentRegion",
+                        "Value": {
+                            "Fn::Sub": "${AWS::Region}"
+                        }
+                    }
+                ]
+            }
+        },
+        "CrossRegionLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Condition": "IsWest2",
+            "Properties": {
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Environment": {
+                    "Variables": {
+                        "LOCAL_TABLE_NAME": {
+                            "Ref": "DynamoDBTable"
+                        },
+                        "LOCAL_TABLE_ARN": {
+                            "Fn::GetAtt": [
+                                "DynamoDBTable",
+                                "Arn"
+                            ]
+                        },
+                        "REMOTE_TABLE_NAME": {
+                            "Fn::If": [
+                                "IsWest2",
+                                {
+                                    "Fn::ImportValue": {
+                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
+                                    }
+                                },
+                                "no-remote-table"
+                            ]
+                        },
+                        "REMOTE_TABLE_ARN": {
+                            "Fn::If": [
+                                "IsWest2",
+                                {
+                                    "Fn::ImportValue": {
+                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
+                                    }
+                                },
+                                "no-remote-table-arn"
+                            ]
+                        },
+                        "TABLE_CONFIG": {
+                            "Fn::Join": [
+                                ",",
+                                [
+                                    {
+                                        "Fn::Sub": "local=${DynamoDBTable}"
+                                    },
+                                    {
+                                        "Fn::If": [
+                                            "IsWest2",
+                                            {
+                                                "Fn::ImportValue": {
+                                                    "Fn::Sub": "TapStack${EnvironmentSuffix}-TableName"
+                                                }
+                                            },
+                                            "no-remote-table"
+                                        ]
+                                    }
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport os\n\ndef lambda_handler(event, context):\n    return {\n        'statusCode': 200,\n        'body': json.dumps({\n            'message': 'Cross-region DynamoDB access configured',\n            'local_table': os.environ.get('LOCAL_TABLE_NAME'),\n            'remote_table': os.environ.get('REMOTE_TABLE_NAME'),\n            'config': os.environ.get('TABLE_CONFIG')\n        })\n    }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsWest2",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBCrossRegionAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "DynamoDBTable",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${DynamoDBTable.Arn}/index/*"
+                                        },
+                                        {
+                                            "Fn::If": [
+                                                "IsWest2",
+                                                {
+                                                    "Fn::ImportValue": {
+                                                        "Fn::Sub": "TapStack${EnvironmentSuffix}-TableArn"
+                                                    }
+                                                },
+                                                {
+                                                    "Ref": "AWS::NoValue"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "TableName": {
+            "Description": "DynamoDB Table Name",
+            "Value": {
+                "Ref": "DynamoDBTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TableName"
+                }
+            }
+        },
+        "TableArn": {
+            "Description": "DynamoDB Table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DynamoDBTable",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TableArn"
+                }
+            }
+        },
+        "TableStreamArn": {
+            "Description": "DynamoDB Table Stream ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DynamoDBTable",
+                    "StreamArn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TableStreamArn"
+                }
+            },
+            "Condition": "EnableStreams"
+        },
+        "GSIArn": {
+            "Description": "Global Secondary Index ARN",
+            "Value": {
+                "Fn::Sub": "${DynamoDBTable.Arn}/index/GSI1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-GSIArn"
+                }
+            },
+            "Condition": "IsWest2"
+        },
+        "IAMRoleArn": {
+            "Description": "IAM Role ARN for DynamoDB access",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DynamoDBAccessRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-IAMRoleArn"
+                }
+            }
+        },
+        "CrossRegionConfig": {
+            "Description": "Cross-region table configuration",
+            "Value": {
+                "Fn::Sub": "Cross-region setup for ${DynamoDBTable}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CrossRegionConfig"
+                }
+            },
+            "Condition": "HasCrossRegionReference"
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda function ARN for cross-region operations",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CrossRegionLambdaFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+                }
+            },
+            "Condition": "IsWest2"
+        },
+        "CapacityConfiguration": {
+            "Description": "Current capacity configuration",
+            "Value": {
+                "Fn::If": [
+                    "IsWest1",
+                    "Read: 5, Write: 5 (Fixed)",
+                    {
+                        "Fn::Sub": "Read: ${ReadCapacityUnits}, Write: ${WriteCapacityUnits} (Parameterized)"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CapacityConfiguration"
+                }
+            }
+        },
+        "TableDetails": {
+            "Description": "Combined table information",
+            "Value": {
+                "Fn::Join": [
+                    " | ",
+                    [
+                        {
+                            "Fn::Sub": "Table: ${DynamoDBTable}"
+                        },
+                        {
+                            "Fn::Sub": "Region: ${AWS::Region}"
+                        },
+                        {
+                            "Fn::Sub": "Environment: ${EnvironmentSuffix}"
+                        },
+                        {
+                            "Fn::Sub": "DeploymentRegion: ${AWS::Region}"
+                        }
+                    ]
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TableDetails"
+                }
+            }
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Application Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix",
+                        "ApplicationName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "DynamoDB Capacity Settings (us-west-2 only)"
+                    },
+                    "Parameters": [
+                        "ReadCapacityUnits",
+                        "WriteCapacityUnits"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "EnvironmentSuffix": {
+                    "default": "Environment Suffix"
+                },
+                "ApplicationName": {
+                    "default": "Application Name"
+                },
+                "ReadCapacityUnits": {
+                    "default": "Read Capacity Units"
+                },
+                "WriteCapacityUnits": {
+                    "default": "Write Capacity Units"
+                }
+            }
+        },
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": [
+                    "W6001",
+                    "W1028"
+                ],
+                "ignore_bad_template": false
+            }
+        }
+    }
+}

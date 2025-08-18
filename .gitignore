@@ -20,6 +20,7 @@ cdk.out/
 
 # IDE/Editor files
 .vscode/settings.local.json
+.claude/settings.local.json
 .idea/
 *.swp
 *.swo
@@ -72,6 +73,7 @@ venv.bak/
 .coverage
 coverage.xml
 cov.json
+coverage
 
 cfn-outputs/*
 
@@ -83,13 +85,20 @@ imports/*
 cdktf.out
 cdktf.log
 *terraform.*.tfstate*
+.gen
+bin/.terraform.lock.hcl
 .genpackage-lock.json
-
+.gen/providers/*
 
 __pycache__/
 .pulumi/
-# CDK build output
-cdk.out/
 
 tasks-status.md
 worktree/
+bin/.terraform.lock.hcl
+bin/tfplan
+
+build
+tasks.csv
+.sherlock/data
+.sherlock/reports

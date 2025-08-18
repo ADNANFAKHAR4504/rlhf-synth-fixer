@@ -9,24 +9,39 @@ inputs:
     description: "Whether to download build artifacts"
     required: false
     default: "true"
-  download-cdk-artifacts:
-    description: "Whether to download CDK artifacts"
-    required: false
-    default: "false"
   terraform-version:
     description: "Terraform version to use"
     required: false
     default: "1.12.2"
+  pulumi-version:
+    description: "Pulumi version to use"
+    required: false
+    default: "3.109.0"
+  upload-artifacts:
+    description: "Whether to upload build artifacts (only for build job)"
+    required: false
+    default: "false"
+  platform:
+    description: "The platform type (cdk, cdktf, cfn, pulumi, terraform)"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
   steps:
     - name: Download build artifacts
       if: inputs.download-artifacts == 'true'
+      id: download-artifacts
       uses: actions/download-artifact@v4
       with:
         name: build-artifacts
+      continue-on-error: true
 
+    - name: Set artifact status
+      if: inputs.download-artifacts == 'true'
+      shell: bash
+      run: echo "ARTIFACTS_FOUND=${{ steps.download-artifacts.outcome == 'success' && 'true' || 'false' }}" >> $GITHUB_ENV
+        
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -40,39 +55,51 @@ runs:
         check-latest: true
 
     - name: Setup Terraform
+      if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: ${{ inputs.terraform-version }}
 
-    - name: Install pipenv
-      shell: bash
-      run: |
-        python -m pip install --upgrade pip
-        pip install pipenv==2025.0.4
-
-    - name: Install dependencies
-      shell: bash
-      run: npm ci
-
-    - name: Install Python dependencies
-      shell: bash
-      run: |
-        if [ -f "Pipfile" ]; then
-          echo "Installing Python dependencies from Pipfile..."
-          pipenv install --dev
-        else
-          echo "No Pipfile found, skipping Python dependencies"
-        fi
-
-    - name: Download CDK artifacts
-      if: inputs.download-cdk-artifacts == 'true'
-      uses: actions/download-artifact@v4
+    - name: Install Pulumi CLI
+      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      uses: pulumi/actions@v5
       with:
-        name: cdk-artifacts
-        path: cdk.out/
+        pulumi-version: ${{ inputs.pulumi-version }}
 
-    - name: Restore executable permissions and setup PATH
+    - name: Cache Python virtual environment
+      uses: actions/cache@v4
+      with:
+        path: .venv
+        key: ${{ runner.os }}-python-${{ hashFiles('Pipfile.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-python-
+
+    - name: Setup environment using script
       shell: bash
-      run: |
-        chmod +x node_modules/.bin/* 2>/dev/null || true
-        echo "${{ github.workspace }}/node_modules/.bin" >> $GITHUB_PATH
+      run: ./scripts/setup.sh
+      env:
+        NODE_VERSION: ${{ inputs.node-version }}
+        TERRAFORM_VERSION: ${{ inputs.terraform-version }}
+        PULUMI_VERSION: ${{ inputs.pulumi-version }}
+        DOWNLOAD_ARTIFACTS: ${{ inputs.download-artifacts }}
+        UPLOAD_ARTIFACTS: ${{ inputs.upload-artifacts }}
+        PLATFORM: ${{ inputs.platform }}
+
+    - name: Upload build artifacts
+      if: inputs.upload-artifacts == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        include-hidden-files: true
+        path: |
+          bin/
+          lib/
+          package*.json
+          Pipfile
+          Pipfile.lock
+          tsconfig.json
+          cdk.json
+          metadata.json
+          lambda/
+
+
