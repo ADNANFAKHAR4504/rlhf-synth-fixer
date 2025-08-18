@@ -9,6 +9,9 @@ import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Note: S3 buckets in us-east-1 return undefined for LocationConstraint
+// This is expected AWS behavior - us-east-1 is the default region
+
 // AWS SDK clients
 const region = 'us-east-1';
 const stsClient = new STSClient({ region});
@@ -23,6 +26,16 @@ const iamClient = new IAMClient({ region});
 // Load infrastructure outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+
+// Helper function to validate S3 bucket location
+const validateS3BucketLocation = (locationConstraint: string | undefined, expectedRegion: string) => {
+  if (expectedRegion === 'us-east-1') {
+    // S3 buckets in us-east-1 return undefined for LocationConstraint
+    expect(locationConstraint).toBeUndefined();
+  } else {
+    expect(locationConstraint).toBe(expectedRegion);
+  }
+};
 
 describe('Secure Infrastructure Integration Tests', () => {
   let accountId: string;
@@ -143,7 +156,7 @@ describe('Secure Infrastructure Integration Tests', () => {
         const locationResponse = await s3Client.send(new GetBucketLocationCommand({
           Bucket: bucketName as string
         }));
-        expect(locationResponse.LocationConstraint).toBe('us-east-1');
+        validateS3BucketLocation(locationResponse.LocationConstraint, region);
 
         // Check versioning
         const versioningResponse = await s3Client.send(new GetBucketVersioningCommand({
@@ -168,7 +181,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       const locationResponse = await s3Client.send(new GetBucketLocationCommand({
         Bucket: sensitiveBucket
       }));
-      expect(locationResponse.LocationConstraint).toBe(region);
+      validateS3BucketLocation(locationResponse.LocationConstraint, region);
     });
   });
 
@@ -309,7 +322,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       const locationResponse = await s3Client.send(new GetBucketLocationCommand({
         Bucket: configBucket
       }));
-      expect(locationResponse.LocationConstraint).toBe(region);
+      validateS3BucketLocation(locationResponse.LocationConstraint, region);
     });
 
     test('All resources are in the correct region', async () => {
