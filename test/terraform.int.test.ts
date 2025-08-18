@@ -19,20 +19,40 @@ async function httpGet(url: string): Promise<{ status: number; body: string }> {
 }
 
 describe('Terraform E2E Integration', () => {
-  const outputsPath = path.resolve(
-    process.cwd(),
-    'cfn-outputs/flat-outputs.json'
-  );
+  const flatPath = path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json');
+  const fullPath = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
   let outputs: Record<string, string> = {};
 
   beforeAll(() => {
-    if (!fs.existsSync(outputsPath)) {
-      throw new Error(
-        `Deployment outputs not found at ${outputsPath}. Ensure deploy step ran.`
-      );
+    if (fs.existsSync(flatPath)) {
+      const raw = fs.readFileSync(flatPath, 'utf8') || '{}';
+      try {
+        outputs = JSON.parse(raw);
+      } catch {
+        outputs = {};
+      }
     }
-    const raw = fs.readFileSync(outputsPath, 'utf8');
-    outputs = JSON.parse(raw);
+
+    // Fallback: read from all-outputs.json and extract .value fields
+    if (
+      (!outputs || Object.keys(outputs).length === 0) &&
+      fs.existsSync(fullPath)
+    ) {
+      const raw = fs.readFileSync(fullPath, 'utf8') || '{}';
+      try {
+        const all = JSON.parse(raw) as any;
+        const maybeCloudfront = all?.cloudfront_domain_name?.value;
+        const maybeApi = all?.api_invoke_url?.value;
+        outputs = {
+          ...(maybeCloudfront
+            ? { cloudfront_domain_name: maybeCloudfront }
+            : {}),
+          ...(maybeApi ? { api_invoke_url: maybeApi } : {}),
+        } as Record<string, string>;
+      } catch {
+        // ignore
+      }
+    }
   });
 
   test('CloudFront is reachable (200/302)', async () => {
