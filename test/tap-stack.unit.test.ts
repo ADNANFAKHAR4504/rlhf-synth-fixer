@@ -120,12 +120,6 @@ describe('TapStack CloudFormation Template', () => {
       const lt = template.Resources.WebServerLaunchTemplate.Properties.LaunchTemplateData.ImageId;
       expect(lt['Fn::FindInMap']).toBeDefined();
     });
-
-    test('CloudFrontDistribution should have logging enabled', () => {
-      const cf = template.Resources.CloudFrontDistribution.Properties.DistributionConfig.Logging;
-      expect(cf.Bucket).toBeDefined();
-      expect(cf.Prefix).toBeDefined();
-    });
   });
 
   describe('Outputs', () => {

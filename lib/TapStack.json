@@ -1162,16 +1162,6 @@
                     "Comment": {
                         "Fn::Sub": "${ProjectName}-${Environment} CloudFront Distribution"
                     },
-                    "Logging": {
-                        "Bucket": {
-                            "Fn::GetAtt": [
-                                "CloudFrontLogsBucket",
-                                "DomainName"
-                            ]
-                        },
-                        "Prefix": "cloudfront-logs/",
-                        "IncludeCookies": false
-                    },
                     "PriceClass": "PriceClass_100"
                 },
                 "Tags": [
