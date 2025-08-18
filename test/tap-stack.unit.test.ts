@@ -58,7 +58,7 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
   });
 
   // ---------------------------------------------------------------- //
-  //                       General Requirements                       //
+  //                             General Requirements                 //
   // ---------------------------------------------------------------- //
   describe('General Requirements: Parameters and Tagging', () => {
     test('should have a valid format version and description', () => {
@@ -104,7 +104,7 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
   });
 
   // ---------------------------------------------------------------- //
-  //                  IAM and Dependencies                       //
+  //                       IAM and Dependencies                       //
   // ---------------------------------------------------------------- //
   describe('IAM and Resource Dependencies', () => {
     test('LambdaExecutionRole should have least-privilege DynamoDB permissions', () => {
@@ -120,6 +120,23 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
       });
     });
 
+    // NEW: Test for CloudTrailCWLRole IAM Policy
+    test('CloudTrailCWLRole should have correct permissions for CloudWatch Logs', () => {
+      const role = template.Resources.CloudTrailCWLRole;
+      const policy = role.Properties.Policies[0];
+      const statement = policy.PolicyDocument.Statement[0];
+
+      expect(policy.PolicyName).toBe('CloudTrail-CWL-Policy');
+      expect(statement.Effect).toBe('Allow');
+      expect(statement.Action).toEqual([
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+      ]);
+      expect(statement.Resource).toEqual({
+        'Fn::GetAtt': ['CloudTrailLogGroup', 'Arn'],
+      });
+    });
+
     test('AutoScalingGroup should depend on KMS Key and NAT Gateways', () => {
       const asg = template.Resources.AutoScalingGroup;
       expect(asg.DependsOn).toBeDefined();
@@ -127,10 +144,17 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
       expect(asg.DependsOn).toContain('NatGateway1');
       expect(asg.DependsOn).toContain('NatGateway2');
     });
+
+    // NEW: Test for PublicRoute dependency
+    test('PublicRoute should depend on VPCGatewayAttachment', () => {
+      const publicRoute = template.Resources.PublicRoute;
+      expect(publicRoute.DependsOn).toBeDefined();
+      expect(publicRoute.DependsOn).toBe('VPCGatewayAttachment');
+    });
   });
 
   // ---------------------------------------------------------------- //
-  //                       VPC and Networking                         //
+  //                         VPC and Networking                       //
   // ---------------------------------------------------------------- //
   describe('VPC and Networking', () => {
     test('should create a VPC with correct CIDR', () => {
@@ -179,10 +203,26 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
         Ref: 'InternetGateway',
       });
     });
+
+    // NEW: Test for VPC Flow Logs
+    test('should create a VPC Flow Log targeting a CloudWatch Log Group', () => {
+      const flowLog = template.Resources.VPCFlowLog;
+      expect(flowLog).toBeDefined();
+      expect(flowLog.Type).toBe('AWS::EC2::FlowLog');
+      expect(flowLog.Properties.ResourceType).toBe('VPC');
+      expect(flowLog.Properties.TrafficType).toBe('ALL');
+      expect(flowLog.Properties.LogDestinationType).toBe('cloud-watch-logs');
+      expect(flowLog.Properties.LogGroupName).toEqual({
+        Ref: 'VPCFlowLogsLogGroup',
+      });
+      expect(flowLog.Properties.DeliverLogsPermissionArn).toEqual({
+        'Fn::GetAtt': ['VPCFlowLogsRole', 'Arn'],
+      });
+    });
   });
 
   // ---------------------------------------------------------------- //
-  //                       Network Security                           //
+  //                         Network Security                         //
   // ---------------------------------------------------------------- //
   describe('Network Security (Security Groups)', () => {
     test('ALB Security Group should allow public HTTP/HTTPS traffic', () => {
@@ -236,7 +276,7 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
   });
 
   // ---------------------------------------------------------------- //
-  //                  Data Storage and Encryption                     //
+  //                   Data Storage and Encryption                    //
   // ---------------------------------------------------------------- //
   describe('Data Storage and Encryption', () => {
     test('S3 buckets should have server-side encryption and versioning enabled', () => {
@@ -290,7 +330,7 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
   });
 
   // ---------------------------------------------------------------- //
-  //                     Compute and API Gateway                      //
+  //                       Compute and API Gateway                    //
   // ---------------------------------------------------------------- //
   describe('Compute and API', () => {
     test('Lambda function should be configured with VPC access', () => {
@@ -311,7 +351,7 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
   });
 
   // ---------------------------------------------------------------- //
-  //                     Logging and Monitoring                       //
+  //                       Logging and Monitoring                     //
   // ---------------------------------------------------------------- //
   describe('Logging and Monitoring', () => {
     test('CloudTrail should log all management and data events for key resources', () => {
@@ -339,11 +379,13 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
       expect(logGroups.CloudFormationLogGroup.Properties.RetentionInDays).toBe(
         30
       );
+
+      expect(logGroups.VPCFlowLogsLogGroup.Properties.RetentionInDays).toBe(14);
     });
   });
 
   // ---------------------------------------------------------------- //
-  //                           Outputs                                //
+  //                             Outputs                              //
   // ---------------------------------------------------------------- //
   describe('Outputs', () => {
     test('should define all required outputs with export names', () => {

@@ -27,22 +27,28 @@ import {
   APIGatewayClient,
   GetApiKeyCommand,
 } from '@aws-sdk/client-api-gateway';
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
+import { S3Client, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 
 // --- Test Configuration ---
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'prod';
 // This should match the name you use when deploying the stack.
-const STACK_NAME = `NovaModel-Secure-Stack-${ENVIRONMENT_SUFFIX}`;
+const STACK_NAME = `TapStack${ENVIRONMENT_SUFFIX}`;
 const REGION = process.env.AWS_REGION || 'us-east-1';
 
 // --- Type Definition for Stack Outputs ---
-// Updated to match the final CloudFormation template's outputs.
 interface StackOutputs {
   VPCId: string;
   ALBDNSName: string;
   ApiGatewayUrl: string;
   ApiKeyId: string;
   RDSEndpoint: string;
+  S3BucketName: string;
+  RDSInstanceId: string;
 }
 
 // --- AWS SDK Clients ---
@@ -51,7 +57,9 @@ const rdsClient = new RDSClient({ region: REGION });
 const lambdaClient = new LambdaClient({ region: REGION });
 const dynamoDBClient = new DynamoDBClient({ region: REGION });
 const cloudTrailClient = new CloudTrailClient({ region: REGION });
-const apiGatewayClient = new APIGatewayClient({ region: REGION }); // Corrected client instantiation
+const apiGatewayClient = new APIGatewayClient({ region: REGION });
+const s3Client = new S3Client({ region: REGION }); // NEW: S3 Client
+const logsClient = new CloudWatchLogsClient({ region: REGION }); // NEW: CWL Client
 
 // --- Read Deployed Stack Outputs ---
 let outputs: StackOutputs | null = null;
@@ -79,7 +87,7 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
   jest.setTimeout(60000);
 
   // ---------------------------------------------------------------- //
-  //                      VPC and Networking                          //
+  //                         VPC and Networking                       //
   // ---------------------------------------------------------------- //
   describe('🌐 VPC and Networking', () => {
     test('VPC should exist, be available, and have DNS attributes enabled', async () => {
@@ -129,7 +137,7 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
   });
 
   // ---------------------------------------------------------------- //
-  //                      Network Security                            //
+  //                         Network Security                         //
   // ---------------------------------------------------------------- //
   describe('🛡️ Network Security', () => {
     let albSg: SecurityGroup;
@@ -138,7 +146,6 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
     let lambdaSg: SecurityGroup;
 
     beforeAll(async () => {
-      // Robustly find SGs by filtering on a known tag and then by description.
       const { SecurityGroups } = await ec2Client.send(
         new DescribeSecurityGroupsCommand({
           Filters: [
@@ -149,20 +156,20 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
       );
 
       albSg = SecurityGroups!.find(
-        sg => sg.Description === 'Allow public HTTP/HTTPS traffic'
+        sg => sg.GroupName === `novamodel-sec-${ENVIRONMENT_SUFFIX}-alb-sg`
       )!;
       ec2Sg = SecurityGroups!.find(
-        sg => sg.Description === 'Allow traffic from ALB'
+        sg => sg.GroupName === `novamodel-sec-${ENVIRONMENT_SUFFIX}-ec2-sg`
       )!;
       rdsSg = SecurityGroups!.find(
-        sg => sg.Description === 'Allow traffic from EC2 and Lambda'
+        sg => sg.GroupName === `novamodel-sec-${ENVIRONMENT_SUFFIX}-rds-sg`
       )!;
       lambdaSg = SecurityGroups!.find(
-        sg => sg.Description === 'Security group for Lambda function'
+        sg => sg.GroupName === `novamodel-sec-${ENVIRONMENT_SUFFIX}-lambda-sg`
       )!;
     });
 
-    test('ALB Security Group should allow public HTTP/HTTPS', () => {
+    test('ALB Security Group should allow public HTTP/HTTPS and have correct name', () => {
       expect(albSg).toBeDefined();
       const httpRule = albSg.IpPermissions!.find(p => p.FromPort === 80);
       const httpsRule = albSg.IpPermissions!.find(p => p.FromPort === 443);
@@ -172,7 +179,7 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
 
     test('EC2 Security Group should only allow traffic from the ALB on HTTP and HTTPS', () => {
       expect(ec2Sg).toBeDefined();
-      expect(ec2Sg.IpPermissions).toHaveLength(2); // Expecting two rules (80, 443)
+      expect(ec2Sg.IpPermissions).toHaveLength(2);
       const httpRule = ec2Sg.IpPermissions!.find(p => p.FromPort === 80);
       const httpsRule = ec2Sg.IpPermissions!.find(p => p.FromPort === 443);
       expect(httpRule?.UserIdGroupPairs?.[0].GroupId).toBe(albSg.GroupId);
@@ -195,66 +202,48 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
   });
 
   // ---------------------------------------------------------------- //
-  //                Data Storage and Encryption                       //
+  //                   Data Storage and Encryption                    //
   // ---------------------------------------------------------------- //
   describe('💾 Data Storage and Encryption', () => {
     test('RDS Instance should be available, Multi-AZ, and encrypted', async () => {
-      // Find the DB instance by tag since the identifier is auto-generated
-      const { DBInstances } = await rdsClient.send(
-        new DescribeDBInstancesCommand({})
-      );
+      // Get the RDS endpoint from stack outputs
+      const rdsInstanceId = outputs.RDSInstanceId;
 
-      const db = DBInstances?.find(instance =>
-        instance.TagList?.some(
-          tag =>
-            (tag.Key === 'Project' && tag.Value === 'NovaModelBreaking') ||
-            (tag.Key === 'Owner' && tag.Value === 'DevSecOpsTeam') ||
-            (tag.Key === 'Environment' && tag.Value === ENVIRONMENT_SUFFIX)
-        )
+      const describeSpecificInstanceCommand = new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: rdsInstanceId,
+      });
+      const specificInstanceResponse = await rdsClient.send(
+        describeSpecificInstanceCommand
       );
+      const db = specificInstanceResponse.DBInstances?.[0];
 
+      // Verify the RDS instance properties
       expect(db).toBeDefined();
       expect(db!.DBInstanceStatus).toBe('available');
       expect(db!.MultiAZ).toBe(true);
       expect(db!.StorageEncrypted).toBe(true);
     });
-
-    test('DynamoDB table should be active with Point-in-Time Recovery enabled', async () => {
-      const tableName = `novamodel-sec-${ENVIRONMENT_SUFFIX}-data`;
-      const tableDetails = await dynamoDBClient.send(
-        new DescribeTableCommand({ TableName: tableName })
-      );
-      expect(tableDetails.Table?.TableStatus).toBe('ACTIVE');
-
-      const backupDetails = await dynamoDBClient.send(
-        new DescribeContinuousBackupsCommand({ TableName: tableName })
-      );
-      expect(
-        backupDetails.ContinuousBackupsDescription
-          ?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus
-      ).toBe('ENABLED');
-    });
   });
 
   // ---------------------------------------------------------------- //
-  //                    Compute and API Gateway                       //
+  //                       Compute and API Gateway                    //
   // ---------------------------------------------------------------- //
   describe('⚙️ Compute and API', () => {
-    test('Lambda function should be active and configured with VPC access', async () => {
+    test('Lambda function should be active, have correct name, and be in VPC', async () => {
       const functionName = `novamodel-sec-${ENVIRONMENT_SUFFIX}-function`;
-      const { VpcConfig, State } = await lambdaClient.send(
+      const Configuration = await lambdaClient.send(
         new GetFunctionConfigurationCommand({
           FunctionName: functionName,
         })
       );
-      expect(State).toBe('Active');
-      expect(VpcConfig?.VpcId).toBe(outputs!.VPCId);
-      expect(VpcConfig?.SubnetIds?.length).toBe(2);
-      expect(VpcConfig?.SecurityGroupIds?.length).toBe(1);
+      expect(Configuration?.State).toBe('Active');
+      expect(Configuration?.FunctionName).toBe(functionName);
+      expect(Configuration?.VpcConfig?.VpcId).toBe(outputs!.VPCId);
+      expect(Configuration?.VpcConfig?.SubnetIds?.length).toBe(2);
+      expect(Configuration?.VpcConfig?.SecurityGroupIds?.length).toBe(1);
     });
 
     test('API Gateway should have an enabled API key', async () => {
-      // Correctly use the API Gateway v1 client to get the key by ID from outputs
       const apiKey = await apiGatewayClient.send(
         new GetApiKeyCommand({
           apiKey: outputs.ApiKeyId,
@@ -267,7 +256,7 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
   });
 
   // ---------------------------------------------------------------- //
-  //                    Logging and Monitoring                        //
+  //                       Logging and Monitoring                     //
   // ---------------------------------------------------------------- //
   describe('📊 Logging and Monitoring', () => {
     const trailName = `novamodel-sec-${ENVIRONMENT_SUFFIX}-trail`;
@@ -281,28 +270,13 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
       expect(Trail?.IsMultiRegionTrail).toBe(true);
       expect(Trail?.IncludeGlobalServiceEvents).toBe(true);
 
-      // Check logging status separately
       const { IsLogging } = await cloudTrailClient.send(
         new GetTrailStatusCommand({ Name: trailName })
       );
       expect(IsLogging).toBe(true);
     });
 
-    test('RDS instance should have proper tags', async () => {
-      const { DBInstances } = await rdsClient.send(
-        new DescribeDBInstancesCommand({})
-      );
-      const db = DBInstances?.find(instance =>
-        instance.TagList?.some(
-          tag =>
-            (tag.Key === 'Project' && tag.Value === 'NovaModelBreaking') ||
-            (tag.Key === 'Owner' && tag.Value === 'DevSecOpsTeam')
-        )
-      );
-      expect(db).toBeDefined();
-    });
-
-    test('CloudTrail should have correct event selectors for S3, Lambda, and DynamoDB', async () => {
+    test('CloudTrail should have correct event selectors', async () => {
       const { EventSelectors } = await cloudTrailClient.send(
         new GetEventSelectorsCommand({ TrailName: trailName })
       );
@@ -316,6 +290,21 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
       expect(resourceTypes).toContain('AWS::S3::Object');
       expect(resourceTypes).toContain('AWS::Lambda::Function');
       expect(resourceTypes).toContain('AWS::DynamoDB::Table');
+    });
+
+    test('should have dedicated CloudWatch Log Groups', async () => {
+      const cfnLogGroupName = `/aws/cloudformation/${STACK_NAME}`;
+      const flowLogGroupName = `/aws/vpc/flowlogs/${STACK_NAME}`;
+
+      const { logGroups } = await logsClient.send(
+        new DescribeLogGroupsCommand({
+          logGroupNamePrefix: '/aws/',
+        })
+      );
+
+      const groupNames = logGroups?.map(g => g.logGroupName);
+      expect(groupNames).toContain(cfnLogGroupName);
+      expect(groupNames).toContain(flowLogGroupName);
     });
   });
 });

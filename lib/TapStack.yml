@@ -48,7 +48,6 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/novamodel-sec-${EnvironmentSuffix}-function'
       RetentionInDays: 30
 
-  # NEW: Log Group for VPC Flow Logs
   VPCFlowLogsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -163,7 +162,6 @@ Resources:
     Properties:
       CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
 
-  # NEW: IAM Role for VPC Flow Logs
   VPCFlowLogsRole:
     Type: AWS::IAM::Role
     Properties:
@@ -187,7 +185,6 @@ Resources:
                   - 'logs:DescribeLogStreams'
                 Resource: !GetAtt VPCFlowLogsLogGroup.Arn
 
-  # NEW: VPC Flow Log resource
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
@@ -886,3 +883,7 @@ Outputs:
     Description: 'Name of the Auto Scaling Group'
     Value: !Ref AutoScalingGroup
     Export: { Name: !Sub '${AWS::StackName}-AutoScalingGroupName' }
+  RDSInstanceId:
+    Description: 'RDS Instance Identifier'
+    Value: !Ref RDSDatabase
+    Export: { Name: !Sub '${AWS::StackName}-RDSInstanceId' }
