@@ -113,6 +113,12 @@ variable "acm_certificate_arn" {
   default     = "arn:aws:acm:us-east-1:111122223333:certificate/00000000-0000-0000-0000-000000000000"
 }
 
+variable "enable_config" {
+  description = "Enable AWS Config resources (guard against account recorder limits)"
+  type        = bool
+  default     = false
+}
+
 ########################
 # Data sources
 ########################
@@ -150,6 +156,36 @@ resource "aws_kms_key" "main" {
   description             = "KMS key for ${local.name_prefix} general encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid: "EnableIAMUserPermissions",
+        Effect: "Allow",
+        Principal: { AWS: "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" },
+        Action: "kms:*",
+        Resource: "*"
+      },
+      {
+        Sid: "AllowCloudWatchLogs",
+        Effect: "Allow",
+        Principal: { Service: "logs.${var.aws_region}.amazonaws.com" },
+        Action: [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ],
+        Resource: "*",
+        Condition: {
+          ArnEquals: {
+            "kms:EncryptionContext:aws:logs:arn": "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
   tags                    = merge(local.common_tags, { Name = "${local.name_prefix}-kms" })
 }
 
@@ -320,8 +356,8 @@ resource "aws_flow_log" "vpc" {
   vpc_id                   = aws_vpc.main.id
   traffic_type             = "ALL"
   log_destination_type     = "cloud-watch-logs"
-  log_group_name           = aws_cloudwatch_log_group.vpc_flow.name
-  deliver_logs_permission_arn = aws_iam_role.vpc_flow.arn
+  log_destination          = aws_cloudwatch_log_group.vpc_flow.arn
+  iam_role_arn             = aws_iam_role.vpc_flow.arn
   tags                     = merge(local.common_tags, { Name = "${local.name_prefix}-vpc-flow" })
 }
 
@@ -458,14 +494,23 @@ resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
   policy = jsonencode({
     Version = "2012-10-17",
-    Statement = [{
-      Sid      = "AllowELBLogDelivery",
-      Effect   = "Allow",
-      Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
-      Action   = ["s3:PutObject"],
-      Resource = "${aws_s3_bucket.logs.arn}/*",
-      Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
-    }]
+    Statement = [
+      {
+        Sid       = "AWSLogDeliveryWrite",
+        Effect    = "Allow",
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
+        Action    = ["s3:PutObject", "s3:PutObjectAcl"],
+        Resource  = "${aws_s3_bucket.logs.arn}/*",
+        Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
+      },
+      {
+        Sid       = "AWSLogDeliveryCheck",
+        Effect    = "Allow",
+        Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
+        Action    = ["s3:GetBucketAcl", "s3:ListBucket"],
+        Resource  = aws_s3_bucket.logs.arn
+      }
+    ]
   })
 }
 
@@ -581,7 +626,11 @@ resource "aws_lb" "main" {
   internal           = false
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
-  access_logs { bucket = aws_s3_bucket.logs.bucket, prefix = "alb", enabled = true }
+  access_logs {
+    bucket  = aws_s3_bucket.logs.bucket
+    prefix  = "alb"
+    enabled = true
+  }
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-alb" })
 }
 
@@ -604,7 +653,10 @@ resource "aws_lb_listener" "https" {
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
   certificate_arn   = var.acm_certificate_arn
-  default_action { type = "forward", target_group_arn = aws_lb_target_group.main.arn }
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
 }
 
 resource "aws_lb_listener" "http" {
@@ -613,7 +665,11 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
   default_action {
     type = "redirect"
-    redirect { port = "443", protocol = "HTTPS", status_code = "HTTP_301" }
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
@@ -693,8 +749,14 @@ resource "aws_launch_template" "main" {
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
-  filter { name = "name", values = ["amzn2-ami-hvm-*-x86_64-gp2"] }
-  filter { name = "virtualization-type", values = ["hvm"] }
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
 resource "aws_autoscaling_group" "main" {
@@ -731,7 +793,7 @@ resource "aws_db_subnet_group" "main" {
 
 resource "aws_db_parameter_group" "main" {
   name        = "${local.name_prefix}-pg"
-  family      = "postgres15"
+  family      = "postgres17"
   description = "Parameter group for ${local.name_prefix}"
   tags        = merge(local.common_tags, { Name = "${local.name_prefix}-pg" })
 }
@@ -764,6 +826,7 @@ resource "aws_db_instance" "main" {
 # AWS Config (recorder, delivery, rules)
 ########################
 resource "aws_config_configuration_recorder" "main" {
+  count    = var.enable_config ? 1 : 0
   name     = "${local.name_prefix}-recorder"
   role_arn = local.config_service_linked_role_arn
   recording_group {
@@ -773,18 +836,21 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
+  count          = var.enable_config ? 1 : 0
   name           = "${local.name_prefix}-delivery"
   s3_bucket_name = aws_s3_bucket.config.bucket
   depends_on     = [aws_config_configuration_recorder.main]
 }
 
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count      = var.enable_config ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.main]
 }
 
 resource "aws_config_config_rule" "s3_encryption" {
+  count = var.enable_config ? 1 : 0
   name = "${local.name_prefix}-s3-bucket-sse"
   source {
     owner             = "AWS"
@@ -794,6 +860,7 @@ resource "aws_config_config_rule" "s3_encryption" {
 }
 
 resource "aws_config_config_rule" "s3_public_read" {
+  count = var.enable_config ? 1 : 0
   name = "${local.name_prefix}-s3-public-read-prohibited"
   source {
     owner             = "AWS"
@@ -803,6 +870,7 @@ resource "aws_config_config_rule" "s3_public_read" {
 }
 
 resource "aws_config_config_rule" "iam_password_policy" {
+  count = var.enable_config ? 1 : 0
   name = "${local.name_prefix}-iam-password-policy"
   source {
     owner             = "AWS"
@@ -881,5 +949,5 @@ output "s3_data_bucket" { value = aws_s3_bucket.data.bucket }
 output "s3_config_bucket" { value = aws_s3_bucket.config.bucket }
 output "sns_topic_arn" { value = aws_sns_topic.alerts.arn }
 output "vpc_flow_log_group" { value = aws_cloudwatch_log_group.vpc_flow.name }
-output "config_recorder_name" { value = aws_config_configuration_recorder.main.name }
+output "config_recorder_name" { value = var.enable_config ? aws_config_configuration_recorder.main[0].name : null }
 ```
