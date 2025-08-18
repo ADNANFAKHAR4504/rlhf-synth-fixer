@@ -268,7 +268,7 @@ describe('TapStack', () => {
   describe('Route 53', () => {
     test('creates hosted zone', () => {
       template.hasResourceProperties('AWS::Route53::HostedZone', {
-        Name: `tap-app-${environmentSuffix}.example.com.`,
+        Name: `tap-app-${environmentSuffix}.local.`,
         HostedZoneConfig: {
           Comment: 'Hosted zone for TAP application',
         },
@@ -278,21 +278,21 @@ describe('TapStack', () => {
     test('creates A record for ALB', () => {
       template.hasResourceProperties('AWS::Route53::RecordSet', {
         Type: 'A',
-        Name: `api.tap-app-${environmentSuffix}.example.com.`,
+        Name: `api.tap-app-${environmentSuffix}.local.`,
       });
     });
 
     test('creates AAAA record for ALB', () => {
       template.hasResourceProperties('AWS::Route53::RecordSet', {
         Type: 'AAAA',
-        Name: `api.tap-app-${environmentSuffix}.example.com.`,
+        Name: `api.tap-app-${environmentSuffix}.local.`,
       });
     });
 
     test('creates A record for CloudFront', () => {
       template.hasResourceProperties('AWS::Route53::RecordSet', {
         Type: 'A',
-        Name: `www.tap-app-${environmentSuffix}.example.com.`,
+        Name: `www.tap-app-${environmentSuffix}.local.`,
       });
     });
   });
