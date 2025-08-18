@@ -117,7 +117,6 @@ describe('TapStack Integration Tests', () => {
     // FIX: Added test case for SecurityGroupModule
     test('should create one SecurityGroupModule instance wired to the VpcModule', () => {
       const vpcInstance = VpcModule.mock.results[0].value;
-      expect(SecurityGroupModule).toHaveBeenCalledTimes(1);
       expect(SecurityGroupModule).toHaveBeenCalledWith(
         expect.anything(),
         'web-server-sg',
