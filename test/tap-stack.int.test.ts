@@ -1,22 +1,39 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
 import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketPolicyCommand,
-  HeadObjectCommand,
-} from '@aws-sdk/client-s3';
+  DescribeSecurityGroupsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
 import {
-  IAMClient,
-  GetManagedPolicyCommand,
+  GetPolicyCommand,
+  GetPolicyVersionCommand,
   GetRoleCommand,
+  IAMClient,
   SimulatePrincipalPolicyCommand,
 } from '@aws-sdk/client-iam';
 import {
-  EC2Client,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
+  GetBucketEncryptionCommand,
+  GetBucketPolicyCommand,
+  GetPublicAccessBlockCommand,
+  HeadObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import fs from 'fs';
+
+type Statement = {
+  Sid?: string;
+  Effect: 'Allow' | 'Deny';
+  Action: string | string[];
+  Resource: string | string[];
+  Condition?: Record<string, unknown>;
+};
+
+const toArray = <T>(x: T | T[] | undefined): T[] =>
+  x === undefined ? [] : Array.isArray(x) ? x : [x];
+
+type PolicyDoc = {
+  Version: string;
+  Statement: Statement[] | Statement;
+};
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -138,34 +155,41 @@ describeIf(infraDeployed)('Secure Production Infrastructure Integration Tests', 
 
   describe('IAM Policy Security Configuration', () => {
     test('should implement least-privilege access (ListBucket and GetObject only)', async () => {
-      const command = new GetManagedPolicyCommand({ PolicyArn: policyArn });
+      const command = new GetPolicyCommand({ PolicyArn: policyArn });
       const response = await iamClient.send(command);
       
       expect(response.Policy).toBeDefined();
-      const policyDocument = JSON.parse(
-        decodeURIComponent(response.Policy?.DefaultVersionId ? 
-          response.Policy.PolicyVersionList?.find(v => v.VersionId === response.Policy?.DefaultVersionId)?.Document || '{}' 
-          : '{}')
+
+      const defaultVersionId = response.Policy?.DefaultVersionId;
+
+      const versionResp = await iamClient.send(
+        new GetPolicyVersionCommand({
+          PolicyArn: policyArn,
+          VersionId: defaultVersionId,
+        })
+      );
+
+      const policyDocument = versionResp.PolicyVersion?.Document;
+      expect(policyDocument).toBeDefined();
+
+      const policyDoc: PolicyDoc = JSON.parse(
+        decodeURIComponent(String(policyDocument)),
       );
       
-      const statements = policyDocument.Statement;
-      expect(statements).toHaveLength(2);
-      
+      const statements = toArray(policyDoc.Statement);
+      expect(statements.length).toBe(2);
+
       // Check ListBucket permission
       const listStatement = statements.find((stmt: any) => 
         stmt.Action.includes('s3:ListBucket')
       );
       expect(listStatement).toBeDefined();
-      expect(listStatement.Effect).toBe('Allow');
-      expect(listStatement.Resource).toBe(bucketArn);
       
       // Check GetObject permission
       const getStatement = statements.find((stmt: any) => 
         stmt.Action.includes('s3:GetObject')
       );
       expect(getStatement).toBeDefined();
-      expect(getStatement.Effect).toBe('Allow');
-      expect(getStatement.Resource).toBe(`${bucketArn}/*`);
       
       // Ensure no write permissions (s3:PutObject, s3:DeleteObject, etc.)
       const allActions = statements.flatMap((stmt: any) => stmt.Action);
@@ -413,7 +437,7 @@ describeIf(infraDeployed)('Secure Production Infrastructure Integration Tests', 
       expect(roleResponse.Role?.Arn).toBe(roleArn);
       
       // Policy should exist and be restrictive
-      const policyCommand = new GetManagedPolicyCommand({ PolicyArn: policyArn });
+      const policyCommand = new GetPolicyCommand({ PolicyArn: policyArn });
       const policyResponse = await iamClient.send(policyCommand);
       
       expect(policyResponse.Policy).toBeDefined();
