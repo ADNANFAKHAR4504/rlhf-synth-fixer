@@ -502,6 +502,85 @@ resource "aws_s3_bucket_policy" "logs" {
   depends_on = [aws_s3_bucket_public_access_block.logs]
 }
 
+
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+  tags = {
+    Name = "main-vpc"
+  }
+}
+
+# S3 data bucket
+resource "aws_s3_bucket" "data" {
+  bucket        = "my-data-bucket-123456"
+  force_destroy = true
+  tags = {
+    Name = "data-bucket"
+  }
+}
+
+# Subnet (needed for NAT Gateway)
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "public-subnet"
+  }
+}
+
+# Internet Gateway (needed for NAT Gateway)
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = "main-igw"
+  }
+}
+
+# Elastic IP for NAT Gateway
+resource "aws_eip" "nat" {
+  vpc = true
+}
+
+# NAT Gateway
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public.id
+  depends_on    = [aws_internet_gateway.main]
+  tags = {
+    Name = "main-nat"
+  }
+}
+
+# KMS Key
+resource "aws_kms_key" "main" {
+  description             = "Main key"
+  deletion_window_in_days = 7
+}
+
+# IAM Role for instance profile
+data "aws_iam_policy_document" "assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "main" {
+  name               = "ec2-role-main"
+  assume_role_policy = data.aws_iam_policy_document.assume_role.json
+}
+
+# Instance Profile
+resource "aws_iam_instance_profile" "main" {
+  name = "main-instance-profile"
+  role = aws_iam_role.main.name
+}
 ######################
 # IAM
 ######################
