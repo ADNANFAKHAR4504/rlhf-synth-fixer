@@ -512,7 +512,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values: 
-                - !Sub '${CloudTrailS3Bucket}/*'
+                - !Sub '${CloudTrailS3Bucket.Arn}/*'
 
   # Note: AWS Config components removed due to account limits on Config Delivery Channels
   # Most AWS accounts already have a Config setup, and only 1 delivery channel is allowed per region

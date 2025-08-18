@@ -906,7 +906,7 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${CloudTrailS3Bucket}/*"
+                                        "Fn::Sub": "${CloudTrailS3Bucket.Arn}/*"
                                     }
                                 ]
                             }
