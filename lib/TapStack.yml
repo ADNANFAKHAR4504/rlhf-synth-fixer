@@ -77,13 +77,13 @@ Parameters:
 
   CreateConfigDeliveryChannel:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Whether to create an AWS Config Delivery Channel (set to 'false' if one already exists in this account/region)
 
   CreateCloudTrailTrail:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Whether to create a CloudTrail trail in this stack (set to 'false' if trail quota is reached or one already exists)
 
@@ -99,9 +99,7 @@ Conditions:
   CreateRDSSubnetGroup: !Equals [!Ref UseExistingRDSSubnetGroup, '']
   # removed to avoid unused condition warning
   HasVpcId: !Not [!Equals [!Ref VpcId, '']]
-  CreateLambdaInVpc: !And
-    - !Not [!Equals [!Ref VpcId, '']]
-    - !Not [!Equals [!Join ['', !Ref PrivateSubnetIds], '']]
+  CreateLambdaInVpc: true
   CreateRDSSubnetGroupAll: !And
     - !Equals [!Ref UseExistingRDSSubnetGroup, '']
     - !Not [!Equals [!Join ['', !Ref PrivateSubnetIds], '']]
@@ -499,9 +497,11 @@ Resources:
   # -----------------------------
   SecureLambdaFunction:
     Type: AWS::Lambda::Function
-    Condition: CreateLambdaInVpc
+    Condition: !And
+      - !Not [!Equals [!Ref VpcId, '']]
+      - !Not [!Equals [!Join ['', !Ref PrivateSubnetIds], '']]
     Properties:
-      FunctionName: !Sub 'secure-lambda-${Environment}'
+      FunctionName: !Sub '${Environment}-tap-function-${AWS::StackName}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role:
@@ -702,7 +702,9 @@ Outputs:
 
   LambdaFunctionArn:
     Description: Secure Lambda Function ARN
-    Condition: CreateLambdaInVpc
+    Condition: !And
+      - !Not [!Equals [!Ref VpcId, '']]
+      - !Not [!Equals [!Join ['', !Ref PrivateSubnetIds], '']]
     Value: !GetAtt SecureLambdaFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-Lambda-Arn'
