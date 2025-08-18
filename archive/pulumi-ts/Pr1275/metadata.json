@@ -15,5 +15,21 @@
     "Monitoring Setup",
     "Access Control",
     "Performance Optimization"
-  ]
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon DynamoDB",
+    "AWS KMS",
+    "Amazon CloudWatch",
+    "AWS IAM",
+    "Amazon SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
