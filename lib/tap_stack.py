@@ -31,8 +31,6 @@ Notes:
   the ID seen in prior logs.
 """
 
-# Removed import of constants.py (file deleted)
-
 from dataclasses import dataclass
 import os
 import ipaddress
