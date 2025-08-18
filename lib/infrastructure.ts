@@ -28,7 +28,9 @@ export function createInfrastructure(
   environment: string,
   allowedSshCidrs: string[],
   instanceType: string = 't3.micro',
-  region: string = 'ap-south-1'
+  region: string = 'ap-south-1',
+  existingRecorderName?: string,
+  existingDeliveryChannelName?: string
 ): InfrastructureOutputs {
   // AWS Provider with explicit region configuration
   const provider = new aws.Provider(`aws-provider-${environment}`, {
@@ -56,7 +58,13 @@ export function createInfrastructure(
   );
 
   // Create security monitoring resources
-  const securityMonitoring = createSecurityMonitoring(environment, provider);
+  const securityMonitoring = createSecurityMonitoring(
+    environment,
+    provider,
+    undefined,
+    existingRecorderName,
+    existingDeliveryChannelName
+  );
 
   return {
     vpcId: vpcResources.vpc.id,

@@ -15,14 +15,87 @@ export interface SecurityMonitoringResources {
   configDeliveryChannel: aws.cfg.DeliveryChannel;
 }
 
+interface ConfigRecorderOptions {
+  recorderName?: string;
+  deliveryChannelName?: string;
+  roleArn: pulumi.Input<string>;
+  bucketName: pulumi.Input<string>;
+  provider: aws.Provider;
+  parent?: pulumi.ComponentResource;
+}
+
+export function getOrCreateOrImportConfigRecorder(
+  options: ConfigRecorderOptions
+): {
+  recorder: aws.cfg.Recorder;
+  deliveryChannel: aws.cfg.DeliveryChannel;
+} {
+  const {
+    recorderName,
+    deliveryChannelName,
+    roleArn,
+    bucketName,
+    provider,
+    parent,
+  } = options;
+
+  if (recorderName && deliveryChannelName) {
+    const recorder = aws.cfg.Recorder.get(
+      `imported-${recorderName}`,
+      recorderName,
+      undefined,
+      { provider, ...(parent && { parent }) }
+    );
+
+    const deliveryChannel = aws.cfg.DeliveryChannel.get(
+      `imported-${deliveryChannelName}`,
+      deliveryChannelName,
+      undefined,
+      { provider, ...(parent && { parent }) }
+    );
+
+    return { recorder, deliveryChannel };
+  } else {
+    const fallbackRecorderName = recorderName ?? 'config-recorder';
+    const fallbackDeliveryChannelName =
+      deliveryChannelName ?? 'config-delivery-channel';
+
+    const recorder = new aws.cfg.Recorder(
+      fallbackRecorderName,
+      {
+        name: fallbackRecorderName,
+        roleArn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+        },
+      },
+      { provider, ...(parent && { parent }) }
+    );
+
+    const deliveryChannel = new aws.cfg.DeliveryChannel(
+      fallbackDeliveryChannelName,
+      {
+        name: fallbackDeliveryChannelName,
+        s3BucketName: bucketName,
+        snapshotDeliveryProperties: {
+          deliveryFrequency: 'TwentyFour_Hours',
+        },
+      },
+      { provider, ...(parent && { parent }), dependsOn: [recorder] }
+    );
+
+    return { recorder, deliveryChannel };
+  }
+}
+
 export function createSecurityMonitoring(
   environment: string,
-  provider: aws.Provider
+  provider: aws.Provider,
+  parent?: pulumi.ComponentResource,
+  existingRecorderName?: string,
+  existingDeliveryChannelName?: string
 ): SecurityMonitoringResources {
-  // Get configuration for Config recorder name
-  const config = new pulumi.Config();
-  const configRecorderName =
-    config.get('configRecorderName') || 'config-recorder-prod';
   // Create S3 bucket for CloudTrail logs
   const cloudTrailBucket = new aws.s3.Bucket(
     `cloudtrail-logs-${environment}`,
@@ -235,7 +308,7 @@ export function createSecurityMonitoring(
   );
 
   // Config bucket policy
-  const configBucketPolicy = new aws.s3.BucketPolicy(
+  new aws.s3.BucketPolicy(
     `config-bucket-policy-${environment}`,
     {
       bucket: configBucket.id,
@@ -317,36 +390,15 @@ export function createSecurityMonitoring(
     { provider }
   );
 
-  // Create Config recorder - if one already exists with the same name,
-  // Pulumi will handle the conflict during deployment
-  const configRecorder = new aws.cfg.Recorder(
-    `config-recorder-${environment}`,
-    {
-      name: configRecorderName,
+  const { recorder: configRecorder, deliveryChannel: configDeliveryChannel } =
+    getOrCreateOrImportConfigRecorder({
+      recorderName: existingRecorderName,
+      deliveryChannelName: existingDeliveryChannelName,
       roleArn: configRole.arn,
-      recordingGroup: {
-        allSupported: true,
-        includeGlobalResourceTypes: true,
-      },
-    },
-    {
+      bucketName: configBucket.bucket,
       provider,
-      dependsOn: [configBucketPolicy],
-    }
-  );
-
-  // Config delivery channel (depends on recorder)
-  const configDeliveryChannel = new aws.cfg.DeliveryChannel(
-    `config-delivery-channel-${environment}`,
-    {
-      name: `config-delivery-channel-${environment}`,
-      s3BucketName: configBucket.bucket,
-    },
-    {
-      provider,
-      dependsOn: [configRecorder],
-    }
-  );
+      parent,
+    });
 
   return {
     cloudTrail,
