@@ -144,11 +144,25 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(secureRole).add('Environment', 'Production');
 
     // 4) VPC Security Group - HTTPS from specified CIDR only, restricted egress
-    // Using a VPC reference that works during synthesis
-    const defaultVpc = ec2.Vpc.fromVpcAttributes(this, 'DefaultVpc', {
-      vpcId: 'vpc-12345678', // Placeholder VPC ID for synthesis
-      availabilityZones: ['us-east-1a', 'us-east-1b'],
+    // Create a new VPC for the secure infrastructure
+    const secureVpc = new ec2.Vpc(this, 'SecureVpc', {
+      vpcName: `prod-secure-vpc-${suffix}`,
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+      maxAzs: 2,
+      natGateways: 0, // No NAT gateways needed for this security configuration
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'Public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      ],
     });
+
+    // Apply tags to the VPC
+    cdk.Tags.of(secureVpc).add('Environment', 'Production');
 
     const secureSecurityGroup = new ec2.SecurityGroup(
       this,
@@ -156,7 +170,7 @@ export class TapStack extends cdk.Stack {
       {
         securityGroupName: `prod-secure-sg-${suffix}`,
         description: 'Secure SG allowing HTTPS from specified CIDR only',
-        vpc: defaultVpc,
+        vpc: secureVpc,
 
         // Deny all traffic by default
         allowAllOutbound: false,
@@ -215,6 +229,12 @@ export class TapStack extends cdk.Stack {
       description: 'CIDR block allowed for HTTPS access',
       value: allowedIpCidr,
       exportName: `prod-secure-allowed-cidr-${suffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'SecureVpcId', {
+      description: 'ID of the secure VPC',
+      value: secureVpc.vpcId,
+      exportName: `prod-secure-vpc-id-${suffix}`,
     });
   }
 }

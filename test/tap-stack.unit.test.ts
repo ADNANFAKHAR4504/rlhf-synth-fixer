@@ -259,7 +259,9 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupName: 'prod-secure-sg-test',
         GroupDescription: 'Secure SG allowing HTTPS from specified CIDR only',
-        VpcId: 'vpc-12345678',
+        VpcId: {
+          Ref: Match.anyValue(),
+        },
         SecurityGroupIngress: [
           {
             IpProtocol: 'tcp',
