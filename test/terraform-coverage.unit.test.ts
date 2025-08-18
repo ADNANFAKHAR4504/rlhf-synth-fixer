@@ -1,6 +1,6 @@
-import { TerraformInfrastructure } from '../lib/terraform-wrapper';
-import * as path from 'path';
 import * as fs from 'fs';
+import * as path from 'path';
+import { TerraformInfrastructure } from '../lib/terraform-wrapper';
 
 describe('TerraformInfrastructure Branch Coverage Tests', () => {
   describe('Edge cases and error handling', () => {
@@ -49,8 +49,12 @@ describe('TerraformInfrastructure Branch Coverage Tests', () => {
       expect(tfInfra.resourceHasConfig('aws_s3_bucket', 'test', 'tags')).toBe(false);
       expect(tfInfra.resourceHasTags('aws_s3_bucket', 'test')).toBe(false);
 
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true });
+      // Cleanup with error handling
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        console.warn('Cleanup warning:', error);
+      }
     });
 
     test('should handle validation errors gracefully', () => {
@@ -64,8 +68,12 @@ describe('TerraformInfrastructure Branch Coverage Tests', () => {
       expect(validation.valid).toBe(false);
       expect(validation.message).toBeDefined();
 
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true });
+      // Cleanup with error handling
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        console.warn('Cleanup warning:', error);
+      }
     });
 
     test('should handle formatting check errors', () => {
@@ -83,8 +91,12 @@ bucket =    "test"
       // This might be false if terraform fmt detects issues
       expect(typeof isFormatted).toBe('boolean');
 
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true });
+      // Cleanup with error handling
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        console.warn('Cleanup warning:', error);
+      }
     });
 
     test('should handle compliance validation with missing components', () => {
@@ -111,8 +123,12 @@ bucket =    "test"
       expect(compliance.issues).toContain('CloudTrail not configured');
       expect(compliance.issues).toContain('No CloudWatch alarms configured');
 
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true });
+      // Cleanup with error handling
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        console.warn('Cleanup warning:', error);
+      }
     });
 
     test('should handle counting resources with tag value', () => {
@@ -144,8 +160,12 @@ bucket =    "test"
       const managedCount = tfInfra.countResourcesWithTag('ManagedBy', 'terraform');
       expect(managedCount).toBe(2);
 
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true });
+      // Cleanup with error handling
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        console.warn('Cleanup warning:', error);
+      }
     });
 
     test('should handle all security feature patterns', () => {
@@ -177,8 +197,12 @@ bucket =    "test"
       const tfInfra = new TerraformInfrastructure(tempDir);
       expect(tfInfra.hasSecurityFeature('unknown_feature')).toBe(false);
 
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true });
+      // Cleanup with error handling
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        console.warn('Cleanup warning:', error);
+      }
     });
 
     test('should handle resourceHasConfig with non-existent resource', () => {
@@ -229,8 +253,12 @@ bucket =    "test"
       expect(tfInfra.resourceHasConfig('aws_s3_bucket', 'complex', 'tags')).toBe(true);
       expect(tfInfra.resourceHasTags('aws_s3_bucket', 'complex')).toBe(true);
 
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true });
+      // Cleanup with error handling
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        console.warn('Cleanup warning:', error);
+      }
     });
 
     test('should handle environment suffix counting with no matches', () => {
@@ -247,8 +275,12 @@ bucket =    "test"
       const tfInfra = new TerraformInfrastructure(tempDir);
       expect(tfInfra.getEnvironmentSuffixUsage()).toBe(0);
 
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true });
+      // Cleanup with error handling
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        console.warn('Cleanup warning:', error);
+      }
     });
   });
 
@@ -300,8 +332,12 @@ bucket =    "test"
       expect(compliance.issues).toContain('CloudTrail not configured');
       expect(compliance.issues).toContain('No CloudWatch alarms configured');
 
-      // Cleanup
-      fs.rmSync(tempDir, { recursive: true });
+      // Cleanup with error handling
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (error) {
+        console.warn('Cleanup warning:', error);
+      }
     });
   });
 });

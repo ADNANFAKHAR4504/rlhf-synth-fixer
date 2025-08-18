@@ -265,7 +265,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const mainContent = terraformFiles['main.tf'];
       expect(mainContent).toContain('locals {');
       expect(mainContent).toContain('suffix      = var.environment_suffix');
-      expect(mainContent).toContain('name_prefix = local.suffix');
+      expect(mainContent).toContain('name_prefix = "${var.project_name}-${local.suffix}"');
     });
 
     test('should apply environment suffix to all resource names', () => {
