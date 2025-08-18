@@ -1,5 +1,8 @@
 import json
-
+import os
+import tempfile
+from distutils import command
+import subprocess
 import pulumi
 import pulumi_tls as tls
 import pulumi_aws as aws
@@ -19,7 +22,7 @@ class SecurityComponent(ComponentResource):
     self._create_security_groups(name, config, dependencies.vpc_id)
 
     # Create SSL certificate
-    self._create_ssl_certificate(name, config)
+    self._create_ssl_certificate(name, config, "turing.com")
 
     # Create WAF
     self._create_waf(name, config)
@@ -187,43 +190,59 @@ class SecurityComponent(ComponentResource):
       opts=ResourceOptions(parent=self)
     )
 
-  def _create_ssl_certificate(self, name: str, config: InfrastructureConfig):
-    # Generate private key
-    private_key = tls.PrivateKey("cert-key", algorithm="RSA", rsa_bits=2048)
-
+  def _create_ssl_certificate(self, name: str, config: InfrastructureConfig, domain: str):
     # Self-signed certificate
-    self_signed_cert = tls.SelfSignedCert(
-      "self-signed-cert",
-      private_key_pem=private_key.private_key_pem,
-      subject={
-        "common_name": "turing.com",
-        "organization": "Turing",
-        "organizational_unit": "IT Department",
-        "street_addresses": ["123 Main St"],
-        "localities": ["San Francisco"],
-        "provinces": ["CA"],
-        "country": "US",
-      },
-      dns_names=[
-        "turing.com",
-        "*.turing.com",
-        "api.turing.com"
-      ],
-      ip_addresses=["127.0.0.1"],
-      validity_period_hours=8760,
-      is_ca_certificate=False,
-      allowed_uses=[
-        "key_encipherment",
-        "digital_signature",
-        "server_auth",
-      ]
-    )
+    with tempfile.TemporaryDirectory() as temp_dir:
+      key_file = os.path.join(temp_dir, "private.key")
+      cert_file = os.path.join(temp_dir, "certificate.crt")
+      config_file = os.path.join(temp_dir, "cert.conf")
+
+      # Create OpenSSL config
+      config_content = f"""
+      [req]
+      distinguished_name = req_distinguished_name
+      req_extensions = v3_req
+      prompt = no
+  
+      [req_distinguished_name]
+      C = US
+      ST = CA
+      L = San Francisco
+      O = My Organization
+      CN = {domain}
+  
+      [v3_req]
+      keyUsage = keyEncipherment, dataEncipherment
+      extendedKeyUsage = serverAuth
+      subjectAltName = @alt_names
+  
+      [alt_names]
+      DNS.1 = {domain}
+      DNS.2 = *.{domain}
+      """
+      with open(config_file, 'w') as f:
+        f.write(config_content)
+
+      # Generate certificate using subprocess
+      subprocess.run([
+        "openssl", "req", "-x509", "-newkey", "rsa:2048",
+        "-keyout", key_file, "-out", cert_file,
+        "-days", "365", "-nodes",
+        "-config", config_file, "-extensions", "v3_req"
+      ], check=True)
+
+      # Read generated files
+      with open(cert_file, 'r') as f:
+        cert_pem = f.read()
+
+      with open(key_file, 'r') as f:
+        key_pem = f.read()
 
     # Create ACM certificate with email validation for CI environments
     self.certificate = aws.acm.Certificate(
       f"{name}-cert",
-      private_key=private_key.private_key_pem,
-      certificate_body=self_signed_cert.cert_pem,
+      private_key=key_pem,
+      certificate_body=cert_pem,
       tags={
         **config.tags,
         "Name": f"{config.app_name}-{config.environment}-cert"
