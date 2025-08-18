@@ -171,12 +171,12 @@ describe('Terraform Configuration Unit Tests - Secure Data Storage', () => {
       const content = fs.readFileSync(mainTfPath, 'utf8');
 
       expect(content).toMatch(/resource\s+"aws_cloudtrail"\s+"security_trail"/);
-      expect(content).toContain('name = "security-trail"');
-      expect(content).toContain('s3_bucket_name = aws_s3_bucket.logs.bucket');
-      expect(content).toContain('s3_key_prefix = "cloudtrail"');
-      expect(content).toContain('include_global_service_events = true');
-      expect(content).toContain('is_multi_region_trail = true');
-      expect(content).toContain('enable_logging = true');
+      expect(content).toMatch(/name\s*=\s*"security-trail"/);
+      expect(content).toMatch(/s3_bucket_name\s*=\s*aws_s3_bucket\.logs\.bucket/);
+      expect(content).toMatch(/s3_key_prefix\s*=\s*"cloudtrail"/);
+      expect(content).toMatch(/include_global_service_events\s*=\s*true/);
+      expect(content).toMatch(/is_multi_region_trail\s*=\s*true/);
+      expect(content).toMatch(/enable_logging\s*=\s*true/);
     });
   });
 
@@ -201,38 +201,38 @@ describe('Terraform Configuration Unit Tests - Secure Data Storage', () => {
       const content = fs.readFileSync(mainTfPath, 'utf8');
 
       expect(content).toMatch(/resource\s+"aws_sns_topic_subscription"\s+"security_team_email"/);
-      expect(content).toContain('count = length(var.security_team_emails)');
-      expect(content).toContain('protocol = "email"');
-      expect(content).toContain('endpoint = var.security_team_emails[count.index]');
+      expect(content).toMatch(/count\s*=\s*length\(var\.security_team_emails\)/);
+      expect(content).toMatch(/protocol\s*=\s*"email"/);
+      expect(content).toMatch(/endpoint\s*=\s*var\.security_team_emails\[count\.index\]/);
     });
 
     test('CloudWatch log group is configured', () => {
       const content = fs.readFileSync(mainTfPath, 'utf8');
 
       expect(content).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"cloudtrail"/);
-      expect(content).toContain('name = "/aws/cloudtrail/security-trail"');
-      expect(content).toContain('retention_in_days = 90');
+      expect(content).toMatch(/name\s*=\s*"\/aws\/cloudtrail\/security-trail"/);
+      expect(content).toMatch(/retention_in_days\s*=\s*90/);
     });
 
     test('CloudWatch metric filter for IAM changes is configured', () => {
       const content = fs.readFileSync(mainTfPath, 'utf8');
 
       expect(content).toMatch(/resource\s+"aws_cloudwatch_log_metric_filter"\s+"iam_policy_changes"/);
-      expect(content).toContain('name = "iam-policy-changes"');
+      expect(content).toMatch(/name\s*=\s*"iam-policy-changes"/);
       expect(content).toContain('PutRolePolicy');
       expect(content).toContain('AttachRolePolicy');
-      expect(content).toContain('name = "IAMPolicyChanges"');
-      expect(content).toContain('namespace = "SecurityMetrics"');
+      expect(content).toMatch(/name\s*=\s*"IAMPolicyChanges"/);
+      expect(content).toMatch(/namespace\s*=\s*"SecurityMetrics"/);
     });
 
     test('CloudWatch alarm for IAM changes is configured', () => {
       const content = fs.readFileSync(mainTfPath, 'utf8');
 
       expect(content).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"iam_policy_changes"/);
-      expect(content).toContain('alarm_name = "iam-policy-role-changes"');
-      expect(content).toContain('comparison_operator = "GreaterThanOrEqualToThreshold"');
-      expect(content).toContain('threshold = "1"');
-      expect(content).toContain('alarm_actions = [aws_sns_topic.security_alerts.arn]');
+      expect(content).toMatch(/alarm_name\s*=\s*"iam-policy-role-changes"/);
+      expect(content).toMatch(/comparison_operator\s*=\s*"GreaterThanOrEqualToThreshold"/);
+      expect(content).toMatch(/threshold\s*=\s*"1"/);
+      expect(content).toMatch(/alarm_actions\s*=\s*\[aws_sns_topic\.security_alerts\.arn\]/);
     });
   });
 
@@ -251,19 +251,19 @@ describe('Terraform Configuration Unit Tests - Secure Data Storage', () => {
 
       // Primary bucket name output
       expect(content).toMatch(/output\s+"primary_bucket_name"\s*{/);
-      expect(content).toContain('value = aws_s3_bucket.primary.bucket');
+      expect(content).toMatch(/value\s*=\s*aws_s3_bucket\.primary\.bucket/);
 
       // Logs bucket name output
       expect(content).toMatch(/output\s+"logs_bucket_name"\s*{/);
-      expect(content).toContain('value = aws_s3_bucket.logs.bucket');
+      expect(content).toMatch(/value\s*=\s*aws_s3_bucket\.logs\.bucket/);
 
       // Application IAM role ARN output
       expect(content).toMatch(/output\s+"application_iam_role_arn"\s*{/);
-      expect(content).toContain('value = aws_iam_role.application.arn');
+      expect(content).toMatch(/value\s*=\s*aws_iam_role\.application\.arn/);
 
       // Security alerts SNS topic ARN output
       expect(content).toMatch(/output\s+"security_alerts_sns_topic_arn"\s*{/);
-      expect(content).toContain('value = aws_sns_topic.security_alerts.arn');
+      expect(content).toMatch(/value\s*=\s*aws_sns_topic\.security_alerts\.arn/);
     });
 
     test('outputs have proper descriptions', () => {
