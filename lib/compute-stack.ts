@@ -170,7 +170,7 @@ export class ComputeStack extends pulumi.ComponentResource {
       {
         keyName: `tap-key-${region}-${environmentSuffix}`,
         publicKey:
-          'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDGH1ZBhp4E5YxP9vYwQHC8+J8qB0wF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qGwF7xnP3rQyU8qG tap-demo-key',
+          'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7l8ZKGm4E3XVmZfNKm9YqHl8OKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQKqF5VgPFcQ== tap-demo-key',
         tags: {
           ...tags,
           Name: `tap-key-${region}-${environmentSuffix}`,
