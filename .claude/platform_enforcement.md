@@ -1,1 +1,1 @@
-cdk+typescript
+TF+HCL
