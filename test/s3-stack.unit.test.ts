@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { S3Stack } from '../lib/s3-stack';
 
 // Mock Pulumi and AWS
@@ -42,7 +42,7 @@ describe('S3Stack', () => {
       expect(aws.s3.Bucket).toHaveBeenCalledWith(
         expect.stringContaining('tap-app-bucket-test'),
         expect.objectContaining({
-          bucket: expect.stringContaining('tap-app-bucket-test'),
+          bucket: expect.stringContaining('tap-app-bucket-test-primary'),
           tags: expect.objectContaining({ Environment: 'test' }),
         }),
         expect.any(Object)

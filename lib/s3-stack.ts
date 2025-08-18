@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface S3StackArgs {
   environmentSuffix?: string;
@@ -22,7 +22,7 @@ export class S3Stack extends pulumi.ComponentResource {
     this.bucket = new aws.s3.Bucket(
       `tap-app-bucket-${environmentSuffix}`,
       {
-        bucket: `tap-app-bucket-${environmentSuffix}-${stackName}`,
+        bucket: `tap-app-bucket-${environmentSuffix}-primary-${stackName}`,
         tags: args.tags,
       },
       { parent: this }
