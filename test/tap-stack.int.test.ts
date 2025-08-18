@@ -191,8 +191,9 @@ describe('TapStack Integration Outputs', () => {
     expect(outputs.AppBucketName).not.toMatch(/[A-Z_]/);
 
     // ALB DNS and DB endpoint should be in us-east-1 for this stack
+    // Allow uppercase letters in the DNS label since AWS may include them
     expect(outputs.AlbDnsName).toMatch(
-      /^[a-z0-9-]+\.us-east-1\.elb\.amazonaws\.com$/
+      /^[A-Za-z0-9-]+\.us-east-1\.elb\.amazonaws\.com$/
     );
     expect(outputs.DbEndpointAddress).toMatch(
       /^[a-z0-9.-]+\.us-east-1\.rds\.amazonaws\.com$/
