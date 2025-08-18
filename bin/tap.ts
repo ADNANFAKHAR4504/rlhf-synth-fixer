@@ -12,7 +12,7 @@ const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 const primaryStack = new TapStack(app, `TapStackPrimary${environmentSuffix}`, {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'eu-west-1',
+    region: 'us-east-1',
   },
   isPrimaryRegion: true,
   environmentSuffix,
@@ -25,7 +25,7 @@ const secondaryStack = new TapStack(
   {
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: 'eu-west-2',
+      region: 'us-east-2',
     },
     isPrimaryRegion: false,
     environmentSuffix,

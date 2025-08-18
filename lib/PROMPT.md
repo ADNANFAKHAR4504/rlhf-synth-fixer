@@ -13,7 +13,7 @@ You are an AWS Cloud Infrastructure Engineer specializing in highly available, d
     - `lib/tap-stack.ts`: Stack definition and all AWS resources.
     - `cdk.json`: CDK project configuration.
   - The solution must:
-    1. Deploy infrastructure spanning both `eu-west-1` and `eu-west-2` regions to guarantee availability.
+    1. Deploy infrastructure spanning both `us-east-1` and `us-east-2` regions to guarantee availability.
     2. Provision S3 buckets for backup storage, encrypted with AWS KMS.
     3. Create independent Amazon RDS instances in each region (with automated backups). Cross‑region replication is not required.
     4. Define AWS Lambda functions for data processing tasks.
@@ -35,7 +35,7 @@ You are an AWS Cloud Infrastructure Engineer specializing in highly available, d
 Deliver an AWS CDK (TypeScript) project that:
 
 - Provisions VPC, public/private subnets, independent RDS instances in each region (no cross‑region replication), S3 buckets (KMS encrypted), Lambda, an SNS topic with CloudWatch alarms (no in‑stack subscription), Route 53 DNS with failover, and CloudWatch Logs. AWS Config is excluded.
-- Spans both `us-west-2` and `us-east-2` regions for true multi-region HA and DR.
+- Spans both `us-east-1` and `us-east-2` regions for true multi-region HA and DR.
 - Follows tagging, resource naming, and IAM best practices.
 - Uses the following structure: `bin/tap.ts`, `lib/tap-stack.ts`, `cdk.json`.
 
