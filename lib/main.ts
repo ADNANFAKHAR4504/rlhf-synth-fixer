@@ -1,17 +1,19 @@
-import { App, TerraformStack } from 'cdktf';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { Construct } from 'constructs';
+import { App, TerraformStack } from "cdktf";
+import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
+import { Vpc } from "@cdktf/provider-aws/lib/vpc";
+import { Subnet } from "@cdktf/provider-aws/lib/subnet";
+import { SecurityGroup } from "@cdktf/provider-aws/lib/security-group";
+import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
+import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
+import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
+import { DbInstance } from "@cdktf/provider-aws/lib/db-instance";
+import { DbSubnetGroup } from "@cdktf/provider-aws/lib/db-subnet-group";
+import { CloudwatchLogGroup } from "@cdktf/provider-aws/lib/cloudwatch-log-group";
+import { Cloudtrail } from "@cdktf/provider-aws/lib/cloudtrail";
+import { KmsKey } from "@cdktf/provider-aws/lib/kms-key";
+import { SecretsmanagerSecret } from "@cdktf/provider-aws/lib/secretsmanager-secret";
+import { SecretsmanagerSecretVersion } from "@cdktf/provider-aws/lib/secretsmanager-secret-version";
+import { Construct } from "constructs";
 
 interface EnvironmentConfig {
   region: string;
@@ -20,11 +22,8 @@ interface EnvironmentConfig {
 }
 
 export class MultiRegionStack extends TerraformStack {
-  public readonly region: string;
-
   constructor(scope: Construct, id: string, config: EnvironmentConfig) {
     super(scope, id);
-    this.region = config.region;
 
     new AwsProvider(this, 'aws', {
       region: config.region,
@@ -130,6 +129,26 @@ export class MultiRegionStack extends TerraformStack {
       },
     });
 
+    // Secrets Manager for RDS password
+    const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
+      name: `${config.environment}-rds-password`,
+      description: 'RDS database password',
+      kmsKeyId: kmsKey.arn,
+      tags: {
+        Name: `${config.environment}-rds-secret`,
+        Environment: config.environment,
+        Purpose: 'RDS-Password',
+      },
+    });
+
+    new SecretsmanagerSecretVersion(this, 'db-secret-version', {
+      secretId: dbSecret.id,
+      secretString: JSON.stringify({
+        username: 'admin',
+        password: 'TempPassword123!-ChangeMe'
+      }),
+    });
+
     // IAM Role for RDS Enhanced Monitoring (minimal permissions)
     const rdsMonitoringRole = new IamRole(this, 'rds-monitoring-role', {
       name: `${config.environment}-rds-monitoring-role`,
@@ -171,6 +190,13 @@ export class MultiRegionStack extends TerraformStack {
     // CloudTrail S3 Bucket
     const cloudtrailBucket = new S3Bucket(this, 'cloudtrail-bucket', {
       bucketPrefix: `${config.environment}-cloudtrail-`,
+      serverSideEncryptionConfiguration: {
+        rule: {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+        },
+      },
       tags: {
         Name: `${config.environment}-cloudtrail-bucket`,
         Environment: config.environment,
@@ -214,7 +240,8 @@ export class MultiRegionStack extends TerraformStack {
       kmsKeyId: kmsKey.arn,
       dbName: 'appdb',
       username: 'admin',
-      password: 'changeme123!',
+      managePassword: false,
+      passwordSecretArn: dbSecret.arn,
       vpcSecurityGroupIds: [rdsSecurityGroup.id],
       dbSubnetGroupName: dbSubnetGroup.name,
       backupRetentionPeriod: 7,
@@ -235,6 +262,13 @@ export class MultiRegionStack extends TerraformStack {
     // Encrypted S3 Bucket
     new S3Bucket(this, 'encrypted-bucket', {
       bucketPrefix: `${config.environment}-secure-`,
+      serverSideEncryptionConfiguration: {
+        rule: {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'AES256',
+          },
+        },
+      },
       tags: {
         Name: `${config.environment}-encrypted-bucket`,
         Environment: config.environment,
