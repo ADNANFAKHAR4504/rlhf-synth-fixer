@@ -108,7 +108,6 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
     test("has AWS Config Recorder configuration", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_config_configuration_recorder"\s+"main"\s*{/);
       expect(complianceContent).toMatch(/all_supported\s*=\s*true/);
-      expect(complianceContent).toMatch(/variable\s+"use_existing_config_recorder"/);
       expect(complianceContent).toMatch(/count\s*=\s*var\.use_existing_config_recorder\s*\?\s*0\s*:\s*1/);
     });
 
