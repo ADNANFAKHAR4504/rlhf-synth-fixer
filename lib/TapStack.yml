@@ -563,12 +563,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Join
-        - '-'
-        - - !Ref 'AWS::StackName'
-          - webapp-static-content
-          - !Ref 'AWS::AccountId'
-          - !Ref 'AWS::Region'
+      BucketName: !Sub 'webapp-static-content-tapstackpr1569${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
