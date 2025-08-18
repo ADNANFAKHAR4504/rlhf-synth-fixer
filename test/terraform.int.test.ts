@@ -1,8 +1,8 @@
 // LIVE integration tests for secure AWS data storage infrastructure
 // Tests actual deployed resources using AWS SDK v3
-// Requires AWS credentials with READ permissions and CDK outputs
+// Requires AWS credentials with READ permissions and infrastructure outputs
 // Run: npx jest --runInBand --detectOpenHandles --testTimeout=180000 --testPathPattern=\.int\.test\.ts$
-// Outputs file expected at: cfn-outputs/outputs.json
+// Outputs file expected at: cfn-outputs/outputs.json or cfn-outputs/flat-outputs.json
 
 import { CloudTrailClient, DescribeTrailsCommand, GetTrailStatusCommand } from '@aws-sdk/client-cloudtrail';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
@@ -39,36 +39,44 @@ type StructuredOutputs = {
 /* ----------------------------- Output Loading ----------------------------- */
 
 function loadOutputs(): SecureDataStorageOutputs {
-  // Try cfn-outputs/outputs.json (CDK CloudFormation format)
+  // Try cfn-outputs/outputs.json first (Terraform structured format)
   const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/outputs.json');
   if (fs.existsSync(outputsPath)) {
-    const data = JSON.parse(fs.readFileSync(outputsPath, 'utf8')) as StructuredOutputs;
-    console.log('✓ Loaded outputs from cfn-outputs/outputs.json');
-    
-    // Extract values from CDK output format
-    const extractedOutputs: SecureDataStorageOutputs = {};
-    for (const [key, valueObj] of Object.entries(data)) {
-      if (valueObj && typeof valueObj === 'object' && 'value' in valueObj) {
-        (extractedOutputs as any)[key] = valueObj.value;
+    const fileContent = fs.readFileSync(outputsPath, 'utf8').trim();
+    if (fileContent && fileContent !== '{}') {
+      const data = JSON.parse(fileContent) as StructuredOutputs;
+      console.log('✓ Loaded outputs from cfn-outputs/outputs.json');
+      
+      // Extract values from Terraform output format
+      const extractedOutputs: SecureDataStorageOutputs = {};
+      for (const [key, valueObj] of Object.entries(data)) {
+        if (valueObj && typeof valueObj === 'object' && 'value' in valueObj) {
+          (extractedOutputs as any)[key] = valueObj.value;
+        }
       }
+      return extractedOutputs;
     }
-    return extractedOutputs;
   }
 
   // Try flat outputs format as fallback
   const flatOutputsPath = path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json');
   if (fs.existsSync(flatOutputsPath)) {
-    const data = JSON.parse(fs.readFileSync(flatOutputsPath, 'utf8'));
-    console.log('✓ Loaded outputs from cfn-outputs/flat-outputs.json');
-    return {
-      primary_bucket_name: data.PrimaryBucketName,
-      logs_bucket_name: data.LogsBucketName,
-      application_iam_role_arn: data.ApplicationIAMRoleArn,
-      security_alerts_sns_topic_arn: data.SecurityAlertsSNSTopicArn,
-    };
+    const fileContent = fs.readFileSync(flatOutputsPath, 'utf8').trim();
+    if (fileContent && fileContent !== '{}') {
+      const data = JSON.parse(fileContent);
+      console.log('✓ Loaded outputs from cfn-outputs/flat-outputs.json');
+      
+      // Handle both Terraform format (exact key names) and CDK format (PascalCase)
+      return {
+        primary_bucket_name: data.primary_bucket_name || data.PrimaryBucketName,
+        logs_bucket_name: data.logs_bucket_name || data.LogsBucketName,
+        application_iam_role_arn: data.application_iam_role_arn || data.ApplicationIAMRoleArn,
+        security_alerts_sns_topic_arn: data.security_alerts_sns_topic_arn || data.SecurityAlertsSNSTopicArn,
+      };
+    }
   }
 
-  console.warn('⚠ No outputs file found. Please ensure infrastructure is deployed and outputs are available.');
+  console.warn('⚠ No outputs file found or outputs are empty. Please ensure infrastructure is deployed and outputs are available.');
   return {};
 }
 
@@ -516,14 +524,14 @@ describe('LIVE: Secure AWS Data Storage Infrastructure Validation', () => {
 
 // Helper test to validate outputs are available
 describe('Pre-flight Checks', () => {
-  test('CDK outputs are available for live testing', () => {
+  test('Infrastructure outputs are available for live testing', () => {
     const outputs = loadOutputs();
 
     if (!outputs || Object.keys(outputs).length === 0) {
-      console.warn('⚠ No CDK outputs found.');
+      console.warn('⚠ No infrastructure outputs found.');
       console.warn('To run live infrastructure tests:');
-      console.warn('1. Deploy infrastructure: npm run deploy or cdk deploy');
-      console.warn('2. Generate outputs: cdk outputs --json > cfn-outputs/outputs.json');
+      console.warn('1. Deploy infrastructure: npm run deploy or terraform apply');
+      console.warn('2. Generate outputs: ./scripts/get-outputs.sh');
       console.warn('3. Re-run tests: npm run test:integration');
       
       // Mark test as skipped instead of failed when outputs are missing
