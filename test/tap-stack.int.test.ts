@@ -17,7 +17,8 @@ import {
 import {
   CloudTrailClient,
   DescribeTrailsCommand,
-  GetEventSelectorsCommand
+  GetEventSelectorsCommand,
+  GetTrailStatusCommand
 } from '@aws-sdk/client-cloudtrail';
 import {
   EC2Client,
@@ -236,7 +237,13 @@ describe(`SecureAWSEnvironment-${testRunId} Integration Tests`, () => {
         expect(trail.IncludeGlobalServiceEvents).toBe(true);
         expect(trail.IsMultiRegionTrail).toBe(true);
         expect(trail.LogFileValidationEnabled).toBe(true);
-        expect(trail.IsLogging).toBe(true);
+        
+        // Check logging status separately using GetTrailStatusCommand
+        const trailStatus = await retryOperation(async () => {
+          const statusCommand = new GetTrailStatusCommand({ Name: cloudTrailName });
+          return await cloudTrailClient.send(statusCommand);
+        });
+        expect(trailStatus.IsLogging).toBe(true);
       } else {
         console.warn('Skipping CloudTrail configuration test - using mock data or trail does not exist');
       }
