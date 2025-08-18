@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+// import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -81,11 +81,16 @@ export class VpcModule extends Construct {
     super(scope, id);
 
     // Get available AZs for the region
-    const azs = new DataAwsAvailabilityZones(this, 'azs', {
-      state: 'available',
-    });
+    // const azs = new DataAwsAvailabilityZones(this, 'azs', {
+    //   state: 'available',
+    // });
 
-    this.availabilityZones = azs.names.slice(0, 3);
+    // Use hardcoded AZs for the region (more predictable)
+    this.availabilityZones = [
+      `${config.region}a`,
+      `${config.region}b`,
+      `${config.region}c`,
+    ];
 
     // Create VPC
     this.vpc = new Vpc(this, 'vpc', {
