@@ -97,7 +97,7 @@
         },
         "SSLCertificateArn": {
             "Type": "String",
-            "Default": "arn:aws:acm:us-east-1:718240086340:certificate/ 61b0014d-05b5-43b2-82d7-cb71936f5a4c",
+            "Default": "arn:aws:acm:us-east-1:718240086340:certificate/d3003292-683c-4983-9ac4-e086e5209472",
             "Description": "ARN of SSL certificate for HTTPS listener",
             "AllowedPattern": "^arn:aws:acm:.*"
         },
@@ -122,9 +122,14 @@
         },
         "DBPasswordSecretArn": {
             "Type": "String",
-            "Default": "arn:aws:secretsmanager:us-east-1:718240086340:secret: TapStack/DBPassword-3xfHNB",
+            "Default": "arn:aws:secretsmanager:us-east-1:718240086340:secret:TapStack/DBPassword-3xfHNB",
             "Description": "ARN of the database password secret in AWS Secrets Manager",
             "AllowedPattern": "^arn:aws:secretsmanager:.*"
+        },
+        "AmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
+            "Description": "AMI ID for EC2 instances (defaults to latest Amazon Linux 2023)"
         }
     },
     "Mappings": {
@@ -726,126 +731,6 @@
                 ]
             }
         },
-        "EC2InstanceRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2-Role"
-                },
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "ec2.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "ParameterStoreAccess",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "ssm:GetParameter",
-                                        "ssm:GetParameters",
-                                        "ssm:GetParametersByPath"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${AWS::StackName}/*\n"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "PolicyName": "S3Access",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject",
-                                        "s3:PutObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    {
-                        "PolicyName": "SecretsManagerAccess",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "secretsmanager:GetSecretValue",
-                                        "secretsmanager:DescribeSecret"
-                                    ],
-                                    "Resource": {
-                                        "Ref": "DatabaseSecret"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
-        "EC2InstanceProfile": {
-            "Type": "AWS::IAM::InstanceProfile",
-            "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "${AWS::StackName}-EC2-Profile"
-                },
-                "Roles": [
-                    {
-                        "Ref": "EC2InstanceRole"
-                    }
-                ]
-            }
-        },
-        "CloudWatchLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/ec2/${AWS::StackName}"
-                },
-                "RetentionInDays": 1,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${AWS::StackName}-LogGroup"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": "Production"
-                    }
-                ]
-            }
-        },
         "S3Bucket": {
             "Type": "AWS::S3::Bucket",
             "DeletionPolicy": "Delete",
@@ -904,31 +789,6 @@
                 }
             }
         },
-        "S3BucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "S3Bucket"
-                },
-                "PolicyDocument": {
-                    "Statement": [
-                        {
-                            "Sid": "AllowCloudFrontAccess",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}'"
-                                }
-                            },
-                            "Action": "s3:GetObject",
-                            "Resource": {
-                                "Fn::Sub": "${S3Bucket}/*"
-                            }
-                        }
-                    ]
-                }
-            }
-        },
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
@@ -937,27 +797,13 @@
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
-                        "Fn::FindInMap": [
-                            "RegionMap",
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "AMI"
-                        ]
+                        "Ref": "AmiId"
                     },
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
                     "KeyName": {
                         "Ref": "KeyPairName"
-                    },
-                    "IamInstanceProfile": {
-                        "Arn": {
-                            "Fn::GetAtt": [
-                                "EC2InstanceProfile",
-                                "Arn"
-                            ]
-                        }
                     },
                     "SecurityGroupIds": [
                         {
@@ -966,7 +812,7 @@
                     ],
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Install CloudWatch agent\nwget >-\n  https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/\n  amazon-cloudwatch-agent.rpm\nrpm -U >-\n  ./amazon-cloudwatch-agent.rpm\n\n# Configure CloudWatch agent\ncat > >-\n  /opt/aws/amazon-cloudwatch-agent/etc/ >-\n  amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/httpd/access_log\",\n            \"log_group_name\": \"${CloudWatchLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/httpd/access_log\"\n          },\n          {\n            \"file_path\": \"/var/log/httpd/error_log\",\n            \"log_group_name\": \"${CloudWatchLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/httpd/error_log\"\n          }\n        ]\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl >-\n  -a fetch-config -m ec2 -c >-\n  file:/opt/aws/amazon-cloudwatch-agent/etc/ >-\n  amazon-cloudwatch-agent.json >-\n  -s\n\n# Create a simple index page\necho >-\n  \"<h1>Web Server - Instance ID: $(curl -s >-\n  http://169.254.169.254/latest/meta-data/instance-id)</h1>\" >-\n  > /var/www/html/index.html\n"
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create a simple index page\necho >-\n  \"<h1>Web Server - Instance ID: $(curl -s >-\n  http://169.254.169.254/latest/meta-data/instance-id)</h1>\" >-\n  > /var/www/html/index.html\n"
                         }
                     },
                     "TagSpecifications": [
@@ -1154,23 +1000,14 @@
         "CloudFrontDistribution": {
             "Type": "AWS::CloudFront::Distribution",
             "DeletionPolicy": "Delete",
+            "DependsOn": [
+                "ApplicationLoadBalancer",
+                "S3Bucket",
+                "CloudFrontOriginAccessIdentity"
+            ],
             "Properties": {
                 "DistributionConfig": {
                     "Origins": [
-                        {
-                            "Id": "S3Origin",
-                            "DomainName": {
-                                "Fn::GetAtt": [
-                                    "S3Bucket",
-                                    "DomainName"
-                                ]
-                            },
-                            "S3OriginConfig": {
-                                "OriginAccessIdentity": {
-                                    "Fn::Sub": "'origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}'"
-                                }
-                            }
-                        },
                         {
                             "Id": "ALBOrigin",
                             "DomainName": {
@@ -1211,29 +1048,6 @@
                             }
                         }
                     },
-                    "CacheBehaviors": [
-                        {
-                            "PathPattern": "/static/*",
-                            "TargetOriginId": "S3Origin",
-                            "ViewerProtocolPolicy": "redirect-to-https",
-                            "AllowedMethods": [
-                                "GET",
-                                "HEAD"
-                            ],
-                            "CachedMethods": [
-                                "GET",
-                                "HEAD"
-                            ],
-                            "ForwardedValues": {
-                                "QueryString": false,
-                                "Cookies": {
-                                    "Forward": "none"
-                                }
-                            },
-                            "DefaultTTL": 86400,
-                            "MaxTTL": 31536000
-                        }
-                    ],
                     "PriceClass": "PriceClass_100",
                     "ViewerCertificate": {
                         "CloudFrontDefaultCertificate": true
@@ -1396,7 +1210,7 @@
                 },
                 "Type": "String",
                 "Value": {
-                    "Fn::Sub": "{\n  \"environment\": \"production\",\n  \"debug\": false,\n  \"s3_bucket\": \"${S3Bucket}\",\n  \"cloudfront_domain\": \"${CloudFrontDistribution.DomainName}\"\n}\n"
+                    "Fn::Sub": "{\n  \"environment\": \"production\",\n  \"debug\": false,\n  \"s3_bucket\": \"${S3Bucket}\"\n}\n"
                 },
                 "Description": "Application configuration parameters",
                 "Tags": {
@@ -1408,13 +1222,7 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMI"
-                    ]
+                    "Ref": "AmiId"
                 },
                 "InstanceType": "t3.micro",
                 "KeyName": {

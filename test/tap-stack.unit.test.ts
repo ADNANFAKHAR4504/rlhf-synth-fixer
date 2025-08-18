@@ -168,7 +168,7 @@ describe('TapStack CloudFormation Template', () => {
       const launchTemplate = template.Resources.LaunchTemplate;
       const data = launchTemplate.Properties.LaunchTemplateData;
       
-      expect(data.ImageId['Fn::FindInMap']).toBeDefined();
+      expect(data.ImageId.Ref).toBe('AmiId');
       expect(data.InstanceType.Ref).toBe('InstanceType');
       expect(data.KeyName.Ref).toBe('KeyPairName');
     });
@@ -318,30 +318,32 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('IAM Roles and Policies', () => {
-    test('should have EC2 Instance Role', () => {
-      expect(template.Resources.EC2InstanceRole).toBeDefined();
-      expect(template.Resources.EC2InstanceRole.Type).toBe('AWS::IAM::Role');
+  describe('CloudFront and CDN', () => {
+    test('should have CloudFront Origin Access Identity', () => {
+      expect(template.Resources.CloudFrontOriginAccessIdentity).toBeDefined();
+      expect(template.Resources.CloudFrontOriginAccessIdentity.Type).toBe('AWS::CloudFront::CloudFrontOriginAccessIdentity');
     });
 
-    test('EC2 Instance Role should have correct assume role policy', () => {
-      const role = template.Resources.EC2InstanceRole;
-      const assumeRolePolicy = role.Properties.AssumeRolePolicyDocument;
+    test('should have CloudFront Distribution', () => {
+      expect(template.Resources.CloudFrontDistribution).toBeDefined();
+      expect(template.Resources.CloudFrontDistribution.Type).toBe('AWS::CloudFront::Distribution');
+    });
+
+    test('CloudFront Distribution should have ALB origin', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      const origins = distribution.Properties.DistributionConfig.Origins;
       
-      expect(assumeRolePolicy.Version).toBe('2012-10-17');
-      expect(assumeRolePolicy.Statement[0].Effect).toBe('Allow');
-      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
-      expect(assumeRolePolicy.Statement[0].Action).toBe('sts:AssumeRole');
+      const albOrigin = origins.find((origin: any) => origin.Id === 'ALBOrigin');
+      expect(albOrigin).toBeDefined();
+      expect(albOrigin.DomainName['Fn::GetAtt']).toEqual(['ApplicationLoadBalancer', 'DNSName']);
     });
 
-    test('EC2 Instance Role should have CloudWatch policy', () => {
-      const role = template.Resources.EC2InstanceRole;
-      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
-    });
-
-    test('should have EC2 Instance Profile', () => {
-      expect(template.Resources.EC2InstanceProfile).toBeDefined();
-      expect(template.Resources.EC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
+    test('CloudFront Distribution should have correct cache behavior', () => {
+      const distribution = template.Resources.CloudFrontDistribution;
+      const defaultCacheBehavior = distribution.Properties.DistributionConfig.DefaultCacheBehavior;
+      
+      expect(defaultCacheBehavior.TargetOriginId).toBe('ALBOrigin');
+      expect(defaultCacheBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
     });
   });
 
