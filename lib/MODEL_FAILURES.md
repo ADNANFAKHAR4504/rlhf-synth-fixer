@@ -140,11 +140,11 @@ this.rdsInstance = new aws.rds.Instance('mysql-db', {
 
 ---
 
-## � **SECURITY FAILURES**
+## **SECURITY FAILURES**
 
 ### **5. Missing KMS Key Policies**
 
-**L FAILURE:** MODEL_RESPONSE.md creates KMS key without proper service permissions
+**FAILURE:** MODEL_RESPONSE.md creates KMS key without proper service permissions
 
 ```typescript
 // MODEL_RESPONSE has incomplete KMS key
@@ -365,7 +365,7 @@ const provider = new aws.Provider('aws-provider', {
 pulumi.runtime.setConfig('aws:region', 'us-west-1');
 ```
 
-**=' CORRECTION:** Proper provider configuration in entry point
+**CORRECTION:** Proper provider configuration in entry point
 
 ```typescript
 // In bin/tap.ts - proper provider setup
