@@ -1,16 +1,28 @@
 ########################
+# Providers
+########################
+provider "aws" {
+  region = var.aws_region
+}
+
+provider "aws" {
+  alias  = "secondary"
+  region = var.dr_region
+}
+
+########################
 # Variables
 ########################
 variable "aws_region" {
   description = "Primary AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-south-1"
 }
 
 variable "dr_region" {
   description = "Secondary (DR) AWS region"
   type        = string
-  default     = "us-west-2"
+  default     = "ap-northeast-2"
 }
 
 variable "name_prefix" {
@@ -245,7 +257,7 @@ resource "aws_security_group" "rds" {
 ########################
 module "alb" {
   source  = "terraform-aws-modules/alb/aws"
-  version = "~> 9.0"
+  version = "~> 8.7"
 
   name               = "${var.name_prefix}-alb"
   load_balancer_type = "application"
@@ -253,22 +265,20 @@ module "alb" {
   subnets            = module.vpc.public_subnets
   security_groups    = [aws_security_group.alb.id]
 
-  listeners = {
-    http = {
-      port     = 80
-      protocol = "HTTP"
-      forward = {
-        target_group_key = "app"
-      }
+  http_tcp_listeners = [
+    {
+      port               = 80
+      protocol           = "HTTP"
+      target_group_index = 0
     }
-  }
+  ]
 
-  target_groups = {
-    app = {
-      name        = "${var.name_prefix}-tg"
-      protocol    = "HTTP"
-      port        = 80
-      target_type = "instance"
+  target_groups = [
+    {
+      name             = "${var.name_prefix}-tg"
+      backend_protocol = "HTTP"
+      backend_port     = 80
+      target_type      = "instance"
       health_check = {
         path                = "/"
         protocol            = "HTTP"
@@ -279,7 +289,7 @@ module "alb" {
         unhealthy_threshold = 2
       }
     }
-  }
+  ]
 
   # Access logs to S3 disabled to avoid ACL constraints in minimal setup
 
@@ -323,7 +333,7 @@ resource "aws_autoscaling_group" "app" {
   desired_capacity          = var.desired_capacity
   health_check_type         = "EC2"
   health_check_grace_period = 120
-  target_group_arns         = [module.alb.target_groups["app"].arn]
+  target_group_arns         = module.alb.target_group_arns
 
   launch_template {
     id      = aws_launch_template.app.id
@@ -800,7 +810,7 @@ resource "aws_security_group" "app_dr" {
 module "alb_dr" {
   providers = { aws = aws.secondary }
   source    = "terraform-aws-modules/alb/aws"
-  version   = "~> 9.0"
+  version   = "~> 8.7"
 
   name               = "${var.name_prefix}-alb-dr"
   load_balancer_type = "application"
@@ -808,28 +818,26 @@ module "alb_dr" {
   subnets            = module.vpc_dr.public_subnets
   security_groups    = [aws_security_group.alb_dr.id]
 
-  listeners = {
-    http = {
-      port     = 80
-      protocol = "HTTP"
-      forward = {
-        target_group_key = "app"
-      }
+  http_tcp_listeners = [
+    {
+      port               = 80
+      protocol           = "HTTP"
+      target_group_index = 0
     }
-  }
+  ]
 
-  target_groups = {
-    app = {
-      name        = "${var.name_prefix}-tg-dr"
-      protocol    = "HTTP"
-      port        = 80
-      target_type = "instance"
+  target_groups = [
+    {
+      name             = "${var.name_prefix}-tg-dr"
+      backend_protocol = "HTTP"
+      backend_port     = 80
+      target_type      = "instance"
       health_check = {
         path     = "/"
         protocol = "HTTP"
       }
     }
-  }
+  ]
 
   # Access logs disabled in DR for minimal setup
 
@@ -869,7 +877,7 @@ resource "aws_autoscaling_group" "app_dr" {
   min_size                 = 1
   max_size                 = var.max_capacity
   desired_capacity         = 1
-  target_group_arns        = [module.alb_dr.target_groups["app"].arn]
+  target_group_arns        = module.alb_dr.target_group_arns
   health_check_type        = "EC2"
   health_check_grace_period = 120
 
