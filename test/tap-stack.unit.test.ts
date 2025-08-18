@@ -1,103 +1,50 @@
-import { App, Testing } from 'cdktf';
-import { IAM } from '../lib/iam';
-import { Logging } from '../lib/logging';
-import { Networking } from '../lib/networking';
-import { Security } from '../lib/security';
-import { Storage } from '../lib/storage';
-import { TapStack } from '../lib/tap-stack';
+import * as fs from 'fs';
+import * as path from 'path';
 
-describe('TapStack Comprehensive Unit Tests', () => {
-  let app: App;
+describe('Terraform S3 and DynamoDB Stack', () => {
+  let tfConfig: string;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    app = new App();
+  beforeAll(() => {
+    // Read the Terraform file
+    tfConfig = fs.readFileSync(path.join(__dirname, '../lib/tap_stack.tf'), 'utf8');
   });
 
-  test('TapStack instantiates with all required props', () => {
-    const stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix: 'test',
-      stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
-      defaultTags: { tags: { Owner: 'test-owner', CostCenter: 'test-cc' } },
-    });
-    const synthesized = Testing.synth(stack);
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+  test('projectname variable is defined and used in resource names', () => {
+    expect(tfConfig).toMatch(/variable\s+"projectname"/);
+    expect(tfConfig).toMatch(/\${var\.projectname}-s3/);
+    expect(tfConfig).toMatch(/\${var\.projectname}-dynamodb/);
   });
 
-  test('Networking module creates VPC and subnets with correct tags', () => {
-    const stack = new TapStack(app, 'NetworkingTestStack');
-    const networking = new Networking(stack, 'NetworkingTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(networking.vpc).toBeDefined();
-    expect(networking.publicSubnets.length).toBeGreaterThan(0);
-    expect(networking.privateSubnets.length).toBeGreaterThan(0);
+  test('S3 bucket resource is present with versioning enabled', () => {
+    expect(tfConfig).toMatch(/resource\s+"aws_s3_bucket"\s+"main"/);
+    expect(tfConfig).toMatch(/versioning_configuration\s*{\s*status\s*=\s*"Enabled"/);
   });
 
-  test('Security module creates SGs with correct rules', () => {
-    const stack = new TapStack(app, 'SecurityTestStack');
-    const security = new Security(stack, 'SecurityTest', {
-      vpcId: 'vpc-123',
-      environment: 'test',
-      region: 'us-west-2',
-      allowedCidr: '203.0.113.0/24',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(security.webSg).toBeDefined();
-    expect(security.appSg).toBeDefined();
-    expect(security.dbSg).toBeDefined();
+  test('S3 bucket public access block is present', () => {
+    expect(tfConfig).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"main"/);
+    expect(tfConfig).toMatch(/block_public_acls\s*=\s*true/);
+    expect(tfConfig).toMatch(/block_public_policy\s*=\s*true/);
+    expect(tfConfig).toMatch(/restrict_public_buckets\s*=\s*true/);
   });
 
-  test('IAM module creates role with least privilege', () => {
-    const stack = new TapStack(app, 'IAMTestStack');
-    const iam = new IAM(stack, 'IAMTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(iam.role).toBeDefined();
+  test('DynamoDB table resource is present with correct config', () => {
+    expect(tfConfig).toMatch(/resource\s+"aws_dynamodb_table"\s+"main"/);
+    expect(tfConfig).toMatch(/billing_mode\s*=\s*"PAY_PER_REQUEST"/);
+    expect(tfConfig).toMatch(/hash_key\s*=\s*"id"/);
+    expect(tfConfig).toMatch(/attribute\s*{\s*name\s*=\s*"id"/);
   });
 
-  test('Logging module creates CloudTrail with correct bucket', () => {
-    const stack = new TapStack(app, 'LoggingTestStack');
-    const logging = new Logging(stack, 'LoggingTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(logging.trail).toBeDefined();
+  test('Outputs for S3 bucket and DynamoDB table are present', () => {
+    expect(tfConfig).toMatch(/output\s+"s3_bucket_name"/);
+    expect(tfConfig).toMatch(/output\s+"dynamodb_table_name"/);
   });
 
-  test('Storage module creates secure S3 buckets', () => {
-    const stack = new TapStack(app, 'StorageTestStack');
-    const storage = new Storage(stack, 'StorageTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(storage.appDataBucket).toBeDefined();
-    expect(storage.logsBucket).toBeDefined();
+  test('Documentation and comments are present', () => {
+    expect(tfConfig).toMatch(/Documentation/);
+    expect(tfConfig).toMatch(/All resource names follow 'projectname-resource' pattern/);
   });
 
-  test('Stack outputs and standards are present', () => {
-    const stack = new TapStack(app, 'OutputTestStack', {
-      environmentSuffix: 'test',
-      stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
-      defaultTags: { tags: { Owner: 'test-owner', CostCenter: 'test-cc' } },
-    });
-    const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('test-us-west-2-vpc');
-    expect(synthesized).toContain('test-us-west-2-app-data');
-    expect(synthesized).toContain('test-us-west-2-logs');
-    expect(synthesized).toContain('test-us-west-2-trail-bucket');
+  test('Tags are set for both resources', () => {
+    expect(tfConfig).toMatch(/tags\s*=\s*{[^}]*Name[^}]*Project[^}]*ManagedBy[^}]*}/s);
   });
 });
-
-// add more test suites and cases as needed
