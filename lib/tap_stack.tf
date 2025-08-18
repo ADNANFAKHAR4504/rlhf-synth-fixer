@@ -82,6 +82,12 @@ variable "cpu_low_threshold" {
   default     = 20
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to avoid conflicts"
+  type        = string
+  default     = "dev"
+}
+
 # =============================================================================
 # LOCAL VALUES
 # =============================================================================
@@ -97,10 +103,10 @@ locals {
   }
 
   # Resource naming conventions
-  name_prefix = "${var.project_name}-${var.environment}"
-  
+  name_prefix = "${var.project_name}-${var.environment_suffix}"
+
   # Short name prefix for resources with length restrictions
-  short_name_prefix = "tap-stack"
+  short_name_prefix = "tap-${var.environment_suffix}"
 }
 
 # =============================================================================
@@ -178,7 +184,7 @@ resource "aws_internet_gateway" "main" {
 
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
-  count = 2
+  count  = 2
   domain = "vpc"
 
   tags = merge(local.common_tags, {
@@ -583,11 +589,11 @@ output "security_group_ids" {
 output "cost_estimation" {
   description = "Estimated monthly cost breakdown"
   value = {
-    vpc            = 0.00
-    subnets        = 0.00
-    nat_gateways   = length(aws_nat_gateway.main) * 45.00
-    alb            = 16.20
-    ec2_instances  = var.desired_capacity * 8.47
+    vpc             = 0.00
+    subnets         = 0.00
+    nat_gateways    = length(aws_nat_gateway.main) * 45.00
+    alb             = 16.20
+    ec2_instances   = var.desired_capacity * 8.47
     total_estimated = (length(aws_nat_gateway.main) * 45.00) + 16.20 + (var.desired_capacity * 8.47)
   }
 }

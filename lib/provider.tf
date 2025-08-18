@@ -15,13 +15,13 @@ terraform {
   }
 
   # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
+  # backend "s3" {}  # Temporarily disabled for QA testing
 }
 
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
       Environment = var.environment

@@ -82,6 +82,12 @@ variable "cpu_low_threshold" {
   default     = 20
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to avoid conflicts"
+  type        = string
+  default     = "dev"
+}
+
 # =============================================================================
 # LOCAL VALUES
 # =============================================================================
@@ -97,10 +103,10 @@ locals {
   }
 
   # Resource naming conventions
-  name_prefix = "${var.project_name}-${var.environment}"
+  name_prefix = "${var.project_name}-${var.environment_suffix}"
   
   # Short name prefix for resources with length restrictions
-  short_name_prefix = "tap-stack"
+  short_name_prefix = "tap-${var.environment_suffix}"
 }
 
 # =============================================================================
