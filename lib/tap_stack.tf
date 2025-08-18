@@ -453,8 +453,8 @@ resource "aws_db_instance" "primary" {
   provider = aws.primary
 
   # Basic Configuration
-  identifier     = "mysql-primary-${var.environment_suffix}"
-  engine         = "mysql"
+  identifier = "mysql-primary-${var.environment_suffix}"
+  engine     = "mysql"
   #engine_version = "8.0.36"
   instance_class = var.db_instance_class
 
@@ -510,8 +510,8 @@ resource "aws_db_instance" "secondary" {
   provider = aws.secondary
 
   # Basic Configuration
-  identifier     = "mysql-secondary-${var.environment_suffix}"
-  engine         = "mysql"
+  identifier = "mysql-secondary-${var.environment_suffix}"
+  engine     = "mysql"
   #engine_version = "8.0.36"
   instance_class = var.db_instance_class
 
