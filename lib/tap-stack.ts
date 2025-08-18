@@ -251,6 +251,7 @@ export class TapStack extends cdk.Stack {
     // SNS Topic for alerts
     const alertTopic = new sns.Topic(this, 'TapAlertTopic', {
       displayName: `TAP Alerts - ${this.region}`,
+      masterKey: backupKey,
     });
 
     // CloudWatch Alarms
