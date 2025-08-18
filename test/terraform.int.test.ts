@@ -32,7 +32,7 @@ type Outputs = {
 };
 
 function loadOutputs() {
-  const p = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
+  const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
   if (!fs.existsSync(p)) {
     console.log("Outputs file not found, using mock data for testing");
     return {
@@ -63,14 +63,14 @@ function loadOutputs() {
   };
 
   const o = {
-    vpcId: req("vpc_id") as string,
-    publicSubnets: req("public_subnet_ids") as string[],
-    privateSubnets: req("private_subnet_ids") as string[],
-    albDnsName: req("alb_dns_name") as string,
-    rdsEndpoint: req("rds_endpoint") as string,
-    s3BucketName: req("s3_bucket_name") as string,
-    secretsManagerArn: req("secrets_manager_arn") as string,
-    costEstimation: req("cost_estimation") as {
+    vpcId: req("vpc_id")?.value as string,
+    publicSubnets: req("public_subnet_ids")?.value as string[],
+    privateSubnets: req("private_subnet_ids")?.value as string[],
+    albDnsName: req("alb_dns_name")?.value as string,
+    rdsEndpoint: req("rds_endpoint")?.value as string,
+    s3BucketName: req("s3_bucket_name")?.value as string,
+    secretsManagerArn: req("secrets_manager_arn")?.value as string,
+    costEstimation: req("cost_estimation")?.value as {
       ec2_instances: number;
       rds_instance: number;
       alb: number;
