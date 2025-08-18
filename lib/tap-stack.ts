@@ -29,7 +29,13 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    const { projectName, environmentSuffix, officeCidr, devOpsEmail, dbUsername } = props;
+    const {
+      projectName,
+      environmentSuffix,
+      officeCidr,
+      devOpsEmail,
+      dbUsername,
+    } = props;
 
     // Common tags for all resources
     const commonTags = {
@@ -69,7 +75,7 @@ export class TapStack extends cdk.Stack {
           expiration: cdk.Duration.days(2555), // 7 years
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // ========================================
@@ -122,12 +128,16 @@ export class TapStack extends cdk.Stack {
       'Allow HTTPS from office'
     );
 
-    const databaseSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      securityGroupName: `${projectName}-${environmentSuffix}-db-sg`,
-      vpc,
-      description: 'Security group for RDS database',
-      allowAllOutbound: false,
-    });
+    const databaseSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        securityGroupName: `${projectName}-${environmentSuffix}-db-sg`,
+        vpc,
+        description: 'Security group for RDS database',
+        allowAllOutbound: false,
+      }
+    );
 
     // Allow MySQL/Aurora access from web security group
     databaseSecurityGroup.addIngressRule(
@@ -143,28 +153,33 @@ export class TapStack extends cdk.Stack {
       roleName: `${projectName}-${environmentSuffix}-ec2-role`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
       inlinePolicies: {
         S3Access: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
+              actions: ['s3:GetObject', 's3:PutObject'],
+              resources: [
+                `arn:aws:s3:::${projectName}-${environmentSuffix}-app-data/*`,
               ],
-              resources: [`arn:aws:s3:::${projectName}-${environmentSuffix}-app-data/*`],
             }),
           ],
         }),
       },
     });
 
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
-      instanceProfileName: `${projectName}-${environmentSuffix}-ec2-profile`,
-      role: ec2Role,
-    });
+    const instanceProfile = new iam.InstanceProfile(
+      this,
+      'EC2InstanceProfile',
+      {
+        instanceProfileName: `${projectName}-${environmentSuffix}-ec2-profile`,
+        role: ec2Role,
+      }
+    );
 
     // ========================================
     // SNS TOPIC FOR ALERTS
@@ -189,34 +204,41 @@ export class TapStack extends cdk.Stack {
       'systemctl start httpd',
       'systemctl enable httpd',
       'echo "<h1>Web Server Running</h1>" > /var/www/html/index.html',
-      
+
       // CloudWatch Agent configuration
       'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF',
-      JSON.stringify({
-        metrics: {
-          namespace: `${projectName}/${environmentSuffix}`,
-          metrics_collected: {
-            cpu: {
-              measurement: ['cpu_usage_idle', 'cpu_usage_iowait', 'cpu_usage_user', 'cpu_usage_system'],
-              metrics_collection_interval: 60,
-            },
-            disk: {
-              measurement: ['used_percent'],
-              metrics_collection_interval: 60,
-              resources: ['*'],
-            },
-            mem: {
-              measurement: ['mem_used_percent'],
-              metrics_collection_interval: 60,
+      JSON.stringify(
+        {
+          metrics: {
+            namespace: `${projectName}/${environmentSuffix}`,
+            metrics_collected: {
+              cpu: {
+                measurement: [
+                  'cpu_usage_idle',
+                  'cpu_usage_iowait',
+                  'cpu_usage_user',
+                  'cpu_usage_system',
+                ],
+                metrics_collection_interval: 60,
+              },
+              disk: {
+                measurement: ['used_percent'],
+                metrics_collection_interval: 60,
+                resources: ['*'],
+              },
+              mem: {
+                measurement: ['mem_used_percent'],
+                metrics_collection_interval: 60,
+              },
             },
           },
         },
-      }, null, 2),
+        null,
+        2
+      ),
       'EOF',
       '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
     );
-
-
 
     // Launch instances in private subnets
     const webInstances: ec2.Instance[] = [];
@@ -225,7 +247,10 @@ export class TapStack extends cdk.Stack {
         instanceName: `${projectName}-${environmentSuffix}-web-${index + 1}`,
         vpc,
         vpcSubnets: { subnets: [subnet] },
-        instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
         machineImage: ec2.MachineImage.latestAmazonLinux2(),
         securityGroup: webSecurityGroup,
         role: ec2Role,
@@ -260,7 +285,8 @@ export class TapStack extends cdk.Stack {
         }),
         threshold: 80,
         evaluationPeriods: 2,
-        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
         alarmDescription: `CPU utilization exceeded 80% for instance ${instance.instanceId}`,
       });
 
@@ -286,7 +312,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [databaseSecurityGroup],
@@ -300,10 +329,8 @@ export class TapStack extends cdk.Stack {
       }),
       backupRetention: cdk.Duration.days(7),
       deletionProtection: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       monitoringInterval: cdk.Duration.minutes(1),
-      enablePerformanceInsights: true,
-      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
     });
 
     // ========================================
@@ -342,7 +369,7 @@ export class TapStack extends cdk.Stack {
           ],
         },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // ========================================
@@ -371,6 +398,21 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'WebInstanceIds', {
       value: webInstances.map(instance => instance.instanceId).join(', '),
       description: 'Web Server Instance IDs',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailArn', {
+      value: cloudTrail.trailArn,
+      description: 'CloudTrail ARN',
+    });
+
+    new cdk.CfnOutput(this, 'AppDataBucketName', {
+      value: appDataBucket.bucketName,
+      description: 'Application Data S3 Bucket Name',
+    });
+
+    new cdk.CfnOutput(this, 'InstanceProfileArn', {
+      value: instanceProfile.instanceProfileArn,
+      description: 'EC2 Instance Profile ARN',
     });
   }
 }

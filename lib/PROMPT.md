@@ -1,4 +1,4 @@
-# Secure AWS Cloud Infrastructure: Requirements Outline
+# Secure AWS Cloud Infrastructure
 You are an AWS professional. You are tasked with setting up a secure, monitored AWS cloud infrastructure for a web application using CloudFormation CDK. This includes IAM policy configuration, network setup, and monitoring. With 
 The Requirements are as follows:
 Deploy all resources in the `us-east-2` AWS region.
