@@ -25,7 +25,7 @@ Resources:
         SecretStringTemplate: '{}'
         GenerateStringKey: 'password'
         PasswordLength: 16
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: '"@/\|'
         RequireEachIncludedType: true
 
   # IAM Policy to enforce MFA for all users
