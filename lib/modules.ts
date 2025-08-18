@@ -9,6 +9,10 @@ import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-assoc
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 
+// FIX: Added NAT Gateway and Elastic IP imports for private subnet internet access
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+
 import { Lb } from '@cdktf/provider-aws/lib/lb';
 import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
@@ -19,7 +23,7 @@ import { AutoscalingPolicy } from '@cdktf/provider-aws/lib/autoscaling-policy';
 
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 
-import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami'; // Fixed import
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
@@ -58,8 +62,8 @@ export interface RdsModuleConfig {
   allocatedStorage: number;
   dbName: string;
   username: string;
-  password: string; // Fixed: Use password instead of passwordSecretArn
-  vpcSecurityGroupIds: string[]; // Fixed: Use array of security group IDs
+  password: string;
+  vpcSecurityGroupIds: string[];
   subnetIds: string[];
   backupRetentionPeriod: number;
   multiAz: boolean;
@@ -79,7 +83,6 @@ export class VpcModule extends Construct {
   constructor(scope: Construct, id: string, config: VpcModuleConfig) {
     super(scope, id);
 
-    // AZs for the region (more predictable)
     this.availabilityZones = [
       `${config.region}a`,
       `${config.region}b`,
@@ -154,6 +157,46 @@ export class VpcModule extends Construct {
       });
     });
 
+    // FIX: Added NAT Gateway for private subnet internet access
+    // Create Elastic IP for NAT Gateway
+    const natEip = new Eip(this, 'nat-eip', {
+      domain: 'vpc',
+      tags: {
+        Name: `${config.name}-nat-eip`,
+      },
+    });
+
+    // Create NAT Gateway in first public subnet
+    const natGateway = new NatGateway(this, 'nat-gw', {
+      allocationId: natEip.id,
+      subnetId: this.publicSubnets[0].id,
+      tags: {
+        Name: `${config.name}-nat-gw`,
+      },
+    });
+
+    // FIX: Create private route table with NAT Gateway route
+    const privateRouteTable = new RouteTable(this, 'private-rt', {
+      vpcId: this.vpc.id,
+      tags: {
+        Name: `${config.name}-private-rt`,
+      },
+    });
+
+    new Route(this, 'private-route', {
+      routeTableId: privateRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      natGatewayId: natGateway.id,
+    });
+
+    // FIX: Associate private subnets with private route table
+    this.privateSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `private-rta-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
+      });
+    });
+
     // Security Groups
     this.webSecurityGroup = new SecurityGroup(this, 'web-sg', {
       name: `${config.name}-web-sg`,
@@ -180,6 +223,16 @@ export class VpcModule extends Construct {
       toPort: 443,
       protocol: 'tcp',
       cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.webSecurityGroup.id,
+    });
+
+    // FIX: Added SSH access for debugging (optional - remove in production)
+    new SecurityGroupRule(this, 'web-ssh-ingress', {
+      type: 'ingress',
+      fromPort: 22,
+      toPort: 22,
+      protocol: 'tcp',
+      cidrBlocks: [config.cidrBlock], // Only from within VPC
       securityGroupId: this.webSecurityGroup.id,
     });
 
@@ -250,7 +303,7 @@ export class ElbModule extends Construct {
         unhealthyThreshold: 2,
         timeout: 5,
         interval: 30,
-        path: '/health',
+        path: '/health', // FIX: This matches the health endpoint created in user data
         matcher: '200',
         protocol: 'HTTP',
         port: 'traffic-port',
@@ -261,10 +314,9 @@ export class ElbModule extends Construct {
       },
     });
 
-    // Fixed: port should be number, not string
     this.listener = new LbListener(this, 'listener', {
       loadBalancerArn: this.loadBalancer.arn,
-      port: 80, // Fixed: Changed from "80" to 80
+      port: 80,
       protocol: 'HTTP',
 
       defaultAction: [
@@ -289,9 +341,8 @@ export class AsgModule extends Construct {
   constructor(scope: Construct, id: string, config: AsgModuleConfig) {
     super(scope, id);
 
-    // Fixed: Use DataAwsAmi instead of Ami
     const ami = new DataAwsAmi(this, 'ami', {
-      mostRecent: true, // This is correct for DataAwsAmi
+      mostRecent: true,
       owners: ['amazon'],
       filter: [
         {
@@ -307,15 +358,26 @@ export class AsgModule extends Construct {
       instanceType: config.instanceType,
       vpcSecurityGroupIds: config.securityGroupIds,
 
+      // FIX: Updated user data to create proper health check endpoint and improve reliability
       userData: Buffer.from(
         `#!/bin/bash
         yum update -y
         yum install -y httpd
+        
+        # Start and enable httpd
         systemctl start httpd
         systemctl enable httpd
         
+        # FIX: Create health check endpoint at root level (accessible via /health)
         echo "<html><body><h1>Healthy</h1></body></html>" > /var/www/html/health
-        echo "<html><body><h1>Hello from $(hostname -f)</h1></body></html>" > /var/www/html/index.html
+        echo "<html><body><h1>Hello from \$(hostname -f)</h1><p>Instance is running and healthy!</p></body></html>" > /var/www/html/index.html
+        
+        # FIX: Ensure httpd is running and restart if needed
+        systemctl restart httpd
+        
+        # FIX: Add logging for debugging
+        echo "User data script completed at \$(date)" >> /var/log/user-data.log
+        systemctl status httpd >> /var/log/user-data.log
       `
       ).toString('base64'),
 
@@ -329,7 +391,8 @@ export class AsgModule extends Construct {
       vpcZoneIdentifier: config.subnetIds,
       targetGroupArns: [config.targetGroupArn],
       healthCheckType: 'ELB',
-      healthCheckGracePeriod: 300,
+      // FIX: Increased grace period to allow more time for instances to become healthy
+      healthCheckGracePeriod: 600, // Increased from 300 to 600 seconds
 
       minSize: config.minSize,
       maxSize: config.maxSize,
@@ -340,7 +403,9 @@ export class AsgModule extends Construct {
         version: '$Latest',
       },
 
-      // Fixed: Use 'tag' instead of 'tags'
+      // FIX: Added wait_for_capacity_timeout to prevent timeout issues
+      waitForCapacityTimeout: '15m', // Allow 15 minutes for capacity
+
       tag: [
         {
           key: 'Name',
@@ -371,16 +436,15 @@ export class AsgModule extends Construct {
       autoscalingGroupName: this.autoScalingGroup.name,
     });
 
-    // Fixed: Convert string values to numbers for CloudWatch alarms
     new CloudwatchMetricAlarm(this, 'cpu-high', {
       alarmName: `${config.name}-cpu-high`,
       comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2, // Fixed: Changed from "2" to 2
+      evaluationPeriods: 2,
       metricName: 'CPUUtilization',
       namespace: 'AWS/EC2',
-      period: 120, // Fixed: Changed from "120" to 120
+      period: 120,
       statistic: 'Average',
-      threshold: 70, // Fixed: Changed from "70" to 70
+      threshold: 70,
       alarmDescription: 'This metric monitors ec2 cpu utilization',
       alarmActions: [this.scaleUpPolicy.arn],
       dimensions: {
@@ -391,12 +455,12 @@ export class AsgModule extends Construct {
     new CloudwatchMetricAlarm(this, 'cpu-low', {
       alarmName: `${config.name}-cpu-low`,
       comparisonOperator: 'LessThanThreshold',
-      evaluationPeriods: 2, // Fixed: Changed from "2" to 2
+      evaluationPeriods: 2,
       metricName: 'CPUUtilization',
       namespace: 'AWS/EC2',
-      period: 120, // Fixed: Changed from "120" to 120
+      period: 120,
       statistic: 'Average',
-      threshold: 30, // Fixed: Changed from "30" to 30
+      threshold: 30,
       alarmDescription: 'This metric monitors ec2 cpu utilization',
       alarmActions: [this.scaleDownPolicy.arn],
       dimensions: {
@@ -443,7 +507,6 @@ export class RdsModule extends Construct {
       },
     });
 
-    // Fixed: Use correct property names for RDS instance
     this.dbInstance = new DbInstance(this, 'db-instance', {
       identifier: `${config.name}-db`,
       engine: config.engine,
@@ -455,11 +518,11 @@ export class RdsModule extends Construct {
 
       dbName: config.dbName,
       username: config.username,
-      password: config.password, // Fixed: Use password instead of managePasswordSecretArn
+      password: config.password,
 
       multiAz: config.multiAz,
       dbSubnetGroupName: this.dbSubnetGroup.name,
-      vpcSecurityGroupIds: config.vpcSecurityGroupIds, // Fixed: Use the array from config
+      vpcSecurityGroupIds: config.vpcSecurityGroupIds,
 
       backupRetentionPeriod: config.backupRetentionPeriod,
       backupWindow: '03:00-04:00',
