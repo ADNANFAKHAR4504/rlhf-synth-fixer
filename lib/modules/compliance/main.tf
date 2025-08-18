@@ -27,7 +27,7 @@ resource "aws_config_delivery_channel" "main" {
   s3_bucket_name = var.config_s3_bucket
   sns_topic_arn  = var.sns_topic_arn
 
-  depends_on = [aws_config_configuration_recorder.main]
+  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder.main]
 }
 
 # AWS Config Configuration Recorder Status (only manage if creating new recorder)
@@ -164,7 +164,7 @@ resource "aws_config_config_rule" "s3_bucket_encryption" {
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
   }
 
-  depends_on = [aws_config_configuration_recorder_status.main]
+  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder_status.main]
 }
 
 resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
@@ -175,7 +175,7 @@ resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
     source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
   }
 
-  depends_on = [aws_config_configuration_recorder_status.main]
+  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder_status.main]
 }
 
 resource "aws_config_config_rule" "rds_encryption" {
@@ -186,7 +186,7 @@ resource "aws_config_config_rule" "rds_encryption" {
     source_identifier = "RDS_STORAGE_ENCRYPTED"
   }
 
-  depends_on = [aws_config_configuration_recorder_status.main]
+  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder_status.main]
 }
 
 resource "aws_config_config_rule" "iam_password_policy" {
@@ -197,7 +197,7 @@ resource "aws_config_config_rule" "iam_password_policy" {
     source_identifier = "IAM_PASSWORD_POLICY"
   }
 
-  depends_on = [aws_config_configuration_recorder_status.main]
+  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder_status.main]
 }
 
 resource "aws_config_config_rule" "root_account_mfa" {

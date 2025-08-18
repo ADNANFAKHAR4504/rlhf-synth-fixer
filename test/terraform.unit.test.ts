@@ -105,13 +105,16 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
       complianceContent = fs.readFileSync(compliancePath, "utf8");
     });
 
-    test("has AWS Config Recorder", () => {
+    test("has AWS Config Recorder configuration", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_config_configuration_recorder"\s+"main"\s*{/);
       expect(complianceContent).toMatch(/all_supported\s*=\s*true/);
+      expect(complianceContent).toMatch(/variable\s+"use_existing_config_recorder"/);
+      expect(complianceContent).toMatch(/count\s*=\s*var\.use_existing_config_recorder\s*\?\s*0\s*:\s*1/);
     });
 
     test("has AWS Config Delivery Channel", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_config_delivery_channel"\s+"main"\s*{/);
+      expect(complianceContent).toMatch(/depends_on\s*=\s*var\.use_existing_config_recorder/);
     });
 
     test("has GuardDuty Detector", () => {
@@ -134,10 +137,16 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_config_config_rule"\s+"rds_encryption"\s*{/);
       expect(complianceContent).toMatch(/resource\s+"aws_config_config_rule"\s+"iam_password_policy"\s*{/);
       expect(complianceContent).toMatch(/resource\s+"aws_config_config_rule"\s+"root_account_mfa"\s*{/);
+      expect(complianceContent).toMatch(/depends_on\s*=\s*var\.use_existing_config_recorder/);
     });
 
     test("has IAM role for AWS Config", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_iam_role"\s+"config_role"\s*{/);
+    });
+
+    test("has existing recorder configuration", () => {
+      expect(complianceContent).toMatch(/config_recorder_name\s*=\s*var\.use_existing_config_recorder\s*\?\s*"prod-sec-config-recorder-main"/);
+      expect(complianceContent).toMatch(/locals\s*{/);
     });
   });
 
@@ -208,6 +217,10 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
 
     test("modules have proper dependencies", () => {
       expect(stackContent).toMatch(/depends_on\s*=\s*\[module\.storage,\s*module\.monitoring\]/);
+    });
+
+    test("compliance module uses existing config recorder", () => {
+      expect(stackContent).toMatch(/use_existing_config_recorder\s*=\s*true/);
     });
 
     test("modules receive required variables", () => {
@@ -310,6 +323,7 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
       expect(complianceVars).toMatch(/variable\s+"environment"/);
       expect(complianceVars).toMatch(/variable\s+"config_s3_bucket"/);
       expect(complianceVars).toMatch(/variable\s+"sns_topic_arn"/);
+      expect(complianceVars).toMatch(/variable\s+"use_existing_config_recorder"/);
     });
 
     test("storage module has required variables", () => {
