@@ -1,55 +1,53 @@
-# Secure AWS Web Application Infrastructure
+# AWS Secure Web Application Infrastructure
 
-We need to setup a **secure AWS environment using Terraform HCL** to host a web application. The configuration must **adhere to AWS Security Best Practices** and be modular, readable, and production-ready.
+We need to build a secure AWS environment using Terraform to host a web application. The goal is to create a production-ready setup that follows AWS security best practices while keeping things modular and readable.
 
-## Security Requirements
+## What we need to build
 
-### VPC
+**VPC Setup:**
 
-- Create a **VPC named `secure-network`** in the `us-west-2` region.
-- Include:
-  - Public Subnets
-  - Internet Gateway
-  - Route Tables
+- VPC named `secure-network` in us-west-2 region
+- Public subnets for web tier
+- Internet gateway for public access
+- Route tables to connect everything
 
-### Network Controls
+**Network Security:**
 
-- **Security Groups**:
-  - Allow inbound traffic **only on ports 80 (HTTP) and 443 (HTTPS)**.
-  - Allow all outbound traffic.
+- Security groups allowing only HTTP (80) and HTTPS (443) inbound
+- All outbound traffic allowed for updates and API calls
+- Network ACLs for additional subnet-level protection
+- Follow AWS networking best practices
 
-- **Network ACLs** (NACLs):
-  - Restrict traffic in and out of the public subnet following **AWS best practices**.
+**Compute Resources:**
 
-### Compute
+- EC2 instance in the public subnet
+- Attach security group created above
+- Public internet access through IGW (no NAT needed)
+- Minimal IAM permissions - only what's actually needed
 
-- Launch an **EC2 instance** in the **public subnet**.
-- Attach the **Security Group** created above.
-- Ensure the instance has **public internet access** (via IGW; NAT not required).
-- Do **not attach unnecessary IAM permissions**.
+**Storage (S3):**
 
-### Storage (S3)
+- S3 bucket for web application logs
+- Server-side encryption enabled (AES-256 or KMS)
+- Restrict write access to just the EC2 instance
+- Follow least privilege principle
 
-- Create an **S3 bucket** for storing **web application logs**.
-- Enable **Server-Side Encryption** (AES-256 or AWS KMS).
-- Restrict **write access** to the EC2 instance only (least privilege).
+**IAM Security:**
 
-### IAM
+- IAM role for the EC2 instance
+- IAM policy with minimal permissions
+- Only s3:PutObject access to the log bucket
 
-- Create an **IAM Role** for the EC2 instance.
-- Attach an **IAM Policy** with **minimal access**:
-  - Only `s3:PutObject` to the log bucket.
+## Technical requirements
 
-### Tagging
-
-All AWS resources must be tagged with:
-
+All resources need this tag:
 Environment = "Production"
 
-## **Non‑negotiables**
+## Important notes
 
-- The `provider.tf` already exists and holds your **AWS provider + S3 backend**.
-- **Do not** put a `provider` block in `lib/tap_stack.tf`. That stays in `provider.tf`.
-- The variable **`aws_region`** must be declared in `lib/tap_stack.tf` and is consumed by `provider.tf`.
-- Integration tests **must read** from `cfn-outputs/all-outputs.json` (CI/CD will create it).
-- Tests must **not** run `terraform init/plan/apply` during test cases stage.
+- Don't touch the provider.tf - it already has the AWS provider and S3 backend configured
+- The aws_region variable must be declared in tap_stack.tf (provider.tf uses it)
+- Integration tests read from cfn-outputs/all-outputs.json that CI/CD creates
+- Tests shouldn't run terraform commands during the test phase
+
+Keep security tight but don't over-engineer it.
