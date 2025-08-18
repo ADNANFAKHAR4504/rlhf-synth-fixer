@@ -17,12 +17,15 @@ const config = new pulumi.Config();
 
 // Get the environment suffix from the Pulumi config, defaulting to 'dev'.
 // You can set this value using the command: `pulumi config set env <value>`
-const environmentSuffix = config.get('env') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix =
+  config.get('env') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
-const repository = config.get('repository') || process.env.REPOSITORY || 'unknown';
-const commitAuthor = config.get('commitAuthor') || process.env.COMMIT_AUTHOR || 'unknown';
+const repository =
+  config.get('repository') || process.env.REPOSITORY || 'unknown';
+const commitAuthor =
+  config.get('commitAuthor') || process.env.COMMIT_AUTHOR || 'unknown';
 
 // Define a set of default tags to apply to all resources.
 const defaultTags = {

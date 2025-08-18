@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 export interface ComputeStackArgs {
@@ -354,7 +354,7 @@ echo "<p>Environment: ${environmentSuffix}</p>" >> /var/www/html/index.html
     new aws.cloudwatch.LogGroup(
       `tap-httpd-access-logs-${region}-${environmentSuffix}`,
       {
-        name: '/tap/ec2/httpd/access',
+        name: '/tap/ec2/httpd/access-primary',
         retentionInDays: 14,
         tags,
       },
@@ -364,7 +364,7 @@ echo "<p>Environment: ${environmentSuffix}</p>" >> /var/www/html/index.html
     new aws.cloudwatch.LogGroup(
       `tap-httpd-error-logs-${region}-${environmentSuffix}`,
       {
-        name: '/tap/ec2/httpd/error',
+        name: '/tap/ec2/httpd/error-primary',
         retentionInDays: 14,
         tags,
       },
