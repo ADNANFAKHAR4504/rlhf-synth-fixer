@@ -10,6 +10,7 @@ import {
   AutoScalingModule,
   S3BucketModule,
 } from './modules';
+import { Fn } from 'cdktf';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -100,12 +101,12 @@ export class TapStack extends TerraformStack {
       minSize: 1,
       maxSize: 3,
       desiredCapacity: 1,
-      userData: `#!/bin/bash
+      userData: Fn.rawString(`#!/bin/bash
                 sudo yum update -y
                 sudo yum install httpd -y
                 sudo systemctl start httpd
                 sudo systemctl enable httpd
-                echo "<h1>Hello from ${project} ${env}</h1>" > /var/www/html/index.html`,
+                echo "<h1>Hello from ${project} ${env}</h1>" > /var/www/html/index.html`),
     });
 
     // 4. Create a private S3 Bucket for application assets.
