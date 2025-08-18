@@ -28,13 +28,14 @@ class TestConfigurationValidation(unittest.TestCase):
         """Test that environment defaults are properly set."""
         # Test that the function can be called without configuration
         # This tests the default value handling
-        try:
-            # We can't actually call create_infrastructure without mocks,
-            # but we can test the configuration logic by examining the function
-            self.assertTrue(callable(create_infrastructure))
-        except Exception as e:
-            # Expected to fail without proper AWS configuration
-            self.assertIsInstance(e, Exception)
+        # Test that the function is callable and has the expected signature
+        self.assertTrue(callable(create_infrastructure))
+
+        # Test function signature
+        import inspect
+
+        sig = inspect.signature(create_infrastructure)
+        self.assertIn("export_outputs", sig.parameters)
 
     def test_cidr_block_validation(self):
         """Test CIDR block validation logic."""
