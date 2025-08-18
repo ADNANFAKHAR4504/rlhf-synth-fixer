@@ -22,6 +22,7 @@ with the "corp-" prefix and deployment limited to us-west-2 region.
 """
 # pylint: disable=too-many-lines
 
+import base64
 import json
 from typing import Dict, List, Optional
 
@@ -87,9 +88,8 @@ class SecureVPC:  # pylint: disable=too-many-instance-attributes
     self.private_nacl = self._create_private_nacl()
     self.flow_logs_role = self._create_flow_logs_role()
     self.flow_logs = self._create_flow_logs()
-    # Temporarily disable VPC endpoints to get the stack deployed
-    # self.vpc_endpoints = self._create_vpc_endpoints()
-    self.vpc_endpoints = []
+    # VPC endpoints are REQUIRED for EKS nodes to join the cluster
+    self.vpc_endpoints = self._create_vpc_endpoints()
 
   def _create_vpc(self) -> aws.ec2.Vpc:
     return aws.ec2.Vpc(
@@ -596,11 +596,77 @@ def create_security_groups(
       to_port=65535,
       protocol="tcp",
       description="Allow ALB to reach nodes",
-      opts=ResourceOptions(provider=provider)
-  )
-
-  return {
-      "alb_sg": alb_sg,
+              opts=ResourceOptions(provider=provider)
+    )
+    
+    # CRITICAL: Additional rules for EKS node registration
+    # Allow cluster to communicate with nodes on ALL ports for bootstrap
+    aws.ec2.SecurityGroupRule(
+        f"{name_prefix}-cluster-ingress-node-all",
+        type="ingress",
+        security_group_id=eks_cluster_sg.id,
+        source_security_group_id=eks_node_sg.id,
+        from_port=0,
+        to_port=65535,
+        protocol="-1",
+        description="Allow nodes full access to cluster",
+        opts=ResourceOptions(provider=provider)
+    )
+    
+    # Allow nodes to communicate with cluster on ALL ports
+    aws.ec2.SecurityGroupRule(
+        f"{name_prefix}-node-ingress-cluster-all",
+        type="ingress",
+        security_group_id=eks_node_sg.id,
+        source_security_group_id=eks_cluster_sg.id,
+        from_port=0,
+        to_port=65535,
+        protocol="-1",
+        description="Allow cluster full access to nodes",
+        opts=ResourceOptions(provider=provider)
+    )
+    
+    # Allow nodes to communicate with each other on ALL ports
+    aws.ec2.SecurityGroupRule(
+        f"{name_prefix}-node-ingress-node-all",
+        type="ingress",
+        security_group_id=eks_node_sg.id,
+        source_security_group_id=eks_node_sg.id,
+        from_port=0,
+        to_port=65535,
+        protocol="-1",
+        description="Allow nodes to communicate with each other",
+        opts=ResourceOptions(provider=provider)
+    )
+    
+    # Allow all outbound traffic from nodes
+    aws.ec2.SecurityGroupRule(
+        f"{name_prefix}-node-egress-all",
+        type="egress",
+        security_group_id=eks_node_sg.id,
+        cidr_blocks=["0.0.0.0/0"],
+        from_port=0,
+        to_port=65535,
+        protocol="-1",
+        description="Allow all outbound traffic from nodes",
+        opts=ResourceOptions(provider=provider)
+    )
+    
+    # Allow all outbound traffic from cluster
+    aws.ec2.SecurityGroupRule(
+        f"{name_prefix}-cluster-egress-all",
+        type="egress",
+        security_group_id=eks_cluster_sg.id,
+        cidr_blocks=["0.0.0.0/0"],
+        from_port=0,
+        to_port=65535,
+        protocol="-1",
+        description="Allow all outbound traffic from cluster",
+        opts=ResourceOptions(provider=provider)
+    )
+ 
+    return {
+        "alb_sg": alb_sg,
       "eks_cluster_sg": eks_cluster_sg,
       "eks_node_sg": eks_node_sg,
       "db_sg": db_sg,
@@ -799,6 +865,9 @@ def create_eks_cluster(
       cluster.certificate_authority.data
   ).apply(generate_kubeconfig)
   
+  # Store cluster info for later use
+  cluster.name_prefix = name_prefix
+  
   return cluster
 
 
@@ -848,17 +917,140 @@ def create_eks_node_group(
               "Action": "sts:AssumeRole",
           }]
       }),
-      managed_policy_arns=[
-          "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-          "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
-          "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+              managed_policy_arns=[
+            "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+            "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+            "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+            "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+            # Additional permissions for troubleshooting
+            "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
+            "arn:aws:iam::aws:policy/AmazonVPCFullAccess",
+        ],
+        tags={**tags, "Name": f"{name_prefix}-eks-node-role"},
+        opts=ResourceOptions(provider=provider)
+    )
+    
+    # Add comprehensive inline policy for EKS node operations
+    aws.iam.RolePolicy(
+        f"{name_prefix}-eks-node-comprehensive-policy",
+        role=node_role.id,
+        policy=json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "eks:*",
+                        "ec2:*",
+                        "ecr:*",
+                        "logs:*",
+                        "iam:*",
+                        "elasticloadbalancing:*",
+                        "autoscaling:*",
+                        "cloudwatch:*",
+                        "s3:*",
+                        "sns:*",
+                        "sqs:*",
+                        "kms:*",
+                        "tag:*"
+                    ],
+                    "Resource": "*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "sts:AssumeRole",
+                        "sts:AssumeRoleWithWebIdentity"
+                    ],
+                    "Resource": "*"
+                }
+            ]
+        }),
+        opts=ResourceOptions(provider=provider)
+    )
+    
+  # Create/Update aws-auth ConfigMap to allow nodes to join the cluster
+  # This is CRITICAL for node registration
+  account_id = aws.get_caller_identity().account_id
+  aws_auth_config_map = k8s.core.v1.ConfigMap(
+      f"{name_prefix}-aws-auth",
+      metadata=k8s.meta.v1.ObjectMetaArgs(
+          name="aws-auth",
+          namespace="kube-system",
+      ),
+      data={
+          "mapRoles": pulumi.Output.all(account_id, node_role.arn).apply(
+              lambda args: json.dumps([
+                  {
+                      "rolearn": args[1],
+                      "username": "system:node:{{EC2PrivateDNSName}}",
+                      "groups": [
+                          "system:bootstrappers",
+                          "system:nodes",
+                      ],
+                  }
+              ])
+          )
+      },
+      opts=ResourceOptions(
+          provider=k8s.Provider(
+              f"{name_prefix}-k8s-provider-for-auth",
+              kubeconfig=cluster.kubeconfig.apply(lambda kc: kc)
+          ),
+          depends_on=[cluster]
+      )
+  )
+
+  # Create a launch template with user data for debugging
+  launch_template = aws.ec2.LaunchTemplate(
+      f"{name_prefix}-eks-launch-template",
+      name_prefix=f"{name_prefix}-eks-lt-",
+      user_data=pulumi.Output.all(cluster.name, cluster.endpoint, cluster.certificate_authority.data).apply(
+          lambda args: base64.b64encode(f"""#!/bin/bash
+set -ex
+
+# Enable detailed logging
+echo "Starting EKS node bootstrap at $(date)" | tee -a /var/log/eks-bootstrap.log
+
+# Update system
+yum update -y | tee -a /var/log/eks-bootstrap.log
+
+# Install SSM agent if not present
+yum install -y amazon-ssm-agent | tee -a /var/log/eks-bootstrap.log
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+
+# Set cluster configuration
+CLUSTER_NAME="{args[0]}"
+API_SERVER_URL="{args[1]}"
+B64_CLUSTER_CA="{args[2]}"
+
+echo "Cluster Name: $CLUSTER_NAME" | tee -a /var/log/eks-bootstrap.log
+echo "API Server URL: $API_SERVER_URL" | tee -a /var/log/eks-bootstrap.log
+
+# Configure kubelet extra args
+echo "KUBELET_EXTRA_ARGS=--node-labels=eks.amazonaws.com/capacityType=ON_DEMAND" >> /etc/sysconfig/kubelet
+
+# Bootstrap the node with detailed logging
+/etc/eks/bootstrap.sh $CLUSTER_NAME --b64-cluster-ca $B64_CLUSTER_CA --apiserver-endpoint $API_SERVER_URL --kubelet-extra-args '--node-labels=eks.amazonaws.com/capacityType=ON_DEMAND' 2>&1 | tee -a /var/log/eks-bootstrap.log
+
+echo "Bootstrap completed at $(date)" | tee -a /var/log/eks-bootstrap.log
+""".encode('utf-8')).decode('ascii')
+      ),
+      metadata_options=aws.ec2.LaunchTemplateMetadataOptionsArgs(
+          http_tokens="optional",  # Allow IMDSv1 for compatibility
+          http_put_response_hop_limit=2,
+      ),
+      tag_specifications=[
+          aws.ec2.LaunchTemplateTagSpecificationArgs(
+              resource_type="instance",
+              tags={**tags, "Name": f"{name_prefix}-eks-node"},
+          ),
       ],
-      tags={**tags, "Name": f"{name_prefix}-eks-node-role"},
       opts=ResourceOptions(provider=provider)
   )
 
-  # Create EKS managed node group - Let AWS handle the configuration!
+  # Create EKS managed node group with launch template
   node_group = aws.eks.NodeGroup(
       f"{name_prefix}-eks-node-group",
       cluster_name=cluster.name,
@@ -874,7 +1066,10 @@ def create_eks_node_group(
           min_size=1,
           max_size=3
       ),
-      # No launch template - let EKS handle it!
+      launch_template=aws.eks.NodeGroupLaunchTemplateArgs(
+          id=launch_template.id,
+          version=launch_template.latest_version,
+      ),
       labels={
           "role": "worker",
           "environment": tags.get("Environment", "production").lower(),
@@ -882,7 +1077,7 @@ def create_eks_node_group(
       tags={**tags, "Name": f"{name_prefix}-eks-nodegroup"},
       opts=ResourceOptions(
           provider=provider,
-          depends_on=[cluster],  # Ensure cluster is ready
+          depends_on=[cluster, launch_template, aws_auth_config_map],  # Ensure all dependencies are ready
           delete_before_replace=True  # Ensure old node group is deleted before creating new one
       )
   )
