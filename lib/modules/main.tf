@@ -329,6 +329,7 @@ resource "aws_s3_bucket" "data" {
   versioning {
     enabled = true
   }
+  lifecycle { prevent_destroy = false }
   tags = {
     Name = "${var.project_name}-data-bucket"
     Type = "Data"
@@ -342,6 +343,7 @@ resource "aws_s3_bucket" "logs" {
   versioning {
     enabled = true
   }
+  lifecycle { prevent_destroy = false }
   tags = {
     Name = "${var.project_name}-logs-bucket"
     Type = "Logs"
