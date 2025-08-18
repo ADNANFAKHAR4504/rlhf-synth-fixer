@@ -70,7 +70,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       expect(outputs.LambdaFunctionArn).toMatch(
         /^arn:aws:lambda:[a-z0-9-]+:\d+:function:.+$/
       );
-      expect(outputs.LambdaFunctionArn).toContain('us-west-2');
+      expect(outputs.LambdaFunctionArn).toContain('us-east-1');
     });
   });
 
