@@ -7,7 +7,7 @@ const VARS_REL = "../lib/vars.tf";
 const stackPath = path.resolve(__dirname, STACK_REL);
 const varsPath = path.resolve(__dirname, VARS_REL);
 
-describe("Terraform single-file stack: tap_stack.tf", () => {
+describe("Terraform modularized stack: tap_stack.tf", () => {
   test("tap_stack.tf exists", () => {
     const exists = fs.existsSync(stackPath);
     if (!exists) {
@@ -22,71 +22,25 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
     expect(content).not.toMatch(/\bprovider\s+"aws"\s*{/);
   });
 
-  // --- Data sources ---
-  test("declares AWS availability zones data source", () => {
-    expect(content).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
+  // --- Data sources now live inside modules, so root should call modules ---
+  test("calls VPC module", () => {
+    expect(content).toMatch(/module\s+"vpc"\s*{/);
   });
 
-  test("declares AWS AMI data source", () => {
-    expect(content).toMatch(/data\s+"aws_ami"\s+"amazon_linux"/);
+  test("calls Security Group module", () => {
+    expect(content).toMatch(/module\s+"security_group"\s*{/);
   });
 
-  // --- Resources ---
-  test("declares random_password for db", () => {
-    expect(content).toMatch(/resource\s+"random_password"\s+"db_password"/);
+  test("calls IAM module", () => {
+    expect(content).toMatch(/module\s+"iam"\s*{/);
   });
 
-  test("declares Secrets Manager secret and version", () => {
-    expect(content).toMatch(/resource\s+"aws_secretsmanager_secret"\s+"app_secrets"/);
-    expect(content).toMatch(/resource\s+"aws_secretsmanager_secret_version"\s+"app_secrets_version"/);
+  test("calls Secrets module", () => {
+    expect(content).toMatch(/module\s+"secrets"\s*{/);
   });
 
-  test("declares VPC", () => {
-    expect(content).toMatch(/resource\s+"aws_vpc"\s+"main"/);
-  });
-
-  test("declares Internet Gateway", () => {
-    expect(content).toMatch(/resource\s+"aws_internet_gateway"\s+"main"/);
-  });
-
-  test("declares Public and Private Subnets", () => {
-    expect(content).toMatch(/resource\s+"aws_subnet"\s+"public"/);
-    expect(content).toMatch(/resource\s+"aws_subnet"\s+"private"/);
-  });
-
-  test("declares EIP and NAT Gateway", () => {
-    expect(content).toMatch(/resource\s+"aws_eip"\s+"nat"/);
-    expect(content).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
-  });
-
-  test("declares Route Tables (public & private)", () => {
-    expect(content).toMatch(/resource\s+"aws_route_table"\s+"public"/);
-    expect(content).toMatch(/resource\s+"aws_route_table"\s+"private"/);
-  });
-
-  test("declares Route Table Associations", () => {
-    expect(content).toMatch(/resource\s+"aws_route_table_association"\s+"public"/);
-    expect(content).toMatch(/resource\s+"aws_route_table_association"\s+"private"/);
-  });
-
-  test("declares Security Groups", () => {
-    expect(content).toMatch(/resource\s+"aws_security_group"\s+"bastion"/);
-    expect(content).toMatch(/resource\s+"aws_security_group"\s+"private_instance"/);
-  });
-
-  test("declares IAM Role, Policy, and Attachments", () => {
-    expect(content).toMatch(/resource\s+"aws_iam_role"\s+"ec2_secrets_role"/);
-    expect(content).toMatch(/resource\s+"aws_iam_policy"\s+"ec2_secrets_policy"/);
-    expect(content).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"ec2_secrets_attachment"/);
-  });
-
-  test("declares IAM Instance Profile", () => {
-    expect(content).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/);
-  });
-
-  test("declares Bastion and Private EC2 instances", () => {
-    expect(content).toMatch(/resource\s+"aws_instance"\s+"bastion"/);
-    expect(content).toMatch(/resource\s+"aws_instance"\s+"private"/);
+  test("calls EC2 module", () => {
+    expect(content).toMatch(/module\s+"ec2"\s*{/);
   });
 });
 
@@ -101,9 +55,7 @@ describe("Terraform variables file: vars.tf", () => {
 
   const varsContent = fs.readFileSync(varsPath, "utf8");
 
-  test("declares aws_region variable", () => {
-    expect(varsContent).toMatch(/variable\s+"aws_region"\s*{/);
-  });
+  // Note: aws_region was removed (provider.tf owns it)
 
   test("declares project variable", () => {
     expect(varsContent).toMatch(/variable\s+"project"\s*{/);
