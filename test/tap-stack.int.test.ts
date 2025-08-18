@@ -7,14 +7,6 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-});
-
 describe('TapStack CloudFormation Outputs Integration', () => {
   test('should have VPCId output', () => {
     expect(outputs.VPCId).toBeDefined();

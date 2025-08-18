@@ -519,7 +519,8 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-Database-Port'
 
-  Key Features Implemented
+
+Key Features Implemented
 1. Naming Convention Compliance
 All resources follow the <Component>-<Environment>-<Region> pattern
 Dynamic naming using CloudFormation functions like !Sub
