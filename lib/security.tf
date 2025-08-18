@@ -1,6 +1,6 @@
 # IAM Role for Web Application
 resource "aws_iam_role" "web_app_role" {
-  name = "${local.resource_prefix}-web-app-role"
+  name = "${local.resource_prefix}-web-app-role-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -18,7 +18,7 @@ resource "aws_iam_role" "web_app_role" {
 
 # IAM Policy for Web Application (Least Privilege)
 resource "aws_iam_policy" "web_app_policy" {
-  name = "${local.resource_prefix}-web-app-policy"
+  name = "${local.resource_prefix}-web-app-policy-${local.unique_suffix}"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -53,13 +53,13 @@ resource "aws_iam_role_policy_attachment" "web_app_policy_attachment" {
 
 # Instance Profile for EC2
 resource "aws_iam_instance_profile" "web_app_profile" {
-  name = "${local.resource_prefix}-web-app-profile"
+  name = "${local.resource_prefix}-web-app-profile-${local.unique_suffix}"
   role = aws_iam_role.web_app_role.name
 }
 
 # IAM Role for Database Service
 resource "aws_iam_role" "db_service_role" {
-  name = "${local.resource_prefix}-db-service-role"
+  name = "${local.resource_prefix}-db-service-role-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

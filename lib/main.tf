@@ -1,9 +1,15 @@
+# Random suffix for resource uniqueness
+resource "random_id" "resource_suffix" {
+  byte_length = 4
+}
+
 # Locals for handling environment suffix
 locals {
   environment_suffix = var.environment_suffix != "" ? var.environment_suffix : (
     terraform.workspace != "default" ? terraform.workspace : "dev"
   )
   resource_prefix = "${var.project_name}-${local.environment_suffix}"
+  unique_suffix = random_id.resource_suffix.hex
 }
 
 # Data sources for existing infrastructure

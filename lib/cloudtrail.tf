@@ -101,7 +101,7 @@ resource "aws_kms_key" "cloudtrail" {
 }
 
 resource "aws_kms_alias" "cloudtrail" {
-  name          = "alias/${local.resource_prefix}-cloudtrail"
+  name          = "alias/${local.resource_prefix}-cloudtrail-${local.unique_suffix}"
   target_key_id = aws_kms_key.cloudtrail.key_id
 }
 
@@ -141,7 +141,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 
 # CloudTrail Configuration
 resource "aws_cloudtrail" "security_audit" {
-  name           = "${local.resource_prefix}-security-audit"
+  name           = "${local.resource_prefix}-security-audit-${local.unique_suffix}"
   s3_bucket_name = aws_s3_bucket.cloudtrail_logs.bucket
   s3_key_prefix  = "cloudtrail-logs"
 
@@ -180,7 +180,7 @@ resource "aws_cloudtrail" "security_audit" {
 
 # CloudWatch Log Group for CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/${local.resource_prefix}-security-audit"
+  name              = "/aws/cloudtrail/${local.resource_prefix}-security-audit-${local.unique_suffix}"
   retention_in_days = var.cloudtrail_retention_days
   # Note: CloudWatch Log Groups cannot use custom KMS keys directly
 
@@ -193,7 +193,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 
 # IAM Role for CloudTrail CloudWatch Logs
 resource "aws_iam_role" "cloudtrail_cloudwatch" {
-  name = "${local.resource_prefix}-cloudtrail-cloudwatch-role"
+  name = "${local.resource_prefix}-cloudtrail-cloudwatch-role-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -210,7 +210,7 @@ resource "aws_iam_role" "cloudtrail_cloudwatch" {
 }
 
 resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
-  name = "${local.resource_prefix}-cloudtrail-cloudwatch-policy"
+  name = "${local.resource_prefix}-cloudtrail-cloudwatch-policy-${local.unique_suffix}"
   role = aws_iam_role.cloudtrail_cloudwatch.id
 
   policy = jsonencode({
@@ -231,7 +231,7 @@ resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
 
 # SNS Topic for security alerts
 resource "aws_sns_topic" "security_alerts" {
-  name              = "${local.resource_prefix}-security-alerts"
+  name              = "${local.resource_prefix}-security-alerts-${local.unique_suffix}"
   display_name      = "${local.resource_prefix}-security-alerts"
   kms_master_key_id = aws_kms_key.cloudtrail.arn
 
@@ -244,7 +244,7 @@ resource "aws_sns_topic" "security_alerts" {
 
 # CloudWatch Alarm for unauthorized secret access
 resource "aws_cloudwatch_metric_alarm" "unauthorized_secret_access" {
-  alarm_name          = "${local.resource_prefix}-unauthorized-secret-access"
+  alarm_name          = "${local.resource_prefix}-unauthorized-secret-access-${local.unique_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
   metric_name         = "UnauthorizedSecretAccess"

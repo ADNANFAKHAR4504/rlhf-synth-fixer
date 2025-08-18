@@ -1,6 +1,6 @@
 # Database Credentials Secret
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name        = "${local.resource_prefix}-db-credentials"
+  name        = "${local.resource_prefix}-db-credentials-${local.unique_suffix}"
   description = "Database credentials for ${local.resource_prefix} application"
 
   replica {
@@ -27,7 +27,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
 
 # API Key Secret
 resource "aws_secretsmanager_secret" "api_key" {
-  name        = "${local.resource_prefix}-api-key"
+  name        = "${local.resource_prefix}-api-key-${local.unique_suffix}"
   description = "API key for external service integration"
 
   replica {
@@ -54,7 +54,7 @@ resource "aws_lambda_function" "secret_rotation" {
   count = var.enable_secret_rotation ? 1 : 0
 
   filename         = "secret_rotation.zip"
-  function_name    = "${local.resource_prefix}-secret-rotation"
+  function_name    = "${local.resource_prefix}-secret-rotation-${local.unique_suffix}"
   role             = aws_iam_role.lambda_rotation_role[0].arn
   handler          = "index.handler"
   source_code_hash = data.archive_file.rotation_lambda[0].output_base64sha256
@@ -96,7 +96,7 @@ EOF
 resource "aws_iam_role" "lambda_rotation_role" {
   count = var.enable_secret_rotation ? 1 : 0
 
-  name = "${local.resource_prefix}-lambda-rotation-role"
+  name = "${local.resource_prefix}-lambda-rotation-role-${local.unique_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -115,7 +115,7 @@ resource "aws_iam_role" "lambda_rotation_role" {
 resource "aws_iam_role_policy" "lambda_rotation_policy" {
   count = var.enable_secret_rotation ? 1 : 0
 
-  name = "${local.resource_prefix}-lambda-rotation-policy"
+  name = "${local.resource_prefix}-lambda-rotation-policy-${local.unique_suffix}"
   role = aws_iam_role.lambda_rotation_role[0].id
 
   policy = jsonencode({
