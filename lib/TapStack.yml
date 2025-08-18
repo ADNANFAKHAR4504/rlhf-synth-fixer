@@ -212,7 +212,7 @@ Resources:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 16
-        ExcludeCharacters: '"@/\''
+        ExcludeCharacters: "\"@/'"
       KmsKeyId: !Ref ApplicationKMSKey
       Tags:
         - Key: Environment
