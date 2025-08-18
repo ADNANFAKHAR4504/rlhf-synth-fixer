@@ -620,7 +620,7 @@ resource "aws_s3_bucket_replication_configuration" "primary" {
     }
     source_selection_criteria {
       sse_kms_encrypted_objects {
-        enabled = true
+        status = "Enabled"
       }
     }
   }
