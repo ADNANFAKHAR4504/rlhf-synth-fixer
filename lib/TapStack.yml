@@ -128,9 +128,9 @@ Parameters:
   MinSize:
     Type: Number
     Default: 2
-    MinValue: 1
+    MinValue: 2
     MaxValue: 10
-    Description: 'Minimum number of instances in Auto Scaling Group'
+    Description: 'Minimum number of instances in Auto Scaling Group (minimum 2 for high availability)'
   
   MaxSize:
     Type: Number
@@ -142,32 +142,27 @@ Parameters:
   DesiredCapacity:
     Type: Number
     Default: 2
-    MinValue: 1
+    MinValue: 2
     MaxValue: 10
-    Description: 'Desired number of instances in Auto Scaling Group'
+    Description: 'Desired number of instances in Auto Scaling Group (minimum 2 for high availability)'
   
   # Application parameters
   S3BucketName:
     Type: String
     Default: 'tap-webapp-code-bucket'
     Description: 'S3 bucket name for application code (must be globally unique)'
+  
+  # Latest AMI parameter
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: Latest Amazon Linux 2 AMI ID
 
 Conditions:
   CreateKeyPair: !Equals [!Ref KeyPairName, '']
   UseExistingKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
-Mappings:
-  # AMI mapping for different regions (Amazon Linux 2)
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c02fb55956c7d316
-    us-west-2:
-      AMI: ami-0892d3c7ee96c0bf7
-    eu-west-1:
-      AMI: ami-0a0c8eebcdd6dcbd0
-    ap-south-1:
-      AMI: ami-0cda377a1b884a1bc
-    # Add more regions as needed
+
 
 Resources:
   # ==================== VPC and Networking ====================
@@ -502,8 +497,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !Sub '${S3Bucket}/*'
-                  - !Ref S3Bucket
+                  - !Sub 'arn:aws:s3:::${S3Bucket}/*'
+                  - !Sub 'arn:aws:s3:::${S3Bucket}'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -544,12 +539,12 @@ Resources:
       Protocol: HTTP
       VpcId: !Ref VPC
       HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 30
+      HealthCheckIntervalSeconds: 120
       HealthCheckPath: /
       HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
+      HealthCheckTimeoutSeconds: 30
       HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
+      UnhealthyThresholdCount: 10
       TargetType: instance
       Tags:
         - Key: Name
@@ -575,7 +570,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${ProjectName}-${Environment}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref LatestAmiId
         InstanceType: !Ref InstanceType
         KeyName: !If [UseExistingKeyPair, !Ref KeyPairName, !Ref KeyPair]
         SecurityGroupIds:
@@ -586,61 +581,34 @@ Resources:
           Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
-            yum install -y httpd aws-cli
-            
-            # Install CloudWatch agent
-            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-            rpm -U ./amazon-cloudwatch-agent.rpm
-            
-            # Start and enable Apache
+            yum install -y httpd
             systemctl start httpd
             systemctl enable httpd
+
+            # Install CloudWatch agent
+            yum install -y amazon-cloudwatch-agent
             
-            # Create a simple index page
+            # Create a simple web page
             cat > /var/www/html/index.html << EOF
             <!DOCTYPE html>
             <html>
             <head>
-                <title>${ProjectName} - ${Environment}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; }
-                    .header { background-color: #f0f0f0; padding: 20px; border-radius: 5px; }
-                    .info { margin: 20px 0; }
-                </style>
+                <title>Secure Web Application</title>
             </head>
             <body>
-                <div class="header">
-                    <h1>${ProjectName} Web Application</h1>
-                    <h2>Environment: ${Environment}</h2>
-                </div>
-                <div class="info">
-                    <p><strong>Instance ID:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-                    <p><strong>Availability Zone:</strong> $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
-                    <p><strong>Instance Type:</strong> $(curl -s http://169.254.169.254/latest/meta-data/instance-type)</p>
-                    <p><strong>Local IP:</strong> $(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)</p>
-                    <p><strong>Timestamp:</strong> $(date)</p>
-                </div>
-                <div class="info">
-                    <h3>Application Status</h3>
-                    <p style="color: green;">✓ Web server is running successfully</p>
-                    <p style="color: green;">✓ Load balancer health check: PASSED</p>
-                </div>
+                <h1>Welcome to the Secure Web Application</h1>
+                <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+                <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+                <p>Stack: ${AWS::StackName}</p>
             </body>
             </html>
             EOF
-            
-            # Download application code from S3 (if available)
-            aws s3 sync s3://${S3Bucket}/ /var/www/html/ --region ${AWS::Region} || echo "No additional application code found in S3"
-            
-            # Set proper permissions
-            chown -R apache:apache /var/www/html
-            chmod -R 644 /var/www/html
-            
-            # Configure CloudWatch agent (basic configuration)
+
+            # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
             {
                 "metrics": {
-                    "namespace": "${ProjectName}/${Environment}",
+                    "namespace": "AWS/EC2/Custom",
                     "metrics_collected": {
                         "cpu": {
                             "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
@@ -659,12 +627,8 @@ Resources:
                 }
             }
             EOF
-            
-            # Start CloudWatch agent
-            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-            
-            # Signal CloudFormation that the instance is ready
-            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s  
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -708,16 +672,13 @@ Resources:
         - Key: CostCenter
           Value: 'Engineering'
           PropagateAtLaunch: true
-    CreationPolicy:
-      ResourceSignal:
-        Count: !Ref DesiredCapacity
-        Timeout: PT10M
+
     UpdatePolicy:
       AutoScalingRollingUpdate:
-        MinInstancesInService: 1
+        MinInstancesInService: 2
         MaxBatchSize: 1
-        PauseTime: PT10M
-        WaitOnResourceSignals: true
+        PauseTime: PT5M
+        WaitOnResourceSignals: false
 
   # ==================== Auto Scaling Policies ====================
   ScaleUpPolicy:
@@ -779,6 +740,28 @@ Resources:
           Value: !Ref AutoScalingGroup
       AlarmActions:
         - !Ref ScaleDownPolicy
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ==================== ASG Capacity Protection Alarm ====================
+  ASGCapacityAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-${Environment}-ASG-Capacity-Low'
+      AlarmDescription: 'Critical: Auto Scaling Group capacity has dropped below minimum threshold'
+      MetricName: GroupInServiceInstances
+      Namespace: AWS/AutoScaling
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: !Ref MinSize
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
       Tags:
         - Key: Environment
           Value: !Ref Environment

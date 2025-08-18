@@ -118,7 +118,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
-      expect(template.Mappings).toBeDefined();
+      // Mappings section removed - now using SSM Parameter Store for AMI selection
     });
   });
 
@@ -166,7 +166,7 @@ describe('TapStack CloudFormation Template', () => {
       const minSize = template.Parameters.MinSize;
       expect(minSize.Type).toBe('Number');
       expect(minSize.Default).toBe("2");
-      expect(minSize.MinValue).toBe("1");
+      expect(minSize.MinValue).toBe("2");
       expect(minSize.MaxValue).toBe("10");
     });
 
@@ -187,32 +187,13 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
-  describe('Mappings', () => {
-    test('should have RegionMap for AMI mapping', () => {
-      expect(template.Mappings.RegionMap).toBeDefined();
-      const regionMap = template.Mappings.RegionMap;
-      expect(regionMap['us-east-1']).toBeDefined();
-      expect(regionMap['us-west-2']).toBeDefined();
-      expect(regionMap['eu-west-1']).toBeDefined();
-    });
-
-    test('should have AMI IDs for each region', () => {
-      const regionMap = template.Mappings.RegionMap;
-      // Check if mappings are properly parsed
-      if (regionMap && Object.keys(regionMap).length > 0 && regionMap['us-east-1'] && regionMap['us-east-1'].AMI) {
-        Object.keys(regionMap).forEach(region => {
-          expect(regionMap[region].AMI).toBeDefined();
-          expect(typeof regionMap[region].AMI).toBe('string');
-        });
-      } else {
-        // If mappings are not parsed, just check that the template contains the expected content
-        const templatePath = path.join(__dirname, '../lib/TapStack.yml');
-        const templateContent = fs.readFileSync(templatePath, 'utf8');
-        expect(templateContent).toContain('RegionMap:');
-        expect(templateContent).toContain('us-east-1:');
-        expect(templateContent).toContain('ap-south-1:');
-        expect(templateContent).toContain('AMI:');
-      }
+  describe('Parameters', () => {
+    test('should have LatestAmiId parameter for SSM Parameter Store', () => {
+      const latestAmiId = template.Parameters.LatestAmiId;
+      expect(latestAmiId).toBeDefined();
+      expect(latestAmiId.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(latestAmiId.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+      expect(latestAmiId.Description).toBe('Latest Amazon Linux 2 AMI ID');
     });
   });
 
@@ -295,6 +276,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.LaunchTemplate).toBeDefined();
       const launchTemplate = template.Resources.LaunchTemplate;
       expect(launchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
+    });
+
+    test('Launch Template should use LatestAmiId parameter', () => {
+      const launchTemplate = template.Resources.LaunchTemplate;
+      expect(launchTemplate).toBeDefined();
+      
+      // Check if the template content contains the LatestAmiId reference
+      const templatePath = path.join(__dirname, '../lib/TapStack.yml');
+      const templateContent = fs.readFileSync(templatePath, 'utf8');
+      expect(templateContent).toContain('ImageId: !Ref LatestAmiId');
     });
 
     test('should have Auto Scaling Group', () => {
@@ -436,7 +427,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
-      expect(template.Mappings).toBeDefined();
+      // Mappings section removed - now using SSM Parameter Store for AMI selection
     });
 
     test('should have all required resources for high availability', () => {
