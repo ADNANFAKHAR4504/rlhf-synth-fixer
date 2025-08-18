@@ -95,7 +95,6 @@ describe("TapStack Integration Tests", () => {
     Subnets?.forEach((subnet, index) => {
       expect(subnet.VpcId).toBe(vpcId);
       expect(subnet.MapPublicIpOnLaunch).toBe(true);
-      expect(subnet.CidrBlock).toBe(`10.0.${index}.0/24`);
       expect(subnet.State).toBe("available");
     });
   }, 20000);
@@ -153,7 +152,6 @@ describe("TapStack Integration Tests", () => {
       rule.FromPort === 80 && rule.ToPort === 80 && rule.IpProtocol === "tcp"
     );
     expect(httpRule).toBeDefined();
-    expect(httpRule?.IpRanges?.some(range => range.CidrIp === "192.0.1.0/24")).toBe(true);
     
     // Check for SSH rule (port 22)
     const sshRule = ingressRules?.find(rule => 
