@@ -416,11 +416,7 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Sub '/aws/s3/${AWS::StackName}'
+      # Notification configuration removed as CloudWatchConfigurations is not supported
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -468,12 +464,13 @@ Resources:
   # RDS Database Instance
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub 'secure-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.39'
       MasterUsername: admin
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       AllocatedStorage: 20
@@ -486,7 +483,7 @@ Resources:
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -599,7 +596,7 @@ Resources:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent
