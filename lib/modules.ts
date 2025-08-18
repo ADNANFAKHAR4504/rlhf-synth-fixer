@@ -246,8 +246,8 @@ export class ElbModule extends Construct {
 
       healthCheck: {
         enabled: true,
-        healthyThreshold: 1,
-        unhealthyThreshold: 0,
+        healthyThreshold: 2,
+        unhealthyThreshold: 2,
         timeout: 5,
         interval: 30,
         path: '/health',
