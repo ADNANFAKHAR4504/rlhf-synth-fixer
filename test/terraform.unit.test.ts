@@ -114,7 +114,7 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
 
     test("has AWS Config Delivery Channel", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_config_delivery_channel"\s+"main"\s*{/);
-      expect(complianceContent).toMatch(/depends_on\s*=\s*var\.use_existing_config_recorder/);
+      expect(complianceContent).toMatch(/depends_on\s*=\s*\[aws_config_configuration_recorder\.main\]/);
     });
 
     test("has GuardDuty Detector", () => {
@@ -137,7 +137,7 @@ describe("Compliance and Monitoring Infrastructure Tests", () => {
       expect(complianceContent).toMatch(/resource\s+"aws_config_config_rule"\s+"rds_encryption"\s*{/);
       expect(complianceContent).toMatch(/resource\s+"aws_config_config_rule"\s+"iam_password_policy"\s*{/);
       expect(complianceContent).toMatch(/resource\s+"aws_config_config_rule"\s+"root_account_mfa"\s*{/);
-      expect(complianceContent).toMatch(/depends_on\s*=\s*var\.use_existing_config_recorder/);
+      expect(complianceContent).toMatch(/depends_on\s*=\s*\[aws_config_configuration_recorder_status\.main\]/);
     });
 
     test("has IAM role for AWS Config", () => {
