@@ -46,8 +46,6 @@ Resources:
         ExcludeCharacters: '"@/\'
         RequireEachIncludedType: true
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -68,8 +66,6 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: false
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -96,8 +92,6 @@ Resources:
               - "kms:GenerateDataKey"
             Resource: "*"
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -131,8 +125,6 @@ Resources:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: "cloudtrail-access-logs/"
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -156,8 +148,6 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -184,8 +174,6 @@ Resources:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: "app-data-access-logs/"
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -231,8 +219,6 @@ Resources:
           IncludeManagementEvents: true
           DataResources: []
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -248,8 +234,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "secure-vpc-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -263,8 +247,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "private-subnet-1-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -277,8 +259,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "private-subnet-2-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -291,8 +271,6 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -311,8 +289,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "rds-sg-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -325,8 +301,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "app-sg-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -355,8 +329,6 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -401,10 +373,8 @@ Resources:
                   - "logs:CreateLogStream"
                   - "logs:PutLogEvents"
                   - "logs:DescribeLogStreams"
-                Resource: !Sub "arn:aws:logs:us-west-2:${AWS::AccountId}:log-group:/aws/application/*"
+                Resource: !Sub "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/application/*"
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -519,22 +489,21 @@ aws cloudformation deploy \
   --stack-name tap-stack-dev \
   --parameter-overrides \
     EnvironmentSuffix=dev \
-    Owner="SecurityTeam" \
     DBUsername=dbadmin \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-west-2
+  --region us-east-1
 ```
 
 ## Security Requirements Compliance
 
 | Requirement | Implementation | Status |
 |-------------|----------------|--------|
-| **us-west-2 Region** | Dynamic AZ selection ensures proper regional deployment | PASSED |
+| **us-east-1 Region** | Dynamic AZ selection ensures proper regional deployment | PASSED |
 | **AWS KMS Encryption** | Dedicated KMS key with proper service permissions | PASSED |
 | **CloudTrail All Management Events** | Complete audit trail with multi-region coverage | PASSED |
 | **IAM Least Privilege** | Scoped policies with specific resource ARNs | PASSED |
 | **S3 Server-Side Encryption** | AES256 encryption with public access blocked | PASSED |
-| **Resource Tagging** | Owner and Environment tags on all resources | PASSED |
+| **Resource Tagging** | Environment tags on all resources | PASSED |
 
 ## Additional Production Features
 - **Password Security**: Secrets Manager with auto-rotation capability

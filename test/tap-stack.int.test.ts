@@ -48,7 +48,7 @@ import path from 'path';
 
 // Get environment suffix from environment variable
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = 'us-west-2'; // From PROMPT.md requirements
+const region = 'us-east-1'; // From PROMPT.md requirements
 
 // AWS clients
 const dynamoClient = new DynamoDBClient({ region });

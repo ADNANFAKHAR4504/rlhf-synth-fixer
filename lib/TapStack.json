@@ -643,7 +643,7 @@
                                         "logs:DescribeLogStreams"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:us-west-2:${AWS::AccountId}:log-group:/aws/application/*"
+                                        "Fn::Sub": "arn:aws:logs:us-east-1:${AWS::AccountId}:log-group:/aws/application/*"
                                     }
                                 }
                             ]
