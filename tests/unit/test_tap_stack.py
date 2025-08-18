@@ -153,6 +153,7 @@ def test_lambda_and_api_per_region():
     # Route may be optimized away by Pulumi/mocks
     routes = find_all(ledger, "aws:apigatewayv2/route:Route",
                       rf"^api-route-{re.escape(r)}-")
+    print("All ledger S3 entries:", [r for r in ledger if r["typ"].startswith("aws:s3")])
     if not routes:
       assert apis and ints, f"Expected Api and Integration for {r}, got none"
     else:
