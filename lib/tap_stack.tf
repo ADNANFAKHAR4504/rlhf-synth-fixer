@@ -4,13 +4,13 @@
 variable "aws_region" {
   description = "Primary AWS region"
   type        = string
-  default     = "ap-south-1"
+  default     = "us-east-1"
 }
 
 variable "dr_region" {
   description = "Secondary (DR) AWS region"
   type        = string
-  default     = "ap-northeast-2"
+  default     = "us-east-2"
 }
 
 variable "name_prefix" {
