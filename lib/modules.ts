@@ -1,5 +1,4 @@
 import { Construct } from 'constructs';
-// import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -80,12 +79,7 @@ export class VpcModule extends Construct {
   constructor(scope: Construct, id: string, config: VpcModuleConfig) {
     super(scope, id);
 
-    // Get available AZs for the region
-    // const azs = new DataAwsAvailabilityZones(this, 'azs', {
-    //   state: 'available',
-    // });
-
-    // Use hardcoded AZs for the region (more predictable)
+    // AZs for the region (more predictable)
     this.availabilityZones = [
       `${config.region}a`,
       `${config.region}b`,
@@ -252,8 +246,8 @@ export class ElbModule extends Construct {
 
       healthCheck: {
         enabled: true,
-        healthyThreshold: 2,
-        unhealthyThreshold: 2,
+        healthyThreshold: 1,
+        unhealthyThreshold: 0,
         timeout: 5,
         interval: 30,
         path: '/health',
