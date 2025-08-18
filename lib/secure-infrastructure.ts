@@ -19,55 +19,33 @@ export function getOrCreateConfigRecorder(
   recorder: aws.cfg.Recorder;
   deliveryChannel: aws.cfg.DeliveryChannel;
 } {
-  let recorder: aws.cfg.Recorder;
-  let deliveryChannel: aws.cfg.DeliveryChannel;
+  const recorderName = `config-recorder-${suffix}`;
+  const deliveryChannelName = `config-delivery-channel-${suffix}`;
 
-  try {
-    recorder = aws.cfg.Recorder.get(
-      `config-recorder-imported-${suffix}`,
-      `config-recorder-${suffix}`,
-      undefined,
-      {
-        provider,
-        parent,
-      }
-    );
-
-    deliveryChannel = aws.cfg.DeliveryChannel.get(
-      `config-delivery-channel-imported-${suffix}`,
-      `config-delivery-channel-${suffix}`,
-      undefined,
-      {
-        provider,
-        parent,
-      }
-    );
-  } catch {
-    recorder = new aws.cfg.Recorder(
-      `config-recorder-${suffix}`,
-      {
-        name: `config-recorder-${suffix}`,
-        roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
+  const recorder = new aws.cfg.Recorder(
+    recorderName,
+    {
+      name: recorderName,
+      roleArn,
+      recordingGroup: {
+        allSupported: true,
+        includeGlobalResourceTypes: true,
       },
-      { provider, parent }
-    );
+    },
+    { provider, parent }
+  );
 
-    deliveryChannel = new aws.cfg.DeliveryChannel(
-      `config-delivery-channel-${suffix}`,
-      {
-        name: `config-delivery-channel-${suffix}`,
-        s3BucketName: bucketName,
-        snapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
+  const deliveryChannel = new aws.cfg.DeliveryChannel(
+    deliveryChannelName,
+    {
+      name: deliveryChannelName,
+      s3BucketName: bucketName,
+      snapshotDeliveryProperties: {
+        deliveryFrequency: 'TwentyFour_Hours',
       },
-      { provider, parent, dependsOn: [recorder] }
-    );
-  }
+    },
+    { provider, parent, dependsOn: [recorder] }
+  );
 
   return { recorder, deliveryChannel };
 }
