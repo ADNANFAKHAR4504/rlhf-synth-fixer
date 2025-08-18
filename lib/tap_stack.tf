@@ -791,7 +791,6 @@ resource "aws_route53_health_check" "primary_ec2" {
   port                            = 80
   request_interval                = 30
   failure_threshold               = 3
-  insufficient_data_health_status = "Unhealthy"
   tags = merge(local.common_tags, {
     Name = "${var.environment}-primary-health-check"
   })
