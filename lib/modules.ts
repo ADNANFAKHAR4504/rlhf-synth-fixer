@@ -53,13 +53,13 @@ export class VpcModule extends Construct {
     const privateSubnet1 = new Subnet(this, 'PrivateSubnet1', {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.1.0/24',
-      availabilityZone: 'us-west-1a',
+      availabilityZone: 'us-west-2a', // ✅ changed from us-west-1a
     });
 
     const privateSubnet2 = new Subnet(this, 'PrivateSubnet2', {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.2.0/24',
-      availabilityZone: 'us-west-1c',
+      availabilityZone: 'us-west-2b', // ✅ changed from us-west-1c
     });
 
     this.privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
