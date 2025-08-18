@@ -463,24 +463,6 @@ resource "aws_s3_bucket_policy" "logs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "DenyDirectInternetAccess"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.logs.arn,
-          "${aws_s3_bucket.logs.arn}/*"
-        ]
-        Condition = {
-          StringNotEquals = {
-            "aws:sourceVpce" = aws_vpc_endpoint.s3.id
-          },
-          StringNotLike = {
-            "aws:PrincipalArn" = var.caller_arn
-          }
-        }
-      },
-      {
         Sid       = "AllowCloudTrailLogs"
         Effect    = "Allow"
         Principal = {
