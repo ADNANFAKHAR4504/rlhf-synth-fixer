@@ -678,15 +678,27 @@ def create_eks_cluster(
     name_prefix: str = "corp"
 ):
   """
-  Create EKS cluster. 
+  Create EKS cluster using native AWS resources.
   
   Note: We use native AWS EKS instead of pulumi_eks to avoid deprecated 
   LaunchConfiguration issues and have better control over managed node groups.
+  
+  Naming strategy:
+  - Random suffixes with timestamp-based keepers to ensure uniqueness
+  - delete_before_replace to handle resource replacements cleanly
+  - This prevents "resource already exists" errors during updates
   """
   # Add random suffix to avoid naming conflicts
+  # Use a timestamp-based approach to ensure uniqueness
+  import time
+  timestamp = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
+  
   cluster_random = random.RandomId(
-      f"{name_prefix}-eks-cluster-random",
+      f"{name_prefix}-eks-cluster-random-{timestamp}",
       byte_length=4,
+      keepers={
+          "timestamp": timestamp  # This forces a new random value when timestamp changes
+      },
       opts=ResourceOptions(provider=provider)
   )
   
@@ -733,7 +745,10 @@ def create_eks_cluster(
           resources=["secrets"]
       ),
       tags={**tags, "Name": f"{name_prefix}-eks-cluster"},
-      opts=ResourceOptions(provider=provider)
+      opts=ResourceOptions(
+          provider=provider,
+          delete_before_replace=True  # Ensure old cluster is deleted before creating new one
+      )
   )
   
   # Generate kubeconfig for the cluster
@@ -795,15 +810,28 @@ def create_eks_node_group(
     name_prefix: str = "corp"
 ):
   """
-  Create EKS node group - simplified since pulumi_eks handles most complexity
+  Create EKS managed node group using native AWS resources.
+  
+  Benefits of EKS managed node groups:
+  - No LaunchConfiguration or LaunchTemplate needed (AWS handles it)
+  - Automatic updates and patching
+  - Seamless integration with EKS cluster
+  - Built-in health checks and recovery
   """
   # Always create EKS managed node groups, regardless of whether pulumi_eks is available
   # This avoids the LaunchConfiguration issue with pulumi_eks's default node groups
   
   # Add random suffix to avoid naming conflicts
+  # Use a timestamp-based approach to ensure uniqueness
+  import time
+  timestamp = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
+  
   node_group_random = random.RandomId(
-      f"{name_prefix}-eks-node-group-random",
+      f"{name_prefix}-eks-node-group-random-{timestamp}",
       byte_length=4,
+      keepers={
+          "timestamp": timestamp  # This forces a new random value when timestamp changes
+      },
       opts=ResourceOptions(provider=provider)
   )
   
@@ -854,7 +882,8 @@ def create_eks_node_group(
       tags={**tags, "Name": f"{name_prefix}-eks-nodegroup"},
       opts=ResourceOptions(
           provider=provider,
-          depends_on=[cluster]
+          depends_on=[cluster],  # Ensure cluster is ready
+          delete_before_replace=True  # Ensure old node group is deleted before creating new one
       )
   )
   
