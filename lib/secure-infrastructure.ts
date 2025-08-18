@@ -9,6 +9,69 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
+export function getOrCreateConfigRecorder(
+  suffix: string,
+  roleArn: pulumi.Input<string>,
+  bucketName: pulumi.Input<string>,
+  provider: aws.Provider,
+  parent: pulumi.ComponentResource
+): {
+  recorder: aws.cfg.Recorder;
+  deliveryChannel: aws.cfg.DeliveryChannel;
+} {
+  let recorder: aws.cfg.Recorder;
+  let deliveryChannel: aws.cfg.DeliveryChannel;
+
+  try {
+    recorder = aws.cfg.Recorder.get(
+      `config-recorder-imported-${suffix}`,
+      `config-recorder-${suffix}`,
+      undefined,
+      {
+        provider,
+        parent,
+      }
+    );
+
+    deliveryChannel = aws.cfg.DeliveryChannel.get(
+      `config-delivery-channel-imported-${suffix}`,
+      `config-delivery-channel-${suffix}`,
+      undefined,
+      {
+        provider,
+        parent,
+      }
+    );
+  } catch {
+    recorder = new aws.cfg.Recorder(
+      `config-recorder-${suffix}`,
+      {
+        name: `config-recorder-${suffix}`,
+        roleArn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+        },
+      },
+      { provider, parent }
+    );
+
+    deliveryChannel = new aws.cfg.DeliveryChannel(
+      `config-delivery-channel-${suffix}`,
+      {
+        name: `config-delivery-channel-${suffix}`,
+        s3BucketName: bucketName,
+        snapshotDeliveryProperties: {
+          deliveryFrequency: 'TwentyFour_Hours',
+        },
+      },
+      { provider, parent, dependsOn: [recorder] }
+    );
+  }
+
+  return { recorder, deliveryChannel };
+}
+
 /**
  * SecureInfrastructureArgs defines the input arguments for the SecureInfrastructure component.
  */
@@ -1144,35 +1207,14 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
     );
 
     // AWS Config recorder and delivery channel handling
-    // AWS Config allows only one recorder per region per account
-    let configRecorder: aws.cfg.Recorder;
-    let configDeliveryChannel: aws.cfg.DeliveryChannel;
-
-    // Create new Config recorder and delivery channel
-    configRecorder = new aws.cfg.Recorder(
-      `config-recorder-${args.environment}`,
-      {
-        name: `config-recorder-${args.environment}`,
-        roleArn: configRole.arn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      },
-      { provider, parent: this }
-    );
-
-    configDeliveryChannel = new aws.cfg.DeliveryChannel(
-      `config-delivery-channel-${args.environment}`,
-      {
-        name: `config-delivery-channel-${args.environment}`,
-        s3BucketName: configBucket.bucket,
-        snapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
-      },
-      { provider, parent: this, dependsOn: [configRecorder] }
-    );
+    const { recorder: configRecorder, deliveryChannel: configDeliveryChannel } =
+      getOrCreateConfigRecorder(
+        args.environment,
+        configRole.arn,
+        configBucket.bucket,
+        provider,
+        this
+      );
 
     // Config rules for compliance (works with both existing and new recorders)
     void new aws.cfg.Rule(
@@ -1191,8 +1233,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       {
         provider,
         parent: this,
-        // Only depend on configRecorder if we created it
-        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {}),
+        ...{ dependsOn: [configRecorder] },
       }
     );
 
@@ -1212,8 +1253,7 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
       {
         provider,
         parent: this,
-        // Only depend on configRecorder if we created it
-        ...(shouldCreateConfigResources ? { dependsOn: [configRecorder] } : {}),
+        ...{ dependsOn: [configRecorder] },
       }
     );
 
