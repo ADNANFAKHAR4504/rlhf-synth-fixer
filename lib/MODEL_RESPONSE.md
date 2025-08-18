@@ -1,4 +1,4 @@
-I'll create a production-ready Terraform configuration for a resilient multi-region AWS infrastructure. Here's the complete `main.tf` file:
+I'll create a production-ready Terraform configuration for a resilient multi-region AWS infrastructures. Here's the complete `main.tf` file:
 
 ```hcl
 # main.tf - Multi-Region Resilient AWS Infrastructure
