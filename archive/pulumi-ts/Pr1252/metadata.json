@@ -9,7 +9,7 @@
   "subtask": "Web Application Deployment",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Web Application Deployment", 
+    "Web Application Deployment",
     "Security Configuration",
     "Database Management",
     "Network Configuration",
@@ -17,5 +17,23 @@
     "Monitoring Setup",
     "Access Control",
     "Performance Optimization"
-  ]
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "EC2",
+    "RDS",
+    "S3",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "VPC",
+    "CloudWatch",
+    "IAM",
+    "ElastiCache"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
