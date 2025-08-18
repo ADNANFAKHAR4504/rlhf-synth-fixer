@@ -328,7 +328,7 @@ export class TapStack extends cdk.Stack {
         secretName: `${projectName}-${environmentSuffix}-db-credentials`,
       }),
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: true,
+      deletionProtection: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       monitoringInterval: cdk.Duration.minutes(1),
     });
