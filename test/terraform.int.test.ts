@@ -1,17 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 
-type Environment = "staging" | "production";
-const environments: Environment[] = ["staging", "production"];
-
 const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
 
 // Load JSON outputs
-const outputsRaw = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
+const rawOutputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
 
-// Parse JSON-string fields from the outputs file
+// Parse JSON-string fields from outputs (like EC2 instance structs)
 const outputs: Record<string, any> = {};
-for (const [key, val] of Object.entries(outputsRaw)) {
+for (const [key, val] of Object.entries(rawOutputs)) {
   try {
     outputs[key] = JSON.parse(val as string);
   } catch {
@@ -19,87 +16,111 @@ for (const [key, val] of Object.entries(outputsRaw)) {
   }
 }
 
-function isNonEmptyString(value: any): boolean {
-  return typeof value === "string" && value.trim().length > 0;
+// Helpers for validation
+function isNonEmptyString(val: any): boolean {
+  return typeof val === "string" && val.trim().length > 0;
+}
+function isArrayOfNonEmptyStrings(val: any): boolean {
+  return Array.isArray(val) && val.every(v => isNonEmptyString(v));
+}
+function isValidIPv4(ip: any): boolean {
+  if (typeof ip !== "string") return false;
+  const regex = /^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$/;
+  return regex.test(ip);
 }
 
-// For subnet IDs, filter keys beginning with environment-subnet-type prefix
-function getSubnetIds(env: Environment, type: "public" | "private"): string[] {
-  const subnetMap = type === "public" ? outputs.public_subnet_ids : outputs.private_subnet_ids;
-  const prefix = `${env}-${type}`;
-  return Object.entries(subnetMap)
-    .filter(([key]) => key.startsWith(prefix))
-    .map(([, val]) => val as string);
-}
-
-describe("Terraform Flat Outputs Integration Tests", () => {
-  it("should contain all expected output keys", () => {
-    // List of keys you definitely have in your outputs JSON
-    const requiredKeys = [
-      "vpc_ids",
-      "public_subnet_ids",
-      "private_subnet_ids",
-      "ec2_instance_ids",
-      "ec2_private_ips",
-      "alb_dns_names",
-      "rds_endpoints",
-      "vpc_peering_connection_id",
-      "cloudwatch_log_groups"
+describe("Terraform Full Stack Integration Tests", () => {
+  it("outputs JSON must have all expected keys", () => {
+    const expectedKeys = [
+      "primary_ec2_instance",
+      "secondary_ec2_instance",
+      "primary_route53_zone_id",
+      "secondary_route53_zone_id",
+      "primary_subnet_ids",
+      "secondary_subnet_ids",
+      "primary_vpc_id",
+      "secondary_vpc_id",
+      "vpc_peering_id",
+      "route53_record"
     ];
-    requiredKeys.forEach((key) => {
-      expect(outputs).toHaveProperty(key);
+    expectedKeys.forEach(key => {
+      expect(Object.keys(outputs)).toContain(key);
     });
   });
 
-  environments.forEach((env) => {
-    describe(`Environment: ${env}`, () => {
-      // Gather all web instance keys for this environment (e.g., staging-web-0, staging-web-1)
-      const envWebKeys = Object.keys(outputs.ec2_instance_ids).filter(k => k.startsWith(env));
-
-      it("should have valid VPC ID", () => {
-        expect(isNonEmptyString(outputs.vpc_ids[env])).toBe(true);
-      });
-
-      it("should have exactly 2 public and 2 private subnet IDs", () => {
-        const publicSubs = getSubnetIds(env, "public");
-        const privateSubs = getSubnetIds(env, "private");
-        expect(publicSubs.length).toBe(2);
-        expect(privateSubs.length).toBe(2);
-        publicSubs.forEach((sub) => expect(isNonEmptyString(sub)).toBe(true));
-        privateSubs.forEach((sub) => expect(isNonEmptyString(sub)).toBe(true));
-      });
-
-      it("should have EC2 instances with IDs and private IPs", () => {
-        envWebKeys.forEach((key) => {
-          expect(isNonEmptyString(outputs.ec2_instance_ids[key])).toBe(true);
-          expect(isNonEmptyString(outputs.ec2_private_ips[key])).toBe(true);
-        });
-      });
-
-      it("should have ALB DNS name for environment", () => {
-        expect(isNonEmptyString(outputs.alb_dns_names[env])).toBe(true);
-      });
-
-      it("should have RDS endpoint for environment", () => {
-        expect(isNonEmptyString(outputs.rds_endpoints[env])).toBe(true);
-      });
-    });
+  it("validate primary_ec2_instance structure and IPs", () => {
+    const ec2 = outputs.primary_ec2_instance;
+    expect(ec2).toHaveProperty("id");
+    expect(isNonEmptyString(ec2.id)).toBe(true);
+    expect(ec2).toHaveProperty("eip_id");
+    expect(isNonEmptyString(ec2.eip_id)).toBe(true);
+    expect(ec2).toHaveProperty("private_ip");
+    expect(isValidIPv4(ec2.private_ip)).toBe(true);
+    expect(ec2).toHaveProperty("public_ip");
+    expect(isValidIPv4(ec2.public_ip)).toBe(true);
   });
 
-  describe("Cross-environment uniqueness and consistency", () => {
-    it("should have unique VPC IDs", () => {
-      const ids = environments.map((env) => outputs.vpc_ids[env]);
-      expect(new Set(ids).size).toBe(ids.length);
-    });
-
-    it("should have unique EC2 instance IDs", () => {
-      const allInstanceIds = Object.values(outputs.ec2_instance_ids);
-      expect(new Set(allInstanceIds).size).toBe(allInstanceIds.length);
-    });
-
-    it("should have unique subnet IDs across public and private", () => {
-      const allSubnets = [...Object.values(outputs.public_subnet_ids), ...Object.values(outputs.private_subnet_ids)];
-      expect(new Set(allSubnets).size).toBe(allSubnets.length);
-    });
+  it("validate secondary_ec2_instance structure and IPs", () => {
+    const ec2 = outputs.secondary_ec2_instance;
+    expect(ec2).toHaveProperty("id");
+    expect(isNonEmptyString(ec2.id)).toBe(true);
+    expect(ec2).toHaveProperty("eip_id");
+    expect(isNonEmptyString(ec2.eip_id)).toBe(true);
+    expect(ec2).toHaveProperty("private_ip");
+    expect(isValidIPv4(ec2.private_ip)).toBe(true);
+    expect(ec2).toHaveProperty("public_ip");
+    expect(isValidIPv4(ec2.public_ip)).toBe(true);
   });
+
+  it("should have valid Route53 Hosted Zone IDs", () => {
+    expect(isNonEmptyString(outputs.primary_route53_zone_id)).toBe(true);
+    expect(isNonEmptyString(outputs.secondary_route53_zone_id)).toBe(true);
+  });
+
+  it("should have valid VPC IDs in both regions", () => {
+    expect(isNonEmptyString(outputs.primary_vpc_id)).toBe(true);
+    expect(isNonEmptyString(outputs.secondary_vpc_id)).toBe(true);
+  });
+
+  it("should have exactly 4 subnet IDs for primary and secondary", () => {
+    expect(isArrayOfNonEmptyStrings(outputs.primary_subnet_ids)).toBe(true);
+    expect(outputs.primary_subnet_ids.length).toBe(4); // 2 public + 2 private
+
+    expect(isArrayOfNonEmptyStrings(outputs.secondary_subnet_ids)).toBe(true);
+    expect(outputs.secondary_subnet_ids.length).toBe(4);
+  });
+
+  it("should have a valid VPC peering ID", () => {
+    expect(isNonEmptyString(outputs.vpc_peering_id)).toBe(true);
+    expect(outputs.vpc_peering_id.startsWith("pcx-")).toBe(true);
+  });
+
+  it("route53_record must be a valid hostname with subdomain", () => {
+    expect(isNonEmptyString(outputs.route53_record)).toBe(true);
+    expect(outputs.route53_record).toMatch(/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i);
+    expect(outputs.route53_record.startsWith(outputs.route53_record.split(".").slice(1).join("."))).toBe(false);
+  });
+
+  // Edge case: Public and private IPs must not overlap
+  it("primary and secondary EC2 private IPs must be from respective VPC CIDRs", () => {
+    const primaryPrivateIp = outputs.primary_ec2_instance.private_ip;
+    const secondaryPrivateIp = outputs.secondary_ec2_instance.private_ip;
+    expect(primaryPrivateIp.startsWith("10.0.")).toBe(true);
+    expect(secondaryPrivateIp.startsWith("10.1.")).toBe(true);
+  });
+
+  // Additional cross-resource consistency
+  it("all subnet IDs must be unique across primary and secondary", () => {
+    const allSubs = [...outputs.primary_subnet_ids, ...outputs.secondary_subnet_ids];
+    const uniqueSubs = new Set(allSubs);
+    expect(uniqueSubs.size).toBe(allSubs.length);
+  });
+
+  it("EC2 instance IDs must be unique across primary and secondary", () => {
+    const ids = [outputs.primary_ec2_instance.id, outputs.secondary_ec2_instance.id];
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+  });
+
+  // You can add more custom validation rules as needed...
 });
