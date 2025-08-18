@@ -191,10 +191,10 @@ class MonitoringComponent(ComponentResource):
       limit_amount=str(budget_limit),
       limit_unit="USD",
       time_unit="MONTHLY",
-      cost_filters=[{
-        "name": "TagKeyValue",
-        "values": [config.environment]
-      }],
+      cost_filters=[aws.budgets.BudgetCostFilterArgs(
+        name="TagKeyValue",
+        values=[config.environment]
+      )],
       notifications=[
         {
           "comparison_operator": "GREATER_THAN",
