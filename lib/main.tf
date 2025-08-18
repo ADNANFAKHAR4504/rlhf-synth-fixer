@@ -81,6 +81,12 @@ variable "create_ssl_certificate" {
   default     = false
 }
 
+variable "create_cloudtrail" {
+  description = "Whether to create CloudTrail (set to false if trail limit exceeded)"
+  type        = bool
+  default     = false
+}
+
 
 # Random resource for unique naming
 resource "random_id" "suffix" {
@@ -484,7 +490,6 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 
 # VPC Flow Logs
 resource "aws_flow_log" "vpc" {
-  iam_role_arn         = aws_iam_role.vpc_flow_logs.arn
   log_destination      = aws_s3_bucket.vpc_flow_logs.arn
   log_destination_type = "s3"
   traffic_type         = "ALL"
@@ -639,6 +644,7 @@ resource "aws_s3_bucket_policy" "app_data_ssl_only" {
 
 # CloudTrail S3 Bucket
 resource "aws_s3_bucket" "cloudtrail" {
+  count  = var.create_cloudtrail ? 1 : 0
   bucket = "${var.project}-cloudtrail-${local.account_id}-${local.suffix}"
 
   tags = merge(local.common_tags, {
@@ -647,14 +653,16 @@ resource "aws_s3_bucket" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_versioning" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count  = var.create_cloudtrail ? 1 : 0
+  bucket = aws_s3_bucket.cloudtrail[0].id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count  = var.create_cloudtrail ? 1 : 0
+  bucket = aws_s3_bucket.cloudtrail[0].id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -666,7 +674,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count  = var.create_cloudtrail ? 1 : 0
+  bucket = aws_s3_bucket.cloudtrail[0].id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -675,7 +684,8 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_policy" "cloudtrail_ssl_only" {
-  bucket = aws_s3_bucket.cloudtrail.id
+  count  = var.create_cloudtrail ? 1 : 0
+  bucket = aws_s3_bucket.cloudtrail[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -686,8 +696,8 @@ resource "aws_s3_bucket_policy" "cloudtrail_ssl_only" {
         Principal = "*"
         Action    = "s3:*"
         Resource = [
-          aws_s3_bucket.cloudtrail.arn,
-          "${aws_s3_bucket.cloudtrail.arn}/*"
+          aws_s3_bucket.cloudtrail[0].arn,
+          "${aws_s3_bucket.cloudtrail[0].arn}/*"
         ]
         Condition = {
           Bool = {
@@ -702,7 +712,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_ssl_only" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.cloudtrail.arn
+        Resource = aws_s3_bucket.cloudtrail[0].arn
       },
       {
         Sid    = "AWSCloudTrailWrite"
@@ -711,7 +721,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_ssl_only" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Resource = "${aws_s3_bucket.cloudtrail[0].arn}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
@@ -724,8 +734,9 @@ resource "aws_s3_bucket_policy" "cloudtrail_ssl_only" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
+  count          = var.create_cloudtrail ? 1 : 0
   name           = "${var.project}-cloudtrail-${local.suffix}"
-  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
+  s3_bucket_name = aws_s3_bucket.cloudtrail[0].bucket
 
   kms_key_id                    = aws_kms_key.main.arn
   include_global_service_events = true
@@ -1024,7 +1035,7 @@ resource "aws_lb_listener" "app" {
 # WAF WebACL
 resource "aws_wafv2_web_acl" "main" {
   name  = "${var.project}-waf-${local.suffix}"
-  scope = "CLOUDFRONT"
+  scope = "REGIONAL"
 
   default_action {
     allow {}
@@ -1166,8 +1177,6 @@ resource "aws_cloudfront_distribution" "main" {
   viewer_certificate {
     cloudfront_default_certificate = true
   }
-
-  web_acl_id = aws_wafv2_web_acl.main.arn
 
   tags = merge(local.common_tags, {
     Name = "${var.project}-cloudfront-${local.suffix}"
@@ -1424,12 +1433,12 @@ output "s3_app_data_bucket" {
 
 output "s3_cloudtrail_bucket" {
   description = "CloudTrail S3 bucket name"
-  value       = aws_s3_bucket.cloudtrail.id
+  value       = var.create_cloudtrail ? aws_s3_bucket.cloudtrail[0].id : ""
 }
 
 output "cloudtrail_arn" {
   description = "CloudTrail ARN"
-  value       = aws_cloudtrail.main.arn
+  value       = var.create_cloudtrail ? aws_cloudtrail.main[0].arn : ""
 }
 
 output "ecs_cluster_name" {
