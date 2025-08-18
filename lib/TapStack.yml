@@ -121,7 +121,7 @@ Parameters:
 
   UseExistingConfigRecorder:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: 'If true, assume an existing AWS Config recorder (set to true if you already have one)'
 
