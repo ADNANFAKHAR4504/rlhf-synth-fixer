@@ -516,18 +516,16 @@ describe('LIVE: Secure AWS Data Storage Infrastructure Validation', () => {
 
 // Helper test to validate outputs are available
 describe('Pre-flight Checks', () => {
-  test('Terraform outputs are available for live testing', () => {
+  test('CDK outputs are available for live testing', () => {
     const outputs = loadOutputs();
-    
-    if (Object.keys(outputs).length === 0) {
+
+    if (!outputs || Object.keys(outputs).length === 0) {
       console.warn('⚠ No CDK outputs found.');
       console.warn('To run live infrastructure tests:');
       console.warn('1. Deploy infrastructure: npm run deploy or cdk deploy');
       console.warn('2. Generate outputs: cdk outputs --json > cfn-outputs/outputs.json');
       console.warn('3. Re-run tests: npm run test:integration');
-      
-      // Don't fail the test, just skip
-      expect(true).toBe(true);
+      // Skip the test if outputs are missing
       return;
     }
 
