@@ -1,8 +1,9 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand, DescribeFlowLogsCommand } from '@aws-sdk/client-ec2';
 import { S3Client, HeadBucketCommand, GetBucketVersioningCommand, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
 import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 
 // Get stack outputs for integration testing
 let outputs: any = {};
@@ -33,6 +34,7 @@ const awsRegion = process.env.AWS_REGION || 'us-west-2';
 const ec2Client = new EC2Client({ region: awsRegion });
 const s3Client = new S3Client({ region: awsRegion });
 const iamClient = new IAMClient({ region: awsRegion });
+const cloudWatchLogsClient = new CloudWatchLogsClient({ region: awsRegion });
 
 describe('AWS Infrastructure Integration Tests', () => {
   
@@ -320,6 +322,104 @@ describe('AWS Infrastructure Integration Tests', () => {
         expect(vpcResponse.Vpcs).toHaveLength(1);
       }
     });
+  });
+
+  describe('VPC Flow Logs Monitoring', () => {
+    test('VPC Flow Logs should be enabled and active', async () => {
+      if (!outputs.VPCId) {
+        console.warn('VPCId not found in outputs, skipping test');
+        return;
+      }
+
+      const command = new DescribeFlowLogsCommand({
+        Filter: [
+          {
+            Name: 'resource-id',
+            Values: [outputs.VPCId]
+          }
+        ]
+      });
+
+      const response = await ec2Client.send(command);
+      const flowLogs = response.FlowLogs || [];
+
+      expect(flowLogs.length).toBeGreaterThan(0);
+      
+      const activeFlowLog = flowLogs.find(log => log.FlowLogStatus === 'ACTIVE');
+      expect(activeFlowLog).toBeDefined();
+      expect(activeFlowLog?.ResourceId).toBe(outputs.VPCId);
+      expect(activeFlowLog?.TrafficType).toBe('ALL');
+      expect(activeFlowLog?.LogDestinationType).toBe('cloud-watch-logs');
+
+      // Check Environment tag
+      const environmentTag = activeFlowLog?.Tags?.find(tag => tag.Key === 'Environment');
+      expect(environmentTag?.Value).toBe('Production');
+    }, 30000);
+
+    test('CloudWatch Log Group for VPC Flow Logs should exist', async () => {
+      const logGroupName = '/aws/vpc/Production';
+      
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: logGroupName
+      });
+
+      const response = await cloudWatchLogsClient.send(command);
+      const logGroups = response.logGroups || [];
+
+      const vpcLogGroup = logGroups.find(group => group.logGroupName === logGroupName);
+      expect(vpcLogGroup).toBeDefined();
+      expect(vpcLogGroup?.retentionInDays).toBe(30);
+    }, 30000);
+
+    test('VPC Flow Logs should have proper IAM role configured', async () => {
+      if (!outputs.VPCId) {
+        console.warn('VPCId not found in outputs, skipping test');
+        return;
+      }
+
+      const command = new DescribeFlowLogsCommand({
+        Filter: [
+          {
+            Name: 'resource-id',
+            Values: [outputs.VPCId]
+          }
+        ]
+      });
+
+      const response = await ec2Client.send(command);
+      const flowLogs = response.FlowLogs || [];
+      
+      expect(flowLogs.length).toBeGreaterThan(0);
+      
+      const activeFlowLog = flowLogs.find(log => log.FlowLogStatus === 'ACTIVE');
+      expect(activeFlowLog?.DeliverLogsPermissionArn).toBeDefined();
+      expect(activeFlowLog?.DeliverLogsPermissionArn).toContain('VPCFlowLogRole');
+    }, 30000);
+
+    test('VPC Flow Logs should capture all traffic types', async () => {
+      if (!outputs.VPCId) {
+        console.warn('VPCId not found in outputs, skipping test');
+        return;
+      }
+
+      const command = new DescribeFlowLogsCommand({
+        Filter: [
+          {
+            Name: 'resource-id',
+            Values: [outputs.VPCId]
+          }
+        ]
+      });
+
+      const response = await ec2Client.send(command);
+      const flowLogs = response.FlowLogs || [];
+      
+      expect(flowLogs.length).toBeGreaterThan(0);
+      
+      const activeFlowLog = flowLogs.find(log => log.FlowLogStatus === 'ACTIVE');
+      expect(activeFlowLog?.TrafficType).toBe('ALL');
+      // VPC Flow Log is configured for VPC resource (verified by resource-id filter)
+    }, 30000);
   });
 
   describe('Security Compliance', () => {
