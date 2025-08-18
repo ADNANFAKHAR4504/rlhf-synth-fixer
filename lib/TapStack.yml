@@ -75,8 +75,9 @@ Parameters:
     Description: 'CIDR block for private subnet in AZ2'
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'EC2 Key Pair for SSH access'
+    Type: String
+    Default: ''
+    Description: 'EC2 Key Pair for SSH access (leave empty to disable SSH)'
 
   InstanceType:
     Type: String
@@ -113,13 +114,18 @@ Parameters:
 
   AlarmEmail:
     Type: String
+    Default: 'admin@example.com'
     Description: 'Email address for CloudWatch alarm notifications'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: 'ami-0c02fb55731490381'  # Amazon Linux 2 AMI
+  AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'AMI ID for EC2 instances (automatically gets latest Amazon Linux 2)'
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+
 
 Resources:
   # VPC and Networking Resources
@@ -590,9 +596,9 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref AmiId
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -620,7 +626,7 @@ Resources:
             yum update -y
             yum install -y amazon-cloudwatch-agent
             yum install -y aws-cfn-bootstrap
-            
+
             # Signal the status from cfn-init
             /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
 

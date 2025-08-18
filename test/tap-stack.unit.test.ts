@@ -47,7 +47,7 @@ describe('TapStack CloudFormation Template - Production AWS Infrastructure', () 
 
     test('has all required top-level sections', () => {
       expect(template.Parameters).toBeDefined();
-      expect(template.Mappings).toBeDefined();
+      expect(template.Conditions).toBeDefined();
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
       expect(template.Metadata).toBeDefined();
@@ -81,8 +81,9 @@ describe('TapStack CloudFormation Template - Production AWS Infrastructure', () 
 
     test('KeyPairName parameter for SSH access', () => {
       const param = template.Parameters.KeyPairName;
-      expect(param.Type).toBe('AWS::EC2::KeyPair::KeyName');
-      expect(param.Description).toBe('EC2 Key Pair for SSH access');
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('');
+      expect(param.Description).toBe('EC2 Key Pair for SSH access (leave empty to disable SSH)');
     });
 
     test('InstanceType parameter with t3.micro default', () => {
@@ -113,6 +114,13 @@ describe('TapStack CloudFormation Template - Production AWS Infrastructure', () 
       expect(param.Type).toBe('String');
       expect(param.Description).toContain('CloudWatch alarm notifications');
       expect(param.AllowedPattern).toBeDefined();
+    });
+
+    test('AmiId parameter uses SSM for latest AMI', () => {
+      const param = template.Parameters.AmiId;
+      expect(param.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(param.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+      expect(param.Description).toContain('automatically gets latest Amazon Linux 2');
     });
   });
 
@@ -424,8 +432,15 @@ describe('TapStack CloudFormation Template - Production AWS Infrastructure', () 
       expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
       
       const data = lt.Properties.LaunchTemplateData;
+      expect(data.ImageId).toEqual({ Ref: 'AmiId' });
       expect(data.InstanceType).toEqual({ Ref: 'InstanceType' });
-      expect(data.KeyName).toEqual({ Ref: 'KeyPairName' });
+      expect(data.KeyName).toEqual({
+        'Fn::If': [
+          'HasKeyPair',
+          { Ref: 'KeyPairName' },
+          { Ref: 'AWS::NoValue' }
+        ]
+      });
       expect(data.IamInstanceProfile.Arn).toEqual({ 'Fn::GetAtt': ['EC2InstanceProfile', 'Arn'] });
     });
 
@@ -677,9 +692,10 @@ describe('TapStack CloudFormation Template - Production AWS Infrastructure', () 
 
   /* Requirements Compliance Tests */
   describe('PROMPT.md Requirements Compliance', () => {
-    test('Resources in us-east-1 region (template region-agnostic)', () => {
-      expect(template.Mappings.RegionMap['us-east-1']).toBeDefined();
-      expect(template.Mappings.RegionMap['us-east-1'].AMI).toBeDefined();
+    test('Uses SSM parameter for latest AMI (region-agnostic)', () => {
+      const amiParam = template.Parameters.AmiId;
+      expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(amiParam.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
     });
 
     test('Multi-AZ redundancy implemented', () => {

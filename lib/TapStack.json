@@ -98,8 +98,9 @@
             "Description": "CIDR block for private subnet in AZ2"
         },
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "EC2 Key Pair for SSH access"
+            "Type": "String",
+            "Default": "",
+            "Description": "EC2 Key Pair for SSH access (leave empty to disable SSH)"
         },
         "InstanceType": {
             "Type": "String",
@@ -137,15 +138,28 @@
         },
         "AlarmEmail": {
             "Type": "String",
+            "Default": "admin@example.com",
             "Description": "Email address for CloudWatch alarm notifications",
             "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        },
+        "AmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "AMI ID for EC2 instances (automatically gets latest Amazon Linux 2)"
         }
     },
-    "Mappings": {
-        "RegionMap": {
-            "us-east-1": {
-                "AMI": "ami-0c02fb55731490381"
-            }
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -1117,19 +1131,21 @@
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
-                        "Fn::FindInMap": [
-                            "RegionMap",
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "AMI"
-                        ]
+                        "Ref": "AmiId"
                     },
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
                     "KeyName": {
-                        "Ref": "KeyPairName"
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     },
                     "IamInstanceProfile": {
                         "Arn": {
