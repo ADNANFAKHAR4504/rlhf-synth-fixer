@@ -161,7 +161,7 @@ export class TapStack extends TerraformStack {
       vpcId: vpc.vpcIdOutput,
       subnetId: Fn.element(vpc.privateSubnetIdsOutput, 0),
       instanceType: instanceType,
-      ami: 'ami-08a6efd148b1f7504',
+      ami: 'ami-084a7d336e816906b',
       keyName: sshKeyName,
       instanceProfileName: iam.instanceProfileName,
       ec2SecurityGroupId: ec2SecurityGroup.id, // Correct property name
