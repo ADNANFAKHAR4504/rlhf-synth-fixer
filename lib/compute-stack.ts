@@ -164,6 +164,19 @@ export class ComputeStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Key Pair for EC2 instances
+    const keyPair = new aws.ec2.KeyPair(
+      `tap-key-${region}-${environmentSuffix}`,
+      {
+        keyName: `tap-key-${region}-${environmentSuffix}`,
+        tags: {
+          ...tags,
+          Name: `tap-key-${region}-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
     // ALB Listener - redirect HTTP to HTTPS - Commented out since HTTPS is disabled
     /*
     new aws.lb.Listener(

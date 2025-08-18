@@ -256,9 +256,9 @@ export class StorageStack extends pulumi.ComponentResource {
 
     // RDS Security Group
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(
-      `tap-rds-sg-${region}-${environmentSuffix}-primary`,
+      `tap-rds-sg-${region}-${environmentSuffix}-primary-1`,
       {
-        name: `tap-rds-sg-${region}-${environmentSuffix}-primary`,
+        name: `tap-rds-sg-${region}-${environmentSuffix}-primary-1`,
         description: 'Security group for RDS database',
         vpcId: vpcIdToUse,
         ingress: [
@@ -280,7 +280,7 @@ export class StorageStack extends pulumi.ComponentResource {
         ],
         tags: {
           ...tags,
-          Name: `tap-rds-sg-${region}-${environmentSuffix}-primary`,
+          Name: `tap-rds-sg-${region}-${environmentSuffix}-primary-1`,
         },
       },
       { parent: this }
