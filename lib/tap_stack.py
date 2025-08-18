@@ -1246,8 +1246,7 @@ def create_nginx_deployment(
   # Create a Kubernetes provider using the EKS cluster
   k8s_provider = k8s.Provider(
       f"{name_prefix}-k8s-provider",
-      kubeconfig=eks_cluster.kubeconfig.apply(lambda kc: kc),
-      opts=ResourceOptions(provider=provider)
+      kubeconfig=eks_cluster.kubeconfig.apply(lambda kc: kc)
   )
   
   # Create NGINX deployment
