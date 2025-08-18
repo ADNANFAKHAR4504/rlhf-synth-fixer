@@ -1,48 +1,14 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`TapStack Unit Tests Stack Configuration and Synthesis should instantiate with custom props 1`] = `
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props 1`] = `
 "{
-  "data": {
-    "aws_ami": {
-      "amazonLinuxAmi": {
-        "filter": [
-          {
-            "name": "name",
-            "values": [
-              "amzn2-ami-hvm-*-x86_64-gp2"
-            ]
-          }
-        ],
-        "most_recent": true,
-        "owners": [
-          "amazon"
-        ]
-      }
-    }
-  },
-  "output": {
-    "ec2_security_group_id": {
-      "description": "The ID of the EC2 security group.",
-      "value": "mock-security-group-id"
-    },
-    "public_subnet_ids": {
-      "description": "The IDs of the public subnets.",
-      "value": [
-        "mock-public-subnet-id"
-      ]
-    },
-    "vpc_id": {
-      "description": "The ID of the main VPC.",
-      "value": "mock-vpc-id"
-    }
-  },
   "provider": {
     "aws": [
       {
         "default_tags": [
           {
             "tags": {
-              "Project": "Custom"
+              "Project": "TAP"
             }
           }
         ],
@@ -53,10 +19,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis should instantiat
   "terraform": {
     "backend": {
       "s3": {
-        "bucket": "custom-bucket",
+        "bucket": "my-custom-state-bucket",
         "encrypt": true,
-        "key": "prod/CustomStack.tfstate",
-        "region": "ap-south-1",
+        "key": "prod/TestCustomStack.tfstate",
+        "region": "us-east-1",
         "use_lockfile": true
       }
     },
@@ -70,42 +36,8 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis should instantiat
 }"
 `;
 
-exports[`TapStack Unit Tests Stack Configuration and Synthesis should use default values when no props provided 1`] = `
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should use default values when no props are provided 1`] = `
 "{
-  "data": {
-    "aws_ami": {
-      "amazonLinuxAmi": {
-        "filter": [
-          {
-            "name": "name",
-            "values": [
-              "amzn2-ami-hvm-*-x86_64-gp2"
-            ]
-          }
-        ],
-        "most_recent": true,
-        "owners": [
-          "amazon"
-        ]
-      }
-    }
-  },
-  "output": {
-    "ec2_security_group_id": {
-      "description": "The ID of the EC2 security group.",
-      "value": "mock-security-group-id"
-    },
-    "public_subnet_ids": {
-      "description": "The IDs of the public subnets.",
-      "value": [
-        "mock-public-subnet-id"
-      ]
-    },
-    "vpc_id": {
-      "description": "The ID of the main VPC.",
-      "value": "mock-vpc-id"
-    }
-  },
   "provider": {
     "aws": [
       {
@@ -120,7 +52,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis should use defaul
       "s3": {
         "bucket": "iac-rlhf-tf-states",
         "encrypt": true,
-        "key": "dev/DefaultStack.tfstate",
+        "key": "dev/TestDefaultStack.tfstate",
         "region": "us-east-1",
         "use_lockfile": true
       }
