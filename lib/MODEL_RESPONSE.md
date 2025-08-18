@@ -7,11 +7,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS Infrastructure Foundation with S3, RDS, IAM, and CloudWatch monitoring'
 
 Parameters:
-  Environment:
+  EnvironmentSuffix:
     Type: String
     Default: 'dev'
-    AllowedValues: ['dev', 'staging', 'prod']
-    Description: 'Environment name for resource naming'
+    Description: 'Environment suffix for resource naming'
 
   DBUsername:
     Type: String
@@ -48,7 +47,7 @@ Resources:
   S3KMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'KMS Key for S3 encryption in ${Environment}'
+      Description: !Sub 'KMS Key for S3 encryption in ${EnvironmentSuffix}'
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
@@ -71,13 +70,13 @@ Resources:
   S3KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/s3-${Environment}-key'
+      AliasName: !Sub 'alias/s3-${EnvironmentSuffix}-key'
       TargetKeyId: !Ref S3KMSKey
 
   RDSKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'KMS Key for RDS encryption in ${Environment}'
+      Description: !Sub 'KMS Key for RDS encryption in ${EnvironmentSuffix}'
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
@@ -101,7 +100,7 @@ Resources:
   RDSKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/rds-${Environment}-key'
+      AliasName: !Sub 'alias/rds-${EnvironmentSuffix}-key'
       TargetKeyId: !Ref RDSKMSKey
 
   # ===========================================
@@ -111,7 +110,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-security-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${EnvironmentSuffix}-security-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -141,7 +140,7 @@ Resources:
     Type: AWS::S3::Bucket
     DependsOn: LoggingBucket
     Properties:
-      BucketName: !Sub '${Environment}-application-data-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${EnvironmentSuffix}-application-data-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -222,7 +221,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-secure-vpc'
+          Value: !Sub '${EnvironmentSuffix}-secure-vpc'
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -232,7 +231,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-1'
+          Value: !Sub '${EnvironmentSuffix}-private-subnet-1'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -242,7 +241,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-2'
+          Value: !Sub '${EnvironmentSuffix}-private-subnet-2'
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -253,7 +252,7 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-db-subnet-group'
+          Value: !Sub '${EnvironmentSuffix}-db-subnet-group'
 
   DBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -268,7 +267,7 @@ Resources:
           Description: 'MySQL access from application tier'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-db-security-group'
+          Value: !Sub '${EnvironmentSuffix}-db-security-group'
 
   ApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -277,7 +276,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-app-security-group'
+          Value: !Sub '${EnvironmentSuffix}-app-security-group'
 
   # ===========================================
   # RDS Database with Encryption
@@ -287,7 +286,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-secure-database'
+      DBInstanceIdentifier: !Sub '${EnvironmentSuffix}-secure-database'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
       EngineVersion: '8.0.35'
@@ -314,7 +313,7 @@ Resources:
       DeletionProtection: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-secure-database'
+          Value: !Sub '${EnvironmentSuffix}-secure-database'
 
   # ===========================================
   # IAM Roles with Least Privilege
@@ -323,7 +322,7 @@ Resources:
   S3AccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-s3-access-role'
+      RoleName: !Sub '${EnvironmentSuffix}-s3-access-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -357,7 +356,7 @@ Resources:
   RDSEnhancedMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-rds-monitoring-role'
+      RoleName: !Sub '${EnvironmentSuffix}-rds-monitoring-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -371,7 +370,7 @@ Resources:
   CloudWatchRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-cloudwatch-role'
+      RoleName: !Sub '${EnvironmentSuffix}-cloudwatch-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -402,7 +401,7 @@ Resources:
   SNSTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${Environment}-security-alerts'
+      TopicName: !Sub '${EnvironmentSuffix}-security-alerts'
       KmsMasterKeyId: alias/aws/sns
 
   SNSSubscription:
@@ -415,21 +414,21 @@ Resources:
   S3AccessLogGroup:
     Type: AWS::CloudWatch::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/${Environment}-access-logs'
+      LogGroupName: !Sub '/aws/s3/${EnvironmentSuffix}-access-logs'
       RetentionInDays: 30
       KmsKeyId: !GetAtt S3KMSKey.Arn
 
   RDSLogGroup:
     Type: AWS::CloudWatch::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/rds/instance/${Environment}-secure-database/error'
+      LogGroupName: !Sub '/aws/rds/instance/${EnvironmentSuffix}-secure-database/error'
       RetentionInDays: 30
 
   # CloudWatch Alarms for Security Monitoring
   UnauthorizedS3AccessAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-unauthorized-s3-access'
+      AlarmName: !Sub '${EnvironmentSuffix}-unauthorized-s3-access'
       AlarmDescription: 'Detects potential unauthorized S3 access attempts'
       MetricName: 4xxErrors
       Namespace: AWS/S3
@@ -448,7 +447,7 @@ Resources:
   DatabaseConnectionFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-database-connection-failures'
+      AlarmName: !Sub '${EnvironmentSuffix}-database-connection-failures'
       AlarmDescription: 'Detects multiple database connection failures'
       MetricName: DatabaseConnections
       Namespace: AWS/RDS
@@ -467,7 +466,7 @@ Resources:
   HighErrorRateAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-high-error-rate'
+      AlarmName: !Sub '${EnvironmentSuffix}-high-error-rate'
       AlarmDescription: 'Detects high error rates in application logs'
       MetricName: ErrorCount
       Namespace: CWLogs
@@ -483,7 +482,7 @@ Resources:
   KMSKeyUsageAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-unusual-kms-usage'
+      AlarmName: !Sub '${EnvironmentSuffix}-unusual-kms-usage'
       AlarmDescription: 'Detects unusual KMS key usage patterns'
       MetricName: NumberOfRequestsSucceeded
       Namespace: AWS/KMS
@@ -503,13 +502,13 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::CloudWatch::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${Environment}-security-trail'
+      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentSuffix}-security-trail'
       RetentionInDays: 90
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub '${Environment}-security-trail'
+      TrailName: !Sub '${EnvironmentSuffix}-security-trail'
       S3BucketName: !Ref LoggingBucket
       S3KeyPrefix: 'cloudtrail-logs/'
       IncludeGlobalServiceEvents: true
@@ -544,7 +543,7 @@ Resources:
   FailedLoginAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-failed-login-attempts'
+      AlarmName: !Sub '${EnvironmentSuffix}-failed-login-attempts'
       AlarmDescription: 'Detects multiple failed login attempts'
       MetricName: FailedLogins
       Namespace: Security/Authentication
@@ -566,61 +565,61 @@ Outputs:
     Description: 'Name of the secure application S3 bucket'
     Value: !Ref ApplicationBucket
     Export:
-      Name: !Sub '${Environment}-application-bucket'
+      Name: !Sub '${EnvironmentSuffix}-application-bucket'
 
   S3LoggingBucket:
     Description: 'Name of the S3 logging bucket'
     Value: !Ref LoggingBucket
     Export:
-      Name: !Sub '${Environment}-logging-bucket'
+      Name: !Sub '${EnvironmentSuffix}-logging-bucket'
 
   DatabaseEndpoint:
     Description: 'RDS database endpoint'
     Value: !GetAtt Database.Endpoint.Address
     Export:
-      Name: !Sub '${Environment}-database-endpoint'
+      Name: !Sub '${EnvironmentSuffix}-database-endpoint'
 
   DatabasePort:
     Description: 'RDS database port'
     Value: !GetAtt Database.Endpoint.Port
     Export:
-      Name: !Sub '${Environment}-database-port'
+      Name: !Sub '${EnvironmentSuffix}-database-port'
 
   S3KMSKeyId:
     Description: 'KMS Key ID for S3 encryption'
     Value: !Ref S3KMSKey
     Export:
-      Name: !Sub '${Environment}-s3-kms-key'
+      Name: !Sub '${EnvironmentSuffix}-s3-kms-key'
 
   RDSKMSKeyId:
     Description: 'KMS Key ID for RDS encryption'
     Value: !Ref RDSKMSKey
     Export:
-      Name: !Sub '${Environment}-rds-kms-key'
+      Name: !Sub '${EnvironmentSuffix}-rds-kms-key'
 
   S3AccessRoleArn:
     Description: 'ARN of the S3 access role'
     Value: !GetAtt S3AccessRole.Arn
     Export:
-      Name: !Sub '${Environment}-s3-access-role-arn'
+      Name: !Sub '${EnvironmentSuffix}-s3-access-role-arn'
 
   SecurityAlertsTopicArn:
     Description: 'ARN of the SNS topic for security alerts'
     Value: !Ref SNSTopic
     Export:
-      Name: !Sub '${Environment}-security-alerts-topic'
+      Name: !Sub '${EnvironmentSuffix}-security-alerts-topic'
 
   VPCId:
     Description: 'ID of the created VPC'
     Value: !Ref VPC
     Export:
-      Name: !Sub '${Environment}-vpc-id'
+      Name: !Sub '${EnvironmentSuffix}-vpc-id'
 
   CloudTrailArn:
     Description: 'ARN of the CloudTrail for audit logging'
     Value: !GetAtt CloudTrail.Arn
     Export:
-      Name: !Sub '${Environment}-cloudtrail-arn'
+      Name: !Sub '${EnvironmentSuffix}-cloudtrail-arn'
 ```
 
 ## Key Security Features Implemented
