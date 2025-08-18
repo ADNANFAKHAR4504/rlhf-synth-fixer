@@ -106,7 +106,7 @@ def test_state_bucket_security():
   ledger = run_program()
 
   # Accept all valid naming conventions observed in this project:
-  # - "state-*"
+  # - "state-*" 
   # - "pulumi-state-*"
   # - "cicd-pulumi-state-*"
   state_name_rx = r"^(?:state|pulumi-state|cicd-pulumi-state)-"
