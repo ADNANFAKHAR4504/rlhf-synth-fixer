@@ -1,4 +1,4 @@
-# Secure Web Application Environment on AWS
+# Secure Web Application Environment on AWS.
 
 Hey there!
 
