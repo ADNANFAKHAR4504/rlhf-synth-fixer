@@ -1,16 +1,11 @@
-Here's a prompt for setting up a secure AWS environment using CloudFormation, trying to sound like a person wrote it, with less formatting:
+I need a CloudFormation YAML template for a secure AWS environment in us-west-2. The security requirements are pretty straightforward but important.
 
-## Secure AWS Environment Setup
+First, all IAM users need to have two-factor authentication enforced. Not just enabled, but actually required for any meaningful operations. Users should still be able to set up their MFA devices and change their passwords, but everything else gets blocked until they authenticate with MFA.
 
-We need a CloudFormation template, in YAML, to set up a secure AWS environment in `us-west-2`. This setup has to meet some important security rules.
+For S3 storage, I want all buckets completely private with server-side encryption using SSE-S3. No exceptions on the public access thing. Buckets should also enforce HTTPS connections and reject any uploads that aren't encrypted.
 
-Here's what it needs to do:
+CloudTrail needs to be running across all regions to capture API calls for auditing. This includes both management events and data events for our S3 buckets. The CloudTrail logs should go to their own encrypted S3 bucket with proper access policies.
 
-- **IAM Users**: Set up **two-factor authentication (2FA)** for all IAM user accounts.
-- **S3 Buckets**: Make sure all S3 buckets are private and encrypted using **SSE-S3**. No public S3 buckets should exist.
-- **CloudTrail Logging**: Turn on **AWS CloudTrail** to log all API calls in our AWS account for auditing.
-- **EC2 Region**: Only allow **EC2 instances to be provisioned in the `us-west-2` region**.
+EC2 instances should only be allowed in us-west-2. This means IAM policies that explicitly allow EC2 operations in that region while denying instance creation anywhere else.
 
-The goal is to design a secure AWS infrastructure using CloudFormation. This is about making sure security and compliance best practices are followed across our application environment. Everything should operate in the `us-west-2` region, with encryption policies for all storage, and clear network and compute boundaries.
-
-We need a valid, well-structured CloudFormation YAML template. It should meet all these security configurations and pass CloudFormation's own validation checks.
+The template should be production-ready with proper resource naming, parameterization for different environments, and should pass CloudFormation validation without issues. All resources need to be in us-west-2 from the start.
