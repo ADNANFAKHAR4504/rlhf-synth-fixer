@@ -8,7 +8,7 @@
 variable "aws_region" {
   description = "AWS region for all resources (consumed by provider.tf)"
   type        = string
-  default     = "us-east-1"
+  default     = "ca-central-1"
 }
 
 variable "project_name" {
@@ -651,35 +651,43 @@ resource "aws_lb_target_group" "main" {
 }
 
 resource "aws_lb_listener" "https" {
+  count             = var.acm_certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = var.acm_certificate_arn != "" ? var.acm_certificate_arn : null
+  certificate_arn   = var.acm_certificate_arn
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
 }
 
-resource "aws_lb_listener" "http" {
+resource "aws_lb_listener" "http_redirect" {
+  count             = var.acm_certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = 80
   protocol          = "HTTP"
   default_action {
-    type = var.acm_certificate_arn != "" ? "redirect" : "forward"
-    dynamic "redirect" {
-      for_each = var.acm_certificate_arn != "" ? [1] : []
-      content {
-        port        = "443"
-        protocol    = "HTTPS"
-        status_code = "HTTP_301"
-      }
+    type = "redirect"
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
     }
-    dynamic "forward" {
-      for_each = var.acm_certificate_arn == "" ? [1] : []
-      content {
-        target_group_arn = aws_lb_target_group.main.arn
+  }
+}
+
+resource "aws_lb_listener" "http_forward" {
+  count             = var.acm_certificate_arn == "" ? 1 : 0
+  load_balancer_arn = aws_lb.main.arn
+  port              = 80
+  protocol          = "HTTP"
+  default_action {
+    type = "forward"
+    forward {
+      target_group {
+        arn = aws_lb_target_group.main.arn
       }
     }
   }
