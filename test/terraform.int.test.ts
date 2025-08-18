@@ -19,7 +19,7 @@ const isNonEmptyString = (val: any): boolean =>
   typeof val === "string" && val.trim().length > 0;
 
 const isArrayOfNonEmptyStrings = (val: any): boolean =>
-  Array.isArray(val) && val.every(v => isNonEmptyString(v));
+  Array.isArray(val) && val.every((v: string) => isNonEmptyString(v));
 
 const isValidIPv4 = (ip: any): boolean => {
   if (typeof ip !== "string") return false;
@@ -47,7 +47,7 @@ describe("Terraform Full Stack Integration Tests", () => {
       "vpc_peering_id",
       "route53_record",
     ];
-    baseKeys.forEach(key => {
+    baseKeys.forEach((key: string) => {
       expect(Object.keys(outputs)).toContain(key);
     });
   });
@@ -118,39 +118,39 @@ describe("Terraform Full Stack Integration Tests", () => {
       expect(outputs.secondary_internet_gateway_id.startsWith("igw-")).toBe(true);
     });
 
-    it("NAT Gateway IDs valid and length 2", () => {
-      const primaryNATs = JSON.parse(outputs.primary_nat_gateway_ids);
-      const secondaryNATs = JSON.parse(outputs.secondary_nat_gateway_ids);
+    it("NAT Gateway IDs are arrays of length 2 with valid format", () => {
+      const primaryNATs: string[] = JSON.parse(outputs.primary_nat_gateway_ids);
+      const secondaryNATs: string[] = JSON.parse(outputs.secondary_nat_gateway_ids);
 
       expect(Array.isArray(primaryNATs)).toBe(true);
       expect(primaryNATs.length).toBe(2);
-      primaryNATs.forEach(id => expect(id.startsWith("nat-")).toBe(true));
+      primaryNATs.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
 
       expect(Array.isArray(secondaryNATs)).toBe(true);
       expect(secondaryNATs.length).toBe(2);
-      secondaryNATs.forEach(id => expect(id.startsWith("nat-")).toBe(true));
+      secondaryNATs.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
     });
 
-    it("Route table IDs exist", () => {
+    it("Route table IDs exist and valid", () => {
       expect(isNonEmptyString(outputs.primary_public_route_table_id)).toBe(true);
       expect(outputs.primary_public_route_table_id.startsWith("rtb-")).toBe(true);
 
       expect(isNonEmptyString(outputs.secondary_public_route_table_id)).toBe(true);
       expect(outputs.secondary_public_route_table_id.startsWith("rtb-")).toBe(true);
 
-      const primaryPrivateRTs = JSON.parse(outputs.primary_private_route_table_ids);
-      const secondaryPrivateRTs = JSON.parse(outputs.secondary_private_route_table_ids);
+      const primaryPrivateRTs: string[] = JSON.parse(outputs.primary_private_route_table_ids);
+      const secondaryPrivateRTs: string[] = JSON.parse(outputs.secondary_private_route_table_ids);
 
       expect(Array.isArray(primaryPrivateRTs)).toBe(true);
       expect(Array.isArray(secondaryPrivateRTs)).toBe(true);
 
-      primaryPrivateRTs.forEach(id => expect(id.startsWith("rtb-")).toBe(true));
-      secondaryPrivateRTs.forEach(id => expect(id.startsWith("rtb-")).toBe(true));
+      primaryPrivateRTs.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
+      secondaryPrivateRTs.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
     });
 
     it("Peering routes defined and non-empty", () => {
-      const p2sRoutes = JSON.parse(outputs.primary_to_secondary_peering_routes);
-      const s2pRoutes = JSON.parse(outputs.secondary_to_primary_peering_routes);
+      const p2sRoutes: any[] = JSON.parse(outputs.primary_to_secondary_peering_routes);
+      const s2pRoutes: any[] = JSON.parse(outputs.secondary_to_primary_peering_routes);
       expect(Array.isArray(p2sRoutes)).toBe(true);
       expect(Array.isArray(s2pRoutes)).toBe(true);
       expect(p2sRoutes.length).toBeGreaterThan(0);
@@ -167,7 +167,7 @@ describe("Terraform Full Stack Integration Tests", () => {
       expect(Number(outputs.secondary_ec2_security_group_rule_count)).toBeGreaterThan(0);
     });
 
-    it("No overlapping CIDRs", () => {
+    it("VPC CIDR overlap warning is valid", () => {
       expect(["No CIDR overlap detected", "Warning: VPC CIDRs overlap!"]).toContain(
         outputs.vpc_cidr_overlap_warning
       );
@@ -175,7 +175,7 @@ describe("Terraform Full Stack Integration Tests", () => {
   });
 
   describe("S3 / KMS / Replication role", () => {
-    it("S3 bucket names present", () => {
+    it("S3 bucket names present and valid", () => {
       expect(isNonEmptyString(outputs.primary_s3_bucket_name)).toBe(true);
       expect(isNonEmptyString(outputs.secondary_s3_bucket_name)).toBe(true);
     });
@@ -188,14 +188,14 @@ describe("Terraform Full Stack Integration Tests", () => {
       expect(outputs.secondary_kms_key_arn.includes("us-west-1")).toBe(true);
     });
 
-    it("Replication role ARN valid", () => {
+    it("Replication role ARN is valid", () => {
       expect(isValidArn(outputs.s3_replication_role_arn)).toBe(true);
       expect(outputs.s3_replication_role_arn.includes("role")).toBe(true);
     });
   });
 
   describe("IAM wiring", () => {
-    it("IAM instance profile and role names presence and format", () => {
+    it("IAM instance profile and role names have expected format", () => {
       expect(isNonEmptyString(outputs.ec2_iam_instance_profile_name)).toBe(true);
       expect(outputs.ec2_iam_instance_profile_name).toMatch(/ec2-profile/);
 
@@ -204,8 +204,8 @@ describe("Terraform Full Stack Integration Tests", () => {
     });
   });
 
-  describe("Public vs Private Subnets", () => {
-    it("Subnet counts per VPC", () => {
+  describe("Subnet counts", () => {
+    it("Has expected count of public and private subnets per VPC", () => {
       expect(Number(outputs.primary_public_subnet_count)).toBe(2);
       expect(Number(outputs.primary_private_subnet_count)).toBe(2);
 
@@ -215,21 +215,19 @@ describe("Terraform Full Stack Integration Tests", () => {
   });
 
   describe("Route53 validations", () => {
-    it("Route53 zone IDs present", () => {
+    it("Route53 zone IDs and record format", () => {
       expect(isNonEmptyString(outputs.primary_route53_zone_id)).toBe(true);
       expect(isNonEmptyString(outputs.secondary_route53_zone_id)).toBe(true);
-    });
 
-    it("Route53 record format", () => {
       expect(isNonEmptyString(outputs.route53_record)).toBe(true);
       expect(/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i.test(outputs.route53_record)).toBe(true);
     });
   });
 
   describe("Subnet IDs format and uniqueness", () => {
-    it("Subnets are arrays of subnets and unique across regions", () => {
-      const primarySubs = JSON.parse(outputs.primary_subnet_ids);
-      const secondarySubs = JSON.parse(outputs.secondary_subnet_ids);
+    it("Subnets must be arrays and unique across both regions", () => {
+      const primarySubs: string[] = JSON.parse(outputs.primary_subnet_ids);
+      const secondarySubs: string[] = JSON.parse(outputs.secondary_subnet_ids);
 
       expect(isArrayOfNonEmptyStrings(primarySubs)).toBe(true);
       expect(isArrayOfNonEmptyStrings(secondarySubs)).toBe(true);
@@ -237,12 +235,12 @@ describe("Terraform Full Stack Integration Tests", () => {
       const allSubs = [...primarySubs, ...secondarySubs];
       expect(new Set(allSubs).size).toBe(allSubs.length);
 
-      allSubs.forEach(subnetId => expect(subnetId.startsWith("subnet-")).toBe(true));
+      allSubs.forEach((subnetId: string) => expect(subnetId.startsWith("subnet-")).toBe(true));
     });
   });
 
   describe("EC2 Instances consistency and IP range", () => {
-    it("EC2 instance IDs unique and valid IP ranges", () => {
+    it("EC2 instance IDs are unique and IPs are in correct CIDRs", () => {
       const primaryEC2 = outputs.primary_ec2_instance;
       const secondaryEC2 = outputs.secondary_ec2_instance;
 
@@ -258,20 +256,20 @@ describe("Terraform Full Stack Integration Tests", () => {
   });
 
   describe("NAT Gateway and Route Table counts and format", () => {
-    it("NAT Gateway and Route Table ID arrays have length 2 and valid format", () => {
-      const natPrimary = JSON.parse(outputs.primary_nat_gateway_ids);
-      const natSecondary = JSON.parse(outputs.secondary_nat_gateway_ids);
+    it("NAT Gateway IDs and private route table IDs arrays have length 2 and valid format", () => {
+      const natPrimary: string[] = JSON.parse(outputs.primary_nat_gateway_ids);
+      const natSecondary: string[] = JSON.parse(outputs.secondary_nat_gateway_ids);
       expect(natPrimary.length).toBe(2);
       expect(natSecondary.length).toBe(2);
-      natPrimary.forEach(id => expect(id.startsWith("nat-")).toBe(true));
-      natSecondary.forEach(id => expect(id.startsWith("nat-")).toBe(true));
+      natPrimary.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
+      natSecondary.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
 
-      const rtbPrimaryPrivate = JSON.parse(outputs.primary_private_route_table_ids);
-      const rtbSecondaryPrivate = JSON.parse(outputs.secondary_private_route_table_ids);
+      const rtbPrimaryPrivate: string[] = JSON.parse(outputs.primary_private_route_table_ids);
+      const rtbSecondaryPrivate: string[] = JSON.parse(outputs.secondary_private_route_table_ids);
       expect(rtbPrimaryPrivate.length).toBe(2);
       expect(rtbSecondaryPrivate.length).toBe(2);
-      rtbPrimaryPrivate.forEach(id => expect(id.startsWith("rtb-")).toBe(true));
-      rtbSecondaryPrivate.forEach(id => expect(id.startsWith("rtb-")).toBe(true));
+      rtbPrimaryPrivate.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
+      rtbSecondaryPrivate.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
     });
   });
 });
