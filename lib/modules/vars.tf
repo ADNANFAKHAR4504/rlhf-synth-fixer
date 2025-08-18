@@ -1,0 +1,86 @@
+######################
+# Networking
+######################
+
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+}
+
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets"
+  type        = list(string)
+}
+
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets"
+  type        = list(string)
+}
+
+variable "availability_zones" {
+  description = "List of availability zones"
+  type        = list(string)
+}
+
+######################
+# Security
+######################
+
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "vpc_id" {
+  description = "ID of the VPC"
+  type        = string
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block of the VPC"
+  type        = string
+}
+
+######################
+# Storage
+######################
+
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
+variable "vpc_id" {
+  description = "ID of the VPC"
+  type        = string
+}
+
+variable "vpc_endpoint_sg_id" {
+  description = "ID of the VPC endpoint security group"
+  type        = string
+}
+
+variable "route_table_ids" {
+  description = "IDs of the route tables for VPC endpoint"
+  type        = list(string)
+}

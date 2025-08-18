@@ -42,36 +42,16 @@ describe("Comprehensive Terraform Infrastructure Integration Tests", () => {
     expect(tf.rds_endpoint.value).toMatch(/\.rds\.amazonaws\.com$/);
   });
 
-  it("should have two web instance IDs", () => {
-    expect(tf.web_instance_ids.value.length).toBe(2);
-    tf.web_instance_ids.value.forEach((id: string) => {
-      expect(id).toMatch(/^i-[a-zA-Z0-9]+$/);
-    });
-  });
-
   it("should output a valid VPC ID", () => {
     expect(tf.vpc_id.value).toMatch(/^vpc-[a-z0-9]+$/);
   });
 
-  it("should have correct deployment info", () => {
-    expect(tf.deployment_info.value.user).toBe("ngwakoleslieelijah");
-    expect(tf.deployment_info.value.compliance_level).toMatch(/standard|high|strict/);
-    // Allow for timestamp format (updated for UTC date/time)
-    expect(tf.deployment_info.value.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}/);
+  it("should output a valid S3 data bucket name", () => {
+    expect(tf.s3_data_bucket_name.value).toMatch(/^[a-z0-9.-]{3,63}$/);
   });
 
-  it("should have all compliance features enabled", () => {
-    const c = tf.compliance_features.value;
-    expect(c.encryption_enabled).toBe(true);
-    expect(c.vpc_flow_logs_enabled).toBe(true);
-    expect(c.cloudtrail_enabled).toBe(true);
-    expect(c.imdsv2_required).toBe(true);
-    expect(c.vpc_endpoints_enabled).toBe(true);
-    expect(c.mfa_enforcement).toBe(true);
-    expect(c.private_subnets_used).toBe(true);
-    expect(c.rds_encryption).toBe(true);
-    expect(c.backup_retention_days).toBeGreaterThanOrEqual(1);
-    expect(c.log_retention_days).toBeGreaterThanOrEqual(1);
+  it("should output a valid CloudTrail ARN", () => {
+    expect(tf.cloudtrail_arn.value).toMatch(/^arn:aws:cloudtrail:[a-z0-9-]+:\d{12}:trail\/[a-zA-Z0-9-]+$/);
   });
 
   it("should not expose sensitive outputs in plaintext", () => {

@@ -1,34 +1,33 @@
 # IaC - AWS Nova Model Breaking
 
-**Author:** ngwakoleslieelijah  
-**Created:** 2025-08-14 21:08:49 UTC  
-**Tool:** Terraform (HCL)  
-**Target Region:** us-east-1
+**Author**: ngwakoleslieelijah  
+**Created**: 2025-08-14 21:08:49 UTC  
+**Infrastructure Tool**: Terraform (HCL)  
+**Target Region**: us-east-1
 
 ## Architecture Overview
 
-This Terraform configuration creates a secure, production-ready AWS infrastructure with proper resource connectivity and security isolation. The architecture follows AWS Well-Architected Framework principles with defense-in-depth security.
+This Terraform configuration establishes a secure, production-ready AWS infrastructure with proper resource connectivity and security isolation. The architecture follows AWS Well-Architected Framework principles with defense-in-depth security.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                           VPC (10.0.0.0/16)                    │
-├─────────────────────┬───────────────────────┬───────────────────┤
-│   Public Subnet     │   Public Subnet       │   Private Subnet  │
-│   10.0.1.0/24       │   10.0.2.0/24         │   10.0.10.0/24    │
-│   (us-east-1a)      │   (us-east-1b)        │   (us-east-1a)    │
-│                     │                       │                   │
-│   ┌─────────────┐   │   ┌─────────────┐     │   ┌─────────────┐ │
-│   │     ALB     │   │   │ NAT Gateway │     │   │    EC2      │ │
-│   └─────────────┘   │   └─────────────┘     │   └─────────────┘ │
-└─────────────────────┼───────────────────────┼───────────────────┤
-                      │                       │   Private Subnet  │
-                      │                       │   10.0.20.0/24    │
-                      │                       │   (us-east-1b)    │
-                      │                       │                   │
-                      │                       │   ┌─────────────┐ │
-                      │                       │   │     RDS     │ │
-                      │                       │   └─────────────┘ │
-                      └───────────────────────┴───────────────────┘
+├─────────────────────────────────────────────────────────────────┤
+│  Public Subnets          │           Private Subnets            │
+│  ┌─────────────────┐     │     ┌─────────────────────────────┐   │
+│  │      ALB        │     │     │        EC2 Instances        │   │
+│  │   (us-east-1a)  │     │     │       (us-east-1a/1b)      │   │
+│  │   10.0.1.0/24   │────────▶ │       10.0.10.0/24         │   │
+│  └─────────────────┘     │     │       10.0.20.0/24         │   │
+│  ┌─────────────────┐     │     └─────────────────────────────┘   │
+│  │   NAT Gateway   │     │     ┌─────────────────────────────┐   │
+│  │   (us-east-1b)  │     │     │         RDS MySQL           │   │
+│  │   10.0.2.0/24   │     │     │       (us-east-1a/1b)      │   │
+│  └─────────────────┘     │     │     Private Subnets         │   │
+│                           │     └─────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                    VPC Endpoints & S3 Buckets                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Project Structure
@@ -71,7 +70,7 @@ This Terraform configuration creates a secure, production-ready AWS infrastructu
         └── outputs.tf
 ```
 
-## Root Configuration Files
+## Root Configuration
 
 ### main.tf
 
@@ -94,8 +93,8 @@ provider "aws" {
       Project     = var.project_name
       Author      = var.author
       Environment = var.environment
-      CreatedDate = var.created_date
-      ManagedBy   = "Terraform"
+      CreatedBy   = "Terraform"
+      CreatedAt   = var.created_date
     }
   }
 }
@@ -107,38 +106,12 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
-# KMS Key for encryption
-resource "aws_kms_key" "main" {
-  description             = "KMS key for ${var.project_name}"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_kms_alias" "main" {
-  name          = "alias/${var.project_name}-key"
-  target_key_id = aws_kms_key.main.key_id
-}
-
 # Networking Module
 module "networking" {
   source = "./modules/networking"
 
-  project_name        = var.project_name
+  project_name         = var.project_name
+  environment         = var.environment
   vpc_cidr           = var.vpc_cidr
   public_subnet_cidrs = var.public_subnet_cidrs
   private_subnet_cidrs = var.private_subnet_cidrs
@@ -150,8 +123,9 @@ module "security" {
   source = "./modules/security"
 
   project_name = var.project_name
-  vpc_id       = module.networking.vpc_id
-  vpc_cidr     = var.vpc_cidr
+  environment  = var.environment
+  vpc_id      = module.networking.vpc_id
+  vpc_cidr    = var.vpc_cidr
 }
 
 # IAM Module
@@ -159,46 +133,46 @@ module "iam" {
   source = "./modules/iam"
 
   project_name = var.project_name
-  kms_key_arn  = aws_kms_key.main.arn
+  environment  = var.environment
+  s3_data_bucket_arn = module.storage.s3_data_bucket_arn
+  s3_logs_bucket_arn = module.storage.s3_logs_bucket_arn
 }
 
 # Storage Module
 module "storage" {
   source = "./modules/storage"
 
-  project_name           = var.project_name
-  vpc_id                = module.networking.vpc_id
-  route_table_ids       = module.networking.private_route_table_ids
-  kms_key_arn           = aws_kms_key.main.arn
-  vpc_endpoint_sg_id    = module.security.vpc_endpoint_sg_id
-  ec2_instance_role_arn = module.iam.ec2_instance_role_arn
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_id      = module.networking.vpc_id
+  vpc_endpoint_sg_id = module.security.vpc_endpoint_sg_id
+  route_table_ids = module.networking.private_route_table_ids
 }
 
 # Database Module
 module "database" {
   source = "./modules/database"
 
-  project_name           = var.project_name
-  vpc_id                = module.networking.vpc_id
-  private_subnet_ids    = module.networking.private_subnet_ids
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_id      = module.networking.vpc_id
+  private_subnet_ids = module.networking.private_subnet_ids
   rds_security_group_id = module.security.rds_sg_id
-  kms_key_arn           = aws_kms_key.main.arn
-  db_username           = var.db_username
-  db_password           = var.db_password
+  kms_key_id = module.storage.kms_key_id
 }
 
 # Compute Module
 module "compute" {
   source = "./modules/compute"
 
-  project_name           = var.project_name
-  vpc_id                = module.networking.vpc_id
-  public_subnet_ids     = module.networking.public_subnet_ids
-  private_subnet_ids    = module.networking.private_subnet_ids
-  alb_security_group_id = module.security.alb_sg_id
+  project_name = var.project_name
+  environment  = var.environment
+  vpc_id      = module.networking.vpc_id
+  public_subnet_ids = module.networking.public_subnet_ids
+  private_subnet_ids = module.networking.private_subnet_ids
   ec2_security_group_id = module.security.ec2_sg_id
+  alb_security_group_id = module.security.alb_sg_id
   instance_profile_name = module.iam.ec2_instance_profile_name
-  kms_key_arn           = aws_kms_key.main.arn
 }
 
 # Monitoring Module
@@ -206,24 +180,19 @@ module "monitoring" {
   source = "./modules/monitoring"
 
   project_name = var.project_name
-  vpc_id       = module.networking.vpc_id
-  kms_key_arn  = aws_kms_key.main.arn
+  environment  = var.environment
+  vpc_id      = module.networking.vpc_id
+  s3_logs_bucket_name = module.storage.s3_logs_bucket_name
 }
 ```
 
 ### variables.tf
 
 ```hcl
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-east-1"
-}
-
 variable "project_name" {
   description = "Name of the project"
   type        = string
-  default     = "iac-aws-nova-model-breaking"
+  default     = "IaC-AWS-Nova-Model-Breaking"
 }
 
 variable "author" {
@@ -232,16 +201,27 @@ variable "author" {
   default     = "ngwakoleslieelijah"
 }
 
+variable "created_date" {
+  description = "Creation date of the project"
+  type        = string
+  default     = "2025-08-14T21:08:49Z"
+}
+
 variable "environment" {
   description = "Environment name"
   type        = string
   default     = "production"
 }
 
-variable "created_date" {
-  description = "Creation date"
+variable "aws_region" {
+  description = "AWS region"
   type        = string
-  default     = "2025-08-14T21:08:49Z"
+  default     = "us-east-1"
+
+  validation {
+    condition     = var.aws_region == "us-east-1"
+    error_message = "Region must be us-east-1 as strictly enforced."
+  }
 }
 
 variable "vpc_cidr" {
@@ -261,19 +241,6 @@ variable "private_subnet_cidrs" {
   type        = list(string)
   default     = ["10.0.10.0/24", "10.0.20.0/24"]
 }
-
-variable "db_username" {
-  description = "Database master username"
-  type        = string
-  default     = "admin"
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Database master password"
-  type        = string
-  sensitive   = true
-}
 ```
 
 ### outputs.tf
@@ -282,21 +249,6 @@ variable "db_password" {
 output "vpc_id" {
   description = "ID of the VPC"
   value       = module.networking.vpc_id
-}
-
-output "vpc_cidr" {
-  description = "CIDR block of the VPC"
-  value       = module.networking.vpc_cidr
-}
-
-output "public_subnet_ids" {
-  description = "IDs of the public subnets"
-  value       = module.networking.public_subnet_ids
-}
-
-output "private_subnet_ids" {
-  description = "IDs of the private subnets"
-  value       = module.networking.private_subnet_ids
 }
 
 output "alb_dns_name" {
@@ -315,16 +267,6 @@ output "s3_data_bucket_name" {
   value       = module.storage.s3_data_bucket_name
 }
 
-output "s3_logs_bucket_name" {
-  description = "Name of the S3 logs bucket"
-  value       = module.storage.s3_logs_bucket_name
-}
-
-output "kms_key_id" {
-  description = "ID of the KMS key"
-  value       = aws_kms_key.main.key_id
-}
-
 output "cloudtrail_arn" {
   description = "ARN of the CloudTrail"
   value       = module.monitoring.cloudtrail_arn
@@ -334,21 +276,18 @@ output "cloudtrail_arn" {
 ### terraform.tfvars
 
 ```hcl
-aws_region   = "us-east-1"
-project_name = "iac-aws-nova-model-breaking"
+project_name = "IaC-AWS-Nova-Model-Breaking"
 author       = "ngwakoleslieelijah"
-environment  = "production"
 created_date = "2025-08-14T21:08:49Z"
+environment  = "production"
+aws_region   = "us-east-1"
 
 vpc_cidr             = "10.0.0.0/16"
 public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
 private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
-
-db_username = "admin"
-# db_password should be set via environment variable or AWS Secrets Manager
 ```
 
-## Module Configurations
+## Module Implementations
 
 ### modules/networking/main.tf
 
@@ -425,7 +364,7 @@ resource "aws_nat_gateway" "main" {
   }
 }
 
-# Public Route Table
+# Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -439,8 +378,10 @@ resource "aws_route_table" "public" {
   }
 }
 
-# Private Route Table
+# Route Table for Private Subnets
 resource "aws_route_table" "private" {
+  count = length(var.private_subnet_cidrs)
+
   vpc_id = aws_vpc.main.id
 
   route {
@@ -449,11 +390,11 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "${var.project_name}-private-rt"
+    Name = "${var.project_name}-private-rt-${count.index + 1}"
   }
 }
 
-# Public Route Table Associations
+# Route Table Associations - Public
 resource "aws_route_table_association" "public" {
   count = length(aws_subnet.public)
 
@@ -461,12 +402,12 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Private Route Table Associations
+# Route Table Associations - Private
 resource "aws_route_table_association" "private" {
   count = length(aws_subnet.private)
 
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.private[count.index].id
 }
 ```
 
@@ -475,6 +416,11 @@ resource "aws_route_table_association" "private" {
 ```hcl
 variable "project_name" {
   description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
   type        = string
 }
 
@@ -522,6 +468,11 @@ output "private_subnet_ids" {
   value       = aws_subnet.private[*].id
 }
 
+output "private_route_table_ids" {
+  description = "IDs of the private route tables"
+  value       = aws_route_table.private[*].id
+}
+
 output "internet_gateway_id" {
   description = "ID of the Internet Gateway"
   value       = aws_internet_gateway.main.id
@@ -531,38 +482,87 @@ output "nat_gateway_id" {
   description = "ID of the NAT Gateway"
   value       = aws_nat_gateway.main.id
 }
-
-output "private_route_table_ids" {
-  description = "IDs of the private route tables"
-  value       = [aws_route_table.private.id]
-}
 ```
 
 ### modules/security/main.tf
 
 ```hcl
+# EC2 Security Group
+resource "aws_security_group" "ec2" {
+  name_prefix = "${var.project_name}-ec2-"
+  vpc_id      = var.vpc_id
+  description = "Security group for EC2 instances"
+
+  # HTTP from ALB
+  ingress {
+    description     = "HTTP from ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  # HTTPS from ALB
+  ingress {
+    description     = "HTTPS from ALB"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  # SSH ONLY from VPC CIDR - NEVER from 0.0.0.0/0
+  ingress {
+    description = "SSH from VPC"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  # All outbound traffic
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-ec2-sg"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ALB Security Group
 resource "aws_security_group" "alb" {
   name_prefix = "${var.project_name}-alb-"
   vpc_id      = var.vpc_id
   description = "Security group for Application Load Balancer"
 
+  # HTTP from internet
   ingress {
-    description = "HTTP from Internet"
+    description = "HTTP from internet"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # HTTPS from internet
   ingress {
-    description = "HTTPS from Internet"
+    description = "HTTPS from internet"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Outbound to EC2 security group only
   egress {
     description     = "HTTP to EC2"
     from_port       = 80
@@ -588,59 +588,13 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# EC2 Security Group
-resource "aws_security_group" "ec2" {
-  name_prefix = "${var.project_name}-ec2-"
-  vpc_id      = var.vpc_id
-  description = "Security group for EC2 instances"
-
-  ingress {
-    description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  ingress {
-    description     = "HTTPS from ALB"
-    from_port       = 443
-    to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  ingress {
-    description = "SSH from VPC only - NEVER from 0.0.0.0/0"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
-  }
-
-  egress {
-    description = "All outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-ec2-sg"
-  }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
 # RDS Security Group
 resource "aws_security_group" "rds" {
   name_prefix = "${var.project_name}-rds-"
   vpc_id      = var.vpc_id
-  description = "Security group for RDS database"
+  description = "Security group for RDS instances"
 
+  # MySQL/PostgreSQL from EC2 security group ONLY
   ingress {
     description     = "MySQL from EC2"
     from_port       = 3306
@@ -657,8 +611,9 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.ec2.id]
   }
 
+  # No outbound rules needed for RDS
   egress {
-    description = "No outbound traffic required"
+    description = "No outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -680,6 +635,7 @@ resource "aws_security_group" "vpc_endpoint" {
   vpc_id      = var.vpc_id
   description = "Security group for VPC endpoints"
 
+  # HTTPS from VPC CIDR
   ingress {
     description = "HTTPS from VPC"
     from_port   = 443
@@ -688,12 +644,13 @@ resource "aws_security_group" "vpc_endpoint" {
     cidr_blocks = [var.vpc_cidr]
   }
 
+  # No outbound rules needed
   egress {
-    description = "All outbound traffic"
+    description = "No outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = []
   }
 
   tags = {
@@ -714,6 +671,11 @@ variable "project_name" {
   type        = string
 }
 
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
+
 variable "vpc_id" {
   description = "ID of the VPC"
   type        = string
@@ -728,14 +690,14 @@ variable "vpc_cidr" {
 ### modules/security/outputs.tf
 
 ```hcl
-output "alb_sg_id" {
-  description = "ID of the ALB security group"
-  value       = aws_security_group.alb.id
-}
-
 output "ec2_sg_id" {
   description = "ID of the EC2 security group"
   value       = aws_security_group.ec2.id
+}
+
+output "alb_sg_id" {
+  description = "ID of the ALB security group"
+  value       = aws_security_group.alb.id
 }
 
 output "rds_sg_id" {
@@ -749,178 +711,215 @@ output "vpc_endpoint_sg_id" {
 }
 ```
 
-### modules/compute/main.tf
+### modules/storage/main.tf
 
 ```hcl
-# Data sources
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
-# Launch Template
-resource "aws_launch_template" "main" {
-  name_prefix   = "${var.project_name}-"
-  image_id      = data.aws_ami.amazon_linux.id
-  instance_type = "t3.micro"
-
-  vpc_security_group_ids = [var.ec2_security_group_id]
-
-  iam_instance_profile {
-    name = var.instance_profile_name
-  }
-
-  block_device_mappings {
-    device_name = "/dev/xvda"
-    ebs {
-      volume_size           = 20
-      volume_type          = "gp3"
-      encrypted            = true
-      kms_key_id          = var.kms_key_arn
-      delete_on_termination = true
-    }
-  }
-
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    project_name = var.project_name
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "${var.project_name}-instance"
-    }
-  }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Application Load Balancer
-resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [var.alb_security_group_id]
-  subnets           = var.public_subnet_ids
-
-  enable_deletion_protection = false
+# KMS Key for encryption
+resource "aws_kms_key" "main" {
+  description             = "KMS key for ${var.project_name} encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
 
   tags = {
-    Name = "${var.project_name}-alb"
+    Name = "${var.project_name}-kms-key"
   }
 }
 
-# Target Group
-resource "aws_lb_target_group" "main" {
-  name     = "${var.project_name}-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = var.vpc_id
+resource "aws_kms_alias" "main" {
+  name          = "alias/${var.project_name}-key"
+  target_key_id = aws_kms_key.main.key_id
+}
 
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
+# S3 Data Bucket
+resource "aws_s3_bucket" "data" {
+  bucket = "${lower(var.project_name)}-data-${random_string.bucket_suffix.result}"
 
   tags = {
-    Name = "${var.project_name}-tg"
+    Name = "${var.project_name}-data-bucket"
+    Type = "Data"
   }
 }
 
-# ALB Listener
-resource "aws_lb_listener" "main" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
+# S3 Logs Bucket
+resource "aws_s3_bucket" "logs" {
+  bucket = "${lower(var.project_name)}-logs-${random_string.bucket_suffix.result}"
 
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
+  tags = {
+    Name = "${var.project_name}-logs-bucket"
+    Type = "Logs"
   }
 }
 
-# Auto Scaling Group
-resource "aws_autoscaling_group" "main" {
-  name                = "${var.project_name}-asg"
-  vpc_zone_identifier = var.private_subnet_ids
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
-  health_check_grace_period = 300
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
 
-  min_size         = 1
-  max_size         = 3
-  desired_capacity = 2
-
-  launch_template {
-    id      = aws_launch_template.main.id
-    version = "$Latest"
+# S3 Bucket Versioning - Data
+resource "aws_s3_bucket_versioning" "data" {
+  bucket = aws_s3_bucket.data.id
+  versioning_configuration {
+    status = "Enabled"
   }
+}
 
-  tag {
-    key                 = "Name"
-    value               = "${var.project_name}-asg-instance"
-    propagate_at_launch = true
+# S3 Bucket Versioning - Logs
+resource "aws_s3_bucket_versioning" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  versioning_configuration {
+    status = "Enabled"
   }
+}
 
-  lifecycle {
-    create_before_destroy = true
+# S3 Bucket Encryption - Data
+resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
   }
+}
+
+# S3 Bucket Encryption - Logs
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Block all public access - Data
+resource "aws_s3_bucket_public_access_block" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Block all public access - Logs
+resource "aws_s3_bucket_public_access_block" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# VPC S3 Endpoint
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = var.vpc_id
+  service_name      = "com.amazonaws.us-east-1.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = var.route_table_ids
+
+  tags = {
+    Name = "${var.project_name}-s3-endpoint"
+  }
+}
+
+# S3 Bucket Policy - Data (VPC Endpoint Only)
+resource "aws_s3_bucket_policy" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyDirectInternetAccess"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.data.arn,
+          "${aws_s3_bucket.data.arn}/*"
+        ]
+        Condition = {
+          StringNotEquals = {
+            "aws:sourceVpce" = aws_vpc_endpoint.s3.id
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.data]
+}
+
+# S3 Bucket Policy - Logs (VPC Endpoint Only)
+resource "aws_s3_bucket_policy" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyDirectInternetAccess"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.logs.arn,
+          "${aws_s3_bucket.logs.arn}/*"
+        ]
+        Condition = {
+          StringNotEquals = {
+            "aws:sourceVpce" = aws_vpc_endpoint.s3.id
+          }
+        }
+      },
+      {
+        Sid       = "AllowCloudTrailLogs"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/cloudtrail/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid       = "AllowCloudTrailAclCheck"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.logs]
 }
 ```
 
-### modules/compute/user_data.sh
-
-```bash
-#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-
-# Create a simple index page
-cat > /var/www/html/index.html << EOF
-<!DOCTYPE html>
-<html>
-<head>
-    <title>${project_name}</title>
-</head>
-<body>
-    <h1>Welcome to ${project_name}</h1>
-    <p>This is a secure AWS infrastructure deployment.</p>
-    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-    <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
-</body>
-</html>
-EOF
-
-# Install CloudWatch agent
-yum install -y amazon-cloudwatch-agent
-```
-
-### modules/compute/variables.tf
+### modules/storage/variables.tf
 
 ```hcl
 variable "project_name" {
   description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
   type        = string
 }
 
@@ -929,123 +928,98 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "public_subnet_ids" {
-  description = "IDs of the public subnets"
+variable "vpc_endpoint_sg_id" {
+  description = "ID of the VPC endpoint security group"
+  type        = string
+}
+
+variable "route_table_ids" {
+  description = "IDs of the route tables for VPC endpoint"
   type        = list(string)
 }
+```
 
-variable "private_subnet_ids" {
-  description = "IDs of the private subnets"
-  type        = list(string)
+### modules/storage/outputs.tf
+
+```hcl
+output "s3_data_bucket_name" {
+  description = "Name of the S3 data bucket"
+  value       = aws_s3_bucket.data.bucket
 }
 
-variable "alb_security_group_id" {
-  description = "ID of the ALB security group"
-  type        = string
+output "s3_data_bucket_arn" {
+  description = "ARN of the S3 data bucket"
+  value       = aws_s3_bucket.data.arn
 }
 
-variable "ec2_security_group_id" {
-  description = "ID of the EC2 security group"
-  type        = string
+output "s3_logs_bucket_name" {
+  description = "Name of the S3 logs bucket"
+  value       = aws_s3_bucket.logs.bucket
 }
 
-variable "instance_profile_name" {
-  description = "Name of the IAM instance profile"
-  type        = string
+output "s3_logs_bucket_arn" {
+  description = "ARN of the S3 logs bucket"
+  value       = aws_s3_bucket.logs.arn
 }
 
-variable "kms_key_arn" {
+output "kms_key_id" {
+  description = "ID of the KMS key"
+  value       = aws_kms_key.main.key_id
+}
+
+output "kms_key_arn" {
   description = "ARN of the KMS key"
-  type        = string
+  value       = aws_kms_key.main.arn
+}
+
+output "vpc_endpoint_s3_id" {
+  description = "ID of the S3 VPC endpoint"
+  value       = aws_vpc_endpoint.s3.id
 }
 ```
 
-### modules/compute/outputs.tf
+### modules/iam/main.tf
 
 ```hcl
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.main.dns_name
-}
-
-output "alb_arn" {
-  description = "ARN of the Application Load Balancer"
-  value       = aws_lb.main.arn
-}
-
-output "target_group_arn" {
-  description = "ARN of the target group"
-  value       = aws_lb_target_group.main.arn
-}
-
-output "autoscaling_group_name" {
-  description = "Name of the Auto Scaling Group"
-  value       = aws_autoscaling_group.main.name
-}
-```
-
-### modules/database/main.tf
-
-```hcl
-# DB Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = var.private_subnet_ids
+# IAM User with MFA requirement
+resource "aws_iam_user" "app_user" {
+  name = "${var.project_name}-app-user"
+  path = "/"
 
   tags = {
-    Name = "${var.project_name}-db-subnet-group"
+    Name = "${var.project_name}-app-user"
   }
 }
 
-# RDS Instance
-resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}-database"
+# MFA Policy for IAM User
+resource "aws_iam_policy" "mfa_policy" {
+  name        = "${var.project_name}-mfa-policy"
+  description = "Policy to enforce MFA for all operations"
 
-  allocated_storage     = 20
-  max_allocated_storage = 100
-  storage_type          = "gp3"
-  storage_encrypted     = true
-  kms_key_id           = var.kms_key_arn
-
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = "db.t3.micro"
-
-  db_name  = "appdb"
-  username = var.db_username
-  password = var.db_password
-
-  vpc_security_group_ids = [var.rds_security_group_id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-
-  skip_final_snapshot = true
-  deletion_protection = false
-
-  performance_insights_enabled = true
-  monitoring_interval         = 60
-  monitoring_role_arn        = aws_iam_role.rds_monitoring.arn
-
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow-query"]
-
-  tags = {
-    Name = "${var.project_name}-database"
-  }
-}
-
-# IAM Role for RDS Enhanced Monitoring
-resource "aws_iam_role" "rds_monitoring" {
-  name = "${var.project_name}-rds-monitoring-role"
-
-  assume_role_policy = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
+        Sid    = "AllowViewAccountInfo"
         Effect = "Allow"
-        Principal = {
-          Service = "monitoring.rds.amazonaws.com"
+        Action = [
+          "iam:GetAccountPasswordPolicy",
+          "iam:GetAccountSummary",
+          "iam:ListVirtualMFADevices"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowManageOwnPasswords"
+        Effect = "Allow"
+        Action = [
+          "iam:ChangePassword",
+          "iam:GetUser"
+        ]
+        Resource = "arn:aws:iam::*:user/$${aws:username}"
+      },
+      {
+        Sid    = "AllowManageOwnMFA"
+        Effect = "Allow"
+        Action
 ```
