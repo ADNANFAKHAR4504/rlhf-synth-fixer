@@ -1,37 +1,25 @@
-I’m writing down what I actually need built, in plain English, so there’s no confusion about scope.
+Alright, so here's what I'm looking for. Need a single terraform file that sets up our basic AWS infrastructure without any of the usual headaches.
 
-What I want
+Just put everything in lib/tap_stack.tf since we already have the provider stuff sorted out in provider.tf. Don't want to duplicate that. And I really need this to work with just "terraform plan" without having to answer a bunch of prompts every time, so please add reasonable defaults for everything.
 
-- One Terraform file at lib/tap_stack.tf, nothing else. Provider setup already exists in provider.tf, so don’t repeat it.
-- It should be easy to run “terraform plan” without prompts. Add sensible defaults and safe toggles for anything that’s likely to hit limits (CloudTrail, AWS Config, etc.).
-- Keep it secure by default: TLS-only S3 access, server-side encryption, versioning, sane security groups, and least‑privilege IAM.
+Security is important here - make sure S3 buckets are locked down with TLS enforcement, turn on encryption everywhere, use proper security groups, and keep IAM permissions as tight as possible.
 
-Region & inputs
+For the region, we're using an aws_region variable already, so just wire everything to that and default it to us-west-2. I don't want to have to specify a million variables just to run a plan, so if you can auto-discover things like VPC info or provide sane defaults, do that. The only tricky bit is bucket names need to be unique globally, so just use some obvious placeholder pattern.
 
-- We already use an aws_region variable; declare it and wire everything to it. Default to us‑west‑2.
-- I don’t want to pass a dozen variables just to plan. If something can be discovered (like default VPC/subnet) or safely defaulted, do that. Buckets still need unique names, but provide obvious placeholders.
+Here's what needs to be in there:
 
-What to include (practical checklist)
+Two S3 buckets - one for logs, one for data. Both need versioning enabled, public access blocked completely, and TLS-only policies. The data bucket should use SSE with KMS (the default aws/s3 key is fine unless someone provides a custom one). Route the bucket access logs from the data bucket to the logs bucket.
 
-- S3: a logs bucket and a data bucket. Turn on versioning, block public access, enforce TLS in policies. Data bucket should have SSE (KMS is fine using alias/aws/s3 unless a key is provided). Send bucket access logs to the logs bucket.
-- IAM: a role that lets an EC2 instance read/write S3 objects that are tagged the right way, and an IAM user we can use for deployments. Keep policies tight. Add an account‑level MFA requirement policy and attach it via a group the user belongs to.
-- EC2 (behind a toggle): security group that only allows 22 and 443 from a provided CIDR. The instance (if enabled) must enforce IMDSv2 and have encrypted root volume.
-- CloudTrail (behind a toggle): create a regional trail that writes to its own bucket, with the usual delivery policy. Since accounts often hit trail limits, give me an option to reuse an existing trail/bucket instead of creating one.
-- AWS Config (behind a toggle): a recorder, delivery channel to the logs bucket, and a few core managed rules. Make it easy to switch off completely if the account already has a recorder.
-- GuardDuty (behind a toggle): just the detector.
+IAM wise, need a role that EC2 instances can use to read/write S3 objects based on tags, plus an IAM user for deployments. Keep the policies minimal. Also add one of those account-level MFA policies and attach it through a group that the user belongs to.
 
-Outputs we rely on in tests/CI
+For EC2, put it behind a toggle since we don't always need it. When enabled, create a security group that only allows SSH and HTTPS from whatever CIDR gets specified. The actual instance needs IMDSv2 enforced and an encrypted root volume.
 
-- data_bucket_name
-- trail_bucket_name (can be empty if CloudTrail disabled/reused)
-- cloudtrail_arn (same note as above)
-- ec2_instance_id (can be empty if EC2 is off)
-- security_group_id (same)
-- iam_role_name
-- iam_user_name
+CloudTrail should also be toggleable since some accounts already have too many trails. When enabled, create a regional trail with its own bucket and the standard delivery policy. Would be nice to have an option to reuse existing trail/bucket instead of always creating new ones.
 
-General notes
+Same deal with AWS Config - toggleable recorder and delivery channel that writes to the logs bucket, plus a few of the standard managed rules. Make it easy to turn off completely if there's already a recorder in the account.
 
-- Don’t introduce any provider blocks into tap_stack.tf.
-- Use small, readable blocks and comments where it’s not obvious why we’re doing something.
-- Err on the side of not breaking shared accounts: ship with CloudTrail and AWS Config disabled by default, but make it trivial to enable with TF_VARs.
+GuardDuty is simple, just the detector, also behind a toggle.
+
+The outputs our tests need are data_bucket_name, trail_bucket_name, cloudtrail_arn, ec2_instance_id, security_group_id, iam_role_name, and iam_user_name. Some of these can be empty strings if the corresponding resources are disabled.
+
+Couple other things - don't add any provider blocks to tap_stack.tf, keep the code readable with comments where things might not be obvious, and default to having CloudTrail and Config disabled so we don't break shared accounts. But make it trivial to turn them on with terraform variables.
