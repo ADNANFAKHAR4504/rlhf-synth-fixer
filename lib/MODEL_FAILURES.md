@@ -1,4 +1,4 @@
-## Model Failures: Terraform HCL IaC Prompt
+## Model Failures:
 
 1. **Resource Naming Pattern Not Enforced**
 	- The model sometimes generates resource names that do not strictly follow the required `projectname-resource` pattern, or omits the use of the `projectname` variable in all resource names.
