@@ -6,7 +6,7 @@ Unit tests for TapStack with comprehensive mocking for >50% code coverage.
 
 import sys
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 # Mock Pulumi modules before importing
 sys.modules['pulumi'] = MagicMock()

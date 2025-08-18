@@ -5,17 +5,18 @@ This module defines the TapStack class, the main Pulumi ComponentResource for
 the CI/CD pipeline implementing a complete microservices platform on AWS.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 import json
 import pulumi
-from pulumi import ResourceOptions, Output
+from pulumi import ResourceOptions
 import pulumi_aws as aws
 
 
 class TapStackArgs:
   """Configuration arguments for the TapStack component."""
 
-  def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[Dict[str, str]] = None):
+  def __init__(self, environment_suffix: Optional[str] = None,
+               tags: Optional[Dict[str, str]] = None):
     self.environment_suffix = environment_suffix or 'dev'
     self.tags = tags or {}
 
@@ -116,7 +117,10 @@ class TapStack(pulumi.ComponentResource):
         cidr_block=f"10.0.{i+1}.0/24",
         availability_zone=azs.names[i],
         map_public_ip_on_launch=True,
-        tags={**self.common_tags, "Name": f"microservices-public-subnet-{i}-{self.environment_suffix}"},
+        tags={
+          **self.common_tags,
+          "Name": f"microservices-public-subnet-{i}-{self.environment_suffix}"
+        },
         opts=ResourceOptions(parent=self)
       )
       self.public_subnets.append(subnet)
@@ -129,7 +133,10 @@ class TapStack(pulumi.ComponentResource):
         vpc_id=self.vpc.id,
         cidr_block=f"10.0.{i+10}.0/24",
         availability_zone=azs.names[i],
-        tags={**self.common_tags, "Name": f"microservices-private-subnet-{i}-{self.environment_suffix}"},
+        tags={
+          **self.common_tags,
+          "Name": f"microservices-private-subnet-{i}-{self.environment_suffix}"
+        },
         opts=ResourceOptions(parent=self)
       )
       self.private_subnets.append(subnet)
@@ -148,7 +155,10 @@ class TapStack(pulumi.ComponentResource):
         f"microservices-nat-gateway-{i}-{self.environment_suffix}",
         allocation_id=eip.id,
         subnet_id=public_subnet.id,
-        tags={**self.common_tags, "Name": f"microservices-nat-gateway-{i}-{self.environment_suffix}"},
+        tags={
+          **self.common_tags,
+          "Name": f"microservices-nat-gateway-{i}-{self.environment_suffix}"
+        },
         opts=ResourceOptions(parent=self)
       )
       self.nat_gateways.append(nat_gw)
@@ -189,7 +199,10 @@ class TapStack(pulumi.ComponentResource):
       private_rt = aws.ec2.RouteTable(
         f"microservices-private-rt-{i}-{self.environment_suffix}",
         vpc_id=self.vpc.id,
-        tags={**self.common_tags, "Name": f"microservices-private-rt-{i}-{self.environment_suffix}"},
+        tags={
+          **self.common_tags,
+          "Name": f"microservices-private-rt-{i}-{self.environment_suffix}"
+        },
         opts=ResourceOptions(parent=self)
       )
 
@@ -396,7 +409,10 @@ class TapStack(pulumi.ComponentResource):
       f"microservices-redis-subnet-group-{self.environment_suffix}",
       name=f"microservices-redis-subnet-group-{self.environment_suffix}",
       subnet_ids=[subnet.id for subnet in self.private_subnets],
-      tags={**self.common_tags, "Name": f"microservices-redis-subnet-group-{self.environment_suffix}"},
+      tags={
+        **self.common_tags,
+        "Name": f"microservices-redis-subnet-group-{self.environment_suffix}"
+      },
       opts=ResourceOptions(parent=self)
     )
 
@@ -593,13 +609,17 @@ class TapStack(pulumi.ComponentResource):
       resource_id=self.scaling_target.resource_id,
       scalable_dimension=self.scaling_target.scalable_dimension,
       service_namespace=self.scaling_target.service_namespace,
-      target_tracking_scaling_policy_configuration=aws.appautoscaling.PolicyTargetTrackingScalingPolicyConfigurationArgs(
+      target_tracking_scaling_policy_configuration=(
+        aws.appautoscaling.PolicyTargetTrackingScalingPolicyConfigurationArgs(
         target_value=70.0,
-        predefined_metric_specification=aws.appautoscaling.PolicyTargetTrackingScalingPolicyConfigurationPredefinedMetricSpecificationArgs(
-          predefined_metric_type="ECSServiceAverageCPUUtilization"
+        predefined_metric_specification=(
+          aws.appautoscaling.PolicyTargetTrackingScalingPolicyConfigurationPredefinedMetricSpecificationArgs(
+            predefined_metric_type="ECSServiceAverageCPUUtilization"
+          )
         ),
         scale_out_cooldown=300,
         scale_in_cooldown=300
+        )
       ),
       opts=ResourceOptions(parent=self)
     )
@@ -612,13 +632,17 @@ class TapStack(pulumi.ComponentResource):
       resource_id=self.scaling_target.resource_id,
       scalable_dimension=self.scaling_target.scalable_dimension,
       service_namespace=self.scaling_target.service_namespace,
-      target_tracking_scaling_policy_configuration=aws.appautoscaling.PolicyTargetTrackingScalingPolicyConfigurationArgs(
+      target_tracking_scaling_policy_configuration=(
+        aws.appautoscaling.PolicyTargetTrackingScalingPolicyConfigurationArgs(
         target_value=80.0,
-        predefined_metric_specification=aws.appautoscaling.PolicyTargetTrackingScalingPolicyConfigurationPredefinedMetricSpecificationArgs(
-          predefined_metric_type="ECSServiceAverageMemoryUtilization"
+        predefined_metric_specification=(
+          aws.appautoscaling.PolicyTargetTrackingScalingPolicyConfigurationPredefinedMetricSpecificationArgs(
+            predefined_metric_type="ECSServiceAverageMemoryUtilization"
+          )
         ),
         scale_out_cooldown=300,
         scale_in_cooldown=300
+        )
       ),
       opts=ResourceOptions(parent=self)
     )
@@ -683,8 +707,10 @@ class TapStack(pulumi.ComponentResource):
       versioning=aws.s3.BucketVersioningArgs(enabled=True),
       server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
         rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-          apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-            sse_algorithm="AES256"
+          apply_server_side_encryption_by_default=(
+            aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+              sse_algorithm="AES256"
+            )
           )
         )
       ),
@@ -817,8 +843,10 @@ class TapStack(pulumi.ComponentResource):
       versioning=aws.s3.BucketVersioningArgs(enabled=True),
       server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
         rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-          apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-            sse_algorithm="AES256"
+          apply_server_side_encryption_by_default=(
+            aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+              sse_algorithm="AES256"
+            )
           )
         )
       ),
