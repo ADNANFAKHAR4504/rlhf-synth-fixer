@@ -1435,6 +1435,39 @@
                     "Fn::Sub": "${AWS::StackName}-KeyPair-Name"
                 }
             }
+        },
+        "StackName": {
+            "Description": "CloudFormation Stack Name",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Name"
+                }
+            }
+        },
+        "Environment": {
+            "Description": "Deployment environment",
+            "Value": {
+                "Ref": "Environment"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Environment"
+                }
+            }
+        },
+        "DataBucketName": {
+            "Description": "Primary S3 Bucket Name used by the application",
+            "Value": {
+                "Ref": "S3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Data-Bucket"
+                }
+            }
         }
     }
 }

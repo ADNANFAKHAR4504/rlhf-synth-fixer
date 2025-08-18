@@ -817,3 +817,22 @@ Outputs:
     Value: !If [CreateKeyPair, !Ref KeyPair, !Ref 'AWS::NoValue']
     Export:
       Name: !Sub '${AWS::StackName}-KeyPair-Name'
+ 
+  StackName:
+    Description: 'CloudFormation Stack Name'
+    Value: !Ref 'AWS::StackName'
+    Export:
+      Name: !Sub '${AWS::StackName}-Name'
+
+  Environment:
+    Description: 'Deployment environment'
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment'
+
+  # Alias for integration tests
+  DataBucketName:
+    Description: 'Primary S3 Bucket Name used by the application'
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-Data-Bucket'
