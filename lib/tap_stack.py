@@ -72,7 +72,7 @@ from pulumi import Config, Output, export
 config = Config()
 
 # Region (default to us-east-1, but allow overriding via Pulumi config or env)
-aws_region = (
+AWS_REGION = (
     config.get("aws:region")
     or os.getenv("AWS_REGION")
     or os.getenv("AWS_DEFAULT_REGION")
