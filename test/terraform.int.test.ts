@@ -10,14 +10,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // AWS SDK clients
-const stsClient = new STSClient({ region: 'us-west-1' });
-const ec2Client = new EC2Client({ region: 'us-west-1' });
-const s3Client = new S3Client({ region: 'us-west-1' });
-const kmsClient = new KMSClient({ region: 'us-west-1' });
-const cloudTrailClient = new CloudTrailClient({ region: 'us-west-1' });
-const configClient = new ConfigServiceClient({ region: 'us-west-1' });
-const snsClient = new SNSClient({ region: 'us-west-1' });
-const iamClient = new IAMClient({ region: 'us-west-1' });
+const region = 'us-east-1';
+const stsClient = new STSClient({ region});
+const ec2Client = new EC2Client({ region });
+const s3Client = new S3Client({ region });
+const kmsClient = new KMSClient({ region });
+const cloudTrailClient = new CloudTrailClient({ region });
+const configClient = new ConfigServiceClient({ region });
+const snsClient = new SNSClient({ region });
+const iamClient = new IAMClient({ region});
 
 // Load infrastructure outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -31,7 +32,7 @@ describe('Secure Infrastructure Integration Tests', () => {
     // Get AWS account and region information
     const identity = await stsClient.send(new GetCallerIdentityCommand({}));
     accountId = identity.Account!;
-    region = 'us-west-1';
+    region = 'us-east-1';
   });
 
   describe('VPC and Networking', () => {
@@ -142,7 +143,7 @@ describe('Secure Infrastructure Integration Tests', () => {
         const locationResponse = await s3Client.send(new GetBucketLocationCommand({
           Bucket: bucketName as string
         }));
-        expect(locationResponse.LocationConstraint).toBe('us-west-1');
+        expect(locationResponse.LocationConstraint).toBe('us-east-1');
 
         // Check versioning
         const versioningResponse = await s3Client.send(new GetBucketVersioningCommand({
@@ -167,7 +168,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       const locationResponse = await s3Client.send(new GetBucketLocationCommand({
         Bucket: sensitiveBucket
       }));
-      expect(locationResponse.LocationConstraint).toBe('us-west-1');
+      expect(locationResponse.LocationConstraint).toBe(region);
     });
   });
 
@@ -296,11 +297,11 @@ describe('Secure Infrastructure Integration Tests', () => {
       const locationResponse = await s3Client.send(new GetBucketLocationCommand({
         Bucket: configBucket
       }));
-      expect(locationResponse.LocationConstraint).toBe('us-west-1');
+      expect(locationResponse.LocationConstraint).toBe(region);
     });
 
     test('All resources are in the correct region', async () => {
-      expect(region).toBe('us-west-1');
+      expect(region).toBe(region);
       
       // Verify VPC is in correct region
       const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
