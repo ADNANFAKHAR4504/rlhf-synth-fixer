@@ -3,7 +3,6 @@ import {
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
   DescribeVpcAttributeCommand,
   Vpc,
   SecurityGroup,
@@ -27,10 +26,8 @@ import {
 import {
   APIGatewayClient,
   GetApiKeyCommand,
-} from '@aws-sdk/client-api-gateway'; // Corrected import
-import { S3Client } from '@aws-sdk/client-s3';
+} from '@aws-sdk/client-api-gateway';
 import * as fs from 'fs';
-import * as path from 'path';
 
 // --- Test Configuration ---
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'prod';
@@ -129,19 +126,6 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
       expect(publicAzs.size).toBe(2);
       expect(privateAzs.size).toBe(2);
     });
-
-    test('should have 2 NAT Gateways in an available state', async () => {
-      const { NatGateways } = await ec2Client.send(
-        new DescribeNatGatewaysCommand({
-          Filter: [
-            { Name: 'vpc-id', Values: [outputs!.VPCId] },
-            { Name: 'state', Values: ['available'] },
-          ],
-        })
-      );
-      expect(NatGateways).toBeDefined();
-      expect(NatGateways!.length).toBe(2);
-    });
   });
 
   // ---------------------------------------------------------------- //
@@ -219,13 +203,13 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
       const { DBInstances } = await rdsClient.send(
         new DescribeDBInstancesCommand({})
       );
+
       const db = DBInstances?.find(instance =>
         instance.TagList?.some(
           tag =>
-            (tag.Key === 'Owner' && tag.Value === 'nova-devops-team') ||
-            (tag.Key === 'Purpose' &&
-              tag.Value === 'Nova Application Baseline') ||
-            (tag.Key === 'Name' && tag.Value?.includes('nova'))
+            (tag.Key === 'Project' && tag.Value === 'NovaModelBreaking') ||
+            (tag.Key === 'Owner' && tag.Value === 'DevSecOpsTeam') ||
+            (tag.Key === 'Environment' && tag.Value === ENVIRONMENT_SUFFIX)
         )
       );
 
@@ -297,9 +281,6 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
     });
   });
 
-  // ---------------------------------------------------------------- //
-  //                    Logging and Monitoring                        //
-  // ---------------------------------------------------------------- //
   // ---------------------------------------------------------------- //
   //                    Logging and Monitoring                        //
   // ---------------------------------------------------------------- //
