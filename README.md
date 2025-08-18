@@ -2,8 +2,6 @@
 
 # Get ready.
 
-# Since now Claude Code is available and ready for attempting to complete TAP tasks.
-
 # Medium: solution in 30 mins
 
 # Hard: 2h
