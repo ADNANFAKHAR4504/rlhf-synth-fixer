@@ -1,5 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
-import { TapStack } from '../lib/tap-stack.js';
+import { TapStack } from '../lib/tap-stack';
 
 // Set up Pulumi runtime mocking
 pulumi.runtime.setMocks({
