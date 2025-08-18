@@ -175,7 +175,7 @@ export class TapStack extends TerraformStack {
       description: 'The ID of the main VPC.',
     });
     new TerraformOutput(this, 'public_subnet_ids', {
-    value: vpc.publicSubnets,
+      value: vpc.publicSubnets,
     });
     new TerraformOutput(this, 'ec2_security_group_id', {
       value: ec2Sg.securityGroup.id,
