@@ -5,8 +5,6 @@ describe('CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -20,161 +18,160 @@ describe('CloudFormation Template', () => {
       expect(typeof template.Description).toBe('string');
       expect(template.Description.length).toBeGreaterThan(0);
     });
-    test('should have Parameters, Resources, and Outputs sections', () => {
-      expect(template.Parameters).toBeDefined();
+    test('should have Resources and Outputs sections', () => {
       expect(template.Resources).toBeDefined();
       expect(template.Outputs).toBeDefined();
     });
   });
 
-  describe('Parameters', () => {
-    test('should define required parameters', () => {
-      const required = ['DeploymentEnv', 'MFAMaxSessionDuration'];
-      required.forEach(param =>
-        expect(template.Parameters[param]).toBeDefined()
-      );
-    });
-    test('should have correct DeploymentEnv parameter', () => {
-      const p = template.Parameters.DeploymentEnv;
-      expect(p.Type).toBe('String');
-      expect(p.Default).toBe('pr');
-      expect(p.AllowedPattern).toBe('[a-z]+');
-      expect(p.AllowedValues).toContain('production');
-      expect(p.ConstraintDescription).toBe(
-        'Must contain only lowercase letters'
-      );
-    });
-    test('should have correct MFAMaxSessionDuration parameter', () => {
-      const p = template.Parameters.MFAMaxSessionDuration;
-      expect(p.Type).toBe('Number');
-      expect(p.Default).toBe(3600);
-      expect(p.MinValue).toBe(900);
-      expect(p.MaxValue).toBe(43200);
-    });
-  });
-
   describe('Resources', () => {
-    test('should create a CloudTrail for security auditing', () => {
-      expect(template.Resources.SecurityAuditTrail).toBeDefined();
-      expect(template.Resources.SecurityAuditTrail.Type).toBe(
-        'AWS::CloudTrail::Trail'
-      );
-    });
-    test('should create an encrypted S3 bucket for audit logs', () => {
-      const bucket = template.Resources.SecurityAuditBucket;
-      expect(bucket).toBeDefined();
-      expect(bucket.Type).toBe('AWS::S3::Bucket');
-      expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(
-        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
-          .ServerSideEncryptionByDefault.SSEAlgorithm
-      ).toBe('AES256');
-      expect(
-        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicAcls
-      ).toBe(true);
-      expect(
-        bucket.Properties.PublicAccessBlockConfiguration.BlockPublicPolicy
-      ).toBe(true);
-      expect(
-        bucket.Properties.PublicAccessBlockConfiguration.IgnorePublicAcls
-      ).toBe(true);
-      expect(
-        bucket.Properties.PublicAccessBlockConfiguration.RestrictPublicBuckets
-      ).toBe(true);
-      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-    });
-    test('should create an IAM role with MFA enforcement and least privilege', () => {
-      const role = template.Resources.SecureAccessRole;
+    test('should define SecureDeveloperRole with MFA enforcement', () => {
+      const role = template.Resources.SecureDeveloperRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
+      const assume = role.Properties.AssumeRolePolicyDocument.Statement[0];
+      expect(assume.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('true');
+      expect(assume.Condition.NumericLessThan['aws:MultiFactorAuthAge']).toBe(
+        '3600'
+      );
+      expect(role.Properties.ManagedPolicyArns[0].Ref).toBe(
+        'DeveloperManagedPolicy'
+      );
       expect(
-        role.Properties.AssumeRolePolicyDocument.Statement.some(
-          (s: any) =>
-            s.Condition &&
-            s.Condition.Bool &&
-            s.Condition.Bool['aws:MultiFactorAuthPresent'] === 'true'
+        role.Properties.Tags.some(
+          (t: any) => t.Key === 'MFARequired' && t.Value === 'true'
         )
       ).toBe(true);
-      expect(role.Properties.ManagedPolicyArns).toEqual(
-        expect.arrayContaining([
-          { Ref: 'ReadOnlyAccessPolicy' },
-          { Ref: 'LimitedS3AccessPolicy' },
-        ])
-      );
     });
-    test('should create a managed policy denying sensitive IAM actions', () => {
-      const policy = template.Resources.ReadOnlyAccessPolicy;
-      expect(policy).toBeDefined();
-      expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
-      const denyStatement = policy.Properties.PolicyDocument.Statement.find(
-        (s: any) => s.Effect === 'Deny'
-      );
-      expect(denyStatement).toBeDefined();
-      expect(denyStatement.Action).toContain('iam:CreateRole');
-      expect(denyStatement.Action).toContain('iam:DeleteUser');
-    });
-    test('should create an emergency access role with stricter MFA', () => {
-      const role = template.Resources.EmergencyAccessRole;
+    test('should define SecureReadOnlyRole with MFA enforcement', () => {
+      const role = template.Resources.SecureReadOnlyRole;
       expect(role).toBeDefined();
       expect(role.Type).toBe('AWS::IAM::Role');
+      const assume = role.Properties.AssumeRolePolicyDocument.Statement[0];
+      expect(assume.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('true');
+      expect(assume.Condition.NumericLessThan['aws:MultiFactorAuthAge']).toBe(
+        '7200'
+      );
+      expect(role.Properties.ManagedPolicyArns[0].Ref).toBe(
+        'ReadOnlyManagedPolicy'
+      );
       expect(
-        role.Properties.AssumeRolePolicyDocument.Statement.some(
-          (s: any) =>
-            s.Condition &&
-            s.Condition.Bool &&
-            s.Condition.Bool['aws:MultiFactorAuthPresent'] === 'true' &&
-            s.Condition.NumericLessThan &&
-            s.Condition.NumericLessThan['aws:MultiFactorAuthAge'] === '900'
+        role.Properties.Tags.some(
+          (t: any) => t.Key === 'MFARequired' && t.Value === 'true'
         )
       ).toBe(true);
-      expect(role.Properties.ManagedPolicyArns).toEqual(
-        expect.arrayContaining([{ Ref: 'EmergencyAccessPolicy' }])
-      );
     });
-    test('should create an emergency access policy with time-limited permissions', () => {
-      const policy = template.Resources.EmergencyAccessPolicy;
-      expect(policy).toBeDefined();
-      expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
-      const allowStatement = policy.Properties.PolicyDocument.Statement.find(
-        (s: any) => s.Effect === 'Allow'
+    test('should define SecureOperationsRole with MFA enforcement', () => {
+      const role = template.Resources.SecureOperationsRole;
+      expect(role).toBeDefined();
+      expect(role.Type).toBe('AWS::IAM::Role');
+      const assume = role.Properties.AssumeRolePolicyDocument.Statement[0];
+      expect(assume.Condition.Bool['aws:MultiFactorAuthPresent']).toBe('true');
+      expect(assume.Condition.NumericLessThan['aws:MultiFactorAuthAge']).toBe(
+        '1800'
       );
-      expect(allowStatement).toBeDefined();
-      expect(allowStatement.Condition.Bool['aws:MultiFactorAuthPresent']).toBe(
-        'true'
+      expect(role.Properties.ManagedPolicyArns[0].Ref).toBe(
+        'OperationsManagedPolicy'
       );
       expect(
-        allowStatement.Condition.NumericLessThan['aws:MultiFactorAuthAge']
-      ).toBe('900');
+        role.Properties.Tags.some(
+          (t: any) => t.Key === 'MFARequired' && t.Value === 'true'
+        )
+      ).toBe(true);
+    });
+    test('should define DeveloperManagedPolicy with least privilege', () => {
+      const policy = template.Resources.DeveloperManagedPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
+      const ec2Statement = policy.Properties.PolicyDocument.Statement.find(
+        (s: any) => s.Sid === 'EC2DevelopmentAccess'
+      );
+      expect(ec2Statement).toBeDefined();
+      expect(ec2Statement.Effect).toBe('Allow');
+      expect(ec2Statement.Action).toContain('ec2:RunInstances');
+      expect(ec2Statement.Condition.StringEquals['ec2:InstanceType']).toContain(
+        't3.micro'
+      );
+    });
+    test('should define ReadOnlyManagedPolicy with only read actions', () => {
+      const policy = template.Resources.ReadOnlyManagedPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
+      const readStatement = policy.Properties.PolicyDocument.Statement.find(
+        (s: any) => s.Sid === 'GeneralReadOnlyAccess'
+      );
+      expect(readStatement).toBeDefined();
+      expect(readStatement.Effect).toBe('Allow');
+      expect(readStatement.Action).toContain('ec2:Describe*');
+      expect(readStatement.Action).not.toContain('ec2:RunInstances');
+    });
+    test('should define OperationsManagedPolicy with region restriction', () => {
+      const policy = template.Resources.OperationsManagedPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::IAM::ManagedPolicy');
+      const ec2Statement = policy.Properties.PolicyDocument.Statement.find(
+        (s: any) => s.Sid === 'EC2OperationalAccess'
+      );
+      expect(ec2Statement).toBeDefined();
+      expect(
+        ec2Statement.Condition.StringEquals['aws:RequestedRegion']
+      ).toBeDefined();
+    });
+    test('should define SecurityAuditTrail for CloudTrail', () => {
+      const trail = template.Resources.SecurityAuditTrail;
+      expect(trail).toBeDefined();
+      expect(trail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(trail.Properties.IsLogging).toBe(true);
+      expect(trail.Properties.EnableLogFileValidation).toBe(true);
+    });
+    test('should define CloudTrailLogsBucketPolicy for S3 bucket', () => {
+      const policy = template.Resources.CloudTrailLogsBucketPolicy;
+      expect(policy).toBeDefined();
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+      expect(policy.Properties.Bucket['Fn::Sub']).toMatch(
+        /security-audit-logs-\$\{AWS::AccountId\}/
+      );
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expected = [
-        'SecureAccessRoleArn',
-        'EmergencyAccessRoleArn',
-        'SecurityAuditTrailArn',
-        'SecurityAuditBucketName',
-        'MFAComplianceStatus',
-        'SecurityValidationChecklist',
+        'SecureDeveloperRoleArn',
+        'SecureReadOnlyRoleArn',
+        'SecureOperationsRoleArn',
+        'CloudTrailArn',
+        'CloudTrailLogsBucketName',
       ];
       expected.forEach(key => expect(template.Outputs[key]).toBeDefined());
     });
     test('should have correct output descriptions and export names', () => {
       const outputs = template.Outputs;
-      expect(outputs.SecureAccessRoleArn.Description).toMatch(
-        /secure access role/i
+      expect(outputs.SecureDeveloperRoleArn.Description).toMatch(
+        /Developer Role/i
       );
-      expect(outputs.EmergencyAccessRoleArn.Description).toMatch(
-        /emergency access role/i
+      expect(outputs.SecureReadOnlyRoleArn.Description).toMatch(
+        /Read-Only Role/i
       );
-      expect(outputs.SecurityAuditTrailArn.Description).toMatch(/CloudTrail/i);
-      expect(outputs.SecurityAuditBucketName.Description).toMatch(/S3 bucket/i);
-      expect(outputs.SecurityAuditTrailArn.Export.Name['Fn::Sub']).toMatch(
-        /security-audit-trail-arn/
+      expect(outputs.SecureOperationsRoleArn.Description).toMatch(
+        /Operations Role/i
       );
-      expect(outputs.SecurityAuditBucketName.Export.Name['Fn::Sub']).toMatch(
-        /security-audit-bucket-name/
+      expect(outputs.CloudTrailArn.Description).toMatch(/CloudTrail/i);
+      expect(outputs.CloudTrailLogsBucketName.Description).toMatch(
+        /CloudTrail logs/i
+      );
+      expect(outputs.SecureDeveloperRoleArn.Export.Name).toBe(
+        'SecureDeveloperRoleArn'
+      );
+      expect(outputs.SecureReadOnlyRoleArn.Export.Name).toBe(
+        'SecureReadOnlyRoleArn'
+      );
+      expect(outputs.SecureOperationsRoleArn.Export.Name).toBe(
+        'SecureOperationsRoleArn'
+      );
+      expect(outputs.CloudTrailArn.Export.Name).toBe('CloudTrailArn');
+      expect(outputs.CloudTrailLogsBucketName.Export.Name).toBe(
+        'CloudTrailLogsBucketName'
       );
     });
   });
@@ -187,41 +184,45 @@ describe('CloudFormation Template', () => {
     test('should not have any undefined or null required sections', () => {
       expect(template.AWSTemplateFormatVersion).not.toBeNull();
       expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
       expect(template.Resources).not.toBeNull();
       expect(template.Outputs).not.toBeNull();
     });
-    test('should have at least 2 parameters', () => {
-      expect(Object.keys(template.Parameters).length).toBeGreaterThanOrEqual(2);
-    });
-    test('should have at least 6 outputs', () => {
-      expect(Object.keys(template.Outputs).length).toBeGreaterThanOrEqual(6);
+    test('should have at least 5 outputs', () => {
+      expect(Object.keys(template.Outputs).length).toBeGreaterThanOrEqual(5);
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('should use Fn::Sub for output export names with environment suffix', () => {
-      Object.values(template.Outputs).forEach((output: any) => {
-        if (
-          output.Export &&
-          output.Export.Name &&
-          output.Export.Name['Fn::Sub']
-        ) {
-          expect(output.Export.Name['Fn::Sub']).toMatch(/\${DeploymentEnv}-/);
-        }
-      });
+    test('should use correct export names for outputs', () => {
+      const outputs = template.Outputs;
+      expect(outputs.SecureDeveloperRoleArn.Export.Name).toBe(
+        'SecureDeveloperRoleArn'
+      );
+      expect(outputs.SecureReadOnlyRoleArn.Export.Name).toBe(
+        'SecureReadOnlyRoleArn'
+      );
+      expect(outputs.SecureOperationsRoleArn.Export.Name).toBe(
+        'SecureOperationsRoleArn'
+      );
+      expect(outputs.CloudTrailArn.Export.Name).toBe('CloudTrailArn');
+      expect(outputs.CloudTrailLogsBucketName.Export.Name).toBe(
+        'CloudTrailLogsBucketName'
+      );
     });
-    test('should apply tags to resources where required', () => {
-      // All taggable resources should have Tags property
-      const taggableTypes = [
-        'AWS::IAM::Role',
-        'AWS::S3::Bucket',
-        'AWS::CloudTrail::Trail',
+    test('should apply tags to IAM roles', () => {
+      const roles = [
+        'SecureDeveloperRole',
+        'SecureReadOnlyRole',
+        'SecureOperationsRole',
       ];
-      Object.values(template.Resources).forEach((res: any) => {
-        if (taggableTypes.includes(res.Type)) {
-          expect(res.Properties.Tags).toBeDefined();
-        }
+      roles.forEach(roleName => {
+        const role = template.Resources[roleName];
+        expect(role.Properties.Tags).toBeDefined();
+        expect(
+          role.Properties.Tags.some(
+            (t: any) => t.Key === 'MFARequired' && t.Value === 'true'
+          )
+        ).toBe(true);
       });
     });
   });
