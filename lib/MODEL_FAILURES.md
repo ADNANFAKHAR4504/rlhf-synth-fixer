@@ -1,115 +1,209 @@
 ## **Model Failures**
 
-### **Failure 1 — Non-standard Condition Keys in S3 Bucket Policy**
+### **1. CloudTrail Setup**
 
-**Statement:**
-The model attempted to prevent public access to the CloudTrail bucket using `aws:PrincipalIsAWSService` and `aws:PrincipalServiceName`. These are **not valid S3 policy condition keys**, so the bucket policy may fail deployment or be ignored by AWS. Correct enforcement requires standard keys like `aws:PrincipalOrgID`, `aws:PrincipalArn`, or `aws:PrincipalAccount`.
+**Failure Statement:**
+The model attempted to create CloudTrail resources without checking for existing trails. In environments with quotas already reached, this caused `CREATE_FAILED` errors.
 
-**Code Snippet:**
+**Requirement in Prompt:**
+
+* Enable AWS CloudTrail logging in all regions for auditing purposes.
+* Must handle environments where trails already exist.
+
+**Model Response Issue:**
 
 ```yaml
-Condition:
-  Bool:
-    'aws:PrincipalIsAWSService': 'false'
-  StringNotEquals:
-    'aws:PrincipalServiceName':
-      - cloudtrail.amazonaws.com
+Resources:
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      IsLogging: true
+      S3BucketName: !Ref CloudTrailLogsBucket
 ```
+
+* No conditional logic or `DependsOn` to check existing trails.
+* No handling for quota limits.
+
+**Corrected Implementation:**
+
+* Uses a **condition to create CloudTrail only if it doesn’t exist**.
+* References the proper **S3 bucket** and ensures bucket creation before applying policies.
 
 ---
 
-### **Failure 2 — Incomplete IAM Role Restrictions**
+### **2. CloudTrail Logs Bucket Policy**
 
-**Statement:**
-The problem specification required that **only IAM roles are allowed to have assumable permissions**, explicitly avoiding root account access. The model partially applied this restriction (only for LambdaExecutionRole) but **did not apply it to other roles** such as `ConfigRole` or any future IAM roles. This is a security gap that could allow root or unmanaged users to assume sensitive roles.
+**Failure Statement:**
+Bucket policy in model response failed because it referenced a bucket that might not exist yet.
 
-**Code Snippet:**
+**Requirement in Prompt:**
+
+* S3 buckets must be private and deny public access.
+* Policies must attach correctly only after bucket creation.
+
+**Model Response Issue:**
 
 ```yaml
-ConfigRole:
-  Type: AWS::IAM::Role
-  Properties:
-    RoleName: !Sub 'AWSConfigRole-${Environment}'
-    AssumeRolePolicyDocument:
-      Version: '2012-10-17'
-      Statement:
-        - Effect: Allow
-          Principal:
-            Service: config.amazonaws.com
-          Action: sts:AssumeRole
+Resources:
+  CloudTrailLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailLogsBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource: !Sub "${CloudTrailLogsBucket.Arn}/*"
 ```
+
+* Direct reference to bucket ARN failed if bucket not yet created.
+
+**Corrected Implementation:**
+
+* Conditional creation using `!If` or parameters for existing buckets.
+* Ensures bucket exists before applying the policy.
 
 ---
 
-### **Failure 3 — AWS Config Rule Input Parameters Formatting**
+### **3. Config S3 Bucket & Bucket Policy**
 
-**Statement:**
-The model passed JSON as a YAML block scalar for the `REQUIRED_TAGS` AWS Config rule. AWS Config expects **native YAML mapping**, not a string containing JSON. This could cause **template validation or rule creation to fail**.
+**Failure Statement:**
+AWS Config bucket and its policy failed because CloudTrail creation failed first; model didn’t consider dependency order.
 
-**Code Snippet:**
+**Requirement in Prompt:**
+
+* AWS Config should monitor compliance and store logs in S3.
+* Bucket must exist before policy or recorder creation.
+
+**Model Response Issue:**
 
 ```yaml
-RequiredTagsRule:
-  Type: AWS::Config::ConfigRule
-  DependsOn: ConfigurationRecorder
-  Properties:
-    ConfigRuleName: 'required-tags'
-    Description: 'Checks whether resources contain all required tags'
-    Source:
-      Owner: AWS
-      SourceIdentifier: REQUIRED_TAGS
-    InputParameters: |
-      {
-        "tag1Key": "Environment",
-        "tag2Key": "Purpose"
-      }
+Resources:
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
 ```
+
+* Policy references bucket directly without dependency checks.
+* No conditional logic for existing bucket.
+
+**Corrected Implementation:**
+
+* Implements **dependency on bucket creation**.
+* Adds condition to **reuse existing bucket** if it already exists.
 
 ---
 
-### **Failure 4 — Hardcoded TLS Policy**
+### **4. Configuration Recorder**
 
-**Statement:**
-The ALB HTTPS listener uses an outdated TLS policy `ELBSecurityPolicy-TLS-1-2-2017-01`. For strict security compliance, the template should enforce **TLS 1.2 or 1.3 using the latest AWS-managed policies**. Using old policies could fail security audits.
+**Failure Statement:**
+Creation failed because dependent resources (S3 bucket, IAM role) didn’t exist.
 
-**Code Snippet:**
+**Requirement in Prompt:**
+
+* Must ensure AWS Config recorder starts successfully.
+
+**Model Response Issue:**
 
 ```yaml
-HTTPSListener:
-  Type: AWS::ElasticLoadBalancingV2::Listener
-  Properties:
-    LoadBalancerArn: !Ref ApplicationLoadBalancer
-    Port: 443
-    Protocol: HTTPS
-    SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
-    Certificates:
-      - CertificateArn: !Sub 'arn:aws:acm:${AWS::Region}:${AWS::AccountId}:certificate/example-cert-id'
+Resources:
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
 ```
+
+* No check if `ConfigRole` exists.
+* Cancels automatically if bucket or role creation fails.
+
+**Corrected Implementation:**
+
+* Adds **conditional creation for recorder**.
+* Ensures **roles and buckets exist** first.
 
 ---
 
-### **Failure 5 — RDS Master Password Handling**
+### **5. Lambda Functions in VPC**
 
-**Statement:**
-The property `ManageMasterUserPassword: true` is used without linking to **AWS Secrets Manager**, which is required for password management in CloudFormation for modern RDS instances. This could prevent RDS from successfully deploying or generate runtime errors.
+**Failure Statement:**
+The model did not enforce VPC deployment for Lambda functions as required.
 
-**Code Snippet:**
+**Requirement in Prompt:**
+
+* Ensure Lambda runs **inside a VPC**.
+
+**Model Response Issue:**
 
 ```yaml
-SecureRDSInstance:
-  Type: AWS::RDS::DBInstance
-  Properties:
-    DBInstanceIdentifier: !Sub 'secure-db-${Environment}'
-    DBInstanceClass: db.t3.micro
-    Engine: mysql
-    EngineVersion: '8.0'
-    AllocatedStorage: 20
-    StorageType: gp2
-    StorageEncrypted: true
-    KmsKeyId: !Ref RDSKMSKey
-    DBSubnetGroupName: !Ref RDSSubnetGroup
-    VPCSecurityGroups:
-      - !Ref RDSSecurityGroup
-    MasterUsername: admin
-    ManageMasterUserPassword: true
+Resources:
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.9
 ```
+
+* No `VpcConfig` property.
+
+**Corrected Implementation:**
+
+* Adds `VpcConfig` with `SubnetIds` and `SecurityGroupIds`.
+
+---
+
+### **6. RDS CMK Encryption**
+
+**Failure Statement:**
+RDS instance in model response did not reference a KMS CMK for encryption.
+
+**Requirement in Prompt:**
+
+* RDS data at rest must use **KMS Customer Managed Key**.
+
+**Model Response Issue:**
+
+```yaml
+Resources:
+  MyRDS:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      StorageEncrypted: true
+```
+
+* Uses default KMS key instead of CMK.
+
+**Corrected Implementation:**
+
+* References **existing or new KMS CMK** for encryption.
+
+---
+
+### **7. ALB SSL Enforcement**
+
+**Failure Statement:**
+Application Load Balancer listeners did not enforce HTTPS / TLS.
+
+**Requirement in Prompt:**
+
+* All ALB listeners must enforce **SSL/TLS**.
+
+**Model Response Issue:**
+
+```yaml
+Resources:
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+```
+
+* No `Certificates` or `Protocol` enforcement for HTTPS.
+
+**Corrected Implementation:**
+
+* Adds `Protocol: HTTPS` and certificate references.
+* Adds HTTP → HTTPS redirection where applicable.
+
+
