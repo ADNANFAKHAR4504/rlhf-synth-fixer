@@ -4,7 +4,7 @@
 	- The model sometimes generates resource names that do not strictly follow the required `projectname-resource` pattern, or omits the use of the `projectname` variable in all resource names.
 
 2. **Region Constraint Not Applied to All Resources**
-	- The S3 bucket is correctly placed in `us-east-1`, but other resources (e.g., DynamoDB) may lack explicit region configuration, risking deployment in a default or unintended region.
+	- The S3 bucket is correctly placed in `us-west-1`, but other resources (e.g., DynamoDB) may lack explicit region configuration, risking deployment in a default or unintended region.
 
 3. **Variable Definition and Usage Issues**
 	- The model may define the `projectname` variable but fail to use it consistently in all resource names, outputs, or tags.
