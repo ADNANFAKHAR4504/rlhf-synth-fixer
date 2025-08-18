@@ -1,4 +1,4 @@
-# Terraform AWS Production Stack Prompt
+
 
 Hey team, I need help creating a production-ready AWS infrastructure in a single Terraform file called **`tap_stack.tf`**.
 
@@ -62,3 +62,4 @@ We need a secure VPC stack in AWS with the following components:
   * IAM roles + policies
   * Security groups with locked-down rules
   * Monitoring and tagging applied everywhere
+
