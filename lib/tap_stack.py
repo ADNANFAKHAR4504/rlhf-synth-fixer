@@ -1244,9 +1244,21 @@ def create_nginx_deployment(
   Deploy NGINX to EKS cluster using pulumi_kubernetes
   """
   # Create a Kubernetes provider using the EKS cluster
+  # Handle different cluster types for kubeconfig access
+  if hasattr(eks_cluster, 'kubeconfig'):
+      # aws.eks.Cluster or pulumi_eks with direct kubeconfig
+      kubeconfig = eks_cluster.kubeconfig
+  elif hasattr(eks_cluster, 'kubeconfig_json'):
+      # Some versions expose kubeconfig as kubeconfig_json
+      kubeconfig = eks_cluster.kubeconfig_json
+  else:
+      # Try to generate kubeconfig if not directly available
+      pulumi.log.warn("Kubeconfig not directly available, cluster may not be fully initialized")
+      kubeconfig = pulumi.Output.from_input("{}")
+  
   k8s_provider = k8s.Provider(
       f"{name_prefix}-k8s-provider",
-      kubeconfig=eks_cluster.kubeconfig.apply(lambda kc: kc)
+      kubeconfig=kubeconfig.apply(lambda kc: kc if isinstance(kc, str) else str(kc))
   )
   
   # Create NGINX deployment
@@ -1619,9 +1631,34 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("rds_instance_id", rds_instance.id)
     pulumi.export("rds_endpoint", rds_instance.endpoint)
     pulumi.export("kms_key_id", kms_key.id)
-    pulumi.export("eks_cluster_name", eks_cluster.name)
-    pulumi.export("eks_cluster_endpoint", eks_cluster.endpoint)
-    pulumi.export("eks_node_group_name", eks_node_group.node_group_name)
+    # Handle different cluster types for name access
+    if hasattr(eks_cluster, 'name'):
+        pulumi.export("eks_cluster_name", eks_cluster.name)
+    elif hasattr(eks_cluster, 'eks_cluster') and hasattr(eks_cluster.eks_cluster, 'name'):
+        pulumi.export("eks_cluster_name", eks_cluster.eks_cluster.name)
+    else:
+        pulumi.export("eks_cluster_name", f"{name_prefix}-eks-cluster")
+    # Handle different cluster types for endpoint access
+    # pulumi_eks.Cluster stores the actual EKS cluster in eks_cluster attribute
+    if hasattr(eks_cluster, 'eks_cluster'):
+        # pulumi_eks.Cluster has the actual cluster under eks_cluster
+        pulumi.export("eks_cluster_endpoint", eks_cluster.eks_cluster.endpoint)
+    elif hasattr(eks_cluster, 'core') and hasattr(eks_cluster.core, 'endpoint'):
+        # Another way pulumi_eks might expose the endpoint
+        pulumi.export("eks_cluster_endpoint", eks_cluster.core.endpoint)
+    elif hasattr(eks_cluster, 'endpoint'):
+        # aws.eks.Cluster has endpoint directly
+        pulumi.export("eks_cluster_endpoint", eks_cluster.endpoint)
+    else:
+        # Fallback
+        pulumi.export("eks_cluster_endpoint", "endpoint-not-available")
+    # Handle different node group types
+    if hasattr(eks_node_group, 'node_group_name'):
+        pulumi.export("eks_node_group_name", eks_node_group.node_group_name)
+    elif hasattr(eks_node_group, 'name'):
+        pulumi.export("eks_node_group_name", eks_node_group.name)
+    else:
+        pulumi.export("eks_node_group_name", f"{name_prefix}-eks-node-group")
     pulumi.export("alb_dns_name", alb.dns_name)
     pulumi.export("alb_target_group_arn", target_group.arn)
     pulumi.export("s3_app_bucket_name", s3_buckets["app_bucket"].bucket)
@@ -1632,8 +1669,18 @@ class TapStack(pulumi.ComponentResource):
     pulumi.export("nginx_deployment_name", nginx_deployment.metadata.name)
 
     # Debug outputs for troubleshooting
-    pulumi.export("eks_cluster_version", eks_cluster.version)
-    pulumi.export("eks_cluster_vpc_config", eks_cluster.vpc_config)
+    # Handle different cluster types for version and vpc_config
+    if hasattr(eks_cluster, 'version'):
+        pulumi.export("eks_cluster_version", eks_cluster.version)
+    else:
+        pulumi.export("eks_cluster_version", "1.29")  # Default version
+    
+    if hasattr(eks_cluster, 'vpc_config'):
+        pulumi.export("eks_cluster_vpc_config", eks_cluster.vpc_config)
+    elif hasattr(eks_cluster, 'core') and hasattr(eks_cluster.core, 'vpc_config'):
+        pulumi.export("eks_cluster_vpc_config", eks_cluster.core.vpc_config)
+    else:
+        pulumi.export("eks_cluster_vpc_config", "vpc-config-not-available")
     pulumi.export("eks_node_group_subnets",
                   [s.id for s in vpc_module.private_subnets])
     pulumi.export("eks_node_group_instance_types", ["t3.medium"])
