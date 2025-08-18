@@ -20,3 +20,4 @@ The setup is intended for a single AWS account in the `us-east-1` region. The co
 
 **Instructions:**
 Generate a complete, functional Terraform HCL configuration that satisfies all requirements above. Do not modify the constraints or data in any way. Ensure the output is ready to be saved as a `.tf` file and applied directly.
+
