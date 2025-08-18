@@ -9,9 +9,26 @@
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "Security Configuration",
-    "Network Configuration", 
+    "Network Configuration",
     "Access Control",
     "General Infrastructure Tooling QA",
     "Performance Optimization"
-  ]
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Security Groups",
+    "VPC Endpoints"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
