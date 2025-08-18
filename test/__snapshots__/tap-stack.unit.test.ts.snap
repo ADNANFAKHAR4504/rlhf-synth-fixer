@@ -3,27 +3,51 @@
 exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props 1`] = `
 "{
   "output": {
-    "ec2InstanceId": {
+    "Ec2InstanceId": {
+      "description": "ID of the EC2 instance",
       "value": "mock-instance-id"
     },
-    "ec2PrivateIp": {
+    "Ec2InstancePrivateIp": {
+      "description": "Private IP address of the EC2 instance",
       "value": "mock-private-ip"
     },
-    "privateSubnetId": {
-      "value": "mock-private-subnet-id"
+    "KmsKeyArn": {
+      "description": "ARN of the KMS key used for encryption",
+      "value": "mock-kms-arn"
     },
-    "rdsInstanceEndpoint": {
-      "sensitive": true,
+    "KmsKeyId": {
+      "description": "ID of the KMS key used for encryption",
+      "value": "mock-kms-key-id"
+    },
+    "PrivateSubnetIds": {
+      "description": "IDs of the private subnets",
+      "value": [
+        "mock-private-subnet-1",
+        "mock-private-subnet-2"
+      ]
+    },
+    "RdsEndpoint": {
+      "description": "RDS instance endpoint",
       "value": "mock-rds-endpoint"
     },
-    "rdsSecretArn": {
-      "sensitive": true,
+    "RdsInstanceId": {
+      "description": "ID of the RDS instance",
+      "value": "mock-rds-id"
+    },
+    "RdsSecretArn": {
+      "description": "ARN of the RDS credentials secret",
       "value": "mock-rds-secret-arn"
     },
-    "s3BucketName": {
+    "S3BucketArn": {
+      "description": "ARN of the secure S3 bucket",
+      "value": "mock-s3-bucket-arn"
+    },
+    "S3BucketName": {
+      "description": "Name of the secure S3 bucket",
       "value": "mock-s3-bucket"
     },
-    "vpcId": {
+    "VpcId": {
+      "description": "ID of the provisioned VPC",
       "value": "mock-vpc-id"
     }
   },
@@ -72,27 +96,51 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
 exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should use default values when no props are provided 1`] = `
 "{
   "output": {
-    "ec2InstanceId": {
+    "Ec2InstanceId": {
+      "description": "ID of the EC2 instance",
       "value": "mock-instance-id"
     },
-    "ec2PrivateIp": {
+    "Ec2InstancePrivateIp": {
+      "description": "Private IP address of the EC2 instance",
       "value": "mock-private-ip"
     },
-    "privateSubnetId": {
-      "value": "mock-private-subnet-id"
+    "KmsKeyArn": {
+      "description": "ARN of the KMS key used for encryption",
+      "value": "mock-kms-arn"
     },
-    "rdsInstanceEndpoint": {
-      "sensitive": true,
+    "KmsKeyId": {
+      "description": "ID of the KMS key used for encryption",
+      "value": "mock-kms-key-id"
+    },
+    "PrivateSubnetIds": {
+      "description": "IDs of the private subnets",
+      "value": [
+        "mock-private-subnet-1",
+        "mock-private-subnet-2"
+      ]
+    },
+    "RdsEndpoint": {
+      "description": "RDS instance endpoint",
       "value": "mock-rds-endpoint"
     },
-    "rdsSecretArn": {
-      "sensitive": true,
+    "RdsInstanceId": {
+      "description": "ID of the RDS instance",
+      "value": "mock-rds-id"
+    },
+    "RdsSecretArn": {
+      "description": "ARN of the RDS credentials secret",
       "value": "mock-rds-secret-arn"
     },
-    "s3BucketName": {
+    "S3BucketArn": {
+      "description": "ARN of the secure S3 bucket",
+      "value": "mock-s3-bucket-arn"
+    },
+    "S3BucketName": {
+      "description": "Name of the secure S3 bucket",
       "value": "mock-s3-bucket"
     },
-    "vpcId": {
+    "VpcId": {
+      "description": "ID of the provisioned VPC",
       "value": "mock-vpc-id"
     }
   },

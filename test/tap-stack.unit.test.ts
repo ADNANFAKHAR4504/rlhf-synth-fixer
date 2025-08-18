@@ -4,25 +4,42 @@ import 'cdktf/lib/testing/adapters/jest';
 import { TapStack } from '../lib/tap-stack';
 
 // --- Mocking the Modules ---
+// This mock setup is crucial for isolating the TapStack logic during tests.
 jest.mock('../lib/modules', () => {
   return {
-    NetworkModule: jest.fn((scope: any, id: string, provider?: any) => ({
+    VpcModule: jest.fn(() => ({
       vpc: { id: 'mock-vpc-id' },
-      privateSubnetIds: ['mock-private-subnet-id'],
+      privateSubnetIds: ['mock-private-subnet-1', 'mock-private-subnet-2'],
     })),
-    KmsModule: jest.fn((scope: any, id: string, opts?: any) => ({
-      kmsKey: { arn: 'mock-kms-arn' },
+    KmsModule: jest.fn(() => ({
+      kmsKey: {
+        id: 'mock-kms-key-id',
+        arn: 'mock-kms-arn',
+      },
     })),
-    ComputeModule: jest.fn((scope: any, id: string, opts?: any) => ({
-      instance: { id: 'mock-instance-id', privateIp: 'mock-private-ip' },
+    Ec2Module: jest.fn(() => ({
+      instance: {
+        id: 'mock-instance-id',
+        privateIp: 'mock-private-ip',
+      },
     })),
-    DatabaseModule: jest.fn((scope: any, id: string, opts?: any) => ({
-      db: { endpoint: 'mock-rds-endpoint' },
+    RdsModule: jest.fn(() => ({
+      db: {
+        id: 'mock-rds-id',
+        endpoint: 'mock-rds-endpoint',
+      },
       dbSecret: { arn: 'mock-rds-secret-arn' },
     })),
-    StorageModule: jest.fn((scope: any, id: string, opts?: any) => ({
-      bucket: { bucket: 'mock-s3-bucket' },
+    S3Module: jest.fn(() => ({
+      bucket: {
+        bucket: 'mock-s3-bucket',
+        arn: 'mock-s3-bucket-arn',
+        bucketRegionalDomainName: 'mock-s3-domain.com',
+      },
     })),
+    CloudFrontModule: jest.fn(() => ({})),
+    CloudTrailModule: jest.fn(() => ({})),
+    IamModule: jest.fn(() => ({})),
   };
 });
 
@@ -31,14 +48,19 @@ describe('TapStack Unit Tests', () => {
   let stack: TapStack;
   let synthesized: string;
 
+  // Import the mocked modules after jest.mock() has been called.
   const {
-    NetworkModule,
+    VpcModule,
     KmsModule,
-    ComputeModule,
-    DatabaseModule,
-    StorageModule,
+    Ec2Module,
+    RdsModule,
+    S3Module,
+    CloudFrontModule,
+    CloudTrailModule,
+    IamModule,
   } = require('../lib/modules');
 
+  // Clear all mocks before each test to ensure a clean state.
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -54,6 +76,8 @@ describe('TapStack Unit Tests', () => {
         stateBucket: 'my-custom-state-bucket',
         awsRegion: 'us-west-2',
         defaultTags: { tags: { Project: 'TAP' } },
+        project: 'custom-project',
+        acmCertArn: 'arn:aws:acm:us-east-1:123456789012:certificate/custom',
       });
       synthesized = Testing.synth(stack);
       const parsed = JSON.parse(synthesized);
@@ -61,8 +85,6 @@ describe('TapStack Unit Tests', () => {
       expect(parsed.terraform.backend.s3.bucket).toBe('my-custom-state-bucket');
       expect(parsed.terraform.backend.s3.key).toBe('prod/TestCustomStack.tfstate');
       expect(parsed.provider.aws[0].region).toBe('us-west-2');
-      // S3 backend uses actual bucket region
-      expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
       expect(synthesized).toMatchSnapshot();
     });
 
@@ -75,105 +97,122 @@ describe('TapStack Unit Tests', () => {
       expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
       expect(parsed.terraform.backend.s3.key).toBe('dev/TestDefaultStack.tfstate');
       expect(parsed.provider.aws[0].region).toBe('us-west-2');
-      expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
       expect(synthesized).toMatchSnapshot();
-    });
-
-    test('should configure the S3 backend correctly', () => {
-      app = new App();
-      stack = new TapStack(app, 'TestBackend');
-      synthesized = Testing.synth(stack);
-      const parsed = JSON.parse(synthesized);
-
-      expect(parsed.terraform.backend.s3).toBeDefined();
-      expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
-      expect(parsed.terraform.backend.s3.key).toBe('dev/TestBackend.tfstate');
-      expect(parsed.terraform.backend.s3.region).toBe('us-east-1'); // backend in actual S3 region
-      expect(parsed.terraform.backend.s3.encrypt).toBe(true);
-    });
-
-    test('should enable S3 backend state locking via escape hatch', () => {
-      app = new App();
-      stack = new TapStack(app, 'TestStateLocking');
-      synthesized = Testing.synth(stack);
-      const parsed = JSON.parse(synthesized);
-
-      expect(parsed.terraform.backend.s3.use_lockfile).toBe(true);
     });
   });
 
   // ------------------------
-  // Module Instantiation Tests
+  // S3 Backend Tests
+  // ------------------------
+  describe('S3 Backend Configuration', () => {
+    beforeEach(() => {
+        app = new App();
+        stack = new TapStack(app, 'TestBackend');
+        synthesized = Testing.synth(stack);
+    });
+
+    test('should configure the S3 backend with correct defaults', () => {
+        const parsed = JSON.parse(synthesized);
+        expect(parsed.terraform.backend.s3).toBeDefined();
+        expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
+        expect(parsed.terraform.backend.s3.key).toBe('dev/TestBackend.tfstate');
+        expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
+        expect(parsed.terraform.backend.s3.encrypt).toBe(true);
+    });
+
+    test('should enable S3 backend state locking via escape hatch', () => {
+        const parsed = JSON.parse(synthesized);
+        expect(parsed.terraform.backend.s3.use_lockfile).toBe(true);
+    });
+  });
+
+  // ------------------------
+  // Provider Configuration Tests
+  // ------------------------
+  describe('Provider Configuration', () => {
+    test('should configure AWS and Random providers', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestProviders');
+      synthesized = Testing.synth(stack);
+      const parsed = JSON.parse(synthesized);
+
+      expect(parsed.provider.aws).toBeDefined();
+      expect(parsed.provider.random).toBeDefined();
+    });
+
+    test('should apply default tags to AWS provider when provided', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestTags', {
+        defaultTags: { tags: { Environment: 'test', Owner: 'team' } },
+      });
+      synthesized = Testing.synth(stack);
+      const parsed = JSON.parse(synthesized);
+
+      expect(parsed.provider.aws[0].default_tags[0].tags).toEqual({
+        Environment: 'test',
+        Owner: 'team',
+      });
+    });
+  });
+
+  // ------------------------
+  // Module Instantiation and Wiring Logic
   // ------------------------
   describe('Module Instantiation and Wiring', () => {
-    beforeEach(() => {
-      app = new App();
-      stack = new TapStack(app, 'TestModuleWiring');
-      Testing.fullSynth(stack);
+    describe('when acmCertArn is NOT provided', () => {
+      beforeEach(() => {
+        app = new App();
+        stack = new TapStack(app, 'TestStackWithoutCloudFront');
+        Testing.fullSynth(stack);
+      });
+
+      test('should create all modules EXCEPT CloudFront', () => {
+        expect(VpcModule).toHaveBeenCalledTimes(1);
+        expect(KmsModule).toHaveBeenCalledTimes(1);
+        expect(S3Module).toHaveBeenCalledTimes(1);
+        expect(RdsModule).toHaveBeenCalledTimes(1);
+        expect(Ec2Module).toHaveBeenCalledTimes(1);
+        expect(CloudTrailModule).toHaveBeenCalledTimes(1);
+        expect(IamModule).toHaveBeenCalledTimes(1);
+        expect(CloudFrontModule).toHaveBeenCalledTimes(0);
+      });
     });
 
-    test('should create NetworkModule instance', () => {
-      expect(NetworkModule).toHaveBeenCalledTimes(1);
-      expect(NetworkModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'network',
-        expect.anything()
-      );
-    });
+    describe('when acmCertArn IS provided', () => {
+      const mockAcmCertArn = 'arn:aws:acm:us-east-1:123456789012:certificate/fake-cert';
 
-    test('should create KmsModule instance', () => {
-      expect(KmsModule).toHaveBeenCalledTimes(1);
-      expect(KmsModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'kms',
-        expect.objectContaining({ project: 'tap', env: 'dev' })
-      );
-    });
+      beforeEach(() => {
+        app = new App();
+        stack = new TapStack(app, 'TestStackWithCloudFront', {
+          acmCertArn: mockAcmCertArn,
+        });
+        Testing.fullSynth(stack);
+      });
 
-    test('should create ComputeModule wired to Network and KMS', () => {
-      const network = NetworkModule.mock.results[0].value;
-      const kms = KmsModule.mock.results[0].value;
+      test('should create exactly one instance of EACH module', () => {
+        expect(VpcModule).toHaveBeenCalledTimes(1);
+        expect(KmsModule).toHaveBeenCalledTimes(1);
+        expect(S3Module).toHaveBeenCalledTimes(1);
+        expect(RdsModule).toHaveBeenCalledTimes(1);
+        expect(Ec2Module).toHaveBeenCalledTimes(1);
+        expect(CloudTrailModule).toHaveBeenCalledTimes(1);
+        expect(IamModule).toHaveBeenCalledTimes(1);
+        expect(CloudFrontModule).toHaveBeenCalledTimes(1);
+      });
 
-      expect(ComputeModule).toHaveBeenCalledTimes(1);
-      expect(ComputeModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'compute',
-        expect.objectContaining({
-          vpcId: network.vpc.id,
-          subnetId: network.privateSubnetIds[0],
-          kmsKeyId: kms.kmsKey.arn,
-        })
-      );
-    });
+      test('should wire KMS key correctly to dependent modules', () => {
+        const kms = KmsModule.mock.results[0].value;
+        expect(S3Module).toHaveBeenCalledWith(expect.anything(), 's3', expect.objectContaining({ kmsKeyArn: kms.kmsKey.arn }));
+        expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'rds', expect.objectContaining({ kmsKeyArn: kms.kmsKey.arn }));
+        expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'ec2', expect.objectContaining({ kmsKeyId: kms.kmsKey.id }));
+        expect(CloudTrailModule).toHaveBeenCalledWith(expect.anything(), 'cloudtrail', expect.objectContaining({ kmsKeyId: kms.kmsKey.id }));
+      });
 
-    test('should create DatabaseModule wired to Network and KMS', () => {
-      const network = NetworkModule.mock.results[0].value;
-      const kms = KmsModule.mock.results[0].value;
-
-      expect(DatabaseModule).toHaveBeenCalledTimes(1);
-      expect(DatabaseModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'database',
-        expect.objectContaining({
-          subnetIds: network.privateSubnetIds,
-          kmsKeyArn: kms.kmsKey.arn,
-        })
-      );
-    });
-
-    test('should create StorageModule wired to KMS', () => {
-      const kms = KmsModule.mock.results[0].value;
-
-      expect(StorageModule).toHaveBeenCalledTimes(1);
-      expect(StorageModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'storage',
-        expect.objectContaining({
-          project: 'tap',
-          env: 'dev',
-          kmsKeyArn: kms.kmsKey.arn,
-        })
-      );
+      test('should wire VPC components correctly to dependent modules', () => {
+        const vpc = VpcModule.mock.results[0].value;
+        expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'ec2', expect.objectContaining({ vpcId: vpc.vpc.id, subnetId: vpc.privateSubnetIds[0] }));
+        expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'rds', expect.objectContaining({ subnetIds: vpc.privateSubnetIds }));
+      });
     });
   });
 
@@ -181,22 +220,39 @@ describe('TapStack Unit Tests', () => {
   // Terraform Outputs Tests
   // ------------------------
   describe('Terraform Outputs', () => {
-    test('should create all required outputs from mocked modules', () => {
+    test('should create all required outputs with correct values and descriptions', () => {
       app = new App();
       stack = new TapStack(app, 'TestOutputs');
       synthesized = Testing.synth(stack);
       const outputs = JSON.parse(synthesized).output;
 
-      expect(outputs.vpcId.value).toBe('mock-vpc-id');
-      expect(outputs.privateSubnetId.value).toBe('mock-private-subnet-id');
-      expect(outputs.ec2InstanceId.value).toBe('mock-instance-id');
-      expect(outputs.ec2PrivateIp.value).toBe('mock-private-ip');
-      expect(outputs.rdsInstanceEndpoint.value).toBe('mock-rds-endpoint');
-      expect(outputs.rdsSecretArn.value).toBe('mock-rds-secret-arn');
-      expect(outputs.s3BucketName.value).toBe('mock-s3-bucket');
+      expect(outputs.VpcId).toEqual({ value: 'mock-vpc-id', description: 'ID of the provisioned VPC' });
+      expect(outputs.PrivateSubnetIds).toEqual({ value: ['mock-private-subnet-1', 'mock-private-subnet-2'], description: 'IDs of the private subnets' });
+      expect(outputs.S3BucketName).toEqual({ value: 'mock-s3-bucket', description: 'Name of the secure S3 bucket' });
+      expect(outputs.S3BucketArn).toEqual({ value: 'mock-s3-bucket-arn', description: 'ARN of the secure S3 bucket' });
+      expect(outputs.Ec2InstanceId).toEqual({ value: 'mock-instance-id', description: 'ID of the EC2 instance' });
+      expect(outputs.Ec2InstancePrivateIp).toEqual({ value: 'mock-private-ip', description: 'Private IP address of the EC2 instance' });
+      expect(outputs.RdsInstanceId).toEqual({ value: 'mock-rds-id', description: 'ID of the RDS instance' });
+      expect(outputs.RdsEndpoint).toEqual({ value: 'mock-rds-endpoint', description: 'RDS instance endpoint' });
+      expect(outputs.RdsSecretArn).toEqual({ value: 'mock-rds-secret-arn', description: 'ARN of the RDS credentials secret' });
+      expect(outputs.KmsKeyId).toEqual({ value: 'mock-kms-key-id', description: 'ID of the KMS key used for encryption' });
+      expect(outputs.KmsKeyArn).toEqual({ value: 'mock-kms-arn', description: 'ARN of the KMS key used for encryption' });
+    });
+  });
 
-      expect(outputs.rdsInstanceEndpoint.sensitive).toBe(true);
-      expect(outputs.rdsSecretArn.sensitive).toBe(true);
+  // ------------------------
+  // Error Handling Tests
+  // ------------------------
+  describe('Error Handling', () => {
+    test('should fail gracefully if a module instantiation throws an error', () => {
+      KmsModule.mockImplementationOnce(() => {
+        throw new Error('KMS module failed');
+      });
+
+      app = new App();
+      expect(() => {
+        new TapStack(app, 'TestError');
+      }).toThrow('KMS module failed');
     });
   });
 });

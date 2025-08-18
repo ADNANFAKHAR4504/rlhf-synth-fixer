@@ -22,6 +22,12 @@ import { Password as RandomPassword } from '@cdktf/provider-random/lib/password'
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+
+import { CloudfrontOriginAccessIdentity } from '@cdktf/provider-aws/lib/cloudfront-origin-access-identity';
+
 // -----------------
 // 🔐 KMS Module
 // -----------------
@@ -209,33 +215,60 @@ export class Ec2Module extends Construct {
 }
 
 // -----------------
-// 🌍 CloudFront Module
+// 🌍 CloudFront Module (Modified)
 // -----------------
+export interface CloudFrontModuleProps {
+  project: string;
+  env: string;
+  acmCertArn: string;
+  // This new property will receive the S3 bucket's domain name
+  s3OriginDomainName: string;
+  provider: AwsProvider;
+}
+
 export class CloudFrontModule extends Construct {
-  constructor(
-    scope: Construct,
-    id: string,
-    props: { project: string; env: string; acmCertArn: string }
-  ) {
+  constructor(scope: Construct, id: string, props: CloudFrontModuleProps) {
     super(scope, id);
+
+    // Create an Origin Access Identity to allow CloudFront to securely access the S3 bucket
+    const oai = new CloudfrontOriginAccessIdentity(this, 'Oai', {
+      comment: `OAI for ${props.project}-${props.env}`,
+      provider: props.provider,
+    });
 
     new CloudfrontDistribution(this, 'Distribution', {
       enabled: true,
+      // Use the S3 bucket domain name passed in via props
+      origin: [
+        {
+          domainName: props.s3OriginDomainName,
+          originId: `${props.project}-${props.env}-s3-origin`,
+          s3OriginConfig: {
+            originAccessIdentity: oai.cloudfrontAccessIdentityPath,
+          },
+        },
+      ],
       defaultCacheBehavior: {
-        targetOriginId: 'origin1',
+        targetOriginId: `${props.project}-${props.env}-s3-origin`,
         viewerProtocolPolicy: 'redirect-to-https',
-        allowedMethods: ['GET', 'HEAD'],
+        allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
         cachedMethods: ['GET', 'HEAD'],
+        compress: true,
         defaultTtl: 3600,
         minTtl: 0,
         maxTtl: 86400,
       },
-      origin: [{ domainName: 'example.com', originId: 'origin1' }],
       viewerCertificate: {
         acmCertificateArn: props.acmCertArn,
         sslSupportMethod: 'sni-only',
+        minimumProtocolVersion: 'TLSv1.2_2021',
       },
-      restrictions: { geoRestriction: { restrictionType: 'none' } },
+      restrictions: {
+        geoRestriction: {
+          restrictionType: 'none',
+        },
+      },
+      provider: props.provider,
     });
   }
 }
@@ -244,19 +277,96 @@ export class CloudFrontModule extends Construct {
 // 📜 CloudTrail Module
 // -----------------
 export class CloudTrailModule extends Construct {
+  public readonly trailBucket: S3Bucket;
+
   constructor(
     scope: Construct,
     id: string,
-    props: { project: string; env: string; kmsKeyId: string }
+    props: {
+      project: string;
+      env: string;
+      kmsKeyId: string;
+      provider: AwsProvider;
+    }
   ) {
     super(scope, id);
 
+    // Create dedicated CloudTrail S3 bucket
+    this.trailBucket = new S3Bucket(this, 'CloudTrailBucket', {
+      bucket: `${props.project}-${props.env}-cloudtrail-logs`,
+      forceDestroy: true, // Be careful with this in production
+      provider: props.provider,
+    });
+
+    // Enable versioning on CloudTrail bucket
+    new S3BucketVersioningA(this, 'CloudTrailBucketVersioning', {
+      bucket: this.trailBucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
+      provider: props.provider,
+    });
+
+    // Configure server-side encryption
+    new S3BucketServerSideEncryptionConfigurationA(
+      this,
+      'CloudTrailBucketEncryption',
+      {
+        bucket: this.trailBucket.id,
+        rule: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: props.kmsKeyId,
+            },
+          },
+        ],
+        provider: props.provider,
+      }
+    );
+
+    // Create bucket policy for CloudTrail
+    new S3BucketPolicy(this, 'CloudTrailBucketPolicy', {
+      bucket: this.trailBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSCloudTrailAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.trailBucket.arn,
+          },
+          {
+            Sid: 'AWSCloudTrailWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.trailBucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+        ],
+      }),
+      provider: props.provider,
+    });
+
+    // Create CloudTrail
     new Cloudtrail(this, 'CloudTrail', {
       name: `${props.project}-${props.env}-trail`,
       isMultiRegionTrail: true,
       enableLogFileValidation: true,
       kmsKeyId: props.kmsKeyId,
-      s3BucketName: `${props.project}-${props.env}-trail-bucket`,
+      s3BucketName: this.trailBucket.bucket, // Use the created bucket
+      provider: props.provider,
     });
   }
 }
@@ -268,18 +378,24 @@ export class IamModule extends Construct {
   constructor(
     scope: Construct,
     id: string,
-    props: { project: string; env: string }
+    props: {
+      project: string;
+      env: string;
+      provider: AwsProvider; // ADD THIS LINE
+    }
   ) {
     super(scope, id);
 
     const user = new IamUser(this, 'IamUser', {
       name: `${props.project}-${props.env}-user`,
+      provider: props.provider, // ADD THIS LINE
     });
 
     new IamPolicyAttachment(this, 'IamMfaPolicy', {
       name: `${props.project}-${props.env}-mfa-policy`,
       users: [user.name],
       policyArn: 'arn:aws:iam::aws:policy/IAMUserChangePassword',
+      provider: props.provider, // ADD THIS LINE
     });
   }
 }
