@@ -1,16 +1,65 @@
-Create consistent infrastructure for multiple environments in AWS using Terraform in us-west-2 region
-Your task is to configure production, staging, and development environments, each isolated in its own VPC, using Terraform's HCL language. 
-The main requirements are as follows: \n1. Each environment must be implemented in a separate VPC. \
- \n4. Implement a tagging strategy for resources, which includes tags like 'Environment', 'Owner', and 'Purpose'. 
- \n5. Network ACLs should be defined to prevent cross-environment traffic. 
- \n6. Use different instance types in the environments to optimize costs: t2.micro for dev, t3.medium for staging, and m5.large for production. 
- \n7. Define input variables to control environment details, such as CIDR block sizes. 
- \n8. Consistent IAM roles and policies must be applied across environments to ensure secure access. 
- \n9. And the major requirement is to have only single state file for all the three environments. 
- \n10. cloud watch monitoring and logging resources are not needed as per the task requirement.
- \n11. There is no encryption needed at rest and in transit.
- \n12. Use for for_each function is allowed.
-I want to put complete code in tap_stack.tf file which must have all variables declarations, existing values and logic and outputs as well. I already have provider.tf file which has providewr information. 
-2. I am using aws_region variable to pass region value in provider.tf file so manage this variable declaration accordingly in tap_stack.tf 
-3. I need tap_stack.tf in a way, it should create all modules instead of pointing anything to existing one. I am going to create brand new stack 
-4. Terraform logic should match what exactly is needed and with best practices
+# Terraform Multi-Environment Infrastructure (us-west-2)
+
+## Objective
+Create consistent infrastructure for multiple environments in **AWS** using **Terraform (HCL)** in the `us-west-2` region.
+
+You must configure **production**, **staging**, and **development** environments, each isolated in its own **VPC**.
+
+---
+
+## Requirements
+
+1. **VPC Isolation**  
+   - Each environment must be implemented in a separate VPC.
+
+2. **Tagging Strategy**  
+   - Apply consistent tags to all resources:  
+     - `Environment`  
+     - `Owner`  
+     - `Purpose`  
+
+3. **Network ACLs**  
+   - Define rules to **prevent cross-environment traffic**.
+
+4. **Instance Types**  
+   - Development: `t2.micro`  
+   - Staging: `t3.medium`  
+   - Production: `m5.large`
+
+5. **Input Variables**  
+   - Control environment details such as **CIDR block sizes**.
+
+6. **IAM Roles & Policies**  
+   - Ensure **consistent IAM roles and policies** across environments for secure access.
+
+7. **Single State File**  
+   - Maintain **one Terraform state file** for all three environments.
+
+8. **Exclusions**  
+   - No CloudWatch monitoring/logging resources.  
+   - No encryption at rest or in transit.
+
+9. **Terraform Features**  
+   - Use of `for_each` is allowed and encouraged.
+
+---
+
+## Implementation Notes
+
+- The entire Terraform logic must reside in **`tap_stack.tf`**, including:
+  - Variable declarations
+  - Default values
+  - Logic for resource creation
+  - Outputs  
+
+- **`provider.tf`** already exists and defines provider configuration.  
+  - The `aws_region` variable must be declared in `tap_stack.tf` and passed to `provider.tf`.
+
+- This should be a **brand-new stack**:  
+  - No pointers to pre-existing modules.  
+  - All modules/resources must be created within this configuration.
+
+- Follow **Terraform best practices** for structure and maintainability.
+
+---
+
