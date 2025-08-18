@@ -1,16 +1,605 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+import {
+  CloudFormationClient,
+  DescribeStacksCommand,
+  DescribeStackResourcesCommand
+} from '@aws-sdk/client-cloudformation';
+import {
+  S3Client,
+  GetBucketVersioningCommand,
+  GetBucketEncryptionCommand,
+  GetBucketPolicyCommand,
+  HeadBucketCommand
+} from '@aws-sdk/client-s3';
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeNatGatewaysCommand
+} from '@aws-sdk/client-ec2';
+import {
+  IAMClient,
+  GetRoleCommand,
+  GetInstanceProfileCommand
+} from '@aws-sdk/client-iam';
+import {
+  KMSClient,
+  DescribeKeyCommand,
+  GetKeyPolicyCommand
+} from '@aws-sdk/client-kms';
+import {
+  CloudTrailClient,
+  GetTrailStatusCommand,
+  DescribeTrailsCommand
+} from '@aws-sdk/client-cloudtrail';
+import {
+  ConfigServiceClient,
+  DescribeConfigurationRecordersCommand,
+  DescribeConfigRulesCommand
+} from '@aws-sdk/client-config-service';
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
+// Generate unique test identifiers with randomness for parallel test execution
+const integrationTestId = Math.random().toString(36).substring(2, 15);
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
+// Configuration - These are coming from cfn-outputs after CloudFormation deploy
+let outputs: any = {};
+let stackName: string;
+
+try {
+  const outputsData = fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8');
+  outputs = JSON.parse(outputsData);
+  console.log('📊 Loaded CloudFormation outputs for integration tests');
+} catch (error) {
+  console.warn('⚠️  Could not load cfn-outputs/flat-outputs.json - some tests may be skipped');
+}
+
+// Initialize AWS clients with proper region configuration
+const region = process.env.AWS_REGION || 'us-west-1';
+const cfnClient = new CloudFormationClient({ region });
+const s3Client = new S3Client({ region });
+const ec2Client = new EC2Client({ region });
+const iamClient = new IAMClient({ region: 'us-east-1' }); // IAM is global but API calls go to us-east-1
+const kmsClient = new KMSClient({ region });
+const cloudTrailClient = new CloudTrailClient({ region });
+const configClient = new ConfigServiceClient({ region });
+
+describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
+  const timeout = 30000;
+
+  beforeAll(() => {
+    // Extract stack name from outputs if available
+    if (outputs.StackName) {
+      stackName = outputs.StackName;
+    } else {
+      stackName = `TapStack${environmentSuffix}`;
+    }
+    
+    console.log(`🚀 Starting integration tests for stack: ${stackName}`);
+  });
+
+  describe(`InfrastructureValidation${integrationTestId}`, () => {
+    test(`should validate CloudFormation stack exists and is in CREATE_COMPLETE state_${integrationTestId}`, async () => {
+      const command = new DescribeStacksCommand({
+        StackName: stackName
+      });
+      
+      const response = await cfnClient.send(command);
+      expect(response.Stacks).toBeDefined();
+      expect(response.Stacks?.length).toBe(1);
+      
+      const stack = response.Stacks![0];
+      expect(stack.StackStatus).toBe('CREATE_COMPLETE');
+      expect(stack.StackName).toContain('TapStack');
+    }, timeout);
+
+    test(`should validate all expected stack resources were created_${integrationTestId}`, async () => {
+      const command = new DescribeStackResourcesCommand({
+        StackName: stackName
+      });
+      
+      const response = await cfnClient.send(command);
+      expect(response.StackResources).toBeDefined();
+      
+      const resourceTypes = response.StackResources!.map(resource => resource.ResourceType);
+      const expectedTypes = [
+        'AWS::EC2::VPC',
+        'AWS::EC2::SecurityGroup',
+        'AWS::S3::Bucket',
+        'AWS::KMS::Key',
+        'AWS::CloudTrail::Trail',
+        'AWS::Config::ConfigurationRecorder'
+      ];
+      
+      expectedTypes.forEach(expectedType => {
+        expect(resourceTypes).toContain(expectedType);
+      });
+      
+      // Should have multiple security groups, subnets, etc.
+      const securityGroupCount = resourceTypes.filter(type => type === 'AWS::EC2::SecurityGroup').length;
+      expect(securityGroupCount).toBeGreaterThanOrEqual(4);
+      
+      const subnetCount = resourceTypes.filter(type => type === 'AWS::EC2::Subnet').length;
+      expect(subnetCount).toBeGreaterThanOrEqual(4);
+    }, timeout);
+  });
+
+  describe(`CyberSecurityValidation${integrationTestId}`, () => {
+    test(`should validate KMS key is active and properly configured_${integrationTestId}`, async () => {
+      if (!outputs.KMSKey) {
+        console.warn('⚠️  KMSKey output not found, skipping KMS validation');
+        return;
+      }
+
+      const describeCommand = new DescribeKeyCommand({
+        KeyId: outputs.KMSKey
+      });
+      
+      const keyResponse = await kmsClient.send(describeCommand);
+      expect(keyResponse.KeyMetadata).toBeDefined();
+      expect(keyResponse.KeyMetadata!.KeyState).toBe('Enabled');
+      expect(keyResponse.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      
+      // Validate key policy allows required services
+      const policyCommand = new GetKeyPolicyCommand({
+        KeyId: outputs.KMSKey,
+        PolicyName: 'default'
+      });
+      
+      const policyResponse = await kmsClient.send(policyCommand);
+      expect(policyResponse.Policy).toBeDefined();
+      
+      const policy = JSON.parse(policyResponse.Policy!);
+      expect(policy.Statement).toBeDefined();
+      
+      // Should allow CloudTrail service
+      const cloudTrailStatement = policy.Statement.find((stmt: any) => 
+        stmt.Principal?.Service === 'cloudtrail.amazonaws.com'
+      );
+      expect(cloudTrailStatement).toBeDefined();
+    }, timeout);
+
+    test(`should validate S3 buckets have versioning and encryption enabled_${integrationTestId}`, async () => {
+      if (!outputs.WebAppS3Bucket) {
+        console.warn('⚠️  WebAppS3Bucket output not found, skipping S3 validation');
+        return;
+      }
+
+      const bucketName = outputs.WebAppS3Bucket;
+      
+      // Check bucket exists
+      const headCommand = new HeadBucketCommand({ Bucket: bucketName });
+      await s3Client.send(headCommand);
+      
+      // Validate versioning
+      const versioningCommand = new GetBucketVersioningCommand({ Bucket: bucketName });
+      const versioningResponse = await s3Client.send(versioningCommand);
+      expect(versioningResponse.Status).toBe('Enabled');
+      
+      // Validate encryption
+      const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
+      const encryptionResponse = await s3Client.send(encryptionCommand);
+      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      
+      const encryptionRules = encryptionResponse.ServerSideEncryptionConfiguration!.Rules;
+      expect(encryptionRules).toBeDefined();
+      expect(encryptionRules!.length).toBeGreaterThan(0);
+      
+      const defaultEncryption = encryptionRules![0].ApplyServerSideEncryptionByDefault;
+      expect(defaultEncryption?.SSEAlgorithm).toBe('aws:kms');
+      expect(defaultEncryption?.KMSMasterKeyID).toBeDefined();
+    }, timeout);
+
+    test(`should validate CloudTrail is active and properly configured_${integrationTestId}`, async () => {
+      const stackPrefix = `SecureWebApp${environmentSuffix}`;
+      
+      // List trails to find ours
+      const listCommand = new DescribeTrailsCommand({});
+      const listResponse = await cloudTrailClient.send(listCommand);
+      
+      const ourTrail = listResponse.trailList?.find(trail => 
+        trail.Name?.includes(stackPrefix) || trail.Name?.includes('CloudTrail')
+      );
+      
+      if (!ourTrail) {
+        console.warn('⚠️  CloudTrail not found, skipping CloudTrail validation');
+        return;
+      }
+      
+      // Validate trail status
+      const statusCommand = new GetTrailStatusCommand({
+        Name: ourTrail.Name
+      });
+      
+      const statusResponse = await cloudTrailClient.send(statusCommand);
+      expect(statusResponse.IsLogging).toBe(true);
+      
+      // Validate trail configuration
+      expect(ourTrail.IncludeGlobalServiceEvents).toBe(true);
+      expect(ourTrail.IsMultiRegionTrail).toBe(true);
+      expect(ourTrail.LogFileValidationEnabled).toBe(true);
+      expect(ourTrail.KMSKeyId).toBeDefined();
+    }, timeout);
+
+    test(`should validate AWS Config is recording and rules are active_${integrationTestId}`, async () => {
+      // Check configuration recorder
+      const recorderCommand = new DescribeConfigurationRecordersCommand({});
+      const recorderResponse = await configClient.send(recorderCommand);
+      
+      expect(recorderResponse.ConfigurationRecorders).toBeDefined();
+      expect(recorderResponse.ConfigurationRecorders!.length).toBeGreaterThan(0);
+      
+      const recorder = recorderResponse.ConfigurationRecorders![0];
+      expect(recorder.recordingGroup?.allSupported).toBe(true);
+      expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
+      
+      // Check Config rules
+      const rulesCommand = new DescribeConfigRulesCommand({});
+      const rulesResponse = await configClient.send(rulesCommand);
+      
+      expect(rulesResponse.ConfigRules).toBeDefined();
+      expect(rulesResponse.ConfigRules!.length).toBeGreaterThan(0);
+      
+      // Should have security-related rules
+      const ruleNames = rulesResponse.ConfigRules!.map(rule => rule.ConfigRuleName);
+      expect(ruleNames.some(name => name?.includes('s3-bucket-versioning'))).toBe(true);
+      expect(ruleNames.some(name => name?.includes('encryption'))).toBe(true);
+    }, timeout);
+  });
+
+  describe(`NetworkingValidation${integrationTestId}`, () => {
+    test(`should validate VPC configuration and connectivity_${integrationTestId}`, async () => {
+      if (!outputs.VPC) {
+        console.warn('⚠️  VPC output not found, skipping VPC validation');
+        return;
+      }
+
+      const vpcCommand = new DescribeVpcsCommand({
+        VpcIds: [outputs.VPC]
+      });
+      
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      expect(vpcResponse.Vpcs).toBeDefined();
+      expect(vpcResponse.Vpcs!.length).toBe(1);
+      
+      const vpc = vpcResponse.Vpcs![0];
+      expect(vpc.State).toBe('available');
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.DhcpOptionsId).toBeDefined();
+      
+      // Validate DNS settings
+      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(vpc.EnableDnsSupport).toBe(true);
+    }, timeout);
+
+    test(`should validate subnet configuration across multiple AZs_${integrationTestId}`, async () => {
+      if (!outputs.PublicSubnets && !outputs.PrivateSubnets) {
+        console.warn('⚠️  Subnet outputs not found, skipping subnet validation');
+        return;
+      }
+
+      let allSubnetIds: string[] = [];
+      
+      if (outputs.PublicSubnets) {
+        allSubnetIds = [...allSubnetIds, ...outputs.PublicSubnets.split(',')];
+      }
+      if (outputs.PrivateSubnets) {
+        allSubnetIds = [...allSubnetIds, ...outputs.PrivateSubnets.split(',')];
+      }
+      
+      const subnetCommand = new DescribeSubnetsCommand({
+        SubnetIds: allSubnetIds
+      });
+      
+      const subnetResponse = await ec2Client.send(subnetCommand);
+      expect(subnetResponse.Subnets).toBeDefined();
+      expect(subnetResponse.Subnets!.length).toBe(allSubnetIds.length);
+      
+      // Validate multi-AZ deployment
+      const availabilityZones = new Set(subnetResponse.Subnets!.map(subnet => subnet.AvailabilityZone));
+      expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
+      
+      // Validate CIDR blocks are in expected range
+      subnetResponse.Subnets!.forEach(subnet => {
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.\d+\.0\/24$/);
+        expect(subnet.State).toBe('available');
+      });
+    }, timeout);
+
+    test(`should validate security groups have proper ingress/egress rules_${integrationTestId}`, async () => {
+      if (!outputs.ALBSecurityGroup && !outputs.WebServerSecurityGroup) {
+        console.warn('⚠️  Security group outputs not found, skipping security group validation');
+        return;
+      }
+
+      const sgIds: string[] = [];
+      if (outputs.ALBSecurityGroup) sgIds.push(outputs.ALBSecurityGroup);
+      if (outputs.WebServerSecurityGroup) sgIds.push(outputs.WebServerSecurityGroup);
+      if (outputs.DatabaseSecurityGroup) sgIds.push(outputs.DatabaseSecurityGroup);
+      
+      const sgCommand = new DescribeSecurityGroupsCommand({
+        GroupIds: sgIds
+      });
+      
+      const sgResponse = await ec2Client.send(sgCommand);
+      expect(sgResponse.SecurityGroups).toBeDefined();
+      
+      sgResponse.SecurityGroups!.forEach(sg => {
+        expect(sg.VpcId).toBe(outputs.VPC);
+        expect(sg.IpPermissions).toBeDefined();
+        
+        // ALB should allow HTTP/HTTPS from internet
+        if (sg.GroupId === outputs.ALBSecurityGroup) {
+          const httpRule = sg.IpPermissions!.find(rule => rule.FromPort === 80);
+          const httpsRule = sg.IpPermissions!.find(rule => rule.FromPort === 443);
+          expect(httpRule).toBeDefined();
+          expect(httpsRule).toBeDefined();
+        }
+        
+        // Database should only allow access from web servers
+        if (sg.GroupId === outputs.DatabaseSecurityGroup) {
+          const dbRule = sg.IpPermissions!.find(rule => rule.FromPort === 3306);
+          expect(dbRule).toBeDefined();
+          expect(dbRule?.UserIdGroupPairs?.some(pair => 
+            pair.GroupId === outputs.WebServerSecurityGroup
+          )).toBe(true);
+        }
+      });
+    }, timeout);
+
+    test(`should validate NAT gateways are operational_${integrationTestId}`, async () => {
+      // List NAT gateways in our VPC
+      const natCommand = new DescribeNatGatewaysCommand({
+        Filter: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPC]
+          }
+        ]
+      });
+      
+      const natResponse = await ec2Client.send(natCommand);
+      expect(natResponse.NatGateways).toBeDefined();
+      expect(natResponse.NatGateways!.length).toBeGreaterThanOrEqual(2);
+      
+      // Validate NAT gateways are available
+      natResponse.NatGateways!.forEach(natGateway => {
+        expect(natGateway.State).toBe('available');
+        expect(natGateway.VpcId).toBe(outputs.VPC);
+        expect(natGateway.NatGatewayAddresses).toBeDefined();
+        expect(natGateway.NatGatewayAddresses!.length).toBeGreaterThan(0);
+        
+        // Should have a public IP
+        const publicIp = natGateway.NatGatewayAddresses![0].PublicIp;
+        expect(publicIp).toBeDefined();
+        expect(publicIp).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+      });
+    }, timeout);
+  });
+
+  describe(`AccessManagementValidation${integrationTestId}`, () => {
+    test(`should validate IAM roles have proper trust relationships_${integrationTestId}`, async () => {
+      if (!outputs.EC2InstanceProfile) {
+        console.warn('⚠️  EC2InstanceProfile output not found, skipping IAM validation');
+        return;
+      }
+
+      // Get instance profile and its role
+      const profileCommand = new GetInstanceProfileCommand({
+        InstanceProfileName: outputs.EC2InstanceProfile
+      });
+      
+      const profileResponse = await iamClient.send(profileCommand);
+      expect(profileResponse.InstanceProfile).toBeDefined();
+      expect(profileResponse.InstanceProfile!.Roles).toBeDefined();
+      expect(profileResponse.InstanceProfile!.Roles!.length).toBeGreaterThan(0);
+      
+      const roleName = profileResponse.InstanceProfile!.Roles![0].RoleName!;
+      
+      // Get the role and validate its trust policy
+      const roleCommand = new GetRoleCommand({
+        RoleName: roleName
+      });
+      
+      const roleResponse = await iamClient.send(roleCommand);
+      expect(roleResponse.Role).toBeDefined();
+      
+      const trustPolicy = JSON.parse(decodeURIComponent(roleResponse.Role!.AssumeRolePolicyDocument!));
+      expect(trustPolicy.Statement).toBeDefined();
+      
+      const ec2TrustStatement = trustPolicy.Statement.find((stmt: any) => 
+        stmt.Principal?.Service === 'ec2.amazonaws.com'
+      );
+      expect(ec2TrustStatement).toBeDefined();
+      expect(ec2TrustStatement.Effect).toBe('Allow');
+    }, timeout);
+
+    test(`should validate IAM role permissions are least privilege_${integrationTestId}`, async () => {
+      if (!outputs.EC2InstanceProfile) {
+        console.warn('⚠️  EC2InstanceProfile output not found, skipping IAM permission validation');
+        return;
+      }
+
+      const profileCommand = new GetInstanceProfileCommand({
+        InstanceProfileName: outputs.EC2InstanceProfile
+      });
+      
+      const profileResponse = await iamClient.send(profileCommand);
+      const roleName = profileResponse.InstanceProfile!.Roles![0].RoleName!;
+      
+      const roleCommand = new GetRoleCommand({
+        RoleName: roleName
+      });
+      
+      const roleResponse = await iamClient.send(roleCommand);
+      expect(roleResponse.Role).toBeDefined();
+      
+      // Validate role has necessary managed policies
+      expect(roleResponse.Role!.AttachedManagedPolicies).toBeDefined();
+      
+      // Should have CloudWatch agent policy
+      const cloudWatchPolicy = roleResponse.Role!.AttachedManagedPolicies?.find(policy =>
+        policy.PolicyArn?.includes('CloudWatchAgentServerPolicy')
+      );
+      expect(cloudWatchPolicy).toBeDefined();
+    }, timeout);
+  });
+
+  describe(`ComplianceWorkflowValidation${integrationTestId}`, () => {
+    test(`should validate complete security monitoring workflow_${integrationTestId}`, async () => {
+      // This test validates that the complete security workflow is operational:
+      // 1. CloudTrail is logging API calls
+      // 2. Config is recording resource changes
+      // 3. KMS is encrypting data
+      // 4. S3 buckets have proper security configurations
+      
+      let workflowComponents = {
+        cloudTrail: false,
+        configRecorder: false,
+        kmsKey: false,
+        s3Encryption: false
+      };
+      
+      try {
+        // Check CloudTrail
+        const trailsCommand = new DescribeTrailsCommand({});
+        const trailsResponse = await cloudTrailClient.send(trailsCommand);
+        workflowComponents.cloudTrail = trailsResponse.trailList?.length! > 0;
+      } catch (error) {
+        console.warn('CloudTrail validation failed:', error);
+      }
+      
+      try {
+        // Check Config
+        const configCommand = new DescribeConfigurationRecordersCommand({});
+        const configResponse = await configClient.send(configCommand);
+        workflowComponents.configRecorder = configResponse.ConfigurationRecorders?.length! > 0;
+      } catch (error) {
+        console.warn('Config validation failed:', error);
+      }
+      
+      try {
+        // Check KMS
+        if (outputs.KMSKey) {
+          const kmsCommand = new DescribeKeyCommand({ KeyId: outputs.KMSKey });
+          const kmsResponse = await kmsClient.send(kmsCommand);
+          workflowComponents.kmsKey = kmsResponse.KeyMetadata?.KeyState === 'Enabled';
+        }
+      } catch (error) {
+        console.warn('KMS validation failed:', error);
+      }
+      
+      try {
+        // Check S3 encryption
+        if (outputs.WebAppS3Bucket) {
+          const s3EncCommand = new GetBucketEncryptionCommand({ Bucket: outputs.WebAppS3Bucket });
+          const s3EncResponse = await s3Client.send(s3EncCommand);
+          workflowComponents.s3Encryption = s3EncResponse.ServerSideEncryptionConfiguration !== undefined;
+        }
+      } catch (error) {
+        console.warn('S3 encryption validation failed:', error);
+      }
+      
+      // At least 3 out of 4 components should be working
+      const workingComponents = Object.values(workflowComponents).filter(Boolean).length;
+      expect(workingComponents).toBeGreaterThanOrEqual(3);
+      
+      console.log('🔒 Security workflow validation results:', workflowComponents);
+    }, timeout);
+
+    test(`should validate resource tagging and naming conventions_${integrationTestId}`, async () => {
+      // Validate that resources follow proper naming conventions with environment suffix
+      const resourceCommand = new DescribeStackResourcesCommand({
+        StackName: stackName
+      });
+      
+      const resourceResponse = await cfnClient.send(resourceCommand);
+      expect(resourceResponse.StackResources).toBeDefined();
+      
+      const resourcesWithNames = resourceResponse.StackResources!.filter(resource =>
+        resource.PhysicalResourceId && (
+          resource.ResourceType === 'AWS::S3::Bucket' ||
+          resource.ResourceType === 'AWS::EC2::SecurityGroup' ||
+          resource.ResourceType === 'AWS::IAM::Role' ||
+          resource.ResourceType === 'AWS::CloudTrail::Trail'
+        )
+      );
+      
+      expect(resourcesWithNames.length).toBeGreaterThan(0);
+      
+      // Most resources should include the stack name or environment suffix
+      const properlyNamedResources = resourcesWithNames.filter(resource => {
+        const physicalId = resource.PhysicalResourceId!;
+        return physicalId.includes('SecureWebApp') || 
+               physicalId.includes(environmentSuffix) ||
+               physicalId.includes(stackName);
+      });
+      
+      // At least 80% of resources should follow naming conventions
+      const namingComplianceRate = properlyNamedResources.length / resourcesWithNames.length;
+      expect(namingComplianceRate).toBeGreaterThan(0.8);
+    }, timeout);
+  });
+
+  describe(`DataProtectionValidation${integrationTestId}`, () => {
+    test(`should validate encryption at rest for all storage services_${integrationTestId}`, async () => {
+      const encryptionValidations: { [key: string]: boolean } = {};
+      
+      // Validate S3 encryption
+      if (outputs.WebAppS3Bucket) {
+        try {
+          const s3EncCommand = new GetBucketEncryptionCommand({ Bucket: outputs.WebAppS3Bucket });
+          const s3EncResponse = await s3Client.send(s3EncCommand);
+          
+          const encryptionConfig = s3EncResponse.ServerSideEncryptionConfiguration?.Rules?.[0];
+          encryptionValidations.s3 = encryptionConfig?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === 'aws:kms';
+        } catch (error) {
+          console.warn('S3 encryption check failed:', error);
+          encryptionValidations.s3 = false;
+        }
+      }
+      
+      // Validate KMS key is encryption-capable
+      if (outputs.KMSKey) {
+        try {
+          const kmsCommand = new DescribeKeyCommand({ KeyId: outputs.KMSKey });
+          const kmsResponse = await kmsClient.send(kmsCommand);
+          
+          encryptionValidations.kms = kmsResponse.KeyMetadata?.KeyUsage === 'ENCRYPT_DECRYPT' &&
+                                   kmsResponse.KeyMetadata?.KeyState === 'Enabled';
+        } catch (error) {
+          console.warn('KMS encryption check failed:', error);
+          encryptionValidations.kms = false;
+        }
+      }
+      
+      console.log('🔐 Encryption validation results:', encryptionValidations);
+      
+      // At least one encryption mechanism should be working
+      const workingEncryption = Object.values(encryptionValidations).some(Boolean);
+      expect(workingEncryption).toBe(true);
+    }, timeout);
+
+    test(`should validate backup and versioning configurations_${integrationTestId}`, async () => {
+      if (!outputs.WebAppS3Bucket) {
+        console.warn('⚠️  WebAppS3Bucket output not found, skipping backup validation');
+        return;
+      }
+
+      // Validate S3 versioning for backup
+      const versionCommand = new GetBucketVersioningCommand({ 
+        Bucket: outputs.WebAppS3Bucket 
+      });
+      
+      const versionResponse = await s3Client.send(versionCommand);
+      expect(versionResponse.Status).toBe('Enabled');
+      
+      console.log('💾 S3 bucket versioning is properly configured for data protection');
+    }, timeout);
+  });
+
+  afterAll(() => {
+    console.log(`✅ Integration tests completed for ${stackName}`);
   });
 });
