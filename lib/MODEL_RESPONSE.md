@@ -1,857 +1,698 @@
-I'll create a comprehensive Pulumi Python program that implements a secure, resilient AWS infrastructure with CI/CD pipeline capabilities. This solution will strictly adhere to all the specified requirements.
+I'll help you build out a comprehensive Terraform setup for your production CI/CD pipeline. This is definitely a complex setup, so I'll break it down into modular components that follow AWS best practices.
 
 ## Project Structure
 
+Let's start with a well-organized directory structure:
+
 ```
-corp-aws-infrastructure/
-├── __main__.py
-├── requirements.txt
-├── Pulumi.yaml
-├── Pulumi.dev.yaml
+terraform/
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── terraform.tfvars.example
 ├── modules/
-│   ├── __init__.py
-│   ├── networking.py
-│   ├── security.py
-│   ├── compute.py
-│   ├── database.py
-│   ├── storage.py
-│   ├── monitoring.py
-│   └── cicd.py
-├── policies/
-│   └── iam_policies.py
-└── tests/
-    ├── test_infrastructure.py
-    └── test_integration.py
+│   ├── networking/
+│   ├── security/
+│   ├── database/
+│   ├── eks/
+│   ├── alb/
+│   ├── kms/
+│   ├── ssm/
+│   └── cicd/
+└── environments/
+    ├── dev/
+    ├── staging/
+    └── prod/
 ```
 
-## Core Infrastructure Implementation
+## Main Configuration
 
-### `__main__.py`
-```python
-"""
-Corporate AWS Infrastructure - Main Pulumi Program
-Implements secure, resilient AWS environment with CI/CD pipeline
-"""
+**main.tf**
 
-import pulumi
-from pulumi import Config, Output
-from typing import Dict, Any
-import json
-
-from modules.networking import NetworkingModule
-from modules.security import SecurityModule
-from modules.compute import ComputeModule
-from modules.database import DatabaseModule
-from modules.storage import StorageModule
-from modules.monitoring import MonitoringModule
-from modules.cicd import CICDModule
-
-# Configuration and tags
-config = Config()
-stack = pulumi.get_stack()
-
-# Common tags applied to all resources
-common_tags: Dict[str, str] = {
-    "Environment": config.get("environment") or "production",
-    "Project": config.get("project") or "corp-infrastructure",
-    "Stack": stack,
-    "ManagedBy": "pulumi",
-    "Owner": config.get("owner") or "platform-team",
-    "CostCenter": config.get("cost_center") or "engineering"
+```hcl
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.23"
+    }
+  }
 }
 
-def main() -> None:
-    """
-    Main function to orchestrate infrastructure deployment
-    """
-    
-    # 1. Security Foundation (KMS, Parameter Store)
-    security = SecurityModule(
-        name_prefix="corp",
-        tags=common_tags
-    )
-    
-    # 2. Networking Infrastructure
-    networking = NetworkingModule(
-        name_prefix="corp",
-        cidr_block="10.0.0.0/16",
-        availability_zones=["us-west-2a", "us-west-2b"],
-        tags=common_tags
-    )
-    
-    # 3. Storage Infrastructure
-    storage = StorageModule(
-        name_prefix="corp",
-        kms_key=security.kms_key,
-        tags=common_tags
-    )
-    
-    # 4. Database Infrastructure
-    database = DatabaseModule(
-        name_prefix="corp",
-        vpc_id=networking.vpc.id,
-        private_subnet_ids=networking.private_subnet_ids,
-        kms_key=security.kms_key,
-        security_group_id=security.database_security_group.id,
-        tags=common_tags
-    )
-    
-    # 5. Monitoring Infrastructure
-    monitoring = MonitoringModule(
-        name_prefix="corp",
-        tags=common_tags
-    )
-    
-    # 6. Compute Infrastructure (EKS)
-    compute = ComputeModule(
-        name_prefix="corp",
-        vpc_id=networking.vpc.id,
-        private_subnet_ids=networking.private_subnet_ids,
-        public_subnet_ids=networking.public_subnet_ids,
-        kms_key=security.kms_key,
-        cluster_role_arn=security.eks_cluster_role.arn,
-        node_group_role_arn=security.eks_node_group_role.arn,
-        alb_security_group_id=security.alb_security_group.id,
-        eks_security_group_id=security.eks_security_group.id,
-        log_group=monitoring.eks_log_group,
-        tags=common_tags
-    )
-    
-    # 7. CI/CD Pipeline
-    cicd = CICDModule(
-        name_prefix="corp",
-        eks_cluster_name=compute.cluster.name,
-        artifacts_bucket=storage.artifacts_bucket,
-        codebuild_role_arn=security.codebuild_role.arn,
-        codepipeline_role_arn=security.codepipeline_role.arn,
-        kms_key=security.kms_key,
-        tags=common_tags
-    )
-    
-    # Export important outputs
-    export_outputs(networking, compute, database, storage, monitoring, cicd)
+provider "aws" {
+  region = var.aws_region
 
-def export_outputs(networking, compute, database, storage, monitoring, cicd) -> None:
-    """Export key infrastructure outputs"""
-    
-    # Networking outputs
-    pulumi.export("vpc_id", networking.vpc.id)
-    pulumi.export("public_subnet_ids", networking.public_subnet_ids)
-    pulumi.export("private_subnet_ids", networking.private_subnet_ids)
-    
-    # Compute outputs
-    pulumi.export("eks_cluster_name", compute.cluster.name)
-    pulumi.export("eks_cluster_endpoint", compute.cluster.endpoint)
-    pulumi.export("alb_dns_name", compute.alb.dns_name)
-    pulumi.export("alb_zone_id", compute.alb.zone_id)
-    
-    # Database outputs
-    pulumi.export("rds_endpoint", database.instance.endpoint)
-    pulumi.export("rds_port", database.instance.port)
-    
-    # Storage outputs
-    pulumi.export("artifacts_bucket_name", storage.artifacts_bucket.bucket)
-    pulumi.export("logs_bucket_name", storage.logs_bucket.bucket)
-    
-    # Monitoring outputs
-    pulumi.export("cloudwatch_log_group", monitoring.eks_log_group.name)
-    
-    # CI/CD outputs
-    pulumi.export("codepipeline_name", cicd.pipeline.name)
-    pulumi.export("codebuild_project_name", cicd.build_project.name)
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "Terraform"
+      Owner       = var.owner
+    }
+  }
+}
 
-if __name__ == "__main__":
-    main()
+# Data sources
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+data "aws_caller_identity" "current" {}
+
+# KMS module - needs to be first for encryption keys
+module "kms" {
+  source = "./modules/kms"
+
+  environment  = var.environment
+  project_name = var.project_name
+}
+
+# Networking module
+module "networking" {
+  source = "./modules/networking"
+
+  environment         = var.environment
+  project_name        = var.project_name
+  vpc_cidr           = var.vpc_cidr
+  availability_zones = data.aws_availability_zones.available.names
+  kms_key_id         = module.kms.main_key_id
+}
+
+# Security module
+module "security" {
+  source = "./modules/security"
+
+  environment  = var.environment
+  project_name = var.project_name
+  vpc_id       = module.networking.vpc_id
+  kms_key_id   = module.kms.main_key_id
+}
+
+# SSM module for secrets management
+module "ssm" {
+  source = "./modules/ssm"
+
+  environment  = var.environment
+  project_name = var.project_name
+  kms_key_id   = module.kms.main_key_id
+}
+
+# Database module
+module "database" {
+  source = "./modules/database"
+
+  environment           = var.environment
+  project_name          = var.project_name
+  vpc_id               = module.networking.vpc_id
+  private_subnet_ids   = module.networking.private_subnet_ids
+  database_sg_id       = module.security.database_sg_id
+  kms_key_id           = module.kms.main_key_id
+  db_username          = var.db_username
+  db_name              = var.db_name
+}
+
+# EKS module
+module "eks" {
+  source = "./modules/eks"
+
+  environment         = var.environment
+  project_name        = var.project_name
+  vpc_id             = module.networking.vpc_id
+  private_subnet_ids = module.networking.private_subnet_ids
+  eks_sg_id          = module.security.eks_sg_id
+  kms_key_id         = module.kms.main_key_id
+}
+
+# ALB module
+module "alb" {
+  source = "./modules/alb"
+
+  environment        = var.environment
+  project_name       = var.project_name
+  vpc_id            = module.networking.vpc_id
+  public_subnet_ids = module.networking.public_subnet_ids
+  alb_sg_id         = module.security.alb_sg_id
+  kms_key_id        = module.kms.main_key_id
+}
+
+# CI/CD module
+module "cicd" {
+  source = "./modules/cicd"
+
+  environment     = var.environment
+  project_name    = var.project_name
+  github_repo     = var.github_repo
+  github_branch   = var.github_branch
+  eks_cluster_name = module.eks.cluster_name
+  kms_key_id      = module.kms.main_key_id
+
+  depends_on = [module.eks]
+}
 ```
 
-### `modules/networking.py`
-```python
-"""
-Networking Module - VPC, Subnets, Gateways, Route Tables
-"""
+**variables.tf**
 
-import pulumi
-import pulumi_aws as aws
-from typing import List, Dict, Any
-from pulumi import Output
+```hcl
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-west-2"
+}
 
-class NetworkingModule:
-    """
-    Creates secure networking infrastructure with multi-AZ deployment
-    """
-    
-    def __init__(
-        self,
-        name_prefix: str,
-        cidr_block: str,
-        availability_zones: List[str],
-        tags: Dict[str, Any]
-    ):
-        self.name_prefix = name_prefix
-        self.cidr_block = cidr_block
-        self.availability_zones = availability_zones
-        self.tags = tags
-        
-        # Create networking components
-        self._create_vpc()
-        self._create_subnets()
-        self._create_gateways()
-        self._create_route_tables()
-        
-    def _create_vpc(self) -> None:
-        """Create VPC with DNS support"""
-        self.vpc = aws.ec2.Vpc(
-            f"{self.name_prefix}-vpc",
-            cidr_block=self.cidr_block,
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-vpc"
-            }
-        )
-        
-    def _create_subnets(self) -> None:
-        """Create public and private subnets across AZs"""
-        self.public_subnets = []
-        self.private_subnets = []
-        
-        for i, az in enumerate(self.availability_zones):
-            # Public subnet
-            public_subnet = aws.ec2.Subnet(
-                f"{self.name_prefix}-public-subnet-{i+1}",
-                vpc_id=self.vpc.id,
-                cidr_block=f"10.0.{i+1}.0/24",
-                availability_zone=az,
-                map_public_ip_on_launch=True,
-                tags={
-                    **self.tags,
-                    "Name": f"{self.name_prefix}-public-subnet-{i+1}",
-                    "Type": "public",
-                    "kubernetes.io/role/elb": "1"
-                }
-            )
-            self.public_subnets.append(public_subnet)
-            
-            # Private subnet
-            private_subnet = aws.ec2.Subnet(
-                f"{self.name_prefix}-private-subnet-{i+1}",
-                vpc_id=self.vpc.id,
-                cidr_block=f"10.0.{i+10}.0/24",
-                availability_zone=az,
-                tags={
-                    **self.tags,
-                    "Name": f"{self.name_prefix}-private-subnet-{i+1}",
-                    "Type": "private",
-                    "kubernetes.io/role/internal-elb": "1"
-                }
-            )
-            self.private_subnets.append(private_subnet)
-            
-    def _create_gateways(self) -> None:
-        """Create Internet Gateway and NAT Gateway"""
-        # Internet Gateway
-        self.igw = aws.ec2.InternetGateway(
-            f"{self.name_prefix}-igw",
-            vpc_id=self.vpc.id,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-igw"
-            }
-        )
-        
-        # Elastic IP for NAT Gateway
-        self.nat_eip = aws.ec2.Eip(
-            f"{self.name_prefix}-nat-eip",
-            domain="vpc",
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-nat-eip"
-            }
-        )
-        
-        # NAT Gateway in first public subnet
-        self.nat_gateway = aws.ec2.NatGateway(
-            f"{self.name_prefix}-nat-gateway",
-            allocation_id=self.nat_eip.id,
-            subnet_id=self.public_subnets[0].id,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-nat-gateway"
-            }
-        )
-        
-    def _create_route_tables(self) -> None:
-        """Create and configure route tables"""
-        # Public route table
-        self.public_route_table = aws.ec2.RouteTable(
-            f"{self.name_prefix}-public-rt",
-            vpc_id=self.vpc.id,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-public-rt"
-            }
-        )
-        
-        # Public route to Internet Gateway
-        aws.ec2.Route(
-            f"{self.name_prefix}-public-route",
-            route_table_id=self.public_route_table.id,
-            destination_cidr_block="0.0.0.0/0",
-            gateway_id=self.igw.id
-        )
-        
-        # Associate public subnets with public route table
-        for i, subnet in enumerate(self.public_subnets):
-            aws.ec2.RouteTableAssociation(
-                f"{self.name_prefix}-public-rta-{i+1}",
-                subnet_id=subnet.id,
-                route_table_id=self.public_route_table.id
-            )
-            
-        # Private route table
-        self.private_route_table = aws.ec2.RouteTable(
-            f"{self.name_prefix}-private-rt",
-            vpc_id=self.vpc.id,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-private-rt"
-            }
-        )
-        
-        # Private route to NAT Gateway
-        aws.ec2.Route(
-            f"{self.name_prefix}-private-route",
-            route_table_id=self.private_route_table.id,
-            destination_cidr_block="0.0.0.0/0",
-            nat_gateway_id=self.nat_gateway.id
-        )
-        
-        # Associate private subnets with private route table
-        for i, subnet in enumerate(self.private_subnets):
-            aws.ec2.RouteTableAssociation(
-                f"{self.name_prefix}-private-rta-{i+1}",
-                subnet_id=subnet.id,
-                route_table_id=self.private_route_table.id
-            )
-    
-    @property
-    def public_subnet_ids(self) -> Output[List[str]]:
-        """Return list of public subnet IDs"""
-        return Output.all(*[subnet.id for subnet in self.public_subnets])
-    
-    @property
-    def private_subnet_ids(self) -> Output[List[str]]:
-        """Return list of private subnet IDs"""
-        return Output.all(*[subnet.id for subnet in self.private_subnets])
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be dev, staging, or prod."
+  }
+}
+
+variable "project_name" {
+  description = "Project name for resource naming"
+  type        = string
+  default     = "corp"
+}
+
+variable "owner" {
+  description = "Resource owner for tagging"
+  type        = string
+}
+
+variable "vpc_cidr" {
+  description = "CIDR block for VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "db_username" {
+  description = "Database master username"
+  type        = string
+  default     = "postgres"
+}
+
+variable "db_name" {
+  description = "Database name"
+  type        = string
+  default     = "corpdb"
+}
+
+variable "github_repo" {
+  description = "GitHub repository for CI/CD"
+  type        = string
+}
+
+variable "github_branch" {
+  description = "GitHub branch for CI/CD"
+  type        = string
+  default     = "main"
+}
 ```
 
-### `modules/security.py`
-```python
-"""
-Security Module - IAM, KMS, Security Groups, Parameter Store
-"""
+## KMS Module
 
-import pulumi
-import pulumi_aws as aws
-import json
-from typing import Dict, Any
-from policies.iam_policies import IAMPolicies
+**modules/kms/main.tf**
 
-class SecurityModule:
-    """
-    Creates comprehensive security infrastructure with least privilege access
-    """
-    
-    def __init__(self, name_prefix: str, tags: Dict[str, Any]):
-        self.name_prefix = name_prefix
-        self.tags = tags
-        self.policies = IAMPolicies()
-        
-        # Create security components
-        self._create_kms_key()
-        self._create_parameter_store()
-        self._create_iam_roles()
-        self._create_security_groups()
-        
-    def _create_kms_key(self) -> None:
-        """Create KMS key for encryption"""
-        self.kms_key = aws.kms.Key(
-            f"{self.name_prefix}-kms-key",
-            description=f"KMS key for {self.name_prefix} infrastructure encryption",
-            deletion_window_in_days=7,
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "Enable IAM User Permissions",
-                        "Effect": "Allow",
-                        "Principal": {"AWS": f"arn:aws:iam::{aws.get_caller_identity().account_id}:root"},
-                        "Action": "kms:*",
-                        "Resource": "*"
-                    }
-                ]
-            }),
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-kms-key"
-            }
-        )
-        
-        self.kms_alias = aws.kms.Alias(
-            f"{self.name_prefix}-kms-alias",
-            name=f"alias/{self.name_prefix}-encryption-key",
-            target_key_id=self.kms_key.key_id
-        )
-        
-    def _create_parameter_store(self) -> None:
-        """Create Parameter Store parameters for secrets"""
-        # Database password
-        self.db_password_param = aws.ssm.Parameter(
-            f"{self.name_prefix}-db-password",
-            name=f"/{self.name_prefix}/database/password",
-            type="SecureString",
-            value="TempPassword123!",  # Should be updated after deployment
-            key_id=self.kms_key.arn,
-            description="Database master password",
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-db-password"
-            }
-        )
-        
-        # GitHub token for CI/CD
-        self.github_token_param = aws.ssm.Parameter(
-            f"{self.name_prefix}-github-token",
-            name=f"/{self.name_prefix}/cicd/github-token",
-            type="SecureString",
-            value="placeholder-token",  # Should be updated after deployment
-            key_id=self.kms_key.arn,
-            description="GitHub personal access token for CI/CD",
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-github-token"
-            }
-        )
-        
-    def _create_iam_roles(self) -> None:
-        """Create IAM roles with least privilege policies"""
-        
-        # EKS Cluster Role
-        self.eks_cluster_role = aws.iam.Role(
-            f"{self.name_prefix}-eks-cluster-role",
-            assume_role_policy=json.dumps(self.policies.eks_cluster_assume_role_policy()),
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-eks-cluster-role"
-            }
-        )
-        
-        # Attach required policies to EKS cluster role
-        aws.iam.RolePolicyAttachment(
-            f"{self.name_prefix}-eks-cluster-policy",
-            role=self.eks_cluster_role.name,
-            policy_arn="arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-        )
-        
-        # EKS Node Group Role
-        self.eks_node_group_role = aws.iam.Role(
-            f"{self.name_prefix}-eks-node-group-role",
-            assume_role_policy=json.dumps(self.policies.ec2_assume_role_policy()),
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-eks-node-group-role"
-            }
-        )
-        
-        # Attach required policies to EKS node group role
-        for policy_arn in [
-            "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-            "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
-            "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-        ]:
-            aws.iam.RolePolicyAttachment(
-                f"{self.name_prefix}-eks-node-{policy_arn.split('/')[-1]}",
-                role=self.eks_node_group_role.name,
-                policy_arn=policy_arn
-            )
-            
-        # CodeBuild Role
-        self.codebuild_role = aws.iam.Role(
-            f"{self.name_prefix}-codebuild-role",
-            assume_role_policy=json.dumps(self.policies.codebuild_assume_role_policy()),
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-codebuild-role"
-            }
-        )
-        
-        # CodeBuild policy
-        self.codebuild_policy = aws.iam.RolePolicy(
-            f"{self.name_prefix}-codebuild-policy",
-            role=self.codebuild_role.id,
-            policy=self.kms_key.arn.apply(
-                lambda arn: json.dumps(self.policies.codebuild_policy(arn))
-            )
-        )
-        
-        # CodePipeline Role
-        self.codepipeline_role = aws.iam.Role(
-            f"{self.name_prefix}-codepipeline-role",
-            assume_role_policy=json.dumps(self.policies.codepipeline_assume_role_policy()),
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-codepipeline-role"
-            }
-        )
-        
-        # CodePipeline policy
-        self.codepipeline_policy = aws.iam.RolePolicy(
-            f"{self.name_prefix}-codepipeline-policy",
-            role=self.codepipeline_role.id,
-            policy=self.kms_key.arn.apply(
-                lambda arn: json.dumps(self.policies.codepipeline_policy(arn))
-            )
-        )
-        
-    def _create_security_groups(self) -> None:
-        """Create security groups with restrictive rules"""
-        # Note: VPC ID will be set when this module is instantiated
-        self.vpc_id = None
-        
-    def create_security_groups_with_vpc(self, vpc_id: str) -> None:
-        """Create security groups after VPC is available"""
-        
-        # ALB Security Group - allows HTTP/HTTPS from internet
-        self.alb_security_group = aws.ec2.SecurityGroup(
-            f"{self.name_prefix}-alb-sg",
-            name=f"{self.name_prefix}-alb-sg",
-            description="Security group for Application Load Balancer",
-            vpc_id=vpc_id,
-            ingress=[
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=80,
-                    to_port=80,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="HTTP from internet"
-                ),
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=443,
-                    to_port=443,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="HTTPS from internet"
-                )
-            ],
-            egress=[
-                aws.ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="All outbound traffic"
-                )
-            ],
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-alb-sg"
-            }
-        )
-        
-        # EKS Security Group - allows traffic from ALB
-        self.eks_security_group = aws.ec2.SecurityGroup(
-            f"{self.name_prefix}-eks-sg",
-            name=f"{self.name_prefix}-eks-sg",
-            description="Security group for EKS cluster",
-            vpc_id=vpc_id,
-            ingress=[
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=80,
-                    to_port=80,
-                    security_groups=[self.alb_security_group.id],
-                    description="HTTP from ALB"
-                ),
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=443,
-                    to_port=443,
-                    security_groups=[self.alb_security_group.id],
-                    description="HTTPS from ALB"
-                )
-            ],
-            egress=[
-                aws.ec2.SecurityGroupEgressArgs(
-                    protocol="-1",
-                    from_port=0,
-                    to_port=0,
-                    cidr_blocks=["0.0.0.0/0"],
-                    description="All outbound traffic"
-                )
-            ],
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-eks-sg"
-            }
-        )
-        
-        # Database Security Group - allows traffic from EKS only
-        self.database_security_group = aws.ec2.SecurityGroup(
-            f"{self.name_prefix}-db-sg",
-            name=f"{self.name_prefix}-db-sg",
-            description="Security group for RDS database",
-            vpc_id=vpc_id,
-            ingress=[
-                aws.ec2.SecurityGroupIngressArgs(
-                    protocol="tcp",
-                    from_port=5432,
-                    to_port=5432,
-                    security_groups=[self.eks_security_group.id],
-                    description="PostgreSQL from EKS"
-                )
-            ],
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-db-sg"
-            }
-        )
+```hcl
+# Main KMS key for general encryption
+resource "aws_kms_key" "main" {
+  description             = "${var.project_name}-${var.environment}-main-key"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-main-kms-key"
+  }
+}
+
+resource "aws_kms_alias" "main" {
+  name          = "alias/${var.project_name}-${var.environment}-main"
+  target_key_id = aws_kms_key.main.key_id
+}
+
+data "aws_caller_identity" "current" {}
 ```
 
-### `policies/iam_policies.py`
-```python
-"""
-IAM Policies - Centralized policy definitions following least privilege
-"""
+**modules/kms/outputs.tf**
 
-from typing import Dict, Any, List
-import pulumi_aws as aws
+```hcl
+output "main_key_id" {
+  description = "ID of the main KMS key"
+  value       = aws_kms_key.main.key_id
+}
 
-class IAMPolicies:
-    """
-    Centralized IAM policy definitions with least privilege access
-    """
-    
-    def eks_cluster_assume_role_policy(self) -> Dict[str, Any]:
-        """EKS cluster service assume role policy"""
-        return {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "eks.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                }
-            ]
-        }
-    
-    def ec2_assume_role_policy(self) -> Dict[str, Any]:
-        """EC2 service assume role policy"""
-        return {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "ec2.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                }
-            ]
-        }
-    
-    def codebuild_assume_role_policy(self) -> Dict[str, Any]:
-        """CodeBuild service assume role policy"""
-        return {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "codebuild.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                }
-            ]
-        }
-    
-    def codepipeline_assume_role_policy(self) -> Dict[str, Any]:
-        """CodePipeline service assume role policy"""
-        return {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "codepipeline.amazonaws.com"
-                    },
-                    "Action": "sts:AssumeRole"
-                }
-            ]
-        }
-    
-    def codebuild_policy(self, kms_key_arn: str) -> Dict[str, Any]:
-        """CodeBuild service policy with minimal required permissions"""
-        account_id = aws.get_caller_identity().account_id
-        return {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "logs:CreateLogGroup",
-                        "logs:CreateLogStream",
-                        "logs:PutLogEvents"
-                    ],
-                    "Resource": f"arn:aws:logs:us-west-2:{account_id}:log-group:/aws/codebuild/*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObject",
-                        "s3:PutObject"
-                    ],
-                    "Resource": [
-                        f"arn:aws:s3:::corp-artifacts-*/*",
-                        f"arn:aws:s3:::corp-logs-*/*"
-                    ]
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "kms:Decrypt",
-                        "kms:GenerateDataKey"
-                    ],
-                    "Resource": kms_key_arn
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "eks:DescribeCluster"
-                    ],
-                    "Resource": f"arn:aws:eks:us-west-2:{account_id}:cluster/corp-*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "ssm:GetParameter",
-                        "ssm:GetParameters"
-                    ],
-                    "Resource": f"arn:aws:ssm:us-west-2:{account_id}:parameter/corp/*"
-                }
-            ]
-        }
-    
-    def codepipeline_policy(self, kms_key_arn: str) -> Dict[str, Any]:
-        """CodePipeline service policy with minimal required permissions"""
-        account_id = aws.get_caller_identity().account_id
-        return {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObject",
-                        "s3:PutObject",
-                        "s3:GetBucketVersioning"
-                    ],
-                    "Resource": [
-                        f"arn:aws:s3:::corp-artifacts-*",
-                        f"arn:aws:s3:::corp-artifacts-*/*"
-                    ]
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "codebuild:BatchGetBuilds",
-                        "codebuild:StartBuild"
-                    ],
-                    "Resource": f"arn:aws:codebuild:us-west-2:{account_id}:project/corp-*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Action": [
-                        "kms:Decrypt",
-                        "kms:GenerateDataKey"
-                    ],
-                    "Resource": kms_key_arn
-                }
-            ]
-        }
+output "main_key_arn" {
+  description = "ARN of the main KMS key"
+  value       = aws_kms_key.main.arn
+}
 ```
 
-### `modules/compute.py`
-```python
-"""
-Compute Module - EKS Cluster, Node Groups, Application Load Balancer
-"""
+**modules/kms/variables.tf**
 
-import pulumi
-import pulumi_aws as aws
-import pulumi_kubernetes as k8s
-from typing import Dict, Any, List
-from pulumi import Output
+```hcl
+variable "environment" {
+  description = "Environment name"
+  type        = string
+}
 
-class ComputeModule:
-    """
-    Creates EKS cluster with auto-scaling and Application Load Balancer
-    """
-    
-    def __init__(
-        self,
-        name_prefix: str,
-        vpc_id: Output[str],
-        private_subnet_ids: Output[List[str]],
-        public_subnet_ids: Output[List[str]],
-        kms_key: aws.kms.Key,
-        cluster_role_arn: Output[str],
-        node_group_role_arn: Output[str],
-        alb_security_group_id: Output[str],
-        eks_security_group_id: Output[str],
-        log_group: aws.cloudwatch.LogGroup,
-        tags: Dict[str, Any]
-    ):
-        self.name_prefix = name_prefix
-        self.vpc_id = vpc_id
-        self.private_subnet_ids = private_subnet_ids
-        self.public_subnet_ids = public_subnet_ids
-        self.kms_key = kms_key
-        self.cluster_role_arn = cluster_role_arn
-        self.node_group_role_arn = node_group_role_arn
-        self.alb_security_group_id = alb_security_group_id
-        self.eks_security_group_id = eks_security_group_id
-        self.log_group = log_group
-        self.tags = tags
-        
-        # Create compute components
-        self._create_eks_cluster()
-        self._create_node_group()
-        self._create_alb()
-        self._deploy_nginx()
-        
-    def _create_eks_cluster(self) -> None:
-        """Create EKS cluster with encryption and logging"""
-        self.cluster = aws.eks.Cluster(
-            f"{self.name_prefix}-eks-cluster",
-            name=f"{self.name_prefix}-eks-cluster",
-            role_arn=self.cluster_role_arn,
-            version="1.27",
-            vpc_config=aws.eks.ClusterVpcConfigArgs(
-                subnet_ids=Output.all(
-                    self.private_subnet_ids,
-                    self.public_subnet_ids
-                ).apply(lambda subnets: subnets[0] + subnets[1]),
-                security_group_ids=[self.eks_security_group_id],
-                endpoint_private_access=True,
-                endpoint_public_access=True,
-                public_access_cidrs=["0.0.0.0/0"]
-            ),
-            encryption_config=aws.eks.ClusterEncryptionConfigArgs(
-                provider=aws.eks.ClusterEncryptionConfigProviderArgs(
-                    key_arn=self.kms_key.arn
-                ),
-                resources=["secrets"]
-            ),
-            enabled_cluster
+variable "project_name" {
+  description = "Project name"
+  type        = string
+}
+```
+
+## Networking Module
+
+**modules/networking/main.tf**
+
+```hcl
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-vpc"
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-igw"
+  }
+}
+
+# Public Subnets
+resource "aws_subnet" "public" {
+  count = 2
+
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
+  availability_zone       = var.availability_zones[count.index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-public-subnet-${count.index + 1}"
+    Type = "public"
+    "kubernetes.io/role/elb" = "1"
+  }
+}
+
+# Private Subnets
+resource "aws_subnet" "private" {
+  count = 2
+
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
+  availability_zone = var.availability_zones[count.index]
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-private-subnet-${count.index + 1}"
+    Type = "private"
+    "kubernetes.io/role/internal-elb" = "1"
+  }
+}
+
+# NAT Gateway EIPs
+resource "aws_eip" "nat" {
+  count = 2
+
+  domain = "vpc"
+  depends_on = [aws_internet_gateway.main]
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-nat-eip-${count.index + 1}"
+  }
+}
+
+# NAT Gateways
+resource "aws_nat_gateway" "main" {
+  count = 2
+
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-nat-gateway-${count.index + 1}"
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Route Tables
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-public-rt"
+  }
+}
+
+resource "aws_route_table" "private" {
+  count = 2
+
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-private-rt-${count.index + 1}"
+  }
+}
+
+# Route Table Associations
+resource "aws_route_table_association" "public" {
+  count = 2
+
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  count = 2
+
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
+# VPC Flow Logs
+resource "aws_flow_log" "vpc" {
+  iam_role_arn    = aws_iam_role.flow_log.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_log.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
+}
+
+resource "aws_cloudwatch_log_group" "vpc_flow_log" {
+  name              = "/aws/vpc/${var.project_name}-${var.environment}-flow-logs"
+  retention_in_days = 30
+  kms_key_id        = var.kms_key_id
+}
+
+resource "aws_iam_role" "flow_log" {
+  name = "${var.project_name}-${var.environment}-flow-log-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "flow_log" {
+  name = "${var.project_name}-${var.environment}-flow-log-policy"
+  role = aws_iam_role.flow_log.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
+      }
+    ]
+  })
+}
+```
+
+## Security Module
+
+**modules/security/main.tf**
+
+```hcl
+# ALB Security Group
+resource "aws_security_group" "alb" {
+  name_prefix = "${var.project_name}-${var.environment}-alb-"
+  vpc_id      = var.vpc_id
+  description = "Security group for ALB"
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-alb-sg"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# EKS Security Group
+resource "aws_security_group" "eks" {
+  name_prefix = "${var.project_name}-${var.environment}-eks-"
+  vpc_id      = var.vpc_id
+  description = "Security group for EKS cluster"
+
+  ingress {
+    description     = "ALB to EKS"
+    from_port       = 0
+    to_port         = 65535
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-eks-sg"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Database Security Group
+resource "aws_security_group" "database" {
+  name_prefix = "${var.project_name}-${var.environment}-db-"
+  vpc_id      = var.vpc_id
+  description = "Security group for RDS database"
+
+  ingress {
+    description     = "PostgreSQL from EKS"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.eks.id]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-db-sg"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# IAM Roles for EKS
+resource "aws_iam_role" "eks_cluster" {
+  name = "${var.project_name}-${var.environment}-eks-cluster-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "eks.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  role       = aws_iam_role.eks_cluster.name
+}
+
+resource "aws_iam_role" "eks_node_group" {
+  name = "${var.project_name}-${var.environment}-eks-node-group-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_worker_node_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
+  role       = aws_iam_role.eks_node_group.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.eks_node_group.name
+}
+
+resource "aws_iam_role_policy_attachment" "eks_container_registry_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  role       = aws_iam_role.eks_node_group.name
+}
+
+# CodePipeline Service Role
+resource "aws_iam_role" "codepipeline" {
+  name = "${var.project_name}-${var.environment}-codepipeline-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "codepipeline.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "codepipeline" {
+  name = "${var.project_name}-${var.environment}-codepipeline-policy"
+  role = aws_iam_role.codepipeline.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketVersioning",
+          "s3:GetObject",
+          "s3:GetObjectVersion",
+          "s3:PutObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.project_name}-${var.environment}-*",
+          "arn:aws:s3:::${var.project_name}-${var.environment}-*/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "codebuild:BatchGetBuilds",
+          "codebuild:StartBuild"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "eks:DescribeCluster"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = var.kms_key_id
+      }
+    ]
+  })
+}
+```
+
+I'll continue with the remaining modules in the next part. This gives you a solid foundation with proper security groups, IAM roles following least privilege, KMS encryption, and a well-structured VPC with HA across multiple AZs.
+
+Would you like me to continue with the EKS, Database, ALB, and CI/CD modules?
