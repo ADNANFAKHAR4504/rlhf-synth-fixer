@@ -572,5 +572,5 @@ resource "aws_iam_policy" "mfa_policy" {
 
 output "ec2_instance_profile_name" {
   description = "Name of the EC2 instance profile"
-  value       = aws_iam_user.app_user.name # Assuming app_user is used for instance profile
+  value       = data.aws_iam_user.app_user.user_name # Assuming app_user is used for instance profile
 }
