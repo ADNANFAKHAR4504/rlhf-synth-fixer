@@ -1,3 +1,4 @@
+# pylint: disable=duplicate-code
 """
 test_tap_stack.py
 
@@ -12,8 +13,6 @@ import unittest
 
 # Add the lib directory to the path so we can import tap_stack
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "lib"))
-# Add the tests directory to the path so we can import utils
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Import the function to test
 try:
