@@ -152,7 +152,7 @@ export class VpcStack extends pulumi.ComponentResource {
     this.privateSubnet1 = new aws.ec2.Subnet(`tap-private-subnet-1-${environmentSuffix}`, {
       vpcId: this.vpc.id,
       cidrBlock: "10.0.1.0/24",
-      availabilityZone: "us-west-2a",
+              availabilityZone: availabilityZones.then(azs => azs.names[0]),
       tags: {
         Name: `tap-private-subnet-1-${environmentSuffix}`,
         ...args.tags as any,
@@ -162,7 +162,7 @@ export class VpcStack extends pulumi.ComponentResource {
     this.privateSubnet2 = new aws.ec2.Subnet(`tap-private-subnet-2-${environmentSuffix}`, {
       vpcId: this.vpc.id,
       cidrBlock: "10.0.2.0/24",
-      availabilityZone: "us-west-2b",
+              availabilityZone: availabilityZones.then(azs => azs.names[1]),
       tags: {
         Name: `tap-private-subnet-2-${environmentSuffix}`,
         ...args.tags as any,
@@ -820,4 +820,4 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## Deployment
 
-The infrastructure is structured to deploy in us-west-2 region with proper resource dependencies and outputs. All resources include proper tagging and follow Pulumi TypeScript best practices with strong typing and modular architecture. The enhanced complexity provides comprehensive integration between AWS services with modern security and monitoring capabilities.
+The infrastructure is structured to deploy in us-east-1 region with proper resource dependencies and outputs. All resources include proper tagging and follow Pulumi TypeScript best practices with strong typing and modular architecture. The enhanced complexity provides comprehensive integration between AWS services with modern security and monitoring capabilities.

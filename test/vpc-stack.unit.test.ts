@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { VpcStack } from '../lib/vpc-stack';
 
 // Mock Pulumi and AWS
@@ -31,6 +31,10 @@ describe('VpcStack', () => {
 
     // Mock AWS resources
     jest.spyOn(aws.ec2, 'getVpc').mockResolvedValue(mockVpc as any);
+    jest.spyOn(aws, 'getAvailabilityZones').mockResolvedValue({
+      names: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
+      zoneIds: ['use1-az1', 'use1-az2', 'use1-az3'],
+    } as any);
     jest.spyOn(aws.ec2, 'Subnet').mockImplementation((() => mockSubnet) as any);
     jest
       .spyOn(aws.ec2, 'SecurityGroup')
@@ -63,7 +67,7 @@ describe('VpcStack', () => {
         expect.objectContaining({
           vpcId: expect.any(Promise),
           cidrBlock: '172.31.96.0/24',
-          availabilityZone: 'us-west-2a',
+          availabilityZone: expect.any(Promise),
         }),
         expect.any(Object)
       );
@@ -72,7 +76,7 @@ describe('VpcStack', () => {
         expect.objectContaining({
           vpcId: expect.any(Promise),
           cidrBlock: '172.31.97.0/24',
-          availabilityZone: 'us-west-2b',
+          availabilityZone: expect.any(Promise),
         }),
         expect.any(Object)
       );

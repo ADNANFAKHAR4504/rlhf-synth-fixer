@@ -699,7 +699,7 @@ export class LambdaStack extends pulumi.ComponentResource {
 ✅ Lambda function with S3-stored code  
 ✅ RDS automatic backups (7+ days retention)  
 ✅ IAM roles and policies for Lambda permissions  
-✅ Deployable in us-west-2 region  
+✅ Deployable in us-east-1 region  
 ✅ Output section exports S3 bucket name  
 
 ### 2. Enhanced Features
@@ -732,7 +732,7 @@ export class LambdaStack extends pulumi.ComponentResource {
 ```bash
 # Set environment
 export ENVIRONMENT_SUFFIX="synthtrainr135"
-export AWS_REGION="us-west-2"
+export AWS_REGION="us-east-1"
 
 # Install dependencies
 npm install
@@ -764,12 +764,12 @@ The stack provides comprehensive outputs for integration:
 {
   "BucketName": "tap-app-bucket-synthtrainr135-tapstacksynthtrainr135",
   "DBInstanceId": "tap-db-synthtrainr135",
-  "DBEndpoint": "tap-db-synthtrainr135.xxxxx.us-west-2.rds.amazonaws.com:3306",
+  "DBEndpoint": "tap-db-synthtrainr135.xxxxx.us-east-1.rds.amazonaws.com:3306",
   "LambdaFunctionName": "tap-lambda-synthtrainr135",
-  "LambdaFunctionArn": "arn:aws:lambda:us-west-2:xxxxx:function:tap-lambda-synthtrainr135",
+  "LambdaFunctionArn": "arn:aws:lambda:us-east-1:xxxxx:function:tap-lambda-synthtrainr135",
   "VPCId": "vpc-xxxxxxxxx",
   "EventBusName": "tap-application-events-synthtrainr135",
-  "EventBusArn": "arn:aws:events:us-west-2:xxxxx:event-bus/tap-application-events-synthtrainr135",
+  "EventBusArn": "arn:aws:events:us-east-1:xxxxx:event-bus/tap-application-events-synthtrainr135",
   "MonitoringLogGroupName": "/aws/events/tap-application-synthtrainr135",
   "DBEndpointParamName": "/tap/synthtrainr135/database/endpoint",
   "DBUsernameParamName": "/tap/synthtrainr135/database/username",

@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface VpcStackArgs {
   environmentSuffix?: string;
@@ -26,13 +26,16 @@ export class VpcStack extends pulumi.ComponentResource {
       id: pulumi.output(defaultVpc.then(vpc => vpc.id)),
     } as any;
 
+    // Get available availability zones for the current region
+    const availabilityZones = aws.getAvailabilityZones({ state: 'available' });
+
     // Create private subnets for RDS in the default VPC
     this.privateSubnet1 = new aws.ec2.Subnet(
       `tap-private-subnet-1-${environmentSuffix}`,
       {
         vpcId: defaultVpc.then(vpc => vpc.id),
         cidrBlock: '172.31.96.0/24',
-        availabilityZone: 'us-west-2a',
+        availabilityZone: availabilityZones.then(azs => azs.names[0]),
         tags: {
           Name: `tap-private-subnet-1-${environmentSuffix}`,
           ...(args.tags as any),
@@ -46,7 +49,7 @@ export class VpcStack extends pulumi.ComponentResource {
       {
         vpcId: defaultVpc.then(vpc => vpc.id),
         cidrBlock: '172.31.97.0/24',
-        availabilityZone: 'us-west-2b',
+        availabilityZone: availabilityZones.then(azs => azs.names[1]),
         tags: {
           Name: `tap-private-subnet-2-${environmentSuffix}`,
           ...(args.tags as any),
