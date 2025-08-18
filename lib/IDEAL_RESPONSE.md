@@ -762,7 +762,7 @@ The stack provides comprehensive outputs for integration:
 
 ```json
 {
-  "BucketName": "tap-app-bucket-synthtrainr135-tapstacksynthtrainr135",
+          "BucketName": "tap-app-bucket-synthtrainr135-primary-tapstacksynthtrainr135",
   "DBInstanceId": "tap-db-synthtrainr135",
   "DBEndpoint": "tap-db-synthtrainr135.xxxxx.us-east-1.rds.amazonaws.com:3306",
   "LambdaFunctionName": "tap-lambda-synthtrainr135",

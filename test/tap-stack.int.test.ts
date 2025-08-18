@@ -13,7 +13,7 @@ try {
 } catch (error) {
   console.warn('Using mock outputs for testing due to deployment issues');
   outputs = {
-    BucketName: 'tap-app-bucket-synthtrainr135-tapstacksynthtrainr135',
+    BucketName: 'tap-app-bucket-synthtrainr135-primary-tapstacksynthtrainr135',
     DBInstanceId: 'tap-db-synthtrainr135',
     DBEndpoint:
       'tap-db-synthtrainr135.c3l4mfxx4xyj.us-west-2.rds.amazonaws.com:3306',
