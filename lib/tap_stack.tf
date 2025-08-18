@@ -409,7 +409,7 @@ resource "aws_autoscaling_group" "primary_app" {
   desired_capacity    = 2
   max_size            = 4
   min_size            = 1
-  vpc_zone_identifier = [for subnet in aws_subnet.primary_public : subnet.id]
+  vpc_zone_identifier = [for subnet in aws_subnet.primary_private : subnet.id]
 
   launch_template {
     id      = aws_launch_template.primary_app.id
@@ -748,7 +748,7 @@ resource "aws_autoscaling_group" "secondary_app" {
   desired_capacity    = 2
   max_size            = 4
   min_size            = 1
-  vpc_zone_identifier = [for subnet in aws_subnet.secondary_public : subnet.id]
+  vpc_zone_identifier = [for subnet in aws_subnet.secondary_private : subnet.id]
 
   launch_template {
     id      = aws_launch_template.secondary_app.id
@@ -1088,12 +1088,12 @@ output "rds_endpoint" {
 
 output "s3_bucket_name" {
   description = "S3 bucket name"
-  value       = aws_s3_bucket.artifacts_bucket.id # Adjust resource name as needed
+  value       = aws_s3_bucket.artifacts.bucket # Adjust resource name as needed
 }
 
 output "private_key_path" {
   description = "Path to the private key file"
-  value       = local_file.private_key.filename # Adjust resource name as needed
+  value       = local_file.nova_key_pem.filename # Adjust resource name as needed
 }
 
 output "primary_alb_name" {
