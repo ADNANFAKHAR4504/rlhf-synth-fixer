@@ -438,8 +438,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureS3Bucket}/*'
-              - !Ref SecureS3Bucket
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
