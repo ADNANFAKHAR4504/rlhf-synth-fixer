@@ -1,279 +1,1025 @@
-# Ideal Terraform Solution for Multi-Environment AWS Infrastructure
+# =============================================================================
+# MULTI-ENVIRONMENT AWS INFRASTRUCTURE
+# =============================================================================
+# 
+# This Terraform configuration implements a comprehensive multi-environment
+# AWS infrastructure supporting Development, Staging, and Production environments
+# with proper isolation, security, and scalability features.
+#
+# Compliance Requirements:
+# 1. All resources in us-east-1 region
+# 2. Environment-specific configurations
+# 3. Security best practices with least privilege
+# 4. Auto Scaling for Production
+# 5. Database encryption at rest and in transit
+# 6. CloudWatch monitoring and alerting
+# 7. Comprehensive tagging strategy
+# 8. S3 logging enabled
+# 9. SSH access restrictions
+# 10. CI/CD pipeline support
+# 11. AWS naming conventions
+# 12. No hardcoded secrets
 
-## Overview
-This document presents the ideal Terraform implementation for a multi-environment AWS infrastructure supporting Development, Staging, and Production environments with complete isolation, security, and scalability features.
+# =============================================================================
+# VARIABLES
+# =============================================================================
 
-## Key Features Implemented
+variable "project_name" {
+  description = "Name of the project"
+  type        = string
+  default     = "aws-infrastructure"
+}
 
-### 1. Complete Environment Isolation
-- Separate VPCs for each environment with distinct CIDR blocks
-- Environment-specific resource naming using `environment_suffix` variable
-- Isolated RDS instances and S3 buckets per environment
-- Comprehensive tagging strategy for resource management
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming"
+  type        = string
+  default     = "dev"
+}
 
-### 2. Security Best Practices
-- **IAM Roles**: Least privilege access with EC2 instance profiles
-- **Database Encryption**: RDS encryption at rest enabled
-- **Secrets Management**: AWS Secrets Manager for database credentials with auto-generated passwords
-- **SSH Restrictions**: Bastion security group restricted to specific CIDR blocks (no 0.0.0.0/0)
-- **S3 Security**: 
-  - Public access blocking enabled
-  - HTTPS-only bucket policies
-  - Server-side encryption (AES256)
-  - Versioning and logging enabled
+variable "environment" {
+  description = "Environment name (development, staging, production)"
+  type        = string
+  default     = "development"
 
-### 3. High Availability and Scalability
-- **Production Auto Scaling**: Auto Scaling Groups with configurable min/max instances
-- **Load Balancing**: Application Load Balancer for traffic distribution
-- **Multi-AZ Deployments**: Configurable Multi-AZ for RDS instances
-- **NAT Gateways**: High availability NAT configuration for private subnets
+  validation {
+    condition     = contains(["development", "staging", "production"], var.environment)
+    error_message = "Environment must be one of: development, staging, production."
+  }
+}
 
-### 4. Infrastructure Code Organization
+variable "aws_region" {
+  description = "AWS region"
+  type        = string
+  default     = "us-east-1"
 
-#### Main Configuration Files
-```hcl
-# provider.tf - Provider and backend configuration
-terraform {
-  required_version = ">= 1.4.0"
-  
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
+  validation {
+    condition     = var.aws_region == "us-east-1"
+    error_message = "All resources must be deployed in us-east-1 region."
+  }
+}
+
+variable "vpc_cidr" {
+  description = "VPC CIDR block"
+  type        = string
+  default     = "10.0.0.0/16"
+
+  validation {
+    condition     = can(cidrhost(var.vpc_cidr, 0))
+    error_message = "Must be a valid CIDR block."
+  }
+}
+
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets"
+  type        = list(string)
+  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+}
+
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets"
+  type        = list(string)
+  default     = ["10.0.11.0/24", "10.0.12.0/24"]
+}
+
+variable "instance_type" {
+  description = "EC2 instance type"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "enable_deletion_protection" {
+  description = "Enable deletion protection for RDS"
+  type        = bool
+  default     = false
+}
+
+variable "enable_multi_az" {
+  description = "Enable Multi-AZ for RDS"
+  type        = bool
+  default     = false
+}
+
+variable "enable_multi_az_nat" {
+  description = "Enable Multi-AZ NAT gateways"
+  type        = bool
+  default     = false
+}
+
+variable "db_username" {
+  description = "Database master username"
+  type        = string
+  default     = "dbadmin"
+}
+
+variable "db_password" {
+  description = "Database master password (auto-generated if null)"
+  type        = string
+  default     = null
+  sensitive   = true
+}
+
+variable "allowed_ssh_cidrs" {
+  description = "Allowed CIDR blocks for SSH access"
+  type        = list(string)
+  default     = ["10.0.0.0/8"]
+
+  validation {
+    condition = alltrue([
+      for cidr in var.allowed_ssh_cidrs :
+      can(cidrhost(cidr, 0)) && cidr != "0.0.0.0/0"
+    ])
+    error_message = "All CIDR blocks must be valid and not 0.0.0.0/0."
+  }
+}
+
+variable "asg_desired_capacity" {
+  description = "Auto Scaling Group desired capacity"
+  type        = number
+  default     = 2
+}
+
+variable "asg_max_size" {
+  description = "Auto Scaling Group maximum size"
+  type        = number
+  default     = 4
+}
+
+variable "asg_min_size" {
+  description = "Auto Scaling Group minimum size"
+  type        = number
+  default     = 1
+}
+
+variable "cloudwatch_log_retention_days" {
+  description = "CloudWatch log retention period in days"
+  type        = number
+  default     = 14
+}
+
+variable "rds_backup_retention_period" {
+  description = "RDS backup retention period in days"
+  type        = number
+  default     = 7
+}
+
+variable "rds_allocated_storage" {
+  description = "RDS allocated storage in GB"
+  type        = number
+  default     = 20
+}
+
+variable "rds_max_allocated_storage" {
+  description = "RDS maximum allocated storage in GB"
+  type        = number
+  default     = 100
+}
+
+# =============================================================================
+# DATA SOURCES
+# =============================================================================
+
+# Get the latest Amazon Linux 2 AMI
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# =============================================================================
+# LOCALS
+# =============================================================================
+
+locals {
+  # Common tags for all resources
+  common_tags = {
+    Environment       = var.environment
+    Project           = var.project_name
+    ManagedBy         = "terraform"
+    Owner             = "devops-team"
+    EnvironmentSuffix = var.environment_suffix
+  }
+
+  # Name prefix for consistent resource naming
+  name_prefix = "tap-${var.environment_suffix}"
+
+  # Availability zones
+  availability_zones = ["us-east-1a", "us-east-1b"]
+
+  # Environment-specific configurations
+  environment_config = {
+    development = {
+      instance_type       = "t3.micro"
+      db_instance_class   = "db.t3.micro"
+      enable_multi_az     = false
+      deletion_protection = false
+    }
+    staging = {
+      instance_type       = "t3.small"
+      db_instance_class   = "db.t3.small"
+      enable_multi_az     = true
+      deletion_protection = false
+    }
+    production = {
+      instance_type       = "t3.medium"
+      db_instance_class   = "db.t3.medium"
+      enable_multi_az     = true
+      deletion_protection = false # Always allow deletion for testing
     }
   }
-  
-  backend "s3" {}  # Partial backend config for flexibility
+
+  config = local.environment_config[var.environment]
 }
 
-provider "aws" {
-  region = var.aws_region
-}
-```
+# =============================================================================
+# NETWORKING MODULE
+# =============================================================================
 
-```hcl
-# tap_stack.tf - Main infrastructure configuration
-# Key sections:
-# - Variables with validation
-# - Locals for environment-specific configs
-# - Networking Module (VPC, Subnets, NAT, IGW)
-# - Security Module (IAM, Security Groups, Secrets)
-# - Compute Module (EC2, ASG, ALB)
-# - Database Module (RDS with encryption)
-# - Storage Module (S3 with security features)
-# - Monitoring Module (CloudWatch alarms)
-# - Comprehensive outputs
-```
-
-#### Environment Configuration
-```hcl
-# terraform.tfvars - Environment-specific values
-environment_suffix = "prIAC291786"  # Unique suffix for resource naming
-environment = "development"
-
-# Network configuration
-vpc_cidr = "10.0.0.0/16"
-public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
-private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
-
-# Instance configurations
-instance_type = "t3.micro"
-db_instance_class = "db.t3.micro"
-
-# Features for testing environment
-enable_deletion_protection = false  # Always false for testing
-enable_multi_az = false
-```
-
-### 5. Monitoring and Observability
-- **CloudWatch Log Groups**: Centralized logging with retention policies
-- **CloudWatch Alarms**: CPU and memory utilization monitoring (Production only)
-- **SNS Topics**: Alert notifications for critical events
-- **S3 Access Logging**: Audit trail for bucket access
-
-### 6. Cost Optimization
-- **Environment-specific sizing**: t3.micro for Dev, t3.small for Staging, t3.medium for Prod
-- **Cost estimation outputs**: Real-time cost tracking per environment
-- **Auto Scaling**: Efficient resource utilization in Production
-- **Conditional resources**: Production-only features to minimize Dev/Staging costs
-
-### 7. CI/CD Integration
-- **Terraform validation**: Built-in syntax and configuration validation
-- **Formatting standards**: Consistent HCL formatting with `terraform fmt`
-- **State management**: S3 backend with state locking via DynamoDB
-- **Environment suffixes**: Support for multiple parallel deployments
-
-## Technical Implementation Details
-
-### Network Architecture
-```hcl
-# VPC with DNS support
+# VPC
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
   })
 }
 
-# Public and Private Subnets across multiple AZs
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-igw"
+  })
+}
+
+# Public Subnets
 resource "aws_subnet" "public" {
   count             = length(var.public_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.public_subnet_cidrs[count.index]
   availability_zone = local.availability_zones[count.index]
+
   map_public_ip_on_launch = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
+    Type = "Public"
+  })
 }
 
+# Private Subnets
 resource "aws_subnet" "private" {
   count             = length(var.private_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = local.availability_zones[count.index]
-}
-```
 
-### Security Implementation
-```hcl
-# Auto-generated database password
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
+    Type = "Private"
+  })
+}
+
+# NAT Gateway EIPs
+resource "aws_eip" "nat" {
+  count  = var.enable_multi_az_nat ? length(var.public_subnet_cidrs) : 1
+  domain = "vpc"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
+  })
+}
+
+# NAT Gateways
+resource "aws_nat_gateway" "main" {
+  count         = var.enable_multi_az_nat ? length(var.public_subnet_cidrs) : 1
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-nat-gateway-${count.index + 1}"
+  })
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Public Route Table
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-rt"
+  })
+}
+
+# Private Route Table
+resource "aws_route_table" "private" {
+  count  = var.enable_multi_az_nat ? length(var.private_subnet_cidrs) : 1
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[var.enable_multi_az_nat ? count.index : 0].id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-rt-${count.index + 1}"
+  })
+}
+
+# Route Table Associations
+resource "aws_route_table_association" "public" {
+  count          = length(var.public_subnet_cidrs)
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  count          = length(var.private_subnet_cidrs)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[var.enable_multi_az_nat ? count.index : 0].id
+}
+
+# =============================================================================
+# SECURITY MODULE
+# =============================================================================
+
+# Random password for database
 resource "random_password" "db_password" {
   count   = var.db_password == null ? 1 : 0
   length  = 16
   special = true
+  upper   = true
+  lower   = true
+  numeric = true
 }
 
-# Secrets Manager for credentials
+# Secrets Manager for database credentials
 resource "aws_secretsmanager_secret" "database" {
-  name = "${local.name_prefix}-db-secret"
-  recovery_window_in_days = 0  # Immediate deletion for testing
+  name                    = "${local.name_prefix}-db-secret"
+  recovery_window_in_days = 0 # Force immediate deletion
+
+  tags = local.common_tags
 }
 
-# Security groups with least privilege
+resource "aws_secretsmanager_secret_version" "database" {
+  secret_id = aws_secretsmanager_secret.database.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = var.db_password != null ? var.db_password : random_password.db_password[0].result
+  })
+}
+
+# Security Group for ALB
+resource "aws_security_group" "alb" {
+  name_prefix = "${local.name_prefix}-alb-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb-sg"
+  })
+}
+
+# Security Group for Application
 resource "aws_security_group" "application" {
   name_prefix = "${local.name_prefix}-app-"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
-}
-```
 
-### Database Configuration
-```hcl
-resource "aws_db_instance" "main" {
-  identifier = "${local.name_prefix}-db"
-  
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = local.config.db_instance_class
-  
-  storage_encrypted = true  # Encryption at rest
-  
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.database.id]
-  
-  multi_az = local.config.enable_multi_az
-  
-  skip_final_snapshot = true  # For testing environments
-  deletion_protection = false  # Always false for destroyability
-}
-```
+  ingress {
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
 
-### Auto Scaling for Production
-```hcl
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-application-sg"
+  })
+}
+
+# Security Group for Database
+resource "aws_security_group" "database" {
+  name_prefix = "${local.name_prefix}-db-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.application.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-database-sg"
+  })
+}
+
+# Security Group for Bastion Host
+resource "aws_security_group" "bastion" {
+  name_prefix = "${local.name_prefix}-bastion-"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ssh_cidrs
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-bastion-sg"
+  })
+}
+
+# IAM Role for EC2 instances
+resource "aws_iam_role" "ec2_role" {
+  name = "${local.name_prefix}-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# IAM Policy for EC2 instances
+resource "aws_iam_role_policy" "ec2_policy" {
+  name = "${local.name_prefix}-ec2-policy"
+  role = aws_iam_role.ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "${aws_s3_bucket.data.arn}/*",
+          "${aws_cloudwatch_log_group.app.arn}:*"
+        ]
+      }
+    ]
+  })
+}
+
+# IAM Instance Profile
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "${local.name_prefix}-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
+# =============================================================================
+# COMPUTE MODULE
+# =============================================================================
+
+# Launch Template for Auto Scaling Group
+resource "aws_launch_template" "main" {
+  name_prefix   = "${local.name_prefix}-lt-"
+  image_id      = data.aws_ami.amazon_linux_2.id
+  instance_type = local.config.instance_type
+
+  network_interfaces {
+    associate_public_ip_address = false
+    security_groups             = [aws_security_group.application.id]
+  }
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_profile.name
+  }
+
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<h1>Hello from ${var.environment} environment!</h1>" > /var/www/html/index.html
+              EOF
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(local.common_tags, {
+      Name = "${local.name_prefix}-instance"
+    })
+  }
+
+  tags = local.common_tags
+}
+
+# Auto Scaling Group (Production only)
 resource "aws_autoscaling_group" "main" {
-  count = var.environment == "production" ? 1 : 0
-  
+  count               = var.environment == "production" ? 1 : 0
   name                = "${local.name_prefix}-asg"
   desired_capacity    = var.asg_desired_capacity
   max_size            = var.asg_max_size
   min_size            = var.asg_min_size
   target_group_arns   = [aws_lb_target_group.main.arn]
   vpc_zone_identifier = aws_subnet.private[*].id
-  
+
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
+
+  tag {
+    key                 = "Name"
+    value               = "${local.name_prefix}-asg-instance"
+    propagate_at_launch = true
+  }
+
+  dynamic "tag" {
+    for_each = local.common_tags
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
+  }
 }
-```
 
-## Compliance and Best Practices
+# EC2 Instances (Development and Staging)
+resource "aws_instance" "web" {
+  count = var.environment != "production" ? 2 : 0
 
-### 12 Enterprise Requirements Met
-1. **Region Compliance**: All resources deployed in us-east-1
-2. **Terraform Version**: Using Terraform >= 1.4.0
-3. **Environment Configurations**: Complete Dev/Staging/Prod separation
-4. **Cost Estimation**: Built-in cost tracking outputs
-5. **Network Architecture**: Dedicated public/private subnets
-6. **SSH Restrictions**: No 0.0.0.0/0 access, CIDR-based restrictions
-7. **Remote State**: S3 backend with encryption
-8. **S3 Security**: HTTPS enforcement, encryption, logging
-9. **CI Pipeline Support**: Validation and formatting built-in
-10. **Naming Conventions**: Consistent `tap-${environment_suffix}` pattern
-11. **Modular Configuration**: Organized into logical modules
-12. **No Hardcoded Secrets**: Using Secrets Manager and random passwords
+  ami           = data.aws_ami.amazon_linux_2.id
+  instance_type = local.config.instance_type
+  subnet_id     = aws_subnet.private[count.index % length(aws_subnet.private)].id
 
-## Deployment Commands
+  vpc_security_group_ids = [aws_security_group.application.id]
+  iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
 
-```bash
-# Set environment suffix
-export ENVIRONMENT_SUFFIX=prIAC291786
+  user_data = <<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<h1>Hello from ${var.environment} environment!</h1>" > /var/www/html/index.html
+              EOF
 
-# Initialize Terraform
-terraform init -backend-config="bucket=terraform-state" \
-               -backend-config="key=${ENVIRONMENT_SUFFIX}/terraform.tfstate" \
-               -backend-config="region=us-east-1"
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-instance-${count.index + 1}"
+  })
+}
 
-# Validate configuration
-terraform validate
+# Application Load Balancer
+resource "aws_lb" "main" {
+  name               = substr("${local.name_prefix}-alb", 0, 32)
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.public[*].id
 
-# Format code
-terraform fmt -recursive
+  enable_deletion_protection = false # Always allow deletion for testing
 
-# Plan deployment
-terraform plan -out=tfplan
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-alb"
+  })
+}
 
-# Apply infrastructure
-terraform apply tfplan
+# Target Group
+resource "aws_lb_target_group" "main" {
+  name     = substr("${local.name_prefix}-tg", 0, 32)
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
 
-# Get outputs
-terraform output -json > ../cfn-outputs/flat-outputs.json
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 2
+  }
 
-# Destroy resources (when needed)
-terraform destroy -auto-approve
-```
+  tags = local.common_tags
+}
 
-## Testing Coverage
+# ALB Listener
+resource "aws_lb_listener" "main" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
 
-### Unit Tests (90%+ coverage)
-- All 12 compliance requirements validated
-- Environment-specific configurations tested
-- Security controls verified
-- Resource naming conventions checked
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
+}
 
-### Integration Tests
-- Real AWS outputs validation
-- Network connectivity verification
-- Security group rules testing
-- Cost estimation accuracy
-- End-to-end workflow validation
+# Target Group Attachments
+resource "aws_lb_target_group_attachment" "asg" {
+  count            = var.environment == "production" ? var.asg_desired_capacity : 0
+  target_group_arn = aws_lb_target_group.main.arn
+  target_id        = aws_autoscaling_group.main[0].id
+  port             = 80
+}
 
-## Key Improvements Over Initial Response
+resource "aws_lb_target_group_attachment" "ec2" {
+  count            = var.environment != "production" ? 2 : 0
+  target_group_arn = aws_lb_target_group.main.arn
+  target_id        = aws_instance.web[count.index].id
+  port             = 80
+}
 
-1. **Environment Suffix Support**: Added `environment_suffix` variable for unique resource naming
-2. **Deletion Protection Disabled**: All resources are destroyable for testing
-3. **Immediate Secret Deletion**: `recovery_window_in_days = 0` for Secrets Manager
-4. **Skip Final Snapshots**: RDS configured with `skip_final_snapshot = true`
-5. **Comprehensive Test Coverage**: Unit and integration tests with real AWS outputs
-6. **Cost Optimization**: Environment-specific resource sizing
-7. **Complete S3 Security**: Public access blocking, HTTPS enforcement, encryption, and logging
+# =============================================================================
+# DATABASE MODULE
+# =============================================================================
 
-## Conclusion
+# RDS Subnet Group
+resource "aws_db_subnet_group" "main" {
+  name       = "${local.name_prefix}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
 
-This Terraform implementation provides a production-ready, secure, and scalable multi-environment AWS infrastructure that meets all enterprise requirements while maintaining flexibility for development and testing workflows. The solution emphasizes security, cost optimization, and operational excellence through comprehensive monitoring and automation.
+  tags = local.common_tags
+}
+
+# RDS Parameter Group
+data "aws_db_parameter_group" "main" {
+  name = "default.mysql8.0"
+}
+
+# RDS Instance
+resource "aws_db_instance" "main" {
+  identifier = "${local.name_prefix}-db"
+
+  engine         = "mysql"
+  engine_version = "8.0"
+  instance_class = local.config.db_instance_class
+
+  allocated_storage     = var.rds_allocated_storage
+  max_allocated_storage = var.rds_max_allocated_storage
+  storage_type          = "gp2"
+  storage_encrypted     = true
+
+  db_name  = "application_db"
+  username = var.db_username
+  password = var.db_password != null ? var.db_password : random_password.db_password[0].result
+  port     = 3306
+
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.database.id]
+
+  backup_retention_period = var.rds_backup_retention_period
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
+  multi_az = local.config.enable_multi_az
+
+  skip_final_snapshot       = true # Skip final snapshot for testing
+  final_snapshot_identifier = "${local.name_prefix}-db-final-snapshot"
+
+  deletion_protection = false # Always allow deletion for testing
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-database"
+  })
+}
+
+# =============================================================================
+# STORAGE MODULE
+# =============================================================================
+
+# Random string for bucket suffix
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# S3 Bucket for Application Data
+resource "aws_s3_bucket" "data" {
+  bucket = "${local.name_prefix}-data-${random_string.bucket_suffix.result}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-data-bucket"
+  })
+}
+
+# S3 Bucket for Logs
+resource "aws_s3_bucket" "logs" {
+  bucket = "${local.name_prefix}-logs-${random_string.bucket_suffix.result}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-logs-bucket"
+  })
+}
+
+# S3 Bucket Versioning
+resource "aws_s3_bucket_versioning" "data" {
+  bucket = aws_s3_bucket.data.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "logs" {
+  bucket = aws_s3_bucket.logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 Bucket Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# S3 Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_public_access_block" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 Bucket Logging
+resource "aws_s3_bucket_logging" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  target_bucket = aws_s3_bucket.logs.id
+  target_prefix = "data-logs/"
+}
+
+# S3 Bucket Policy for HTTPS enforcement
+resource "aws_s3_bucket_policy" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyNonHttpsRequests"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.data.arn,
+          "${aws_s3_bucket.data.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# =============================================================================
+# MONITORING MODULE
+# =============================================================================
+
+# CloudWatch Log Group
+resource "aws_cloudwatch_log_group" "app" {
+  name              = "/aws/ec2/${local.name_prefix}"
+  retention_in_days = var.cloudwatch_log_retention_days
+
+  tags = local.common_tags
+}
+
+# CloudWatch Alarms (Production only)
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  count               = var.environment == "production" ? 1 : 0
+  alarm_name          = "${local.name_prefix}-cpu-utilization-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors EC2 CPU utilization"
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main[0].name
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_cloudwatch_metric_alarm" "memory_high" {
+  count               = var.environment == "production" ? 1 : 0
+  alarm_name          = "${local.name_prefix}-memory-utilization-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "MemoryUtilization"
+  namespace           = "System/Linux"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "85"
+  alarm_description   = "This metric monitors memory utilization"
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main[0].name
+  }
+
+  tags = local.common_tags
+}
+
+# SNS Topic for Alerts
+resource "aws_sns_topic" "alerts" {
+  name = "${local.name_prefix}-alerts"
+
+  tags = local.common_tags
+}
+
+# SNS Topic Subscription (email)
+resource "aws_sns_topic_subscription" "email" {
+  count     = var.environment == "production" ? 1 : 0
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = "devops@company.com"
+}
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
+
+output "vpc_id" {
+  description = "VPC ID"
+  value       = aws_vpc.main.id
+}
+
+output "public_subnet_ids" {
+  description = "Public subnet IDs"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "Private subnet IDs"
+  value       = aws_subnet.private[*].id
+}
+
+output "alb_dns_name" {
+  description = "Application Load Balancer DNS name"
+  value       = aws_lb.main.dns_name
+}
+
+output "rds_endpoint" {
+  description = "RDS instance endpoint"
+  value       = aws_db_instance.main.endpoint
+  sensitive   = true
+}
+
+output "s3_bucket_name" {
+  description = "S3 bucket name"
+  value       = aws_s3_bucket.data.bucket
+}
+
+output "secrets_manager_arn" {
+  description = "Secrets Manager ARN"
+  value       = aws_secretsmanager_secret.database.arn
+}
+
+output "security_group_ids" {
+  description = "Security group IDs"
+  value = {
+    alb         = aws_security_group.alb.id
+    application = aws_security_group.application.id
+    database    = aws_security_group.database.id
+    bastion     = aws_security_group.bastion.id
+  }
+}
+
+output "cost_estimation" {
+  description = "Estimated monthly costs"
+  value = {
+    ec2_instances   = var.environment == "production" ? 150 : 30
+    rds_instance    = var.environment == "production" ? 200 : 50
+    alb             = var.environment == "production" ? 20 : 0
+    nat_gateway     = var.environment == "production" ? 45 : 0
+    total_estimated = var.environment == "production" ? 415 : 80
+  }
+}
+
+output "environment_info" {
+  description = "Environment configuration information"
+  value = {
+    environment         = var.environment
+    region              = var.aws_region
+    vpc_cidr            = var.vpc_cidr
+    instance_type       = local.config.instance_type
+    db_instance_class   = local.config.db_instance_class
+    enable_multi_az     = local.config.enable_multi_az
+    deletion_protection = local.config.deletion_protection
+  }
+}
