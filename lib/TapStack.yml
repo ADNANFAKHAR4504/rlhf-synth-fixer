@@ -18,25 +18,16 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
   
-  DBPassword:
-    Type: String
-    Description: 'Database master password'
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    ConstraintDescription: 'Must contain only alphanumeric characters and be 8-41 characters long'
-  
   NotificationEmail:
     Type: String
     Description: 'Email address for CloudWatch alarm notifications'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: 'Must be a valid email address'
-
-Mappings:
-  RegionMap:
-    us-west-2:
-      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2023 AMI
+  
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: Latest Amazon Linux 2 AMI ID
 
 Resources:
   # ==================== NETWORKING ====================
@@ -74,7 +65,7 @@ Resources:
     Properties:
       VpcId: !Ref TapVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -87,7 +78,7 @@ Resources:
     Properties:
       VpcId: !Ref TapVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -101,7 +92,7 @@ Resources:
     Properties:
       VpcId: !Ref TapVPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       Tags:
         - Key: Name
           Value: TapStack-Private-Subnet-1
@@ -113,7 +104,7 @@ Resources:
     Properties:
       VpcId: !Ref TapVPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
       Tags:
         - Key: Name
           Value: TapStack-Private-Subnet-2
@@ -279,7 +270,6 @@ Resources:
   TapEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -296,14 +286,12 @@ Resources:
   TapEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${AWS::StackName}-EC2-InstanceProfile'
       Roles:
         - !Ref TapEC2Role
 
   TapLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-Lambda-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -322,7 +310,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${TapS3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-bucket-${AWS::AccountId}-${AWS::Region}/*'
       Tags:
         - Key: Environment
           Value: Production
@@ -334,14 +322,14 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref LatestAmiId
         InstanceType: t3.micro
         IamInstanceProfile:
           Arn: !GetAtt TapEC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref TapEC2SecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent
@@ -404,6 +392,8 @@ Resources:
   
   TapS3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub '${AWS::StackName}-bucket-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
@@ -447,6 +437,27 @@ Resources:
               StringEquals:
                 'aws:SourceVpc': !Ref TapVPC
 
+  # ==================== SECRETS ====================
+  
+  TapDBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-db-secret'
+      Description: 'Database credentials for TapStack RDS instance'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub |
+          {
+            "username": "${DBUsername}"
+          }
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: TapStack-DB-Secret
+        - Key: Environment
+          Value: Production
+
   # ==================== DATABASE ====================
   
   TapDBSubnetGroup:
@@ -466,6 +477,7 @@ Resources:
   TapRDSInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
       DBInstanceClass: db.t3.micro
@@ -475,7 +487,7 @@ Resources:
       StorageType: gp2
       StorageEncrypted: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${TapDBSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref TapRDSSecurityGroup
       DBSubnetGroupName: !Ref TapDBSubnetGroup
@@ -538,7 +550,7 @@ Resources:
       FunctionName: !Ref TapLambdaFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub '${TapS3Bucket}/*'
+      SourceArn: !Sub 'arn:aws:s3:::${AWS::StackName}-bucket-${AWS::AccountId}-${AWS::Region}/*'
 
   # ==================== MONITORING & ALERTS ====================
   
@@ -582,36 +594,198 @@ Resources:
 # ==================== OUTPUTS ====================
 
 Outputs:
+  # Network Outputs
   VPCId:
-    Description: 'VPC ID'
+    Description: 'VPC ID for integration testing'
     Value: !Ref TapVPC
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
 
-  EC2PublicIPs:
-    Description: 'Public IP addresses of EC2 instances (check Auto Scaling Group)'
-    Value: 'Check Auto Scaling Group instances for current public IPs'
+  VPCIdForTesting:
+    Description: 'VPC ID formatted for test assertions'
+    Value: !Ref TapVPC
 
-  RDSEndpoint:
-    Description: 'RDS Database Endpoint'
-    Value: !GetAtt TapRDSInstance.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
+  PublicSubnetIds:
+    Description: 'Public subnet IDs for integration testing'
+    Value: !Join
+      - ','
+      - - !Ref TapPublicSubnet1
+        - !Ref TapPublicSubnet2
 
+  PrivateSubnetIds:
+    Description: 'Private subnet IDs for integration testing'
+    Value: !Join
+      - ','
+      - - !Ref TapPrivateSubnet1
+        - !Ref TapPrivateSubnet2
+
+  # Security Group Outputs
+  EC2SecurityGroupId:
+    Description: 'EC2 Security Group ID for testing'
+    Value: !Ref TapEC2SecurityGroup
+
+  RDSSecurityGroupId:
+    Description: 'RDS Security Group ID for testing'
+    Value: !Ref TapRDSSecurityGroup
+
+  LambdaSecurityGroupId:
+    Description: 'Lambda Security Group ID for testing'
+    Value: !Ref TapLambdaSecurityGroup
+
+  # Compute Outputs
+  AutoScalingGroupName:
+    Description: 'Auto Scaling Group name for testing'
+    Value: !Ref TapAutoScalingGroup
+
+  LaunchTemplateId:
+    Description: 'Launch Template ID for testing'
+    Value: !Ref TapLaunchTemplate
+
+  LaunchTemplateLatestVersion:
+    Description: 'Launch Template latest version for testing'
+    Value: !GetAtt TapLaunchTemplate.LatestVersionNumber
+
+  # Storage Outputs
   S3BucketName:
-    Description: 'S3 Bucket Name'
+    Description: 'S3 Bucket Name for integration testing'
     Value: !Ref TapS3Bucket
     Export:
       Name: !Sub '${AWS::StackName}-S3-Bucket'
 
+  S3BucketArn:
+    Description: 'S3 Bucket ARN for testing'
+    Value: !Sub 'arn:aws:s3:::${TapS3Bucket}'
+
+  # Database Outputs
+  RDSEndpoint:
+    Description: 'RDS Database Endpoint for integration testing'
+    Value: !GetAtt TapRDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
+
+  RDSPort:
+    Description: 'RDS Database Port for testing'
+    Value: !GetAtt TapRDSInstance.Endpoint.Port
+
+  RDSInstanceId:
+    Description: 'RDS Instance ID for testing'
+    Value: !Ref TapRDSInstance
+
+  DBSubnetGroupName:
+    Description: 'RDS DB Subnet Group Name for testing'
+    Value: !Ref TapDBSubnetGroup
+
+  # Lambda Outputs
   LambdaFunctionArn:
-    Description: 'Lambda Function ARN'
+    Description: 'Lambda Function ARN for integration testing'
     Value: !GetAtt TapLambdaFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-Lambda-ARN'
 
+  LambdaFunctionName:
+    Description: 'Lambda Function Name for testing'
+    Value: !Ref TapLambdaFunction
+
+  LambdaExecutionRoleArn:
+    Description: 'Lambda Execution Role ARN for testing'
+    Value: !GetAtt TapLambdaExecutionRole.Arn
+
+  # IAM Outputs
+  EC2RoleArn:
+    Description: 'EC2 Role ARN for testing'
+    Value: !GetAtt TapEC2Role.Arn
+
+  EC2InstanceProfileArn:
+    Description: 'EC2 Instance Profile ARN for testing'
+    Value: !GetAtt TapEC2InstanceProfile.Arn
+
+  # Monitoring Outputs
   SNSTopicArn:
-    Description: 'SNS Topic ARN for alerts'
+    Description: 'SNS Topic ARN for alerts and testing'
     Value: !Ref TapSNSTopic
     Export:
       Name: !Sub '${AWS::StackName}-SNS-Topic'
+
+  SNSTopicName:
+    Description: 'SNS Topic Name for testing'
+    Value: !Ref TapSNSTopic
+
+  CloudWatchAlarmName:
+    Description: 'CloudWatch Alarm Name for testing'
+    Value: !Ref TapCPUAlarm
+
+  # Network Configuration Outputs
+  VpcCidrBlock:
+    Description: 'VPC CIDR block for testing'
+    Value: !GetAtt TapVPC.CidrBlock
+
+  PublicSubnet1Cidr:
+    Description: 'Public Subnet 1 CIDR for testing'
+    Value: !GetAtt TapPublicSubnet1.CidrBlock
+
+  PublicSubnet2Cidr:
+    Description: 'Public Subnet 2 CIDR for testing'
+    Value: !GetAtt TapPublicSubnet2.CidrBlock
+
+  PrivateSubnet1Cidr:
+    Description: 'Private Subnet 1 CIDR for testing'
+    Value: !GetAtt TapPrivateSubnet1.CidrBlock
+
+  PrivateSubnet2Cidr:
+    Description: 'Private Subnet 2 CIDR for testing'
+    Value: !GetAtt TapPrivateSubnet2.CidrBlock
+
+  # Stack Information Outputs
+  StackName:
+    Description: 'Stack name for testing'
+    Value: !Ref 'AWS::StackName'
+
+  StackRegion:
+    Description: 'Stack region for testing'
+    Value: !Ref 'AWS::Region'
+
+  StackAccountId:
+    Description: 'Stack account ID for testing'
+    Value: !Ref 'AWS::AccountId'
+
+  # Test Configuration Outputs
+  TestConfiguration:
+    Description: 'JSON configuration for automated testing'
+    Value: !Sub |
+      {
+        "vpc": {
+          "id": "${TapVPC}",
+          "cidr": "${TapVPC.CidrBlock}"
+        },
+        "subnets": {
+          "public": ["${TapPublicSubnet1}", "${TapPublicSubnet2}"],
+          "private": ["${TapPrivateSubnet1}", "${TapPrivateSubnet2}"]
+        },
+        "security_groups": {
+          "ec2": "${TapEC2SecurityGroup}",
+          "rds": "${TapRDSSecurityGroup}",
+          "lambda": "${TapLambdaSecurityGroup}"
+        },
+        "compute": {
+          "asg_name": "${TapAutoScalingGroup}",
+          "launch_template": "${TapLaunchTemplate}"
+        },
+        "storage": {
+          "s3_bucket": "${TapS3Bucket}",
+          "s3_arn": "arn:aws:s3:::${TapS3Bucket}"
+        },
+        "database": {
+          "endpoint": "${TapRDSInstance.Endpoint.Address}",
+          "port": "${TapRDSInstance.Endpoint.Port}",
+          "instance_id": "${TapRDSInstance}"
+        },
+        "lambda": {
+          "function_name": "${TapLambdaFunction}",
+          "function_arn": "${TapLambdaFunction.Arn}",
+          "role_arn": "${TapLambdaExecutionRole.Arn}"
+        },
+        "monitoring": {
+          "sns_topic": "${TapSNSTopic}",
+          "cloudwatch_alarm": "${TapCPUAlarm}"
+        }
+      }
