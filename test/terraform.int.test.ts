@@ -305,7 +305,8 @@ const environmentSuffix = 'dev';
 
           // Check monitoring
           expect(dbInstance.MonitoringInterval).toBe(60);
-          expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
+          // Some AWS SDK versions may not return PerformanceInsightsEnabled if not set, so fallback to false
+          expect(dbInstance.PerformanceInsightsEnabled ?? false).toBe(true);
 
           // Check public accessibility
           expect(dbInstance.PubliclyAccessible).toBe(false);
