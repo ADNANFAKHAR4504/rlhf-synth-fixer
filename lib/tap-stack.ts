@@ -2,6 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -37,8 +38,11 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
 
+    // --- Providers ---
     new AwsProvider(this, 'aws', { region: awsRegion });
+    new RandomProvider(this, 'random'); // ✅ Add Random provider for RandomPassword
 
+    // --- S3 Backend ---
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${env}/${id}.tfstate`,
@@ -75,28 +79,21 @@ export class TapStack extends TerraformStack {
 
     // --- Outputs ---
     new TerraformOutput(this, 'vpcId', { value: network.vpc.id });
-
     new TerraformOutput(this, 'privateSubnetId', {
       value: network.privateSubnetIds[0],
     });
-
     new TerraformOutput(this, 'ec2InstanceId', { value: compute.instance.id });
-
     new TerraformOutput(this, 'ec2PrivateIp', {
       value: compute.instance.privateIp,
     });
-
     new TerraformOutput(this, 'rdsInstanceEndpoint', {
       value: database.db.endpoint,
       sensitive: true,
     });
-
-    // ✅ Output the RDS secret ARN for retrieving username/password
     new TerraformOutput(this, 'rdsSecretArn', {
       value: database.dbSecret.arn,
       sensitive: true,
     });
-
     new TerraformOutput(this, 's3BucketName', { value: storage.bucket.bucket });
   }
 }

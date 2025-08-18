@@ -32,6 +32,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
       {
         "region": "us-west-2"
       }
+    ],
+    "random": [
+      {
+      }
     ]
   },
   "terraform": {
@@ -48,6 +52,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
       "aws": {
         "source": "aws",
         "version": "6.4.0"
+      },
+      "random": {
+        "source": "hashicorp/random",
+        "version": "3.7.2"
       }
     }
   }
@@ -86,6 +94,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should u
       {
         "region": "us-west-2"
       }
+    ],
+    "random": [
+      {
+      }
     ]
   },
   "terraform": {
@@ -102,6 +114,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should u
       "aws": {
         "source": "aws",
         "version": "6.4.0"
+      },
+      "random": {
+        "source": "hashicorp/random",
+        "version": "3.7.2"
       }
     }
   }
