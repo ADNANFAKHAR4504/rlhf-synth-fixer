@@ -6,7 +6,7 @@ import sys
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import pytest
-from lib.tap_helpers import get_resource_name, get_short_name, calculate_ipv6_cidr, PROJECT_NAME, ENVIRONMENT, DEPLOYMENT_ID
+from lib.tap_stack import get_resource_name, get_short_name, calculate_ipv6_cidr, PROJECT_NAME, ENVIRONMENT, DEPLOYMENT_ID
 
 # Pipeline and deployment configuration constants
 REQUIRED_COVERAGE_THRESHOLD = 20
