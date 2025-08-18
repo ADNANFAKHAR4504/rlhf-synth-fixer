@@ -951,7 +951,6 @@ output "secondary_s3_bucket_name" {
   value       = aws_s3_bucket.secondary.bucket
   description = "Secondary S3 bucket name"
 }
-
 output "s3_replication_role_arn" {
   value       = aws_iam_role.s3_replication.arn
   description = "IAM Role ARN used for S3 cross-region replication"
