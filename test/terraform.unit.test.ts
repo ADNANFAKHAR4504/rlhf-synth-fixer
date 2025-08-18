@@ -20,12 +20,12 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
   // --- Optional sanity checks (keep lightweight) ---
 
   test('does NOT declare provider in tap_stack.tf (provider.tf owns providers)', () => {
-    const content = fs.readFileSync(stackPath, 'utf8');
+    const content = fs.readFileSync('stackPath', 'utf8');
     expect(content).not.toMatch(/\bprovider\s+"aws"\s*{/);
   });
 
-  test('declares aws_region variable in tap_stack.tf (vars.tf owns vars)', () => {
-    const content = fs.readFileSync(stackPath, 'utf8');
+  test('declares aws_region variable in vars.tf', () => {
+    const content = fs.readFileSync('../lib/tap_stack.tf', 'utf8');
     expect(content).toMatch(/variable\s+"aws_region"\s*{/);
   });
 });
