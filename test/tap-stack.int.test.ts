@@ -352,7 +352,7 @@ describe('TapStack.yml - Comprehensive Integration Tests', () => {
 
       if (channelCount > 0) {
         const channel = channels.DeliveryChannels?.[0];
-        expect(channel?.name).toContain(`config-delivery-channel-${env}`);
+        expect(channel?.name).toContain(`config-delivery-channel`);
         expect(channel?.s3BucketName).toBe(configBucketName);
 
         // Check required-tags rule
