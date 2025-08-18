@@ -82,7 +82,7 @@ output "s3_logs_bucket_name" {
 
 output "s3_logs_bucket_arn" {
   description = "ARN of the S3 logs bucket"
-  value       = aws_s3_bucket.logs.arn
+  value       = aws_s3_bucket.logs_bucket.arn
 }
 
 output "kms_key_id" {

@@ -77,7 +77,8 @@ resource "aws_nat_gateway" "main" {
   }
 }
 resource "aws_eip" "main" {
-  vpc = true
+  count  = length(var.public_subnet_cidrs)
+  domain = true
 }
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
@@ -489,7 +490,7 @@ resource "aws_s3_bucket_policy" "logs" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.logs.arn
+        Resource = aws_s3_bucket.logs_bucket.arn
       }
     ]
   })
