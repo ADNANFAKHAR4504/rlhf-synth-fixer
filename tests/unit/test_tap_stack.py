@@ -112,8 +112,8 @@ class TestTapStack(unittest.TestCase):
         self.assertEqual(mock_secrets.call_count, 2)
         self.assertEqual(mock_compute.call_count, 2)
 
-        # Database and monitoring should only be created in primary region
-        self.assertEqual(mock_database.call_count, 1)
+        # Database deployment is disabled due to SCP restrictions, monitoring should only be created in primary region
+        self.assertEqual(mock_database.call_count, 0)  # Database disabled due to SCP restrictions
         self.assertEqual(mock_monitoring.call_count, 1)
 
         # Verify exports were called
