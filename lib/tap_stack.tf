@@ -20,7 +20,7 @@ variable "aws_region" {
 # S3 Bucket (versioning enabled, us-east-1)
 ############################################################
 resource "aws_s3_bucket" "main" {
-  bucket = "${var.projectname}-s3"
+  bucket = "${var.projectname}-s3-${random_id.suffix.hex}"
   tags = {
     Name        = "${var.projectname}-s3"
     Project     = var.projectname
@@ -120,3 +120,7 @@ output "bucket_tags" {
   value = aws_s3_bucket.this.tags
 }
 */
+
+resource "random_id" "suffix" {
+  byte_length = 4
+}
