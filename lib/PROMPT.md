@@ -1,19 +1,17 @@
 
 ---
 
-You are tasked with creating a secure AWS infrastructure using **CloudFormation (YAML)**. The environment must strictly follow security best practices and meet compliance requirements.
+We need to set up secure AWS infrastructure using CloudFormation YAML templates. This has to meet our security and compliance standards.
 
-**Requirements:**
+Key requirements:
+1. Deploy everything in us-east-1 region
+2. Use AWS KMS for RDS database encryption keys
+3. Enable CloudTrail for all management events
+4. IAM role should follow least privilege principle
+5. S3 buckets need server-side encryption and logging
+6. Tag all resources with Environment for auditing
 
-1. All resources must be deployed in the **us-east-1** region.
-2. Use **AWS KMS** to manage encryption keys for the RDS database.
-3. Enable **CloudTrail** to capture **all management events**.
-4. Create an **IAM role** that applies the **least privilege principle** when attaching policies.
-5. Configure **S3 buckets** with **server-side encryption** and **logging enabled**.
-6. Apply **tags** (`Environment`) to **all resources** for auditing purposes.
-
-**Output:**
-Write a CloudFormation template that provisions the infrastructure with these constraints. The template must deploy without errors and demonstrate compliance with all the requirements.
+The CloudFormation template should deploy cleanly and meet all these security requirements.
 
 ---
 
