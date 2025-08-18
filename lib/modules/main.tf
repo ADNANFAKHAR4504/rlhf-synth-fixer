@@ -68,6 +68,14 @@ data "aws_eip" "nat" {
 }
 
 # NAT Gateway
+resource "aws_nat_gateway" "main" {
+  allocation_id = data.aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = {
+    Name = "${var.project_name}-nat-gateway"
+  }
+}
 
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
@@ -476,7 +484,7 @@ resource "aws_s3_bucket_policy" "logs" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.logs_bucket.arn
+        Resource = aws_s3_bucket.logs.arn
       }
     ]
   })
