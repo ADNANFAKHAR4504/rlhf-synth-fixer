@@ -1,5 +1,5 @@
 import pulumi_aws as aws
-from pulumi import ComponentResource, ResourceOptions
+from pulumi import ComponentResource, ResourceOptions, InvokeOptions
 from ..config import InfrastructureConfig
 
 
@@ -9,7 +9,8 @@ class NetworkingComponent(ComponentResource):
     super().__init__('custom:networking:NetworkingComponent', name, None, opts)
 
     # Get availability zones for the specific region
-    azs = aws.get_availability_zones(state="available", opts=opts)
+    invoke_opts = InvokeOptions(provider=opts.provider) if opts and opts.provider else None
+    azs = aws.get_availability_zones(state="available", opts=invoke_opts)
 
     # Create VPC
     self.vpc = aws.ec2.Vpc(
