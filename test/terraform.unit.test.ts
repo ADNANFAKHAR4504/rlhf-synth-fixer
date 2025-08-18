@@ -35,13 +35,20 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
     expect(content).toMatch(
       /module\s+"vpc"\s*{[\s\S]*?source\s*=\s*"terraform-aws-modules\/vpc\/aws"/
     );
-    // ALB + ASG
+    // ALB
     expect(content).toMatch(
       /module\s+"alb"\s*{[\s\S]*?load_balancer_type\s*=\s*"application"/
     );
-    expect(content).toMatch(
-      /module\s+"asg"\s*{[\s\S]*?terraform-aws-modules\/autoscaling\/aws/
+    // ASG: either module-based or first-party resources
+    const hasAsgModule =
+      /module\s+"asg"\s*{[\s\S]*?terraform-aws-modules\/autoscaling\/aws/.test(
+        content
+      );
+    const hasAsgResource = /resource\s+"aws_autoscaling_group"\s+"app"/.test(
+      content
     );
+    expect(hasAsgModule || hasAsgResource).toBe(true);
+
     // RDS
     expect(content).toMatch(/module\s+"rds"\s*{[\s\S]*?engine\s*=\s*"mysql"/);
     // Lambda + API Gateway + Cognito
@@ -52,10 +59,13 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
     expect(content).toMatch(
       /resource\s+"aws_cloudfront_distribution"\s+"this"/
     );
-    // DR region minimal
+    // DR region minimal: either module-based or first-party ASG
     expect(content).toMatch(/module\s+"vpc_dr"/);
     expect(content).toMatch(/module\s+"alb_dr"/);
-    expect(content).toMatch(/module\s+"asg_dr"/);
+    const hasAsgDrModule = /module\s+"asg_dr"/.test(content);
+    const hasAsgDrResource =
+      /resource\s+"aws_autoscaling_group"\s+"app_dr"/.test(content);
+    expect(hasAsgDrModule || hasAsgDrResource).toBe(true);
   });
 
   test('outputs expose endpoints and identifiers', () => {
