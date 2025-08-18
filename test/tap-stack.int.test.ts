@@ -14,7 +14,6 @@ import {
   PutItemCommand
 } from '@aws-sdk/client-dynamodb';
 import {
-  DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
   EC2Client
 } from '@aws-sdk/client-ec2';
@@ -23,9 +22,7 @@ import {
   IAMClient
 } from '@aws-sdk/client-iam';
 import {
-  DescribeKeyCommand,
-  KMSClient,
-  ListAliasesCommand
+  KMSClient
 } from '@aws-sdk/client-kms';
 import {
   DescribeDBInstancesCommand,
@@ -291,49 +288,10 @@ describe('TapStack Live Infrastructure Integration Tests', () => {
       expect(vpc?.DhcpOptionsId).toBeDefined();
     }, 30000);
 
-  //   test('should verify security groups exist with correct rules', async () => {
-  //     const command = new DescribeSecurityGroupsCommand({
-  //       Filters: [
-  //         { Name: 'group-name', Values: [`rds-sg-${resourceNames.environmentSuffix}`, `app-sg-${resourceNames.environmentSuffix}`] }
-  //       ]
-  //     });
 
-  //     const response = await ec2Client.send(command);
-      
-  //     // expect(response.SecurityGroups).toBeDefined();
-  //     // //expect(response.SecurityGroups?.length).toBeGreaterThanOrEqual(2);
-      
-  //     // const rdsSecGroup = response.SecurityGroups?.find(sg => sg.GroupName === `rds-sg-${resourceNames.environmentSuffix}`);
-  //     // expect(rdsSecGroup).toBeDefined();
-      
-  //     // Verify RDS security group allows MySQL access (port 3306)
-  //     const mysqlRule = rdsSecGroup?.IpPermissions?.find(rule => 
-  //       rule.FromPort === 3306 && rule.ToPort === 3306
-  //     );
-  //     expect(mysqlRule).toBeDefined();
-  //   }, 30000);
-  // });
+  });
 
-  // describe('KMS Key Tests', () => {
-  //   test('should verify KMS key exists and is accessible', async () => {
-  //     // Describe the key using the key ID from outputs
-  //     const keyCommand = new DescribeKeyCommand({ KeyId: resourceNames.kmsKeyId });
-  //     const keyResponse = await kmsClient.send(keyCommand);
-      
-  //     expect(keyResponse.KeyMetadata).toBeDefined();
-  //     expect(keyResponse.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
-  //     expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
-  //     expect(keyResponse.KeyMetadata?.Description).toBe('KMS Key for RDS Database encryption');
-      
-  //     // Also verify the alias exists
-  //     const aliasCommand = new ListAliasesCommand({});
-  //     const aliasResponse = await kmsClient.send(aliasCommand);
-      
-  //     const alias = aliasResponse.Aliases?.find(a => a.AliasName === resourceNames.kmsAlias);
-  //     expect(alias).toBeDefined();
-  //     expect(alias?.TargetKeyId).toBe(resourceNames.kmsKeyId);
-  //   }, 30000);
-  // });
+
 
   describe('CloudTrail Tests', () => {
     test('should verify CloudTrail exists and is logging', async () => {
