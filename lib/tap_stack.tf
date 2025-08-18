@@ -13,7 +13,7 @@ data "aws_caller_identity" "current" {}
 ######################
 
 module "networking" {
-  source = "./modules/networking"
+  source = "./modules"
   
   project_name         = var.project_name
   environment         = var.environment
@@ -28,7 +28,7 @@ module "networking" {
 ######################
 
 module "security" {
-  source = "./modules/security"
+  source = "./modules"
   
   project_name = var.project_name
   environment  = var.environment
@@ -40,7 +40,7 @@ module "security" {
 ######################
 
 module "iam" {
-  source = "./modules/iam"
+  source = "./modules"
   
   project_name = var.project_name
   environment  = var.environment
@@ -54,7 +54,7 @@ module "iam" {
 
 # Storage Module
 module "storage" {
-  source = "./modules/storage"
+  source = "./modules"
   
   project_name = var.project_name
   environment  = var.environment
@@ -65,7 +65,7 @@ module "storage" {
 
 # Database Module
 module "database" {
-  source = "./modules/database"
+  source = "./modules"
   
   project_name = var.project_name
   environment  = var.environment
@@ -77,7 +77,7 @@ module "database" {
 
 # Compute Module
 module "compute" {
-  source = "./modules/compute"
+  source = "./modules"
   
   project_name = var.project_name
   environment  = var.environment
@@ -95,7 +95,7 @@ module "compute" {
 
 # Monitoring Module
 module "monitoring" {
-  source = "./modules/monitoring"
+  source = "./modules"
   
   project_name = var.project_name
   environment  = var.environment
