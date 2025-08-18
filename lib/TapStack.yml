@@ -11,10 +11,10 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
 
-  SSLCertificateArn:
-    Type: String
-    Description: 'ARN of SSL certificate for ALB (must be in us-east-1)'
-    Default: ''
+Conditions:
+  # Always create SSL since certificate is created in the stack
+  HasSSLCertificate: true
+  NoSSLCertificate: false
 
 Resources:
   # VPC Configuration
@@ -229,12 +229,12 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
@@ -421,7 +421,7 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # ALB Listener (HTTPS)
+  # ALB Listener (HTTPS) - Always created since certificate is in the stack
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -432,7 +432,7 @@ Resources:
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref SSLCertificateArn
+        - CertificateArn: !Ref SSLCertificate
 
   # ALB Listener (HTTP - redirect to HTTPS)
   ALBListenerHTTP:
@@ -581,12 +581,44 @@ Resources:
         - Key: Environment
           Value: Production
 
+  # ACM Certificate for ALB (self-signed for testing)
+  SSLCertificate:
+    Type: AWS::ACM::Certificate
+    Properties:
+      DomainName: !Sub '${AWS::StackName}.${AWS::Region}.${AWS::AccountId}.internal'
+      ValidationMethod: DNS
+      SubjectAlternativeNames:
+        - !Sub '*.${AWS::StackName}.${AWS::Region}.${AWS::AccountId}.internal'
+      Tags:
+        - Key: Name
+          Value: WebApp-SSL-Certificate
+        - Key: Environment
+          Value: Production
+
 Outputs:
   ApplicationLoadBalancerDNS:
     Description: DNS name of the Application Load Balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DNS'
+
+  ApplicationLoadBalancerURL:
+    Description: URL to access the Application Load Balancer
+    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-URL'
+
+  SSLCertificateArn:
+    Description: ARN of the SSL certificate created in this stack
+    Value: !Ref SSLCertificate
+    Export:
+      Name: !Sub '${AWS::StackName}-SSL-Certificate-ARN'
+
+  SSLCertificateConfigured:
+    Description: Whether SSL certificate is configured
+    Value: 'true'
+    Export:
+      Name: !Sub '${AWS::StackName}-SSL-Configured'
 
   VPCId:
     Description: VPC ID

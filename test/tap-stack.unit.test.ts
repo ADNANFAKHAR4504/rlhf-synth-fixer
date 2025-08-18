@@ -31,12 +31,45 @@ describe('TapStack CloudFormation Template - Unit', () => {
         'Must begin with a letter and contain only alphanumeric characters'
       );
 
-      expect(template.Parameters.SSLCertificateArn).toBeDefined();
-      expect(template.Parameters.SSLCertificateArn.Type).toBe('String');
-      expect(template.Parameters.SSLCertificateArn.Description).toBe(
-        'ARN of SSL certificate for ALB (must be in us-east-1)'
+      // SSLCertificateArn parameter should not exist anymore
+      expect(template.Parameters.SSLCertificateArn).toBeUndefined();
+    });
+
+    test('has conditions for SSL certificate', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.HasSSLCertificate).toBe(true);
+      expect(template.Conditions.NoSSLCertificate).toBe(false);
+    });
+  });
+
+  describe('SSL Certificate Resource', () => {
+    test('defines ACM certificate resource', () => {
+      const cert = template.Resources.SSLCertificate;
+      expect(cert).toBeDefined();
+      expect(cert.Type).toBe('AWS::ACM::Certificate');
+      expect(cert.Properties.DomainName['Fn::Sub']).toContain(
+        '${AWS::StackName}'
       );
-      expect(template.Parameters.SSLCertificateArn.Default).toBe('');
+      expect(cert.Properties.DomainName['Fn::Sub']).toContain('${AWS::Region}');
+      expect(cert.Properties.DomainName['Fn::Sub']).toContain(
+        '${AWS::AccountId}'
+      );
+      expect(cert.Properties.DomainName['Fn::Sub']).toContain('.internal');
+      expect(cert.Properties.ValidationMethod).toBe('DNS');
+      expect(Array.isArray(cert.Properties.SubjectAlternativeNames)).toBe(true);
+      expect(cert.Properties.SubjectAlternativeNames[0]['Fn::Sub']).toContain(
+        '*.${AWS::StackName}'
+      );
+    });
+
+    test('certificate has proper tags', () => {
+      const cert = template.Resources.SSLCertificate;
+      const tags = cert.Properties.Tags;
+      expect(tags).toHaveLength(2);
+      expect(tags[0].Key).toBe('Name');
+      expect(tags[0].Value).toBe('WebApp-SSL-Certificate');
+      expect(tags[1].Key).toBe('Environment');
+      expect(tags[1].Value).toBe('Production');
     });
   });
 
@@ -117,11 +150,12 @@ describe('TapStack CloudFormation Template - Unit', () => {
 
       const ingress = albSg.Properties.SecurityGroupIngress;
       expect(ingress).toHaveLength(2);
-      expect(ingress[0].FromPort).toBe(443);
-      expect(ingress[0].ToPort).toBe(443);
+      expect(ingress[0].FromPort).toBe(80);
+      expect(ingress[0].ToPort).toBe(80);
       expect(ingress[0].IpProtocol).toBe('tcp');
-      expect(ingress[1].FromPort).toBe(80);
-      expect(ingress[1].ToPort).toBe(80);
+      expect(ingress[1].FromPort).toBe(443);
+      expect(ingress[1].ToPort).toBe(443);
+      expect(ingress[1].IpProtocol).toBe('tcp');
     });
 
     test('defines web server security group', () => {
@@ -265,17 +299,23 @@ describe('TapStack CloudFormation Template - Unit', () => {
       expect(r.ALBTargetGroup.Properties.VpcId.Ref).toBe('VPC');
       expect(r.ALBTargetGroup.Properties.HealthCheckPath).toBe('/');
 
+      // HTTPS listener should always be created
       const https = r.ALBListener.Properties;
       expect(https.Port).toBe(443);
       expect(https.Protocol).toBe('HTTPS');
       expect(Array.isArray(https.Certificates)).toBe(true);
+      expect(https.Certificates[0].CertificateArn.Ref).toBe('SSLCertificate');
 
+      // HTTP redirect listener should always be created
       const http = r.ALBListenerHTTP.Properties;
       expect(http.Port).toBe(80);
       expect(http.Protocol).toBe('HTTP');
       expect(http.DefaultActions[0].Type).toBe('redirect');
       expect(http.DefaultActions[0].RedirectConfig.Protocol).toBe('HTTPS');
       expect(http.DefaultActions[0].RedirectConfig.StatusCode).toBe('HTTP_301');
+
+      // HTTP-only listener should not exist
+      expect(r.ALBListenerHTTPDefault).toBeUndefined();
     });
   });
 
@@ -381,6 +421,44 @@ describe('TapStack CloudFormation Template - Unit', () => {
       ).toContain('ALB-DNS');
     });
 
+    test('outputs include ALB URL (always HTTPS)', () => {
+      const outputs = template.Outputs;
+      expect(outputs.ApplicationLoadBalancerURL).toBeDefined();
+      expect(outputs.ApplicationLoadBalancerURL.Description).toBe(
+        'URL to access the Application Load Balancer'
+      );
+      expect(outputs.ApplicationLoadBalancerURL.Value['Fn::Sub']).toContain(
+        'https://'
+      );
+      expect(
+        outputs.ApplicationLoadBalancerURL.Export.Name['Fn::Sub']
+      ).toContain('ALB-URL');
+    });
+
+    test('outputs include SSL certificate ARN', () => {
+      const outputs = template.Outputs;
+      expect(outputs.SSLCertificateArn).toBeDefined();
+      expect(outputs.SSLCertificateArn.Description).toBe(
+        'ARN of the SSL certificate created in this stack'
+      );
+      expect(outputs.SSLCertificateArn.Value.Ref).toBe('SSLCertificate');
+      expect(outputs.SSLCertificateArn.Export.Name['Fn::Sub']).toContain(
+        'SSL-Certificate-ARN'
+      );
+    });
+
+    test('outputs include SSL configuration status', () => {
+      const outputs = template.Outputs;
+      expect(outputs.SSLCertificateConfigured).toBeDefined();
+      expect(outputs.SSLCertificateConfigured.Description).toBe(
+        'Whether SSL certificate is configured'
+      );
+      expect(outputs.SSLCertificateConfigured.Value).toBe('true');
+      expect(outputs.SSLCertificateConfigured.Export.Name['Fn::Sub']).toContain(
+        'SSL-Configured'
+      );
+    });
+
     test('outputs include VPC ID', () => {
       expect(template.Outputs.VPCId).toBeDefined();
       expect(template.Outputs.VPCId.Description).toBe('VPC ID');
@@ -414,12 +492,12 @@ describe('TapStack CloudFormation Template - Unit', () => {
 
     test('has correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(2);
+      expect(parameterCount).toBe(1); // Only DBUsername now
     });
 
     test('has correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(7); // Added SSL-related outputs
     });
   });
 });

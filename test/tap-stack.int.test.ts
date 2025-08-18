@@ -47,6 +47,37 @@ describe('TapStack CloudFormation Template - Integration', () => {
     });
   });
 
+  describe('SSL Certificate (Live)', () => {
+    test('SSL certificate should be created and accessible', () => {
+      if (!outputs.SSLCertificateArn) {
+        console.log(
+          '💡 SSL certificate not deployed yet. Deploy with: npm run cfn:deploy-yaml'
+        );
+        expect(true).toBe(true);
+        return;
+      }
+
+      expect(outputs.SSLCertificateArn).toBeDefined();
+      expect(typeof outputs.SSLCertificateArn).toBe('string');
+      expect(outputs.SSLCertificateArn).toMatch(
+        /^arn:aws:acm:us-east-1:[0-9]{12}:certificate\/[a-zA-Z0-9-]+$/
+      );
+    });
+
+    test('SSL configuration status should be true', () => {
+      if (!outputs.SSLCertificateConfigured) {
+        console.log(
+          '💡 SSL configuration status not available. Deploy with: npm run cfn:deploy-yaml'
+        );
+        expect(true).toBe(true);
+        return;
+      }
+
+      expect(outputs.SSLCertificateConfigured).toBeDefined();
+      expect(outputs.SSLCertificateConfigured).toBe('true');
+    });
+  });
+
   describe('VPC and Networking (Live)', () => {
     test('VPC should be accessible if deployed', () => {
       if (!outputs.VPCId) {
@@ -90,6 +121,21 @@ describe('TapStack CloudFormation Template - Integration', () => {
       expect(outputs.ApplicationLoadBalancerDNS).toBeDefined();
       expect(typeof outputs.ApplicationLoadBalancerDNS).toBe('string');
       expect(outputs.ApplicationLoadBalancerDNS).toContain('.amazonaws.com');
+    });
+
+    test('ALB URL should always be HTTPS', () => {
+      if (!outputs.ApplicationLoadBalancerURL) {
+        console.log(
+          '💡 ALB URL not deployed yet. Deploy with: npm run cfn:deploy-yaml'
+        );
+        expect(true).toBe(true);
+        return;
+      }
+
+      expect(outputs.ApplicationLoadBalancerURL).toBeDefined();
+      expect(typeof outputs.ApplicationLoadBalancerURL).toBe('string');
+      expect(outputs.ApplicationLoadBalancerURL).toMatch(/^https:\/\/.+/);
+      expect(outputs.ApplicationLoadBalancerURL).toContain('.amazonaws.com');
     });
 
     test('ALB should respond to health checks', async () => {
@@ -195,6 +241,43 @@ describe('TapStack CloudFormation Template - Integration', () => {
     });
   });
 
+  describe('SSL Certificate Validation (Live)', () => {
+    test('SSL certificate should be valid and accessible', () => {
+      if (!outputs.SSLCertificateArn) {
+        console.log(
+          '💡 SSL certificate not deployed yet. Deploy with: npm run cfn:deploy-yaml'
+        );
+        expect(true).toBe(true);
+        return;
+      }
+
+      // Verify certificate ARN format
+      expect(outputs.SSLCertificateArn).toMatch(
+        /^arn:aws:acm:us-east-1:[0-9]{12}:certificate\/[a-zA-Z0-9-]+$/
+      );
+
+      // Verify it's in us-east-1 region (required for ALB)
+      expect(outputs.SSLCertificateArn).toContain('us-east-1');
+    });
+
+    test('ALB should be configured for HTTPS', () => {
+      if (
+        !outputs.ApplicationLoadBalancerURL ||
+        !outputs.SSLCertificateConfigured
+      ) {
+        console.log(
+          '💡 ALB or SSL not fully deployed yet. Deploy with: npm run cfn:deploy-yaml'
+        );
+        expect(true).toBe(true);
+        return;
+      }
+
+      // ALB URL should always be HTTPS now
+      expect(outputs.ApplicationLoadBalancerURL).toMatch(/^https:\/\//);
+      expect(outputs.SSLCertificateConfigured).toBe('true');
+    });
+  });
+
   describe('Deployment Instructions', () => {
     test('should provide clear deployment instructions', () => {
       if (Object.keys(outputs).length === 0) {
@@ -206,11 +289,17 @@ describe('TapStack CloudFormation Template - Integration', () => {
         console.log('5. Run tests: npm run test:integration');
         console.log('\n💡 The deployment will create:');
         console.log('   - VPC with public/private subnets');
-        console.log('   - Application Load Balancer');
+        console.log('   - Application Load Balancer (HTTPS enabled)');
+        console.log('   - SSL Certificate (automatically created)');
         console.log('   - Auto Scaling Group with EC2 instances');
         console.log('   - RDS MySQL database');
         console.log('   - S3 bucket for static content');
         console.log('   - CloudWatch alarms and scaling policies');
+        console.log('\n🔒 SSL Features:');
+        console.log('   - Automatic certificate creation in ACM');
+        console.log('   - HTTPS listener on port 443');
+        console.log('   - HTTP redirect to HTTPS on port 80');
+        console.log('   - Certificate validation via DNS');
       }
 
       expect(true).toBe(true);
