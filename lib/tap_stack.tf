@@ -194,5 +194,7 @@ module "compliance" {
   config_s3_bucket = module.storage.config_bucket_name
   sns_topic_arn    = module.monitoring.sns_topic_arn
 
+  use_existing_config_recorder = false
+
   depends_on = [module.storage, module.monitoring]
 }

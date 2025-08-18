@@ -5,12 +5,6 @@ variable "use_existing_config_recorder" {
   default     = true
 }
 
-# Data source for existing configuration recorder
-data "aws_config_configuration_recorder" "existing" {
-  count = var.use_existing_config_recorder ? 1 : 0
-  name  = "prod-sec-config-recorder-main"
-}
-
 # AWS Config Recorder (only create if not using existing)
 resource "aws_config_configuration_recorder" "main" {
   count    = var.use_existing_config_recorder ? 0 : 1
@@ -22,10 +16,9 @@ resource "aws_config_configuration_recorder" "main" {
   }
 }
 
-# Local value to reference either existing or new recorder
+# Local value to reference the recorder name
 locals {
-  config_recorder_name = var.use_existing_config_recorder ? data.aws_config_configuration_recorder.existing[0].name : aws_config_configuration_recorder.main[0].name
-  config_recorder_arn  = var.use_existing_config_recorder ? data.aws_config_configuration_recorder.existing[0].arn : aws_config_configuration_recorder.main[0].arn
+  config_recorder_name = var.use_existing_config_recorder ? "prod-sec-config-recorder-main" : aws_config_configuration_recorder.main[0].name
 }
 
 # AWS Config Delivery Channel
@@ -40,7 +33,7 @@ resource "aws_config_delivery_channel" "main" {
 # AWS Config Configuration Recorder Status (only manage if creating new recorder)
 resource "aws_config_configuration_recorder_status" "main" {
   count      = var.use_existing_config_recorder ? 0 : 1
-  name       = local.config_recorder_name
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
 
   depends_on = [aws_config_delivery_channel.main]
@@ -171,7 +164,7 @@ resource "aws_config_config_rule" "s3_bucket_encryption" {
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
   }
 
-  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder_status.main[0]]
+  depends_on = [aws_config_configuration_recorder_status.main]
 }
 
 resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
@@ -182,7 +175,7 @@ resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
     source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
   }
 
-  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder_status.main[0]]
+  depends_on = [aws_config_configuration_recorder_status.main]
 }
 
 resource "aws_config_config_rule" "rds_encryption" {
@@ -193,7 +186,7 @@ resource "aws_config_config_rule" "rds_encryption" {
     source_identifier = "RDS_STORAGE_ENCRYPTED"
   }
 
-  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder_status.main[0]]
+  depends_on = [aws_config_configuration_recorder_status.main]
 }
 
 resource "aws_config_config_rule" "iam_password_policy" {
@@ -204,7 +197,7 @@ resource "aws_config_config_rule" "iam_password_policy" {
     source_identifier = "IAM_PASSWORD_POLICY"
   }
 
-  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder_status.main[0]]
+  depends_on = [aws_config_configuration_recorder_status.main]
 }
 
 resource "aws_config_config_rule" "root_account_mfa" {
@@ -215,7 +208,7 @@ resource "aws_config_config_rule" "root_account_mfa" {
     source_identifier = "ROOT_ACCOUNT_MFA_ENABLED"
   }
 
-  depends_on = var.use_existing_config_recorder ? [] : [aws_config_configuration_recorder_status.main[0]]
+  depends_on = [aws_config_configuration_recorder_status.main]
 }
 
 # Config Aggregator (for multi-account setup)

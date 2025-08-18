@@ -51,7 +51,7 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count = length(var.public_subnet_cidrs)
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = {
@@ -127,7 +127,7 @@ resource "aws_flow_log" "vpc_flow_log" {
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/flowlogs/${var.project_name}-${var.environment}"
+  name_prefix       = "/aws/vpc/flowlogs/${var.project_name}-${var.environment}-"
   retention_in_days = 30
 
   tags = {

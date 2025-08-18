@@ -5,7 +5,7 @@ output "config_recorder_name" {
 
 output "config_recorder_arn" {
   description = "AWS Config recorder ARN"
-  value       = local.config_recorder_arn
+  value       = var.use_existing_config_recorder ? "arn:aws:config:us-east-1:${var.account_id}:configuration-recorder/${local.config_recorder_name}" : aws_config_configuration_recorder.main[0].id
 }
 
 output "guardduty_detector_id" {

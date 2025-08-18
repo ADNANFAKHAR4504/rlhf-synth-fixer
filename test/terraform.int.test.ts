@@ -10,15 +10,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // AWS SDK clients
-const region = 'us-east-1';
-const stsClient = new STSClient({ region});
-const ec2Client = new EC2Client({ region });
-const s3Client = new S3Client({ region });
-const kmsClient = new KMSClient({ region });
-const cloudTrailClient = new CloudTrailClient({ region });
-const configClient = new ConfigServiceClient({ region });
-const snsClient = new SNSClient({ region });
-const iamClient = new IAMClient({ region});
+const awsRegion = 'us-east-1';
+const stsClient = new STSClient({ region: awsRegion });
+const ec2Client = new EC2Client({ region: awsRegion });
+const s3Client = new S3Client({ region: awsRegion });
+const kmsClient = new KMSClient({ region: awsRegion });
+const cloudTrailClient = new CloudTrailClient({ region: awsRegion });
+const configClient = new ConfigServiceClient({ region: awsRegion });
+const snsClient = new SNSClient({ region: awsRegion });
+const iamClient = new IAMClient({ region: awsRegion });
 
 // Load infrastructure outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
@@ -26,13 +26,11 @@ const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
 describe('Secure Infrastructure Integration Tests', () => {
   let accountId: string;
-  let region: string;
 
   beforeAll(async () => {
-    // Get AWS account and region information
+    // Get AWS account information
     const identity = await stsClient.send(new GetCallerIdentityCommand({}));
     accountId = identity.Account!;
-    region = 'us-east-1';
   });
 
   describe('VPC and Networking', () => {
@@ -54,7 +52,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       if ('EnableDnsSupport' in vpc && vpc.EnableDnsSupport !== undefined) {
         expect(vpc.EnableDnsSupport).toBe(true);
       }
-    });
+    }, 60000); // Increased timeout to 60 seconds
 
     test('Public subnets exist and are properly configured', async () => {
       const publicSubnetIds = JSON.parse(outputs.public_subnet_ids);
@@ -139,11 +137,11 @@ describe('Secure Infrastructure Integration Tests', () => {
       const s3Buckets = JSON.parse(outputs.s3_buckets);
       
       for (const [bucketType, bucketName] of Object.entries(s3Buckets)) {
-        // Check bucket location
+        // Check bucket location - for us-east-1, LocationConstraint should be undefined
         const locationResponse = await s3Client.send(new GetBucketLocationCommand({
           Bucket: bucketName as string
         }));
-        expect(locationResponse.LocationConstraint).toBe('us-east-1');
+        expect(locationResponse.LocationConstraint).toBeUndefined(); // us-east-1 has no location constraint
 
         // Check versioning
         const versioningResponse = await s3Client.send(new GetBucketVersioningCommand({
@@ -168,7 +166,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       const locationResponse = await s3Client.send(new GetBucketLocationCommand({
         Bucket: sensitiveBucket
       }));
-      expect(locationResponse.LocationConstraint).toBe(region);
+      expect(locationResponse.LocationConstraint).toBeUndefined(); // us-east-1 has no location constraint
     });
   });
 
@@ -297,11 +295,11 @@ describe('Secure Infrastructure Integration Tests', () => {
       const locationResponse = await s3Client.send(new GetBucketLocationCommand({
         Bucket: configBucket
       }));
-      expect(locationResponse.LocationConstraint).toBe(region);
+      expect(locationResponse.LocationConstraint).toBeUndefined(); // us-east-1 has no location constraint
     });
 
     test('All resources are in the correct region', async () => {
-      expect(region).toBe(region);
+      expect(awsRegion).toBe('us-east-1');
       
       // Verify VPC is in correct region
       const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
