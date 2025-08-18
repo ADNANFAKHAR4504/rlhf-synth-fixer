@@ -677,17 +677,16 @@ Resources:
                   Values:
                     - 'Security'
                     - 'Bugfix'
+                - Key: 'SEVERITY'
+                  Values:
                     - 'Critical'
+                    - 'Important'
             ApproveAfterDays: 0
-            EnableNonSecurity: false
             ComplianceLevel: 'CRITICAL'
       ApprovedPatches:
-        - 'kernel*'
+        - '*'
       ApprovedPatchesComplianceLevel: 'CRITICAL'
       RejectedPatches: []
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'FinancialApp-PatchBaseline-${EnvironmentSuffix}'
 
   MaintenanceWindow:
     Type: AWS::SSM::MaintenanceWindow
