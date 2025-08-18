@@ -193,7 +193,7 @@ class MonitoringComponent(ComponentResource):
       time_unit="MONTHLY",
       cost_filters=[aws.budgets.BudgetCostFilterArgs(
         name="TagKeyValue",
-        values=[config.environment]
+        values=[f"Environment${config.environment}"]
       )],
       notifications=[
         {
