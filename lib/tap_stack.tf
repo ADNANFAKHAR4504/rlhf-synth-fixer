@@ -444,7 +444,7 @@ resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_attach" {
   policy_arn = aws_iam_policy.ec2_cloudwatch_policy.arn
 }
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.environment}-ec2-profile"
+  name = "${var.environment}-ec2-profile-1484"
   role = aws_iam_role.ec2_role.name
   tags = local.common_tags
 }
