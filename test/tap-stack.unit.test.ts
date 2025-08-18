@@ -416,9 +416,9 @@ describe('Terraform Configuration Unit Tests', () => {
     test('S3 replication has proper dependencies', () => {
       expect(stackContent).toMatch(/depends_on\s*=\s*\[aws_s3_bucket_versioning\.primary\]/);
     });
-
-    test('DynamoDB global table has proper dependencies', () => {
-      expect(stackContent).toMatch(/depends_on\s*=\s*\[[^\]]*aws_dynamodb_table\.primary[^\]]*aws_dynamodb_table\.secondary[^\]]*\]/);
+    
+    test('does not define deprecated DynamoDB global table resource', () => {
+      expect(stackContent).not.toMatch(/resource\s+"aws_dynamodb_global_table"\s+"main"/);
     });
   });
 });
