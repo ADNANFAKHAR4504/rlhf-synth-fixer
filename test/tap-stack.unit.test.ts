@@ -18,6 +18,7 @@ jest.mock('../lib/modules', () => {
     })),
     DatabaseModule: jest.fn(() => ({
       db: { endpoint: 'mock-rds-endpoint' },
+      dbSecret: { arn: 'mock-rds-secret-arn' }, // ✅ Add dbSecret for outputs
     })),
     StorageModule: jest.fn(() => ({
       bucket: { bucket: 'mock-s3-bucket' },
@@ -42,6 +43,9 @@ describe('TapStack Unit Tests', () => {
     jest.clearAllMocks();
   });
 
+  // ------------------------
+  // Stack Configuration Tests
+  // ------------------------
   describe('Stack Configuration and Synthesis', () => {
     test('TapStack should instantiate with custom props', () => {
       app = new App();
@@ -68,7 +72,7 @@ describe('TapStack Unit Tests', () => {
 
       expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
       expect(parsed.terraform.backend.s3.key).toBe('dev/TestDefaultStack.tfstate');
-      expect(parsed.provider.aws[0].region).toBe('us-east-1');
+      expect(parsed.provider.aws[0].region).toBe('us-west-2'); // AWS_REGION_OVERRIDE
       expect(synthesized).toMatchSnapshot();
     });
 
@@ -95,6 +99,9 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
+  // ------------------------
+  // Module Instantiation Tests
+  // ------------------------
   describe('Module Instantiation and Wiring', () => {
     beforeEach(() => {
       app = new App();
@@ -127,7 +134,7 @@ describe('TapStack Unit Tests', () => {
         expect.objectContaining({
           vpcId: network.vpc.id,
           subnetId: network.privateSubnetIds[0],
-          kmsKeyId: kms.kmsKey.arn, // ✅ updated to arn
+          kmsKeyId: kms.kmsKey.arn,
         })
       );
     });
@@ -141,9 +148,8 @@ describe('TapStack Unit Tests', () => {
         expect.anything(),
         'database',
         expect.objectContaining({
-          vpcId: network.vpc.id,
           subnetIds: network.privateSubnetIds,
-          kmsKeyArn: kms.kmsKey.arn, // ✅ updated to arn
+          kmsKeyArn: kms.kmsKey.arn,
         })
       );
     });
@@ -158,12 +164,15 @@ describe('TapStack Unit Tests', () => {
         expect.objectContaining({
           project: 'tap',
           env: 'dev',
-          kmsKeyArn: kms.kmsKey.arn, // ✅ updated to arn
+          kmsKeyArn: kms.kmsKey.arn,
         })
       );
     });
   });
 
+  // ------------------------
+  // Terraform Outputs Tests
+  // ------------------------
   describe('Terraform Outputs', () => {
     test('should create all required outputs from mocked modules', () => {
       app = new App();
@@ -176,9 +185,11 @@ describe('TapStack Unit Tests', () => {
       expect(outputs.ec2InstanceId.value).toBe('mock-instance-id');
       expect(outputs.ec2PrivateIp.value).toBe('mock-private-ip');
       expect(outputs.rdsInstanceEndpoint.value).toBe('mock-rds-endpoint');
+      expect(outputs.rdsSecretArn.value).toBe('mock-rds-secret-arn'); // ✅ dbSecret output
       expect(outputs.s3BucketName.value).toBe('mock-s3-bucket');
 
       expect(outputs.rdsInstanceEndpoint.sensitive).toBe(true);
+      expect(outputs.rdsSecretArn.sensitive).toBe(true);
     });
   });
 });

@@ -16,6 +16,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
       "sensitive": true,
       "value": "mock-rds-endpoint"
     },
+    "rdsSecretArn": {
+      "sensitive": true,
+      "value": "mock-rds-secret-arn"
+    },
     "s3BucketName": {
       "value": "mock-s3-bucket"
     },
@@ -66,6 +70,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should u
       "sensitive": true,
       "value": "mock-rds-endpoint"
     },
+    "rdsSecretArn": {
+      "sensitive": true,
+      "value": "mock-rds-secret-arn"
+    },
     "s3BucketName": {
       "value": "mock-s3-bucket"
     },
@@ -76,7 +84,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should u
   "provider": {
     "aws": [
       {
-        "region": "us-east-1"
+        "region": "us-west-2"
       }
     ]
   },

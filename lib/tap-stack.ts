@@ -22,13 +22,13 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const AWS_REGION_OVERRIDE = '';
+const AWS_REGION_OVERRIDE = 'us-west-2';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
-    const project = 'tap'; // ✅ fixed project name
+    const project = 'tap';
     const env = props?.environmentSuffix || 'dev';
 
     const awsRegion = AWS_REGION_OVERRIDE
@@ -37,12 +37,7 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
 
-    //const defaultTags = props?.defaultTags;
-
-    new AwsProvider(this, 'aws', {
-      region: awsRegion,
-      // defaultTags: defaultTags ? { tags: defaultTags.tags } : undefined,
-    });
+    new AwsProvider(this, 'aws', { region: awsRegion });
 
     new S3Backend(this, {
       bucket: stateBucket,
@@ -68,7 +63,6 @@ export class TapStack extends TerraformStack {
     const database = new DatabaseModule(this, 'database', {
       project,
       env,
-      vpcId: network.vpc.id,
       subnetIds: network.privateSubnetIds,
       kmsKeyArn: kms.kmsKey.arn,
     });
@@ -80,17 +74,13 @@ export class TapStack extends TerraformStack {
     });
 
     // --- Outputs ---
-    new TerraformOutput(this, 'vpcId', {
-      value: network.vpc.id,
-    });
+    new TerraformOutput(this, 'vpcId', { value: network.vpc.id });
 
     new TerraformOutput(this, 'privateSubnetId', {
       value: network.privateSubnetIds[0],
     });
 
-    new TerraformOutput(this, 'ec2InstanceId', {
-      value: compute.instance.id,
-    });
+    new TerraformOutput(this, 'ec2InstanceId', { value: compute.instance.id });
 
     new TerraformOutput(this, 'ec2PrivateIp', {
       value: compute.instance.privateIp,
@@ -101,8 +91,12 @@ export class TapStack extends TerraformStack {
       sensitive: true,
     });
 
-    new TerraformOutput(this, 's3BucketName', {
-      value: storage.bucket.bucket,
+    // ✅ Output the RDS secret ARN for retrieving username/password
+    new TerraformOutput(this, 'rdsSecretArn', {
+      value: database.dbSecret.arn,
+      sensitive: true,
     });
+
+    new TerraformOutput(this, 's3BucketName', { value: storage.bucket.bucket });
   }
 }

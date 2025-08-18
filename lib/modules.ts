@@ -1,6 +1,6 @@
 import { Construct } from 'constructs';
 
-// AWS Provider
+// AWS Provider resources
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
@@ -13,6 +13,13 @@ import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distr
 import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
 import { IamUser } from '@cdktf/provider-aws/lib/iam-user';
 import { IamPolicyAttachment } from '@cdktf/provider-aws/lib/iam-policy-attachment';
+
+// Random password import
+import { Password as RandomPassword } from '@cdktf/provider-random/lib/password';
+
+// Secrets Manager imports
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 
 // -----------------
 // 🔐 KMS Module
@@ -41,11 +48,8 @@ export class VpcModule extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    this.vpc = new Vpc(this, 'Vpc', {
-      cidrBlock: '10.0.0.0/16',
-    });
+    this.vpc = new Vpc(this, 'Vpc', { cidrBlock: '10.0.0.0/16' });
 
-    // Create 2 private subnets in different AZs
     const privateSubnet1 = new Subnet(this, 'PrivateSubnet1', {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.1.0/24',
@@ -70,7 +74,7 @@ export class S3Module extends Construct {
   constructor(
     scope: Construct,
     id: string,
-    props: { project: string; env: string; kmsKeyArn: string } // renamed to kmsKeyArn
+    props: { project: string; env: string; kmsKeyArn: string }
   ) {
     super(scope, id);
 
@@ -80,7 +84,7 @@ export class S3Module extends Construct {
         rule: {
           applyServerSideEncryptionByDefault: {
             sseAlgorithm: 'aws:kms',
-            kmsMasterKeyId: props.kmsKeyArn, // uses ARN
+            kmsMasterKeyId: props.kmsKeyArn,
           },
         },
       },
@@ -90,19 +94,20 @@ export class S3Module extends Construct {
 }
 
 // -----------------
-// 🗄️ RDS Module
+// 🗄️ RDS Module with Secrets Manager (Fixed)
 // -----------------
 export class RdsModule extends Construct {
   public readonly db: DbInstance;
+  public readonly dbSecret: SecretsmanagerSecret;
+
   constructor(
     scope: Construct,
     id: string,
     props: {
       project: string;
       env: string;
-      vpcId: string;
       subnetIds: string[];
-      kmsKeyArn: string; // renamed to kmsKeyArn
+      kmsKeyArn: string;
     }
   ) {
     super(scope, id);
@@ -112,14 +117,39 @@ export class RdsModule extends Construct {
       subnetIds: props.subnetIds,
     });
 
+    // Generate a random password
+    const password = new RandomPassword(this, 'DbPassword', {
+      length: 16,
+      special: true,
+    });
+
+    // Create Secrets Manager secret
+    this.dbSecret = new SecretsmanagerSecret(this, 'DbSecret', {
+      name: `${props.project}-${props.env}-rds-secret`,
+      description: `RDS credentials for ${props.project}-${props.env}`,
+      kmsKeyId: props.kmsKeyArn,
+    });
+
+    // Attach the username and generated password to the secret version
+    new SecretsmanagerSecretVersion(this, 'DbSecretVersion', {
+      secretId: this.dbSecret.id,
+      secretString: JSON.stringify({
+        username: 'admin', // static username
+        password: password.result, // dynamic password
+      }),
+    });
+
+    // Create RDS instance using the generated password
     this.db = new DbInstance(this, 'RdsInstance', {
       engine: 'postgres',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageEncrypted: true,
-      kmsKeyId: props.kmsKeyArn, // now explicitly expects ARN
+      kmsKeyId: props.kmsKeyArn,
       dbSubnetGroupName: subnetGroup.name,
       publiclyAccessible: false,
+      username: 'admin',
+      password: password.result,
     });
   }
 }
@@ -155,7 +185,7 @@ export class Ec2Module extends Construct {
     });
 
     this.instance = new Instance(this, 'Ec2Instance', {
-      ami: 'ami-084a7d336e816906b', // valid AMI
+      ami: 'ami-04e08e36e17a21b56', // keep your existing AMI
       instanceType: 't3.micro',
       subnetId: props.subnetId,
       vpcSecurityGroupIds: [sg.id],
@@ -186,21 +216,12 @@ export class CloudFrontModule extends Construct {
         minTtl: 0,
         maxTtl: 86400,
       },
-      origin: [
-        {
-          domainName: 'example.com',
-          originId: 'origin1',
-        },
-      ],
+      origin: [{ domainName: 'example.com', originId: 'origin1' }],
       viewerCertificate: {
         acmCertificateArn: props.acmCertArn,
         sslSupportMethod: 'sni-only',
       },
-      restrictions: {
-        geoRestriction: {
-          restrictionType: 'none',
-        },
-      },
+      restrictions: { geoRestriction: { restrictionType: 'none' } },
     });
   }
 }
