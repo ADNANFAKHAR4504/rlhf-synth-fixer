@@ -1,5 +1,5 @@
 ########################################
-# TAP_STACK.TF - Production AWS Infrastructure
+# TAP_STACK.TF - Production AWS Infrastructure (No EIP/NAT)
 ########################################
 
 terraform {
@@ -87,34 +87,6 @@ variable "tfstate_lock_table" {
 }
 
 ########################################
-# DATA SOURCES (For Existing Resources)
-########################################
-
-data "aws_kms_alias" "state_key_alias" {
-  name = "alias/prod-state-key"
-}
-
-data "aws_iam_role" "app_role" {
-  name = "prod-app-role"
-}
-
-data "aws_iam_policy" "app_s3_policy" {
-  name = "prod-app-s3-policy"
-}
-
-data "aws_iam_role" "bastion_role" {
-  name = "prod-bastion-role"
-}
-
-data "aws_key_pair" "existing_key" {
-  key_name = var.ssh_key_name
-}
-
-data "aws_dynamodb_table" "tf_lock" {
-  name = var.tfstate_lock_table
-}
-
-########################################
 # LOCALS
 ########################################
 
@@ -175,21 +147,6 @@ resource "aws_subnet" "private_b" {
   tags              = merge(local.common_tags, { Name = "${var.project_name}-private-subnet-b" })
 }
 
-# Elastic IP for NAT Gateway
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags   = merge(local.common_tags, { Name = "${var.project_name}-nat-eip" })
-}
-
-# NAT Gateway
-resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public.id
-  tags          = merge(local.common_tags, { Name = "${var.project_name}-nat-gw" })
-
-  depends_on = [aws_internet_gateway.igw]
-}
-
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
   tags   = merge(local.common_tags, { Name = "${var.project_name}-public-rt" })
@@ -209,12 +166,6 @@ resource "aws_route_table_association" "public_assoc" {
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
   tags   = merge(local.common_tags, { Name = "${var.project_name}-private-rt" })
-}
-
-resource "aws_route" "private_internet_access" {
-  route_table_id         = aws_route_table.private.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.nat.id
 }
 
 resource "aws_route_table_association" "private_a_assoc" {
@@ -292,70 +243,6 @@ resource "aws_vpc_endpoint" "ssmmessages" {
   tags                = merge(local.common_tags, { Name = "${var.project_name}-ssmmessages-endpoint" })
 }
 
-resource "aws_kms_key" "state_key" {
-  count         = data.aws_kms_alias.state_key_alias.target_key_arn == null ? 1 : 0
-  description   = "KMS key for encrypting S3 and Terraform state"
-  enable_key_rotation = true
-  tags          = local.common_tags
-}
-
-########################################
-# IAM (Updated to use existing roles/policies)
-########################################
-
-resource "aws_iam_role_policy_attachment" "app_attach_s3" {
-  role       = data.aws_iam_role.app_role.name
-  policy_arn = data.aws_iam_policy.app_s3_policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "app_attach_ssm" {
-  role       = data.aws_iam_role.app_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_instance_profile" "app_profile" {
-  name = "${var.project_name}-app-profile"
-  role = data.aws_iam_role.app_role.name
-}
-
-resource "aws_iam_role_policy_attachment" "bastion_attach_ssm" {
-  role       = data.aws_iam_role.bastion_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_instance_profile" "bastion_profile" {
-  name = "${var.project_name}-bastion-profile"
-  role = data.aws_iam_role.bastion_role.name
-}
-
-########################################
-# EC2 INSTANCES (Updated key reference)
-########################################
-
-resource "aws_instance" "bastion" {
-  ami                         = data.aws_ami.ubuntu.id
-  instance_type               = var.bastion_instance_type
-  subnet_id                   = aws_subnet.public.id
-  key_name                    = local.effective_key_name # Uses existing key
-  vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
-  associate_public_ip_address = true
-  iam_instance_profile        = aws_iam_instance_profile.bastion_profile.name
-  monitoring                  = true
-  tags                        = merge(local.common_tags, { Name = "${var.project_name}-bastion" })
-}
-
-resource "aws_instance" "app" {
-  ami                         = data.aws_ami.ubuntu.id
-  instance_type               = var.app_instance_type
-  subnet_id                   = aws_subnet.private_a.id
-  key_name                    = local.effective_key_name # Uses existing key
-  vpc_security_group_ids      = [aws_security_group.private_sg.id]
-  associate_public_ip_address = false
-  iam_instance_profile        = aws_iam_instance_profile.app_profile.name
-  monitoring                  = true
-  tags                        = merge(local.common_tags, { Name = "${var.project_name}-app" })
-}
-
 ########################################
 # SECURITY GROUPS
 ########################################
@@ -414,6 +301,11 @@ resource "aws_kms_key" "state_key" {
   description         = "KMS key for encrypting S3 and Terraform state"
   enable_key_rotation = true
   tags                = local.common_tags
+}
+
+resource "aws_kms_alias" "state_key_alias" {
+  name          = "alias/${var.project_name}-state-key"
+  target_key_id = aws_kms_key.state_key.id
 }
 
 ########################################
@@ -620,14 +512,6 @@ resource "aws_dynamodb_table" "tf_lock" {
 # OUTPUTS
 ########################################
 
-output "kms_key_arn" {
-  value = data.aws_kms_alias.state_key_alias.target_key_arn
-}
-
-output "ssh_key_name_effective" {
-  value = local.effective_key_name
-}
-
 output "vpc_id" {
   value = aws_vpc.main.id
 }
@@ -667,7 +551,11 @@ output "generated_private_key_path" {
   sensitive   = true
 }
 
-output "nat_gateway_ip" {
-  description = "Elastic IP associated with the NAT Gateway"
-  value       = aws_eip.nat.public_ip
-}
+# Partial backend config: values are injected at `terraform init` time
+  backend "s3" {
+    bucket         = "prod-terraform-state-unique"
+    key            = "prod/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "prod-terraform-locks"
+  }
