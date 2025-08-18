@@ -127,7 +127,7 @@ resource "aws_route_table_association" "private" {
 # EC2 Security Group
 resource "aws_security_group" "ec2" {
   name_prefix = "${var.project_name}-ec2-"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
   description = "Security group for EC2 instances"
 
   # HTTP from ALB
@@ -178,7 +178,7 @@ resource "aws_security_group" "ec2" {
 # ALB Security Group
 resource "aws_security_group" "alb" {
   name_prefix = "${var.project_name}-alb-"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
   description = "Security group for Application Load Balancer"
 
   # HTTP from internet
@@ -228,7 +228,7 @@ resource "aws_security_group" "alb" {
 # RDS Security Group
 resource "aws_security_group" "rds" {
   name_prefix = "${var.project_name}-rds-"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
   description = "Security group for RDS instances"
 
   # MySQL/PostgreSQL from EC2 security group ONLY
@@ -269,7 +269,7 @@ resource "aws_security_group" "rds" {
 # VPC Endpoint Security Group
 resource "aws_security_group" "vpc_endpoint" {
   name_prefix = "${var.project_name}-vpc-endpoint-"
-  vpc_id      = var.vpc_id
+  vpc_id      = aws_vpc.main.id
   description = "Security group for VPC endpoints"
 
   # HTTPS from VPC CIDR
@@ -409,10 +409,10 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 
 # VPC S3 Endpoint
 resource "aws_vpc_endpoint" "s3" {
-  vpc_id            = var.vpc_id
+  vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.us-east-1.s3"
   vpc_endpoint_type = "Gateway"
-  route_table_ids   = var.route_table_ids
+  route_table_ids   = aws_route_table.private[*].id
 
   tags = {
     Name = "${var.project_name}-s3-endpoint"

@@ -99,3 +99,12 @@ output "vpc_endpoint_s3_id" {
   description = "ID of the S3 VPC endpoint"
   value       = aws_vpc_endpoint.s3.id
 }
+
+######################
+# IAM
+######################
+
+output "instance_profile_name" {
+  description = "Name of the EC2 instance profile"
+  value       = aws_iam_user.app_user.name
+}

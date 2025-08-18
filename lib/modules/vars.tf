@@ -31,27 +31,3 @@ variable "availability_zones" {
   description = "List of availability zones"
   type        = list(string)
 }
-
-######################
-# Security
-######################
-
-variable "vpc_id" {
-  description = "ID of the VPC"
-  type        = string
-}
-
-
-######################
-# Storage
-######################
-
-variable "vpc_endpoint_sg_id" {
-  description = "ID of the VPC endpoint security group"
-  type        = string
-}
-
-variable "route_table_ids" {
-  description = "IDs of the route tables for VPC endpoint"
-  type        = list(string)
-}
