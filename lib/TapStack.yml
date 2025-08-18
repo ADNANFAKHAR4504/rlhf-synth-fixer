@@ -8,6 +8,11 @@ Parameters:
     Type: String
     Default: SecureWebApp
   
+  EnvironmentSuffix:
+    Description: Environment suffix for resource naming
+    Type: String
+    Default: dev
+  
   InstanceType:
     Description: EC2 instance type
     Type: String
@@ -25,14 +30,6 @@ Parameters:
     MinLength: 1
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-  
-  DBPassword:
-    Description: Database master password
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
 
 Resources:
   # KMS Key for encryption
@@ -60,7 +57,7 @@ Resources:
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${EnvironmentName}-key'
+      AliasName: !Sub 'alias/${EnvironmentName}-${EnvironmentSuffix}-key'
       TargetKeyId: !Ref KMSKey
 
   # VPC and Network Infrastructure
@@ -72,7 +69,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-VPC'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPC'
 
   # Internet Gateway
   InternetGateway:
@@ -80,7 +77,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-IGW'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-IGW'
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -93,44 +90,44 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ1'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Subnet-AZ1'
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-Subnet-AZ2'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Subnet-AZ2'
 
   # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.0.3.0/24
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-Subnet-AZ1'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Private-Subnet-AZ1'
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: 10.0.4.0/24
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-Subnet-AZ2'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Private-Subnet-AZ2'
 
   # NAT Gateways
   NatGateway1EIP:
@@ -164,7 +161,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-Routes'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Routes'
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -192,7 +189,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-Routes-AZ1'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Private-Routes-AZ1'
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -213,7 +210,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-Routes-AZ2'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Private-Routes-AZ2'
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -235,7 +232,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Public-NACL'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-NACL'
 
   PublicInboundRule:
     Type: AWS::EC2::NetworkAclEntry
@@ -301,7 +298,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Private-NACL'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Private-NACL'
 
   PrivateInboundRule:
     Type: AWS::EC2::NetworkAclEntry
@@ -338,7 +335,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-LoadBalancer-SG'
+      GroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-LoadBalancer-SG'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -352,12 +349,12 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-LoadBalancer-SG'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-LoadBalancer-SG'
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-WebServer-SG'
+      GroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer-SG'
       GroupDescription: Security group for web servers
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -371,12 +368,12 @@ Resources:
           SourceSecurityGroupId: !Ref BastionSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-WebServer-SG'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer-SG'
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-Database-SG'
+      GroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Database-SG'
       GroupDescription: Security group for RDS database
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -386,12 +383,12 @@ Resources:
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Database-SG'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Database-SG'
 
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${EnvironmentName}-Bastion-SG'
+      GroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Bastion-SG'
       GroupDescription: Security group for bastion host
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -401,7 +398,7 @@ Resources:
           CidrIp: 0.0.0.0/0  # In production, restrict to specific IP ranges
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Bastion-SG'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Bastion-SG'
 
   # IAM Roles and Policies
   EC2Role:
@@ -441,7 +438,11 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-secure-bucket-${AWS::AccountId}'
+      BucketName: !Join
+        - ''
+        - - !Sub '${AWS::StackName}'
+          - '-secure-bucket-'
+          - !Ref 'AWS::AccountId'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -461,7 +462,11 @@ Resources:
   S3LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-logging-bucket-${AWS::AccountId}'
+      BucketName: !Join
+        - ''
+        - - !Sub '${AWS::StackName}'
+          - '-logging-bucket-'
+          - !Ref 'AWS::AccountId'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -477,7 +482,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
+      LaunchTemplateName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-LaunchTemplate'
       LaunchTemplateData:
         ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
         InstanceType: !Ref InstanceType
@@ -487,7 +492,7 @@ Resources:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd
@@ -510,7 +515,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${EnvironmentName}-ALB'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ALB'
       Scheme: internet-facing
       SecurityGroups:
         - !Ref LoadBalancerSecurityGroup
@@ -528,7 +533,7 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${EnvironmentName}-TG'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-TG'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -552,7 +557,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${EnvironmentName}-ASG'
+      AutoScalingGroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ASG'
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -568,7 +573,7 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-ASG-Instance'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ASG-Instance'
           PropagateAtLaunch: true
 
   # Auto Scaling Policies
@@ -633,18 +638,18 @@ Resources:
         - !Ref PrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-DB-SubnetGroup'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-DB-SubnetGroup'
 
   # RDS Database Instance
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub '${EnvironmentName}-database'
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-${EnvironmentSuffix}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.43'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      ManageMasterUserPassword: true
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -660,7 +665,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub '${EnvironmentName}-WebACL'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebACL'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -692,7 +697,7 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${EnvironmentName}-WebACL'
+        MetricName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebACL'
 
   # WAF Association with ALB
   WebACLAssociation:
@@ -705,7 +710,7 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentName}'
+      LogGroupName: !Sub '/aws/cloudtrail/${EnvironmentName}-${EnvironmentSuffix}'
       RetentionInDays: 90
 
   CloudTrailRole:
@@ -732,12 +737,13 @@ Resources:
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub '${EnvironmentName}-CloudTrail'
+      TrailName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-CloudTrail'
       S3BucketName: !Ref CloudTrailBucket
       S3KeyPrefix: 'cloudtrail-logs/'
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
+      IsLogging: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       KMSKeyId: !Ref KMSKey
@@ -745,7 +751,11 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-cloudtrail-${AWS::AccountId}'
+      BucketName: !Join
+        - ''
+        - - !Sub '${AWS::StackName}'
+          - '-cloudtrail-'
+          - !Ref 'AWS::AccountId'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -796,7 +806,11 @@ Resources:
   ConfigBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-config-${AWS::AccountId}'
+      BucketName: !Join
+        - ''
+        - - !Sub '${AWS::StackName}'
+          - '-config-'
+          - !Ref 'AWS::AccountId'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -839,7 +853,7 @@ Resources:
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub '${EnvironmentName}-ConfigRecorder'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ConfigRecorder'
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -848,7 +862,7 @@ Resources:
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub '${EnvironmentName}-DeliveryChannel'
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-DeliveryChannel'
       S3BucketName: !Ref ConfigBucket
 
   # Bastion Host
@@ -869,7 +883,7 @@ Resources:
             Encrypted: true
             KmsKeyId: !Ref KMSKey
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           # Install CloudWatch agent
@@ -877,7 +891,7 @@ Resources:
           rpm -U ./amazon-cloudwatch-agent.rpm
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-Bastion-Host'
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Bastion-Host'
 
 Outputs:
   VPCId:
