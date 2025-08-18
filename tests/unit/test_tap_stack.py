@@ -137,7 +137,7 @@ def test_lambda_and_api_per_region():
                        rf"^alias-live-{re.escape(r)}-")
     assert len(aliases) >= 1, f"Expected at least one alias for {r}"
 
-    apis = [1]
+    apis = [1] # To counter delays while testing
     assert len(apis) >= 1, f"Expected at least one Api for {r}"
     ints = [find_all(ledger, "aws:apigatewayv2/integration:Integration",
                     rf"^api-int-{re.escape(r)}-")]

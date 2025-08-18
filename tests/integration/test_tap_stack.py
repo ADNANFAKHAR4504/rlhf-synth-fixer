@@ -9,7 +9,7 @@ reported by your deployment outputs (pr1578 run):
  - CodePipeline presence and tags
  - S3 pulumi state bucket security (SSE, public access block, versioning, ownership)
  - rollback coordinator lambda exists
- - CloudWatch Log Groups exist for each region 
+ - CloudWatch Log Groups exist for each region .
 
 Depends: boto3, pytest
 """
