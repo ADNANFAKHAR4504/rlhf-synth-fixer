@@ -78,8 +78,9 @@ resource "aws_nat_gateway" "main" {
 }
 resource "aws_eip" "main" {
   count  = length(var.public_subnet_cidrs)
-  domain = true
+  domain = "vpc"
 }
+
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -327,10 +328,9 @@ data "aws_kms_key" "main" {
 resource "aws_s3_bucket" "data" {
   bucket = "${lower(var.project_name)}-data-${random_string.bucket_suffix.result}"
   force_destroy = true
-  versioning {
-    enabled = true
-  }
+
   lifecycle { prevent_destroy = false }
+
   tags = {
     Name = "${var.project_name}-data-bucket"
     Type = "Data"
@@ -338,12 +338,10 @@ resource "aws_s3_bucket" "data" {
 }
 
 # S3 Logs Bucket
-resource "aws_s3_bucket" "logs_bucket" {
+resource "aws_s3_bucket" "logs" {
   bucket = "${lower(var.project_name)}-logs-${random_string.bucket_suffix.result}"
   force_destroy = true
-  versioning {
-    enabled = true
-  }
+  
   lifecycle { prevent_destroy = false }
   tags = {
     Name = "${var.project_name}-logs-bucket"
