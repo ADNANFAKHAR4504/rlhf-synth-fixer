@@ -51,6 +51,20 @@ variable "create_cloudtrail" {
 # Data sources
 data "aws_caller_identity" "current" {}
 
+# Detect existing CloudTrail trails to avoid hitting per‑region limits
+data "aws_cloudtrail_trails" "us_east_1" {}
+
+data "aws_cloudtrail_trails" "eu_west_1" {
+  provider = aws.eu_west_1
+}
+
+locals {
+  us_east_1_trail_count = length(data.aws_cloudtrail_trails.us_east_1.names)
+  eu_west_1_trail_count = length(data.aws_cloudtrail_trails.eu_west_1.names)
+  allow_primary_trail   = var.create_cloudtrail && local.us_east_1_trail_count < 5
+  allow_secondary_trail = var.create_cloudtrail && local.eu_west_1_trail_count < 5
+}
+
 # Data sources for latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux_us_east_1" {
   most_recent = true
@@ -920,7 +934,7 @@ resource "aws_iam_role_policy_attachment" "global_policy_attachment" {
 
 # CloudTrail
 resource "aws_cloudtrail" "primary" {
-  count                         = var.create_cloudtrail ? 1 : 0
+  count                         = local.allow_primary_trail ? 1 : 0
   name                         = "primary-cloudtrail-${random_string.resource_suffix.result}"
   s3_bucket_name               = aws_s3_bucket.logging.bucket
   s3_key_prefix                = "primary-region/"
@@ -944,7 +958,7 @@ resource "aws_cloudtrail" "primary" {
 }
 
 resource "aws_cloudtrail" "secondary" {
-  count                         = var.create_cloudtrail ? 1 : 0
+  count                         = local.allow_secondary_trail ? 1 : 0
   provider                     = aws.eu_west_1
   name                         = "secondary-cloudtrail-${random_string.resource_suffix.result}"
   s3_bucket_name               = aws_s3_bucket.logging.bucket
