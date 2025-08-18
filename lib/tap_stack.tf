@@ -16,7 +16,7 @@ variable "environment_suffix" {
 variable "bucket_name_prefix" {
   description = "Prefix for S3 bucket name"
   type        = string
-  default     = "corpSec-logs"
+  default     = "corpsec-logs"
 }
 
 ########################
