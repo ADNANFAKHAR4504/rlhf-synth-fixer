@@ -390,7 +390,7 @@ module "rds" {
   subnet_ids             = module.vpc.private_subnets
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  performance_insights_enabled = true
+  performance_insights_enabled = false
 
   tags = local.common_tags
 }
@@ -583,6 +583,11 @@ resource "aws_api_gateway_deployment" "api" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   triggers    = { redeploy = timestamp() }
   lifecycle { create_before_destroy = true }
+  
+  depends_on = [
+    aws_api_gateway_method.hello_any,
+    aws_api_gateway_integration.hello_integration
+  ]
 }
 
 resource "aws_api_gateway_stage" "prod" {
