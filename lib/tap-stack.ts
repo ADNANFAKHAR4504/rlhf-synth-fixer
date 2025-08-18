@@ -36,7 +36,7 @@ export class TapStack extends cdk.Stack {
       Project: 'CompleteEnvironment',
       Environment: 'Production',
       Owner: 'DevOps',
-      CostCenter: 'IT-001'
+      CostCenter: 'IT-001',
     };
 
     // Apply tags to the stack
@@ -135,7 +135,9 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instance with S3 access',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
@@ -146,7 +148,10 @@ export class TapStack extends cdk.Stack {
     // 7. EC2 Instance in private subnet
     const ec2Instance = new ec2.Instance(this, 'EC2Instance', {
       vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -196,7 +201,10 @@ echo "EC2 instance setup complete" > /var/log/setup.log
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0_35,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [rdsSecurityGroup],
@@ -214,17 +222,21 @@ echo "EC2 instance setup complete" > /var/log/setup.log
     });
 
     // 11. CloudWatch Log Group for application logs
-    const logGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
+    new logs.LogGroup(this, 'ApplicationLogGroup', {
       logGroupName: '/aws/ec2/complete-environment',
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // 12. CloudWatch Alarms for monitoring
-    
     // EC2 CPU Utilization Alarm
     new cloudwatch.Alarm(this, 'EC2HighCPUAlarm', {
-      metric: ec2Instance.metricCpuUtilization({
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/EC2',
+        metricName: 'CPUUtilization',
+        dimensionsMap: {
+          InstanceId: ec2Instance.instanceId,
+        },
         period: cdk.Duration.minutes(5),
       }),
       threshold: 80,
@@ -235,7 +247,7 @@ echo "EC2 instance setup complete" > /var/log/setup.log
 
     // RDS CPU Utilization Alarm
     new cloudwatch.Alarm(this, 'RDSHighCPUAlarm', {
-      metric: rdsInstance.metricCpuUtilization({
+      metric: rdsInstance.metricCPUUtilization({
         period: cdk.Duration.minutes(5),
       }),
       threshold: 80,
@@ -285,12 +297,5 @@ echo "EC2 instance setup complete" > /var/log/setup.log
       value: s3KmsKey.keyId,
       description: 'KMS Key ID for S3 encryption',
     });
-  
   }
 }
-
-
-
-
-
-
