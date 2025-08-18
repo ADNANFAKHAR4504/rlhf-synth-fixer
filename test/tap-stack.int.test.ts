@@ -234,21 +234,6 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
           ?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus
       ).toBe('ENABLED');
     });
-
-    test('CloudTrail S3 Bucket should have server-side encryption and versioning', async () => {
-      // Construct the bucket name since it's not in the outputs
-      // Note: This is fragile. A better approach is to add the bucket name to outputs.
-      // For this test, we assume the test runner has access to the bucket name.
-      // A more robust way is to list buckets and find by tag.
-      const bucketName = `s3cloudtrailbucket-`; // CloudFormation will add a unique suffix
-
-      // This test cannot be fully implemented without knowing the exact bucket name.
-      // It's conceptually correct but will fail if the name isn't known.
-      // We will skip the actual check but leave the structure.
-      console.warn(
-        'Skipping S3 bucket check due to auto-generated bucket name. Add the bucket name to stack outputs for a complete test.'
-      );
-    });
   });
 
   // ---------------------------------------------------------------- //
