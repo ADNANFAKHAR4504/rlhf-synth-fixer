@@ -31,12 +31,7 @@ Notes:
   the ID seen in prior logs.
 """
 
-# Import constants from the constants module
-from .constants import (
-    PROJECT_NAME, AWS_REGION, ENVIRONMENT, INSTANCE_TYPE, DEPLOYMENT_ID,
-    get_resource_name, get_short_name, calculate_ipv6_cidr
-)
-
+# Removed import of constants.py (file deleted)
 
 from dataclasses import dataclass
 import os
