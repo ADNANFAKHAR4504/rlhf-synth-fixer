@@ -13,7 +13,7 @@ You are an AWS Cloud Infrastructure Engineer specializing in highly available, s
     - `lib/tap-stack.ts`: CDK stack definition with all AWS resources.
     - `cdk.json`: CDK project configuration.
   - The stack must:
-    1. Deploy a **highly available** web application across `ap-south-1` and `ap-northeast-2` regions using **VPCs with public and private subnets** in multiple Availability Zones.
+    1. Deploy a **highly available** web application across `us-east-1` and `us-east-2` regions using **VPCs with public and private subnets** in multiple Availability Zones.
     2. Deploy **EC2 instances** within an **Auto Scaling Group** behind an **Elastic Load Balancer** configured for **cross-zone load balancing**.
     3. Use **Amazon RDS** with **Multi-AZ deployment**, automated backups, and encryption at rest using **AWS KMS**.
     4. Store static assets in **Amazon S3** with restricted public read access and encryption at rest.
@@ -44,7 +44,7 @@ Deliver an AWS CDK (TypeScript) project that:
 - Secures traffic with ACM certificates for the custom domain.
 - Implements Route 53 failover routing with health checks.
 - Includes AWS CodePipeline and CodeBuild for CI/CD.
-- Deploys in `ap-south-1` and `ap-northeast-2`.
+- Deploys in `us-east-1` and `us-east-2`.
 
 ## Output Format
 
