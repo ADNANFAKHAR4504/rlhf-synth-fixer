@@ -253,7 +253,7 @@ module "alb" {
   subnets            = module.vpc.public_subnets
   security_groups    = [aws_security_group.alb.id]
 
-  http_tcp_listeners = [
+  listeners = [
     {
       port               = 80
       protocol           = "HTTP"
@@ -814,7 +814,7 @@ module "alb_dr" {
   subnets            = module.vpc_dr.public_subnets
   security_groups    = [aws_security_group.alb_dr.id]
 
-  http_tcp_listeners = [
+  listeners = [
     {
       port               = 80
       protocol           = "HTTP"
