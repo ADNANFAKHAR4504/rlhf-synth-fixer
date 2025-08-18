@@ -1,7 +1,4 @@
 ### Prompt for geenrating the Stack config is below
-```yaml
-
-Generate AI prompt for writing CFN yaml config script
 
 Your primary mission is to convert a set of existing AWS CloudFormation JSON templates into fully functional, deployment-ready YAML temps. These new YAML templates must support a multi-account, multi-region AWS environment while adhering to strict security and naming conventions.
 
@@ -22,4 +19,3 @@ Security Preservation: You must not alter any security configurations. All IAM p
 
 Expected Output:
 The final deliverable is a set of complete and verified YAML CloudFormation templates. These templates must be ready for immediate deployment via AWS CloudFormation and are expected to pass all existing integration tests for each environment (development, testing, production) without requiring any modifications to the test scripts.
-```
