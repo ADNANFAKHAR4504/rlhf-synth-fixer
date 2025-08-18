@@ -239,6 +239,10 @@ Resources:
               Values:
                 - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
                 - !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}/*'
+            - Type: 'AWS::S3::Object'
+              Values:
+                - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
+                - !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}'
 
   # SCP-style policy to restrict EC2 to us-west-2 (implemented as IAM policy)
   RegionalRestrictionPolicy:

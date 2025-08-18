@@ -275,7 +275,8 @@ describe(`SecureAWSEnvironment-${testRunId} Integration Tests`, () => {
             resource.Type === 'AWS::S3::Object'
           );
           const hasS3BucketLogging = selector.DataResources?.some(resource => 
-            resource.Type === 'AWS::S3::Bucket'
+            resource.Type === 'AWS::S3::Object' &&
+            resource.Values?.some(value => !value.endsWith('/*'))
           );
           
           expect(hasS3ObjectLogging).toBe(true);
