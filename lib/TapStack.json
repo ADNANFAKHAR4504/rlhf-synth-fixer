@@ -11,15 +11,25 @@
             "Description": "Name for CloudTrail S3 bucket (must be globally unique)",
             "Type": "String",
             "Default": "secure-cloudtrail-logs-bucket-12345"
-        },
-        "TempPassword": {
-            "Description": "Temporary password for sample user (will be required to change on first login)",
-            "Type": "String",
-            "Default": "TempPassword123!",
-            "NoEcho": true
         }
     },
     "Resources": {
+        "UserTempPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-user-temp-password"
+                },
+                "Description": "Temporary password for sample user",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\",
+                    "RequireEachIncludedType": true
+                }
+            }
+        },
         "EnforceMFAPolicy": {
             "Type": "AWS::IAM::ManagedPolicy",
             "Properties": {
@@ -116,7 +126,7 @@
                 ],
                 "LoginProfile": {
                     "Password": {
-                        "Ref": "TempPassword"
+                        "Fn::Sub": "{{resolve:secretsmanager:${UserTempPasswordSecret}:SecretString:password}}"
                     },
                     "PasswordResetRequired": true
                 }

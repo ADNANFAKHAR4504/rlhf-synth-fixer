@@ -12,13 +12,22 @@ Parameters:
     Type: String
     Default: secure-cloudtrail-logs-bucket-12345
 
-  TempPassword:
-    Description: Temporary password for sample user (will be required to change on first login)
-    Type: String
-    Default: TempPassword123!
-    NoEcho: true
+  # Removed TempPassword parameter - using dynamic reference to Secrets Manager instead
 
 Resources:
+  # AWS Secrets Manager secret for user temporary password
+  UserTempPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentName}-user-temp-password'
+      Description: 'Temporary password for sample user'
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+
   # IAM Policy to enforce MFA for all users
   EnforceMFAPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -86,7 +95,7 @@ Resources:
       Groups:
         - !Ref SecureUsersGroup
       LoginProfile:
-        Password: !Ref TempPassword
+        Password: !Sub '{{resolve:secretsmanager:${UserTempPasswordSecret}:SecretString:password}}'
         PasswordResetRequired: true
 
   # VPC for security group
