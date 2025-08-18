@@ -80,8 +80,6 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
         const resource = resources[key];
         if (resource.Properties && resource.Properties.Tags) {
           const tags = resource.Properties.Tags;
-          // FIX: Use .some() to check for the presence of the key-value pair,
-          // ignoring other properties like PropagateAtLaunch.
           expect(
             tags.some(
               (tag: any) =>
@@ -102,6 +100,32 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
           ).toBe(true);
         }
       }
+    });
+  });
+
+  // ---------------------------------------------------------------- //
+  //                  IAM and Dependencies                       //
+  // ---------------------------------------------------------------- //
+  describe('IAM and Resource Dependencies', () => {
+    test('LambdaExecutionRole should have least-privilege DynamoDB permissions', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      const policy = role.Properties.Policies[0];
+      const statement = policy.PolicyDocument.Statement[0];
+
+      expect(policy.PolicyName).toBe('DynamoDB-Write-Policy');
+      expect(statement.Effect).toBe('Allow');
+      expect(statement.Action).toEqual('dynamodb:PutItem');
+      expect(statement.Resource).toEqual({
+        'Fn::GetAtt': ['DynamoDBTable', 'Arn'],
+      });
+    });
+
+    test('AutoScalingGroup should depend on KMS Key and NAT Gateways', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.DependsOn).toBeDefined();
+      expect(asg.DependsOn).toContain('EBSKMSKey');
+      expect(asg.DependsOn).toContain('NatGateway1');
+      expect(asg.DependsOn).toContain('NatGateway2');
     });
   });
 
@@ -310,7 +334,7 @@ describe('NovaModel Secure Infrastructure Unit Tests', () => {
         template.Resources,
         'AWS::Logs::LogGroup'
       );
-      expect(Object.keys(logGroups).length).toBeGreaterThanOrEqual(4);
+      expect(Object.keys(logGroups).length).toBeGreaterThanOrEqual(5);
       expect(logGroups.CloudTrailLogGroup.Properties.RetentionInDays).toBe(90);
       expect(logGroups.CloudFormationLogGroup.Properties.RetentionInDays).toBe(
         30

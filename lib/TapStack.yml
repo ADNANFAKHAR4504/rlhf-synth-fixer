@@ -48,6 +48,13 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/novamodel-sec-${EnvironmentSuffix}-function'
       RetentionInDays: 30
 
+  # NEW: Log Group for VPC Flow Logs
+  VPCFlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}'
+      RetentionInDays: 14
+
   S3CloudTrailBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -92,7 +99,7 @@ Resources:
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
-      TrailName: !Sub 'NovaModel-Secure-Stack-${EnvironmentSuffix}' # Add explicit trail name
+      TrailName: !Sub 'novamodel-sec-${EnvironmentSuffix}-trail'
       S3BucketName: !Ref S3CloudTrailBucket
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailCWLRole.Arn
@@ -156,8 +163,43 @@ Resources:
     Properties:
       CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
 
+  # NEW: IAM Role for VPC Flow Logs
+  VPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'VPC-Flow-Logs-Policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource: !GetAtt VPCFlowLogsLogGroup.Arn
+
+  # NEW: VPC Flow Log resource
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VPCFlowLogsLogGroup
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
+
   # =================================================================
-  # KMS Customer Managed Key - FIXED FOR ASG
+  # KMS Customer Managed Key
   # =================================================================
   EBSKMSKey:
     Type: AWS::KMS::Key
@@ -407,6 +449,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub 'novamodel-sec-${EnvironmentSuffix}-alb-sg'
       GroupDescription: 'Allow public HTTP/HTTPS traffic'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -428,6 +471,7 @@ Resources:
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub 'novamodel-sec-${EnvironmentSuffix}-ec2-sg'
       GroupDescription: 'Allow traffic from ALB'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -449,6 +493,7 @@ Resources:
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub 'novamodel-sec-${EnvironmentSuffix}-lambda-sg'
       GroupDescription: 'Security group for Lambda function'
       VpcId: !Ref VPC
       Tags:
@@ -459,6 +504,7 @@ Resources:
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
+      GroupName: !Sub 'novamodel-sec-${EnvironmentSuffix}-rds-sg'
       GroupDescription: 'Allow traffic from EC2 and Lambda'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -480,7 +526,6 @@ Resources:
   # =================================================================
   # Data Stores
   # =================================================================
-  # Create the secret for RDS password
   RDSPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -527,7 +572,6 @@ Resources:
         - { Key: Environment, Value: !Ref EnvironmentSuffix }
         - { Key: Owner, Value: 'DevSecOpsTeam' }
 
-  # Attach the secret to RDS for automatic rotation support
   RDSSecretAttachment:
     Type: AWS::SecretsManager::SecretTargetAttachment
     Properties:
@@ -572,7 +616,6 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  # NEW: IAM role for EC2 instances
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -596,7 +639,6 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  # UPDATED: Target group with health checks
   EC2TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -616,7 +658,6 @@ Resources:
         - { Key: Environment, Value: !Ref EnvironmentSuffix }
         - { Key: Owner, Value: 'DevSecOpsTeam' }
 
-  # UPDATED: Launch template with UserData and instance profile
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -654,7 +695,6 @@ Resources:
               - { Key: Environment, Value: !Ref EnvironmentSuffix }
               - { Key: Owner, Value: 'DevSecOpsTeam' }
 
-  # UPDATED: Auto Scaling Group with dependencies and health check settings
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
@@ -826,27 +866,22 @@ Outputs:
     Description: 'Endpoint address of the RDS instance'
     Value: !GetAtt RDSDatabase.Endpoint.Address
     Export: { Name: !Sub '${AWS::StackName}-RDSEndpoint' }
-
   S3BucketName:
     Description: 'Name of the CloudTrail S3 bucket'
     Value: !Ref S3CloudTrailBucket
     Export: { Name: !Sub '${AWS::StackName}-S3BucketName' }
-
   CloudTrailName:
     Description: 'Name of the CloudTrail'
     Value: !Ref CloudTrail
     Export: { Name: !Sub '${AWS::StackName}-CloudTrailName' }
-
   DynamoDBTableName:
     Description: 'Name of the DynamoDB table'
     Value: !Ref DynamoDBTable
     Export: { Name: !Sub '${AWS::StackName}-DynamoDBTableName' }
-
   LambdaFunctionName:
     Description: 'Name of the Lambda function'
     Value: !Ref LambdaFunction
     Export: { Name: !Sub '${AWS::StackName}-LambdaFunctionName' }
-
   AutoScalingGroupName:
     Description: 'Name of the Auto Scaling Group'
     Value: !Ref AutoScalingGroup
