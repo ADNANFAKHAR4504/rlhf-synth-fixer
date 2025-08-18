@@ -213,8 +213,8 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - 'arn:aws:s3:::*/*'
-            # Removed invalid S3 Bucket data resource type
+                - !Sub '${SecureS3Bucket}/*'
+                - !Sub '${CloudTrailLogsBucket}/*'
 
   # SCP-style policy to restrict EC2 to us-west-2 (implemented as IAM policy)
   RegionalRestrictionPolicy:

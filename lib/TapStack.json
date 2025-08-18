@@ -306,7 +306,12 @@
                             {
                                 "Type": "AWS::S3::Object",
                                 "Values": [
-                                    "arn:aws:s3:::*/*"
+                                    {
+                                        "Fn::Sub": "${SecureS3Bucket}/*"
+                                    },
+                                    {
+                                        "Fn::Sub": "${CloudTrailLogsBucket}/*"
+                                    }
                                 ]
                             }
                         ]
