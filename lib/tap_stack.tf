@@ -14,25 +14,25 @@ data "aws_caller_identity" "current" {}
 
 output "vpc_id" {
   description = "ID of the VPC"
-  value       = module.infra.vpc_id
+  value       = aws_vpc.main.id
 }
 
 output "s3_data_bucket_name" {
   description = "Name of the S3 data bucket"
-  value       = module.infra.s3_data_bucket_name
+  value       = aws_s3_bucket.data.bucket
 }
 
 output "nat_gateway_id" {
   description = "ID of the NAT Gateway"
-  value       = module.infra.nat_gateway_id
+  value       = aws_nat_gateway.main.id
 }
 
 output "kms_key_arn" {
   description = "ARN of the KMS key"
-  value       = module.infra.kms_key_arn
+  value       = aws_kms_key.main.arn
 }
 
 output "instance_profile_name" {
   description = "Name of the EC2 instance profile"
-  value       = module.infra.instance_profile_name
+  value       = aws_iam_instance_profile.main.name
 }
