@@ -236,7 +236,7 @@ resource "aws_route_table_association" "public" {
 }
 
 resource "aws_route_table" "private" {
-  count = 2
+  count  = 2
   vpc_id = aws_vpc.main.id
   route {
     cidr_block     = "0.0.0.0/0"
@@ -285,9 +285,9 @@ resource "aws_iam_role" "vpc_flow" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "vpc-flow-logs.amazonaws.com" }
-      Action   = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = local.common_tags
@@ -313,12 +313,12 @@ resource "aws_iam_role_policy" "vpc_flow" {
 }
 
 resource "aws_flow_log" "vpc" {
-  vpc_id                   = aws_vpc.main.id
-  traffic_type             = "ALL"
-  log_destination_type     = "cloud-watch-logs"
-  log_group_name           = aws_cloudwatch_log_group.vpc_flow.name
-  deliver_logs_permission_arn = aws_iam_role.vpc_flow.arn
-  tags                     = merge(local.common_tags, { Name = "${local.name_prefix}-vpc-flow" })
+  vpc_id               = aws_vpc.main.id
+  traffic_type         = "ALL"
+  log_destination_type = "cloud-watch-logs"
+  log_group_name       = aws_cloudwatch_log_group.vpc_flow.name
+  iam_role_arn         = aws_iam_role.vpc_flow.arn
+  tags                 = merge(local.common_tags, { Name = "${local.name_prefix}-vpc-flow" })
 }
 
 ########################
@@ -455,11 +455,11 @@ resource "aws_s3_bucket_policy" "logs" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Sid      = "AllowELBLogDelivery",
-      Effect   = "Allow",
+      Sid       = "AllowELBLogDelivery",
+      Effect    = "Allow",
       Principal = { Service = "logdelivery.elasticloadbalancing.amazonaws.com" },
-      Action   = ["s3:PutObject"],
-      Resource = "${aws_s3_bucket.logs.arn}/*",
+      Action    = ["s3:PutObject"],
+      Resource  = "${aws_s3_bucket.logs.arn}/*",
       Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
     }]
   })
@@ -543,25 +543,25 @@ resource "aws_s3_bucket_policy" "config" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid      = "AWSConfigPermissionsCheck",
-        Effect   = "Allow",
+        Sid       = "AWSConfigPermissionsCheck",
+        Effect    = "Allow",
         Principal = { Service = "config.amazonaws.com" },
-        Action   = "s3:GetBucketAcl",
-        Resource = aws_s3_bucket.config.arn
+        Action    = "s3:GetBucketAcl",
+        Resource  = aws_s3_bucket.config.arn
       },
       {
-        Sid      = "AWSConfigBucketExistenceCheck",
-        Effect   = "Allow",
+        Sid       = "AWSConfigBucketExistenceCheck",
+        Effect    = "Allow",
         Principal = { Service = "config.amazonaws.com" },
-        Action   = "s3:ListBucket",
-        Resource = aws_s3_bucket.config.arn
+        Action    = "s3:ListBucket",
+        Resource  = aws_s3_bucket.config.arn
       },
       {
-        Sid      = "AWSConfigBucketDelivery",
-        Effect   = "Allow",
+        Sid       = "AWSConfigBucketDelivery",
+        Effect    = "Allow",
         Principal = { Service = "config.amazonaws.com" },
-        Action   = "s3:PutObject",
-        Resource = "${aws_s3_bucket.config.arn}/*",
+        Action    = "s3:PutObject",
+        Resource  = "${aws_s3_bucket.config.arn}/*",
         Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
       }
     ]
@@ -577,7 +577,11 @@ resource "aws_lb" "main" {
   internal           = false
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
-  access_logs { bucket = aws_s3_bucket.logs.bucket, prefix = "alb", enabled = true }
+  access_logs {
+    bucket  = aws_s3_bucket.logs.bucket
+    prefix  = "alb"
+    enabled = true
+  }
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-alb" })
 }
 
@@ -600,7 +604,10 @@ resource "aws_lb_listener" "https" {
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
   certificate_arn   = var.acm_certificate_arn
-  default_action { type = "forward", target_group_arn = aws_lb_target_group.main.arn }
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
 }
 
 resource "aws_lb_listener" "http" {
@@ -609,7 +616,11 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
   default_action {
     type = "redirect"
-    redirect { port = "443", protocol = "HTTPS", status_code = "HTTP_301" }
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 }
 
@@ -630,7 +641,7 @@ EOF
 resource "aws_iam_role" "ec2" {
   name = "${local.name_prefix}-ec2-role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version   = "2012-10-17",
     Statement = [{ Effect = "Allow", Principal = { Service = "ec2.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
   tags = local.common_tags
@@ -642,9 +653,9 @@ resource "aws_iam_role_policy" "ec2" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      { Effect = "Allow", Action = ["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"], Resource = "*" },
+      { Effect = "Allow", Action = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"], Resource = "*" },
       { Effect = "Allow", Action = ["s3:ListBucket"], Resource = aws_s3_bucket.data.arn },
-      { Effect = "Allow", Action = ["s3:GetObject","s3:PutObject","s3:DeleteObject"], Resource = "${aws_s3_bucket.data.arn}/*" }
+      { Effect = "Allow", Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"], Resource = "${aws_s3_bucket.data.arn}/*" }
     ]
   })
 }
@@ -689,8 +700,14 @@ resource "aws_launch_template" "main" {
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
-  filter { name = "name", values = ["amzn2-ami-hvm-*-x86_64-gp2"] }
-  filter { name = "virtualization-type", values = ["hvm"] }
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
 resource "aws_autoscaling_group" "main" {
@@ -733,27 +750,27 @@ resource "aws_db_parameter_group" "main" {
 }
 
 resource "aws_db_instance" "main" {
-  identifier                 = "${local.name_prefix}-db"
-  engine                     = "postgres"
-  engine_version             = var.rds_engine_version != "" ? var.rds_engine_version : null
-  instance_class             = var.rds_instance_class
-  allocated_storage          = 20
-  storage_type               = "gp3"
-  storage_encrypted          = true
-  kms_key_id                 = aws_kms_key.rds.arn
-  db_subnet_group_name       = aws_db_subnet_group.main.name
-  vpc_security_group_ids     = [aws_security_group.rds.id]
-  username                   = var.rds_username
-  password                   = var.rds_password
-  multi_az                   = true
-  publicly_accessible        = false
-  backup_retention_period    = 7
-  delete_automated_backups   = true
-  deletion_protection        = false
-  skip_final_snapshot        = true
-  parameter_group_name       = aws_db_parameter_group.main.name
-  apply_immediately          = true
-  tags                       = merge(local.common_tags, { Name = "${local.name_prefix}-rds" })
+  identifier               = "${local.name_prefix}-db"
+  engine                   = "postgres"
+  engine_version           = var.rds_engine_version != "" ? var.rds_engine_version : null
+  instance_class           = var.rds_instance_class
+  allocated_storage        = 20
+  storage_type             = "gp3"
+  storage_encrypted        = true
+  kms_key_id               = aws_kms_key.rds.arn
+  db_subnet_group_name     = aws_db_subnet_group.main.name
+  vpc_security_group_ids   = [aws_security_group.rds.id]
+  username                 = var.rds_username
+  password                 = var.rds_password
+  multi_az                 = true
+  publicly_accessible      = false
+  backup_retention_period  = 7
+  delete_automated_backups = true
+  deletion_protection      = false
+  skip_final_snapshot      = true
+  parameter_group_name     = aws_db_parameter_group.main.name
+  apply_immediately        = true
+  tags                     = merge(local.common_tags, { Name = "${local.name_prefix}-rds" })
 }
 
 ########################
