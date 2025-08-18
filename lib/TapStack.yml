@@ -7,10 +7,7 @@ Parameters:
     Type: String
     Default: SecureEnv
 
-  CloudTrailBucketName:
-    Description: Name for CloudTrail S3 bucket (must be globally unique)
-    Type: String
-    Default: secure-cloudtrail-logs-bucket-12345
+  # Removed CloudTrailBucketName parameter - letting CloudFormation auto-generate unique name
 
   # Removed TempPassword parameter - using dynamic reference to Secrets Manager instead
 
@@ -171,7 +168,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Ref CloudTrailBucketName
+      # BucketName will be auto-generated to ensure global uniqueness
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

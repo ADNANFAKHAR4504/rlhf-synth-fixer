@@ -6,11 +6,6 @@
             "Description": "Name prefix for resources",
             "Type": "String",
             "Default": "SecureEnv"
-        },
-        "CloudTrailBucketName": {
-            "Description": "Name for CloudTrail S3 bucket (must be globally unique)",
-            "Type": "String",
-            "Default": "secure-cloudtrail-logs-bucket-12345"
         }
     },
     "Resources": {
@@ -241,9 +236,6 @@
             "Type": "AWS::S3::Bucket",
             "DeletionPolicy": "Delete",
             "Properties": {
-                "BucketName": {
-                    "Ref": "CloudTrailBucketName"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
