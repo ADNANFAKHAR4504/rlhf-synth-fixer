@@ -170,14 +170,37 @@ describeLive('TapStack Integration Tests (live)', () => {
   });
 
   it('CloudTrail is logging and points to expected CW Logs group', async () => {
-    const desc = await ct.send(new DescribeTrailsCommand({ trailNameList: [trailArn], includeShadowTrails: true }));
-    expect(desc.trailList && desc.trailList.length).toBeGreaterThan(0);
-    const trail = desc.trailList![0];
-    if (trail.CloudWatchLogsLogGroupArn) {
-      expect(trail.CloudWatchLogsLogGroupArn).toContain(ctLogGroup);
+    // Try with ARN, then with the name (last segment after "/"),
+    // finally fall back to fetching all trails and filtering.
+    const trailName = trailArn.split('/').pop() || trailArn;
+    const tryNames = [trailArn, trailName];
+
+    let found: any | undefined;
+    for (const name of tryNames) {
+      const resp = await ct.send(
+        new DescribeTrailsCommand({ trailNameList: [name], includeShadowTrails: true })
+      );
+      const list = resp.trailList || [];
+      found = list.find(t => t.TrailARN === trailArn || t.Name === trailName) || list[0];
+      if (found) break;
     }
-    const status = await ct.send(new GetTrailStatusCommand({ Name: trailArn }));
+
+    if (!found) {
+      const resp = await ct.send(new DescribeTrailsCommand({ includeShadowTrails: true }));
+      const list = resp.trailList || [];
+      found = list.find(t => t.TrailARN === trailArn || t.Name === trailName);
+    }
+
+    expect(found).toBeTruthy();
+    const status = await ct.send(
+      new GetTrailStatusCommand({ Name: found!.TrailARN ?? found!.Name! })
+    );
     expect(status.IsLogging).toBe(true);
+
+    // If the API returns the CW Logs group ARN, verify it points to the expected group
+    if (found!.CloudWatchLogsLogGroupArn) {
+      expect(found!.CloudWatchLogsLogGroupArn).toContain(ctLogGroup);
+    }
   });
 
   it('CloudWatch Logs: CloudTrail log group exists', async () => {
