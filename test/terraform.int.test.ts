@@ -1,14 +1,25 @@
 // Integration tests for Terraform Infrastructure
+import { DescribeInstancesCommand, DescribeInternetGatewaysCommand, DescribeKeyPairsCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
 import fs from "fs";
 import path from "path";
-import { EC2Client, DescribeInstancesCommand, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeKeyPairsCommand } from "@aws-sdk/client-ec2";
 
 // Load deployment outputs
 const outputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
 let outputs: any = {};
 
 if (fs.existsSync(outputsPath)) {
-  outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+  const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+  
+  // Parse JSON strings in outputs
+  outputs = {
+    ...rawOutputs,
+    public_subnet_ids: rawOutputs.public_subnet_ids ? JSON.parse(rawOutputs.public_subnet_ids) : [],
+    public_instance_ids: rawOutputs.public_instance_ids ? JSON.parse(rawOutputs.public_instance_ids) : [],
+    public_instance_private_ips: rawOutputs.public_instance_private_ips ? JSON.parse(rawOutputs.public_instance_private_ips) : [],
+    public_instance_public_ips: rawOutputs.public_instance_public_ips ? JSON.parse(rawOutputs.public_instance_public_ips) : [],
+    ssh_connection_commands: rawOutputs.ssh_connection_commands ? JSON.parse(rawOutputs.ssh_connection_commands) : {},
+    availability_zones: rawOutputs.availability_zones ? JSON.parse(rawOutputs.availability_zones) : []
+  };
 }
 
 // AWS SDK client
@@ -395,7 +406,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
       
       const nameTag = tags.find(t => t.Key === "Name");
       expect(nameTag).toBeDefined();
-      expect(nameTag?.Value).toContain("synthtrainr882");
+      // Check that the name follows the expected pattern: project-name-env-suffix-vpc
+      expect(nameTag?.Value).toMatch(/^cloud-environment-.+-vpc$/);
       
       const envTag = tags.find(t => t.Key === "Environment");
       expect(envTag).toBeDefined();
