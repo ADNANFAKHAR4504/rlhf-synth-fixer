@@ -52,13 +52,10 @@ resource "aws_subnet" "private" {
 }
 
 # Elastic IP for NAT Gateway
-resource "aws_eip" "nat" {
-  domain = "vpc"
-  
-  depends_on = [aws_internet_gateway.main]
-
-  tags = {
-    Name = "${var.project_name}-nat-eip"
+data "aws_eip" "nat" {
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-nat-eip"]
   }
 }
 
@@ -313,19 +310,8 @@ resource "aws_security_group" "vpc_endpoint" {
 ######################
 
 # KMS Key for encryption
-resource "aws_kms_key" "main" {
-  description             = "KMS key for ${var.project_name} encryption"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-
-  tags = {
-    Name = "${var.project_name}-kms-key"
-  }
-}
-
-resource "aws_kms_alias" "main" {
-  name          = "alias/${var.project_name}-key"
-  target_key_id = aws_kms_key.main.key_id
+data "aws_kms_key" "main" {
+  key_id = "alias/${var.project_name}-key"
 }
 
 # S3 Data Bucket
@@ -512,13 +498,8 @@ resource "aws_s3_bucket_policy" "logs" {
 ######################
 
 # IAM User with MFA requirement
-resource "aws_iam_user" "app_user" {
-  name = "${var.project_name}-app-user"
-  path = "/"
-
-  tags = {
-    Name = "${var.project_name}-app-user"
-  }
+data "aws_iam_user" "app_user" {
+  user_name = "${var.project_name}-app-user"
 }
 
 # MFA Policy for IAM User
