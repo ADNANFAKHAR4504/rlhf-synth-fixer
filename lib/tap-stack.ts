@@ -45,6 +45,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly ec2InstancePublicDns: pulumi.Output<string>;
   public readonly cloudTrailArn: pulumi.Output<string>;
   public readonly guardDutyDetectorId: pulumi.Output<string>;
+  public readonly natGatewayId: pulumi.Output<string>;
+  public readonly vpcFlowLogId: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -92,6 +94,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.ec2InstancePublicDns = infrastructure.ec2InstancePublicDns;
     this.cloudTrailArn = infrastructure.cloudTrailArn;
     this.guardDutyDetectorId = infrastructure.guardDutyDetectorId;
+    this.natGatewayId = infrastructure.natGatewayId;
+    this.vpcFlowLogId = infrastructure.vpcFlowLogId;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -105,6 +109,8 @@ export class TapStack extends pulumi.ComponentResource {
       ec2InstancePublicDns: this.ec2InstancePublicDns,
       cloudTrailArn: this.cloudTrailArn,
       guardDutyDetectorId: this.guardDutyDetectorId,
+      natGatewayId: this.natGatewayId,
+      vpcFlowLogId: this.vpcFlowLogId,
     });
   }
 }

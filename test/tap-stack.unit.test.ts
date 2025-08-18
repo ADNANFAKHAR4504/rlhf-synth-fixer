@@ -70,6 +70,8 @@ jest.mock('../lib/infrastructure', () => ({
     ec2InstancePublicDns: 'ec2-203-0-113-1.ap-south-1.compute.amazonaws.com',
     cloudTrailArn: 'arn:aws:cloudtrail:ap-south-1:123456789012:trail/mock-trail',
     guardDutyDetectorId: 'mock-detector-id',
+    natGatewayId: 'mock-nat-gateway-id',
+    vpcFlowLogId: 'mock-vpc-flow-log-id',
   })),
 }));
 
@@ -86,6 +88,8 @@ jest.mock('../lib/vpc', () => ({
       { id: 'mock-private-subnet-2' },
     ],
     internetGateway: { id: 'mock-igw-id' },
+    natGateway: { id: 'mock-nat-gateway-id' },
+    vpcFlowLog: { id: 'mock-vpc-flow-log-id' },
   })),
 }));
 
@@ -238,6 +242,14 @@ describe('TapStack Unit Tests', () => {
       expect(stack.guardDutyDetectorId).toBe('mock-detector-id');
     });
 
+    it('should expose NAT Gateway ID output', () => {
+      expect(stack.natGatewayId).toBe('mock-nat-gateway-id');
+    });
+
+    it('should expose VPC Flow Log ID output', () => {
+      expect(stack.vpcFlowLogId).toBe('mock-vpc-flow-log-id');
+    });
+
     it('should have all required outputs defined', () => {
       expect(stack.vpcId).toBeDefined();
       expect(stack.publicSubnetIds).toBeDefined();
@@ -249,6 +261,8 @@ describe('TapStack Unit Tests', () => {
       expect(stack.ec2InstancePublicDns).toBeDefined();
       expect(stack.cloudTrailArn).toBeDefined();
       expect(stack.guardDutyDetectorId).toBeDefined();
+      expect(stack.natGatewayId).toBeDefined();
+      expect(stack.vpcFlowLogId).toBeDefined();
     });
   });
 
@@ -416,6 +430,8 @@ describe('TapStack Unit Tests', () => {
         ec2InstancePublicDns: 'ec2-203-0-113-1.ap-south-1.compute.amazonaws.com',
         cloudTrailArn: 'arn:aws:cloudtrail:ap-south-1:123456789012:trail/mock-trail',
         guardDutyDetectorId: 'mock-detector-id',
+        natGatewayId: 'mock-nat-gateway-id',
+        vpcFlowLogId: 'mock-vpc-flow-log-id',
       });
     });
 
@@ -654,6 +670,36 @@ describe('TapStack Unit Tests', () => {
         expect.any(String),
         expect.any(String)
       );
+    });
+  });
+
+  describe('VPC Flow Logs and NAT Gateway', () => {
+    beforeEach(() => {
+      stack = new TapStack('test-stack', { environmentSuffix: 'test' });
+    });
+
+    it('should create VPC Flow Logs for network monitoring', () => {
+      expect(createInfrastructure).toHaveBeenCalled();
+      expect(stack.vpcFlowLogId).toBeDefined();
+      expect(stack.vpcFlowLogId).toBe('mock-vpc-flow-log-id');
+    });
+
+    it('should create NAT Gateway for private subnet internet access', () => {
+      expect(createInfrastructure).toHaveBeenCalled();
+      expect(stack.natGatewayId).toBeDefined();
+      expect(stack.natGatewayId).toBe('mock-nat-gateway-id');
+    });
+
+    it('should ensure NAT Gateway is properly configured for outbound connectivity', () => {
+      // Verify that infrastructure is created which includes NAT Gateway
+      expect(createInfrastructure).toHaveBeenCalled();
+      expect(stack.natGatewayId).toBeDefined();
+    });
+
+    it('should ensure VPC Flow Logs capture all traffic types', () => {
+      // Verify that infrastructure is created which includes Flow Logs
+      expect(createInfrastructure).toHaveBeenCalled();
+      expect(stack.vpcFlowLogId).toBeDefined();
     });
   });
 

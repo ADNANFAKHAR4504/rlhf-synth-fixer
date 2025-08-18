@@ -22,6 +22,8 @@ export interface InfrastructureOutputs {
   ec2InstancePublicDns: pulumi.Output<string>;
   cloudTrailArn: pulumi.Output<string>;
   guardDutyDetectorId: pulumi.Output<string>;
+  natGatewayId: pulumi.Output<string>;
+  vpcFlowLogId: pulumi.Output<string>;
 }
 
 export function createInfrastructure(
@@ -77,5 +79,7 @@ export function createInfrastructure(
     ec2InstancePublicDns: ec2Instance.publicDns,
     cloudTrailArn: securityMonitoring.cloudTrail.arn,
     guardDutyDetectorId: securityMonitoring.guardDutyDetectorId,
+    natGatewayId: vpcResources.natGateway.id,
+    vpcFlowLogId: vpcResources.vpcFlowLog.id,
   };
 }
