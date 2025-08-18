@@ -207,7 +207,6 @@ Resources:
     Type: AWS::S3::Bucket
     Condition: IsUsWest2
     Properties:
-      # No explicit BucketName to avoid global name collisions
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -310,7 +309,7 @@ Resources:
     Properties:
       LogGroupName: prod-cloudtrail-logs
       RetentionInDays: 90
-      KmsKeyId: !Ref ProdLogsKey
+      KmsKeyId: !GetAtt ProdLogsKey.Arn
       Tags:
         - { Key: Environment, Value: Production }
 
@@ -352,7 +351,7 @@ Resources:
       IsMultiRegionTrail: false
       IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
-      KMSKeyId: !Ref ProdLogsKey
+      KMSKeyId: !GetAtt ProdLogsKey.Arn
       CloudWatchLogsLogGroupArn: !GetAtt ProdTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt ProdTrailCWLogsRole.Arn
       Tags:
@@ -368,7 +367,6 @@ Resources:
       Tags:
         - { Key: Environment, Value: Production }
 
-  # Root account usage
   RootUsageMetricFilter:
     Type: AWS::Logs::MetricFilter
     Condition: IsUsWest2
@@ -398,7 +396,6 @@ Resources:
       Tags:
         - { Key: Environment, Value: Production }
 
-  # Console login failures
   ConsoleLoginFailureFilter:
     Type: AWS::Logs::MetricFilter
     Condition: IsUsWest2
@@ -428,7 +425,6 @@ Resources:
       Tags:
         - { Key: Environment, Value: Production }
 
-  # Console login without MFA
   ConsoleLoginNoMFAFilter:
     Type: AWS::Logs::MetricFilter
     Condition: IsUsWest2
@@ -551,7 +547,7 @@ Resources:
     Properties:
       LogGroupName: prod-vpc-flowlogs
       RetentionInDays: 90
-      KmsKeyId: !Ref ProdLogsKey
+      KmsKeyId: !GetAtt ProdLogsKey.Arn
       Tags:
         - { Key: Environment, Value: Production }
 
