@@ -674,7 +674,7 @@ resource "aws_cloudfront_distribution" "this" {
   default_root_object = ""
 
   origin {
-    domain_name = module.alb.dns_name
+    domain_name = module.alb.lb_dns_name
     origin_id   = "alb-origin"
     custom_origin_config {
       http_port              = 80
@@ -889,7 +889,7 @@ output "vpc_id" {
 }
 
 output "alb_dns_name" {
-  value = module.alb.dns_name
+  value = module.alb.lb_dns_name
 }
 
 output "api_invoke_url" {
