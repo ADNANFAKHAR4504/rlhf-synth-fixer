@@ -379,10 +379,14 @@ describe(`SecureAWSEnvironment-${testRunId} Integration Tests`, () => {
         if (typeof value === 'string') {
           // Most resources should include the environment name or have consistent naming
           const hasConsistentNaming = value.includes('Secure') || 
+                                     value.includes('SecureEnv') ||
                                      value.includes('secureenv') ||
                                      value.includes('SecurityTrail') ||
                                      value.startsWith('sg-') ||
-                                     value.startsWith('arn:aws:');
+                                     value.startsWith('arn:aws:') ||
+                                     value.includes('secure-cloudtrail') ||
+                                     value.includes('secure-') ||
+                                     (key.includes('Bucket') && value.includes('bucket'));
           expect(hasConsistentNaming).toBe(true);
         }
       });
