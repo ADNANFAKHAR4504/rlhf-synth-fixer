@@ -740,7 +740,7 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-static-content-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'static-content-tapstackpr1604-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:

@@ -1300,7 +1300,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${AWS::StackName}-static-content-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "static-content-${AWS::StackName}-${AWS::AccountId}-${AWS::Region}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
