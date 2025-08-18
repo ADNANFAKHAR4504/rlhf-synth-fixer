@@ -354,17 +354,6 @@
                                         "Fn::Sub": "arn:aws:s3:::${CloudTrailLogsBucket}/*"
                                     }
                                 ]
-                            },
-                            {
-                                "Type": "AWS::S3::Object",
-                                "Values": [
-                                    {
-                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
-                                    },
-                                    {
-                                        "Fn::Sub": "arn:aws:s3:::${CloudTrailLogsBucket}"
-                                    }
-                                ]
                             }
                         ]
                     }
