@@ -439,7 +439,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-database-${EnvironmentSuffix}'
       DBInstanceClass: !Ref DBInstanceClass
       Engine: 'mysql'
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.4.6'
       AllocatedStorage: '100'
       StorageType: 'gp3'
       StorageEncrypted: true
