@@ -48,11 +48,6 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3LogGroup
 
   # Artifacts bucket - for storing build artifacts and temporary files
   ArtifactsBucket:
