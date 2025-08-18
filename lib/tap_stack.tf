@@ -81,12 +81,13 @@ resource "aws_kms_key" "main" {
   }
 }
 
+# example: aws_kms_key.main is for_each = toset(var.regions)
 resource "aws_kms_alias" "main" {
-  for_each = aws_kms_key.main
-
-  name          = "alias/${each.value.environment}-${local.project_name}-${each.value.region}-${var.environment_suffix}"
+  for_each      = aws_kms_key.main
+  name          = "alias/${var.environment_suffix}-${local.project_name}-${each.key}-${var.environment_suffix}"
   target_key_id = each.value.key_id
 }
+
 
 ########################
 # CloudWatch Log Groups
