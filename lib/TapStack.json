@@ -6,6 +6,11 @@
             "Description": "Name prefix for resources",
             "Type": "String",
             "Default": "SecureEnv"
+        },
+        "EnvironmentSuffix": {
+            "Description": "Unique suffix to avoid resource conflicts",
+            "Type": "String",
+            "Default": "random123"
         }
     },
     "Resources": {
@@ -147,6 +152,9 @@
             "Type": "AWS::S3::Bucket",
             "DeletionPolicy": "Delete",
             "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "secure-s3-${EnvironmentSuffix}"
+                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
@@ -236,6 +244,9 @@
             "Type": "AWS::S3::Bucket",
             "DeletionPolicy": "Delete",
             "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "cloudtrail-logs-${EnvironmentSuffix}"
+                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {

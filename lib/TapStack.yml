@@ -7,8 +7,13 @@ Parameters:
     Type: String
     Default: SecureEnv
 
-  # Removed CloudTrailBucketName parameter - letting CloudFormation auto-generate unique name
+  EnvironmentSuffix:
+    Description: Unique suffix to avoid resource conflicts  
+    Type: String
+    Default: random123
+    # This should be set by the deployment pipeline with a unique value
 
+  # Removed CloudTrailBucketName parameter - using unique naming strategy
   # Removed TempPassword parameter - using dynamic reference to Secrets Manager instead
 
 Resources:
@@ -111,7 +116,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      # BucketName will be auto-generated to ensure uniqueness
+      BucketName: !Sub 'secure-s3-${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -168,7 +173,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      # BucketName will be auto-generated to ensure global uniqueness
+      BucketName: !Sub 'cloudtrail-logs-${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
