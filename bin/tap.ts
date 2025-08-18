@@ -25,7 +25,7 @@ new TapStack(app, `TapStack-${environmentSuffix}-use2`, {
   isPrimaryRegion: true,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-2',
+    region: 'ap-northeast-2',
   },
 });
 
@@ -38,6 +38,6 @@ new TapStack(app, `TapStack-${environmentSuffix}-usw2`, {
   isPrimaryRegion: false,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
+    region: 'ap-southeast-2',
   },
 });
