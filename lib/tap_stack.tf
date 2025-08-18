@@ -48,6 +48,9 @@ variable "create_cloudtrail" {
   default     = true
 }
 
+# Data sources
+data "aws_caller_identity" "current" {}
+
 # Data sources for latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux_us_east_1" {
   most_recent = true
@@ -85,6 +88,44 @@ resource "aws_kms_key" "primary" {
   description             = "KMS key for primary region (us-east-1)"
   deletion_window_in_days = 7
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudTrail to encrypt logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:CreateGrant",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = [
+              "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+            ]
+          }
+        }
+      }
+    ]
+  })
+
   tags = {
     Name        = "primary-kms-key"
     Environment = "production"
@@ -101,6 +142,44 @@ resource "aws_kms_key" "secondary" {
   provider                = aws.eu_west_1
   description             = "KMS key for secondary region (eu-west-1)"
   deletion_window_in_days = 7
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudTrail to encrypt logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:CreateGrant",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = [
+              "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
+            ]
+          }
+        }
+      }
+    ]
+  })
 
   tags = {
     Name        = "secondary-kms-key"
@@ -541,6 +620,10 @@ resource "aws_s3_bucket_replication_configuration" "primary" {
       prefix = ""
     }
 
+    delete_marker_replication {
+      status = "Enabled"
+    }
+
     destination {
       bucket        = aws_s3_bucket.secondary.arn
       storage_class = "STANDARD"
@@ -582,10 +665,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "logging" {
 
 # DynamoDB Tables for Global Table
 resource "aws_dynamodb_table" "primary" {
-  name           = "tap-stack-table-${random_string.resource_suffix.result}"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
-  stream_enabled = true
+  name             = "tap-stack-table-${random_string.resource_suffix.result}"
+  billing_mode     = "PAY_PER_REQUEST"
+  hash_key         = "id"
+  stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
 
   attribute {
@@ -608,11 +691,11 @@ resource "aws_dynamodb_table" "primary" {
 }
 
 resource "aws_dynamodb_table" "secondary" {
-  provider       = aws.eu_west_1
-  name           = "tap-stack-table-${random_string.resource_suffix.result}"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
-  stream_enabled = true
+  provider         = aws.eu_west_1
+  name             = "tap-stack-table-${random_string.resource_suffix.result}"
+  billing_mode     = "PAY_PER_REQUEST"
+  hash_key         = "id"
+  stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
 
   attribute {
@@ -635,22 +718,8 @@ resource "aws_dynamodb_table" "secondary" {
 }
 
 # DynamoDB Global Table
-resource "aws_dynamodb_global_table" "main" {
-  depends_on = [
-    aws_dynamodb_table.primary,
-    aws_dynamodb_table.secondary
-  ]
-
-  name = "tap-stack-table-${random_string.resource_suffix.result}"
-
-  replica {
-    region_name = "us-east-1"
-  }
-
-  replica {
-    region_name = "eu-west-1"
-  }
-}
+# Note: Using individual tables with replication instead of aws_dynamodb_global_table
+# to avoid CMK compatibility issues with Global Tables version 2017.11.29
 
 # RDS Subnet Groups (conditional)
 resource "aws_db_subnet_group" "primary" {
@@ -676,11 +745,11 @@ resource "aws_db_subnet_group" "secondary" {
 
 # RDS Instances (conditional)
 resource "aws_db_instance" "primary" {
-  count                    = var.create_vpcs ? 1 : 0
-  identifier               = "primary-database"
-  allocated_storage        = 20
-  storage_type            = "gp2"
-  storage_encrypted       = true
+  count                  = var.create_vpcs ? 1 : 0
+  identifier             = "primary-database-${random_string.resource_suffix.result}"
+  allocated_storage      = 20
+  storage_type           = "gp2"
+  storage_encrypted      = true
   kms_key_id             = aws_kms_key.primary.arn
   engine                 = "mysql"
   engine_version         = "8.0"
@@ -701,12 +770,12 @@ resource "aws_db_instance" "primary" {
 }
 
 resource "aws_db_instance" "secondary" {
-  count                    = var.create_vpcs ? 1 : 0
-  provider                 = aws.eu_west_1
-  identifier               = "secondary-database"
-  allocated_storage        = 20
-  storage_type            = "gp2"
-  storage_encrypted       = true
+  count                  = var.create_vpcs ? 1 : 0
+  provider               = aws.eu_west_1
+  identifier             = "secondary-database-${random_string.resource_suffix.result}"
+  allocated_storage      = 20
+  storage_type           = "gp2"
+  storage_encrypted      = true
   kms_key_id             = aws_kms_key.secondary.arn
   engine                 = "mysql"
   engine_version         = "8.0"
@@ -728,9 +797,9 @@ resource "aws_db_instance" "secondary" {
 
 # EC2 Instances (conditional)
 resource "aws_instance" "primary" {
-  count                   = var.create_vpcs ? 1 : 0
-  ami                     = data.aws_ami.amazon_linux_us_east_1.id
-  instance_type           = var.ec2_instance_type
+  count                  = var.create_vpcs ? 1 : 0
+  ami                    = data.aws_ami.amazon_linux_us_east_1.id
+  instance_type          = var.ec2_instance_type
   key_name               = var.ec2_key_pair_name != "" ? var.ec2_key_pair_name : null
   subnet_id              = aws_subnet.primary_public[0].id
   vpc_security_group_ids = [aws_security_group.primary[0].id]
@@ -750,10 +819,10 @@ resource "aws_instance" "primary" {
 }
 
 resource "aws_instance" "secondary" {
-  count                   = var.create_vpcs ? 1 : 0
-  provider                = aws.eu_west_1
-  ami                     = data.aws_ami.amazon_linux_eu_west_1.id
-  instance_type           = var.ec2_instance_type
+  count                  = var.create_vpcs ? 1 : 0
+  provider               = aws.eu_west_1
+  ami                    = data.aws_ami.amazon_linux_eu_west_1.id
+  instance_type          = var.ec2_instance_type
   key_name               = var.ec2_key_pair_name != "" ? var.ec2_key_pair_name : null
   subnet_id              = aws_subnet.secondary_public[0].id
   vpc_security_group_ids = [aws_security_group.secondary[0].id]
@@ -859,8 +928,8 @@ resource "aws_cloudtrail" "primary" {
   kms_key_id = aws_kms_key.primary.arn
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type           = "All"
+    include_management_events = true
     data_resource {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.primary.arn}/*"]
@@ -880,11 +949,11 @@ resource "aws_cloudtrail" "secondary" {
   s3_bucket_name = aws_s3_bucket.logging.bucket
   s3_key_prefix  = "secondary-region/"
 
-  kms_key_id = aws_kms_key.primary.arn
+  kms_key_id = aws_kms_key.secondary.arn
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type           = "All"
+    include_management_events = true
     data_resource {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.secondary.arn}/*"]
@@ -989,9 +1058,9 @@ output "secondary_kms_key_id" {
   value       = aws_kms_key.secondary.key_id
 }
 
-output "dynamodb_global_table_name" {
-  description = "Name of the DynamoDB Global Table"
-  value       = aws_dynamodb_global_table.main.name
+output "dynamodb_table_name" {
+  description = "Name of the DynamoDB tables"
+  value       = aws_dynamodb_table.primary.name
 }
 
 output "vpc_peering_connection_id" {
