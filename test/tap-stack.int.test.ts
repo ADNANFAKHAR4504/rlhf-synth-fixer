@@ -2,16 +2,27 @@ import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Utility: Search for all .tf files that contain a backend block
+function findBackendFiles(dir: string): string[] {
+  return fs.readdirSync(dir)
+    .filter(f => f.endsWith('.tf'))
+    .filter(f => {
+      const content = fs.readFileSync(path.join(dir, f), 'utf8');
+      return /backend\s*"/.test(content);
+    });
+}
+
 describe('Terraform E2E Integration Test', () => {
   const tfDir = path.join(__dirname, '../lib');
   const tfvarsPath = path.join(tfDir, 'terraform.tfvars');
-  const backendConfigPath = path.join(tfDir, 'backend.tf');
-  const stackFile = path.join(tfDir, 'tap_stack.tf');
+  const localBackendFile = path.join(tfDir, 'zz_local_backend.tf'); // unique name to avoid conflicts
 
   // Use env var to control live AWS tests
   const runLiveTests = process.env.RUN_LIVE_TESTS === 'true';
-  // Always use region from environment, never hardcoded
   const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-west-1';
+
+  // Track renamed files for restore
+  let renamedBackendFiles: string[] = [];
 
   beforeAll(() => {
     // Ensure tfvars exists
@@ -19,13 +30,16 @@ describe('Terraform E2E Integration Test', () => {
       fs.writeFileSync(tfvarsPath, 'projectname = "integrationtest"\n');
     }
 
-    // Remove existing backend config for test isolation
-    if (fs.existsSync(backendConfigPath)) {
-      fs.renameSync(backendConfigPath, backendConfigPath + '.bak');
-    }
-    // Write a local backend config for the test run
+    // Find and rename all backend config files
+    renamedBackendFiles = findBackendFiles(tfDir);
+    renamedBackendFiles.forEach(f => {
+      const fullPath = path.join(tfDir, f);
+      fs.renameSync(fullPath, fullPath + '.bak');
+    });
+
+    // Write a local backend config for the test run (new file, easy to remove later)
     fs.writeFileSync(
-      backendConfigPath,
+      localBackendFile,
       `
 terraform {
   backend "local" {
@@ -34,6 +48,7 @@ terraform {
 }
 `
     );
+
     // Always run terraform init before other commands
     try {
       execSync('terraform init -no-color', { cwd: tfDir, stdio: 'pipe' });
@@ -137,10 +152,17 @@ terraform {
       const filePath = path.join(tfDir, f);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     });
-    // Restore original backend config
-    if (fs.existsSync(backendConfigPath + '.bak')) {
-      fs.unlinkSync(backendConfigPath); // remove local backend
-      fs.renameSync(backendConfigPath + '.bak', backendConfigPath);
+    // Remove local backend config
+    if (fs.existsSync(localBackendFile)) {
+      fs.unlinkSync(localBackendFile);
     }
+    // Restore original backend config files
+    renamedBackendFiles.forEach(f => {
+      const orig = path.join(tfDir, f);
+      const bak = orig + '.bak';
+      if (fs.existsSync(bak)) {
+        fs.renameSync(bak, orig);
+      }
+    });
   });
 });
