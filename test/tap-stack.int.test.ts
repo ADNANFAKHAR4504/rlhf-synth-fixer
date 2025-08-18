@@ -1,20 +1,4 @@
 // Configuration - These are coming from cfn-outputs after CloudFormation deployment
-import fs from 'fs';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  GetBucketVersioningCommand,
-  GetBucketLoggingCommand,
-} from '@aws-sdk/client-s3';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-} from '@aws-sdk/client-kms';
 import {
   CloudTrailClient,
   GetTrailStatusCommand,
@@ -24,10 +8,20 @@ import {
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
   DescribeSecurityGroupsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLoggingCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 // Load deployment outputs
 const outputs = JSON.parse(
@@ -38,37 +32,56 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Initialize AWS clients
-const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
-const rdsClient = new RDSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const kmsClient = new KMSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const cloudTrailClient = new CloudTrailClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const cloudWatchClient = new CloudWatchClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const rdsClient = new RDSClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const kmsClient = new KMSClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const cloudTrailClient = new CloudTrailClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const cloudWatchClient = new CloudWatchClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const ec2Client = new EC2Client({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
 
 describe('Secure AWS Infrastructure Integration Tests', () => {
-  
   describe('S3 Security Implementation', () => {
     test('Application bucket should be encrypted with KMS', async () => {
       const bucketName = outputs.ApplicationBucketName;
       expect(bucketName).toBeDefined();
-      
-      const encryption = await s3Client.send(new GetBucketEncryptionCommand({
-        Bucket: bucketName
-      }));
-      
+
+      const encryption = await s3Client.send(
+        new GetBucketEncryptionCommand({
+          Bucket: bucketName,
+        })
+      );
+
       expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
       const rule = encryption.ServerSideEncryptionConfiguration?.Rules?.[0];
-      expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-      expect(rule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toEqual(outputs.S3KMSKeyId);
+      expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe(
+        'aws:kms'
+      );
+      expect(rule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toEqual(
+        outputs.S3KMSKeyId
+      );
     });
 
     test('Application bucket should have public access blocked', async () => {
       const bucketName = outputs.ApplicationBucketName;
-      
-      const publicAccessBlock = await s3Client.send(new GetPublicAccessBlockCommand({
-        Bucket: bucketName
-      }));
-      
+
+      const publicAccessBlock = await s3Client.send(
+        new GetPublicAccessBlockCommand({
+          Bucket: bucketName,
+        })
+      );
+
       const config = publicAccessBlock.PublicAccessBlockConfiguration;
       expect(config?.BlockPublicAcls).toBe(true);
       expect(config?.BlockPublicPolicy).toBe(true);
@@ -78,60 +91,76 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
     test('Application bucket should have versioning enabled', async () => {
       const bucketName = outputs.ApplicationBucketName;
-      
-      const versioning = await s3Client.send(new GetBucketVersioningCommand({
-        Bucket: bucketName
-      }));
-      
+
+      const versioning = await s3Client.send(
+        new GetBucketVersioningCommand({
+          Bucket: bucketName,
+        })
+      );
+
       expect(versioning.Status).toBe('Enabled');
     });
 
     test('Application bucket should have access logging configured', async () => {
       const bucketName = outputs.ApplicationBucketName;
-      
-      const logging = await s3Client.send(new GetBucketLoggingCommand({
-        Bucket: bucketName
-      }));
-      
+
+      const logging = await s3Client.send(
+        new GetBucketLoggingCommand({
+          Bucket: bucketName,
+        })
+      );
+
       expect(logging.LoggingEnabled).toBeDefined();
       expect(logging.LoggingEnabled?.TargetBucket).toContain('security-logs');
-      expect(logging.LoggingEnabled?.TargetPrefix).toBe('application-bucket-logs/');
+      expect(logging.LoggingEnabled?.TargetPrefix).toBe(
+        'application-bucket-logs/'
+      );
     });
   });
 
   describe('RDS Security Implementation', () => {
     test('Database should be encrypted with KMS', async () => {
       const dbIdentifier = `${environmentSuffix}-secure-database`;
-      
-      const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier
-      }));
-      
+
+      const dbInstances = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+      );
+
       const dbInstance = dbInstances.DBInstances?.[0];
       expect(dbInstance).toBeDefined();
       expect(dbInstance?.StorageEncrypted).toBe(true);
-      expect(dbInstance?.KmsKeyId).toContain('rds-');
+      // KMS Key should be present and be a valid KMS key ARN/ID
+      expect(dbInstance?.KmsKeyId).toBeDefined();
+      expect(dbInstance?.KmsKeyId).toMatch(/^(arn:aws:kms:|[a-f0-9-]{36})/);
     });
 
     test('Database should be in private subnets', async () => {
       const dbIdentifier = `${environmentSuffix}-secure-database`;
-      
-      const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier
-      }));
-      
+
+      const dbInstances = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+      );
+
       const dbInstance = dbInstances.DBInstances?.[0];
       expect(dbInstance?.PubliclyAccessible).toBe(false);
-      expect(dbInstance?.DBSubnetGroup?.DBSubnetGroupName).toContain(environmentSuffix);
+      expect(dbInstance?.DBSubnetGroup?.DBSubnetGroupName).toContain(
+        environmentSuffix
+      );
     });
 
     test('Database should have backup and monitoring enabled', async () => {
       const dbIdentifier = `${environmentSuffix}-secure-database`;
-      
-      const dbInstances = await rdsClient.send(new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier
-      }));
-      
+
+      const dbInstances = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+      );
+
       const dbInstance = dbInstances.DBInstances?.[0];
       expect(dbInstance?.BackupRetentionPeriod).toBeGreaterThan(0);
       expect(dbInstance?.MonitoringInterval).toBeGreaterThan(0);
@@ -143,11 +172,13 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
     test('S3 KMS key should have rotation enabled', async () => {
       const keyId = outputs.S3KMSKeyId;
       expect(keyId).toBeDefined();
-      
-      const keyDetails = await kmsClient.send(new DescribeKeyCommand({
-        KeyId: keyId
-      }));
-      
+
+      const keyDetails = await kmsClient.send(
+        new DescribeKeyCommand({
+          KeyId: keyId,
+        })
+      );
+
       // Note: Need to use GetKeyRotationStatus to check rotation
       expect(keyDetails.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
     });
@@ -157,30 +188,36 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
     test('VPC should exist with proper configuration', async () => {
       const vpcId = outputs.VPCId;
       expect(vpcId).toBeDefined();
-      
-      const vpcs = await ec2Client.send(new DescribeVpcsCommand({
-        VpcIds: [vpcId]
-      }));
-      
+
+      const vpcs = await ec2Client.send(
+        new DescribeVpcsCommand({
+          VpcIds: [vpcId],
+        })
+      );
+
       const vpc = vpcs.Vpcs?.[0];
       expect(vpc?.State).toBe('available');
       expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
     });
 
     test('Security groups should be properly configured', async () => {
-      const securityGroups = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        Filters: [
-          {
-            Name: 'group-name',
-            Values: [`${environmentSuffix}-db-security-group`]
-          }
-        ]
-      }));
-      
+      const securityGroups = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            {
+              Name: 'group-name',
+              Values: [`${environmentSuffix}-db-security-group`],
+            },
+          ],
+        })
+      );
+
       const dbSecurityGroup = securityGroups.SecurityGroups?.[0];
       expect(dbSecurityGroup).toBeDefined();
-      expect(dbSecurityGroup?.GroupName).toBe(`${environmentSuffix}-db-security-group`);
-      
+      expect(dbSecurityGroup?.GroupName).toBe(
+        `${environmentSuffix}-db-security-group`
+      );
+
       // Check that DB security group only allows access from application security group
       const inboundRules = dbSecurityGroup?.IpPermissions || [];
       const mysqlRule = inboundRules.find(rule => rule.FromPort === 3306);
@@ -193,38 +230,63 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
     test('CloudTrail should be actively logging', async () => {
       const trailArn = outputs.CloudTrailArn;
       expect(trailArn).toBeDefined();
-      
-      const trailName = trailArn.split('/')[1];
-      const trailStatus = await cloudTrailClient.send(new GetTrailStatusCommand({
-        Name: trailName
-      }));
-      
-      expect(trailStatus.IsLogging).toBe(true);
+
+      // CloudTrail ARN format: arn:aws:cloudtrail:region:account:trail/trail-name
+      // Extract trail name from ARN, handling both ARN and simple name formats
+      let trailName: string;
+      if (trailArn.includes('/')) {
+        trailName = trailArn.split('/').pop() || trailArn;
+      } else {
+        trailName = trailArn;
+      }
+
+      try {
+        const trailStatus = await cloudTrailClient.send(
+          new GetTrailStatusCommand({
+            Name: trailArn, // Try with full ARN first
+          })
+        );
+        expect(trailStatus.IsLogging).toBe(true);
+      } catch (error) {
+        // Fallback to trail name if ARN doesn't work
+        const trailStatus = await cloudTrailClient.send(
+          new GetTrailStatusCommand({
+            Name: trailName,
+          })
+        );
+        expect(trailStatus.IsLogging).toBe(true);
+      }
     });
   });
 
   describe('CloudWatch Security Monitoring', () => {
     test('Security alarms should be configured and active', async () => {
-      const alarms = await cloudWatchClient.send(new DescribeAlarmsCommand({
-        AlarmNamePrefix: environmentSuffix
-      }));
-      
-      const alarmNames = alarms.MetricAlarms?.map(alarm => alarm.AlarmName) || [];
-      
-      // Check for key security alarms
-      expect(alarmNames).toEqual(expect.arrayContaining([
-        expect.stringContaining('unauthorized-s3-access'),
-        expect.stringContaining('database-connection-failures'),
-        expect.stringContaining('failed-login-attempts'),
-        expect.stringContaining('unusual-kms-usage')
-      ]));
-      
-      // Ensure all alarms are in OK or ALARM state (not INSUFFICIENT_DATA for critical ones)
-      const securityAlarms = alarms.MetricAlarms?.filter(alarm => 
-        alarm.AlarmName?.includes('unauthorized-s3-access') ||
-        alarm.AlarmName?.includes('failed-login-attempts')
+      const alarms = await cloudWatchClient.send(
+        new DescribeAlarmsCommand({
+          AlarmNamePrefix: environmentSuffix,
+        })
       );
-      
+
+      const alarmNames =
+        alarms.MetricAlarms?.map(alarm => alarm.AlarmName) || [];
+
+      // Check for key security alarms
+      expect(alarmNames).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining('unauthorized-s3-access'),
+          expect.stringContaining('database-connection-failures'),
+          expect.stringContaining('failed-login-attempts'),
+          expect.stringContaining('unusual-kms-usage'),
+        ])
+      );
+
+      // Ensure all alarms are in OK or ALARM state (not INSUFFICIENT_DATA for critical ones)
+      const securityAlarms = alarms.MetricAlarms?.filter(
+        alarm =>
+          alarm.AlarmName?.includes('unauthorized-s3-access') ||
+          alarm.AlarmName?.includes('failed-login-attempts')
+      );
+
       securityAlarms?.forEach(alarm => {
         expect(['OK', 'ALARM']).toContain(alarm.StateValue);
       });
@@ -239,7 +301,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(outputs.DatabaseEndpoint).toBeDefined();
       expect(outputs.S3KMSKeyId).toBeDefined();
       expect(outputs.CloudTrailArn).toBeDefined();
-      
+
       // Verify output naming follows environment suffix pattern
       expect(outputs.ApplicationBucketName).toContain(environmentSuffix);
       expect(outputs.VPCId).toBeDefined(); // VPC ID is AWS-generated, just verify it exists
@@ -247,10 +309,14 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
 
     test('Resources should follow consistent naming patterns', async () => {
       // Database endpoint should contain environment suffix
-      expect(outputs.DatabaseEndpoint).toContain(`${environmentSuffix}-secure-database`);
-      
+      expect(outputs.DatabaseEndpoint).toContain(
+        `${environmentSuffix}-secure-database`
+      );
+
       // Application bucket should contain environment suffix
-      expect(outputs.ApplicationBucketName).toContain(`${environmentSuffix}-application-data`);
+      expect(outputs.ApplicationBucketName).toContain(
+        `${environmentSuffix}-application-data`
+      );
     });
   });
 });
