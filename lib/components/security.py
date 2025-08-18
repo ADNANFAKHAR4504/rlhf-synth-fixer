@@ -1,10 +1,8 @@
 import json
 import os
 import tempfile
-from distutils import command
 import subprocess
 import pulumi
-import pulumi_tls as tls
 import pulumi_aws as aws
 from pulumi import ComponentResource, ResourceOptions
 from ..config import InfrastructureConfig, ComponentDependencies
