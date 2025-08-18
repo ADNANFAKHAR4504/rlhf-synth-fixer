@@ -14,7 +14,12 @@ Known deployment failures and resolutions (reflecting current `tap_stack.tf`):
 
 4) CloudTrail InsufficientEncryptionPolicyException
 - Error: Insufficient permissions to access logging S3 bucket or KMS key when creating trails
-- Resolution: Added a KMS key policy on KMS keys to allow the `cloudtrail.amazonaws.com` service principal to use the key (Encrypt/Decrypt/GenerateDataKey*/DescribeKey/ReEncrypt*/CreateGrant) with appropriate conditions. Recommendation: keep both trails using the primary‑region KMS key when the logging bucket is in `us-east-1` to avoid cross‑region KMS/S3 mismatches.
+- Resolution:
+  - KMS: Updated KMS key policies (both regions) to allow CloudTrail service principal actions (GenerateDataKey*/Encrypt/Decrypt/ReEncrypt*/CreateGrant/DescribeKey) with `StringLike` on `kms:EncryptionContext:aws:cloudtrail:arn` for this account’s trail ARNs.
+  - S3: Tightened logging bucket policy to the CloudTrail-required resources and context:
+    - `s3:GetBucketAcl` and `s3:GetBucketLocation` with `Condition.StringEquals.AWS:SourceArn` for primary/secondary trail ARNs
+    - `s3:PutObject` to `${bucket_arn}/AWSLogs/${account_id}/*` with `Condition.StringEquals` including `s3:x-amz-acl = bucket-owner-full-control` and `AWS:SourceArn` for the same ARNs
+  - Cross-region: Forced `aws_cloudtrail.secondary.kms_key_id` to use the primary-region KMS key because logs land in the primary-region logging bucket.
 
 Operational toggles used to unblock account limits:
 - `create_vpcs` and `create_cloudtrail` variables can be set to `false` in constrained accounts.
