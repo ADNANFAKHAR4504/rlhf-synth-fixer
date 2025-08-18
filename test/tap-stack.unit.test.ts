@@ -61,6 +61,8 @@ describe('TapStack Unit Tests', () => {
       expect(parsed.terraform.backend.s3.bucket).toBe('my-custom-state-bucket');
       expect(parsed.terraform.backend.s3.key).toBe('prod/TestCustomStack.tfstate');
       expect(parsed.provider.aws[0].region).toBe('us-west-2');
+      // S3 backend uses actual bucket region
+      expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
       expect(synthesized).toMatchSnapshot();
     });
 
@@ -73,6 +75,7 @@ describe('TapStack Unit Tests', () => {
       expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
       expect(parsed.terraform.backend.s3.key).toBe('dev/TestDefaultStack.tfstate');
       expect(parsed.provider.aws[0].region).toBe('us-west-2');
+      expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
       expect(synthesized).toMatchSnapshot();
     });
 
@@ -85,7 +88,7 @@ describe('TapStack Unit Tests', () => {
       expect(parsed.terraform.backend.s3).toBeDefined();
       expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
       expect(parsed.terraform.backend.s3.key).toBe('dev/TestBackend.tfstate');
-      expect(parsed.terraform.backend.s3.region).toBe('us-east-1'); // <- updated
+      expect(parsed.terraform.backend.s3.region).toBe('us-east-1'); // backend in actual S3 region
       expect(parsed.terraform.backend.s3.encrypt).toBe(true);
     });
 
@@ -114,7 +117,7 @@ describe('TapStack Unit Tests', () => {
       expect(NetworkModule).toHaveBeenCalledWith(
         expect.anything(),
         'network',
-        expect.anything() // <-- accept provider argument
+        expect.anything()
       );
     });
 
