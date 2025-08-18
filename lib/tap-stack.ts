@@ -1,3 +1,4 @@
+// tapstack
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -7,7 +8,6 @@ import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { Fn, S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
-// Corrected import: All modules are now correctly exported and imported.
 import {
   AlbModule,
   CloudwatchModule,
@@ -26,16 +26,11 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-const AWS_REGION_OVERRIDE = '';
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags
@@ -50,9 +45,10 @@ export class TapStack extends TerraformStack {
           },
         ];
 
-    // Configure AWS Provider
+    // Configure AWS Provider with a hardcoded region.
+    // The previous dynamic logic has been replaced.
     new AwsProvider(this, 'aws', {
-      region: awsRegion,
+      region: 'us-east-1',
       defaultTags: defaultTags,
     });
 
