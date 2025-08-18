@@ -301,7 +301,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
       test("should have user data script", () => {
         expect(userData).toMatch(/^#!\/bin\/bash/);
         expect(userData).toMatch(/yum update -y/);
-        expect(userData).toMatch(/yum install -y nginx/);
+        expect(userData).toMatch(/yum install -y amazon-cloudwatch-agent nginx/);
         expect(userData).toMatch(/amazon-cloudwatch-agent/);
       });
     });
