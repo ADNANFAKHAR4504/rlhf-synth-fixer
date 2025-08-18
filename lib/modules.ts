@@ -35,26 +35,32 @@ export class KmsModule extends Construct {
 // -----------------
 // 🌐 VPC Module
 // -----------------
+// -----------------
+// 🌐 VPC Module
+// -----------------
 export class VpcModule extends Construct {
   public readonly vpc: Vpc;
   public readonly privateSubnetIds: string[];
-  constructor(
-    scope: Construct,
-    id: string
-    // props: { project: string; env: string },
-  ) {
+  constructor(scope: Construct, id: string) {
     super(scope, id);
 
     this.vpc = new Vpc(this, 'Vpc', {
       cidrBlock: '10.0.0.0/16',
     });
 
-    const privateSubnet = new Subnet(this, 'PrivateSubnet1', {
+    const privateSubnet1 = new Subnet(this, 'PrivateSubnet1', {
       vpcId: this.vpc.id,
       cidrBlock: '10.0.1.0/24',
+      availabilityZone: 'us-east-1a', // ✅ explicitly place in AZ a
     });
 
-    this.privateSubnetIds = [privateSubnet.id];
+    const privateSubnet2 = new Subnet(this, 'PrivateSubnet2', {
+      vpcId: this.vpc.id,
+      cidrBlock: '10.0.2.0/24',
+      availabilityZone: 'us-east-1b', // ✅ second AZ
+    });
+
+    this.privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
   }
 }
 
@@ -151,7 +157,7 @@ export class Ec2Module extends Construct {
     });
 
     this.instance = new Instance(this, 'Ec2Instance', {
-      ami: 'ami-123456',
+      ami: 'ami-084a7d336e816906b',
       instanceType: 't3.micro',
       subnetId: props.subnetId,
       vpcSecurityGroupIds: [sg.id],
