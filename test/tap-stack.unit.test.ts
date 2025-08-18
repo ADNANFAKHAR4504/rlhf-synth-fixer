@@ -103,7 +103,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('LogProcessorFunction should have correct runtime and configuration', () => {
       const lambda = template.Resources.LogProcessorFunction;
-      expect(lambda.Properties.Runtime).toBe('python3.9');
+      expect(lambda.Properties.Runtime).toBe('python3.12');
       expect(lambda.Properties.Handler).toBe('index.lambda_handler');
       expect(lambda.Properties.Timeout).toBe(300);
       expect(lambda.Properties.MemorySize).toBe(256);
@@ -148,7 +148,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have S3NotificationLambda for custom resource', () => {
       const lambda = template.Resources.S3NotificationLambda;
       expect(lambda.Type).toBe('AWS::Lambda::Function');
-      expect(lambda.Properties.Runtime).toBe('python3.9');
+      expect(lambda.Properties.Runtime).toBe('python3.12');
       expect(lambda.Properties.Timeout).toBe(60);
     });
 
