@@ -85,7 +85,6 @@ resource "aws_subnet" "private" {
 
 # Elastic IP for NAT Gateway
 data "aws_eip" "nat" {
-  domain = "vpc"
   filter {
     name   = "tag:Name"
     values = ["${var.project_name}-nat-eip"]
