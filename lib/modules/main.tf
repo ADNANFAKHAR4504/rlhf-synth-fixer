@@ -524,3 +524,12 @@ resource "aws_s3_bucket_policy" "logs" {
 
   depends_on = [aws_s3_bucket_public_access_block.logs]
 }
+
+######################
+# IAM
+######################
+
+# IAM User with MFA requirement
+data "aws_iam_user" "app_user" {
+  user_name = "${var.project_name}-app-user"
+}
