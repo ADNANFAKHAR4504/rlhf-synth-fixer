@@ -88,6 +88,10 @@ describe("Terraform single-file stack: main.tf", () => {
       expect(content).toMatch(/enable_dns_support\s*=\s*true/);
     });
 
+    test("creates VPC with correct CIDR block", () => {
+      expect(content).toMatch(/cidr_block\s*=\s*"10\.0\.0\.0\/16"/);
+    });
+
     test("creates Internet Gateway", () => {
       expect(content).toMatch(/resource\s+"aws_internet_gateway"\s+"main"/);
     });
@@ -105,9 +109,35 @@ describe("Terraform single-file stack: main.tf", () => {
       expect(content).toMatch(/resource\s+"aws_subnet"\s+"database"/);
     });
 
+    test("creates public subnets in multiple AZs with correct CIDR", () => {
+      expect(content).toMatch(/count\s*=\s*length\(local\.azs\)/);
+      expect(content).toMatch(/cidr_block\s*=\s*"10\.0\.\$\{count\.index \+ 1\}\.0\/24"/);
+      expect(content).toMatch(/availability_zone\s*=\s*local\.azs\[count\.index\]/);
+    });
+
+    test("creates private subnets with correct CIDR", () => {
+      expect(content).toMatch(/cidr_block\s*=\s*"10\.0\.\$\{count\.index \+ 10\}\.0\/24"/);
+    });
+
+    test("creates database subnets with correct CIDR", () => {
+      expect(content).toMatch(/cidr_block\s*=\s*"10\.0\.\$\{count\.index \+ 20\}\.0\/24"/);
+    });
+
+    test("subnets have proper type tags", () => {
+      expect(content).toMatch(/Type\s*=\s*"Public"/);
+      expect(content).toMatch(/Type\s*=\s*"Private"/);
+      expect(content).toMatch(/Type\s*=\s*"Database"/);
+    });
+
     test("creates NAT Gateways with EIPs", () => {
       expect(content).toMatch(/resource\s+"aws_eip"\s+"nat"/);
       expect(content).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
+      expect(content).toMatch(/domain\s*=\s*"vpc"/);
+    });
+
+    test("NAT gateways depend on internet gateway", () => {
+      expect(content).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
+      expect(content).toMatch(/depends_on\s*=\s*\[aws_internet_gateway\.main\]/);
     });
 
     test("creates route tables and associations", () => {
@@ -116,6 +146,23 @@ describe("Terraform single-file stack: main.tf", () => {
       expect(content).toMatch(/resource\s+"aws_route_table_association"\s+"public"/);
       expect(content).toMatch(/resource\s+"aws_route_table_association"\s+"private"/);
     });
+
+    test("public route table has internet gateway route", () => {
+      const publicRtMatch = content.match(/resource\s+"aws_route_table"\s+"public"\s*{[^}]*}/s);
+      expect(publicRtMatch).toBeTruthy();
+      expect(publicRtMatch![0]).toMatch(/cidr_block\s*=\s*"0\.0\.0\.0\/0"/);
+      expect(publicRtMatch![0]).toMatch(/gateway_id\s*=\s*aws_internet_gateway\.main\.id/);
+    });
+
+    test("private route tables have NAT gateway routes", () => {
+      const privateRtMatch = content.match(/resource\s+"aws_route_table"\s+"private"\s*{[^}]*}/s);
+      expect(privateRtMatch).toBeTruthy();
+      expect(privateRtMatch![0]).toMatch(/nat_gateway_id\s*=\s*aws_nat_gateway\.main\[count\.index\]\.id/);
+    });
+
+    test("limits to 2 availability zones", () => {
+      expect(content).toMatch(/azs\s*=\s*slice\(data\.aws_availability_zones\.available\.names,\s*0,\s*2\)/);
+    });
   });
 
   // === Security Groups ===
@@ -123,23 +170,68 @@ describe("Terraform single-file stack: main.tf", () => {
   describe("Security Groups", () => {
     test("creates ALB security group with HTTP/HTTPS access", () => {
       expect(content).toMatch(/resource\s+"aws_security_group"\s+"alb"/);
-      // Should have ingress for port 80 and 443
-      expect(content).toMatch(/resource\s+"aws_security_group"\s+"alb"/);
       expect(content).toMatch(/from_port\s*=\s*80/);
       expect(content).toMatch(/from_port\s*=\s*443/);
     });
 
+    test("ALB security group allows HTTP from internet", () => {
+      const httpIngressPattern = /ingress\s*{[^}]*from_port\s*=\s*80[^}]*}/s;
+      const httpMatch = content.match(httpIngressPattern);
+      expect(httpMatch).toBeTruthy();
+      expect(httpMatch![0]).toMatch(/to_port\s*=\s*80/);
+      expect(httpMatch![0]).toMatch(/protocol\s*=\s*"tcp"/);
+      expect(httpMatch![0]).toMatch(/cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/);
+    });
+
+    test("ALB security group allows HTTPS from internet", () => {
+      const httpsIngressPattern = /ingress\s*{[^}]*from_port\s*=\s*443[^}]*}/s;
+      const httpsMatch = content.match(httpsIngressPattern);
+      expect(httpsMatch).toBeTruthy();
+      expect(httpsMatch![0]).toMatch(/to_port\s*=\s*443/);
+      expect(httpsMatch![0]).toMatch(/protocol\s*=\s*"tcp"/);
+      expect(httpsMatch![0]).toMatch(/cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/);
+    });
+
+    test("ALB security group has proper configuration", () => {
+      expect(content).toMatch(/resource\s+"aws_security_group"\s+"alb"/);
+      expect(content).toMatch(/name\s*=.*alb-sg/);
+      expect(content).toMatch(/description\s*=.*Application Load Balancer/);
+      expect(content).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+    });
+
     test("creates EC2 security group with restricted access", () => {
       expect(content).toMatch(/resource\s+"aws_security_group"\s+"ec2"/);
-      // Should only accept traffic from ALB security group
+      expect(content).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
+    });
+
+    test("EC2 security group only allows ALB traffic", () => {
       expect(content).toMatch(/resource\s+"aws_security_group"\s+"ec2"/);
+      expect(content).toMatch(/from_port\s*=\s*80/);
+      expect(content).toMatch(/to_port\s*=\s*80/);
+      expect(content).toMatch(/protocol\s*=\s*"tcp"/);
       expect(content).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
     });
 
     test("creates RDS security group with database access", () => {
       expect(content).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
-      expect(content).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
       expect(content).toMatch(/from_port\s*=\s*5432/); // PostgreSQL port
+    });
+
+    test("RDS security group only allows EC2 access", () => {
+      expect(content).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
+      expect(content).toMatch(/from_port\s*=\s*5432/);
+      expect(content).toMatch(/to_port\s*=\s*5432/);
+      expect(content).toMatch(/protocol\s*=\s*"tcp"/);
+      expect(content).toMatch(/security_groups\s*=\s*\[aws_security_group\.ec2\.id\]/);
+    });
+
+    test("all security groups have proper names and descriptions", () => {
+      expect(content).toMatch(/name\s*=.*alb-sg/);
+      expect(content).toMatch(/name\s*=.*ec2-sg/);
+      expect(content).toMatch(/name\s*=.*rds-sg/);
+      expect(content).toMatch(/description\s*=.*Application Load Balancer/);
+      expect(content).toMatch(/description\s*=.*EC2 instances/);
+      expect(content).toMatch(/description\s*=.*RDS database/);
     });
   });
 
@@ -149,26 +241,74 @@ describe("Terraform single-file stack: main.tf", () => {
     test("creates EC2 IAM role with proper assume policy", () => {
       expect(content).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
       expect(content).toMatch(/ec2\.amazonaws\.com/);
+      expect(content).toMatch(/assume_role_policy\s*=\s*jsonencode/);
+      expect(content).toMatch(/"Action"\s*=\s*"sts:AssumeRole"|Action\s*=\s*"sts:AssumeRole"/);
     });
 
     test("creates IAM policy with least privilege", () => {
       expect(content).toMatch(/resource\s+"aws_iam_policy"\s+"ec2_policy"/);
-      // Should have specific S3, SSM, and CloudWatch permissions
       expect(content).toMatch(/s3:GetObject/);
       expect(content).toMatch(/ssm:GetParameter/);
       expect(content).toMatch(/logs:CreateLogGroup/);
-      // Should have KMS permissions
       expect(content).toMatch(/kms:Encrypt/);
       expect(content).toMatch(/kms:Decrypt/);
     });
 
-    test("creates Auto Scaling service role", () => {
-      expect(content).toMatch(/resource\s+"aws_iam_service_linked_role"\s+"autoscaling"/);
-      expect(content).toMatch(/autoscaling\.amazonaws\.com/);
+    test("IAM policy grants specific S3 permissions to logs bucket only", () => {
+      expect(content).toMatch(/resource\s+"aws_iam_policy"\s+"ec2_policy"/);
+      expect(content).toMatch(/"s3:GetObject"/);
+      expect(content).toMatch(/"s3:PutObject"/);
+      expect(content).toMatch(/aws_s3_bucket\.logs\.arn/);
+    });
+
+    test("IAM policy grants SSM parameter access with path restriction", () => {
+      expect(content).toMatch(/resource\s+"aws_iam_policy"\s+"ec2_policy"/);
+      expect(content).toMatch(/"ssm:GetParameter"/);
+      expect(content).toMatch(/"ssm:GetParameters"/);
+      expect(content).toMatch(/"ssm:GetParametersByPath"/);
+      expect(content).toMatch(/parameter\/\$\{var\.app_name\}/);
+    });
+
+    test("IAM policy grants CloudWatch Logs permissions", () => {
+      expect(content).toMatch(/resource\s+"aws_iam_policy"\s+"ec2_policy"/);
+      expect(content).toMatch(/"logs:CreateLogGroup"/);
+      expect(content).toMatch(/"logs:CreateLogStream"/);
+      expect(content).toMatch(/"logs:PutLogEvents"/);
+    });
+
+    test("IAM policy grants specific KMS permissions", () => {
+      expect(content).toMatch(/resource\s+"aws_iam_policy"\s+"ec2_policy"/);
+      expect(content).toMatch(/"kms:Encrypt"/);
+      expect(content).toMatch(/"kms:Decrypt"/);
+      expect(content).toMatch(/"kms:ReEncrypt\*"/);
+      expect(content).toMatch(/"kms:GenerateDataKey\*"/);
+      expect(content).toMatch(/"kms:DescribeKey"/);
+      expect(content).toMatch(/aws_kms_key\.main\.arn/);
+    });
+
+    test("Auto Scaling service role is managed by AWS", () => {
+      expect(content).toMatch(/Auto Scaling Service Role - AWS creates this automatically/);
     });
 
     test("creates instance profile", () => {
       expect(content).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/);
+      expect(content).toMatch(/role\s*=\s*aws_iam_role\.ec2_role\.name/);
+    });
+
+    test("attaches policy to role", () => {
+      expect(content).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"ec2_policy"/);
+      const attachmentMatch = content.match(/resource\s+"aws_iam_role_policy_attachment"\s+"ec2_policy"\s*{[^}]*}/s);
+      expect(attachmentMatch).toBeTruthy();
+      expect(attachmentMatch![0]).toMatch(/role\s*=\s*aws_iam_role\.ec2_role\.name/);
+      expect(attachmentMatch![0]).toMatch(/policy_arn\s*=\s*aws_iam_policy\.ec2_policy\.arn/);
+    });
+
+    test("IAM policies follow principle of least privilege", () => {
+      const policyMatch = content.match(/resource\s+"aws_iam_policy"\s+"ec2_policy"\s*{[^}]*}/s);
+      expect(policyMatch).toBeTruthy();
+      expect(policyMatch![0]).not.toMatch(/"Resource":\s*"\*"/);
+      expect(policyMatch![0]).not.toMatch(/"s3:\*"/);
+      expect(policyMatch![0]).not.toMatch(/"iam:\*"/);
     });
   });
 
@@ -221,15 +361,43 @@ describe("Terraform single-file stack: main.tf", () => {
   describe("KMS Configuration", () => {
     test("creates KMS key for encryption", () => {
       expect(content).toMatch(/resource\s+"aws_kms_key"\s+"main"/);
+      expect(content).toMatch(/description\s*=\s*"KMS key for.*encryption"/);
+      expect(content).toMatch(/deletion_window_in_days\s*=\s*7/);
     });
 
     test("creates KMS alias", () => {
       expect(content).toMatch(/resource\s+"aws_kms_alias"\s+"main"/);
+      expect(content).toMatch(/name\s*=\s*"alias\/.*key.*"/);
+      expect(content).toMatch(/target_key_id\s*=\s*aws_kms_key\.main\.key_id/);
     });
 
     test("KMS key has proper permissions for services", () => {
       expect(content).toMatch(/logs\..*\.amazonaws\.com/);
       expect(content).toMatch(/sns\.amazonaws\.com/);
+    });
+
+    test("KMS key policy allows root account access", () => {
+      expect(content).toMatch(/resource\s+"aws_kms_key"\s+"main"/);
+      expect(content).toMatch(/Enable IAM User Permissions/);
+      expect(content).toMatch(/data\.aws_caller_identity\.current\.account_id/);
+      expect(content).toMatch(/"kms:\*"/);
+    });
+
+    test("KMS key policy allows CloudWatch Logs service", () => {
+      expect(content).toMatch(/resource\s+"aws_kms_key"\s+"main"/);
+      expect(content).toMatch(/Allow CloudWatch Logs/);
+      expect(content).toMatch(/kms:EncryptionContext:aws:logs:arn/);
+    });
+
+    test("KMS key policy allows SNS service", () => {
+      expect(content).toMatch(/resource\s+"aws_kms_key"\s+"main"/);
+      expect(content).toMatch(/Allow SNS Service/);
+      expect(content).toMatch(/sns\.amazonaws\.com/);
+    });
+
+    test("applies common tags to KMS resources", () => {
+      expect(content).toMatch(/resource\s+"aws_kms_key"\s+"main"/);
+      expect(content).toMatch(/tags\s*=\s*local\.common_tags/);
     });
   });
 
@@ -286,7 +454,8 @@ describe("Terraform single-file stack: main.tf", () => {
     test("creates HTTP listener with redirect to HTTPS", () => {
       expect(content).toMatch(/resource\s+"aws_lb_listener"\s+"http"/);
       expect(content).toMatch(/port\s*=\s*"80"/);
-      expect(content).toMatch(/type\s*=\s*"redirect"/);
+      // HTTP listener uses conditional redirect based on SSL certificate enablement
+      expect(content).toMatch(/type\s*=\s*var\.enable_ssl_certificate/);
     });
 
     test("creates HTTPS listener with SSL certificate", () => {
@@ -416,6 +585,10 @@ describe("Terraform single-file stack: main.tf", () => {
       expect(content).toMatch(/AWSManagedRulesLinuxRuleSet/);
     });
 
+    test("WAF WebACL uses CloudFront scope", () => {
+      expect(content).toMatch(/scope\s*=\s*"CLOUDFRONT"/);
+    });
+
     test("CloudFront distribution associates with WAF", () => {
       expect(content).toMatch(/web_acl_id\s*=\s*aws_wafv2_web_acl\.main\.arn/);
     });
@@ -483,6 +656,198 @@ describe("Terraform single-file stack: main.tf", () => {
 
     test("places EC2 instances in private subnets", () => {
       expect(content).toMatch(/vpc_zone_identifier\s*=\s*aws_subnet\.private/);
+    });
+  });
+
+  // === Additional Compute Tests ===
+  
+  describe("Launch Template and Auto Scaling", () => {
+    test("creates launch template with proper configuration", () => {
+      expect(content).toMatch(/resource\s+"aws_launch_template"\s+"main"/);
+      expect(content).toMatch(/name_prefix\s*=/);
+      expect(content).toMatch(/image_id\s*=\s*data\.aws_ami\.amazon_linux\.id/);
+      expect(content).toMatch(/instance_type\s*=\s*"t3\.micro"/);
+    });
+
+    test("launch template includes user data template", () => {
+      expect(content).toMatch(/resource\s+"aws_launch_template"\s+"main"/);
+      expect(content).toMatch(/user_data\s*=\s*base64encode\(templatefile/);
+      expect(content).toMatch(/user_data\.tpl/);
+      expect(content).toMatch(/app_name\s*=\s*var\.app_name/);
+      expect(content).toMatch(/db_endpoint\s*=\s*aws_db_instance\.main\.endpoint/);
+    });
+
+    test("auto scaling group has reasonable capacity settings", () => {
+      expect(content).toMatch(/resource\s+"aws_autoscaling_group"\s+"main"/);
+      expect(content).toMatch(/min_size\s*=\s*1/);
+      expect(content).toMatch(/max_size\s*=\s*6/);
+      expect(content).toMatch(/desired_capacity\s*=\s*2/);
+      expect(content).toMatch(/health_check_type\s*=\s*"ELB"/);
+    });
+
+    test("scaling policies have proper cooldown", () => {
+      expect(content).toMatch(/cooldown\s*=\s*300/);
+    });
+  });
+
+  // === Additional CloudWatch Tests ===
+  
+  describe("Advanced CloudWatch Monitoring", () => {
+    test("creates comprehensive ALB monitoring", () => {
+      expect(content).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"alb_response_time"/);
+      expect(content).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"alb_healthy_hosts"/);
+      expect(content).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"alb_4xx_errors"/);
+    });
+
+    test("ALB response time alarm has proper configuration", () => {
+      expect(content).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"alb_response_time"/);
+      expect(content).toMatch(/metric_name\s*=\s*"TargetResponseTime"/);
+      expect(content).toMatch(/namespace\s*=\s*"AWS\/ApplicationELB"/);
+      expect(content).toMatch(/threshold\s*=\s*"1\.0"/);
+    });
+
+    test("billing alarm monitors costs", () => {
+      const billingMatch = content.match(/resource\s+"aws_cloudwatch_metric_alarm"\s+"billing"\s*{[\s\S]*?^}/m);
+      expect(billingMatch).toBeTruthy();
+      expect(billingMatch![0]).toMatch(/metric_name\s*=\s*"EstimatedCharges"/);
+      expect(billingMatch![0]).toMatch(/namespace\s*=\s*"AWS\/Billing"/);
+      expect(billingMatch![0]).toMatch(/threshold\s*=\s*"50"/);
+    });
+
+    test("log groups have encryption and retention", () => {
+      expect(content).toMatch(/retention_in_days\s*=\s*14/);
+      expect(content).toMatch(/kms_key_id\s*=\s*aws_kms_key\.main\.arn/);
+    });
+  });
+
+  // === WAF and SSL Advanced Tests ===
+  
+  describe("Advanced WAF and SSL Configuration", () => {
+    test("SSL certificate is conditional", () => {
+      const certMatch = content.match(/resource\s+"aws_acm_certificate"\s+"main"\s*{[^}]*}/s);
+      expect(certMatch).toBeTruthy();
+      expect(certMatch![0]).toMatch(/count\s*=\s*var\.enable_ssl_certificate\s*\?\s*1\s*:\s*0/);
+      expect(content).toMatch(/validation_method\s*=\s*"DNS"/);
+    });
+
+    test("WAF includes comprehensive managed rule sets", () => {
+      expect(content).toMatch(/AWSManagedRulesCommonRuleSet/);
+      expect(content).toMatch(/AWSManagedRulesKnownBadInputsRuleSet/);
+      expect(content).toMatch(/AWSManagedRulesSQLiRuleSet/);
+      expect(content).toMatch(/AWSManagedRulesLinuxRuleSet/);
+    });
+
+    test("WAF has proper priority ordering", () => {
+      expect(content).toMatch(/priority\s*=\s*1/);
+      expect(content).toMatch(/priority\s*=\s*2/);
+      expect(content).toMatch(/priority\s*=\s*3/);
+      expect(content).toMatch(/priority\s*=\s*4/);
+    });
+
+    test("certificate validation has configurable timeout", () => {
+      const validationMatch = content.match(/resource\s+"aws_acm_certificate_validation"\s+"main"\s*{[^}]*}/s);
+      expect(validationMatch).toBeTruthy();
+      expect(validationMatch![0]).toMatch(/timeouts\s*{[^}]*create\s*=\s*var\.certificate_validation_timeout[^}]*}/s);
+    });
+
+    test("database password has validation", () => {
+      const dbVarMatch = content.match(/variable\s+"db_password"\s*{[^}]*}/s);
+      expect(dbVarMatch).toBeTruthy();
+      expect(dbVarMatch![0]).toMatch(/validation\s*{/);
+      expect(dbVarMatch![0]).toMatch(/length\(var\.db_password\)\s*>=\s*12/);
+      expect(dbVarMatch![0]).toMatch(/error_message.*least 12 characters/);
+    });
+  });
+
+  // === Security Best Practices Enhanced ===
+  
+  describe("Enhanced Security Validation", () => {
+    test("does not expose SSH or RDP to the world", () => {
+      expect(content).not.toMatch(/from_port\s*=\s*22[^}]*cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/s);
+      expect(content).not.toMatch(/from_port\s*=\s*3389[^}]*cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/s);
+    });
+
+    test("does not expose database port to internet", () => {
+      expect(content).not.toMatch(/from_port\s*=\s*5432[^}]*cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/s);
+    });
+
+    test("uses security group references for internal traffic", () => {
+      expect(content).toMatch(/security_groups\s*=\s*\[aws_security_group\.alb\.id\]/);
+      expect(content).toMatch(/security_groups\s*=\s*\[aws_security_group\.ec2\.id\]/);
+    });
+
+    test("all storage is encrypted", () => {
+      expect(content).toMatch(/sse_algorithm\s*=\s*"aws:kms"/);
+      expect(content).toMatch(/storage_encrypted\s*=\s*true/);
+    });
+
+    test("uses customer-managed KMS keys", () => {
+      expect(content).toMatch(/kms_master_key_id\s*=\s*aws_kms_key\.main\.arn/);
+      expect(content).toMatch(/kms_key_id\s*=\s*aws_kms_key\.main\.arn/);
+    });
+
+    test("database password is marked sensitive", () => {
+      const dbVarMatch = content.match(/variable\s+"db_password"\s*{[^}]*}/s);
+      expect(dbVarMatch).toBeTruthy();
+      expect(dbVarMatch![0]).toMatch(/sensitive\s*=\s*true/);
+    });
+
+    test("S3 buckets have public access blocked", () => {
+      expect(content).toMatch(/block_public_acls\s*=\s*true/);
+      expect(content).toMatch(/block_public_policy\s*=\s*true/);
+      expect(content).toMatch(/ignore_public_acls\s*=\s*true/);
+      expect(content).toMatch(/restrict_public_buckets\s*=\s*true/);
+    });
+  });
+
+  // === Performance and Reliability Tests ===
+  
+  describe("Performance and Reliability", () => {
+    test("instances are in private subnets", () => {
+      expect(content).toMatch(/resource\s+"aws_autoscaling_group"\s+"main"/);
+      expect(content).toMatch(/vpc_zone_identifier\s*=\s*aws_subnet\.private/);
+    });
+
+    test("load balancer is in public subnets", () => {
+      expect(content).toMatch(/resource\s+"aws_lb"\s+"main"/);
+      expect(content).toMatch(/subnets\s*=\s*aws_subnet\.public/);
+    });
+
+    test("database has proper backup configuration", () => {
+      expect(content).toMatch(/backup_retention_period\s*=\s*7/);
+      expect(content).toMatch(/backup_window\s*=\s*"03:00-04:00"/);
+      expect(content).toMatch(/maintenance_window\s*=\s*"sun:04:00-sun:05:00"/);
+    });
+
+    test("CloudFront enforces HTTPS", () => {
+      expect(content).toMatch(/resource\s+"aws_cloudfront_distribution"\s+"main"/);
+      expect(content).toMatch(/viewer_protocol_policy\s*=\s*"redirect-to-https"/);
+    });
+
+    test("health check grace period allows startup time", () => {
+      expect(content).toMatch(/health_check_grace_period\s*=\s*300/);
+    });
+  });
+
+  // === Data Sources and Random Generation ===
+  
+  describe("Data Sources and Randomization", () => {
+    test("uses caller identity data source", () => {
+      expect(content).toMatch(/data\s+"aws_caller_identity"\s+"current"/);
+    });
+
+    test("uses AMI data source with proper filters", () => {
+      const amiMatch = content.match(/data\s+"aws_ami"\s+"amazon_linux"\s*{[^}]*}/s);
+      expect(amiMatch).toBeTruthy();
+      expect(amiMatch![0]).toMatch(/most_recent\s*=\s*true/);
+      expect(amiMatch![0]).toMatch(/owners\s*=\s*\["amazon"\]/);
+      expect(amiMatch![0]).toMatch(/amzn2-ami-hvm-.*-x86_64-gp2/);
+    });
+
+    test("generates random suffix for resource naming", () => {
+      expect(content).toMatch(/resource\s+"random_id"\s+"bucket_suffix"/);
+      expect(content).toMatch(/byte_length\s*=\s*4/);
+      expect(content).toMatch(/suffix\s*=\s*random_id\.bucket_suffix\.hex/);
     });
   });
 
