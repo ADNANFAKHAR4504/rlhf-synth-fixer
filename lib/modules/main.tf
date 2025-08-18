@@ -6,6 +6,30 @@ variable "caller_arn" {
   type = string
 }
 
+variable "project_name" {
+  type = string
+}
+
+variable "environment" {
+  type = string
+}
+
+variable "vpc_cidr" {
+  type = string
+}
+
+variable "public_subnet_cidrs" {
+  type = list(string)
+}
+
+variable "private_subnet_cidrs" {
+  type = list(string)
+}
+
+variable "availability_zones" {
+  type = list(string)
+}
+
 ######################
 # Networking
 ######################
@@ -501,6 +525,3 @@ resource "aws_s3_bucket_policy" "logs" {
 
   depends_on = [aws_s3_bucket_public_access_block.logs]
 }
-
-
-
