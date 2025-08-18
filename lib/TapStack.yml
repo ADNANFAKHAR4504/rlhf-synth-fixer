@@ -436,7 +436,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${WebAppS3Bucket}/*'
+                Resource: !Sub '${WebAppS3Bucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
