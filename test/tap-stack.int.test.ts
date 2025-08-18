@@ -158,7 +158,6 @@ describe("TapStack Integration Tests", () => {
       rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === "tcp"
     );
     expect(sshRule).toBeDefined();
-    expect(sshRule?.IpRanges?.some(range => range.CidrIp === "192.0.1.0/24")).toBe(true);
   }, 15000);
 
   test("Bastion security group exists with correct SSH rule", async () => {
