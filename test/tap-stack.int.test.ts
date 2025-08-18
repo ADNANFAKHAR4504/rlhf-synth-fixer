@@ -1,8 +1,4 @@
 import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-} from '@aws-sdk/client-cloudformation';
-import {
   CloudTrailClient,
   DescribeTrailsCommand,
 } from '@aws-sdk/client-cloudtrail';
@@ -43,12 +39,12 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
+import fs from 'fs';
 
 const region = process.env.AWS_REGION || 'us-east-1';
 const env = process.env.ENVIRONMENT || 'prod';
 const stackName = process.env.CFN_STACK_NAME || `TapStack${env}`;
 
-const cf = new CloudFormationClient({ region });
 const s3 = new S3Client({ region });
 const cloudtrail = new CloudTrailClient({ region });
 const cfg = new ConfigServiceClient({ region });
@@ -59,46 +55,17 @@ const rds = new RDSClient({ region });
 const sts = new STSClient({ region });
 const kms = new KMSClient({ region });
 
-const getStackOutputs = async () => {
-  const desiredKeys = new Set([
-    'CloudTrailArn',
-    'ConfigBucketName',
-    'LambdaFunctionArn',
-    'RDSInstanceEndpoint',
-    'LoadBalancerDNS',
-  ]);
-
-  const resolveOutputs = (s: any) => {
-    const out: Record<string, string> = {};
-    for (const o of s.Outputs || []) {
-      if (o.OutputKey && o.OutputValue) out[o.OutputKey] = o.OutputValue;
-    }
-    return out;
-  };
-
-  if (process.env.CFN_STACK_NAME) {
-    const res = await cf.send(
-      new DescribeStacksCommand({ StackName: process.env.CFN_STACK_NAME })
+// Read stack outputs from flat-outputs.json
+const getStackOutputs = () => {
+  try {
+    const outputs = JSON.parse(
+      fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
     );
-    const stack = res.Stacks?.[0];
-    if (!stack) throw new Error('Stack not found');
-    return resolveOutputs(stack);
+    return outputs;
+  } catch (error) {
+    console.error('Failed to read cfn-outputs/flat-outputs.json:', error);
+    throw new Error('Stack outputs file not found or invalid');
   }
-
-  const res = await cf.send(new DescribeStacksCommand({}));
-  const stacks = res.Stacks || [];
-  let best: { score: number; outputs: Record<string, string> } | null = null;
-  for (const s of stacks) {
-    const out = resolveOutputs(s);
-    const score = Object.keys(out).reduce(
-      (acc, k) => acc + (desiredKeys.has(k) ? 1 : 0),
-      0
-    );
-    if (!best || score > best.score) best = { score, outputs: out };
-  }
-  if (!best || best.score < 1)
-    throw new Error('Suitable stack with required outputs not found');
-  return best.outputs;
 };
 
 let runtimeSkip = false;
@@ -113,7 +80,7 @@ describe('TapStack.yml - Integration (live) validations', () => {
       return;
     }
     try {
-      outputs = await getStackOutputs();
+      outputs = getStackOutputs();
     } catch {
       runtimeSkip = true;
       return;

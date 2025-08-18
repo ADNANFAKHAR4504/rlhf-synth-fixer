@@ -99,7 +99,9 @@ Conditions:
   CreateRDSSubnetGroup: !Equals [!Ref UseExistingRDSSubnetGroup, '']
   # removed to avoid unused condition warning
   HasVpcId: !Not [!Equals [!Ref VpcId, '']]
-  CreateLambdaInVpc: true
+  CreateLambdaInVpc: !And
+    - !Not [!Equals [!Ref VpcId, '']]
+    - !Not [!Equals [!Join ['', !Ref PrivateSubnetIds], '']]
   CreateRDSSubnetGroupAll: !And
     - !Equals [!Ref UseExistingRDSSubnetGroup, '']
     - !Not [!Equals [!Join ['', !Ref PrivateSubnetIds], '']]
@@ -497,9 +499,7 @@ Resources:
   # -----------------------------
   SecureLambdaFunction:
     Type: AWS::Lambda::Function
-    Condition: !And
-      - !Not [!Equals [!Ref VpcId, '']]
-      - !Not [!Equals [!Join ['', !Ref PrivateSubnetIds], '']]
+    Condition: CreateLambdaInVpc
     Properties:
       FunctionName: !Sub '${Environment}-tap-function-${AWS::StackName}'
       Runtime: python3.9
@@ -702,9 +702,7 @@ Outputs:
 
   LambdaFunctionArn:
     Description: Secure Lambda Function ARN
-    Condition: !And
-      - !Not [!Equals [!Ref VpcId, '']]
-      - !Not [!Equals [!Join ['', !Ref PrivateSubnetIds], '']]
+    Condition: CreateLambdaInVpc
     Value: !GetAtt SecureLambdaFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-Lambda-Arn'
