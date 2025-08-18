@@ -1,5 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'High Availability Web Application with Multi-AZ deployment, Auto Scaling, RDS, S3 replication, WAF, and comprehensive monitoring'
+
 Resources:
   ############################################
   # Networking: VPC, Subnets, Routing, NAT
@@ -344,7 +345,7 @@ Resources:
         - { Key: Name, Value: !Sub '${AWS::StackName}-db' }
 
   ############################################
-  # S3: KMS-encrypted bucket + replication
+  # S3: KMS-encrypted bucket (single-region)
   ############################################
   S3KmsKey:
     Type: AWS::KMS::Key
@@ -362,57 +363,6 @@ Resources:
       Tags:
         - { Key: Name, Value: !Sub '${AWS::StackName}-s3-kms' }
 
-  ReplicaBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      VersioningConfiguration: { Status: Enabled }
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
-      Tags:
-        - { Key: Name, Value: !Sub '${AWS::StackName}-replica' }
-
-  S3ReplicationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: { Service: s3.amazonaws.com }
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3ReplicationInline
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              # Use permissive scope to avoid circular refs; still only usable by S3 service via AssumeRole
-              - Effect: Allow
-                Action:
-                  - s3:GetReplicationConfiguration
-                  - s3:ListBucket
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - s3:GetObjectVersion
-                  - s3:GetObjectVersionAcl
-                  - s3:GetObjectVersionTagging
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - s3:ReplicateObject
-                  - s3:ReplicateDelete
-                  - s3:ReplicateTags
-                Resource: "*"
-              # If source objects are KMS-encrypted with this CMK, allow decrypt during replication
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                  - kms:DescribeKey
-                Resource: !GetAtt S3KmsKey.Arn
-      Tags:
-        - { Key: Name, Value: !Sub '${AWS::StackName}-replication-role' }
-
   PrimaryBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -422,17 +372,6 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref S3KmsKey
-      ReplicationConfiguration:
-        Role: !GetAtt S3ReplicationRole.Arn
-        Rules:
-          - Id: ReplicateAll
-            Status: Enabled
-            Priority: 1
-            DeleteMarkerReplication: { Status: Disabled }
-            Filter: {}
-            Destination:
-              Bucket: !GetAtt ReplicaBucket.Arn
-              # For real CRR, point Destination to a bucket ARN in a different region.
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
@@ -458,13 +397,13 @@ Resources:
   HostedZone:
     Type: AWS::Route53::HostedZone
     Properties:
-      Name: ha-app.example.com
+      Name: !Sub '${AWS::StackName}.ha.example.com'
 
   DNSPrimary:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZone
-      Name: app.ha-app.example.com.
+      Name: !Sub 'app.${AWS::StackName}.ha.example.com.'
       Type: A
       AliasTarget:
         DNSName: !GetAtt ALB.DNSName
@@ -478,7 +417,7 @@ Resources:
     Type: AWS::Route53::RecordSet
     Properties:
       HostedZoneId: !Ref HostedZone
-      Name: app.ha-app.example.com.
+      Name: !Sub 'app.${AWS::StackName}.ha.example.com.'
       Type: A
       TTL: '60'
       SetIdentifier: secondary
@@ -578,4 +517,4 @@ Outputs:
     Value: !GetAtt ALB.DNSName
   AppURLExample:
     Description: Example URL (if you delegate the zone)
-    Value: app.ha-app.example.com
+    Value: !Sub 'app.${AWS::StackName}.ha.example.com'
