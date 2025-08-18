@@ -118,7 +118,7 @@ resource "aws_kms_alias" "rds" {
 ########################
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.8"
+  version = "~> 5.0"
 
   name = "${var.name_prefix}-vpc"
   cidr = var.vpc_cidr
@@ -245,7 +245,7 @@ resource "aws_security_group" "rds" {
 ########################
 module "alb" {
   source  = "terraform-aws-modules/alb/aws"
-  version = "~> 9.7"
+  version = "~> 9.0"
 
   name               = "${var.name_prefix}-alb"
   load_balancer_type = "application"
@@ -324,18 +324,22 @@ module "asg" {
     )
   }
 
-  tags = [
-    {
-      key                 = "Name"
-      value               = "${var.name_prefix}-app"
-      propagate_at_launch = true
-    },
-    for k, v in local.common_tags : {
-      key                 = k
-      value               = v
-      propagate_at_launch = true
-    }
-  ]
+  tags = concat(
+    [
+      {
+        key                 = "Name"
+        value               = "${var.name_prefix}-app"
+        propagate_at_launch = true
+      }
+    ],
+    [
+      for k, v in local.common_tags : {
+        key                 = k
+        value               = v
+        propagate_at_launch = true
+      }
+    ]
+  )
 }
 
 ########################
@@ -379,7 +383,7 @@ module "rds" {
   storage_encrypted      = true
   kms_key_id             = aws_kms_key.rds.arn
   deletion_protection    = true
-  skip_final_snapshot    = false
+  skip_final_snapshot    = true
   backup_retention_period = 7
   publicly_accessible    = false
 
@@ -600,6 +604,8 @@ resource "aws_api_gateway_stage" "prod" {
     destination_arn = aws_cloudwatch_log_group.api_access.arn
     format          = jsonencode({ requestId = "$context.requestId", ip = "$context.identity.sourceIp", requestTime = "$context.requestTime", httpMethod = "$context.httpMethod", routeKey = "$context.routeKey", status = "$context.status", protocol = "$context.protocol" })
   }
+
+  depends_on = [aws_api_gateway_account.this]
 }
 
 # API Gateway access logging setup (minimal, scoped)
@@ -699,9 +705,15 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
-  restrictions { geo_restriction { restriction_type = "none" } }
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
 
-  viewer_certificate { cloudfront_default_certificate = true }
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
 
   # CloudFront logging disabled to keep minimal surface area
 
@@ -720,7 +732,7 @@ data "aws_availability_zones" "dr" {
 module "vpc_dr" {
   providers = { aws = aws.secondary }
   source    = "terraform-aws-modules/vpc/aws"
-  version   = "~> 5.8"
+  version   = "~> 5.0"
 
   name = "${var.name_prefix}-vpc-dr"
   cidr = var.dr_vpc_cidr
@@ -794,7 +806,7 @@ resource "aws_security_group" "app_dr" {
 module "alb_dr" {
   providers = { aws = aws.secondary }
   source    = "terraform-aws-modules/alb/aws"
-  version   = "~> 9.7"
+  version   = "~> 9.0"
 
   name               = "${var.name_prefix}-alb-dr"
   load_balancer_type = "application"
@@ -864,18 +876,22 @@ module "asg_dr" {
     )
   }
 
-  tags = [
-    {
-      key                 = "Name"
-      value               = "${var.name_prefix}-app-dr"
-      propagate_at_launch = true
-    },
-    for k, v in local.common_tags : {
-      key                 = k
-      value               = v
-      propagate_at_launch = true
-    }
-  ]
+  tags = concat(
+    [
+      {
+        key                 = "Name"
+        value               = "${var.name_prefix}-app-dr"
+        propagate_at_launch = true
+      }
+    ],
+    [
+      for k, v in local.common_tags : {
+        key                 = k
+        value               = v
+        propagate_at_launch = true
+      }
+    ]
+  )
 }
 
 ########################
