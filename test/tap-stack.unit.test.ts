@@ -49,3 +49,5 @@ describe('Terraform S3 and DynamoDB Stack', () => {
     expect(tfConfig).toMatch(/resource\s+"aws_dynamodb_table"\s+"main"[\s\S]*tags\s*=\s*{[^}]*Name[^}]*Project[^}]*ManagedBy[^}]*}/);
   });
 });
+
+ 
