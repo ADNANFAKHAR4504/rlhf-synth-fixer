@@ -28,6 +28,12 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
     const maxCapacity = config.getNumber('maxCapacity') || 10;
     const desiredCapacity = config.getNumber('desiredCapacity') || 3;
     const dbUsername = config.get('dbUsername') || 'admin';
+    const allowedSshCidrs = config.getObject<string[]>('allowedSshCidrs') || [
+      '10.0.1.0/24',
+    ];
+    const allowedAlbCidrs = config.getObject<string[]>('allowedAlbCidrs') || [
+      '0.0.0.0/0',
+    ];
 
     // Generate secure password
     const dbPassword = new random.RandomPassword(
@@ -51,11 +57,26 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // KMS Key for Secrets Manager
+    const secretsKmsKey = new aws.kms.Key(
+      `secrets-kms-key-${environmentSuffix}`,
+      {
+        description: `KMS key for Secrets Manager - ${environmentSuffix}`,
+        deletionWindowInDays: 7,
+        tags: {
+          Name: `secrets-kms-key-${environmentSuffix}`,
+          Environment: 'production',
+        },
+      },
+      { provider, parent: this }
+    );
+
     // Store in Secrets Manager
     const dbSecret = new aws.secretsmanager.Secret(
       `${environmentSuffix}-db-secret`,
       {
         description: `DB credentials for ${environmentSuffix}`,
+        kmsKeyId: secretsKmsKey.arn,
         tags: {
           Name: `${environmentSuffix}-db-secret`,
           Environment: 'production',
@@ -140,12 +161,25 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    // CloudWatch Log Groups (create before VPC Flow Logs)
+    const vpcFlowLogsGroup = new aws.cloudwatch.LogGroup(
+      `vpc-flow-logs-group-${environmentSuffix}`,
+      {
+        name: `/aws/vpc/flowlogs-${environmentSuffix}`,
+        retentionInDays: 90,
+        tags: {
+          Environment: 'production',
+        },
+      },
+      { provider, parent: this }
+    );
+
     // VPC Flow Logs
     new aws.ec2.FlowLog(
       `vpc-flow-logs-${environmentSuffix}`,
       {
         iamRoleArn: vpcFlowLogsRole.arn,
-        logDestination: pulumi.interpolate`arn:aws:logs:ap-south-1:${aws.getCallerIdentity().then(i => i.accountId)}:log-group:/aws/vpc/flowlogs-${environmentSuffix}`,
+        logDestination: vpcFlowLogsGroup.arn,
         logDestinationType: 'cloud-watch-logs',
         vpcId: vpc.id,
         trafficType: 'ALL',
@@ -153,7 +187,7 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
           Name: `vpc-flow-logs-${environmentSuffix}`,
         },
       },
-      { provider, parent: this }
+      { provider, parent: this, dependsOn: [vpcFlowLogsGroup] }
     );
 
     // Internet Gateway
@@ -341,14 +375,14 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
             fromPort: 80,
             toPort: 80,
             protocol: 'tcp',
-            cidrBlocks: ['0.0.0.0/0'],
+            cidrBlocks: allowedAlbCidrs,
           },
           {
             description: 'HTTPS',
             fromPort: 443,
             toPort: 443,
             protocol: 'tcp',
-            cidrBlocks: ['0.0.0.0/0'],
+            cidrBlocks: allowedAlbCidrs,
           },
         ],
         egress: [
@@ -381,11 +415,11 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
             securityGroups: [albSecurityGroup.id],
           },
           {
-            description: 'SSH from bastion only',
+            description: 'SSH from allowed CIDRs',
             fromPort: 22,
             toPort: 22,
             protocol: 'tcp',
-            cidrBlocks: ['10.0.1.0/24'], // Restrict to public subnet only
+            cidrBlocks: allowedSshCidrs,
           },
         ],
         egress: [
@@ -438,6 +472,11 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
               Principal: {
                 Service: 'ec2.amazonaws.com',
               },
+              Condition: {
+                StringEquals: {
+                  'aws:RequestedRegion': 'ap-south-1',
+                },
+              },
             },
           ],
         }),
@@ -453,31 +492,36 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       `cloudwatch-logs-policy-${environmentSuffix}`,
       {
         description: 'Policy for EC2 instances to write to CloudWatch Logs',
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogStreams',
-              ],
-              Resource: pulumi.interpolate`arn:aws:logs:ap-south-1:${aws.getCallerIdentity().then(i => i.accountId)}:log-group:/aws/ec2/application-${environmentSuffix}`,
-            },
-            {
-              Effect: 'Allow',
-              Action: ['cloudwatch:PutMetricData'],
-              Resource: '*',
-              Condition: {
-                StringEquals: {
-                  'cloudwatch:namespace': 'CustomApp/EC2',
+        policy: pulumi
+          .all([aws.getCallerIdentity().then(i => i.accountId)])
+          .apply(([accountId]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                    'logs:DescribeLogStreams',
+                  ],
+                  Resource: `arn:aws:logs:ap-south-1:${accountId}:log-group:/aws/ec2/application-${environmentSuffix}*`,
                 },
-              },
-            },
-          ],
-        }),
+                {
+                  Effect: 'Allow',
+                  Action: ['cloudwatch:PutMetricData'],
+                  Resource: '*',
+                  Condition: {
+                    StringEquals: {
+                      'cloudwatch:namespace': 'CustomApp/EC2',
+                      'aws:RequestedRegion': 'ap-south-1',
+                    },
+                  },
+                },
+              ],
+            })
+          ),
       },
       { provider, parent: this }
     );
@@ -518,18 +562,6 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       `alb-log-group-${environmentSuffix}`,
       {
         name: `/aws/alb/access-logs-${environmentSuffix}`,
-        retentionInDays: 90,
-        tags: {
-          Environment: 'production',
-        },
-      },
-      { provider, parent: this }
-    );
-
-    new aws.cloudwatch.LogGroup(
-      `vpc-flow-logs-group-${environmentSuffix}`,
-      {
-        name: `/aws/vpc/flowlogs-${environmentSuffix}`,
         retentionInDays: 90,
         tags: {
           Environment: 'production',
@@ -613,7 +645,7 @@ EOF
         name: `app-launch-template-${environmentSuffix}`,
         imageId: amazonLinuxAmi.then(ami => ami.id),
         instanceType: 't3.micro',
-        keyName: config.get('keyPairName'), // Use config for key pair name
+        keyName: config.get('keyPairName') || undefined, // Use config for key pair name
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
         iamInstanceProfile: {
           name: instanceProfile.name,
@@ -721,7 +753,6 @@ EOF
         port: 443,
         protocol: 'HTTPS',
         sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
-        certificateArn: config.require('albCertArn'), // Corrected from 'certificates'
         defaultActions: [
           {
             type: 'forward',
@@ -732,7 +763,7 @@ EOF
       { provider, parent: this }
     );
 
-    // Update HTTP Listener to Redirect to HTTPS
+    // HTTP Listener
     new aws.lb.Listener(
       `app-alb-http-listener-${environmentSuffix}`,
       {
@@ -741,12 +772,8 @@ EOF
         protocol: 'HTTP',
         defaultActions: [
           {
-            type: 'redirect',
-            redirect: {
-              protocol: 'HTTPS',
-              port: '443',
-              statusCode: 'HTTP_301',
-            },
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
           },
         ],
       },
