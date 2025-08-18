@@ -4,9 +4,8 @@ import os
 import sys
 import time
 import pytest
-from lib import tap_stack
-from lib import tap_helpers
-from lib.tap_stack import get_resource_name, get_short_name, calculate_ipv6_cidr, PROJECT_NAME, ENVIRONMENT, DEPLOYMENT_ID
+from lib import constants as tap_stack
+from lib.constants import get_resource_name, get_short_name, calculate_ipv6_cidr, PROJECT_NAME, ENVIRONMENT, DEPLOYMENT_ID
 
 # Add lib directory to path for tap_stack imports
 lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'lib')

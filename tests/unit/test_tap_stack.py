@@ -6,7 +6,7 @@ import sys
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import pytest
-from lib.tap_stack import get_resource_name, get_short_name, calculate_ipv6_cidr, PROJECT_NAME, ENVIRONMENT, DEPLOYMENT_ID
+from lib.constants import get_resource_name, get_short_name, calculate_ipv6_cidr, PROJECT_NAME, ENVIRONMENT, DEPLOYMENT_ID
 
 # Pipeline and deployment configuration constants
 REQUIRED_COVERAGE_THRESHOLD = 20
@@ -78,12 +78,12 @@ class TestCompletelyIndependentDeployment(unittest.TestCase):
       
   def test_independent_deployment_strategy(self):
     """Test that completely independent deployment strategy is implemented."""
-    PROJECT_NAME = "dswa-v5"
-    ENVIRONMENT = "dev"
+    # Use actual constants from the module
+    from lib.constants import PROJECT_NAME as ACTUAL_PROJECT_NAME, ENVIRONMENT as ACTUAL_ENVIRONMENT
     
     # Verify project configuration
-    self.assertEqual(PROJECT_NAME, "dswa-v5")
-    self.assertEqual(ENVIRONMENT, "dev")
+    self.assertEqual(ACTUAL_PROJECT_NAME, "tap-ds-demo")
+    self.assertEqual(ACTUAL_ENVIRONMENT, "dev")
     
     # Test resource naming for independence
     def get_resource_name(resource_type: str) -> str:
@@ -134,18 +134,18 @@ class TestDeploymentValidation(unittest.TestCase):
   
   def test_application_url_format(self):
     """Test that application URL follows correct format."""
-    # Mock ALB DNS name format
-    alb_dns = "dswa-v5-dev-web-alb-2238-757475336.us-east-1.elb.amazonaws.com"
+    # Mock ALB DNS name format using actual project name
+    alb_dns = "tap-ds-demo-dev-web-alb-2238-757475336.us-east-1.elb.amazonaws.com"
     app_url = f"http://{alb_dns}"
     
     # Validate URL format
     self.assertTrue(app_url.startswith("http://"))
-    self.assertIn("dswa-v5-dev", app_url)
+    self.assertIn("tap-ds-demo-dev", app_url)
     self.assertIn("elb.amazonaws.com", app_url)
     
   def test_cloudwatch_dashboard_url(self):
     """Test CloudWatch dashboard URL format."""
-    dashboard_name = "dswa-v5-dev-monitoring-dashboard-2238"
+    dashboard_name = "tap-ds-demo-dev-monitoring-dashboard-2238"
     dashboard_url = f"https://{AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region={AWS_REGION}#dashboards:name={dashboard_name}"
     
     # Validate dashboard URL format
@@ -158,7 +158,7 @@ class TestDeploymentValidation(unittest.TestCase):
     """Test resource tagging strategy for management."""
     expected_tags = {
       "Environment": "dev",
-      "Project": "dswa-v5", 
+      "Project": "tap-ds-demo", 
       "ManagedBy": "Pulumi-IaC"
     }
     
@@ -277,7 +277,7 @@ class TestCompletelyIndependentDeploymentIntegrity(unittest.TestCase):
     """Test that deployment outputs follow expected format for independent deployment."""
     # Test output structure for completely independent deployment
     expected_outputs = {
-      "application_url": "http://dswa-v5-dev-web-alb-2238-757475336.us-east-1.elb.amazonaws.com",
+      "application_url": "http://tap-ds-demo-dev-web-alb-2238-757475336.us-east-1.elb.amazonaws.com",
       "vpc_id": "vpc-030d02a288e1e09e0",
       "cloudwatch_dashboard_url": f"https://{AWS_REGION}.console.aws.amazon.com/cloudwatch/home",
       "vpc_optimization": {
@@ -302,7 +302,7 @@ class TestCompletelyIndependentDeploymentIntegrity(unittest.TestCase):
     """Test resource tagging strategy for independent deployment."""
     expected_tags = {
       "Environment": "dev",
-      "Project": "dswa-v5", 
+      "Project": "tap-ds-demo", 
       "ManagedBy": "Pulumi-IaC",
       "DeploymentType": "Completely-Independent",
       "Strategy": "New-Resources-Only"
