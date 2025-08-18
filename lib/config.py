@@ -73,6 +73,7 @@ class ComponentDependencies:
   database_sg_id: Any = None
   secrets_arn: Any = None
   instance_profile_name: Any = None
+  certificate_arn: Any = pulumi.Output.secret("arn:aws:acm:us-west-2:123456789012:certificate/mock")
   backup_bucket_name: Any = None
   alb_arn: Any = None
 
