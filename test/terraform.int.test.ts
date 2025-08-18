@@ -60,7 +60,7 @@ let rdsClient: RDSClient;
 let elbClient: ElasticLoadBalancingV2Client;
 let secretsClient: SecretsManagerClient;
 let region: string;
-let isLiveTestingEnabled = false;
+let isLiveTestingEnabled = true;
 
 function loadOutputs() {
   const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
