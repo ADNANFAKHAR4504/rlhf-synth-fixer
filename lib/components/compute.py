@@ -234,7 +234,6 @@ python3 /opt/app/health.py &
       port=443,
       protocol="HTTPS",
       ssl_policy=self.config.security.ssl_policy,
-      certificate_arn=self.dependencies.certificate_arn,
       default_actions=[{
         "type": "forward",
         "target_group_arn": self.target_group.arn

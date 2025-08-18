@@ -17,9 +17,6 @@ class SecurityComponent(ComponentResource):
     # Create security groups
     self._create_security_groups(name, config, dependencies.vpc_id)
 
-    # Create SSL certificate
-    self._create_ssl_certificate(name, config)
-
     # Create WAF
     self._create_waf(name, config)
 
@@ -30,7 +27,6 @@ class SecurityComponent(ComponentResource):
       "alb_sg_id": self.alb_sg.id,
       "ec2_sg_id": self.ec2_sg.id,
       "database_sg_id": self.database_sg.id,
-      "certificate_arn": self.certificate.arn,
       "waf_arn": self.waf.arn,
       "ec2_instance_profile_name": self.ec2_instance_profile.name
     })
@@ -182,20 +178,6 @@ class SecurityComponent(ComponentResource):
       tags={
         **config.tags,
         "Name": f"{config.app_name}-{config.environment}-db-sg"
-      },
-      opts=ResourceOptions(parent=self)
-    )
-
-  def _create_ssl_certificate(self, name: str, config: InfrastructureConfig):
-    # Create ACM certificate with email validation for CI environments
-    self.certificate = aws.acm.Certificate(
-      f"{name}-cert",
-      domain_name=config.security.certificate_domain,
-      subject_alternative_names=[f"*.{config.security.certificate_domain}"],
-      validation_method="EMAIL",
-      tags={
-        **config.tags,
-        "Name": f"{config.app_name}-{config.environment}-cert"
       },
       opts=ResourceOptions(parent=self)
     )

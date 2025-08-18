@@ -132,8 +132,7 @@ class TapStack(pulumi.ComponentResource):
         alb_sg_id=security.alb_sg.id,
         ec2_sg_id=security.ec2_sg.id,
         secrets_arn=secrets.app_secrets.arn,
-        instance_profile_name=security.ec2_instance_profile.name,
-        certificate_arn=security.certificate.arn
+        instance_profile_name=security.ec2_instance_profile.name
       )
       compute = ComputeComponent(
         f"compute-{region}",

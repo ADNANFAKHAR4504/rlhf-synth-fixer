@@ -192,8 +192,7 @@ class MonitoringComponent(ComponentResource):
       limit_unit="USD",
       time_unit="MONTHLY",
       cost_filters=[{
-        "name": "Environment",
-        "values": [config.environment]
+        "TagKeyValue": [config.environment]
       }],
       notifications=[
         {
