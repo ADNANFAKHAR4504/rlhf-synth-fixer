@@ -180,60 +180,7 @@ resource "aws_security_group_rule" "ec2_ingress_https_from_alb" {
 }
 
 # ALB Security Group
-# ALB Security Group
 resource "aws_security_group" "alb" {
-  name_prefix = "${var.project_name}-alb-"
-  vpc_id      = aws_vpc.main.id
-  description = "Security group for Application Load Balancer"
-
-  # HTTP from internet
-  ingress {
-    description = "HTTP from internet"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # HTTPS from internet
-  ingress {
-    description = "HTTPS from internet"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-alb-sg"
-  }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-# Allow HTTP from ALB to EC2
-resource "aws_security_group_rule" "alb_egress_http_to_ec2" {
-  type              = "egress"
-  from_port         = 80
-  to_port           = 80
-  protocol          = "tcp"
-  security_group_id = aws_security_group.alb.id
-  source_security_group_id = aws_security_group.ec2.id
-  description       = "Allow HTTP to EC2"
-}
-
-# Allow HTTPS from ALB to EC2
-resource "aws_security_group_rule" "alb_egress_https_to_ec2" {
-  type              = "egress"
-  from_port         = 443
-  to_port           = 443
-  protocol          = "tcp"
-  security_group_id = aws_security_group.alb.id
-  source_security_group_id = aws_security_group.ec2.id
-  description       = "Allow HTTPS to EC2"
-}" {
   name_prefix = "${var.project_name}-alb-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for Application Load Balancer"
