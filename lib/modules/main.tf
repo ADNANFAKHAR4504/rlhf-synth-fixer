@@ -69,16 +69,16 @@ data "aws_eip" "nat" {
 
 # NAT Gateway
 resource "aws_nat_gateway" "main" {
-  allocation_id = data.aws_eip.nat.id
-  subnet_id     = aws_subnet.public[0].id
-
-  depends_on = [aws_internet_gateway.main]
+  allocation_id = aws_eip.main.id
+  subnet_id     = aws_subnet.public.id
 
   tags = {
     Name = "${var.project_name}-nat-gateway"
   }
 }
-
+resource "aws_eip" "main" {
+  vpc = true
+}
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -337,7 +337,7 @@ resource "aws_s3_bucket" "data" {
 }
 
 # S3 Logs Bucket
-resource "aws_s3_bucket" "logs" {
+resource "aws_s3_bucket" "logs_bucket" {
   bucket = "${lower(var.project_name)}-logs-${random_string.bucket_suffix.result}"
   force_destroy = true
   versioning {
