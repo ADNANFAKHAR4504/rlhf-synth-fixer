@@ -2,21 +2,20 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
-import { Construct } from 'constructs';
-import { Fn } from 'cdktf';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { Fn, S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 // Corrected import: All modules are now correctly exported and imported.
 import {
-  Ec2Module,
-  VpcModule,
   AlbModule,
-  RdsModule,
-  IamModule,
-  Route53Module,
   CloudwatchModule,
+  Ec2Module,
+  IamModule,
+  RdsModule,
+  Route53Module,
+  VpcModule,
 } from '../lib/module';
 
 interface TapStackProps {
@@ -71,9 +70,9 @@ export class TapStack extends TerraformStack {
     const namingConvention = (resourceName: string) =>
       `${prefix}-${resourceName}-${environmentSuffix}`;
     const instanceType = 't3.micro';
-    const sshKeyName = 'your-ssh-key-name'; // Replace with your EC2 key pair name
-    const myIp = '0.0.0.0/0'; // Replace with your public IP CIDR for secure SSH access, e.g., '1.2.3.4/32'
-    const domainName = 'example.com'; // Replace with your domain name
+    const sshKeyName = 'ssh-key-aug';
+    const myIp = '206.84.231.196/32';
+    const domainName = 'Example.com';
 
     // --- Module Instantiation and Composition ---
     // 1. Create a secure VPC with public and private subnets across multiple AZs.
