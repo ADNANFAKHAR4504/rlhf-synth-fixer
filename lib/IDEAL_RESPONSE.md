@@ -7,7 +7,7 @@ Description: >
 
 Metadata:
   ProvidedData:
-    ExistingVpcIdLiteral: "vpc-12345abcde"
+    ExistingVpcIdLiteral: "vpc-002dd1e7eb944d35a"
 
 Rules:
   MustBeUsEast1:
