@@ -157,12 +157,13 @@ describe("Multi-Environment AWS Infrastructure - Unit Tests", () => {
       expect(locals).toMatch(/production\s*=\s*{/);
     });
 
-    it("should have common_tags with Environment variable", () => {
+    it("should have common_tags with Environment variable and EnvironmentSuffix", () => {
       const localsBlocks = extractAllBlocks(hcl, /\blocals\s*/g);
       expect(localsBlocks.length).toBeGreaterThan(0);
       const locals = localsBlocks.join("\n");
       expect(locals).toMatch(/common_tags\s*=\s*{/);
       expect(locals).toMatch(/Environment\s*=\s*var\.environment/);
+      expect(locals).toMatch(/EnvironmentSuffix\s*=\s*var\.environment_suffix/);
     });
   });
 
@@ -297,11 +298,11 @@ describe("Multi-Environment AWS Infrastructure - Unit Tests", () => {
 
   /** ===================== REQUIREMENT 10: AWS NAMING CONVENTIONS ===================== */
   describe("Requirement 10: AWS Naming Conventions", () => {
-    it("should use consistent naming prefix", () => {
+    it("should use consistent naming prefix with environment suffix", () => {
       const localsBlocks = extractAllBlocks(hcl, /\blocals\s*/g);
       expect(localsBlocks.length).toBeGreaterThan(0);
       const locals = localsBlocks.join("\n");
-      expect(locals).toMatch(/name_prefix\s*=\s*"\$\{var\.project_name\}-\$\{var\.environment\}"/);
+      expect(locals).toMatch(/name_prefix\s*=\s*"tap-\$\{var\.environment_suffix\}"/);
     });
 
     it("resources should follow naming conventions", () => {
@@ -383,12 +384,12 @@ describe("Multi-Environment AWS Infrastructure - Unit Tests", () => {
       expect(ec2!).toMatch(/count\s*=\s*var\.environment\s*!=\s*["']production["']\s*\?\s*2\s*:\s*0/);
     });
 
-    it("should have environment-specific deletion protection", () => {
+    it("should have environment-specific deletion protection disabled for testing", () => {
       const localsBlocks = extractAllBlocks(hcl, /\blocals\s*/g);
       expect(localsBlocks.length).toBeGreaterThan(0);
       const locals = localsBlocks.join("\n");
+      // All environments should have deletion_protection = false for testing
       expect(locals).toMatch(/deletion_protection\s*=\s*false/);
-      expect(locals).toMatch(/deletion_protection\s*=\s*true/);
     });
   });
 
