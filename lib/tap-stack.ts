@@ -8,8 +8,6 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
