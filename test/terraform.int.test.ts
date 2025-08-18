@@ -23,8 +23,8 @@ import {
 import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
 
 describe('Terraform Infrastructure Integration Tests', () => {
-  let outputs: any = {};
-  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+let outputs: any = {};
+const environmentSuffix = 'dev';
 
   // AWS clients for both regions
   const primaryRegion = 'us-east-1';
