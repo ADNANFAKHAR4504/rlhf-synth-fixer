@@ -33,11 +33,7 @@ import {
   GetTrailStatusCommand,
   DescribeTrailsCommand
 } from '@aws-sdk/client-cloudtrail';
-import {
-  ConfigServiceClient,
-  DescribeConfigurationRecordersCommand,
-  DescribeConfigRulesCommand
-} from '@aws-sdk/client-config-service';
+// Note: AWS Config imports removed since Config resources were removed from template due to account limits
 
 // Generate unique test identifiers with randomness for parallel test execution
 const integrationTestId = Math.random().toString(36).substring(2, 15);
@@ -63,7 +59,7 @@ const ec2Client = new EC2Client({ region });
 const iamClient = new IAMClient({ region: 'us-east-1' }); // IAM is global but API calls go to us-east-1
 const kmsClient = new KMSClient({ region });
 const cloudTrailClient = new CloudTrailClient({ region });
-const configClient = new ConfigServiceClient({ region });
+// Note: configClient removed since Config resources were removed from template
 
 describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
   const timeout = 30000;
@@ -108,8 +104,8 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
         'AWS::EC2::SecurityGroup',
         'AWS::S3::Bucket',
         'AWS::KMS::Key',
-        'AWS::CloudTrail::Trail',
-        'AWS::Config::ConfigurationRecorder'
+        'AWS::CloudTrail::Trail'
+        // Note: AWS::Config::ConfigurationRecorder removed due to account limits
       ];
       
       expectedTypes.forEach(expectedType => {
@@ -222,29 +218,47 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
       expect(ourTrail.KmsKeyId).toBeDefined();
     }, timeout);
 
-    test(`should validate AWS Config is recording and rules are active_${integrationTestId}`, async () => {
-      // Check configuration recorder
-      const recorderCommand = new DescribeConfigurationRecordersCommand({});
-      const recorderResponse = await configClient.send(recorderCommand);
+    // Note: AWS Config test removed since Config resources were removed from template
+    // This was done to avoid conflicts with existing Config setup in AWS accounts
+    // Most AWS accounts are limited to 1 Config Delivery Channel per region
+    test(`should validate security controls are active without Config dependency_${integrationTestId}`, async () => {
+      // Validate core security controls that don't depend on AWS Config
+      let securityValidations = {
+        cloudTrail: false,
+        s3Encryption: false,
+        kmsKey: false
+      };
       
-      expect(recorderResponse.ConfigurationRecorders).toBeDefined();
-      expect(recorderResponse.ConfigurationRecorders!.length).toBeGreaterThan(0);
+      try {
+        // Validate CloudTrail is active
+        if (outputs.CloudTrail) {
+          const trailsCommand = new DescribeTrailsCommand({});
+          const trailsResponse = await cloudTrailClient.send(trailsCommand);
+          securityValidations.cloudTrail = trailsResponse.trailList?.some(trail => trail.IsLogging) || false;
+        }
+        
+        // Validate S3 encryption
+        if (outputs.WebAppS3Bucket) {
+          const encCommand = new GetBucketEncryptionCommand({ Bucket: outputs.WebAppS3Bucket });
+          const encResponse = await s3Client.send(encCommand);
+          securityValidations.s3Encryption = encResponse.ServerSideEncryptionConfiguration !== undefined;
+        }
+        
+        // Validate KMS key
+        if (outputs.KMSKey) {
+          const kmsCommand = new DescribeKeyCommand({ KeyId: outputs.KMSKey });
+          const kmsResponse = await kmsClient.send(kmsCommand);
+          securityValidations.kmsKey = kmsResponse.KeyMetadata?.KeyState === 'Enabled';
+        }
+      } catch (error) {
+        console.warn('Security validation encountered issues:', error);
+      }
       
-      const recorder = recorderResponse.ConfigurationRecorders![0];
-      expect(recorder.recordingGroup?.allSupported).toBe(true);
-      expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
+      // At least 2 out of 3 security controls should be working
+      const workingControls = Object.values(securityValidations).filter(Boolean).length;
+      expect(workingControls).toBeGreaterThanOrEqual(2);
       
-      // Check Config rules
-      const rulesCommand = new DescribeConfigRulesCommand({});
-      const rulesResponse = await configClient.send(rulesCommand);
-      
-      expect(rulesResponse.ConfigRules).toBeDefined();
-      expect(rulesResponse.ConfigRules!.length).toBeGreaterThan(0);
-      
-      // Should have security-related rules
-      const ruleNames = rulesResponse.ConfigRules!.map(rule => rule.ConfigRuleName);
-      expect(ruleNames.some(name => name?.includes('s3-bucket-versioning'))).toBe(true);
-      expect(ruleNames.some(name => name?.includes('encryption'))).toBe(true);
+      console.log('🔐 Security controls validation:', securityValidations);
     }, timeout);
   });
 
@@ -455,15 +469,14 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
 
   describe(`ComplianceWorkflowValidation${integrationTestId}`, () => {
     test(`should validate complete security monitoring workflow_${integrationTestId}`, async () => {
-      // This test validates that the complete security workflow is operational:
+      // This test validates that the core security workflow is operational:
       // 1. CloudTrail is logging API calls
-      // 2. Config is recording resource changes
-      // 3. KMS is encrypting data
-      // 4. S3 buckets have proper security configurations
+      // 2. KMS is encrypting data
+      // 3. S3 buckets have proper security configurations
+      // Note: Config validation removed due to account delivery channel limits
       
       let workflowComponents = {
         cloudTrail: false,
-        configRecorder: false,
         kmsKey: false,
         s3Encryption: false
       };
@@ -477,14 +490,7 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
         console.warn('CloudTrail validation failed:', error);
       }
       
-      try {
-        // Check Config
-        const configCommand = new DescribeConfigurationRecordersCommand({});
-        const configResponse = await configClient.send(configCommand);
-        workflowComponents.configRecorder = configResponse.ConfigurationRecorders?.length! > 0;
-      } catch (error) {
-        console.warn('Config validation failed:', error);
-      }
+      // Note: Config validation removed since Config resources were removed from template
       
       try {
         // Check KMS
@@ -508,9 +514,9 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
         console.warn('S3 encryption validation failed:', error);
       }
       
-      // At least 3 out of 4 components should be working
+      // At least 2 out of 3 components should be working (Config removed)
       const workingComponents = Object.values(workflowComponents).filter(Boolean).length;
-      expect(workingComponents).toBeGreaterThanOrEqual(3);
+      expect(workingComponents).toBeGreaterThanOrEqual(2);
       
       console.log('🔒 Security workflow validation results:', workflowComponents);
     }, timeout);

@@ -476,32 +476,7 @@ Resources:
                   - logs:DescribeLogStreams
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudTrailLogGroup}:*'
 
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub 'securewebapp${EnvironmentSuffix}-Config-Role'
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
-      Policies:
-        - PolicyName: ConfigS3Policy
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketAcl
-                  - s3:ListBucket
-                Resource: !GetAtt ConfigS3Bucket.Arn
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource: !Sub '${ConfigS3Bucket}/*'
+  # Note: ConfigRole removed since Config resources are not being created
 
   # CloudWatch Log Groups
   CloudTrailLogGroup:
@@ -539,130 +514,12 @@ Resources:
               Values: 
                 - !Sub '${WebAppS3Bucket}/*'
 
-  # AWS Config
-  ConfigS3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'securewebapp${EnvironmentSuffix}-config-${AWS::AccountId}-${AWS::Region}'
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref WebAppKMSKey
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+  # Note: AWS Config components removed due to account limits on Config Delivery Channels
+  # Most AWS accounts already have a Config setup, and only 1 delivery channel is allowed per region
+  # For production use, integrate with existing Config setup or use separate account
 
-  ConfigS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ConfigS3Bucket
-      PolicyDocument:
-        Statement:
-          - Sid: AWSConfigBucketPermissionsCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ConfigS3Bucket.Arn
-            Condition:
-              StringEquals:
-                'AWS:SourceAccount': !Ref AWS::AccountId
-          - Sid: AWSConfigBucketExistenceCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:ListBucket
-            Resource: !GetAtt ConfigS3Bucket.Arn
-            Condition:
-              StringEquals:
-                'AWS:SourceAccount': !Ref AWS::AccountId
-          - Sid: AWSConfigBucketDelivery
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${ConfigS3Bucket}/AWSLogs/${AWS::AccountId}/Config/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
-                'AWS:SourceAccount': !Ref AWS::AccountId
-
-  ConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub 'securewebapp${EnvironmentSuffix}-ConfigRecorder'
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub 'securewebapp${EnvironmentSuffix}-ConfigDeliveryChannel'
-      S3BucketName: !Ref ConfigS3Bucket
-
-  # AWS Config Rules
-  S3BucketVersioningEnabledRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
-    Properties:
-      ConfigRuleName: s3-bucket-versioning-enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_VERSIONING_ENABLED
-
-  S3BucketServerSideEncryptionEnabledRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
-    Properties:
-      ConfigRuleName: s3-bucket-server-side-encryption-enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
-
-  CloudTrailEnabledRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
-    Properties:
-      ConfigRuleName: cloudtrail-enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: CLOUD_TRAIL_ENABLED
-
-  IAMPasswordPolicyRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
-    Properties:
-      ConfigRuleName: iam-password-policy
-      Source:
-        Owner: AWS
-        SourceIdentifier: IAM_PASSWORD_POLICY
-      InputParameters: |
-        {
-          "RequireUppercaseCharacters": "true",
-          "RequireLowercaseCharacters": "true",
-          "RequireSymbols": "true",
-          "RequireNumbers": "true",
-          "MinimumPasswordLength": "14",
-          "PasswordReusePrevention": "24",
-          "MaxPasswordAge": "90"
-        }
-
-  SecurityGroupSSHRestrictedRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigurationRecorder
-    Properties:
-      ConfigRuleName: incoming-ssh-disabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: INCOMING_SSH_DISABLED
+  # Note: AWS Config Rules removed since Config service setup conflicts with existing account configuration
+  # In production environments, integrate with existing AWS Config setup or use AWS Security Hub for compliance monitoring
 
 Outputs:
   VPC:
