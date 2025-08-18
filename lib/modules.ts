@@ -95,26 +95,27 @@ export class VpcModule extends Construct {
     });
 
     this.publicSubnets = [];
-    this.availabilityZones.forEach((az: string, index: number) => {
-      const publicSubnet = new Subnet(this, `public-subnet-${index}`, {
+    for (let i = 0; i < this.availabilityZones.length; i++) {
+      const azToken = Fn.element(zones.names, i);
+      const publicSubnet = new Subnet(this, `public-subnet-${i}`, {
         vpcId: this.vpc.id,
-        cidrBlock: `10.0.${index}.0/24`,
-        availabilityZone: az,
+        cidrBlock: `10.0.${i}.0/24`,
+        availabilityZone: azToken,
         mapPublicIpOnLaunch: true,
         tags: {
-          Name: `${config.project}-${config.env}-public-subnet-${index}`,
+          Name: `${config.project}-${config.env}-public-subnet-${i}`,
           Environment: config.env,
           Project: config.project,
         },
       });
 
-      new RouteTableAssociation(this, `public-rta-${index}`, {
+      new RouteTableAssociation(this, `public-rta-${i}`, {
         subnetId: publicSubnet.id,
         routeTableId: publicRouteTable.id,
       });
 
       this.publicSubnets.push(publicSubnet);
-    });
+    }
   }
 }
 
