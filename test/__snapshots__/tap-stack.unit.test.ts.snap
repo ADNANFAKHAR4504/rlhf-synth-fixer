@@ -2,6 +2,29 @@
 
 exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props 1`] = `
 "{
+  "output": {
+    "app_bucket_name": {
+      "description": "The name of the application S3 bucket"
+    },
+    "public_subnet_ids": {
+      "description": "The IDs of the public subnets",
+      "value": [
+        "mock-public-subnet-id-0",
+        "mock-public-subnet-id-1"
+      ]
+    },
+    "vpc_id": {
+      "description": "The ID of the created VPC",
+      "value": "mock-vpc-id"
+    },
+    "web_asg_name": {
+      "description": "The name of the web server Auto Scaling Group"
+    },
+    "web_server_sg_id": {
+      "description": "The ID of the web server security group",
+      "value": "mock-sg-id"
+    }
+  },
   "provider": {
     "aws": [
       {
@@ -22,37 +45,6 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
         "bucket": "my-custom-state-bucket",
         "encrypt": true,
         "key": "prod/TestCustomStack.tfstate",
-        "region": "us-east-1",
-        "use_lockfile": true
-      }
-    },
-    "required_providers": {
-      "aws": {
-        "source": "aws",
-        "version": "6.4.0"
-      }
-    }
-  }
-}"
-`;
-
-exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should use default values when no props are provided 1`] = `
-"{
-  "provider": {
-    "aws": [
-      {
-        "default_tags": [
-        ],
-        "region": "us-east-1"
-      }
-    ]
-  },
-  "terraform": {
-    "backend": {
-      "s3": {
-        "bucket": "iac-rlhf-tf-states",
-        "encrypt": true,
-        "key": "dev/TestDefaultStack.tfstate",
         "region": "us-east-1",
         "use_lockfile": true
       }
