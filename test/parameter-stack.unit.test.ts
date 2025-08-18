@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ParameterStack } from '../lib/parameter-stack';
 import { RdsStack } from '../lib/rds-stack';
 
@@ -51,7 +51,7 @@ describe('ParameterStack', () => {
           value: mockRdsStack.dbEndpoint,
           description: 'RDS database endpoint',
           tier: 'Standard',
-          allowedPattern: '^[a-zA-Z0-9\\.-]+$',
+          allowedPattern: '^[a-zA-Z0-9\\.:-]+$',
           tags: expect.objectContaining({
             Name: 'tap-db-endpoint-param-test',
             Component: 'Database',

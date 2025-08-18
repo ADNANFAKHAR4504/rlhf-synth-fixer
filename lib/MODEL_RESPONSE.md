@@ -471,7 +471,7 @@ export class ParameterStack extends pulumi.ComponentResource {
       description: 'RDS database endpoint',
       // 2024 feature: Enhanced secret rotation capabilities
       tier: 'Standard',
-      allowedPattern: '^[a-zA-Z0-9\\.-]+$',
+              allowedPattern: '^[a-zA-Z0-9\\.:-]+$',
       tags: {
         Name: `tap-db-endpoint-param-${environmentSuffix}`,
         Component: 'Database',

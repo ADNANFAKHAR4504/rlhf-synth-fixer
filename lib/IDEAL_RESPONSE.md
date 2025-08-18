@@ -460,7 +460,7 @@ export class ParameterStack extends pulumi.ComponentResource {
         value: args.rdsStack.dbEndpoint,
         description: 'RDS database endpoint',
         tier: 'Standard',
-        allowedPattern: '^[a-zA-Z0-9\\.-]+$',
+        allowedPattern: '^[a-zA-Z0-9\\.:-]+$',
         tags: {
           Name: `tap-db-endpoint-param-${environmentSuffix}`,
           Component: 'Database',

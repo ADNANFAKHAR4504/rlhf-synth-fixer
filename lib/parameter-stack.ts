@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { RdsStack } from './rds-stack';
 
 export interface ParameterStackArgs {
@@ -35,7 +35,7 @@ export class ParameterStack extends pulumi.ComponentResource {
         description: 'RDS database endpoint',
         // 2024 feature: Enhanced secret rotation capabilities
         tier: 'Standard',
-        allowedPattern: '^[a-zA-Z0-9\\.-]+$',
+        allowedPattern: '^[a-zA-Z0-9\\.:-]+$',
         tags: {
           Name: `tap-db-endpoint-param-${environmentSuffix}`,
           Component: 'Database',
