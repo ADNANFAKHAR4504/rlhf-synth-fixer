@@ -945,4 +945,6 @@ output "s3_data_bucket" { value = aws_s3_bucket.data.bucket }
 output "s3_config_bucket" { value = aws_s3_bucket.config.bucket }
 output "sns_topic_arn" { value = aws_sns_topic.alerts.arn }
 output "vpc_flow_log_group" { value = aws_cloudwatch_log_group.vpc_flow.name }
-output "config_recorder_name" { value = aws_config_configuration_recorder.main.name }
+output "config_recorder_name" {
+  value = var.enable_config ? aws_config_configuration_recorder.main[0].name : null
+}
