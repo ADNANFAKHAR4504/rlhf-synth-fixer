@@ -77,7 +77,7 @@ output "s3_data_bucket_arn" {
 
 output "s3_logs_bucket_name" {
   description = "Name of the S3 logs bucket"
-  value       = aws_s3_bucket.logs.bucket
+  value       = aws_s3_bucket.logs_bucket.bucket
 }
 
 output "s3_logs_bucket_arn" {

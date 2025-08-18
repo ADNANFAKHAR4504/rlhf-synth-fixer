@@ -15,7 +15,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
   let tf: TerraformOutputs;
 
   beforeAll(() => {
-    const tfOutputPath = path.resolve(process.cwd(), "tf-output.json");
+    const tfOutputPath = path.resolve(process.cwd(), "cfn-outputs", "all-outputs.json");
     const raw = readFileSync(tfOutputPath, "utf8");
     tf = JSON.parse(raw);
   });

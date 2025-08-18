@@ -68,18 +68,6 @@ data "aws_eip" "nat" {
 }
 
 # NAT Gateway
-resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.main.id
-  subnet_id     = aws_subnet.public.id
-
-  tags = {
-    Name = "${var.project_name}-nat-gateway"
-  }
-}
-resource "aws_eip" "main" {
-  count  = length(var.public_subnet_cidrs)
-  domain = "vpc"
-}
 
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
