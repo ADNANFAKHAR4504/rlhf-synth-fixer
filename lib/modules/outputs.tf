@@ -92,7 +92,7 @@ output "kms_key_id" {
 
 output "kms_key_arn" {
   description = "ARN of the KMS key"
-  value       = aws_kms_key.main.arn
+  value       = data.aws_kms_key.main.arn
 }
 
 output "vpc_endpoint_s3_id" {
