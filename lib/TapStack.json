@@ -687,7 +687,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${SecureS3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
                                     }
                                 },
                                 {
@@ -696,7 +696,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "SecureS3Bucket"
+                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
                                     }
                                 },
                                 {

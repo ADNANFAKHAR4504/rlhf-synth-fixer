@@ -372,11 +372,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${SecureS3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref SecureS3Bucket
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
