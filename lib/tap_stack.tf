@@ -32,9 +32,7 @@ locals {
     ManagedBy   = "terraform"
     Suffix      = "291295"
   }
-  key_name = "nova-key-291295"
-
-  # Add timestamp to make resource names unique for redeployments
+  key_name      = "nova-key-291295"
   deployment_id = "291295"
 }
 
@@ -78,20 +76,17 @@ data "aws_ami" "amazon_linux_2_secondary" {
 # GLOBAL & SHARED RESOURCES
 # ------------------------------------------------------------------------------
 
-# Generate secure random password for RDS
 resource "random_password" "db_password" {
   length           = 16
   special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
-# Generate EC2 key pair automatically
 resource "tls_private_key" "nova_key" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
-# Save the generated private key to a local file
 resource "local_file" "nova_key_pem" {
   content         = tls_private_key.nova_key.private_key_pem
   filename        = "${local.key_name}.pem"
@@ -102,7 +97,6 @@ resource "local_file" "nova_key_pem" {
 # PRIMARY REGION (us-east-1) RESOURCES
 # ------------------------------------------------------------------------------
 
-# Create the AWS key pair resource in the primary region
 resource "aws_key_pair" "primary" {
   provider   = aws.primary
   key_name   = local.key_name
@@ -148,7 +142,6 @@ resource "aws_internet_gateway" "primary" {
   tags     = merge(local.common_tags, { Name = "igw-primary-${local.deployment_id}" })
 }
 
-# NAT Gateway for private subnets (best practice for RDS access)
 resource "aws_eip" "primary_nat" {
   provider = aws.primary
   domain   = "vpc"
@@ -180,7 +173,6 @@ resource "aws_route_table" "primary_private" {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.primary.id
   }
-  # Route for VPC peering
   route {
     cidr_block                = "10.2.0.0/16"
     vpc_peering_connection_id = aws_vpc_peering_connection.peer.id
@@ -209,7 +201,6 @@ resource "aws_security_group" "primary_alb" {
   name_prefix = "alb-primary-"
   description = "Allow HTTP/HTTPS inbound traffic to ALB"
   vpc_id      = aws_vpc.primary.id
-
   ingress {
     from_port   = 80
     to_port     = 80
@@ -217,7 +208,6 @@ resource "aws_security_group" "primary_alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow HTTP from anywhere"
   }
-
   ingress {
     from_port   = 443
     to_port     = 443
@@ -225,7 +215,6 @@ resource "aws_security_group" "primary_alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow HTTPS from anywhere"
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -233,11 +222,9 @@ resource "aws_security_group" "primary_alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-
   lifecycle {
     create_before_destroy = true
   }
-
   tags = merge(local.common_tags, { Name = "sg-alb-primary-${local.deployment_id}" })
 }
 
@@ -246,7 +233,6 @@ resource "aws_security_group" "primary_ec2" {
   name_prefix = "ec2-primary-"
   description = "Allow web and SSH traffic"
   vpc_id      = aws_vpc.primary.id
-
   ingress {
     from_port       = 80
     to_port         = 80
@@ -254,7 +240,6 @@ resource "aws_security_group" "primary_ec2" {
     security_groups = [aws_security_group.primary_alb.id]
     description     = "Allow HTTP from ALB"
   }
-
   ingress {
     from_port   = 22
     to_port     = 22
@@ -262,7 +247,6 @@ resource "aws_security_group" "primary_ec2" {
     cidr_blocks = var.allowed_ssh_cidr
     description = "Allow SSH from specific IPs"
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -270,11 +254,9 @@ resource "aws_security_group" "primary_ec2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-
   lifecycle {
     create_before_destroy = true
   }
-
   tags = merge(local.common_tags, { Name = "sg-ec2-primary-${local.deployment_id}" })
 }
 
@@ -283,7 +265,6 @@ resource "aws_security_group" "primary_rds" {
   name_prefix = "rds-primary-"
   description = "Allow PostgreSQL traffic from EC2 instances"
   vpc_id      = aws_vpc.primary.id
-
   ingress {
     from_port       = 5432
     to_port         = 5432
@@ -291,7 +272,6 @@ resource "aws_security_group" "primary_rds" {
     security_groups = [aws_security_group.primary_ec2.id]
     description     = "Allow PostgreSQL from EC2 instances"
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -299,11 +279,9 @@ resource "aws_security_group" "primary_rds" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-
   lifecycle {
     create_before_destroy = true
   }
-
   tags = merge(local.common_tags, { Name = "sg-rds-primary-${local.deployment_id}" })
 }
 
@@ -385,16 +363,6 @@ resource "aws_launch_template" "primary_app" {
 
   vpc_security_group_ids = [aws_security_group.primary_ec2.id]
 
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Primary Region Instance - ${local.deployment_id}</h1>" > /var/www/html/index.html
-  EOF
-  )
-
   tag_specifications {
     resource_type = "instance"
     tags          = merge(local.common_tags, { Name = "ec2-app-primary-${local.deployment_id}" })
@@ -410,12 +378,10 @@ resource "aws_autoscaling_group" "primary_app" {
   max_size            = 4
   min_size            = 1
   vpc_zone_identifier = [for subnet in aws_subnet.primary_private : subnet.id]
-
   launch_template {
     id      = aws_launch_template.primary_app.id
     version = "$Latest"
   }
-
   target_group_arns         = [aws_lb_target_group.primary_app.arn]
   health_check_type         = "ELB"
   health_check_grace_period = 300
@@ -444,8 +410,7 @@ resource "aws_lb" "primary_app" {
   enable_deletion_protection       = false
   enable_http2                     = true
   enable_cross_zone_load_balancing = true
-
-  tags = merge(local.common_tags, { Name = "alb-app-primary-${local.deployment_id}" })
+  tags                             = merge(local.common_tags, { Name = "alb-app-primary-${local.deployment_id}" })
 }
 
 resource "aws_lb_target_group" "primary_app" {
@@ -454,7 +419,6 @@ resource "aws_lb_target_group" "primary_app" {
   port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.primary.id
-
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -464,10 +428,8 @@ resource "aws_lb_target_group" "primary_app" {
     path                = "/"
     matcher             = "200"
   }
-
   deregistration_delay = 300
-
-  tags = merge(local.common_tags, { Name = "tg-app-primary-${local.deployment_id}" })
+  tags                 = merge(local.common_tags, { Name = "tg-app-primary-${local.deployment_id}" })
 }
 
 resource "aws_lb_listener" "primary_app_http" {
@@ -475,7 +437,6 @@ resource "aws_lb_listener" "primary_app_http" {
   load_balancer_arn = aws_lb.primary_app.arn
   port              = "80"
   protocol          = "HTTP"
-
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.primary_app.arn
@@ -492,38 +453,36 @@ resource "aws_db_subnet_group" "primary_rds" {
 }
 
 resource "aws_db_instance" "primary_db" {
-  provider                = aws.primary
-  identifier_prefix       = "rds-postgres-primary-"
-  allocated_storage       = 20
-  max_allocated_storage   = 100
-  storage_type            = "gp3"
-  storage_encrypted       = true
-  engine                  = "postgres"
-  engine_version          = "15.4"
-  instance_class          = "db.t3.micro"
-  db_name                 = "novadb"
-  username                = var.db_username
-  password                = random_password.db_password.result
-  db_subnet_group_name    = aws_db_subnet_group.primary_rds.name
-  vpc_security_group_ids  = [aws_security_group.primary_rds.id]
-  multi_az                = true
-  backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-  skip_final_snapshot     = true
-  deletion_protection     = false
-  publicly_accessible     = false
+  provider              = aws.primary
+  identifier_prefix     = "rds-postgres-primary-"
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  engine                = "postgres"
 
+  engine_version                  = "15.7"
+  instance_class                  = "db.t3.micro"
+  db_name                         = "novadb"
+  username                        = var.db_username
+  password                        = random_password.db_password.result
+  db_subnet_group_name            = aws_db_subnet_group.primary_rds.name
+  vpc_security_group_ids          = [aws_security_group.primary_rds.id]
+  multi_az                        = true
+  backup_retention_period         = 7
+  backup_window                   = "03:00-04:00"
+  maintenance_window              = "sun:04:00-sun:05:00"
+  skip_final_snapshot             = true
+  deletion_protection             = false
+  publicly_accessible             = false
   enabled_cloudwatch_logs_exports = ["postgresql"]
-
-  tags = merge(local.common_tags, { Name = "rds-postgres-primary-${local.deployment_id}" })
+  tags                            = merge(local.common_tags, { Name = "rds-postgres-primary-${local.deployment_id}" })
 }
 
 # ------------------------------------------------------------------------------
 # SECONDARY REGION (us-west-2) RESOURCES
 # ------------------------------------------------------------------------------
 
-# Create the AWS key pair resource in the secondary region
 resource "aws_key_pair" "secondary" {
   provider   = aws.secondary
   key_name   = local.key_name
@@ -569,7 +528,6 @@ resource "aws_internet_gateway" "secondary" {
   tags     = merge(local.common_tags, { Name = "igw-secondary-${local.deployment_id}" })
 }
 
-# NAT Gateway for private subnets
 resource "aws_eip" "secondary_nat" {
   provider = aws.secondary
   domain   = "vpc"
@@ -601,7 +559,6 @@ resource "aws_route_table" "secondary_private" {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary.id
   }
-  # Route for VPC peering
   route {
     cidr_block                = "10.1.0.0/16"
     vpc_peering_connection_id = aws_vpc_peering_connection.peer.id
@@ -630,7 +587,6 @@ resource "aws_security_group" "secondary_alb" {
   name_prefix = "alb-secondary-"
   description = "Allow HTTP/HTTPS inbound traffic to ALB"
   vpc_id      = aws_vpc.secondary.id
-
   ingress {
     from_port   = 80
     to_port     = 80
@@ -638,7 +594,6 @@ resource "aws_security_group" "secondary_alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow HTTP from anywhere"
   }
-
   ingress {
     from_port   = 443
     to_port     = 443
@@ -646,7 +601,6 @@ resource "aws_security_group" "secondary_alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow HTTPS from anywhere"
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -654,11 +608,9 @@ resource "aws_security_group" "secondary_alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-
   lifecycle {
     create_before_destroy = true
   }
-
   tags = merge(local.common_tags, { Name = "sg-alb-secondary-${local.deployment_id}" })
 }
 
@@ -667,7 +619,6 @@ resource "aws_security_group" "secondary_ec2" {
   name_prefix = "ec2-secondary-"
   description = "Allow web and SSH traffic"
   vpc_id      = aws_vpc.secondary.id
-
   ingress {
     from_port       = 80
     to_port         = 80
@@ -675,7 +626,6 @@ resource "aws_security_group" "secondary_ec2" {
     security_groups = [aws_security_group.secondary_alb.id]
     description     = "Allow HTTP from ALB"
   }
-
   ingress {
     from_port   = 22
     to_port     = 22
@@ -683,7 +633,6 @@ resource "aws_security_group" "secondary_ec2" {
     cidr_blocks = var.allowed_ssh_cidr
     description = "Allow SSH from specific IPs"
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -691,11 +640,9 @@ resource "aws_security_group" "secondary_ec2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-
   lifecycle {
     create_before_destroy = true
   }
-
   tags = merge(local.common_tags, { Name = "sg-ec2-secondary-${local.deployment_id}" })
 }
 
@@ -707,7 +654,6 @@ resource "aws_launch_template" "secondary_app" {
   image_id      = data.aws_ami.amazon_linux_2_secondary.id
   instance_type = "t2.micro"
   key_name      = aws_key_pair.secondary.key_name
-
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
@@ -717,28 +663,14 @@ resource "aws_launch_template" "secondary_app" {
       delete_on_termination = true
     }
   }
-
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
-
   vpc_security_group_ids = [aws_security_group.secondary_ec2.id]
-
-  user_data = base64encode(<<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Secondary Region Instance - ${local.deployment_id}</h1>" > /var/www/html/index.html
-  EOF
-  )
-
   tag_specifications {
     resource_type = "instance"
     tags          = merge(local.common_tags, { Name = "ec2-app-secondary-${local.deployment_id}" })
   }
-
   tags = merge(local.common_tags, { Name = "lt-app-secondary-${local.deployment_id}" })
 }
 
@@ -749,16 +681,13 @@ resource "aws_autoscaling_group" "secondary_app" {
   max_size            = 4
   min_size            = 1
   vpc_zone_identifier = [for subnet in aws_subnet.secondary_private : subnet.id]
-
   launch_template {
     id      = aws_launch_template.secondary_app.id
     version = "$Latest"
   }
-
   target_group_arns         = [aws_lb_target_group.secondary_app.arn]
   health_check_type         = "ELB"
   health_check_grace_period = 300
-
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -767,7 +696,6 @@ resource "aws_autoscaling_group" "secondary_app" {
       propagate_at_launch = true
     }
   }
-
   lifecycle {
     create_before_destroy = true
   }
@@ -783,8 +711,7 @@ resource "aws_lb" "secondary_app" {
   enable_deletion_protection       = false
   enable_http2                     = true
   enable_cross_zone_load_balancing = true
-
-  tags = merge(local.common_tags, { Name = "alb-app-secondary-${local.deployment_id}" })
+  tags                             = merge(local.common_tags, { Name = "alb-app-secondary-${local.deployment_id}" })
 }
 
 resource "aws_lb_target_group" "secondary_app" {
@@ -793,7 +720,6 @@ resource "aws_lb_target_group" "secondary_app" {
   port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.secondary.id
-
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -803,10 +729,8 @@ resource "aws_lb_target_group" "secondary_app" {
     path                = "/"
     matcher             = "200"
   }
-
   deregistration_delay = 300
-
-  tags = merge(local.common_tags, { Name = "tg-app-secondary-${local.deployment_id}" })
+  tags                 = merge(local.common_tags, { Name = "tg-app-secondary-${local.deployment_id}" })
 }
 
 resource "aws_lb_listener" "secondary_app_http" {
@@ -814,7 +738,6 @@ resource "aws_lb_listener" "secondary_app_http" {
   load_balancer_arn = aws_lb.secondary_app.arn
   port              = "80"
   protocol          = "HTTP"
-
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secondary_app.arn
@@ -831,11 +754,9 @@ resource "aws_vpc_peering_connection" "peer" {
   peer_vpc_id   = aws_vpc.secondary.id
   vpc_id        = aws_vpc.primary.id
   peer_region   = "us-west-2"
-
-  tags = merge(local.common_tags, { Name = "vpc-peering-primary-to-secondary-${local.deployment_id}" })
+  tags          = merge(local.common_tags, { Name = "vpc-peering-primary-to-secondary-${local.deployment_id}" })
 }
 
-# Accepter for the VPC peering connection in the secondary region
 resource "aws_vpc_peering_connection_accepter" "peer" {
   provider                  = aws.secondary
   vpc_peering_connection_id = aws_vpc_peering_connection.peer.id
@@ -876,14 +797,11 @@ resource "aws_route53_record" "failover_primary" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${var.domain_name}"
   type    = "A"
-
   failover_routing_policy {
     type = "PRIMARY"
   }
-
   set_identifier  = "primary-alb-failover-${local.deployment_id}"
   health_check_id = aws_route53_health_check.primary.id
-
   alias {
     name                   = aws_lb.primary_app.dns_name
     zone_id                = aws_lb.primary_app.zone_id
@@ -895,14 +813,11 @@ resource "aws_route53_record" "failover_secondary" {
   zone_id = aws_route53_zone.main.zone_id
   name    = "app.${var.domain_name}"
   type    = "A"
-
   failover_routing_policy {
     type = "SECONDARY"
   }
-
   set_identifier  = "secondary-alb-failover-${local.deployment_id}"
   health_check_id = aws_route53_health_check.secondary.id
-
   alias {
     name                   = aws_lb.secondary_app.dns_name
     zone_id                = aws_lb.secondary_app.zone_id
@@ -914,7 +829,6 @@ resource "aws_route53_record" "failover_secondary" {
 # GLOBAL & MONITORING RESOURCES
 # ------------------------------------------------------------------------------
 
-# S3 Bucket for artifacts and logs
 resource "aws_s3_bucket" "artifacts" {
   bucket_prefix = "nova-artifacts-${data.aws_caller_identity.current.account_id}-"
   tags          = merge(local.common_tags, { Name = "s3-artifacts-${local.deployment_id}" })
@@ -944,7 +858,6 @@ resource "aws_s3_bucket_public_access_block" "artifacts" {
   restrict_public_buckets = true
 }
 
-# CloudWatch Log Group for application logs
 resource "aws_cloudwatch_log_group" "app_logs" {
   provider          = aws.primary
   name_prefix       = "/app/nova-project-logs-"
@@ -952,7 +865,6 @@ resource "aws_cloudwatch_log_group" "app_logs" {
   tags              = merge(local.common_tags, { Name = "cw-log-group-app-${local.deployment_id}" })
 }
 
-# CloudWatch Alarm for high CPU on primary EC2 instances
 resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
   provider            = aws.primary
   alarm_name          = "alarm-primary-cpu-high-${local.deployment_id}"
@@ -964,11 +876,9 @@ resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
   period              = 120
   statistic           = "Average"
   threshold           = 80
-
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.primary_app.name
   }
-
   tags = merge(local.common_tags, { Name = "cw-alarm-cpu-primary-${local.deployment_id}" })
 }
 
@@ -979,7 +889,6 @@ resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "${path.module}/cost_saver_lambda.zip"
-
   source {
     content  = <<-EOT
 import boto3
@@ -1047,7 +956,8 @@ resource "aws_cloudwatch_event_rule" "daily_shutdown" {
   provider            = aws.primary
   name_prefix         = "rule-daily-shutdown-"
   description         = "Triggers cost saver Lambda every night at midnight UTC"
-  schedule_expression = "cron(0 0 * * ? *)" # Midnight UTC
+  schedule_expression = "cron(0 0 * * ? *)"
+  force_destroy       = true
   tags                = merge(local.common_tags, { Name = "cw-rule-daily-shutdown-${local.deployment_id}" })
 }
 
@@ -1083,17 +993,17 @@ output "secondary_alb_dns" {
 
 output "rds_endpoint" {
   description = "RDS endpoint"
-  value       = aws_db_instance.primary_db.endpoint # Adjust resource name as needed
+  value       = aws_db_instance.primary_db.endpoint
 }
 
 output "s3_bucket_name" {
   description = "S3 bucket name"
-  value       = aws_s3_bucket.artifacts.bucket # Adjust resource name as needed
+  value       = aws_s3_bucket.artifacts.bucket
 }
 
 output "private_key_path" {
   description = "Path to the private key file"
-  value       = local_file.nova_key_pem.filename # Adjust resource name as needed
+  value       = local_file.nova_key_pem.filename
 }
 
 output "primary_alb_name" {
@@ -1108,25 +1018,30 @@ output "secondary_alb_name" {
 
 output "primary_asg_name" {
   description = "Name of the primary Auto Scaling Group"
-  value       = aws_autoscaling_group.primary_app.name # Adjust resource name as needed
+  value       = aws_autoscaling_group.primary_app.name
 }
 
 output "secondary_asg_name" {
   description = "Name of the secondary Auto Scaling Group"
-  value       = aws_autoscaling_group.secondary_app.name # Adjust resource name as needed
+  value       = aws_autoscaling_group.secondary_app.name
 }
 
 output "primary_db_identifier" {
   description = "Primary database identifier"
-  value       = aws_db_instance.primary_db.identifier # Adjust resource name as needed
+  value       = aws_db_instance.primary_db.identifier
 }
 
 output "lambda_function_name" {
   description = "Lambda function name"
-  value       = aws_lambda_function.cost_saver.function_name # Adjust resource name as needed
+  value       = aws_lambda_function.cost_saver.function_name
 }
 
 output "event_rule_name" {
   description = "EventBridge rule name"
-  value       = aws_cloudwatch_event_rule.daily_shutdown.name # Adjust resource name as needed
+  value       = aws_cloudwatch_event_rule.daily_shutdown.name
+}
+
+output "application_url" {
+  description = "The Route 53 URL for the application."
+  value       = "http://app.${var.domain_name}"
 }
