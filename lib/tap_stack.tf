@@ -30,6 +30,12 @@ variable "project_name" {
   default     = "aws-infrastructure"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming"
+  type        = string
+  default     = "dev"
+}
+
 variable "environment" {
   description = "Environment name (development, staging, production)"
   type        = string
@@ -201,14 +207,15 @@ data "aws_ami" "amazon_linux_2" {
 locals {
   # Common tags for all resources
   common_tags = {
-    Environment = var.environment
-    Project     = var.project_name
-    ManagedBy   = "terraform"
-    Owner       = "devops-team"
+    Environment       = var.environment
+    Project           = var.project_name
+    ManagedBy         = "terraform"
+    Owner             = "devops-team"
+    EnvironmentSuffix = var.environment_suffix
   }
 
   # Name prefix for consistent resource naming
-  name_prefix = "${var.project_name}-${var.environment}"
+  name_prefix = "tap-${var.environment_suffix}"
 
   # Availability zones
   availability_zones = ["us-east-1a", "us-east-1b"]
@@ -231,7 +238,7 @@ locals {
       instance_type       = "t3.medium"
       db_instance_class   = "db.t3.medium"
       enable_multi_az     = true
-      deletion_protection = true
+      deletion_protection = false # Always allow deletion for testing
     }
   }
 
@@ -371,7 +378,8 @@ resource "random_password" "db_password" {
 
 # Secrets Manager for database credentials
 resource "aws_secretsmanager_secret" "database" {
-  name = "${local.name_prefix}-db-secret"
+  name                    = "${local.name_prefix}-db-secret"
+  recovery_window_in_days = 0 # Force immediate deletion
 
   tags = local.common_tags
 }
@@ -648,7 +656,7 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection = var.environment == "production"
+  enable_deletion_protection = false # Always allow deletion for testing
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
@@ -748,10 +756,10 @@ resource "aws_db_instance" "main" {
 
   multi_az = local.config.enable_multi_az
 
-  skip_final_snapshot       = false
+  skip_final_snapshot       = true # Skip final snapshot for testing
   final_snapshot_identifier = "${local.name_prefix}-db-final-snapshot"
 
-  deletion_protection = local.config.deletion_protection
+  deletion_protection = false # Always allow deletion for testing
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-database"
