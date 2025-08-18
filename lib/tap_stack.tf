@@ -455,7 +455,7 @@ resource "aws_db_instance" "primary" {
   # Basic Configuration
   identifier     = "mysql-primary-${var.environment_suffix}"
   engine         = "mysql"
-  engine_version = "8.0.34"
+  engine_version = "8.0.35"
   instance_class = var.db_instance_class
 
   # Storage Configuration
@@ -512,7 +512,7 @@ resource "aws_db_instance" "secondary" {
   # Basic Configuration
   identifier     = "mysql-secondary-${var.environment_suffix}"
   engine         = "mysql"
-  engine_version = "8.0.34"
+  engine_version = "8.0.35"
   instance_class = var.db_instance_class
 
   # Storage Configuration
