@@ -207,10 +207,10 @@
                             "Action": "s3:*",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${SecureS3Bucket}/*"
+                                    "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
                                 },
                                 {
-                                    "Fn::Sub": "${SecureS3Bucket}"
+                                    "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
                                 }
                             ],
                             "Condition": {
@@ -225,7 +225,7 @@
                             "Principal": "*",
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${SecureS3Bucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
                             },
                             "Condition": {
                                 "StringNotEquals": {

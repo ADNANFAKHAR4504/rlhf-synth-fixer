@@ -152,8 +152,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureS3Bucket}/*'
-              - !Sub '${SecureS3Bucket}'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -161,7 +161,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub '${SecureS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'AES256'
