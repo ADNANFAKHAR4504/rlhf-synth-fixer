@@ -1,5 +1,6 @@
 """Integration tests for TapStack."""
 from cdktf import App
+from lib.tap_stack import TapStack
 
 
 class TestTurnAroundPromptAPIIntegrationTests:
@@ -8,5 +9,7 @@ class TestTurnAroundPromptAPIIntegrationTests:
   def test_terraform_configuration_synthesis(self):
     """Test that stack instantiates properly."""
     app = App()
-    assert app is not None
+    stack = TapStack(app, "integration-test", environment_suffix="test")
+    assert stack is not None
+    assert hasattr(stack, 'bucket')
 
