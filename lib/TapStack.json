@@ -145,6 +145,15 @@
             "Type": "String",
             "Default": "",
             "Description": "Optional Secrets Manager secret name for DB password (if blank, a new secret will be created)"
+        },
+        "UseExistingConfigRecorder": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If true, assume an existing AWS Config recorder (set to true if you already have one)"
         }
     },
     "Mappings": {
@@ -257,6 +266,14 @@
                         ""
                     ]
                 }
+            ]
+        },
+        "CreateConfigRecorder": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingConfigRecorder"
+                },
+                "false"
             ]
         }
     },
@@ -1269,6 +1286,7 @@
         },
         "ConfigRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "CreateConfigRecorder",
             "Properties": {
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -1297,6 +1315,7 @@
         },
         "ConfigRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "CreateConfigRecorder",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${CompanyPrefix}-config-recorder"
@@ -1315,6 +1334,7 @@
         },
         "ConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "CreateConfigRecorder",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${CompanyPrefix}-config-delivery"
@@ -1643,7 +1663,13 @@
         "ConfigRecorderName": {
             "Description": "Config Recorder Name",
             "Value": {
-                "Ref": "ConfigRecorder"
+                "Fn::If": [
+                    "CreateConfigRecorder",
+                    {
+                        "Ref": "ConfigRecorder"
+                    },
+                    "Using existing Config Recorder"
+                ]
             }
         },
         "S3BucketCleanupFunctionName": {

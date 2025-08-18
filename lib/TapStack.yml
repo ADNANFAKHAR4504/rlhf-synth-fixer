@@ -119,6 +119,12 @@ Parameters:
     Default: ''
     Description: 'Optional Secrets Manager secret name for DB password (if blank, a new secret will be created)'
 
+  UseExistingConfigRecorder:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'If true, assume an existing AWS Config recorder (set to true if you already have one)'
+
 Mappings:
   RegionMap:
     us-west-2:
@@ -139,6 +145,7 @@ Conditions:
   CreateRDSFlag: !Equals [!Ref CreateRDS, 'true']
   HasCloudTrailBucketName: !Not [!Equals [!Ref CloudTrailBucketName, '']]
   HasDBPasswordSecretName: !Not [!Equals [!Ref DBPasswordSecretName, '']]
+  CreateConfigRecorder: !Equals [!Ref UseExistingConfigRecorder, 'false']
 
 Resources:
   #############################
@@ -628,6 +635,7 @@ Resources:
   #############################
   ConfigRole:
     Type: AWS::IAM::Role
+    Condition: CreateConfigRecorder
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -645,6 +653,7 @@ Resources:
 
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateConfigRecorder
     Properties:
       Name: !Sub '${CompanyPrefix}-config-recorder'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -654,6 +663,7 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: CreateConfigRecorder
     Properties:
       Name: !Sub '${CompanyPrefix}-config-delivery'
       S3BucketName: !Ref ProdTrailBucket
@@ -855,7 +865,12 @@ Outputs:
 
   ConfigRecorderName:
     Description: 'Config Recorder Name'
-    Value: !Ref ConfigRecorder
+    Value:
+      !If [
+        CreateConfigRecorder,
+        !Ref ConfigRecorder,
+        'Using existing Config Recorder',
+      ]
 
   S3BucketCleanupFunctionName:
     Description: 'S3 Bucket Cleanup Lambda Function Name'

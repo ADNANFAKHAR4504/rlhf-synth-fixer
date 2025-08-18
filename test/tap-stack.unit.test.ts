@@ -51,6 +51,7 @@ describe('TapStack CloudFormation Template', () => {
       'CreateRDS',
       'DBMasterUser',
       'DBPasswordSecretName',
+      'UseExistingConfigRecorder',
     ];
 
     test('should have all required parameters', () => {
@@ -95,6 +96,7 @@ describe('TapStack CloudFormation Template', () => {
       'CreateRDSFlag',
       'HasCloudTrailBucketName',
       'HasDBPasswordSecretName',
+      'CreateConfigRecorder',
     ];
 
     test('should have all required conditions', () => {
@@ -237,6 +239,7 @@ describe('TapStack CloudFormation Template', () => {
       const configRole = template.Resources.ConfigRole;
       expect(configRole).toBeDefined();
       expect(configRole.Type).toBe('AWS::IAM::Role');
+      expect(configRole.Condition).toBe('CreateConfigRecorder');
       expect(configRole.Properties.ManagedPolicyArns).toContain(
         'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
       );
@@ -343,6 +346,7 @@ describe('TapStack CloudFormation Template', () => {
       const configRecorder = template.Resources.ConfigRecorder;
       expect(configRecorder).toBeDefined();
       expect(configRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
+      expect(configRecorder.Condition).toBe('CreateConfigRecorder');
       expect(configRecorder.Properties.RecordingGroup.AllSupported).toBe(true);
     });
 
@@ -350,6 +354,7 @@ describe('TapStack CloudFormation Template', () => {
       const deliveryChannel = template.Resources.ConfigDeliveryChannel;
       expect(deliveryChannel).toBeDefined();
       expect(deliveryChannel.Type).toBe('AWS::Config::DeliveryChannel');
+      expect(deliveryChannel.Condition).toBe('CreateConfigRecorder');
       expect(deliveryChannel.Properties.S3BucketName).toEqual({
         Ref: 'ProdTrailBucket',
       });
