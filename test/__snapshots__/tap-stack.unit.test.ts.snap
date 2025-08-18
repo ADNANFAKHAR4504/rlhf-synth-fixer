@@ -1,0 +1,101 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should instantiate with custom props 1`] = `
+"{
+  "output": {
+    "ec2InstanceId": {
+      "value": "mock-instance-id"
+    },
+    "ec2PrivateIp": {
+      "value": "mock-private-ip"
+    },
+    "privateSubnetId": {
+      "value": "mock-private-subnet-id"
+    },
+    "rdsInstanceEndpoint": {
+      "sensitive": true,
+      "value": "mock-rds-endpoint"
+    },
+    "s3BucketName": {
+      "value": "mock-s3-bucket"
+    },
+    "vpcId": {
+      "value": "mock-vpc-id"
+    }
+  },
+  "provider": {
+    "aws": [
+      {
+        "region": "us-west-2"
+      }
+    ]
+  },
+  "terraform": {
+    "backend": {
+      "s3": {
+        "bucket": "my-custom-state-bucket",
+        "encrypt": true,
+        "key": "prod/TestCustomStack.tfstate",
+        "region": "us-east-1",
+        "use_lockfile": true
+      }
+    },
+    "required_providers": {
+      "aws": {
+        "source": "aws",
+        "version": "6.4.0"
+      }
+    }
+  }
+}"
+`;
+
+exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should use default values when no props are provided 1`] = `
+"{
+  "output": {
+    "ec2InstanceId": {
+      "value": "mock-instance-id"
+    },
+    "ec2PrivateIp": {
+      "value": "mock-private-ip"
+    },
+    "privateSubnetId": {
+      "value": "mock-private-subnet-id"
+    },
+    "rdsInstanceEndpoint": {
+      "sensitive": true,
+      "value": "mock-rds-endpoint"
+    },
+    "s3BucketName": {
+      "value": "mock-s3-bucket"
+    },
+    "vpcId": {
+      "value": "mock-vpc-id"
+    }
+  },
+  "provider": {
+    "aws": [
+      {
+        "region": "us-east-1"
+      }
+    ]
+  },
+  "terraform": {
+    "backend": {
+      "s3": {
+        "bucket": "iac-rlhf-tf-states",
+        "encrypt": true,
+        "key": "dev/TestDefaultStack.tfstate",
+        "region": "us-east-1",
+        "use_lockfile": true
+      }
+    },
+    "required_providers": {
+      "aws": {
+        "source": "aws",
+        "version": "6.4.0"
+      }
+    }
+  }
+}"
+`;
