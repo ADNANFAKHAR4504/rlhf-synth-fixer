@@ -61,6 +61,7 @@ resource "aws_subnet" "private" {
 
 # Elastic IP for NAT Gateway
 data "aws_eip" "nat" {
+  domain = "vpc"
   filter {
     name   = "tag:Name"
     values = ["${var.project_name}-nat-eip"]
@@ -71,7 +72,7 @@ data "aws_eip" "nat" {
 resource "aws_nat_gateway" "main" {
   allocation_id = data.aws_eip.nat.id
   subnet_id     = aws_subnet.public[0].id
-
+  depends_on    = [aws_internet_gateway.main]
   tags = {
     Name = "${var.project_name}-nat-gateway"
   }
@@ -342,6 +343,15 @@ resource "aws_s3_bucket" "logs" {
   tags = {
     Name = "${var.project_name}-logs-bucket"
     Type = "Logs"
+  }
+}
+
+resource "null_resource" "empty_bucket" {
+  triggers = {
+    bucket = aws_s3_bucket.logs.id
+  }
+  provisioner "local-exec" {
+    command = "aws s3 rm s3://${self.triggers.bucket} --recursive"
   }
 }
 
