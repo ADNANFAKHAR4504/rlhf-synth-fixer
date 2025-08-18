@@ -28,6 +28,43 @@ Parameters:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-2/latest/amzn2-ami-hvm-x86_64-gp2'
 
+Mappings:
+  RegionToCanonicalId:
+    us-east-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    us-east-2:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    us-west-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    us-west-2:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    ap-east-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    ap-south-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    ap-northeast-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    ap-northeast-2:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    ap-southeast-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    ap-southeast-2:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    ca-central-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    eu-central-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    eu-west-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    eu-west-2:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    eu-west-3:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    eu-north-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    sa-east-1:
+      CanonicalId: "d9e8790089e879017ae70f3f2679f2255776d5b0d00f7278b87163c4578b663b"
+    
 Resources:
   # -----------------------------------------------------------------------
   # 1. Security Groups
@@ -80,7 +117,7 @@ Resources:
               - TransitionInDays: 30
                 StorageClass: GLACIER
 
-  # Add a policy to the S3 bucket to allow the ELB to write logs
+  # Add a policy to the S3 bucket to allow the ELB to write logs using the canonical user ID
   S3BucketPolicyForELBAccessLogs:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -88,11 +125,12 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Changed Principal to use a regionalized service principal, which is more robust
-          # and avoids the "endpoint" validation error.
           - Effect: Allow
             Principal:
-              Service: !Sub 'elb.${AWS::Region}.amazonaws.com'
+              CanonicalUser: !FindInMap
+                - RegionToCanonicalId
+                - !Ref "AWS::Region"
+                - CanonicalId
             Action: 's3:PutObject'
             Resource: !Sub '${WebAppLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
 
