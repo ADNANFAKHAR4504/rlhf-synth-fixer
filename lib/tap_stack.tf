@@ -264,6 +264,16 @@ resource "aws_vpc_endpoint" "ssmmessages" {
   tags                = merge(local.common_tags, { Name = "${var.project_name}-ssmmessages-endpoint" })
 }
 
+resource "aws_kms_alias" "state_key_alias" {
+  name          = "alias/prod-state-key"
+  target_key_id = aws_kms_key.state_key.id
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = [name]
+  }
+}
+
 ########################################
 # SECURITY GROUPS
 ########################################
