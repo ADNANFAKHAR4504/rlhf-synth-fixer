@@ -678,149 +678,113 @@ def create_eks_cluster(
     name_prefix: str = "corp"
 ):
   """
-  Create EKS cluster using pulumi_eks package for better reliability
-  Note: This requires pulumi_eks package to be installed
+  Create EKS cluster. 
+  
+  Note: We use native AWS EKS instead of pulumi_eks to avoid deprecated 
+  LaunchConfiguration issues and have better control over managed node groups.
   """
-  try:
-      import pulumi_eks as eks
+  # Add random suffix to avoid naming conflicts
+  cluster_random = random.RandomId(
+      f"{name_prefix}-eks-cluster-random",
+      byte_length=4,
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  cluster_name = pulumi.Output.concat(f"{name_prefix}-eks-cluster-", cluster_random.hex)
+  
+  # Create EKS cluster IAM role
+  eks_role = aws.iam.Role(
+      f"{name_prefix}-eks-cluster-role",
+      assume_role_policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [{
+              "Effect": "Allow",
+              "Principal": {"Service": "eks.amazonaws.com"},
+              "Action": "sts:AssumeRole",
+          }]
+      }),
+      managed_policy_arns=[
+          "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+      ],
+      tags={**tags, "Name": f"{name_prefix}-eks-cluster-role"},
+      opts=ResourceOptions(provider=provider)
+  )
 
-      # Create EKS cluster using pulumi_eks package
-      # Add random suffix to avoid naming conflicts
-      cluster_random = random.RandomId(
-          f"{name_prefix}-eks-cluster-random",
-          byte_length=4,
-          opts=ResourceOptions(provider=provider)
-      )
-      
-      cluster_name = pulumi.Output.concat(f"{name_prefix}-eks-cluster-", cluster_random.hex)
-      
-      cluster = eks.Cluster(
-          f"{name_prefix}-eks-cluster",
-          name=cluster_name,
-          version="1.29",
-          vpc_id=eks_cluster_sg.vpc_id,
-          public_subnet_ids=subnet_ids[:2],  # First 2 subnets as public
-          private_subnet_ids=subnet_ids[2:],  # Remaining as private
-          public_access_cidrs=["0.0.0.0/0"],
-          desired_capacity=1,
-          min_size=1,
-          max_size=2,
-          instance_type="t3.medium",
-          enabled_cluster_log_types=[
-              "api", "audit", "authenticator"
-          ],
-          tags=tags,
-          opts=ResourceOptions(provider=provider)
-      )
-      
-      return cluster
-      
-  except ImportError:
-      # Fallback to basic AWS EKS if pulumi_eks is not available
-      pulumi.log.warn("pulumi_eks not available, using basic AWS EKS")
-      
-      # Add random suffix to avoid naming conflicts
-      cluster_random = random.RandomId(
-          f"{name_prefix}-eks-cluster-random",
-          byte_length=4,
-          opts=ResourceOptions(provider=provider)
-      )
-      
-      cluster_name = pulumi.Output.concat(f"{name_prefix}-eks-cluster-", cluster_random.hex)
-      
-      # Create EKS cluster IAM role
-      eks_role = aws.iam.Role(
-          f"{name_prefix}-eks-cluster-role",
-          assume_role_policy=json.dumps({
-              "Version": "2012-10-17",
-              "Statement": [{
-                  "Effect": "Allow",
-                  "Principal": {"Service": "eks.amazonaws.com"},
-                  "Action": "sts:AssumeRole",
-              }]
-          }),
-          managed_policy_arns=[
-              "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-          ],
-          tags={**tags, "Name": f"{name_prefix}-eks-cluster-role"},
-          opts=ResourceOptions(provider=provider)
-      )
-
-      # Create EKS cluster
-      cluster = aws.eks.Cluster(
-          f"{name_prefix}-eks-cluster",
-          name=cluster_name,
-          version="1.29",
-          role_arn=eks_role.arn,
-          vpc_config=aws.eks.ClusterVpcConfigArgs(
-              subnet_ids=subnet_ids,
-              security_group_ids=[eks_cluster_sg.id],
-              endpoint_public_access=True,
-              endpoint_private_access=True,
-              public_access_cidrs=["0.0.0.0/0"]
+  # Create EKS cluster
+  cluster = aws.eks.Cluster(
+      f"{name_prefix}-eks-cluster",
+      name=cluster_name,
+      version="1.29",
+      role_arn=eks_role.arn,
+      vpc_config=aws.eks.ClusterVpcConfigArgs(
+          subnet_ids=subnet_ids,
+          security_group_ids=[eks_cluster_sg.id],
+          endpoint_public_access=True,
+          endpoint_private_access=True,
+          public_access_cidrs=["0.0.0.0/0"]
+      ),
+      enabled_cluster_log_types=[
+          "api", "audit", "authenticator", "controllerManager", "scheduler"
+      ],
+      encryption_config=aws.eks.ClusterEncryptionConfigArgs(
+          provider=aws.eks.ClusterEncryptionConfigProviderArgs(
+              key_arn=kms_key.arn
           ),
-          enabled_cluster_log_types=[
-              "api", "audit", "authenticator", "controllerManager", "scheduler"
-          ],
-          encryption_config=aws.eks.ClusterEncryptionConfigArgs(
-              provider=aws.eks.ClusterEncryptionConfigProviderArgs(
-                  key_arn=kms_key.arn
-              ),
-              resources=["secrets"]
-          ),
-          tags={**tags, "Name": f"{name_prefix}-eks-cluster"},
-          opts=ResourceOptions(provider=provider)
-      )
-      
-      # Generate kubeconfig for the cluster
-      def generate_kubeconfig(args):
-          cluster_name, endpoint, certificate = args
-          return json.dumps({
-              "apiVersion": "v1",
-              "clusters": [{
-                  "cluster": {
-                      "server": endpoint,
-                      "certificate-authority-data": certificate
-                  },
-                  "name": "kubernetes"
-              }],
-              "contexts": [{
-                  "context": {
-                      "cluster": "kubernetes",
-                      "user": "aws"
-                  },
-                  "name": "aws"
-              }],
-              "current-context": "aws",
-              "kind": "Config",
-              "users": [{
-                  "name": "aws",
-                  "user": {
-                      "exec": {
-                          "apiVersion": "client.authentication.k8s.io/v1beta1",
-                          "command": "aws",
-                          "args": [
-                              "eks",
-                              "get-token",
-                              "--cluster-name",
-                              cluster_name,
-                              "--region",
-                              provider.region or "us-west-2"
-                          ],
-                          "env": None
-                      }
+          resources=["secrets"]
+      ),
+      tags={**tags, "Name": f"{name_prefix}-eks-cluster"},
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  # Generate kubeconfig for the cluster
+  def generate_kubeconfig(args):
+      cluster_name, endpoint, certificate = args
+      return json.dumps({
+          "apiVersion": "v1",
+          "clusters": [{
+              "cluster": {
+                  "server": endpoint,
+                  "certificate-authority-data": certificate
+              },
+              "name": "kubernetes"
+          }],
+          "contexts": [{
+              "context": {
+                  "cluster": "kubernetes",
+                  "user": "aws"
+              },
+              "name": "aws"
+          }],
+          "current-context": "aws",
+          "kind": "Config",
+          "users": [{
+              "name": "aws",
+              "user": {
+                  "exec": {
+                      "apiVersion": "client.authentication.k8s.io/v1beta1",
+                      "command": "aws",
+                      "args": [
+                          "eks",
+                          "get-token",
+                          "--cluster-name",
+                          cluster_name,
+                          "--region",
+                          provider.region or "us-west-2"
+                      ],
+                      "env": None
                   }
-              }]
-          })
-      
-      # Add kubeconfig as a property
-      cluster.kubeconfig = pulumi.Output.all(
-          cluster.name,
-          cluster.endpoint,
-          cluster.certificate_authority.data
-      ).apply(generate_kubeconfig)
-      
-      return cluster
+              }
+          }]
+      })
+  
+  # Add kubeconfig as a property
+  cluster.kubeconfig = pulumi.Output.all(
+      cluster.name,
+      cluster.endpoint,
+      cluster.certificate_authority.data
+  ).apply(generate_kubeconfig)
+  
+  return cluster
 
 
 def create_eks_node_group(
@@ -833,76 +797,68 @@ def create_eks_node_group(
   """
   Create EKS node group - simplified since pulumi_eks handles most complexity
   """
-  try:
-      import pulumi_eks as eks
+  # Always create EKS managed node groups, regardless of whether pulumi_eks is available
+  # This avoids the LaunchConfiguration issue with pulumi_eks's default node groups
+  
+  # Add random suffix to avoid naming conflicts
+  node_group_random = random.RandomId(
+      f"{name_prefix}-eks-node-group-random",
+      byte_length=4,
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  node_group_name = pulumi.Output.concat(f"{name_prefix}-eks-node-group-", node_group_random.hex)
+  
+  # Create IAM role for EKS node group
+  node_role = aws.iam.Role(
+      f"{name_prefix}-eks-node-role",
+      assume_role_policy=json.dumps({
+          "Version": "2012-10-17",
+          "Statement": [{
+              "Effect": "Allow",
+              "Principal": {"Service": "ec2.amazonaws.com"},
+              "Action": "sts:AssumeRole",
+          }]
+      }),
+      managed_policy_arns=[
+          "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+          "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+          "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+      ],
+      tags={**tags, "Name": f"{name_prefix}-eks-node-role"},
+      opts=ResourceOptions(provider=provider)
+  )
 
-      # If using pulumi_eks, the cluster already has a default node group
-      # Just return the cluster object itself as the node group reference
-      return cluster
-      
-  except ImportError:
-      # Fallback to manual node group creation
-      pulumi.log.warn("pulumi_eks not available, creating manual node group")
-      
-      # Add random suffix to avoid naming conflicts
-      node_group_random = random.RandomId(
-          f"{name_prefix}-eks-node-group-random",
-          byte_length=4,
-          opts=ResourceOptions(provider=provider)
+  # Create EKS managed node group - Let AWS handle the configuration!
+  node_group = aws.eks.NodeGroup(
+      f"{name_prefix}-eks-node-group",
+      cluster_name=cluster.name,
+      node_group_name=node_group_name,
+      node_role_arn=node_role.arn,
+      subnet_ids=[s.id for s in private_subnets],
+      instance_types=["t3.medium"],
+      capacity_type="ON_DEMAND",
+      ami_type="AL2_x86_64",
+      disk_size=20,
+      scaling_config=aws.eks.NodeGroupScalingConfigArgs(
+          desired_size=1,
+          min_size=1,
+          max_size=3
+      ),
+      # No launch template - let EKS handle it!
+      labels={
+          "role": "worker",
+          "environment": tags.get("Environment", "production").lower(),
+      },
+      tags={**tags, "Name": f"{name_prefix}-eks-nodegroup"},
+      opts=ResourceOptions(
+          provider=provider,
+          depends_on=[cluster]
       )
-      
-      node_group_name = pulumi.Output.concat(f"{name_prefix}-eks-node-group-", node_group_random.hex)
-      
-      # Create IAM role for EKS node group
-      node_role = aws.iam.Role(
-          f"{name_prefix}-eks-node-role",
-          assume_role_policy=json.dumps({
-              "Version": "2012-10-17",
-              "Statement": [{
-                  "Effect": "Allow",
-                  "Principal": {"Service": "ec2.amazonaws.com"},
-                  "Action": "sts:AssumeRole",
-              }]
-          }),
-          managed_policy_arns=[
-              "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-              "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
-              "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-              "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-          ],
-          tags={**tags, "Name": f"{name_prefix}-eks-node-role"},
-          opts=ResourceOptions(provider=provider)
-      )
-
-      # Create EKS managed node group - Let AWS handle the configuration!
-      node_group = aws.eks.NodeGroup(
-          f"{name_prefix}-eks-node-group",
-          cluster_name=cluster.name,
-          node_group_name=node_group_name,
-          node_role_arn=node_role.arn,
-          subnet_ids=[s.id for s in private_subnets],
-          instance_types=["t3.medium"],
-          capacity_type="ON_DEMAND",
-          ami_type="AL2_x86_64",
-          disk_size=20,
-          scaling_config=aws.eks.NodeGroupScalingConfigArgs(
-              desired_size=1,
-              min_size=1,
-              max_size=3
-          ),
-          # No launch template - let EKS handle it!
-          labels={
-              "role": "worker",
-              "environment": tags.get("Environment", "production").lower(),
-          },
-          tags={**tags, "Name": f"{name_prefix}-eks-nodegroup"},
-          opts=ResourceOptions(
-              provider=provider,
-              depends_on=[cluster]
-          )
-      )
-      
-      return node_group
+  )
+  
+  return node_group
 
 
 def create_s3_buckets(
