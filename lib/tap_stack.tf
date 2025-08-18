@@ -6,6 +6,12 @@ variable "projectname" {
   type        = string
 }
 
+variable "aws_region" {
+  description = "AWS region for provider"
+  type        = string
+  default     = "us-east-1"
+}
+
 ############################################################
 # Provider block removed to avoid duplicate configuration
 ############################################################
