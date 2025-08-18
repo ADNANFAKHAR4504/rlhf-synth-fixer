@@ -270,12 +270,9 @@ testSuite('NovaModel Secure Infrastructure Integration Tests', () => {
   //                    Logging and Monitoring                        //
   // ---------------------------------------------------------------- //
   describe('📊 Logging and Monitoring', () => {
-    // The trail name is the same as the CloudFormation stack name
-    const trailName = STACK_NAME;
+    const trailName = `novamodel-sec-${ENVIRONMENT_SUFFIX}-trail`;
 
     test('CloudTrail should be configured correctly', async () => {
-      const trailName = `NovaModel-Secure-Stack-${ENVIRONMENT_SUFFIX}`;
-
       const { Trail } = await cloudTrailClient.send(
         new GetTrailCommand({ Name: trailName })
       );
