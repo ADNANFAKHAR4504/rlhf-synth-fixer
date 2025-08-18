@@ -41,22 +41,22 @@ Multiple CDK v2 deprecation warnings and API changes were encountered during dev
 ```typescript
 // DEPRECATED (CDK v1 style)
 new ec2.Vpc(this, 'Vpc', {
-  cidr: '10.0.0.0/16',  // ❌ Deprecated
+  cidr: '10.0.0.0/16',  // Deprecated
 });
 
 // CORRECT (CDK v2 style)
 new ec2.Vpc(this, 'Vpc', {
-  ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),  // ✅ Current API
+  ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),  // Current API
 });
 ```
 
 #### Backup Schedule API Changes
 ```typescript
 // DEPRECATED
-scheduleExpression: backup.Schedule.cron({...})  // ❌ Wrong import
+scheduleExpression: backup.Schedule.cron({...})  // Wrong import
 
 // CORRECT
-scheduleExpression: events.Schedule.cron({...})  // ✅ Correct import
+scheduleExpression: events.Schedule.cron({...})  // Correct import
 ```
 
 #### Backup Plan Rules API Changes
@@ -64,15 +64,15 @@ scheduleExpression: events.Schedule.cron({...})  // ✅ Correct import
 // DEPRECATED (CDK v1 style)
 backupPlanRules: [
   {
-    ruleName: 'DailyBackups',  // ❌ Should be 'name'
-    scheduleExpression: {...}  // ❌ Should be 'schedule'
+    ruleName: 'DailyBackups',  // Should be 'name'
+    scheduleExpression: {...}  // Should be 'schedule'
   }
 ]
 
 // CORRECT (CDK v2 style)
 this.plan.addRule(new backup.BackupPlanRule({
-  ruleName: 'DailyBackups',  // ✅ Correct property name
-  scheduleExpression: events.Schedule.cron({...})  // ✅ Correct API
+  ruleName: 'DailyBackups',  // Correct property name
+  scheduleExpression: events.Schedule.cron({...})  // Correct API
 }));
 ```
 
@@ -94,10 +94,10 @@ Original code used `RemovalPolicy.RETAIN` which prevents proper cleanup during s
 ### Problem
 ```typescript
 // PROBLEMATIC (prevents cleanup)
-removalPolicy: cdk.RemovalPolicy.RETAIN,  // ❌ Resources persist after stack deletion
+removalPolicy: cdk.RemovalPolicy.RETAIN,  // Resources persist after stack deletion
 
 // SOLUTION (allows proper cleanup)
-removalPolicy: cdk.RemovalPolicy.DESTROY,  // ✅ Resources deleted with stack
+removalPolicy: cdk.RemovalPolicy.DESTROY,  // Resources deleted with stack
 ```
 
 ### Impact
@@ -118,14 +118,14 @@ Hard-coded resource names caused deployment conflicts in multi-stack environment
 ### Examples of Problematic Names
 ```typescript
 // PROBLEMATIC (non-deterministic)
-bucketName: 'tap-financial-services-bucket',  // ❌ Conflicts in multi-deployment
-logGroupName: '/tap/vpc/flowlogs',           // ❌ Conflicts in multi-deployment
-backupVaultName: 'tap-backup-vault',         // ❌ Conflicts in multi-deployment
+bucketName: 'tap-financial-services-bucket',  // Conflicts in multi-deployment
+logGroupName: '/tap/vpc/flowlogs',           // Conflicts in multi-deployment
+backupVaultName: 'tap-backup-vault',         // Conflicts in multi-deployment
 
 // SOLUTION (deterministic with stack context)
-bucketName: `${this.stackName}-financial-services-bucket`,  // ✅ Unique per stack
-logGroupName: `/tap/${this.stackName}/vpc/flowlogs`,        // ✅ Unique per stack
-backupVaultName: `tap-${environment}-backup-${stackNameShort}`,  // ✅ Unique per stack
+bucketName: `${this.stackName}-financial-services-bucket`,  // Unique per stack
+logGroupName: `/tap/${this.stackName}/vpc/flowlogs`,        // Unique per stack
+backupVaultName: `tap-${environment}-backup-${stackNameShort}`,  // Unique per stack
 ```
 
 ### Impact
@@ -164,13 +164,13 @@ AWS Backup has strict requirements for lifecycle configurations that must be fol
 ```typescript
 // PROBLEMATIC (violates AWS Backup requirements)
 new backup.BackupPlanRule({
-  deleteAfter: cdk.Duration.days(30),        // ❌ Too close to cold storage
+  deleteAfter: cdk.Duration.days(30),        // Too close to cold storage
   moveToColdStorageAfter: cdk.Duration.days(7), // Only 23 days difference
 });
 
 // SOLUTION (complies with AWS requirements)
 new backup.BackupPlanRule({
-  deleteAfter: cdk.Duration.days(120),       // ✅ At least 90 days after cold storage
+  deleteAfter: cdk.Duration.days(120),       // At least 90 days after cold storage
   moveToColdStorageAfter: cdk.Duration.days(7), // 113 days difference
 });
 ```
@@ -190,7 +190,7 @@ Original code lacked proper error handling for conditional resource creation.
 const repository = new codecommit.Repository(this, 'Repository', {
   // ... configuration
 });
-// ❌ Fails completely if CodeCommit not available
+// Fails completely if CodeCommit not available
 
 // SOLUTION (with error handling)
 try {
@@ -231,10 +231,10 @@ Original code assumed certain context values would always be available.
 ### Problem
 ```typescript
 // PROBLEMATIC (assumes context exists)
-const environment = this.node.tryGetContext('environment');  // ❌ Could be undefined
+const environment = this.node.tryGetContext('environment');  // Could be undefined
 
 // SOLUTION (with defaults)
-const environment = this.node.tryGetContext('environment') || 'development';  // ✅ Has fallback
+const environment = this.node.tryGetContext('environment') || 'development';  // Has fallback
 ```
 
 ### Impact
