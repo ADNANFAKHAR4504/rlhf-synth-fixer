@@ -23,6 +23,7 @@ Parameters:
 
   NotificationEmail:
     Type: String
+    Default: 'xyz@abc.com'
     Description: 'Email address for pipeline notifications'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
@@ -372,7 +373,7 @@ Resources:
             Value: !Ref AWS::AccountId
       Source:
         Type: CODEPIPELINE
-        BuildSpec: |
+        BuildSpec: !Sub |
           version: 0.2
           phases:
             pre_build:
@@ -405,7 +406,7 @@ Resources:
           artifacts:
             files:
               - '**/*'
-            name: !Sub '${ProjectName}-$(date +%Y-%m-%d)'
+            name: '${ProjectName}-$(date +%Y-%m-%d)'
       LogsConfig:
         CloudWatchLogs:
           Status: ENABLED
