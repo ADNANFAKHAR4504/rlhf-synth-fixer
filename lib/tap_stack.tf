@@ -316,7 +316,7 @@ resource "aws_flow_log" "vpc" {
   vpc_id               = aws_vpc.main.id
   traffic_type         = "ALL"
   log_destination_type = "cloud-watch-logs"
-  log_group_name       = aws_cloudwatch_log_group.vpc_flow.name
+  log_destination      = aws_cloudwatch_log_group.vpc_flow.arn
   iam_role_arn         = aws_iam_role.vpc_flow.arn
   tags                 = merge(local.common_tags, { Name = "${local.name_prefix}-vpc-flow" })
 }
