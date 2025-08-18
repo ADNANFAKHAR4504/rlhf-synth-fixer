@@ -102,7 +102,7 @@ export class TapStack extends TerraformStack {
           fromPort: 22,
           toPort: 22,
           protocol: 'tcp',
-          cidrBlocks: ['192.0.2.0/24'], 
+          cidrBlocks: ['192.0.2.0/24'],
         },
       ],
     });
@@ -161,7 +161,5 @@ export class TapStack extends TerraformStack {
       value: bastionSg.securityGroup.id,
       description: 'The ID of the bastion host security group',
     });
-
-    
   }
 }
