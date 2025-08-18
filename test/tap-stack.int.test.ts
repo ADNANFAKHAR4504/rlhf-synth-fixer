@@ -1,185 +1,269 @@
-import { App, Testing } from 'cdktf';
-import 'cdktf/lib/testing/adapters/jest';
-import { TapStack } from '../lib/tap-stack';
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeInternetGatewaysCommand,
+} from "@aws-sdk/client-ec2";
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+} from "@aws-sdk/client-auto-scaling";
+import {
+  DescribeLaunchTemplatesCommand,
+} from "@aws-sdk/client-ec2";
+import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
+import * as fs from "fs";
+import * as path from "path";
 
-// --- Mocking the Modules ---
-// Mocks are created to isolate the TapStack and test its wiring logic,
-// simulating the behavior of the real modules.
-jest.mock('../lib/modules', () => {
-  return {
-    VpcModule: jest.fn(() => ({
-      vpc: { id: 'mock-vpc-id' },
-      publicSubnets: [{ id: 'mock-public-subnet-id-0' }, { id: 'mock-public-subnet-id-1' }],
-    })),
-    SecurityGroupModule: jest.fn(() => ({
-      securityGroup: { id: 'mock-sg-id' },
-    })),
-    AutoScalingModule: jest.fn(() => ({
-      autoScalingGroup: { name: 'mock-asg-name' },
-    })),
-    S3BucketModule: jest.fn(() => ({
-      bucket: { bucket: 'mock-s3-bucket-name' },
-    })),
-  };
-});
+const awsRegion =
+  process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
 
-describe('TapStack Integration Tests', () => {
-  let app: App;
-  let stack: TapStack;
-  let synthesized: string;
+const ec2Client = new EC2Client({ region: awsRegion });
+const s3Client = new S3Client({ region: awsRegion });
+const autoScalingClient = new AutoScalingClient({ region: awsRegion });
+let stackOutputs: Record<string, any>;
 
-  const { VpcModule, SecurityGroupModule, AutoScalingModule, S3BucketModule } = require('../lib/modules');
+describe("TapStack Integration Tests", () => {
+  let vpcId: string;
+  let publicSubnetIds: string[];
+  let appBucketName: string;
+  let webServerSgId: string;
+  let bastionSgId: string;
+  let webAsgName: string;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
+  beforeAll(() => {
+    const suffix = process.env.ENVIRONMENT_SUFFIX;
+    if (!suffix) {
+      throw new Error("ENVIRONMENT_SUFFIX environment variable is not set.");
+    }
+
+    const outputFilePath = path.join(
+      __dirname,
+      "..",
+      "cfn-outputs",
+      "flat-outputs.json"
+    );
+
+    if (!fs.existsSync(outputFilePath)) {
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
+    }
+
+    const outputs = JSON.parse(fs.readFileSync(outputFilePath, "utf-8"));
+    const stackKey = Object.keys(outputs).find((k) => k.includes(suffix));
+    if (!stackKey) {
+      throw new Error(`No output found for environment: ${suffix}`);
+    }
+
+    stackOutputs = outputs[stackKey];
+
+    vpcId = stackOutputs["vpc_id"];
+    publicSubnetIds = stackOutputs["public_subnet_ids"];
+    appBucketName = stackOutputs["app_bucket_name"];
+    webServerSgId = stackOutputs["web_server_sg_id"];
+    bastionSgId = stackOutputs["bastion_sg_id"];
+    webAsgName = stackOutputs["web_asg_name"];
+
+    if (
+      !vpcId ||
+      !publicSubnetIds?.length ||
+      !appBucketName ||
+      !webServerSgId ||
+      !bastionSgId ||
+      !webAsgName
+    ) {
+      throw new Error("Missing one or more required stack outputs.");
+    }
   });
 
-  describe('Stack Configuration and Synthesis', () => {
-    test('TapStack should instantiate with default props and match snapshot', () => {
-      app = new App();
-      stack = new TapStack(app, 'TestDefaultStack');
-      synthesized = Testing.synth(stack);
+  test("VPC exists and is available", async () => {
+    const { Vpcs } = await ec2Client.send(
+      new DescribeVpcsCommand({ VpcIds: [vpcId] })
+    );
+    expect(Vpcs?.[0]?.VpcId).toBe(vpcId);
+    expect(Vpcs?.[0]?.State).toBe("available");
+    expect(Vpcs?.[0]?.CidrBlock).toBe("10.0.0.0/16");
+  }, 20000);
 
-      expect(stack).toBeDefined();
-      expect(synthesized).toBeDefined();
-      expect(synthesized).toContain('iac-rlhf-tf-states');
-      expect(synthesized).toContain('dev/TestDefaultStack.tfstate');
+  test("Public subnets exist in VPC and are properly configured", async () => {
+    const { Subnets } = await ec2Client.send(
+      new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
+    );
+    expect(Subnets?.length).toBe(publicSubnetIds.length);
+    
+    Subnets?.forEach((subnet, index) => {
+      expect(subnet.VpcId).toBe(vpcId);
+      expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      expect(subnet.CidrBlock).toBe(`10.0.${index}.0/24`);
+      expect(subnet.State).toBe("available");
     });
-    test('TapStack should instantiate with custom props and match snapshot', () => {
-      app = new App();
-      stack = new TapStack(app, 'TestCustomStack', {
-        environmentSuffix: 'prod',
-        stateBucket: 'my-custom-state-bucket',
-        awsRegion: 'us-east-1',
-        defaultTags: {
-          tags: {
-            Project: 'TAP',
-            ManagedBy: 'Terraform',
-          },
-        },
-      });
-      synthesized = Testing.synth(stack);
+  }, 20000);
 
-      expect(stack).toBeDefined();
-      expect(synthesized).toBeDefined();
-      expect(synthesized).toContain('my-custom-state-bucket');
-      expect(synthesized).toContain('prod/TestCustomStack.tfstate');
+  test("Internet Gateway exists and is attached to VPC", async () => {
+    const { InternetGateways } = await ec2Client.send(
+      new DescribeInternetGatewaysCommand({
+        Filters: [
+          { Name: "attachment.vpc-id", Values: [vpcId] }
+        ]
+      })
+    );
+    
+    expect(InternetGateways?.length).toBeGreaterThanOrEqual(1);
+    expect(InternetGateways?.[0]?.Attachments?.[0]?.VpcId).toBe(vpcId);
+    expect(InternetGateways?.[0]?.Attachments?.[0]?.State).toBe("available");
+  }, 20000);
 
-      const parsed = JSON.parse(synthesized);
-      expect(parsed.provider.aws[0].default_tags[0].tags).toEqual({
-        Project: 'TAP',
-        ManagedBy: 'Terraform',
-      });
-    });
-    test('should configure the S3 backend correctly', () => {
-      app = new App();
-      stack = new TapStack(app, 'TestBackend');
-      synthesized = Testing.synth(stack);
-      const parsed = JSON.parse(synthesized);
+  test("Public route table exists with internet gateway route", async () => {
+    const { RouteTables } = await ec2Client.send(
+      new DescribeRouteTablesCommand({
+        Filters: [{ Name: "vpc-id", Values: [vpcId] }],
+      })
+    );
+    
+    expect(RouteTables?.length).toBeGreaterThanOrEqual(2); // Main + public route table
+    
+    // Find the public route table (should have a route to 0.0.0.0/0)
+    const publicRouteTable = RouteTables?.find(rt => 
+      rt.Routes?.some(route => route.DestinationCidrBlock === "0.0.0.0/0")
+    );
+    
+    expect(publicRouteTable).toBeDefined();
+    expect(publicRouteTable?.Routes?.some(route => 
+      route.DestinationCidrBlock === "0.0.0.0/0" && route.GatewayId?.startsWith("igw-")
+    )).toBe(true);
+  }, 20000);
 
-      expect(parsed.terraform.backend.s3).toBeDefined();
-      expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
-      expect(parsed.terraform.backend.s3.key).toBe('dev/TestBackend.tfstate');
-      expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
-      expect(parsed.terraform.backend.s3.encrypt).toBe(true);
-    });
-    test('should enable S3 backend state locking', () => {
-      app = new App();
-      stack = new TapStack(app, 'TestStateLocking');
-      synthesized = Testing.synth(stack);
-      const parsed = JSON.parse(synthesized);
+  test("Web server security group exists with correct rules", async () => {
+    const { SecurityGroups } = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [webServerSgId] })
+    );
+    
+    const webSg = SecurityGroups?.[0];
+    expect(webSg?.GroupId).toBe(webServerSgId);
+    expect(webSg?.VpcId).toBe(vpcId);
+    expect(webSg?.Description).toBe("Allows HTTP and SSH access");
+    
+    // Check ingress rules
+    const ingressRules = webSg?.IpPermissions;
+    expect(ingressRules?.length).toBeGreaterThanOrEqual(2);
+    
+    // Check for HTTP rule (port 80)
+    const httpRule = ingressRules?.find(rule => 
+      rule.FromPort === 80 && rule.ToPort === 80 && rule.IpProtocol === "tcp"
+    );
+    expect(httpRule).toBeDefined();
+    expect(httpRule?.IpRanges?.some(range => range.CidrIp === "192.0.1.0/24")).toBe(true);
+    
+    // Check for SSH rule (port 22)
+    const sshRule = ingressRules?.find(rule => 
+      rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === "tcp"
+    );
+    expect(sshRule).toBeDefined();
+    expect(sshRule?.IpRanges?.some(range => range.CidrIp === "192.0.1.0/24")).toBe(true);
+  }, 15000);
 
-      expect(parsed.terraform.backend.s3.use_lockfile).toBe(true);
-    });
-  });
+  test("Bastion security group exists with correct SSH rule", async () => {
+    const { SecurityGroups } = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [bastionSgId] })
+    );
+    
+    const bastionSg = SecurityGroups?.[0];
+    expect(bastionSg?.GroupId).toBe(bastionSgId);
+    expect(bastionSg?.VpcId).toBe(vpcId);
+    expect(bastionSg?.Description).toBe("Allows SSH access from a trusted IP");
+    
+    // Check ingress rules
+    const ingressRules = bastionSg?.IpPermissions;
+    expect(ingressRules?.length).toBeGreaterThanOrEqual(1);
+    
+    // Check for SSH rule (port 22)
+    const sshRule = ingressRules?.find(rule => 
+      rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === "tcp"
+    );
+    expect(sshRule).toBeDefined();
+    expect(sshRule?.IpRanges?.some(range => range.CidrIp === "192.0.2.0/24")).toBe(true);
+  }, 15000);
 
-  describe('Module Instantiation and Wiring', () => {
-    beforeEach(() => {
-      app = new App();
-      stack = new TapStack(app, 'TestModuleWiring');
-      Testing.fullSynth(stack);
-    });
+  test("Auto Scaling Group exists with correct configuration", async () => {
+    const { AutoScalingGroups } = await autoScalingClient.send(
+      new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [webAsgName]
+      })
+    );
+    
+    const asg = AutoScalingGroups?.[0];
+    expect(asg?.AutoScalingGroupName).toBe(webAsgName);
+    expect(asg?.MinSize).toBe(1);
+    expect(asg?.MaxSize).toBe(3);
+    expect(asg?.DesiredCapacity).toBe(1);
+    
+    // Check that ASG is using the correct subnets
+    expect(asg?.VPCZoneIdentifier?.split(",")).toEqual(
+      expect.arrayContaining(publicSubnetIds)
+    );
+    
+    // Check launch template is configured
+    expect(asg?.LaunchTemplate?.LaunchTemplateId).toBeDefined();
+    expect(asg?.LaunchTemplate?.Version).toBe("$Latest");
+  }, 20000);
 
-    // FIX: Updated test case for VpcModule
-    test('should create one VpcModule instance with correct properties', () => {
-      expect(VpcModule).toHaveBeenCalledTimes(1);
-      expect(VpcModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'tap-vpc',
-        expect.objectContaining({
-          cidrBlock: '10.0.0.0/16',
-          env: 'dev',
-          project: 'tap',
-        })
-      );
-    });
+  test("Launch Template exists with correct configuration", async () => {
+    // First get the ASG to find the launch template ID
+    const { AutoScalingGroups } = await autoScalingClient.send(
+      new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [webAsgName]
+      })
+    );
+    
+    const launchTemplateId = AutoScalingGroups?.[0]?.LaunchTemplate?.LaunchTemplateId;
+    expect(launchTemplateId).toBeDefined();
+    
+    const { LaunchTemplates } = await ec2Client.send(
+      new DescribeLaunchTemplatesCommand({
+        LaunchTemplateIds: [launchTemplateId!]
+      })
+    );
+    
+    const launchTemplate = LaunchTemplates?.[0];
+    expect(launchTemplate?.LaunchTemplateId).toBe(launchTemplateId);
+    expect(launchTemplate?.LaunchTemplateName).toContain("tap");
+    expect(launchTemplate?.LaunchTemplateName).toContain("lt");
+  }, 20000);
 
-    // FIX: Added test case for SecurityGroupModule
-    test('should create one SecurityGroupModule instance wired to the VpcModule', () => {
-      const vpcInstance = VpcModule.mock.results[0].value;
-      expect(SecurityGroupModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'web-server-sg',
-        expect.objectContaining({
-          vpcId: vpcInstance.vpc.id,
-          name: 'web-server',
-          description: 'Allows HTTP and SSH access',
-        })
-      );
-    });
+  test("S3 bucket exists and is accessible", async () => {
+    await expect(
+      s3Client.send(new HeadBucketCommand({ Bucket: appBucketName }))
+    ).resolves.not.toThrow();
+    
+    // Verify bucket name follows expected pattern
+    expect(appBucketName).toMatch(/^tap-.+-app-assets$/);
+  }, 15000);
 
-    // FIX: Added test case for AutoScalingModule
-    test('should create one AutoScalingModule instance wired to VpcModule and SecurityGroupModule', () => {
-      const vpcInstance = VpcModule.mock.results[0].value;
-      const sgInstance = SecurityGroupModule.mock.results[0].value;
-      expect(AutoScalingModule).toHaveBeenCalledTimes(1);
-      expect(AutoScalingModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'web-asg',
-        expect.objectContaining({
-          subnetIds: [
-            vpcInstance.publicSubnets[0].id,
-            vpcInstance.publicSubnets[1].id,
-          ],
-          securityGroupIds: [sgInstance.securityGroup.id],
-          amiId: 'ami-04e08e36e17a21b56',
-          instanceType: 't2.micro',
-        })
-      );
-    });
+  test("All resources have proper tags", async () => {
+    // Test VPC tags
+    const { Vpcs } = await ec2Client.send(
+      new DescribeVpcsCommand({ VpcIds: [vpcId] })
+    );
+    const vpcTags = Vpcs?.[0]?.Tags;
+    expect(vpcTags?.find(tag => tag.Key === "Project")?.Value).toBe("tap");
+    expect(vpcTags?.find(tag => tag.Key === "Environment")).toBeDefined();
+    
+    // Test Security Group tags
+    const { SecurityGroups } = await ec2Client.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [webServerSgId] })
+    );
+    const sgTags = SecurityGroups?.[0]?.Tags;
+    expect(sgTags?.find(tag => tag.Key === "Project")?.Value).toBe("tap");
+    expect(sgTags?.find(tag => tag.Key === "Environment")).toBeDefined();
+  }, 15000);
 
-    // FIX: Updated test case for S3BucketModule
-    test('should create one S3BucketModule instance with correct properties', () => {
-      expect(S3BucketModule).toHaveBeenCalledTimes(1);
-      expect(S3BucketModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'app-bucket',
-        expect.objectContaining({
-          env: 'dev',
-          project: 'tap',
-          name: 'app-assets',
-        })
-      );
-    });
-  });
-
-  describe('Terraform Outputs', () => {
-    // FIX: Updated test case to match the actual TerraformOutput names and values
-    test('should create the required outputs with values from mocked modules', () => {
-      app = new App();
-      stack = new TapStack(app, 'TestOutputs');
-      const synthesizedOutput = Testing.synth(stack);
-      const outputs = JSON.parse(synthesizedOutput).output;
-
-      const vpcInstance = VpcModule.mock.results[0].value;
-      const sgInstance = SecurityGroupModule.mock.results[0].value;
-      const asgInstance = AutoScalingModule.mock.results[0].value;
-      const s3Instance = S3BucketModule.mock.results[0].value;
-
-      expect(outputs.vpc_id.value).toBe(vpcInstance.vpc.id);
-      expect(outputs.web_server_sg_id.value).toBe(sgInstance.securityGroup.id);
-      expect(outputs.web_asg_name.value).toBe(asgInstance.autoScalingGroup.name);
-      expect(outputs.app_bucket_name.value).toBe(s3Instance.bucket.bucket);
-    });
-  });
+  test("Subnets are distributed across multiple availability zones", async () => {
+    const { Subnets } = await ec2Client.send(
+      new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
+    );
+    
+    const uniqueAZs = new Set(Subnets?.map(subnet => subnet.AvailabilityZone));
+    expect(uniqueAZs.size).toBeGreaterThanOrEqual(2);
+  }, 20000);
 });
