@@ -24,11 +24,6 @@ Parameters:
     AllowedPattern: "^[a-zA-Z0-9]+$"
     ConstraintDescription: "Must contain only alphanumeric characters"
 
-  Owner:
-    Type: String
-    Default: "SecurityTeam"
-    Description: "Owner tag for all resources"
-
   DBUsername:
     Type: String
     Default: "admin"

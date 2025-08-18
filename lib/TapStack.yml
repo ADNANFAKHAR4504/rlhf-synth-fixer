@@ -17,11 +17,6 @@ Parameters:
     AllowedPattern: "^[a-zA-Z0-9]+$"
     ConstraintDescription: "Must contain only alphanumeric characters"
 
-  Owner:
-    Type: String
-    Default: "SecurityTeam"
-    Description: "Owner tag for all resources"
-
   DBUsername:
     Type: String
     Default: "admin"
@@ -44,8 +39,6 @@ Resources:
         ExcludeCharacters: '"@/\'
         RequireEachIncludedType: true
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -66,8 +59,6 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: false
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -93,8 +84,6 @@ Resources:
               - "kms:GenerateDataKey"
             Resource: "*"
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -128,8 +117,6 @@ Resources:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: "cloudtrail-access-logs/"
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -153,8 +140,6 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -181,8 +166,6 @@ Resources:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: "app-data-access-logs/"
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -228,8 +211,6 @@ Resources:
           IncludeManagementEvents: true
           DataResources: []
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -245,8 +226,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "secure-vpc-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -260,8 +239,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "private-subnet-1-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -274,8 +251,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "private-subnet-2-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -288,8 +263,6 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -308,8 +281,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "rds-sg-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -322,8 +293,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "app-sg-${EnvironmentSuffix}"
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
@@ -352,8 +321,6 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose
@@ -400,8 +367,6 @@ Resources:
                   - "logs:DescribeLogStreams"
                 Resource: !Sub "arn:aws:logs:us-west-2:${AWS::AccountId}:log-group:/aws/application/*"
       Tags:
-        - Key: Owner
-          Value: !Ref Owner
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Purpose

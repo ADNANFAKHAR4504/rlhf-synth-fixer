@@ -23,11 +23,6 @@
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
         },
-        "Owner": {
-            "Type": "String",
-            "Default": "SecurityTeam",
-            "Description": "Owner tag for all resources"
-        },
         "DBUsername": {
             "Type": "String",
             "Default": "admin",
@@ -55,12 +50,6 @@
                     "RequireEachIncludedType": true
                 },
                 "Tags": [
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {
@@ -97,12 +86,6 @@
                 "BillingMode": "PAY_PER_REQUEST",
                 "DeletionProtectionEnabled": false,
                 "Tags": [
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {
@@ -148,12 +131,6 @@
                     ]
                 },
                 "Tags": [
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {
@@ -211,12 +188,6 @@
                 },
                 "Tags": [
                     {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
-                    {
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentSuffix"
@@ -255,12 +226,6 @@
                     "Status": "Enabled"
                 },
                 "Tags": [
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {
@@ -306,12 +271,6 @@
                     "LogFilePrefix": "app-data-access-logs/"
                 },
                 "Tags": [
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {
@@ -391,12 +350,6 @@
                 ],
                 "Tags": [
                     {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
-                    {
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentSuffix"
@@ -420,12 +373,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "secure-vpc-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
                         }
                     },
                     {
@@ -460,12 +407,6 @@
                         }
                     },
                     {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
-                    {
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentSuffix"
@@ -497,12 +438,6 @@
                         }
                     },
                     {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
-                    {
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentSuffix"
@@ -524,12 +459,6 @@
                     }
                 ],
                 "Tags": [
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {
@@ -565,12 +494,6 @@
                         }
                     },
                     {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
-                    {
                         "Key": "Environment",
                         "Value": {
                             "Ref": "EnvironmentSuffix"
@@ -591,12 +514,6 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "app-sg-${EnvironmentSuffix}"
-                        }
-                    },
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
                         }
                     },
                     {
@@ -646,12 +563,6 @@
                 "MultiAZ": false,
                 "PubliclyAccessible": false,
                 "Tags": [
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {
@@ -740,12 +651,6 @@
                     }
                 ],
                 "Tags": [
-                    {
-                        "Key": "Owner",
-                        "Value": {
-                            "Ref": "Owner"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {

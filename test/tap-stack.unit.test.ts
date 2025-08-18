@@ -42,15 +42,15 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
-      const expectedParams = ['EnvironmentSuffix', 'Owner', 'DBUsername'];
+      const expectedParams = ['EnvironmentSuffix', 'DBUsername'];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
     });
 
-    test('should have exactly three parameters', () => {
+    test('should have exactly two parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(2);
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -66,12 +66,7 @@ describe('TapStack CloudFormation Template', () => {
       );
     });
 
-    test('Owner parameter should have correct properties', () => {
-      const ownerParam = template.Parameters.Owner;
-      expect(ownerParam.Type).toBe('String');
-      expect(ownerParam.Default).toBe('SecurityTeam');
-      expect(ownerParam.Description).toBe('Owner tag for all resources');
-    });
+
 
     test('DBUsername parameter should have correct properties', () => {
       const dbUserParam = template.Parameters.DBUsername;
@@ -147,17 +142,14 @@ describe('TapStack CloudFormation Template', () => {
       const tags = secret.Properties.Tags;
 
       expect(tags).toBeDefined();
-      expect(tags).toHaveLength(3);
+      expect(tags).toHaveLength(2);
       
-      const ownerTag = tags.find((tag: any) => tag.Key === 'Owner');
       const envTag = tags.find((tag: any) => tag.Key === 'Environment');
       const purposeTag = tags.find((tag: any) => tag.Key === 'Purpose');
       
-      expect(ownerTag).toBeDefined();
       expect(envTag).toBeDefined();
       expect(purposeTag).toBeDefined();
       
-      expect(ownerTag.Value).toEqual({ Ref: 'Owner' });
       expect(envTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
       expect(purposeTag.Value).toBe('RDS-Authentication');
     });
@@ -191,17 +183,14 @@ describe('TapStack CloudFormation Template', () => {
       const tags = table.Properties.Tags;
 
       expect(tags).toBeDefined();
-      expect(tags).toHaveLength(3);
+      expect(tags).toHaveLength(2);
       
-      const ownerTag = tags.find((tag: any) => tag.Key === 'Owner');
       const envTag = tags.find((tag: any) => tag.Key === 'Environment');
       const purposeTag = tags.find((tag: any) => tag.Key === 'Purpose');
       
-      expect(ownerTag).toBeDefined();
       expect(envTag).toBeDefined();
       expect(purposeTag).toBeDefined();
       
-      expect(ownerTag.Value).toEqual({ Ref: 'Owner' });
       expect(envTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
       expect(purposeTag.Value).toBe('Prompt-Storage');
     });
@@ -622,12 +611,9 @@ describe('TapStack CloudFormation Template', () => {
       resourcesWithTags.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource.Properties.Tags) {
-          const ownerTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Owner');
           const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
           
-          expect(ownerTag).toBeDefined();
           expect(envTag).toBeDefined();
-          expect(ownerTag.Value).toEqual({ Ref: 'Owner' });
           expect(envTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
         }
       });
