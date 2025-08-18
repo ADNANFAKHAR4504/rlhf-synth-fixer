@@ -12,7 +12,7 @@ import {
 } from '@cdktf/provider-aws/lib/security-group';
 
 // Corrected import paths
-import { autoscalingGroup } from '@cdktf/provider-aws';
+import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 
@@ -208,7 +208,7 @@ export interface AutoScalingGroupConfig {
  */
 export class AutoScalingModule extends Construct {
   public readonly launchTemplate: LaunchTemplate;
-  public readonly autoScalingGroup: autoscalingGroup.AutoscalingGroup;
+  public readonly autoScalingGroup: AutoscalingGroup;
 
   constructor(scope: Construct, id: string, config: AutoScalingGroupConfig) {
     super(scope, id);
@@ -226,7 +226,7 @@ export class AutoScalingModule extends Construct {
       },
     });
 
-    this.autoScalingGroup = new autoscalingGroup.AutoscalingGroup(this, 'asg', {
+    this.autoScalingGroup = new AutoscalingGroup(this, 'asg', {
       name: `${config.project}-${config.env}-asg`,
       vpcZoneIdentifier: config.subnetIds,
       minSize: config.minSize,
