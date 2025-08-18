@@ -8,7 +8,6 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -197,7 +196,7 @@ echo "EC2 instance setup complete" > /var/log/setup.log
     // 10. RDS Instance
     const rdsInstance = new rds.DatabaseInstance(this, 'RDSInstance', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
+        version: rds.MysqlEngineVersion.VER_8_4_5,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
