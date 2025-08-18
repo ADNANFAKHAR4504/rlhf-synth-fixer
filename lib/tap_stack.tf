@@ -54,7 +54,11 @@ variable "bucket_tags" {
 resource "aws_s3_bucket" "this" {
   provider = aws.primary
   bucket   = "${var.name_prefix}-${var.environment}-s3-bucket"
-  tags     = var.bucket_tags
+  tags = {
+    Project     = "secure-env"
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "this" {

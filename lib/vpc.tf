@@ -36,7 +36,68 @@ resource "aws_vpc" "secondary" {
   }
 }
 
-# ... Add public/private subnets, IGW, NAT, route tables, associations for both regions ...
+resource "aws_subnet" "private_primary" {
+  provider    = aws.primary
+  vpc_id      = aws_vpc.primary.id
+  cidr_block  = "10.0.1.0/24"
+  availability_zone = "us-east-1a"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-private-subnet-primary"
+  }
+}
+
+resource "aws_subnet" "private_secondary" {
+  provider    = aws.secondary
+  vpc_id      = aws_vpc.secondary.id
+  cidr_block  = "10.1.1.0/24"
+  availability_zone = "us-west-2a"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-private-subnet-secondary"
+  }
+}
+
+
+# Private Subnets for Primary Region
+resource "aws_subnet" "private_primary_1" {
+  provider            = aws.primary
+  vpc_id              = aws_vpc.primary.id
+  cidr_block          = "10.0.1.0/24"
+  availability_zone   = "us-east-1a"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-private-subnet-primary-1"
+  }
+}
+
+resource "aws_subnet" "private_primary_2" {
+  provider            = aws.primary
+  vpc_id              = aws_vpc.primary.id
+  cidr_block          = "10.0.2.0/24"
+  availability_zone   = "us-east-1b"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-private-subnet-primary-2"
+  }
+}
+
+# Private Subnets for Secondary Region
+resource "aws_subnet" "private_secondary_1" {
+  provider            = aws.secondary
+  vpc_id              = aws_vpc.secondary.id
+  cidr_block          = "10.1.1.0/24"
+  availability_zone   = "us-west-2a"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-private-subnet-secondary-1"
+  }
+}
+
+resource "aws_subnet" "private_secondary_2" {
+  provider            = aws.secondary
+  vpc_id              = aws_vpc.secondary.id
+  cidr_block          = "10.1.2.0/24"
+  availability_zone   = "us-west-2b"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-private-subnet-secondary-2"
+  }
+}
 
 # Outputs for VPC IDs
 output "vpc_id_primary" {
