@@ -238,7 +238,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(configRole).toBeDefined();
       expect(configRole.Type).toBe('AWS::IAM::Role');
       expect(configRole.Properties.ManagedPolicyArns).toContain(
-        'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
+        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
       );
     });
   });
