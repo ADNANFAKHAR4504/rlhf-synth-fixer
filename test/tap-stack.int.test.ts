@@ -350,12 +350,6 @@ describeIf(infraDeployed)('Secure Production Infrastructure Integration Tests', 
       
       const command = new GetResourcesCommand({
         ResourceARNList: [bucketArn, policyArn, roleArn],
-        TagFilters: [
-          {
-            Key: 'Environment',
-            Values: ['Production'],
-          },
-        ],
       });
       
       const response = await taggingClient.send(command);
