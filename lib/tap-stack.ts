@@ -78,26 +78,41 @@ export class TapStack extends TerraformStack {
           fromPort: 80,
           toPort: 80,
           protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
+          cidrBlocks: ['192.0.1.0/24'],
           ipv6CidrBlocks: ['::/0'],
         },
         {
           fromPort: 22,
           toPort: 22,
           protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
+          cidrBlocks: ['192.0.1.0/24'],
           ipv6CidrBlocks: ['::/0'],
         },
       ],
     });
 
-    // 3. Create an EC2 Auto Scaling Group and Launch Template.
+    const bastionSg = new SecurityGroupModule(this, 'bastion-sg', {
+      vpcId: tapVpc.vpc.id,
+      env,
+      project,
+      name: 'bastion',
+      description: 'Allows SSH access from a trusted IP',
+      ingressRules: [
+        {
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
+          cidrBlocks: ['192.0.2.0/24'], 
+        },
+      ],
+    });
+
     const webAsg = new AutoScalingModule(this, 'web-asg', {
       env,
       project,
       subnetIds: tapVpc.publicSubnets.map(subnet => subnet.id),
       securityGroupIds: [webServerSg.securityGroup.id],
-      amiId: 'ami-04e08e36e17a21b56', // IMPORTANT: Replace with a valid AMI ID for us-west-2.
+      amiId: 'ami-04e08e36e17a21b56',
       instanceType: 't2.micro',
       minSize: 1,
       maxSize: 3,
@@ -141,5 +156,12 @@ export class TapStack extends TerraformStack {
       value: appBucket.bucket.bucket,
       description: 'The name of the application S3 bucket',
     });
+
+    new TerraformOutput(this, 'bastion_sg_id', {
+      value: bastionSg.securityGroup.id,
+      description: 'The ID of the bastion host security group',
+    });
+
+    
   }
 }

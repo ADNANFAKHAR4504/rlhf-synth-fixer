@@ -6,6 +6,10 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
     "app_bucket_name": {
       "description": "The name of the application S3 bucket"
     },
+    "bastion_sg_id": {
+      "description": "The ID of the bastion host security group",
+      "value": "mock-sg-id"
+    },
     "public_subnet_ids": {
       "description": "The IDs of the public subnets",
       "value": [
@@ -35,7 +39,7 @@ exports[`TapStack Unit Tests Stack Configuration and Synthesis TapStack should i
             }
           }
         ],
-        "region": "us-west-2"
+        "region": "us-east-1"
       }
     ]
   },

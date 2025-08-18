@@ -47,7 +47,7 @@ describe('TapStack Unit Tests', () => {
       stack = new TapStack(app, 'TestCustomStack', {
         environmentSuffix: 'prod',
         stateBucket: 'my-custom-state-bucket',
-        awsRegion: 'us-west-2',
+        awsRegion: 'us-east-1',
         defaultTags: {
           tags: { Project: 'TAP' },
         },
@@ -121,7 +121,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create one SecurityGroupModule instance wired to the VpcModule', () => {
       const vpcInstance = VpcModule.mock.results[0].value;
-      expect(SecurityGroupModule).toHaveBeenCalledTimes(1);
+      expect(SecurityGroupModule).toHaveBeenCalledTimes(2);
       expect(SecurityGroupModule).toHaveBeenCalledWith(
         expect.anything(),
         'web-server-sg',
