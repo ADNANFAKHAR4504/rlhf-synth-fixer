@@ -187,8 +187,8 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:PutObject
                 Resource:
-                  - !Sub '${SourceCodeBucket}/*'
-                  - !Sub '${ArtifactsBucket}/*'
+                  - !Sub 'arn:aws:s3:::${SourceCodeBucket}/*'
+                  - !Sub 'arn:aws:s3:::${ArtifactsBucket}/*'
 
   # Lambda Execution Role
   LambdaExecutionRole:
