@@ -919,7 +919,7 @@ resource "aws_cloudtrail" "primary" {
   count                         = var.create_cloudtrail ? 1 : 0
   name                         = "primary-cloudtrail-${random_string.resource_suffix.result}"
   s3_bucket_name               = aws_s3_bucket.logging.bucket
-  s3_key_prefix                = "AWSLogs/${data.aws_caller_identity.current.account_id}"
+  s3_key_prefix                = "cloudtrail-logs"
   include_global_service_events = true
   is_multi_region_trail        = true
   enable_log_file_validation   = true
@@ -946,7 +946,7 @@ resource "aws_cloudtrail" "secondary" {
   provider                     = aws.eu_west_1
   name                         = "secondary-cloudtrail-${random_string.resource_suffix.result}"
   s3_bucket_name               = aws_s3_bucket.logging.bucket
-  s3_key_prefix                = "AWSLogs/${data.aws_caller_identity.current.account_id}"
+  s3_key_prefix                = "cloudtrail-logs"
   include_global_service_events = true
   is_multi_region_trail        = true
   enable_log_file_validation   = true
