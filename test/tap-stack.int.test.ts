@@ -50,7 +50,7 @@ describe('Terraform E2E Integration Test', () => {
   test('S3 bucket exists and has versioning enabled (live check)', async () => {
     const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-west-1' });
     const buckets = await s3.listBuckets().promise();
-    const found = buckets.Buckets.some(b => b.Name === bucketName);
+  const found = buckets.Buckets.some((b: { Name: string }) => b.Name === bucketName);
     expect(found).toBe(true);
     const versioning = await s3.getBucketVersioning({ Bucket: bucketName }).promise();
     expect(versioning.Status).toBe('Enabled');
@@ -62,7 +62,7 @@ describe('Terraform E2E Integration Test', () => {
     expect(tables.TableNames).toContain(tableName);
     const desc = await dynamodb.describeTable({ TableName: tableName }).promise();
     expect(desc.Table.BillingModeSummary.BillingMode).toBe('PAY_PER_REQUEST');
-    expect(desc.Table.KeySchema.some(k => k.AttributeName === 'id' && k.KeyType === 'HASH')).toBe(true);
+  expect(desc.Table.KeySchema.some((k: { AttributeName: string; KeyType: string }) => k.AttributeName === 'id' && k.KeyType === 'HASH')).toBe(true);
   });
 
   afterAll(() => {
