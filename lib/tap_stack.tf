@@ -920,10 +920,11 @@ resource "aws_iam_role_policy_attachment" "global_policy_attachment" {
 
 # CloudTrail
 resource "aws_cloudtrail" "primary" {
-  count          = var.create_cloudtrail ? 1 : 0
-  name           = "primary-cloudtrail-${random_string.resource_suffix.result}"
-  s3_bucket_name = aws_s3_bucket.logging.bucket
-  s3_key_prefix  = "primary-region/"
+  count                         = var.create_cloudtrail ? 1 : 0
+  name                         = "primary-cloudtrail-${random_string.resource_suffix.result}"
+  s3_bucket_name               = aws_s3_bucket.logging.bucket
+  s3_key_prefix                = "primary-region/"
+  is_multi_region_trail        = false
 
   kms_key_id = aws_kms_key.primary.arn
 
@@ -943,11 +944,12 @@ resource "aws_cloudtrail" "primary" {
 }
 
 resource "aws_cloudtrail" "secondary" {
-  count          = var.create_cloudtrail ? 1 : 0
-  provider       = aws.eu_west_1
-  name           = "secondary-cloudtrail-${random_string.resource_suffix.result}"
-  s3_bucket_name = aws_s3_bucket.logging.bucket
-  s3_key_prefix  = "secondary-region/"
+  count                         = var.create_cloudtrail ? 1 : 0
+  provider                     = aws.eu_west_1
+  name                         = "secondary-cloudtrail-${random_string.resource_suffix.result}"
+  s3_bucket_name               = aws_s3_bucket.logging.bucket
+  s3_key_prefix                = "secondary-region/"
+  is_multi_region_trail        = false
 
   kms_key_id = aws_kms_key.secondary.arn
 
