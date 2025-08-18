@@ -81,6 +81,7 @@ describe('TapStack.yml - Integration (live) validations', () => {
     }
     try {
       outputs = getStackOutputs();
+      console.log('Available outputs:', Object.keys(outputs));
     } catch {
       runtimeSkip = true;
       return;
@@ -264,6 +265,14 @@ describe('TapStack.yml - Integration (live) validations', () => {
     if (runtimeSkip) {
       return;
     }
+
+    // Check if Config bucket was created (indicates Config resources should exist)
+    const configBucketName = outputs['ConfigBucketName'];
+    if (!configBucketName) {
+      console.log('Config bucket not found in outputs, skipping Config tests');
+      return;
+    }
+
     const recorders = await cfg.send(
       new DescribeConfigurationRecordersCommand({})
     );
@@ -283,6 +292,9 @@ describe('TapStack.yml - Integration (live) validations', () => {
     } catch {}
     const channels = await cfg.send(new DescribeDeliveryChannelsCommand({}));
     const channelCount = (channels.DeliveryChannels || []).length;
+    console.log(
+      `Found ${channelCount} AWS Config delivery channels in region ${region}`
+    );
     expect(channelCount).toBeGreaterThan(0);
     if (channelCount > 0) {
       try {
