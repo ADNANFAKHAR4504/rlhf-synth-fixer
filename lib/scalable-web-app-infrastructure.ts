@@ -155,8 +155,7 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       `vpc-flow-logs-policy-${environmentSuffix}`,
       {
         role: vpcFlowLogsRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+        policyArn: 'arn:aws:iam::aws:policy/service-role/VPCFlowLogsRole',
       },
       { provider, parent: this }
     );
@@ -686,12 +685,21 @@ EOF
     const albLogsBucket = new aws.s3.Bucket(
       `${environmentSuffix}-alb-logs-bucket`,
       {
-        acl: 'private',
         forceDestroy: false,
         tags: {
           Name: `${environmentSuffix}-alb-logs-bucket`,
           Environment: 'production',
         },
+      },
+      { provider, parent: this }
+    );
+
+    // S3 Bucket ACL
+    new aws.s3.BucketAcl(
+      `${environmentSuffix}-alb-logs-bucket-acl`,
+      {
+        bucket: albLogsBucket.id,
+        acl: 'private',
       },
       { provider, parent: this }
     );
