@@ -302,10 +302,10 @@ describe('Terraform HCL Infrastructure Integration Tests', () => {
       const content = fs.readFileSync(stackPath, 'utf8');
 
       // Check module source paths
-      expect(content).toMatch(/source\s*=\s*"\.\.\/modules\/vpc"/);
-      expect(content).toMatch(/source\s*=\s*"\.\.\/modules\/security"/);
-      expect(content).toMatch(/source\s*=\s*"\.\.\/modules\/storage"/);
-      expect(content).toMatch(/source\s*=\s*"\.\.\/modules\/compute"/);
+      expect(content).toMatch(/source\s*=\s*"\.\/modules\/vpc"/);
+      expect(content).toMatch(/source\s*=\s*"\.\/modules\/security"/);
+      expect(content).toMatch(/source\s*=\s*"\.\/modules\/storage"/);
+      expect(content).toMatch(/source\s*=\s*"\.\/modules\/compute"/);
     });
 
     test('variables are properly configured for production deployment', () => {

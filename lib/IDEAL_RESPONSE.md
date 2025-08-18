@@ -549,8 +549,6 @@ value = aws_internet_gateway.main.id
 
 # lib/tap_stack.tf
 
-########################
-
 variable "aws_region" {
 description = "AWS region for resources"
 type = string
@@ -593,6 +591,12 @@ type = string
 default = null
 }
 
+########################
+
+# Data Sources
+
+########################
+
 # Data source for availability zones
 
 data "aws_availability_zones" "available" {
@@ -605,10 +609,10 @@ state = "available"
 
 ########################
 
-## VPC Module
+# VPC Module
 
 module "vpc" {
-source = "../modules/vpc"
+source = "./modules/vpc"
 
 vpc_name = var.vpc_name
 vpc_cidr = var.vpc_cidr
@@ -616,28 +620,28 @@ availability_zones = data.aws_availability_zones.available.names
 public_subnet_cidrs = var.public_subnet_cidrs
 }
 
-## Security Module
+# Security Module
 
 module "security" {
-source = "../modules/security"
+source = "./modules/security"
 
 vpc_id = module.vpc.vpc_id
 public_subnet_id = module.vpc.public_subnet_ids[0]
 bucket_arn = module.storage.bucket_arn
 }
 
-## Storage Module
+# Storage Module
 
 module "storage" {
-source = "../modules/storage"
+source = "./modules/storage"
 
 bucket_name = var.bucket_name
 }
 
-## Compute Module
+# Compute Module
 
 module "compute" {
-source = "../modules/compute"
+source = "./modules/compute"
 
 vpc_id = module.vpc.vpc_id
 public_subnet_id = module.vpc.public_subnet_ids[0]

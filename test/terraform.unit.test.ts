@@ -104,7 +104,7 @@ describe('Terraform HCL Infrastructure Unit Tests', () => {
       requiredModules.forEach(module => {
         expect(content).toMatch(new RegExp(`module\\s+"${module}"\\s*{`));
         expect(content).toMatch(
-          new RegExp(`source\\s*=\\s*"../modules/${module}"`)
+          new RegExp(`source\\s*=\\s*"./modules/${module}"`)
         );
       });
     });
