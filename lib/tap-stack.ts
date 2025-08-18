@@ -29,7 +29,7 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+      : props?.awsRegion || 'us-west-2';
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
