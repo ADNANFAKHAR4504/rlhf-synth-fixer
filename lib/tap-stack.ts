@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 export interface TapStackArgs {
@@ -309,7 +309,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         identifier: `webapp-postgres-${environmentSuffix}`,
         engine: 'postgres',
-        engineVersion: '15.4',
+        engineVersion: '16.3',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         storageType: 'gp2',
