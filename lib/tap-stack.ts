@@ -86,14 +86,14 @@ export class TapStack extends TerraformStack {
     // Auto Scaling Configuration
     const asgMinSize = new TerraformVariable(this, 'asg_min_size', {
       type: 'number',
-      default: 2,
+      default: 1,
       description:
         'Minimum number of instances in ASG - ensures baseline capacity',
     });
 
     const asgMaxSize = new TerraformVariable(this, 'asg_max_size', {
       type: 'number',
-      default: 6,
+      default: 3,
       description: 'Maximum number of instances in ASG - controls cost',
     });
 
@@ -102,7 +102,7 @@ export class TapStack extends TerraformStack {
       'asg_desired_capacity',
       {
         type: 'number',
-        default: 3,
+        default: 1,
         description: 'Desired number of instances - one per AZ for HA',
       }
     );
