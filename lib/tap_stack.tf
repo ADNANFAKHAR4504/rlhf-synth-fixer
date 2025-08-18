@@ -116,10 +116,9 @@ resource "aws_kms_key" "primary" {
         ]
         Resource = "*"
         Condition = {
-          StringEquals = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = [
-              "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
-            ]
+          StringLike = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*",
+            "AWS:SourceArn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
           }
         }
       }
@@ -171,10 +170,9 @@ resource "aws_kms_key" "secondary" {
         ]
         Resource = "*"
         Condition = {
-          StringEquals = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = [
-              "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
-            ]
+          StringLike = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*",
+            "AWS:SourceArn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
           }
         }
       }
@@ -951,7 +949,8 @@ resource "aws_cloudtrail" "secondary" {
   s3_key_prefix                = "secondary-region/"
   is_multi_region_trail        = false
 
-  kms_key_id = aws_kms_key.secondary.arn
+  # Use primary region KMS key because the logging S3 bucket is in us-east-1
+  kms_key_id = aws_kms_key.primary.arn
 
   event_selector {
     read_write_type           = "All"
@@ -991,7 +990,7 @@ resource "aws_s3_bucket_policy" "logging" {
           Service = "cloudtrail.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.logging.arn}/*"
+        Resource = "${aws_s3_bucket.logging.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
