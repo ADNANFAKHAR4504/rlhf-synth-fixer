@@ -1,4 +1,4 @@
-## Model Failures & Weaknesses Given Your Constraints
+## Model-Failures & Weaknesses Given Your Constraints
 
 ### 1. Lack of explicit AWS CodePipeline/CodeBuild/CodeDeploy resources
 
