@@ -497,7 +497,7 @@ describe('Security Baseline CloudFormation Template Unit Tests', () => {
 
     test('should have proper resource count', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(33); // Total number of resources in template
+      expect(resourceCount).toBe(38); // Total number of resources in template
     });
 
     test('all resources should have proper CloudFormation types', () => {
