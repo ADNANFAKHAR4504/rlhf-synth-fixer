@@ -597,76 +597,75 @@ def create_security_groups(
       protocol="tcp",
       description="Allow ALB to reach nodes",
       opts=ResourceOptions(provider=provider)
-    )
-    
-    # CRITICAL: Additional rules for EKS node registration
-    # Allow cluster to communicate with nodes on ALL ports for bootstrap
-    aws.ec2.SecurityGroupRule(
-        f"{name_prefix}-cluster-ingress-node-all",
-        type="ingress",
-        security_group_id=eks_cluster_sg.id,
-        source_security_group_id=eks_node_sg.id,
-        from_port=0,
-        to_port=65535,
-        protocol="-1",
-        description="Allow nodes full access to cluster",
-        opts=ResourceOptions(provider=provider)
-    )
-    
-    # Allow nodes to communicate with cluster on ALL ports
-    aws.ec2.SecurityGroupRule(
-        f"{name_prefix}-node-ingress-cluster-all",
-        type="ingress",
-        security_group_id=eks_node_sg.id,
-        source_security_group_id=eks_cluster_sg.id,
-        from_port=0,
-        to_port=65535,
-        protocol="-1",
-        description="Allow cluster full access to nodes",
-        opts=ResourceOptions(provider=provider)
-    )
-    
-    # Allow nodes to communicate with each other on ALL ports
-    aws.ec2.SecurityGroupRule(
-        f"{name_prefix}-node-ingress-node-all",
-        type="ingress",
-        security_group_id=eks_node_sg.id,
-        source_security_group_id=eks_node_sg.id,
-        from_port=0,
-        to_port=65535,
-        protocol="-1",
-        description="Allow nodes to communicate with each other",
-        opts=ResourceOptions(provider=provider)
-    )
-    
-    # Allow all outbound traffic from nodes
-    aws.ec2.SecurityGroupRule(
-        f"{name_prefix}-node-egress-all",
-        type="egress",
-        security_group_id=eks_node_sg.id,
-        cidr_blocks=["0.0.0.0/0"],
-        from_port=0,
-        to_port=65535,
-        protocol="-1",
-        description="Allow all outbound traffic from nodes",
-        opts=ResourceOptions(provider=provider)
-    )
-    
-    # Allow all outbound traffic from cluster
-    aws.ec2.SecurityGroupRule(
-        f"{name_prefix}-cluster-egress-all",
-        type="egress",
-        security_group_id=eks_cluster_sg.id,
-        cidr_blocks=["0.0.0.0/0"],
-        from_port=0,
-        to_port=65535,
-        protocol="-1",
-        description="Allow all outbound traffic from cluster",
-        opts=ResourceOptions(provider=provider)
-    )
- 
-    return {
-        "alb_sg": alb_sg,
+  )
+  
+  # CRITICAL: Additional rules for EKS node registration
+  # Allow cluster to communicate with nodes on ALL ports for bootstrap
+  aws.ec2.SecurityGroupRule(
+      f"{name_prefix}-cluster-ingress-node-all",
+      type="ingress",
+      security_group_id=eks_cluster_sg.id,
+      source_security_group_id=eks_node_sg.id,
+      from_port=0,
+      to_port=65535,
+      protocol="-1",
+      description="Allow nodes full access to cluster",
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  # Allow nodes to communicate with cluster on ALL ports
+  aws.ec2.SecurityGroupRule(
+      f"{name_prefix}-node-ingress-cluster-all",
+      type="ingress",
+      security_group_id=eks_node_sg.id,
+      source_security_group_id=eks_cluster_sg.id,
+      from_port=0,
+      to_port=65535,
+      protocol="-1",
+      description="Allow cluster full access to nodes",
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  # Allow nodes to communicate with each other on ALL ports
+  aws.ec2.SecurityGroupRule(
+      f"{name_prefix}-node-ingress-node-all",
+      type="ingress",
+      security_group_id=eks_node_sg.id,
+      source_security_group_id=eks_node_sg.id,
+      from_port=0,
+      to_port=65535,
+      protocol="-1",
+      description="Allow nodes to communicate with each other",
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  # Allow all outbound traffic from nodes
+  aws.ec2.SecurityGroupRule(
+      f"{name_prefix}-node-egress-all",
+      type="egress",
+      security_group_id=eks_node_sg.id,
+      cidr_blocks=["0.0.0.0/0"],
+      from_port=0,
+      to_port=65535,
+      protocol="-1",
+      description="Allow all outbound traffic from nodes",
+      opts=ResourceOptions(provider=provider)
+  )
+  
+  # Allow all outbound traffic from cluster
+  aws.ec2.SecurityGroupRule(
+      f"{name_prefix}-cluster-egress-all",
+      type="egress",
+      security_group_id=eks_cluster_sg.id,
+      cidr_blocks=["0.0.0.0/0"],
+      from_port=0,
+      to_port=65535,
+      protocol="-1",
+      description="Allow all outbound traffic from cluster",
+      opts=ResourceOptions(provider=provider)
+  )
+  return {
+      "alb_sg": alb_sg,
       "eks_cluster_sg": eks_cluster_sg,
       "eks_node_sg": eks_node_sg,
       "db_sg": db_sg,
