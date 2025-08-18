@@ -291,10 +291,29 @@ data "aws_ssm_parameter" "al2023_ami" {
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 }
 
-module "asg" {
-  source  = "terraform-aws-modules/autoscaling/aws"
-  version = "~> 9.0"
+resource "aws_launch_template" "app" {
+  name_prefix   = "${var.name_prefix}-lt-"
+  image_id      = data.aws_ssm_parameter.al2023_ami.value
+  instance_type = var.instance_type
+  vpc_security_group_ids = [aws_security_group.app.id]
+  user_data = base64encode(<<-EOT
+    #!/bin/bash
+    dnf update -y
+    dnf install -y nginx
+    cat <<'HTML' >/usr/share/nginx/html/index.html
+    <html><body><h1>${var.name_prefix} - Hello from ASG</h1></body></html>
+    HTML
+    systemctl enable nginx
+    systemctl start nginx
+  EOT
+  )
+  tag_specifications {
+    resource_type = "instance"
+    tags = local.common_tags
+  }
+}
 
+resource "aws_autoscaling_group" "app" {
   name                      = "${var.name_prefix}-asg"
   vpc_zone_identifier       = module.vpc.private_subnets
   min_size                  = 1
@@ -304,42 +323,16 @@ module "asg" {
   health_check_grace_period = 120
   target_group_arns         = [module.alb.target_group_arns[0]]
 
-  launch_template = {
-    name                   = "${var.name_prefix}-lt"
-    image_id               = data.aws_ssm_parameter.al2023_ami.value
-    instance_type          = var.instance_type
-    update_default_version = true
-    security_group_ids     = [aws_security_group.app.id]
-
-    user_data = base64encode(<<-EOT
-      #!/bin/bash
-      dnf update -y
-      dnf install -y nginx
-      cat <<'HTML' >/usr/share/nginx/html/index.html
-      <html><body><h1>${var.name_prefix} - Hello from ASG</h1></body></html>
-      HTML
-      systemctl enable nginx
-      systemctl start nginx
-    EOT
-    )
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
   }
 
-  tags = concat(
-    [
-      {
-        key                 = "Name"
-        value               = "${var.name_prefix}-app"
-        propagate_at_launch = true
-      }
-    ],
-    [
-      for k, v in local.common_tags : {
-        key                 = k
-        value               = v
-        propagate_at_launch = true
-      }
-    ]
-  )
+  tag {
+    key                 = "Name"
+    value               = "${var.name_prefix}-app"
+    propagate_at_launch = true
+  }
 }
 
 ########################
@@ -845,53 +838,48 @@ data "aws_ssm_parameter" "al2023_ami_dr" {
   name     = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 }
 
-module "asg_dr" {
-  providers = { aws = aws.secondary }
-  source    = "terraform-aws-modules/autoscaling/aws"
-  version   = "~> 9.0"
+resource "aws_launch_template" "app_dr" {
+  provider      = aws.secondary
+  name_prefix   = "${var.name_prefix}-lt-dr-"
+  image_id      = data.aws_ssm_parameter.al2023_ami_dr.value
+  instance_type = var.instance_type
+  vpc_security_group_ids = [aws_security_group.app_dr.id]
+  user_data = base64encode(<<-EOT
+    #!/bin/bash
+    dnf update -y
+    dnf install -y nginx
+    echo "<html><body><h1>${var.name_prefix} - DR</h1></body></html>" >/usr/share/nginx/html/index.html
+    systemctl enable nginx
+    systemctl start nginx
+  EOT
+  )
+  tag_specifications {
+    resource_type = "instance"
+    tags = local.common_tags
+  }
+}
 
-  name                = "${var.name_prefix}-asg-dr"
-  vpc_zone_identifier = module.vpc_dr.private_subnets
-  min_size            = 1
-  max_size            = var.max_capacity
-  desired_capacity    = 1
+resource "aws_autoscaling_group" "app_dr" {
+  provider                 = aws.secondary
+  name                     = "${var.name_prefix}-asg-dr"
+  vpc_zone_identifier      = module.vpc_dr.private_subnets
+  min_size                 = 1
+  max_size                 = var.max_capacity
+  desired_capacity         = 1
+  target_group_arns        = [module.alb_dr.target_group_arns[0]]
+  health_check_type        = "EC2"
+  health_check_grace_period = 120
 
-  target_group_arns = [module.alb_dr.target_group_arns[0]]
-
-  launch_template = {
-    name                   = "${var.name_prefix}-lt-dr"
-    image_id               = data.aws_ssm_parameter.al2023_ami_dr.value
-    instance_type          = var.instance_type
-    update_default_version = true
-    security_group_ids     = [aws_security_group.app_dr.id]
-
-    user_data = base64encode(<<-EOT
-      #!/bin/bash
-      dnf update -y
-      dnf install -y nginx
-      echo "<html><body><h1>${var.name_prefix} - DR</h1></body></html>" >/usr/share/nginx/html/index.html
-      systemctl enable nginx
-      systemctl start nginx
-    EOT
-    )
+  launch_template {
+    id      = aws_launch_template.app_dr.id
+    version = "$Latest"
   }
 
-  tags = concat(
-    [
-      {
-        key                 = "Name"
-        value               = "${var.name_prefix}-app-dr"
-        propagate_at_launch = true
-      }
-    ],
-    [
-      for k, v in local.common_tags : {
-        key                 = k
-        value               = v
-        propagate_at_launch = true
-      }
-    ]
-  )
+  tag {
+    key                 = "Name"
+    value               = "${var.name_prefix}-app-dr"
+    propagate_at_launch = true
+  }
 }
 
 ########################
