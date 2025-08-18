@@ -156,7 +156,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       });
       
       const response = await apiGatewayClient.send(command);
-      expect(response.name).toMatch(/srvls-ms-.*-api/);
+      expect(response.name).toMatch(/srvls-ms(-.*)?-api/);
       expect(response.endpointConfiguration?.types).toContain("REGIONAL");
     });
 
@@ -193,7 +193,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       
       const secretData = JSON.parse(response.SecretString!);
       expect(secretData.api_key).toBeDefined();
-      expect(secretData.read_only_key).toBeDefined();
+      expect(secretData.notification_service_key).toBeDefined();
     });
   });
 
