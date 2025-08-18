@@ -1,36 +1,48 @@
-A **modal failure** in Terraform AWS infrastructure provisioning typically includes:
+---
 
-- Using overly permissive or insecure security groups with wide open inbound rules (e.g., allowing all IPs on SSH/HTTP).
-- Not enabling encryption on S3 buckets or leaving public access open.
-- Omitting logging features such as CloudTrail, CloudWatch alarms, or S3 access logging.
-- Assigning overly broad IAM permissions with wildcard actions/resources rather than least privilege.
-- Hardcoding AMIs, ignoring latest patched versions.
-- Missing automation for patch management on EC2 instances.
-- Lack of multi-AZ deployment for databases affecting availability.
-- Inconsistent or missing tagging and naming conventions.
-- Resource names not unique, causing conflicts on repeated deployments.
-- Not handling existing resource state correctly causing conflicts during reapply or destroy.
+- **Output is incomplete/invalid HCL**: The file truncates at the `aws_iam_role_policy.ec2_ssm_policy` block (ends at `"ssm`), leaving unclosed braces and an unfinished policy. Terraform will not parse.
 
-An **ideal response** addresses all these issues by:
+- **EC2 not implemented**: No `aws_instance`, no `aws_iam_instance_profile`, no `metadata_options { http_tokens = "required" }`, and no network settings to disable public IPs. Fails EC2 AMI + hardening requirement.
 
-- Restricting security groups to specific IP address ranges only.
-- Enforcing server-side encryption with customer-managed KMS keys on all S3 buckets; blocking public access.
-- Enabling comprehensive audit logging: CloudTrail with secure S3 bucket, VPC flow logs to CloudWatch, and alarms on suspicious activities.
-- Using IAM roles and policies that follow the principle of least privilege; separate roles for EC2, Flow Logs, and maintenance tasks.
-- Dynamically selecting the latest secure Amazon Linux 2 AMIs for EC2 launch templates.
-- Automating patch management with SSM patch baselines, patch groups, and maintenance windows.
-- Deploying RDS instances with Multi-AZ and encryption enabled.
-- Using consistent tagging and dynamic resource naming (with random suffixes) to avoid collisions.
-- Managing Terraform state carefully to avoid drift and import existing resources when needed.
+- **SSM Patch Manager not implemented**: No Maintenance Window, Patch Baseline/Association, or SSM Associations. Fails patch automation requirement.
 
-Such an ideal configuration is modular, reusable, and fully deployable without manual interventions and passes compliance and security audits.
+- **Missing required outputs**: No `output` blocks for key resource ARNs/IDs. Deliverable requires outputs.
 
-[1] https://controlmonkey.io/resource/how-to-troubleshoot-debug-terraform-on-aws
-[2] https://docs.aws.amazon.com/parallelcluster/latest/ug/troubleshooting-v3-terraform.html
-[3] https://controlmonkey.io/resource/terraform-errors-guide
-[4] https://github.com/terraform-aws-modules/terraform-aws-lambda/issues/82
-[5] https://developer.hashicorp.com/terraform/tutorials/configuration-language/troubleshooting-workflow
-[6] https://discuss.hashicorp.com/t/optimizing-terraform-aws-to-deploy-and-destroy-4000-instances/25334
-[7] https://stackoverflow.com/questions/79270048/terraform-deployment-of-ecs-targets-failing
-[8] https://aws.amazon.com/blogs/devops/terraform-ci-cd-and-testing-on-aws-with-the-new-terraform-test-framework/
-[9] https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecs_service
+- **KMS key policy gaps vs usage**:
+  - CloudWatch Log Groups and the SNS topic are configured to use the same CMK, but the KMS key policy does not allow `logs.${region}.amazonaws.com` nor `sns.amazonaws.com` to use the key. Will cause AccessDenied for log encryption and SNS.
+  - Declared inputs `kms_key_administrators` / `kms_key_users` are not referenced in the key policy.
+  - Key policy grants `kms:*` to account root, violating the “avoid \*” guidance under IAM least privilege.
+
+- **S3 access logging coverage**: Server access logging is enabled for `cloudtrail` and `app_data` buckets, but not for the `access_logs` bucket itself, violating “every S3 bucket has logging to a central logging bucket.”
+
+- **S3 access logs bucket policy likely incorrect**:
+  - Uses `logging.s3.amazonaws.com` principal with `Condition` on `aws:SourceArn`. S3 server access log delivery typically does not include `aws:SourceArn`; this condition may block log delivery.
+  - Policy does not explicitly require expected canned ACL for server access logs; configuration may be brittle.
+  - The `access_logs` bucket enforces SSE-KMS via default encryption and DenyUnencryptedUploads; S3 server access log delivery does not use SSE-KMS. These denies will likely prevent delivery of access logs to the logging bucket.
+
+- **Bucket policy public ACL protection missing**: Policies deny non-TLS and unencrypted uploads, but do not include explicit denies for public ACLs/policies as requested (relying only on Public Access Block).
+
+- **CloudTrail bucket policy condition key typo**: Uses `"AWS:SourceArn"` instead of the correct `"aws:SourceArn"` in multiple statements.
+
+- **IAM least-privilege issues**:
+  - VPC Flow Logs role allows `logs:CreateLogGroup` scoped to a specific log group ARN, which is not the correct resource scope for that action and may fail. Either drop it or scope to `arn:aws:logs:${region}:${account}:*`.
+  - EC2 SSM permissions are unfinished; the inline policy block is truncated and does not grant required SSM permissions (e.g., equivalent to `AmazonSSMManagedInstanceCore`).
+
+- **CloudTrail event selector schema issue**: `exclude_management_event_sources = []` is not a valid attribute in the `event_selector` block and will fail validation.
+
+- **“No manual steps” gap for alarms/subscriptions**: Uses email SNS subscriptions which require manual confirmation, and there are no outputs or notes acknowledging this exception.
+
+- **EC2 AMI lookup unused**: `data.aws_ssm_parameter.amazon_linux_2023_ami` is defined but not used anywhere due to the absence of EC2 resources.
+
+- **Unused inputs**: `public_subnet_ids`, KMS admin/user variables are declared but not consumed (KMS vars also not wired into key policy).
+
+- **RDS secret and password exposure**: DB password is set directly on `aws_db_instance`, placing the secret in the Terraform state. Not strictly forbidden by the prompt, but contrary to security-first intent; better to source from Secrets Manager at creation time or use `manage_master_user_password`.
+
+- **S3 CMK not enforced by key-id in policies**: Bucket policies only check `s3:x-amz-server-side-encryption = aws:kms` and do not constrain `s3:x-amz-server-side-encryption-aws-kms-key-id` to the configured CMK; uploads using other CMKs would pass.
+
+- **Region pinning not explicit in code**: While the prompt allows an existing `provider.tf`, the Terraform code itself does not assert `us-west-2` anywhere; region-sensitive constructs rely entirely on provider configuration rather than validating the expected region.
+
+
+
+
+

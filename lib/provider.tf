@@ -1,4 +1,5 @@
-# FILE: provider.tf
+# provider.tf
+
 terraform {
   required_version = ">= 1.4.0"
 
@@ -7,30 +8,20 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.6"
-    }
   }
-  # backend "local" {
-  #   path = "terraform.tfstate"
-  # }
- backend "s3" {
-    bucket         = "devs3-bucket-291749-nova"
-    key            = "terraform.tfstate"
-    region         = "us-west-2"  # <-- Correct region
-    use_lockfile   = true           # Optional for state locking
+
+  # S3 backend configuration (ensure bucket/table exist beforehand)
+  backend "s3" {
+    bucket         = "iac-rlhf-tf-states"
+    key            = "iac-test-automations/lib/terraform.tfstate"
+    region         = "us-west-2"
+    use_lockfile   = true
     encrypt        = true
   }
 }
 
+# Primary AWS provider for general resources
 provider "aws" {
-  region = var.aws_region
-  default_tags {
-    tags = {
-      Environment = var.environment
-      Project     = var.project_name
-      ManagedBy   = "Terraform"
-    }
-  }
+  region = "us-west-2"
 }
+  
