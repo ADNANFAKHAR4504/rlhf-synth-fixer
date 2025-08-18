@@ -1,16 +1,22 @@
-I need to create a secure and efficient AWS cloud environment using Pulumi with TypeScript. The infrastructure must follow AWS security best practices and be deployable in any AWS region. All resources should be modular and named following the pattern `<resource>-<environment>`. Here are the components I need:
+# Pulumi AWS Infrastructure Setup (Human-style prompt)
 
-1. Create a new VPC with the CIDR block `10.0.0.0/16`.
-2. Create two public subnets within the VPC, using CIDR blocks `10.0.1.0/24` and `10.0.2.0/24`, distributed across different availability zones for redundancy.
-3. Provision an Internet Gateway and attach it to the VPC.
-4. Create a route table associated with the Internet Gateway, and ensure both public subnets are connected to this route table to allow outbound internet access.
-5. Define a security group that allows SSH access **only from a specified list of trusted CIDR blocks** from IP range `203.26.56.90.`
-6. Deploy an EC2 instance into one of the public subnets:
-   - Use the latest Amazon Linux 2 AMI.
-   - Ensure the instance is associated with the previously created security group and is publicly reachable only for SSH access as defined. from that IP range.
-7. Use Pulumi configuration or environment variables to pass the list of allowed SSH CIDRs and other region-specific values.
-8. All resources must be associated with a Pulumi provider object to control deployment region explicitly.
-9. Follow Pulumi best practices: modular code structure, strict typing, clear tagging, and export all important outputs like VPC ID, subnet IDs, security group ID, and EC2 instance public IP.
-10. Make sure there is a pulumi provider which is used to deploy resources and that region is configurable and it is deployed in `ap-south-1` region.
+I'm setting up a secure and modular AWS environment using Pulumi with TypeScript. The goal is to follow AWS security best practices and keep things region-agnostic, but I'll start by deploying in `ap-south-1`. I want the code to be production-ready and reusable across environments like `dev`, `stage`, and `prod`.
+
+Here’s what I’m trying to build:
+
+- A new VPC with the CIDR block `10.0.0.0/16`.
+- Two public subnets: `10.0.1.0/24` and `10.0.2.0/24`, spread across different availability zones.
+- An Internet Gateway atached to the VPC.
+- A route table linked to the IGW, associated with both public subnets to enable outbound internet access.
+- A security group that allows SSH only from a specific trusted CIDR (e.g., `203.26.56.90/32`). No broad SSH access.
+- An EC2 instance (Amazon Linux 2023) in one of the public subnets, associated with the security group. Should be publicly reachable via SSH (but only from that CIDR).
+- Use Pulumi config or environment variables to provide values like allowed SSH CIDRs and the target region.
+- All resources should be tagged and named using the `<resource>-<environment>` convention.
+- Everything should be created using a Pulumi provider configured for the chosen region.
+- Finally, export all the important outputs: VPC ID, subnet IDs, security group ID, and the EC2 instance public IP.
+
+Please avoid scaffolding/boilerplate and focus just on the core infrastructure logic.
+
+Thanks!
 
 Please provide the Pulumi TypeScript code implementing this setup. The code must be production-ready, follow AWS security standards, and be region-agnostic. Avoid boilerplate scaffolding — focus only on the core infrastructure logic.
