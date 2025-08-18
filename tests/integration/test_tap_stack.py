@@ -166,16 +166,30 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     """Test that VPC was created with correct configuration."""
     outputs = self._get_stack_outputs()
     
-    if not outputs:
-      self.skipTest("No stack outputs available")
-
-    # Get VPC ID from outputs
-    primary_region = outputs.get('primary_region', 'us-west-2')
+    # Get VPC ID from outputs or discover it
+    primary_region = outputs.get('primary_region', 'us-west-2') if outputs else 'us-west-2'
     vpc_id_key = f"vpc_id_{primary_region.replace('-', '_')}"
-    vpc_id = outputs.get(vpc_id_key)
+    vpc_id = outputs.get(vpc_id_key) if outputs else None
     
+    # If not found in outputs, search for VPC with our app tags
     if vpc_id is None:
-      self.skipTest("VPC ID not found - VPC may not be deployed yet")
+      vpc_response = self.ec2_client.describe_vpcs(
+        Filters=[{'Name': 'state', 'Values': ['available']}]
+      )
+      for vpc in vpc_response['Vpcs']:
+        tags = {tag['Key']: tag['Value'] for tag in vpc.get('Tags', [])}
+        if any(self.app_name.lower() in str(value).lower() for value in tags.values()):
+          vpc_id = vpc['VpcId']
+          break
+      
+      # If still no tagged VPC, use the first available non-default VPC
+      if vpc_id is None:
+        for vpc in vpc_response['Vpcs']:
+          if not vpc.get('IsDefault', False) and vpc['State'] == 'available':
+            vpc_id = vpc['VpcId']
+            break
+    
+    self.assertIsNotNone(vpc_id, "No VPC found for the application")
 
     def check_vpc():
       response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
@@ -235,15 +249,23 @@ class TestTapStackLiveIntegration(unittest.TestCase):
           pass  # Some buckets might not have PAB configured
           
     except Exception as e:
-      self.skipTest(f"Could not test S3 buckets: {e}")
+      self.fail(f"Error testing S3 buckets: {e}")
 
   def test_alb_exists_and_accessible(self):
     """Test that Application Load Balancer exists and is accessible."""
     outputs = self._get_stack_outputs()
     alb_dns_name = outputs.get('primary_alb_dns')
     
+    # If we can't find ALB from outputs, search directly
     if alb_dns_name is None:
-      self.skipTest("ALB DNS name not found - ALB may not be deployed yet")
+      alb_response = self.elbv2_client.describe_load_balancers()
+      for lb in alb_response['LoadBalancers']:
+        if (self.app_name.lower() in lb['LoadBalancerName'].lower() or 
+            'compute' in lb['LoadBalancerName'].lower()):
+          alb_dns_name = lb['DNSName']
+          break
+    
+    self.assertIsNotNone(alb_dns_name, "No Application Load Balancer found for the application")
 
     def check_alb():
       response = self.elbv2_client.describe_load_balancers()
@@ -261,59 +283,55 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
   def test_secrets_exist(self):
     """Test that secrets were created in AWS Secrets Manager."""
-    try:
-      # Find secrets by searching for secrets with our app name
-      secrets = self.secretsmanager_client.list_secrets()['SecretList']
-      app_secrets = [secret for secret in secrets if self.app_name.lower() in secret['Name'].lower()]
-      
-      if not app_secrets:
-        self.skipTest("No secrets found for the application")
-      
-      # Test that at least one secret exists and is accessible
-      for secret in app_secrets[:2]:  # Test up to 2 secrets
-        secret_name = secret['Name']
-        try:
-          self.secretsmanager_client.describe_secret(SecretId=secret_name)
-        except ClientError as e:
-          self.fail(f"Cannot access secret {secret_name}: {e}")
-          
-    except Exception as e:
-      self.skipTest(f"Could not test secrets: {e}")
+    # Find secrets by searching for secrets with our app name
+    secrets = self.secretsmanager_client.list_secrets()['SecretList']
+    app_secrets = [secret for secret in secrets if self.app_name.lower() in secret['Name'].lower()]
+    
+    self.assertGreater(len(app_secrets), 0, f"No secrets found for application {self.app_name}")
+    
+    # Test that at least one secret exists and is accessible
+    for secret in app_secrets[:2]:  # Test up to 2 secrets
+      secret_name = secret['Name']
+      try:
+        self.secretsmanager_client.describe_secret(SecretId=secret_name)
+      except ClientError as e:
+        self.fail(f"Cannot access secret {secret_name}: {e}")
 
   def test_ssm_parameters_exist(self):
     """Test that SSM parameters were created."""
-    try:
-      # Find SSM parameters by searching for parameters with our app name
-      parameters = self.ssm_client.describe_parameters()['Parameters']
-      app_params = [param for param in parameters if self.app_name.lower() in param['Name'].lower()]
-      
-      if not app_params:
-        self.skipTest("No SSM parameters found for the application")
-      
-      # Test that parameters are accessible
-      for param in app_params[:3]:  # Test up to 3 parameters
-        param_name = param['Name']
-        try:
-          self.ssm_client.get_parameter(Name=param_name)
-        except ClientError as e:
-          self.fail(f"Cannot access SSM parameter {param_name}: {e}")
-          
-    except Exception as e:
-      self.skipTest(f"Could not test SSM parameters: {e}")
+    # Find SSM parameters by searching for parameters with our app name
+    parameters = self.ssm_client.describe_parameters()['Parameters']
+    app_params = [param for param in parameters if self.app_name.lower() in param['Name'].lower()]
+    
+    self.assertGreater(len(app_params), 0, f"No SSM parameters found for application {self.app_name}")
+    
+    # Test that parameters are accessible
+    for param in app_params[:3]:  # Test up to 3 parameters
+      param_name = param['Name']
+      try:
+        self.ssm_client.get_parameter(Name=param_name)
+      except ClientError as e:
+        self.fail(f"Cannot access SSM parameter {param_name}: {e}")
 
   def test_security_groups_configured_correctly(self):
     """Test that security groups have correct rules."""
     outputs = self._get_stack_outputs()
-    
-    if not outputs:
-      self.skipTest("No stack outputs available")
       
-    primary_region = outputs.get('primary_region', 'us-west-2')
+    primary_region = outputs.get('primary_region', 'us-west-2') if outputs else 'us-west-2'
     vpc_id_key = f"vpc_id_{primary_region.replace('-', '_')}"
-    vpc_id = outputs.get(vpc_id_key)
+    vpc_id = outputs.get(vpc_id_key) if outputs else None
     
+    # Find VPC if not in outputs
     if vpc_id is None:
-      self.skipTest("VPC ID not found - cannot test security groups")
+      vpc_response = self.ec2_client.describe_vpcs(
+        Filters=[{'Name': 'state', 'Values': ['available']}]
+      )
+      for vpc in vpc_response['Vpcs']:
+        if not vpc.get('IsDefault', False):
+          vpc_id = vpc['VpcId']
+          break
+    
+    self.assertIsNotNone(vpc_id, "No VPC found to test security groups")
 
     # Get security groups for the VPC
     response = self.ec2_client.describe_security_groups(
@@ -371,50 +389,44 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
   def test_iam_role_exists(self):
     """Test that EC2 IAM role was created with correct policies."""
-    # Try to find IAM role by searching for roles with our app name
-    try:
-      roles = self.iam_client.list_roles()['Roles']
-      app_roles = [role for role in roles if self.app_name.lower() in role['RoleName'].lower() and 'ec2' in role['RoleName'].lower()]
-      
-      if not app_roles:
-        self.skipTest("No IAM roles found for the application")
-      
-      role_name = app_roles[0]['RoleName']
+    # Find IAM role by searching for roles with our app name
+    roles = self.iam_client.list_roles()['Roles']
+    app_roles = [role for role in roles if self.app_name.lower() in role['RoleName'].lower() and 'ec2' in role['RoleName'].lower()]
+    
+    self.assertGreater(len(app_roles), 0, f"No EC2 IAM roles found for application {self.app_name}")
+    
+    role_name = app_roles[0]['RoleName']
 
-      def check_role():
-        try:
-          self.iam_client.get_role(RoleName=role_name)
-          return True
-        except ClientError as e:
-          if e.response['Error']['Code'] == 'NoSuchEntity':
-            return False
-          raise
-
-      self.assertTrue(
-        self._resource_exists_with_retries(check_role),
-        f"IAM role {role_name} does not exist"
-      )
-
-      # Check attached policies
+    def check_role():
       try:
-        policies = self.iam_client.list_attached_role_policies(RoleName=role_name)
-        policy_arns = [p['PolicyArn'] for p in policies['AttachedPolicies']]
+        self.iam_client.get_role(RoleName=role_name)
+        return True
+      except ClientError as e:
+        if e.response['Error']['Code'] == 'NoSuchEntity':
+          return False
+        raise
 
-        # Should have SSM policy attached
-        ssm_policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-        self.assertIn(ssm_policy_arn, policy_arns)
-      except ClientError:
-        pass  # Skip if we can't check policies
-        
-    except Exception as e:
-      self.skipTest(f"Could not test IAM roles: {e}")
+    self.assertTrue(
+      self._resource_exists_with_retries(check_role),
+      f"IAM role {role_name} does not exist"
+    )
+
+    # Check attached policies
+    try:
+      policies = self.iam_client.list_attached_role_policies(RoleName=role_name)
+      policy_arns = [p['PolicyArn'] for p in policies['AttachedPolicies']]
+
+      # Should have SSM policy attached
+      ssm_policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      self.assertIn(ssm_policy_arn, policy_arns)
+    except ClientError:
+      pass  # Skip if we can't check policies
 
   def test_stack_exports_contain_expected_keys(self):
     """Test that stack exports all expected output keys."""
     outputs = self._get_stack_outputs()
     
-    if not outputs:
-      self.skipTest("No stack outputs available")
+    self.assertIsNotNone(outputs, "Stack outputs should be available")
 
     expected_keys = [
       'app_name',
@@ -477,10 +489,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
       f"RDS instance {db_instance_id} does not exist"
     )
 
-  @unittest.skipUnless(
-    os.getenv('RUN_NETWORK_TESTS') == 'true',
-    "Skipping network connectivity test - set RUN_NETWORK_TESTS=true to run"
-  )
   def test_alb_health_check_responds(self):
     """Test that ALB health check endpoint responds (network test)."""
     import requests  # pylint: disable=import-outside-toplevel
