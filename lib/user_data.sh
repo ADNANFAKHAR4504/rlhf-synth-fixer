@@ -26,13 +26,27 @@ yum install -y amazon-cloudwatch-agent
 mkdir -p /opt/app
 chown ec2-user:ec2-user /opt/app
 
+# Function to get IMDSv2 token and metadata
+get_metadata() {
+    local token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null)
+    curl -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/$1" 2>/dev/null
+}
+
 # Set up basic monitoring
 cat > /opt/app/health-check.sh << 'EOF'
 #!/bin/bash
 # Basic health check script
 echo "Instance health check - $(date)"
-echo "Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
-echo "Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)"
+
+# Get IMDSv2 token
+TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null)
+
+# Get instance metadata using IMDSv2
+INSTANCE_ID=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" "http://169.254.169.254/latest/meta-data/instance-id" 2>/dev/null)
+AZ=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" "http://169.254.169.254/latest/meta-data/placement/availability-zone" 2>/dev/null)
+
+echo "Instance ID: $INSTANCE_ID"
+echo "Availability Zone: $AZ"
 echo "System load: $(uptime)"
 echo "Memory usage: $(free -h)"
 echo "Disk usage: $(df -h /)"
@@ -58,10 +72,25 @@ class HealthCheckHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             
-            # Get instance metadata
+            # Get instance metadata using IMDSv2
             try:
-                instance_id = subprocess.check_output(['curl', '-s', 'http://169.254.169.254/latest/meta-data/instance-id']).decode().strip()
-                az = subprocess.check_output(['curl', '-s', 'http://169.254.169.254/latest/meta-data/placement/availability-zone']).decode().strip()
+                # Get IMDSv2 token
+                token = subprocess.check_output([
+                    'curl', '-X', 'PUT', 
+                    'http://169.254.169.254/latest/api/token',
+                    '-H', 'X-aws-ec2-metadata-token-ttl-seconds: 21600'
+                ]).decode().strip()
+                
+                # Get metadata with token
+                instance_id = subprocess.check_output([
+                    'curl', '-H', f'X-aws-ec2-metadata-token: {token}',
+                    'http://169.254.169.254/latest/meta-data/instance-id'
+                ]).decode().strip()
+                
+                az = subprocess.check_output([
+                    'curl', '-H', f'X-aws-ec2-metadata-token: {token}',
+                    'http://169.254.169.254/latest/meta-data/placement/availability-zone'
+                ]).decode().strip()
             except:
                 instance_id = "unknown"
                 az = "unknown"

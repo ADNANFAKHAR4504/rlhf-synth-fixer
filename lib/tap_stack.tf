@@ -180,8 +180,8 @@ data "aws_availability_zones" "available" {
 resource "null_resource" "region_guard" {
   lifecycle {
     precondition {
-      condition     = data.aws_region.current.name == local.expected_region
-      error_message = "This stack must be deployed in us-west-2. Current region: ${data.aws_region.current.name}"
+      condition     = data.aws_region.current.id == local.expected_region
+      error_message = "This stack must be deployed in us-west-2. Current region: ${data.aws_region.current.id}"
     }
   }
 }
@@ -273,7 +273,7 @@ resource "aws_kms_key" "main" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "kms:ViaService" = "s3.${data.aws_region.current.name}.amazonaws.com"
+            "kms:ViaService" = "s3.${data.aws_region.current.id}.amazonaws.com"
           }
         }
       },
@@ -289,14 +289,14 @@ resource "aws_kms_key" "main" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
           }
         }
       },
       {
         Sid       = "AllowCloudWatchLogsUse"
         Effect    = "Allow"
-        Principal = { Service = "logs.${data.aws_region.current.name}.amazonaws.com" }
+        Principal = { Service = "logs.${data.aws_region.current.id}.amazonaws.com" }
         Action = [
           "kms:Encrypt",
           "kms:Decrypt",
@@ -327,7 +327,7 @@ resource "aws_kms_key" "main" {
       {
         Sid       = "AllowRDSUseViaRegion"
         Effect    = "Allow"
-        Principal = { Service = "rds.${data.aws_region.current.name}.amazonaws.com" }
+        Principal = { Service = "rds.${data.aws_region.current.id}.amazonaws.com" }
         Action = [
           "kms:Encrypt",
           "kms:Decrypt",
@@ -342,6 +342,106 @@ resource "aws_kms_key" "main" {
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-primary-cmk"
+  })
+}
+
+// =====================
+// Random suffix for unique S3 bucket names
+// =====================
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
+// =====================
+// S3 Buckets
+// =====================
+// Central Access Logs bucket
+resource "aws_s3_bucket" "access_logs" {
+  bucket        = "${local.name_prefix}-access-logs-${random_id.bucket_suffix.hex}"
+  force_destroy = false
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-access-logs"
+    Purpose = "access-logging"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "access_logs" {
+  bucket = aws_s3_bucket.access_logs.id
+  versioning_configuration { status = "Enabled" }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
+  bucket = aws_s3_bucket.access_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "access_logs" {
+  bucket                  = aws_s3_bucket.access_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_logging" "access_logs_self" {
+  bucket        = aws_s3_bucket.access_logs.id
+  target_bucket = aws_s3_bucket.access_logs.id
+  target_prefix = "access-logs/self/"
+}
+
+resource "aws_s3_bucket_policy" "access_logs" {
+  bucket = aws_s3_bucket.access_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = [aws_s3_bucket.access_logs.arn, "${aws_s3_bucket.access_logs.arn}/*"]
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+      },
+      {
+        Sid       = "DenyPublicObjectACLs"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["s3:PutObject", "s3:PutObjectAcl"]
+        Resource  = "${aws_s3_bucket.access_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = ["public-read", "public-read-write", "authenticated-read"]
+          }
+        }
+      },
+      {
+        Sid       = "S3ServerAccessLogsDeliveryWrite"
+        Effect    = "Allow"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.access_logs.arn}/access-logs/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid       = "S3ServerAccessLogsDeliveryAcl"
+        Effect    = "Allow"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Action    = ["s3:GetBucketAcl"]
+        Resource  = aws_s3_bucket.access_logs.arn
+      }
+    ]
   })
 }
 
@@ -615,7 +715,7 @@ resource "aws_instance" "app" {
   user_data_base64            = base64encode(templatefile("${path.module}/user_data.sh", {
     project_name = var.project_name
     environment  = var.environment
-    region       = data.aws_region.current.name
+    region       = data.aws_region.current.id
   }))
 
   metadata_options {
@@ -738,106 +838,6 @@ resource "aws_kms_alias" "main" {
   target_key_id = aws_kms_key.main.key_id
 }
 
-// =====================
-// Random suffix for unique S3 bucket names
-// =====================
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
-}
-
-// =====================
-// S3 Buckets
-// =====================
-// Central Access Logs bucket
-resource "aws_s3_bucket" "access_logs" {
-  bucket        = "${local.name_prefix}-access-logs-${random_id.bucket_suffix.hex}"
-  force_destroy = false
-
-  tags = merge(local.common_tags, {
-    Name    = "${local.name_prefix}-access-logs"
-    Purpose = "access-logging"
-  })
-}
-
-resource "aws_s3_bucket_versioning" "access_logs" {
-  bucket = aws_s3_bucket.access_logs.id
-  versioning_configuration { status = "Enabled" }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
-  bucket = aws_s3_bucket.access_logs.id
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.main.arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "access_logs" {
-  bucket                  = aws_s3_bucket.access_logs.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_logging" "access_logs_self" {
-  bucket        = aws_s3_bucket.access_logs.id
-  target_bucket = aws_s3_bucket.access_logs.id
-  target_prefix = "access-logs/self/"
-}
-
-resource "aws_s3_bucket_policy" "access_logs" {
-  bucket = aws_s3_bucket.access_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource  = [aws_s3_bucket.access_logs.arn, "${aws_s3_bucket.access_logs.arn}/*"]
-        Condition = { Bool = { "aws:SecureTransport" = "false" } }
-      },
-      {
-        Sid       = "DenyPublicObjectACLs"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = ["s3:PutObject", "s3:PutObjectAcl"]
-        Resource  = "${aws_s3_bucket.access_logs.arn}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = ["public-read", "public-read-write", "authenticated-read"]
-          }
-        }
-      },
-      {
-        Sid       = "S3ServerAccessLogsDeliveryWrite"
-        Effect    = "Allow"
-        Principal = { Service = "logging.s3.amazonaws.com" }
-        Action    = ["s3:PutObject"]
-        Resource  = "${aws_s3_bucket.access_logs.arn}/access-logs/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      },
-      {
-        Sid       = "S3ServerAccessLogsDeliveryAcl"
-        Effect    = "Allow"
-        Principal = { Service = "logging.s3.amazonaws.com" }
-        Action    = ["s3:GetBucketAcl"]
-        Resource  = aws_s3_bucket.access_logs.arn
-      }
-    ]
-  })
-}
-
 // CloudTrail bucket
 resource "aws_s3_bucket" "cloudtrail" {
   bucket        = "${local.name_prefix}-cloudtrail-${random_id.bucket_suffix.hex}"
@@ -925,7 +925,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource  = aws_s3_bucket.cloudtrail.arn
         Condition = {
           StringEquals = {
-            "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
+            "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
           }
         }
       },
@@ -938,7 +938,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"  = "bucket-owner-full-control",
-            "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
+            "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
           }
         }
       }
