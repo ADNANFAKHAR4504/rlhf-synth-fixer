@@ -11,7 +11,7 @@
   - `restricted-ssh`
   - `vpc-flow-logs-enabled`
 
-- **GuardDuty not enabled**: No `aws_guardduty_detector` resource is defined.
+- **GuardDuty not enabled**: No `aws_guardduty_detector` resource defined.
 
 - **No outputs provided**: The response omits all required outputs specified in the prompt, including (at minimum):
   - VPC ID; Subnet IDs; Security Group IDs
