@@ -22,6 +22,20 @@
     "integration-tests"
   ],
   "training_quality": 9,
-  "aws_services": ["s3", "ec2", "cloudtrail", "iam", "kms", "vpc", "sts"],
-  "startedAt": "2025-08-16T13:27:26.764Z"
+  "aws_services": [
+    "s3",
+    "ec2",
+    "cloudtrail",
+    "iam",
+    "kms",
+    "vpc",
+    "sts"
+  ],
+  "startedAt": "2025-08-16T13:27:26.764Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akorede28",
+  "dockerS3Location": ""
 }
