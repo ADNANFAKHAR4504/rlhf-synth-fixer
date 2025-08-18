@@ -1,46 +1,56 @@
-We need to build a **highly available and resilient AWS web application environment** using CDK for Terraform (TypeScript).  
-The implementation should be structured into two files:
+# Task: Highly Available AWS Web App Environment with CDKTF (TypeScript)
 
-1. `modules.ts`  
-   - Define all core infrastructure modules:
-     - **VPC** spanning at least three Availability Zones.  
-     - **Elastic Load Balancer (ELB)** for distributing incoming traffic across multiple AZs.  
-     - **Auto Scaling Groups (ASG)** to manage EC2 instances across three AZs.  
-     - **RDS (Multi-AZ enabled)** for the relational database layer with automated backup configuration.  
-   - Add inline comments explaining each resource and how it contributes to high availability and failure recovery.  
+We need to set up a **highly available and fault-tolerant web application environment** on AWS using **CDK for Terraform with TypeScript**.  
 
-2. `tap-stack.ts`  
-   - Import and instantiate the modules defined in `modules.ts`.  
-   - Wire variables for AZ selection, instance types, scaling thresholds, and DB configuration.  
-   - Ensure outputs are defined for critical resources like ELB DNS name, RDS endpoint, and Auto Scaling Group details.  
-   - No hardcoded credentials — use variables or secret references.  
+The implementation should be split into two files:
 
 ---
 
-### Requirements
-- **Region:** us-east-1.  
-- **RDS:**  
-  - Multi-AZ enabled.  
-  - Automated backups with a **minimum 7-day retention period**.  
-- **Elastic Load Balancer (ELB):**  
-  - Must balance traffic evenly across at least **three AZs**.  
-- **Auto Scaling Groups (ASG):**  
-  - Must scale EC2 instances dynamically.  
-  - Instances must be spread across at least **three AZs**.  
-- **High Availability:**  
-  - The entire system must survive the failure of any single AZ without downtime.  
+## 1. `modules.ts`
+Define the core infrastructure pieces:
+- **VPC** spanning at least three Availability Zones in `us-east-1`.
+- **Elastic Load Balancer (ELB)** to spread requests across multiple zones.
+- **Auto Scaling Groups (ASG)** to manage EC2 instances across three AZs.
+- **RDS (multi-AZ enabled)** with automated backups turned on (minimum 7-day retention).
+
+Add inline comments explaining how each component contributes to high availability and failover.
 
 ---
 
-### Deliverables
-- `modules.ts`: Resource definitions for VPC, ELB, ASG, RDS with comments.  
-- `tap-stack.ts`: Composition file that sets variables, instantiates modules, and declares outputs.  
-- Code must be valid CDKTF TypeScript, passing `terraform validate` and `terraform plan`.  
+## 2. `tap-stack.ts`
+- Import and instantiate the modules from `modules.ts`.
+- Use variables for AZs, instance types, scaling thresholds, and DB configuration (no hardcoded credentials).
+- Define outputs for critical resources such as:
+  - ELB DNS name
+  - RDS endpoint
+  - Auto Scaling Group details
 
 ---
 
-### Expectations
-- Apply AWS best practices for HA and DR.  
-- Keep modules reusable and cleanly separated.  
-- Comment on architectural choices, especially how resilience and failover are handled.  
-- Ensure the resulting infrastructure matches CloudFormation equivalent requirements but is implemented in **CDKTF TypeScript**.  
+## Requirements
+- **Region:** `us-east-1`
+- **RDS:**
+  - Multi-AZ enabled
+  - Automated backups with at least 7-day retention
+- **Elastic Load Balancer (ELB):**
+  - Must distribute traffic evenly across three or more AZs
+- **Auto Scaling Groups (ASG):**
+  - Dynamic scaling of EC2 instances
+  - Instances spread across at least three AZs
+- **High Availability:**
+  - The system must remain operational even if one AZ fails
+
+---
+
+## Deliverables
+- `modules.ts`: Resource definitions for VPC, ELB, ASG, and RDS with explanatory comments
+- `tap-stack.ts`: Composition file wiring everything together with variables and outputs
+- Code must pass `terraform validate` and `terraform plan`
+
+---
+
+## Notes
+- Follow AWS best practices for HA and disaster recovery.
+- Keep modules reusable and cleanly separated.
+- Add meaningful inline comments (not just what is being created, but why).
+- This should serve as the CDKTF equivalent of a CloudFormation template with the same requirements.
