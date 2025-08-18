@@ -12,6 +12,8 @@ import unittest
 
 # Add the lib directory to the path so we can import tap_stack
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "lib"))
+# Add the tests directory to the path so we can import utils
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Import the function to test
 try:
@@ -19,6 +21,11 @@ try:
 except ImportError:
     # Fallback for testing without the actual module
     create_infrastructure = None
+
+# Import shared utilities
+from utils import (test_nat_gateway_placement, validate_cidr_blocks,
+                   validate_nat_gateway_configuration,
+                   validate_region_cidr_mapping, validate_security_tiers)
 
 
 class TestInfrastructureIntegration(unittest.TestCase):
@@ -45,20 +52,14 @@ class TestInfrastructureIntegration(unittest.TestCase):
         """Test multi-region configuration integration."""
         # Test region configuration
         regions = ["us-east-1", "us-west-2", "eu-west-1"]
+        results = validate_region_cidr_mapping()
 
         for region in regions:
-            # Test region CIDR mapping
-            region_cidrs = {
-                "us-east-1": "10.0.0.0/16",
-                "us-west-2": "10.1.0.0/16",
-                "eu-west-1": "10.4.0.0/16",
-            }
-
-            if region in region_cidrs:
-                cidr = region_cidrs[region]
-                network = ipaddress.IPv4Network(cidr)
-                self.assertTrue(network.is_private)
-                self.assertEqual(str(network), cidr)
+            if region in results:
+                result = results[region]
+                self.assertTrue(result["is_valid"])
+                self.assertTrue(result["is_private"])
+                self.assertEqual(result["network"], result["cidr"])
 
     def test_environment_configuration_integration(self):
         """Test environment configuration integration."""
@@ -75,17 +76,18 @@ class TestInfrastructureIntegration(unittest.TestCase):
 
     def test_security_integration_validation(self):
         """Test security configuration integration."""
-        # Test security group tiers integration
-        security_tiers = ["web", "app", "db"]
+        result = validate_security_tiers()
+        
+        security_tiers = result["tiers"]
+        tier_relationships = result["relationships"]
 
         # Test that tiers are properly defined
         for tier in security_tiers:
-            self.assertIsInstance(tier, str)
-            self.assertGreater(len(tier), 0)
+            validation = result["validation"][tier]
+            self.assertTrue(validation["is_string"])
+            self.assertTrue(validation["has_length"])
 
         # Test tier relationships
-        tier_relationships = {"web": ["app"], "app": ["db"], "db": []}
-
         for tier, allowed_access in tier_relationships.items():
             self.assertIn(tier, security_tiers)
             self.assertIsInstance(allowed_access, list)
@@ -104,12 +106,15 @@ class TestInfrastructureIntegration(unittest.TestCase):
             "10.0.3.0/24",  # Private subnet 2
         ]
 
-        for subnet_cidr in subnet_cidrs:
-            subnet_network = ipaddress.IPv4Network(subnet_cidr)
+        results = validate_cidr_blocks(subnet_cidrs)
+        
+        for result in results:
+            self.assertTrue(result["is_valid"])
+            subnet_network = ipaddress.IPv4Network(result["cidr"])
             # Verify subnet is within VPC
             self.assertTrue(subnet_network.subnet_of(vpc_network))
             # Verify subnet is private
-            self.assertTrue(subnet_network.is_private)
+            self.assertTrue(result["is_private"])
 
     def test_naming_convention_integration(self):
         """Test naming convention integration across all resources."""
@@ -182,22 +187,20 @@ class TestInfrastructureIntegration(unittest.TestCase):
         enable_ha_nat = False
         num_azs = 2
 
-        if enable_ha_nat:
-            nat_gateways = num_azs
-        else:
-            nat_gateways = 1
-
-        self.assertGreater(nat_gateways, 0)
-        self.assertLessEqual(nat_gateways, num_azs)
+        result = validate_nat_gateway_configuration(enable_ha_nat, num_azs)
+        
+        self.assertTrue(result["is_valid"])
+        self.assertGreater(result["nat_gateways"], 0)
+        self.assertLessEqual(result["nat_gateways"], num_azs)
 
         # Test NAT Gateway placement
-        if nat_gateways == 1:
-            # Single NAT Gateway should be in first public subnet
-            self.assertEqual(nat_gateways, 1)
+        placement_result = test_nat_gateway_placement(result["nat_gateways"], num_azs)
+        self.assertTrue(placement_result["is_valid"])
+        
+        if placement_result["placement"] == "single":
+            self.assertEqual(result["nat_gateways"], 1)
         else:
-            # Multiple NAT Gateways should be distributed
-            nat_subnet_indices = list(range(num_azs))
-            self.assertEqual(len(nat_subnet_indices), num_azs)
+            self.assertEqual(len(placement_result["subnet_indices"]), num_azs)
 
     def test_routing_integration(self):
         """Test routing configuration integration."""
