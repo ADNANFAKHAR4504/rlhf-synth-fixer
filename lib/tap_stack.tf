@@ -955,6 +955,7 @@ output "primary_s3_versioning_status" {
   value       = aws_s3_bucket_versioning.primary.versioning_configuration[0].status
   description = "Primary S3 bucket versioning status"
 }
+
 output "secondary_s3_versioning_status" {
   value       = aws_s3_bucket_versioning.secondary.versioning_configuration.status
   description = "Secondary S3 bucket versioning status"
