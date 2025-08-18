@@ -121,9 +121,9 @@ describe('TapStack.yml - CloudFormation Template Quality', () => {
       expect(p.PrivateSubnetIds.Type).toBe('CommaDelimitedList');
       expect(p.PublicSubnetIds.Type).toBe('CommaDelimitedList');
       expect(p.CreateConfigDeliveryChannel.Type).toBe('String');
-      expect(p.CreateConfigDeliveryChannel.Default).toBe('false');
+      expect(p.CreateConfigDeliveryChannel.Default).toBe('true');
       expect(p.CreateCloudTrailTrail.Type).toBe('String');
-      expect(p.CreateCloudTrailTrail.Default).toBe('false');
+      expect(p.CreateCloudTrailTrail.Default).toBe('true');
 
       [
         'UseExistingCloudTrailBucket',

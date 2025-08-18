@@ -77,13 +77,13 @@ Parameters:
 
   CreateConfigDeliveryChannel:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Whether to create an AWS Config Delivery Channel (set to 'false' if one already exists in this account/region)
 
   CreateCloudTrailTrail:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Whether to create a CloudTrail trail in this stack (set to 'false' if trail quota is reached or one already exists)
 
