@@ -25,7 +25,6 @@ import {
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   GetRoleCommand,
-  GetRolePolicyCommand,
   IAMClient,
   ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
@@ -55,7 +54,6 @@ import {
 } from '@aws-sdk/client-s3';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
 import fs from 'fs';
-
 const region = process.env.AWS_REGION || 'us-east-1';
 const env = process.env.ENVIRONMENT || 'prod';
 const stackName = process.env.CFN_STACK_NAME || `TapStack${env}`;
@@ -142,7 +140,7 @@ describe('TapStack.yml - Comprehensive Integration Tests', () => {
       );
       if (cloudTrailAlias) {
         expect(cloudTrailAlias).toContain(env);
-        expect(cloudTrailAlias).toContain(stackName);
+        expect(cloudTrailAlias).toContain(`cloudtrail-${env}-${stackName}`);
 
         // Verify key policy
         const alias = aliases.Aliases?.find(
@@ -355,7 +353,7 @@ describe('TapStack.yml - Comprehensive Integration Tests', () => {
 
       if (channelCount > 0) {
         const channel = channels.DeliveryChannels?.[0];
-        expect(channel?.name).toContain(env);
+        expect(channel?.name).toContain(`tap-config-delivery-channel-${env}`);
         expect(channel?.s3BucketName).toBe(configBucketName);
 
         // Check required-tags rule
@@ -424,24 +422,26 @@ describe('TapStack.yml - Comprehensive Integration Tests', () => {
 
       if (recorder?.roleARN) {
         const roleName = recorder.roleARN.split('/').pop();
-        const role = await iam.send(new GetRoleCommand({ RoleName: roleName }));
+        const configRole = await iam.send(
+          new GetRoleCommand({ RoleName: roleName })
+        );
 
-        expect(role.Role?.AssumeRolePolicyDocument).toBeDefined();
+        expect(configRole.Role?.AssumeRolePolicyDocument).toBeDefined();
         const assumePolicy = JSON.parse(
-          decodeURIComponent(role.Role!.AssumeRolePolicyDocument!)
+          decodeURIComponent(configRole.Role!.AssumeRolePolicyDocument!)
         );
         expect(assumePolicy.Statement[0].Principal.Service).toBe(
           'config.amazonaws.com'
         );
 
-        // Check inline policies
-        const policies = await iam.send(
-          new GetRolePolicyCommand({
-            RoleName: roleName,
-            PolicyName: 'AWSConfigRecorderAccess',
-          })
+        // Check for attached managed policies
+        const attachedPolicies = await iam.send(
+          new ListAttachedRolePoliciesCommand({ RoleName: roleName })
         );
-        expect(policies.PolicyDocument).toBeDefined();
+        const policyArns = (attachedPolicies.AttachedPolicies || []).map(
+          p => p.PolicyArn
+        );
+        expect(policyArns.length).toBeGreaterThan(0);
       }
     }, 120000);
   });
