@@ -455,7 +455,7 @@ resource "aws_db_instance" "primary" {
   # Basic Configuration
   identifier     = "mysql-primary-${var.environment_suffix}"
   engine         = "mysql"
-  engine_version = "8.0.37"
+  engine_version = "8.0.36"
   instance_class = var.db_instance_class
 
   # Storage Configuration
@@ -487,7 +487,7 @@ resource "aws_db_instance" "primary" {
   monitoring_role_arn = aws_iam_role.rds_enhanced_monitoring.arn
 
   # Performance Insights
-  performance_insights_enabled = true
+  # performance_insights_enabled = true
 
   # Parameter Group
   parameter_group_name = aws_db_parameter_group.mysql.name
@@ -512,7 +512,7 @@ resource "aws_db_instance" "secondary" {
   # Basic Configuration
   identifier     = "mysql-secondary-${var.environment_suffix}"
   engine         = "mysql"
-  engine_version = "8.0.37"
+  engine_version = "8.0.36"
   instance_class = var.db_instance_class
 
   # Storage Configuration
@@ -544,7 +544,7 @@ resource "aws_db_instance" "secondary" {
   monitoring_role_arn = aws_iam_role.rds_enhanced_monitoring.arn
 
   # Performance Insights
-  performance_insights_enabled = true
+  # performance_insights_enabled = true
 
   # Parameter Group
   parameter_group_name = aws_db_parameter_group.mysql_secondary.name
