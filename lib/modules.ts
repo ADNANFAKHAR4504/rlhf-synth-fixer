@@ -473,7 +473,7 @@ export class RdsModule extends Construct {
 
       performanceInsightsEnabled: true,
       performanceInsightsRetentionPeriod: 7,
-      monitoringInterval: 60,
+      monitoringInterval: 0,
 
       parameterGroupName: this.dbParameterGroup.name,
 
