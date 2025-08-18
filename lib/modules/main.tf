@@ -546,7 +546,7 @@ resource "aws_iam_policy" "mfa_policy" {
           "iam:ChangePassword",
           "iam:GetUser"
         ]
-        Resource = "arn:aws:iam::*:user/${aws:username}"
+        Resource = "arn:aws:iam::*:user/$${aws:username}"
       },
       {
         Sid    = "AllowManageOwnMFA"
@@ -563,8 +563,8 @@ resource "aws_iam_policy" "mfa_policy" {
           "iam:ListUsers"
         ],
         Resource = [
-          "arn:aws:iam::*:user/${aws:username}",
-          "arn:aws:iam::*:mfa/${aws:username}"
+          "arn:aws:iam::*:user/$${aws:username}",
+          "arn:aws:iam::*:mfa/$${aws:username}"
         ]
       }
     ]})
