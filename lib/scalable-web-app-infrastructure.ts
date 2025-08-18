@@ -151,11 +151,26 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
     );
 
     // VPC Flow Logs Policy
-    new aws.iam.RolePolicyAttachment(
+    new aws.iam.RolePolicy(
       `vpc-flow-logs-policy-${environmentSuffix}`,
       {
-        role: vpcFlowLogsRole.name,
-        policyArn: 'arn:aws:iam::aws:policy/service-role/VPCFlowLogsRole',
+        role: vpcFlowLogsRole.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
       },
       { provider, parent: this }
     );
