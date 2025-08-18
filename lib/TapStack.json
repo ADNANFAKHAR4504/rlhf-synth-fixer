@@ -77,8 +77,31 @@
             }
           ]
         },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/VPCFlowLogsPublisher"
+        "Policies": [
+          {
+            "PolicyName": "VPCFlowLogsDeliveryRolePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs/${AWS::StackName}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs/${AWS::StackName}:log-stream:*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
         ],
         "Tags": [
           {
@@ -118,6 +141,12 @@
         "LogDestinationType": "cloud-watch-logs",
         "LogDestination": {
           "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${VPCFlowLogs}"
+        },
+        "DeliverLogsPermissionArn": {
+          "Fn::GetAtt": [
+            "VPCFlowLogRole",
+            "Arn"
+          ]
         },
         "Tags": [
           {
@@ -1358,6 +1387,23 @@
               "Effect": "Allow",
               "Principal": {
                 "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": [
+                "s3:PutObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "${S3Bucket}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "elasticloadbalancing.amazonaws.com"
               },
               "Action": [
                 "s3:PutObject"

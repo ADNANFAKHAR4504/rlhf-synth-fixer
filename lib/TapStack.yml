@@ -51,8 +51,19 @@ Resources:
             Principal:
               Service: vpc-flow-logs.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy
+      Policies:
+        - PolicyName: VPCFlowLogsDeliveryRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs/${AWS::StackName}'
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/vpc/flowlogs/${AWS::StackName}:log-stream:*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -74,7 +85,7 @@ Resources:
       TrafficType: ALL
       LogDestinationType: cloud-watch-logs
       LogDestination: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${VPCFlowLogs}'
-      IamRoleArn: !GetAtt VPCFlowLogRole.Arn
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
       Tags:
         - Key: Environment
           Value: !Ref Environment
