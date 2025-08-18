@@ -56,7 +56,7 @@ const region = process.env.AWS_REGION || 'us-west-1';
 const cfnClient = new CloudFormationClient({ region });
 const s3Client = new S3Client({ region });
 const ec2Client = new EC2Client({ region });
-const iamClient = new IAMClient({ region: 'us-east-1' }); // IAM is global but API calls go to us-east-1
+const iamClient = new IAMClient({ region }); // IAM is global but API calls go to current region
 const kmsClient = new KMSClient({ region });
 const cloudTrailClient = new CloudTrailClient({ region });
 // Note: configClient removed since Config resources were removed from template
