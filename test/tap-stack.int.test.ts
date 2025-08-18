@@ -52,7 +52,7 @@ try {
 }
 
 // Initialize AWS clients with proper region configuration
-const region = process.env.AWS_REGION || 'us-west-1';
+const region = process.env.AWS_REGION || 'us-east-1';
 const cfnClient = new CloudFormationClient({ region });
 const s3Client = new S3Client({ region });
 const ec2Client = new EC2Client({ region });

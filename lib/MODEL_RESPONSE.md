@@ -796,7 +796,7 @@ aws cloudformation create-stack \
   --stack-name SecureWebApp-Infrastructure \
   --template-body file://secure-webapp-infrastructure.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-west-1
+  --region us-east-1
 ```
 
 3. **Monitor deployment**:
@@ -804,7 +804,7 @@ aws cloudformation create-stack \
 ```bash
 aws cloudformation describe-stacks \
   --stack-name SecureWebApp-Infrastructure \
-  --region us-west-1
+  --region us-east-1
 ```
 
 ## Security Compliance Features
