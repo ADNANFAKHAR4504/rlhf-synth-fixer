@@ -24,7 +24,7 @@ export class TapStack extends cdk.Stack {
     super(scope, id, {
       ...props,
       env: {
-        region: 'us-east-2',
+        region: 'us-west-2',
         account: props.env?.account,
       },
     });
