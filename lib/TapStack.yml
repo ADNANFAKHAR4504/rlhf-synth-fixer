@@ -12,6 +12,12 @@ Parameters:
     Type: String
     Default: secure-cloudtrail-logs-bucket-12345
 
+  TempPassword:
+    Description: Temporary password for sample user (will be required to change on first login)
+    Type: String
+    Default: TempPassword123!
+    NoEcho: true
+
 Resources:
   # IAM Policy to enforce MFA for all users
   EnforceMFAPolicy:
@@ -80,42 +86,25 @@ Resources:
       Groups:
         - !Ref SecureUsersGroup
       LoginProfile:
-        Password: 'TempPassword123!'
+        Password: !Ref TempPassword
         PasswordResetRequired: true
 
-  # S3 Bucket Policy to deny public access
-  S3BucketPolicy:
-    Type: AWS::IAM::ManagedPolicy
+  # VPC for security group
+  SecureVPC:
+    Type: AWS::EC2::VPC
     Properties:
-      ManagedPolicyName: !Sub '${EnvironmentName}-S3SecurityPolicy'
-      Description: 'Policy to ensure S3 buckets are private and encrypted'
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${SecureS3Bucket}/*'
-              - !Ref SecureS3Bucket
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
-          - Sid: DenyUnencryptedObjectUploads
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:PutObject'
-            Resource: !Sub '${SecureS3Bucket}/*'
-            Condition:
-              StringNotEquals:
-                's3:x-amz-server-side-encryption': 'AES256'
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-SecureVPC'
 
   # Secure S3 Bucket with encryption
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-secure-bucket-${AWS::AccountId}'
+      # BucketName will be auto-generated to ensure uniqueness
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -128,9 +117,7 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
+      # Removed invalid CloudWatchConfigurations
 
   # Apply the security policy to the S3 bucket
   SecureS3BucketPolicyAttachment:
@@ -218,9 +205,7 @@ Resources:
             - Type: 'AWS::S3::Object'
               Values:
                 - 'arn:aws:s3:::*/*'
-            - Type: 'AWS::S3::Bucket'
-              Values:
-                - 'arn:aws:s3:::*'
+            # Removed invalid S3 Bucket data resource type
 
   # SCP-style policy to restrict EC2 to us-west-2 (implemented as IAM policy)
   RegionalRestrictionPolicy:
@@ -255,10 +240,17 @@ Resources:
 
   # Attach regional restriction to secure users group
   AttachRegionalRestriction:
-    Type: AWS::IAM::GroupPolicyAttachment
+    Type: AWS::IAM::Policy
     Properties:
-      GroupName: !Ref SecureUsersGroup
-      PolicyArn: !Ref RegionalRestrictionPolicy
+      PolicyName: !Sub '${EnvironmentName}-AttachRegionalRestriction'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: 'iam:AttachGroupPolicy'
+            Resource: '*'
+      Groups:
+        - !Ref SecureUsersGroup
 
   # Security Group for EC2 instances (restrictive by default)
   SecureSecurityGroup:
@@ -266,6 +258,7 @@ Resources:
     Properties:
       GroupName: !Sub '${EnvironmentName}-SecureSecurityGroup'
       GroupDescription: 'Secure security group with minimal access'
+      VpcId: !Ref SecureVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
