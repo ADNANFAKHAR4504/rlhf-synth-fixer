@@ -207,7 +207,7 @@ EOF
     );
 
     // CloudWatch Alarm for Scale Up (High Resolution)
-    new aws.cloudwatch.MetricAlarm(
+    this.cpuAlarm = new aws.cloudwatch.MetricAlarm(
       `${name}-cpu-high`,
       {
         comparisonOperator: 'GreaterThanThreshold',
