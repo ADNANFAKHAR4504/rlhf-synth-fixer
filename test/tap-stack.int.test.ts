@@ -34,6 +34,37 @@ describe('Terraform E2E Integration Test', () => {
     expect(applyOutput).toMatch(/Apply complete|No changes. Infrastructure is up-to-date/);
   });
 
+  const AWS = require('aws-sdk');
+  let bucketName = '';
+  let tableName = '';
+
+  test('terraform output returns resource names', () => {
+    const output = execSync('terraform output -json', { cwd: tfDir }).toString();
+    const outputs = JSON.parse(output);
+    bucketName = outputs.s3_bucket_name.value;
+    tableName = outputs.dynamodb_table_name.value;
+    expect(bucketName).toMatch(/integrationtest-s3-/);
+    expect(tableName).toMatch(/integrationtest-dynamodb/);
+  });
+
+  test('S3 bucket exists and has versioning enabled (live check)', async () => {
+    const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-west-1' });
+    const buckets = await s3.listBuckets().promise();
+    const found = buckets.Buckets.some(b => b.Name === bucketName);
+    expect(found).toBe(true);
+    const versioning = await s3.getBucketVersioning({ Bucket: bucketName }).promise();
+    expect(versioning.Status).toBe('Enabled');
+  });
+
+  test('DynamoDB table exists and is on-demand with correct key (live check)', async () => {
+    const dynamodb = new AWS.DynamoDB({ region: process.env.AWS_REGION || 'us-west-1' });
+    const tables = await dynamodb.listTables().promise();
+    expect(tables.TableNames).toContain(tableName);
+    const desc = await dynamodb.describeTable({ TableName: tableName }).promise();
+    expect(desc.Table.BillingModeSummary.BillingMode).toBe('PAY_PER_REQUEST');
+    expect(desc.Table.KeySchema.some(k => k.AttributeName === 'id' && k.KeyType === 'HASH')).toBe(true);
+  });
+
   afterAll(() => {
     // Optionally clean up state files for test isolation
     const stateFiles = ['terraform.tfstate', 'terraform.tfstate.backup'];
