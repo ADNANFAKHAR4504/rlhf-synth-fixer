@@ -574,16 +574,19 @@ resource "aws_acm_certificate" "main" {
 }
 
 resource "aws_route53_record" "cert_validation" {
-  for_each = toset([
-    "${local.suffix}.${var.domain_name}",
-    "*.${local.suffix}.${var.domain_name}"
-  ])
+  for_each = {
+    for dvo in aws_acm_certificate.main.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
 
   allow_overwrite = true
-  name            = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_name if dvo.domain_name == each.key][0]
-  records         = [[for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_value if dvo.domain_name == each.key][0]]
+  name            = each.value.name
+  records         = [each.value.record]
   ttl             = 60
-  type            = [for dvo in aws_acm_certificate.main.domain_validation_options : dvo.resource_record_type if dvo.domain_name == each.key][0]
+  type            = each.value.type
   zone_id         = aws_route53_zone.main.zone_id
 }
 
