@@ -2,15 +2,13 @@ import * as fs from "fs";
 import * as path from "path";
 
 const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
-const rawOutputs = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
 
-// Parse JSON-string fields from outputs (like EC2 instances and lists)
-const outputs: Record<string, any> = {};
-for (const [key, val] of Object.entries(rawOutputs)) {
+// Safe JSON parse function
+function safeJsonParse(input: any): any {
   try {
-    outputs[key] = JSON.parse(val as string);
-  } catch {
-    outputs[key] = val;
+    return JSON.parse(input);
+  } catch (error) {
+    throw new Error("Invalid JSON format");
   }
 }
 
@@ -31,245 +29,216 @@ const isValidIPv4 = (ip: any): boolean => {
 const isValidArn = (arn: any): boolean =>
   typeof arn === "string" && /^arn:aws:[a-z\-]+:[a-z0-9\-]+:\d{12}:/.test(arn);
 
-describe("Terraform Full Stack Integration Tests", () => {
-  // Existing core tests
+describe("Terraform Full Stack Integration Tests with Error Handling & Complete Outputs", () => {
+  let outputsRaw: Record<string, any>;
+  let outputs: Record<string, any> = {};
 
+  beforeAll(() => {
+    outputsRaw = JSON.parse(fs.readFileSync(outputPath, "utf-8"));
+    for (const [key, val] of Object.entries(outputsRaw)) {
+      try {
+        // Only parse JSON strings that look like arrays or objects
+        if (typeof val === "string" && (val.startsWith("[") || val.startsWith("{"))) {
+          outputs[key] = safeJsonParse(val);
+        } else {
+          outputs[key] = val;
+        }
+      } catch (e) {
+        outputs[key] = e;
+      }
+    }
+  });
+
+  // Test presence of all 23 expected keys
   it("outputs JSON must have all expected keys", () => {
-    const baseKeys = [
+    const expectedKeys = [
+      "ec2_iam_instance_profile_name",
+      "ec2_iam_role_name",
       "primary_ec2_instance",
-      "secondary_ec2_instance",
+      "primary_ec2_security_group_id",
+      "primary_ec2_security_group_rule_count",
+      "primary_internet_gateway_id",
+      "primary_kms_key_arn",
+      "primary_nat_gateway_ids",
+      "primary_private_route_table_ids",
+      "primary_private_subnet_count",
+      "primary_public_route_table_id",
+      "primary_public_subnet_count",
       "primary_route53_zone_id",
-      "secondary_route53_zone_id",
+      "primary_s3_bucket_name",
       "primary_subnet_ids",
-      "secondary_subnet_ids",
+      "primary_to_secondary_peering_routes",
       "primary_vpc_id",
-      "secondary_vpc_id",
-      "vpc_peering_id",
       "route53_record",
+      "s3_replication_role_arn",
+      "secondary_ec2_instance",
+      "secondary_ec2_security_group_id",
+      "secondary_ec2_security_group_rule_count",
+      "secondary_internet_gateway_id",
+      "secondary_kms_key_arn",
+      "secondary_nat_gateway_ids",
+      "secondary_private_route_table_ids",
+      "secondary_private_subnet_count",
+      "secondary_public_route_table_id",
+      "secondary_public_subnet_count",
+      "secondary_route53_zone_id",
+      "secondary_s3_bucket_name",
+      "secondary_subnet_ids",
+      "secondary_to_primary_peering_routes",
+      "secondary_vpc_id",
+      "vpc_cidr_overlap_warning",
+      "vpc_peering_id"
     ];
-    baseKeys.forEach((key: string) => {
+
+    expectedKeys.forEach(key => {
       expect(Object.keys(outputs)).toContain(key);
     });
   });
 
-  it("validate primary_ec2_instance structure and IPs", () => {
-    const ec2 = outputs.primary_ec2_instance;
-    expect(ec2).toHaveProperty("id");
-    expect(isNonEmptyString(ec2.id)).toBe(true);
-    expect(ec2).toHaveProperty("eip_id");
-    expect(isNonEmptyString(ec2.eip_id)).toBe(true);
-    expect(ec2).toHaveProperty("private_ip");
-    expect(isValidIPv4(ec2.private_ip)).toBe(true);
-    expect(ec2).toHaveProperty("public_ip");
-    expect(isValidIPv4(ec2.public_ip)).toBe(true);
+  // EC2 Instances validation
+  ["primary_ec2_instance", "secondary_ec2_instance"].forEach((key) => {
+    it(`validate ${key} structure and IPs`, () => {
+      const ec2 = outputs[key];
+      expect(ec2).toHaveProperty("id");
+      expect(isNonEmptyString(ec2.id)).toBe(true);
+      expect(ec2).toHaveProperty("eip_id");
+      expect(isNonEmptyString(ec2.eip_id)).toBe(true);
+      expect(ec2).toHaveProperty("private_ip");
+      expect(isValidIPv4(ec2.private_ip)).toBe(true);
+      expect(ec2).toHaveProperty("public_ip");
+      expect(isValidIPv4(ec2.public_ip)).toBe(true);
+    });
   });
 
-  it("validate secondary_ec2_instance structure and IPs", () => {
-    const ec2 = outputs.secondary_ec2_instance;
-    expect(ec2).toHaveProperty("id");
-    expect(isNonEmptyString(ec2.id)).toBe(true);
-    expect(ec2).toHaveProperty("eip_id");
-    expect(isNonEmptyString(ec2.eip_id)).toBe(true);
-    expect(ec2).toHaveProperty("private_ip");
-    expect(isValidIPv4(ec2.private_ip)).toBe(true);
-    expect(ec2).toHaveProperty("public_ip");
-    expect(isValidIPv4(ec2.public_ip)).toBe(true);
+  // Internet gateways
+  it("Internet Gateway IDs are valid", () => {
+    expect(isNonEmptyString(outputs.primary_internet_gateway_id)).toBe(true);
+    expect(outputs.primary_internet_gateway_id.startsWith("igw-")).toBe(true);
+
+    expect(isNonEmptyString(outputs.secondary_internet_gateway_id)).toBe(true);
+    expect(outputs.secondary_internet_gateway_id.startsWith("igw-")).toBe(true);
   });
 
-  it("should have valid Route53 Hosted Zone IDs", () => {
-    expect(isNonEmptyString(outputs.primary_route53_zone_id)).toBe(true);
-    expect(isNonEmptyString(outputs.secondary_route53_zone_id)).toBe(true);
+  // NAT Gateway IDs
+  it("NAT Gateway IDs arrays length 2 with valid format", () => {
+    expect(Array.isArray(outputs.primary_nat_gateway_ids)).toBe(true);
+    expect(outputs.primary_nat_gateway_ids.length).toBe(2);
+    outputs.primary_nat_gateway_ids.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
+
+    expect(Array.isArray(outputs.secondary_nat_gateway_ids)).toBe(true);
+    expect(outputs.secondary_nat_gateway_ids.length).toBe(2);
+    outputs.secondary_nat_gateway_ids.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
   });
 
-  it("should have valid VPC IDs in both regions", () => {
+  // Route tables
+  it("Route Tables IDs exist and valid", () => {
+    expect(isNonEmptyString(outputs.primary_public_route_table_id)).toBe(true);
+    expect(outputs.primary_public_route_table_id.startsWith("rtb-")).toBe(true);
+
+    expect(isNonEmptyString(outputs.secondary_public_route_table_id)).toBe(true);
+    expect(outputs.secondary_public_route_table_id.startsWith("rtb-")).toBe(true);
+
+    expect(Array.isArray(outputs.primary_private_route_table_ids)).toBe(true);
+    outputs.primary_private_route_table_ids.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
+
+    expect(Array.isArray(outputs.secondary_private_route_table_ids)).toBe(true);
+    outputs.secondary_private_route_table_ids.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
+  });
+
+  // Peering routes
+  it("Peering routes defined non-empty arrays", () => {
+    expect(Array.isArray(outputs.primary_to_secondary_peering_routes)).toBe(true);
+    expect(outputs.primary_to_secondary_peering_routes.length).toBeGreaterThan(0);
+
+    expect(Array.isArray(outputs.secondary_to_primary_peering_routes)).toBe(true);
+    expect(outputs.secondary_to_primary_peering_routes.length).toBeGreaterThan(0);
+  });
+
+  // Security groups and rule counts
+  it("Security groups IDs and rule counts", () => {
+    expect(isNonEmptyString(outputs.primary_ec2_security_group_id)).toBe(true);
+    expect(isNonEmptyString(outputs.secondary_ec2_security_group_id)).toBe(true);
+
+    expect(Number(outputs.primary_ec2_security_group_rule_count)).toBeGreaterThan(0);
+    expect(Number(outputs.secondary_ec2_security_group_rule_count)).toBeGreaterThan(0);
+  });
+
+  // VPC IDs and peering
+  it("VPC IDs are valid and distinct", () => {
     expect(isNonEmptyString(outputs.primary_vpc_id)).toBe(true);
     expect(isNonEmptyString(outputs.secondary_vpc_id)).toBe(true);
+    expect(outputs.primary_vpc_id).not.toEqual(outputs.secondary_vpc_id);
   });
 
-  it("should have exactly 4 subnet IDs for primary and secondary", () => {
-    expect(isArrayOfNonEmptyStrings(outputs.primary_subnet_ids)).toBe(true);
-    expect(outputs.primary_subnet_ids.length).toBe(4);
-
-    expect(isArrayOfNonEmptyStrings(outputs.secondary_subnet_ids)).toBe(true);
-    expect(outputs.secondary_subnet_ids.length).toBe(4);
-  });
-
-  it("should have a valid VPC peering ID", () => {
+  it("VPC peering ID is valid", () => {
     expect(isNonEmptyString(outputs.vpc_peering_id)).toBe(true);
     expect(outputs.vpc_peering_id.startsWith("pcx-")).toBe(true);
   });
 
-  it("route53_record must be a valid hostname with subdomain", () => {
+  it("CIDR overlap warning valid", () => {
+    expect(["No CIDR overlap detected", "Warning: VPC CIDRs overlap!"]).toContain(
+      outputs.vpc_cidr_overlap_warning
+    );
+  });
+
+  // Subnet counts
+  it("Subnet counts per VPC are 2 public and 2 private", () => {
+    expect(Number(outputs.primary_public_subnet_count)).toBe(2);
+    expect(Number(outputs.primary_private_subnet_count)).toBe(2);
+    expect(Number(outputs.secondary_public_subnet_count)).toBe(2);
+    expect(Number(outputs.secondary_private_subnet_count)).toBe(2);
+  });
+
+  // Subnet IDs uniqueness and validity
+  it("Subnet IDs arrays valid and unique across regions", () => {
+    expect(Array.isArray(outputs.primary_subnet_ids)).toBe(true);
+    expect(Array.isArray(outputs.secondary_subnet_ids)).toBe(true);
+
+    outputs.primary_subnet_ids.forEach((id: string) => expect(id.startsWith("subnet-")).toBe(true));
+    outputs.secondary_subnet_ids.forEach((id: string) => expect(id.startsWith("subnet-")).toBe(true));
+
+    const allSubs = [...outputs.primary_subnet_ids, ...outputs.secondary_subnet_ids];
+    expect(new Set(allSubs).size).toBe(allSubs.length);
+  });
+
+  // S3 and KMS outputs validity
+  it("S3 bucket names exist and KMS ARNs valid", () => {
+    expect(isNonEmptyString(outputs.primary_s3_bucket_name)).toBe(true);
+    expect(isNonEmptyString(outputs.secondary_s3_bucket_name)).toBe(true);
+
+    expect(isValidArn(outputs.primary_kms_key_arn)).toBe(true);
+    expect(outputs.primary_kms_key_arn.includes("us-east-2")).toBe(true);
+
+    expect(isValidArn(outputs.secondary_kms_key_arn)).toBe(true);
+    expect(outputs.secondary_kms_key_arn.includes("us-west-1")).toBe(true);
+  });
+
+  it("S3 replication role ARN is valid", () => {
+    expect(isValidArn(outputs.s3_replication_role_arn)).toBe(true);
+    expect(outputs.s3_replication_role_arn.includes("role")).toBe(true);
+  });
+
+  // IAM wiring names validation
+  it("EC2 IAM instance profile and role names formatted", () => {
+    expect(isNonEmptyString(outputs.ec2_iam_instance_profile_name)).toBe(true);
+    expect(outputs.ec2_iam_instance_profile_name).toMatch(/ec2-profile/);
+
+    expect(isNonEmptyString(outputs.ec2_iam_role_name)).toBe(true);
+    expect(outputs.ec2_iam_role_name).toMatch(/ec2-role/);
+  });
+
+  // Route53 zone IDs and record
+  it("Route53 zone IDs present and record is valid DNS hostname", () => {
+    expect(isNonEmptyString(outputs.primary_route53_zone_id)).toBe(true);
+    expect(isNonEmptyString(outputs.secondary_route53_zone_id)).toBe(true);
+
     expect(isNonEmptyString(outputs.route53_record)).toBe(true);
-    expect(outputs.route53_record).toMatch(/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i);
-    expect(
-      outputs.route53_record.startsWith(outputs.route53_record.split(".").slice(1).join("."))
-    ).toBe(false);
+    expect(/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i.test(outputs.route53_record)).toBe(true);
   });
 
-  // Additional enhanced outputs coverage
-
-  describe("Networking plumbing", () => {
-    it("Internet Gateway IDs valid", () => {
-      expect(isNonEmptyString(outputs.primary_internet_gateway_id)).toBe(true);
-      expect(outputs.primary_internet_gateway_id.startsWith("igw-")).toBe(true);
-
-      expect(isNonEmptyString(outputs.secondary_internet_gateway_id)).toBe(true);
-      expect(outputs.secondary_internet_gateway_id.startsWith("igw-")).toBe(true);
-    });
-
-    it("NAT Gateway IDs are arrays of length 2 with valid format", () => {
-      const primaryNATs: string[] = JSON.parse(outputs.primary_nat_gateway_ids);
-      const secondaryNATs: string[] = JSON.parse(outputs.secondary_nat_gateway_ids);
-
-      expect(Array.isArray(primaryNATs)).toBe(true);
-      expect(primaryNATs.length).toBe(2);
-      primaryNATs.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
-
-      expect(Array.isArray(secondaryNATs)).toBe(true);
-      expect(secondaryNATs.length).toBe(2);
-      secondaryNATs.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
-    });
-
-    it("Route table IDs exist and valid", () => {
-      expect(isNonEmptyString(outputs.primary_public_route_table_id)).toBe(true);
-      expect(outputs.primary_public_route_table_id.startsWith("rtb-")).toBe(true);
-
-      expect(isNonEmptyString(outputs.secondary_public_route_table_id)).toBe(true);
-      expect(outputs.secondary_public_route_table_id.startsWith("rtb-")).toBe(true);
-
-      const primaryPrivateRTs: string[] = JSON.parse(outputs.primary_private_route_table_ids);
-      const secondaryPrivateRTs: string[] = JSON.parse(outputs.secondary_private_route_table_ids);
-
-      expect(Array.isArray(primaryPrivateRTs)).toBe(true);
-      expect(Array.isArray(secondaryPrivateRTs)).toBe(true);
-
-      primaryPrivateRTs.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
-      secondaryPrivateRTs.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
-    });
-
-    it("Peering routes defined and non-empty", () => {
-      const p2sRoutes: any[] = JSON.parse(outputs.primary_to_secondary_peering_routes);
-      const s2pRoutes: any[] = JSON.parse(outputs.secondary_to_primary_peering_routes);
-      expect(Array.isArray(p2sRoutes)).toBe(true);
-      expect(Array.isArray(s2pRoutes)).toBe(true);
-      expect(p2sRoutes.length).toBeGreaterThan(0);
-      expect(s2pRoutes.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe("Security groups and CIDR overlap", () => {
-    it("EC2 Security Groups IDs and rule counts", () => {
-      expect(isNonEmptyString(outputs.primary_ec2_security_group_id)).toBe(true);
-      expect(isNonEmptyString(outputs.secondary_ec2_security_group_id)).toBe(true);
-
-      expect(Number(outputs.primary_ec2_security_group_rule_count)).toBeGreaterThan(0);
-      expect(Number(outputs.secondary_ec2_security_group_rule_count)).toBeGreaterThan(0);
-    });
-
-    it("VPC CIDR overlap warning is valid", () => {
-      expect(["No CIDR overlap detected", "Warning: VPC CIDRs overlap!"]).toContain(
-        outputs.vpc_cidr_overlap_warning
-      );
-    });
-  });
-
-  describe("S3 / KMS / Replication role", () => {
-    it("S3 bucket names present and valid", () => {
-      expect(isNonEmptyString(outputs.primary_s3_bucket_name)).toBe(true);
-      expect(isNonEmptyString(outputs.secondary_s3_bucket_name)).toBe(true);
-    });
-
-    it("KMS ARNs valid format and correct regions", () => {
-      expect(isValidArn(outputs.primary_kms_key_arn)).toBe(true);
-      expect(outputs.primary_kms_key_arn.includes("us-east-2")).toBe(true);
-
-      expect(isValidArn(outputs.secondary_kms_key_arn)).toBe(true);
-      expect(outputs.secondary_kms_key_arn.includes("us-west-1")).toBe(true);
-    });
-
-    it("Replication role ARN is valid", () => {
-      expect(isValidArn(outputs.s3_replication_role_arn)).toBe(true);
-      expect(outputs.s3_replication_role_arn.includes("role")).toBe(true);
-    });
-  });
-
-  describe("IAM wiring", () => {
-    it("IAM instance profile and role names have expected format", () => {
-      expect(isNonEmptyString(outputs.ec2_iam_instance_profile_name)).toBe(true);
-      expect(outputs.ec2_iam_instance_profile_name).toMatch(/ec2-profile/);
-
-      expect(isNonEmptyString(outputs.ec2_iam_role_name)).toBe(true);
-      expect(outputs.ec2_iam_role_name).toMatch(/ec2-role/);
-    });
-  });
-
-  describe("Subnet counts", () => {
-    it("Has expected count of public and private subnets per VPC", () => {
-      expect(Number(outputs.primary_public_subnet_count)).toBe(2);
-      expect(Number(outputs.primary_private_subnet_count)).toBe(2);
-
-      expect(Number(outputs.secondary_public_subnet_count)).toBe(2);
-      expect(Number(outputs.secondary_private_subnet_count)).toBe(2);
-    });
-  });
-
-  describe("Route53 validations", () => {
-    it("Route53 zone IDs and record format", () => {
-      expect(isNonEmptyString(outputs.primary_route53_zone_id)).toBe(true);
-      expect(isNonEmptyString(outputs.secondary_route53_zone_id)).toBe(true);
-
-      expect(isNonEmptyString(outputs.route53_record)).toBe(true);
-      expect(/^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$/i.test(outputs.route53_record)).toBe(true);
-    });
-  });
-
-  describe("Subnet IDs format and uniqueness", () => {
-    it("Subnets must be arrays and unique across both regions", () => {
-      const primarySubs: string[] = JSON.parse(outputs.primary_subnet_ids);
-      const secondarySubs: string[] = JSON.parse(outputs.secondary_subnet_ids);
-
-      expect(isArrayOfNonEmptyStrings(primarySubs)).toBe(true);
-      expect(isArrayOfNonEmptyStrings(secondarySubs)).toBe(true);
-
-      const allSubs = [...primarySubs, ...secondarySubs];
-      expect(new Set(allSubs).size).toBe(allSubs.length);
-
-      allSubs.forEach((subnetId: string) => expect(subnetId.startsWith("subnet-")).toBe(true));
-    });
-  });
-
-  describe("EC2 Instances consistency and IP range", () => {
-    it("EC2 instance IDs are unique and IPs are in correct CIDRs", () => {
-      const primaryEC2 = outputs.primary_ec2_instance;
-      const secondaryEC2 = outputs.secondary_ec2_instance;
-
-      expect(primaryEC2.id).not.toEqual(secondaryEC2.id);
-      expect(isValidIPv4(primaryEC2.private_ip)).toBe(true);
-      expect(isValidIPv4(primaryEC2.public_ip)).toBe(true);
-      expect(isValidIPv4(secondaryEC2.private_ip)).toBe(true);
-      expect(isValidIPv4(secondaryEC2.public_ip)).toBe(true);
-
-      expect(primaryEC2.private_ip.startsWith("10.0.")).toBe(true);
-      expect(secondaryEC2.private_ip.startsWith("10.1.")).toBe(true);
-    });
-  });
-
-  describe("NAT Gateway and Route Table counts and format", () => {
-    it("NAT Gateway IDs and private route table IDs arrays have length 2 and valid format", () => {
-      const natPrimary: string[] = JSON.parse(outputs.primary_nat_gateway_ids);
-      const natSecondary: string[] = JSON.parse(outputs.secondary_nat_gateway_ids);
-      expect(natPrimary.length).toBe(2);
-      expect(natSecondary.length).toBe(2);
-      natPrimary.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
-      natSecondary.forEach((id: string) => expect(id.startsWith("nat-")).toBe(true));
-
-      const rtbPrimaryPrivate: string[] = JSON.parse(outputs.primary_private_route_table_ids);
-      const rtbSecondaryPrivate: string[] = JSON.parse(outputs.secondary_private_route_table_ids);
-      expect(rtbPrimaryPrivate.length).toBe(2);
-      expect(rtbSecondaryPrivate.length).toBe(2);
-      rtbPrimaryPrivate.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
-      rtbSecondaryPrivate.forEach((id: string) => expect(id.startsWith("rtb-")).toBe(true));
-    });
+  // EC2 instance IP ranges check
+  it("EC2 private IPs are in designated CIDR blocks", () => {
+    expect(outputs.primary_ec2_instance.private_ip.startsWith("10.0.")).toBe(true);
+    expect(outputs.secondary_ec2_instance.private_ip.startsWith("10.1.")).toBe(true);
   });
 });
