@@ -220,13 +220,8 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(stackContent).not.toMatch(/kms_key_arn\s*=\s*aws_kms_key\.secondary\.arn/);
     });
 
-    test('defines DynamoDB global table', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_dynamodb_global_table"\s+"main"/);
-    });
-
-    test('global table has replicas for both regions', () => {
-      expect(stackContent).toMatch(/replica\s*{[^}]*region_name\s*=\s*"us-east-1"/);
-      expect(stackContent).toMatch(/replica\s*{[^}]*region_name\s*=\s*"eu-west-1"/);
+    test('does not use deprecated Global Table v2017 resource', () => {
+      expect(stackContent).not.toMatch(/resource\s+"aws_dynamodb_global_table"\s+"main"/);
     });
   });
 
@@ -360,7 +355,7 @@ describe('Terraform Configuration Unit Tests', () => {
         'secondary_ec2_instance_id',
         'primary_kms_key_id',
         'secondary_kms_key_id',
-        'dynamodb_global_table_name',
+        'dynamodb_table_name',
         'vpc_peering_connection_id'
       ];
 
