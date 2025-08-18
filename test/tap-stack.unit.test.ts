@@ -219,32 +219,32 @@ describe('TapStack', () => {
     // Additional comprehensive tests for the OR chain in line 21
     it('should test all branches of environmentSuffix OR chain', () => {
       const originalEnv = process.env.ENVIRONMENT_SUFFIX;
-      
+
       // Test case 1: args.environmentSuffix is truthy (first branch should be taken)
       process.env.ENVIRONMENT_SUFFIX = 'should-not-be-used';
       const stack1 = new TapStack('test1', { environmentSuffix: 'from-args' });
       expect(stack1).toBeDefined();
-      
+
       // Test case 2: args.environmentSuffix is falsy but process.env.ENVIRONMENT_SUFFIX is truthy
       delete process.env.ENVIRONMENT_SUFFIX;
       process.env.ENVIRONMENT_SUFFIX = 'from-env';
       const stack2 = new TapStack('test2', { environmentSuffix: '' }); // Empty string is falsy
       expect(stack2).toBeDefined();
-      
+
       // Test case 3: Both are falsy, should use 'dev' default
       delete process.env.ENVIRONMENT_SUFFIX;
       const stack3 = new TapStack('test3', { environmentSuffix: null as any });
       expect(stack3).toBeDefined();
-      
+
       // Test case 4: args.environmentSuffix is undefined, env var is undefined
       const stack4 = new TapStack('test4', { environmentSuffix: undefined });
       expect(stack4).toBeDefined();
-      
+
       // Test case 5: args.environmentSuffix is 0 (falsy), env var exists
       process.env.ENVIRONMENT_SUFFIX = 'env-value';
       const stack5 = new TapStack('test5', { environmentSuffix: 0 as any });
       expect(stack5).toBeDefined();
-      
+
       // Restore original environment
       if (originalEnv) {
         process.env.ENVIRONMENT_SUFFIX = originalEnv;

@@ -46,6 +46,20 @@ const stack = new TapStack('TapStack', {
 export const loadBalancerDns = stack.loadBalancerDns;
 export const bucketName = stack.bucketName;
 export const databaseEndpoint = stack.databaseEndpoint;
+export const vpcId = stack.vpcId;
+export const cacheEndpoint = stack.cacheEndpoint;
+export const autoScalingGroupName = stack.autoScalingGroupName;
+export const targetGroupArn = stack.targetGroupArn;
+export const albSecurityGroupId = stack.albSecurityGroupId;
+export const ec2SecurityGroupId = stack.ec2SecurityGroupId;
+export const rdsSecurityGroupId = stack.rdsSecurityGroupId;
+export const publicSubnet1Id = stack.publicSubnet1Id;
+export const publicSubnet2Id = stack.publicSubnet2Id;
+export const privateSubnet1Id = stack.privateSubnet1Id;
+export const privateSubnet2Id = stack.privateSubnet2Id;
+export const ec2RoleArn = stack.ec2RoleArn;
+export const instanceProfileName = stack.instanceProfileName;
+export const systemLogGroupName = stack.systemLogGroupName;
 
 // To use the stack outputs, you can export them.
 // For example, if TapStack had an output `bucketName`:

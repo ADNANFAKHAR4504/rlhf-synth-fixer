@@ -13,6 +13,18 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly databaseEndpoint: pulumi.Output<string>;
   public readonly vpcId: pulumi.Output<string>;
   public readonly cacheEndpoint: pulumi.Output<string>;
+  public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly targetGroupArn: pulumi.Output<string>;
+  public readonly albSecurityGroupId: pulumi.Output<string>;
+  public readonly ec2SecurityGroupId: pulumi.Output<string>;
+  public readonly rdsSecurityGroupId: pulumi.Output<string>;
+  public readonly publicSubnet1Id: pulumi.Output<string>;
+  public readonly publicSubnet2Id: pulumi.Output<string>;
+  public readonly privateSubnet1Id: pulumi.Output<string>;
+  public readonly privateSubnet2Id: pulumi.Output<string>;
+  public readonly ec2RoleArn: pulumi.Output<string>;
+  public readonly instanceProfileName: pulumi.Output<string>;
+  public readonly systemLogGroupName: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -721,6 +733,18 @@ EOF
     this.cacheEndpoint = cache.endpoints.apply(endpoints =>
       endpoints && endpoints.length > 0 ? endpoints[0].address || '' : ''
     );
+    this.autoScalingGroupName = autoScalingGroup.name;
+    this.targetGroupArn = targetGroup.arn;
+    this.albSecurityGroupId = albSecurityGroup.id;
+    this.ec2SecurityGroupId = ec2SecurityGroup.id;
+    this.rdsSecurityGroupId = rdsSecurityGroup.id;
+    this.publicSubnet1Id = publicSubnet1.id;
+    this.publicSubnet2Id = publicSubnet2.id;
+    this.privateSubnet1Id = privateSubnet1.id;
+    this.privateSubnet2Id = privateSubnet2.id;
+    this.ec2RoleArn = ec2Role.arn;
+    this.instanceProfileName = instanceProfile.name;
+    this.systemLogGroupName = systemLogGroup.name;
 
     this.registerOutputs({
       loadBalancerDns: this.loadBalancerDns,

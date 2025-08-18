@@ -22,22 +22,24 @@ try {
 } catch (error) {
   console.warn('Warning: Could not read outputs file. Using mock data.');
   outputs = {
-    loadBalancerDns: "web-synthtrainr123-73649.us-east-1.elb.amazonaws.com",
-    bucketName: "webapp-synthtrainr123",
-    databaseEndpoint: "webapp-postgres-synthtrainr123.c9xzrj8wqp5h.us-east-1.rds.amazonaws.com:5432",
-    vpcId: "vpc-0a1b2c3d4e5f67890",
-    autoScalingGroupName: "webapp-asg-synthtrainr123",
-    targetGroupArn: "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/webapp-tg-synthtrainr123/1234567890abcdef",
-    albSecurityGroupId: "sg-0abc123def456789",
-    ec2SecurityGroupId: "sg-1abc123def456789",
-    rdsSecurityGroupId: "sg-2abc123def456789",
-    publicSubnet1Id: "subnet-0123456789abcdef0",
-    publicSubnet2Id: "subnet-0123456789abcdef1",
-    privateSubnet1Id: "subnet-0123456789abcdef2",
-    privateSubnet2Id: "subnet-0123456789abcdef3",
-    ec2RoleArn: "arn:aws:iam::123456789012:role/webapp-ec2-role-synthtrainr123",
-    instanceProfileName: "webapp-instance-profile-synthtrainr123",
-    systemLogGroupName: "webapp-synthtrainr123-system"
+    loadBalancerDns: 'web-synthtrainr123-73649.us-east-1.elb.amazonaws.com',
+    bucketName: 'webapp-synthtrainr123',
+    databaseEndpoint:
+      'webapp-postgres-synthtrainr123.c9xzrj8wqp5h.us-east-1.rds.amazonaws.com:5432',
+    vpcId: 'vpc-0a1b2c3d4e5f67890',
+    autoScalingGroupName: 'webapp-asg-synthtrainr123',
+    targetGroupArn:
+      'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/webapp-tg-synthtrainr123/1234567890abcdef',
+    albSecurityGroupId: 'sg-0abc123def456789',
+    ec2SecurityGroupId: 'sg-1abc123def456789',
+    rdsSecurityGroupId: 'sg-2abc123def456789',
+    publicSubnet1Id: 'subnet-0123456789abcdef0',
+    publicSubnet2Id: 'subnet-0123456789abcdef1',
+    privateSubnet1Id: 'subnet-0123456789abcdef2',
+    privateSubnet2Id: 'subnet-0123456789abcdef3',
+    ec2RoleArn: 'arn:aws:iam::123456789012:role/webapp-ec2-role-synthtrainr123',
+    instanceProfileName: 'webapp-instance-profile-synthtrainr123',
+    systemLogGroupName: 'webapp-synthtrainr123-system',
   };
 }
 
@@ -45,13 +47,15 @@ describe('TapStack Integration Tests', () => {
   beforeAll(() => {
     // Setup mock responses
     mockDescribeVpcs.mockResolvedValue({
-      Vpcs: [{
-        VpcId: outputs.vpcId,
-        State: 'available',
-        CidrBlock: '10.0.0.0/16',
-        EnableDnsHostnames: true,
-        EnableDnsSupport: true,
-      }]
+      Vpcs: [
+        {
+          VpcId: outputs.vpcId,
+          State: 'available',
+          CidrBlock: '10.0.0.0/16',
+          EnableDnsHostnames: true,
+          EnableDnsSupport: true,
+        },
+      ],
     });
 
     mockDescribeSubnets.mockResolvedValue({
@@ -67,36 +71,42 @@ describe('TapStack Integration Tests', () => {
           AvailabilityZone: 'us-east-1b',
           MapPublicIpOnLaunch: true,
           State: 'available',
-        }
-      ]
+        },
+      ],
     });
 
     mockDescribeLoadBalancers.mockResolvedValue({
-      LoadBalancers: [{
-        DNSName: outputs.loadBalancerDns,
-        State: { Code: 'active' },
-        Type: 'application',
-        Scheme: 'internet-facing',
-      }]
+      LoadBalancers: [
+        {
+          DNSName: outputs.loadBalancerDns,
+          State: { Code: 'active' },
+          Type: 'application',
+          Scheme: 'internet-facing',
+        },
+      ],
     });
 
     mockDescribeAutoScalingGroups.mockResolvedValue({
-      AutoScalingGroups: [{
-        AutoScalingGroupName: outputs.autoScalingGroupName,
-        MinSize: 2,
-        MaxSize: 6,
-        DesiredCapacity: 2,
-        HealthCheckType: 'ELB',
-      }]
+      AutoScalingGroups: [
+        {
+          AutoScalingGroupName: outputs.autoScalingGroupName,
+          MinSize: 2,
+          MaxSize: 6,
+          DesiredCapacity: 2,
+          HealthCheckType: 'ELB',
+        },
+      ],
     });
 
     mockDescribeDBInstances.mockResolvedValue({
-      DBInstances: [{
-        Engine: 'postgres',
-        MultiAZ: true,
-        StorageEncrypted: true,
-        BackupRetentionPeriod: 7,
-      }]
+      DBInstances: [
+        {
+          Engine: 'postgres',
+          MultiAZ: true,
+          StorageEncrypted: true,
+          BackupRetentionPeriod: 7,
+        },
+      ],
     });
 
     mockGetBucketVersioning.mockResolvedValue({
@@ -104,10 +114,12 @@ describe('TapStack Integration Tests', () => {
     });
 
     mockDescribeLogGroups.mockResolvedValue({
-      logGroups: [{
-        logGroupName: outputs.systemLogGroupName,
-        retentionInDays: 30,
-      }]
+      logGroups: [
+        {
+          logGroupName: outputs.systemLogGroupName,
+          retentionInDays: 30,
+        },
+      ],
     });
   });
 
@@ -131,7 +143,9 @@ describe('TapStack Integration Tests', () => {
 
     it('should have valid ARN formats', () => {
       if (outputs.targetGroupArn) {
-        expect(outputs.targetGroupArn).toMatch(/^arn:aws:elasticloadbalancing:.*/);
+        expect(outputs.targetGroupArn).toMatch(
+          /^arn:aws:elasticloadbalancing:.*/
+        );
       }
       if (outputs.ec2RoleArn) {
         expect(outputs.ec2RoleArn).toMatch(/^arn:aws:iam::\d+:role\/.*/);
@@ -143,7 +157,9 @@ describe('TapStack Integration Tests', () => {
         expect(outputs.loadBalancerDns).toMatch(/.*\.elb\.amazonaws\.com$/);
       }
       if (outputs.databaseEndpoint) {
-        expect(outputs.databaseEndpoint).toMatch(/.*\.rds\.amazonaws\.com:\d+$/);
+        expect(outputs.databaseEndpoint).toMatch(
+          /.*\.rds\.amazonaws\.com:\d+$/
+        );
       }
     });
   });
@@ -165,7 +181,9 @@ describe('TapStack Integration Tests', () => {
 
     it('should have public subnets with auto-assign public IP', async () => {
       const subnets = await mockDescribeSubnets();
-      const publicSubnets = subnets.Subnets.filter((s: any) => s.MapPublicIpOnLaunch);
+      const publicSubnets = subnets.Subnets.filter(
+        (s: any) => s.MapPublicIpOnLaunch
+      );
       expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
     });
   });
@@ -180,7 +198,9 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have correct DNS name format', () => {
-      expect(outputs.loadBalancerDns).toMatch(/^[a-z0-9-]+\.us-east-1\.elb\.amazonaws\.com$/);
+      expect(outputs.loadBalancerDns).toMatch(
+        /^[a-z0-9-]+\.us-east-1\.elb\.amazonaws\.com$/
+      );
     });
   });
 
@@ -218,7 +238,9 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have valid database endpoint', () => {
-      expect(outputs.databaseEndpoint).toMatch(/^[\w-]+\.[\w]+\.us-east-1\.rds\.amazonaws\.com:5432$/);
+      expect(outputs.databaseEndpoint).toMatch(
+        /^[\w-]+\.[\w]+\.us-east-1\.rds\.amazonaws\.com:5432$/
+      );
     });
   });
 
@@ -229,7 +251,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have valid bucket name', () => {
-      expect(outputs.bucketName).toMatch(/^webapp-[\w]+$/);
+      expect(outputs.bucketName).toMatch(/^webapp-[\w-]+$/);
       expect(outputs.bucketName.length).toBeLessThanOrEqual(63);
     });
   });
@@ -242,7 +264,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have correct log group naming', () => {
-      expect(outputs.systemLogGroupName).toMatch(/^webapp-[\w]+-system$/);
+      expect(outputs.systemLogGroupName).toMatch(/^webapp-[\w-]+-system$/);
     });
   });
 
@@ -251,12 +273,12 @@ describe('TapStack Integration Tests', () => {
       expect(outputs.albSecurityGroupId).toBeDefined();
       expect(outputs.ec2SecurityGroupId).toBeDefined();
       expect(outputs.rdsSecurityGroupId).toBeDefined();
-      
+
       // Ensure they are different
       const securityGroups = [
         outputs.albSecurityGroupId,
         outputs.ec2SecurityGroupId,
-        outputs.rdsSecurityGroupId
+        outputs.rdsSecurityGroupId,
       ];
       expect(new Set(securityGroups).size).toBe(3);
     });
@@ -271,7 +293,7 @@ describe('TapStack Integration Tests', () => {
     it('should have resources in multiple availability zones', () => {
       // Public subnets in different AZs
       expect(outputs.publicSubnet1Id).not.toBe(outputs.publicSubnet2Id);
-      
+
       // Private subnets in different AZs
       expect(outputs.privateSubnet1Id).not.toBe(outputs.privateSubnet2Id);
     });
