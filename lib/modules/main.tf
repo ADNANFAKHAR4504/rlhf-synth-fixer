@@ -542,6 +542,16 @@ resource "aws_iam_policy" "mfa_policy" {
       {
         Sid    = "AllowManageOwnMFA"
         Effect = "Allow"
-        Action}
+        Action = [
+          "iam:CreateVirtualMfaDevice",
+          "iam:EnableMfaDevice",
+          "iam:ResyncMfaDevice",
+          "iam:DeactivateMfaDevice",
+          "iam:DeleteVirtualMfaDevice",
+          "iam:ListVirtualMfaDevices",
+          "iam:ListMfaDevices",
+          "iam:GetUser",
+          "iam:ListUsers"
+        ]}
     ]})
 }
