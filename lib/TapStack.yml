@@ -1,4 +1,3 @@
-# lib/TapStack.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Secure, compliance-oriented stack: VPC (2 public + 2 private), S3 (versioning + SSE-KMS),
