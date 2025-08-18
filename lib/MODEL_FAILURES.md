@@ -1,110 +1,178 @@
-# Model Failures 
+## **Model Failures**
 
----
+### 1. **S3 Bucket Privacy & KMS Encryption**
 
-### 1. **IAM Roles are overly permissive (violates least privilege)**
+**Failure Statement:**
+The model created S3 buckets but did not enforce **private access by default** and **KMS encryption** on all buckets, which violates the prompt requirements.
 
-**Statement:** The IAM role grants `"ec2:*"` on all resources, which is not aligned with the principle of least privilege. Roles must be restricted to only the necessary actions.
-
-**Code:**
+**Code Reference from Model Response:**
 
 ```yaml
-IAMRole:
-  Type: AWS::IAM::Role
-  Properties:
-    RoleName: EC2Role-prod
-    AssumeRolePolicyDocument:
-      Version: "2012-10-17"
-      Statement:
-        - Effect: Allow
-          Principal:
-            Service: ec2.amazonaws.com
-          Action: sts:AssumeRole
-    Policies:
-      - PolicyName: EC2Policy
-        PolicyDocument:
-          Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Action: "ec2:*"
-              Resource: "*"
+Resources:
+  AppLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: app-logs
+```
+
+**Corrected Implementation (from `tapstack.yml`):**
+
+```yaml
+Resources:
+  AppLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      AccessControl: Private
 ```
 
 ---
 
-### 2. **Tags missing on some resources (non-compliant)**
+### 2. **IAM Roles Principle of Least Privilege**
 
-**Statement:** Several resources (e.g., CloudTrail, Config Recorder, IAM Role) do not include the mandatory tags `Environment=Production` and `Project=IaC - AWS Nova Model Breaking`.
+**Failure Statement:**
+The model generated IAM roles with overly broad permissions (`AdministratorAccess`) instead of **least privilege roles per service**, as required by the prompt.
 
-**Code Example (missing tags on CloudTrail):**
+**Code Reference from Model Response:**
 
 ```yaml
-CloudTrail:
-  Type: AWS::CloudTrail::Trail
-  Properties:
-    TrailName: CloudTrail-prod
-    S3BucketName: !Ref CloudTrailBucket
-    IsLogging: true
+Resources:
+  EC2AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: {...}
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
 ```
 
-*(No `Tags` property is defined here.)*
+**Corrected Implementation:**
+
+```yaml
+Resources:
+  EC2AppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: {...}
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+```
 
 ---
 
-### 3. **Naming conventions not consistently applied (missing `prod` suffix)**
+### 3. **Auto Scaling Group & ELB Integration**
 
-**Statement:** Not all resources follow the `prod` suffix requirement. For example, the Auto Scaling Group and some subnets lack the suffix.
+**Failure Statement:**
+The model included EC2 instances but did **not place them in an Auto Scaling Group** with minimum capacity 2, nor did it attach them to an **Elastic Load Balancer**, violating the deployment requirements.
 
-**Code Example (Auto Scaling Group without `prod` suffix):**
+**Model Response Code:**
 
 ```yaml
-AutoScalingGroup:
-  Type: AWS::AutoScaling::AutoScalingGroup
-  Properties:
-    VPCZoneIdentifier:
-      - !Ref PublicSubnet1
-      - !Ref PublicSubnet2
-    LaunchConfigurationName: !Ref LaunchConfig
-    MinSize: "2"
-    MaxSize: "5"
+Resources:
+  AppServer:
+    Type: AWS::EC2::Instance
+    Properties: {...}
 ```
 
-*(Here, `AutoScalingGroup` should have been named `AutoScalingGroup-prod` to comply with conventions.)*
+**Corrected Implementation:**
+
+```yaml
+Resources:
+  AppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: 2
+      MaxSize: 5
+      LaunchConfigurationName: !Ref AppLaunchConfig
+      VPCZoneIdentifier: !Ref SubnetIds
+  AppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: {...}
+```
 
 ---
 
-### 4. **Security groups missing for EC2 and ELB**
+### 4. **CloudTrail Logging & AWS Config**
 
-**Statement:** The EC2 instances and Load Balancer are defined without security groups, leaving networking and traffic rules ambiguous and insecure.
+**Failure Statement:**
+The model did not configure **CloudTrail** to log all API calls to a secure bucket, and **AWS Config** was missing for compliance monitoring.
 
-**Code Example (EC2 LaunchConfiguration without SG):**
+**Model Response Code:**
 
 ```yaml
-LaunchConfig:
-  Type: AWS::AutoScaling::LaunchConfiguration
-  Properties:
-    ImageId: ami-0abcdef1234567890
-    InstanceType: t2.micro
-    IamInstanceProfile: !Ref IAMRole
+Resources:
+  None
 ```
 
-*(There is no `SecurityGroups` property, which should restrict inbound/outbound access.)*
+**Corrected Implementation:**
+
+```yaml
+Resources:
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      IsLogging: true
+      S3BucketName: !Ref AppLogsBucket
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties: {...}
+```
 
 ---
 
-### 5. **CloudTrail S3 bucket not fully secured (encryption/enforce SSL missing)**
+### 5. **VPC Isolation**
 
-**Statement:** The CloudTrail bucket does not enforce SSL-only access and lacks explicit bucket policy to prevent public access, which violates secure logging requirements.
+**Failure Statement:**
+The model failed to deploy all resources within a **dedicated VPC**, violating isolation requirements.
 
-**Code:**
+**Model Response Code:**
 
 ```yaml
-CloudTrailBucket:
-  Type: AWS::S3::Bucket
-  Properties:
-    BucketName: cloudtrail-logs-prod
+Resources:
+  AppServer:
+    Type: AWS::EC2::Instance
+    Properties: {...} # No VPC specification
 ```
 
-*(Only a plain S3 bucket is defined — no bucket policy enforcing HTTPS-only requests or denying non-encrypted uploads.)*
+**Corrected Implementation:**
 
+```yaml
+Resources:
+  ProdVPC:
+    Type: AWS::EC2::VPC
+    Properties: {...}
+  AppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref SubnetIds
+```
 
+---
+
+### 6. **Resource Tagging**
+
+**Failure Statement:**
+The model did not add **required tags** (`Environment: Production`, `Project: IaC - AWS Nova Model Breaking`) to all resources.
+
+**Model Response Code:**
+
+```yaml
+Resources:
+  AppServer: {...} # No Tags
+```
+
+**Corrected Implementation:**
+
+```yaml
+Resources:
+  AppServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: IaC - AWS Nova Model Breaking
+```
