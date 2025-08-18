@@ -4,7 +4,7 @@ Environment & Requirements:
 
 Environment Management – Use Terraform workspaces to clearly differentiate between staging and production.
 
-Consistency – Use consistent environment variable naming across environments to make the setup predictable and easy to maintain.
+Consistencies – Use consistent environment variable naming across environments to make the setup predictable and easy to maintain.
 
 Reusability – Implement Terraform modules to abstract and reuse common configurations, reducing redundancies.
 
