@@ -1145,49 +1145,34 @@ export class SecureInfrastructure extends pulumi.ComponentResource {
 
     // AWS Config recorder and delivery channel handling
     // AWS Config allows only one recorder per region per account
-
-    // Check if we should create Config resources or use existing ones
-    // Set PULUMI_CREATE_CONFIG_RESOURCES=true to create new Config resources
-    const shouldCreateConfigResources =
-      process.env.PULUMI_CREATE_CONFIG_RESOURCES === 'true';
-
     let configRecorder: aws.cfg.Recorder;
     let configDeliveryChannel: aws.cfg.DeliveryChannel;
 
-    if (shouldCreateConfigResources) {
-      // Create new Config recorder and delivery channel
-      configRecorder = new aws.cfg.Recorder(
-        `config-recorder-${args.environment}`,
-        {
-          name: `config-recorder-${args.environment}`,
-          roleArn: configRole.arn,
-          recordingGroup: {
-            allSupported: true,
-            includeGlobalResourceTypes: true,
-          },
+    // Create new Config recorder and delivery channel
+    configRecorder = new aws.cfg.Recorder(
+      `config-recorder-${args.environment}`,
+      {
+        name: `config-recorder-${args.environment}`,
+        roleArn: configRole.arn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
         },
-        { provider, parent: this }
-      );
+      },
+      { provider, parent: this }
+    );
 
-      configDeliveryChannel = new aws.cfg.DeliveryChannel(
-        `config-delivery-channel-${args.environment}`,
-        {
-          name: `config-delivery-channel-${args.environment}`,
-          s3BucketName: configBucket.bucket,
-          snapshotDeliveryProperties: {
-            deliveryFrequency: 'TwentyFour_Hours',
-          },
+    configDeliveryChannel = new aws.cfg.DeliveryChannel(
+      `config-delivery-channel-${args.environment}`,
+      {
+        name: `config-delivery-channel-${args.environment}`,
+        s3BucketName: configBucket.bucket,
+        snapshotDeliveryProperties: {
+          deliveryFrequency: 'TwentyFour_Hours',
         },
-        { provider, parent: this, dependsOn: [configRecorder] }
-      );
-    } else {
-      // Use existing Config resources (default behavior)
-      // Create placeholder objects for outputs
-      configRecorder = {} as aws.cfg.Recorder;
-      configDeliveryChannel = {
-        name: pulumi.output('existing-config-delivery-channel'),
-      } as aws.cfg.DeliveryChannel;
-    }
+      },
+      { provider, parent: this, dependsOn: [configRecorder] }
+    );
 
     // Config rules for compliance (works with both existing and new recorders)
     void new aws.cfg.Rule(
