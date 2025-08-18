@@ -98,9 +98,8 @@ describe('Terraform Infrastructure - Lambda Function Integration Tests', () => {
     const command = new GetFunctionCommand({ FunctionName: functionName });
     const response = await lambdaClient.send(command);
     
-    // Check concurrency separately as it might be in different part of response
-    const concurrency = response.Concurrency?.ReservedConcurrentExecutions || 
-                       response.Configuration?.ReservedConcurrentExecutions;
+    // Check concurrency from the Concurrency object in the response
+    const concurrency = response.Concurrency?.ReservedConcurrentExecutions;
     
     // The reserved concurrent executions might be set but not always returned in basic config
     // We'll check if the function exists and can be invoked
