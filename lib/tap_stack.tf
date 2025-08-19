@@ -1,4 +1,3 @@
-```hcl
 ############################################
 # tap_stack.tf — Prod baseline, single file
 ############################################
@@ -681,4 +680,3 @@ output "ssh_private_key" {
   description = "Private key for SSH access (save this securely)"
   sensitive   = true
 }
-```
