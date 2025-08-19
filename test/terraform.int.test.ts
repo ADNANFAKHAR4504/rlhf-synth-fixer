@@ -1,11 +1,11 @@
-import { CloudTrailClient } from '@aws-sdk/client-cloudtrail';
+import { CloudTrailClient, GetTrailCommand } from '@aws-sdk/client-cloudtrail';
 import {
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
 import { GetInstanceProfileCommand, IAMClient } from '@aws-sdk/client-iam';
-import { KMSClient } from '@aws-sdk/client-kms';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
   GetBucketAclCommand,
   GetBucketPolicyStatusCommand,
@@ -132,6 +132,13 @@ describe('LIVE: Core Infrastructure Verification', () => {
       );
       expect(hasPublic).toBe(false);
     });
+
+    test('KMS key is enabled', async () => {
+      const key = await kms.send(
+        new DescribeKeyCommand({ KeyId: outputs.kms_key_id.value })
+      );
+      expect(key.KeyMetadata?.Enabled).toBe(true);
+    });
   });
 
   describe('IAM', () => {
@@ -146,8 +153,11 @@ describe('LIVE: Core Infrastructure Verification', () => {
   });
 
   describe('Monitoring', () => {
-    test('CloudTrail ARN is available', () => {
-      expect(outputs.cloudtrail_arn.value).toBeTruthy();
+    test('CloudTrail is enabled', async () => {
+      const trail = await cloudtrail.send(
+        new GetTrailCommand({ Name: outputs.cloudtrail_name.value })
+      );
+      expect(trail.Trail?.isLogging).toBe(true);
     });
   });
 });

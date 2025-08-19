@@ -1,6 +1,6 @@
 output "cloudtrail_arn" {
   description = "The ARN of the CloudTrail"
-  value       = aws_cloudtrail.main.arn
+  value       = data.aws_cloudtrail.main.arn
 }
 
 output "flow_log_destination_arn" {

@@ -89,26 +89,3 @@ resource "aws_vpc_endpoint" "s3" {
     Environment = var.environment
   }
 }
-
-resource "aws_s3_bucket_policy" "data" {
-  bucket = aws_s3_bucket.data.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action    = "s3:*"
-        Effect    = "Deny"
-        Resource = [
-          aws_s3_bucket.data.arn,
-          "${aws_s3_bucket.data.arn}/*",
-        ]
-        Principal = "*"
-        Condition = {
-          StringNotEquals = {
-            "aws:sourceVpce" = aws_vpc_endpoint.s3.id
-          }
-        }
-      },
-    ]
-  })
-}
