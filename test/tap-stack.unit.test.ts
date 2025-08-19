@@ -55,6 +55,66 @@ describe('TapStack', () => {
               ],
               Resource: '*',
             },
+            {
+              Sid: 'Allow CloudWatch Logs to encrypt logs',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'logs.amazonaws.com',
+              },
+              Action: [
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+                'kms:Encrypt',
+                'kms:ReEncrypt*',
+                'kms:Decrypt',
+              ],
+              Resource: '*',
+            },
+            {
+              Sid: 'Allow S3 to encrypt objects',
+              Effect: 'Allow',
+              Principal: {
+                Service: 's3.amazonaws.com',
+              },
+              Action: [
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+                'kms:Encrypt',
+                'kms:ReEncrypt*',
+                'kms:Decrypt',
+              ],
+              Resource: '*',
+            },
+            {
+              Sid: 'Allow RDS to encrypt data',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'rds.amazonaws.com',
+              },
+              Action: [
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+                'kms:Encrypt',
+                'kms:ReEncrypt*',
+                'kms:Decrypt',
+              ],
+              Resource: '*',
+            },
+            {
+              Sid: 'Allow SNS to encrypt messages',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'sns.amazonaws.com',
+              },
+              Action: [
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+                'kms:Encrypt',
+                'kms:ReEncrypt*',
+                'kms:Decrypt',
+              ],
+              Resource: '*',
+            },
           ],
         },
       });
