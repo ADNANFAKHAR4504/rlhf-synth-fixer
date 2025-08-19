@@ -111,9 +111,15 @@ data "aws_route53_zone" "main" {
 
 # VPC and Networking
 # Locals for resource naming
+# Random ID to ensure unique resource names
+resource "random_id" "suffix" {
+  byte_length = 3
+}
+
 locals {
-  env_suffix  = var.environment_suffix != "" ? "-${var.environment_suffix}" : ""
-  name_prefix = "${var.project_name}${local.env_suffix}"
+  env_suffix    = var.environment_suffix != "" ? "-${var.environment_suffix}" : ""
+  random_suffix = random_id.suffix.hex
+  name_prefix   = "${var.project_name}${local.env_suffix}-${local.random_suffix}"
 }
 
 resource "aws_vpc" "main" {

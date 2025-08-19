@@ -371,7 +371,7 @@ describe("Terraform Configuration Unit Tests", () => {
         execSync("cd lib && terraform fmt -check", { encoding: 'utf8' });
       } catch (error: any) {
         // If the command fails, it means files are not formatted
-        fail("Terraform files are not properly formatted. Run 'terraform fmt' to fix.");
+        throw new Error("Terraform files are not properly formatted. Run 'terraform fmt' to fix.");
       }
     });
   });
