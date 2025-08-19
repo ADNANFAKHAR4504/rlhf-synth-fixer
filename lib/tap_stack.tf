@@ -1,3 +1,10 @@
+# Variables
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-east-1"
+}
+
 # Data sources for availability zones
 data "aws_availability_zones" "available" {
   state = "available"
