@@ -601,7 +601,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "${ProjectName}-ALB-SG"
+                    "Fn::Sub": "${ResourceNamePrefix}ALBSG"
                 },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
@@ -660,7 +660,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "${ProjectName}-WebServer-SG"
+                    "Fn::Sub": "${ResourceNamePrefix}WebServerSG"
                 },
                 "GroupDescription": "Security group for web servers",
                 "VpcId": {
@@ -717,7 +717,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "${ProjectName}-Database-SG"
+                    "Fn::Sub": "${ResourceNamePrefix}DatabaseSG"
                 },
                 "GroupDescription": "Security group for RDS database",
                 "VpcId": {
@@ -839,7 +839,7 @@
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "${ProjectName}-db-subnet-group"
+                    "Fn::Sub": "${ResourceNamePrefix}DBSubnetGroup"
                 },
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
@@ -931,7 +931,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${ProjectName}-db-credentials"
+                    "Fn::Sub": "${ResourceNamePrefix}DBCredentials"
                 },
                 "Description": "Database credentials for the web application",
                 "GenerateSecretString": {
@@ -960,7 +960,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${ProjectName}-ALB"
+                    "Fn::Sub": "${ResourceNamePrefix}ALB"
                 },
                 "Scheme": "internet-facing",
                 "Type": "application",
@@ -1004,7 +1004,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${ProjectName}-TG"
+                    "Fn::Sub": "${ResourceNamePrefix}TG"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -1063,7 +1063,7 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": {
-                    "Fn::Sub": "${ProjectName}-LaunchTemplate"
+                    "Fn::Sub": "${ResourceNamePrefix}LaunchTemplate"
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
@@ -1152,7 +1152,7 @@
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
                 "AutoScalingGroupName": {
-                    "Fn::Sub": "${ProjectName}-ASG"
+                    "Fn::Sub": "${ResourceNamePrefix}ASG"
                 },
                 "VPCZoneIdentifier": [
                     {
@@ -1236,7 +1236,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "${ProjectName}-CPU-High"
+                    "Fn::Sub": "${ResourceNamePrefix}CPUHigh"
                 },
                 "AlarmDescription": "Alarm when CPU exceeds 70%",
                 "MetricName": "CPUUtilization",
@@ -1269,7 +1269,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "${ProjectName}-CPU-Low"
+                    "Fn::Sub": "${ResourceNamePrefix}CPULow"
                 },
                 "AlarmDescription": "Alarm when CPU is below 25%",
                 "MetricName": "CPUUtilization",
@@ -1299,7 +1299,7 @@
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "${ProjectName}-Database-CPU-High"
+                    "Fn::Sub": "${ResourceNamePrefix}DatabaseCPUHigh"
                 },
                 "AlarmDescription": "Alarm when database CPU exceeds 80%",
                 "MetricName": "CPUUtilization",

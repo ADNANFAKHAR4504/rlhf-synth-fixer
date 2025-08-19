@@ -295,7 +295,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${ProjectName}-ALB-SG"
+      GroupName: !Sub "${ResourceNamePrefix}ALBSG"
       GroupDescription: "Security group for Application Load Balancer"
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -324,7 +324,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${ProjectName}-WebServer-SG"
+      GroupName: !Sub "${ResourceNamePrefix}WebServerSG"
       GroupDescription: "Security group for web servers"
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -353,7 +353,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${ProjectName}-Database-SG"
+      GroupName: !Sub "${ResourceNamePrefix}DatabaseSG"
       GroupDescription: "Security group for RDS database"
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -415,7 +415,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub "${ProjectName}-db-subnet-group"
+      DBSubnetGroupName: !Sub "${ResourceNamePrefix}DBSubnetGroup"
       DBSubnetGroupDescription: "Subnet group for RDS database"
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -463,7 +463,7 @@ Resources:
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub "${ProjectName}-db-credentials"
+      Name: !Sub "${ResourceNamePrefix}DBCredentials"
       Description: "Database credentials for the web application"
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
@@ -480,7 +480,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub "${ProjectName}-ALB"
+      Name: !Sub "${ResourceNamePrefix}ALB"
       Scheme: internet-facing
       Type: application
       IpAddressType: ipv4
@@ -501,7 +501,7 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub "${ProjectName}-TG"
+      Name: !Sub "${ResourceNamePrefix}TG"
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -536,7 +536,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub "${ProjectName}-LaunchTemplate"
+      LaunchTemplateName: !Sub "${ResourceNamePrefix}LaunchTemplate"
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
         InstanceType: !Ref InstanceType
@@ -623,7 +623,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub "${ProjectName}-ASG"
+      AutoScalingGroupName: !Sub "${ResourceNamePrefix}ASG"
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -671,7 +671,7 @@ Resources:
   CPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${ProjectName}-CPU-High"
+      AlarmName: !Sub "${ResourceNamePrefix}CPUHigh"
       AlarmDescription: "Alarm when CPU exceeds 70%"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -691,7 +691,7 @@ Resources:
   CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${ProjectName}-CPU-Low"
+      AlarmName: !Sub "${ResourceNamePrefix}CPULow"
       AlarmDescription: "Alarm when CPU is below 25%"
       MetricName: CPUUtilization
       Namespace: AWS/EC2
@@ -710,7 +710,7 @@ Resources:
   DatabaseCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${ProjectName}-Database-CPU-High"
+      AlarmName: !Sub "${ResourceNamePrefix}DatabaseCPUHigh"
       AlarmDescription: "Alarm when database CPU exceeds 80%"
       MetricName: CPUUtilization
       Namespace: AWS/RDS
