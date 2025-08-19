@@ -418,8 +418,7 @@ resource "aws_launch_template" "main" {
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = local.current_config.instance_type
   network_interfaces {
-    associate_public_ip_address = true
-    security_groups             = [aws_security_group.ec2.id]
+    security_groups = [aws_security_group.ec2.id]
   }
   # vpc_security_group_ids = [aws_security_group.ec2.id]
 
