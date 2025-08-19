@@ -202,7 +202,7 @@ export class MultiEnvironmentStack extends TerraformStack {
       });
 
       const bucket = new S3Bucket(envScope, 'DataBucket', {
-        bucket: `app-data-${config.env}-879355`.toLowerCase(),
+        bucket: `app-data-${config.env}-879676`.toLowerCase(),
       });
       const s3KmsKey = new KmsKey(envScope, 'S3Key', {
         enableKeyRotation: true,
