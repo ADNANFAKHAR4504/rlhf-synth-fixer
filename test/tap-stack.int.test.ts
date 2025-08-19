@@ -50,9 +50,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new DescribeStacksCommand({ StackName: outputs.StackName })
         );
         
+        expect(response.Stacks).toBeDefined();
         expect(response.Stacks).toHaveLength(1);
-        expect(response.Stacks[0].StackStatus).toBe('CREATE_COMPLETE');
-        expect(response.Stacks[0].StackName).toBe(outputs.StackName);
+        expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
+        expect(response.Stacks![0].StackName).toBe(outputs.StackName);
       } catch (error) {
         console.warn('Stack validation test skipped - stack may not be deployed');
         expect(true).toBe(true); // Pass test if stack is not deployed
@@ -91,9 +92,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new GetBucketPolicyCommand({ Bucket: outputs.S3BucketName })
         );
         
-        const policy = JSON.parse(response.Policy);
+        const policy = JSON.parse(response.Policy!);
         const sslEnforcementStatement = policy.Statement.find(
-          stmt => stmt.Sid === 'DenyInsecureConnections'
+          (stmt: any) => stmt.Sid === 'DenyInsecureConnections'
         );
         
         expect(sslEnforcementStatement).toBeDefined();
@@ -125,8 +126,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new DescribeInstancesCommand({ InstanceIds: [outputs.EC2InstanceId] })
         );
         
-        const instance = response.Reservations[0].Instances[0];
-        expect(instance.State.Name).toMatch(/running|pending|stopped/);
+        expect(response.Reservations).toBeDefined();
+        expect(response.Reservations!.length).toBeGreaterThan(0);
+        const instance = response.Reservations![0].Instances![0];
+        expect(instance.State?.Name).toMatch(/running|pending|stopped/);
         expect(instance.InstanceType).toBe('t3.micro');
       } catch (error) {
         console.warn('EC2 instance test skipped - instance may not exist');
@@ -140,7 +143,8 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] })
         );
         
-        const vpc = response.Vpcs[0];
+        expect(response.Vpcs).toBeDefined();
+        const vpc = response.Vpcs![0];
         expect(vpc.CidrBlock).toBe('10.0.0.0/16');
         expect(vpc.State).toBe('available');
       } catch (error) {
@@ -155,13 +159,14 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new DescribeSecurityGroupsCommand({ GroupIds: [outputs.SecurityGroupId] })
         );
         
-        const sg = response.SecurityGroups[0];
-        const httpsRule = sg.IpPermissions.find(rule => 
+        expect(response.SecurityGroups).toBeDefined();
+        const sg = response.SecurityGroups![0];
+        const httpsRule = sg.IpPermissions?.find(rule => 
           rule.FromPort === 443 && rule.ToPort === 443
         );
         
         expect(httpsRule).toBeDefined();
-        expect(httpsRule.IpProtocol).toBe('tcp');
+        expect(httpsRule!.IpProtocol).toBe('tcp');
       } catch (error) {
         console.warn('Security group test skipped');
         expect(true).toBe(true);
@@ -178,8 +183,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
           })
         );
         
-        if (response.logGroups.length > 0) {
-          const logGroup = response.logGroups[0];
+        expect(response.logGroups).toBeDefined();
+        if (response.logGroups!.length > 0) {
+          const logGroup = response.logGroups![0];
           expect(logGroup.retentionInDays).toBe(7);
           expect(logGroup.kmsKeyId).toBeDefined();
         } else {
@@ -199,8 +205,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
           })
         );
         
-        if (response.logGroups.length > 0) {
-          const logGroup = response.logGroups[0];
+        expect(response.logGroups).toBeDefined();
+        if (response.logGroups!.length > 0) {
+          const logGroup = response.logGroups![0];
           expect(logGroup.retentionInDays).toBe(7);
           expect(logGroup.kmsKeyId).toBeDefined();
         }
@@ -218,8 +225,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
           })
         );
         
-        if (response.logGroups.length > 0) {
-          const logGroup = response.logGroups[0];
+        expect(response.logGroups).toBeDefined();
+        if (response.logGroups!.length > 0) {
+          const logGroup = response.logGroups![0];
           expect(logGroup.retentionInDays).toBe(7);
           expect(logGroup.kmsKeyId).toBeDefined();
         }
@@ -239,11 +247,12 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new GetRoleCommand({ RoleName: roleName })
         );
         
-        const role = response.Role;
+        expect(response.Role).toBeDefined();
+        const role = response.Role!;
         expect(role.AssumeRolePolicyDocument).toBeDefined();
         
         // Decode and check assume role policy
-        const policy = JSON.parse(decodeURIComponent(role.AssumeRolePolicyDocument));
+        const policy = JSON.parse(decodeURIComponent(role.AssumeRolePolicyDocument!));
         const statement = policy.Statement[0];
         expect(statement.Principal.Service).toBe('ec2.amazonaws.com');
         
@@ -266,8 +275,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new GetInstanceProfileCommand({ InstanceProfileName: profileName })
         );
         
-        expect(response.InstanceProfile.Roles).toHaveLength(1);
-        expect(response.InstanceProfile.Roles[0].Arn).toBe(outputs.EC2RoleArn);
+        expect(response.InstanceProfile).toBeDefined();
+        expect(response.InstanceProfile!.Roles).toBeDefined();
+        expect(response.InstanceProfile!.Roles!).toHaveLength(1);
+        expect(response.InstanceProfile!.Roles![0].Arn).toBe(outputs.EC2RoleArn);
       } catch (error) {
         console.warn('Instance profile test skipped');
         expect(true).toBe(true);
@@ -282,9 +293,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new GetFunctionCommand({ FunctionName: outputs.RandomSuffixGeneratorArn })
         );
         
-        expect(response.Configuration.Runtime).toBe('python3.12');
-        expect(response.Configuration.Handler).toBe('index.handler');
-        expect(response.Configuration.State).toBe('Active');
+        expect(response.Configuration).toBeDefined();
+        expect(response.Configuration!.Runtime).toBe('python3.12');
+        expect(response.Configuration!.Handler).toBe('index.handler');
+        expect(response.Configuration!.State).toBe('Active');
       } catch (error) {
         console.warn('Lambda function test skipped');
         expect(true).toBe(true);
@@ -305,9 +317,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new DescribeKeyCommand({ KeyId: keyId })
         );
         
-        expect(response.KeyMetadata.KeyState).toBe('Enabled');
-        expect(response.KeyMetadata.KeyUsage).toBe('ENCRYPT_DECRYPT');
-        expect(response.KeyMetadata.Description).toContain('tapstack');
+        expect(response.KeyMetadata).toBeDefined();
+        expect(response.KeyMetadata!.KeyState).toBe('Enabled');
+        expect(response.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+        expect(response.KeyMetadata!.Description).toContain('tapstack');
       } catch (error) {
         console.warn('KMS key test skipped');
         expect(true).toBe(true);
@@ -329,8 +342,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] })
         );
         
-        if (vpcResponse.Vpcs.length > 0) {
-          const vpc = vpcResponse.Vpcs[0];
+        expect(vpcResponse.Vpcs).toBeDefined();
+        if (vpcResponse.Vpcs!.length > 0) {
+          const vpc = vpcResponse.Vpcs![0];
           const envTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
           expect(envTag?.Value).toBe('Production');
         }
@@ -371,8 +385,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new DescribeVpcsCommand({ VpcIds: [outputs.VPCId] })
         );
         
-        if (vpcResponse.Vpcs.length > 0) {
-          const vpc = vpcResponse.Vpcs[0];
+        expect(vpcResponse.Vpcs).toBeDefined();
+        if (vpcResponse.Vpcs!.length > 0) {
+          const vpc = vpcResponse.Vpcs![0];
           expect(vpc.CidrBlock).toBe('10.0.0.0/16');
           expect(vpc.State).toBe('available');
         }
@@ -382,8 +397,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new DescribeSecurityGroupsCommand({ GroupIds: [outputs.SecurityGroupId] })
         );
         
-        if (sgResponse.SecurityGroups.length > 0) {
-          const sg = sgResponse.SecurityGroups[0];
+        expect(sgResponse.SecurityGroups).toBeDefined();
+        if (sgResponse.SecurityGroups!.length > 0) {
+          const sg = sgResponse.SecurityGroups![0];
           const ingressRules = sg.IpPermissions || [];
           
           // Should only allow HTTPS inbound
@@ -430,8 +446,9 @@ describe('TapStack Infrastructure Integration Tests', () => {
           new DescribeInstancesCommand({ InstanceIds: [outputs.EC2InstanceId] })
         );
         
-        if (response.Reservations.length > 0) {
-          const instance = response.Reservations[0].Instances[0];
+        expect(response.Reservations).toBeDefined();
+        if (response.Reservations!.length > 0) {
+          const instance = response.Reservations![0].Instances![0];
           expect(instance.InstanceType).toBe('t3.micro');
         }
       } catch (error) {

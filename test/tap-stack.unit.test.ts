@@ -173,7 +173,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('EC2Role should have minimal S3 permissions with region restrictions', () => {
       const role = template.Resources.EC2Role.Properties;
-      const s3Policy = role.Policies.find(p => p.PolicyName === 'MinimalS3Access');
+      const s3Policy = role.Policies.find((p: any) => p.PolicyName === 'MinimalS3Access');
       expect(s3Policy).toBeDefined();
       expect(s3Policy.PolicyDocument.Statement[0].Condition.StringEquals['aws:RequestedRegion']).toBe('us-west-1');
     });
@@ -240,7 +240,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('SecurityGroup should allow HTTPS inbound on port 443', () => {
       const sg = template.Resources.EC2SecurityGroup.Properties;
-      const httpsRule = sg.SecurityGroupIngress.find(rule => rule.FromPort === 443);
+      const httpsRule = sg.SecurityGroupIngress.find((rule: any) => rule.FromPort === 443);
       expect(httpsRule).toBeDefined();
       expect(httpsRule.IpProtocol).toBe('tcp');
       expect(httpsRule.ToPort).toBe(443);
@@ -289,7 +289,7 @@ describe('TapStack CloudFormation Template', () => {
       resourcesWithTags.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource && resource.Properties && resource.Properties.Tags) {
-          const envTag = resource.Properties.Tags.find(tag => tag.Key === 'Environment');
+          const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
           expect(envTag).toBeDefined();
           expect(envTag.Value).toBe('Production');
         }
@@ -308,7 +308,7 @@ describe('TapStack CloudFormation Template', () => {
       componentTags.forEach(({ resource, component }) => {
         const res = template.Resources[resource];
         if (res && res.Properties && res.Properties.Tags) {
-          const compTag = res.Properties.Tags.find(tag => tag.Key === 'Component');
+          const compTag = res.Properties.Tags.find((tag: any) => tag.Key === 'Component');
           expect(compTag).toBeDefined();
           expect(compTag.Value).toBe(component);
         }
