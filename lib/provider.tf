@@ -1,4 +1,4 @@
-# provider-local.tf - Local development version without S3 backend
+# provider.tf
 
 terraform {
   required_version = ">= 1.4.0"
@@ -14,22 +14,11 @@ terraform {
     }
   }
 
-  # Use local backend for development when AWS credentials are not available
-  backend "local" {
-    path = "terraform.tfstate"
-  }
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
 
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
-  
-  # Skip credential validation for local testing
-  skip_credentials_validation = true
-  skip_requesting_account_id  = true
-  skip_metadata_api_check     = true
-  
-  # Use fake credentials for local testing
-  access_key = "test"
-  secret_key = "test"
 }
