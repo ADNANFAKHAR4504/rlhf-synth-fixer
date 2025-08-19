@@ -1,1 +1,0 @@
-../lib/tap_stack.tf
