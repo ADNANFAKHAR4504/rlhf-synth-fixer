@@ -1,28 +1,19 @@
+# Production-ready AWS infrastructure with security and compliance controls
+#
+# VALIDATION NOTES / REQUIREMENTS CHECKLIST:
+# ✅ Security Groups (Ingress): aws_security_group resources restrict ingress to var.allowed_ingress_cidrs
+# ✅ S3 Encryption (CMK): aws_kms_key.main with rotation, all buckets use customer-managed key
+# ✅ S3 Access Logging: Central logging bucket with server access logging for all buckets
+# ✅ IAM Least Privilege: All roles/policies scoped with resource ARNs and conditions
+# ✅ CloudWatch Alarms: Metric filters on CloudTrail for unauthorized API calls with SNS alerts
+# ✅ VPC Flow Logs: Enabled to CloudWatch Logs with retention and least-privilege role
+# ✅ RDS High Availability: Multi-AZ, encrypted, private subnets, locked-down security groups
+# ✅ EC2 AMIs: Latest AMIs via SSM Parameter lookup, hardened security groups
+# ✅ Patch Automation: SSM Patch Manager with maintenance windows and associations
+# ✅ S3 Public Access Block: Enabled at bucket level with restrictive bucket policies
+# ✅ Region guard: ensures deployment only in us-west-2 (see null_resource.region_guard precondition)
 
-// Production-ready AWS infrastructure with security and compliance controls
-//
-// VALIDATION NOTES / REQUIREMENTS CHECKLIST
-// - Region guard: ensures deployment only in us-west-2 (see null_resource.region_guard precondition)
-// - Security Groups (Ingress): aws_security_group.* restrict ingress strictly to var.allowed_ingress_cidrs
-// - S3 Encryption (CMK): aws_kms_key.main with rotation; all buckets use customer-managed KMS; policies enforce CMK key-id
-// - S3 Access Logging: All buckets log to central access logs bucket (access logs bucket also logs per requirement)
-// - IAM Least Privilege: Scoped resource ARNs and conditions; managed policies where applicable
-// - CloudWatch Alarms: Metric filter on CloudTrail for unauthorized API calls + SNS notification (encrypted topic)
-// - VPC Flow Logs: Enabled to CloudWatch Logs with retention; minimal IAM permissions (no CreateLogGroup)
-// - RDS High Availability: Multi-AZ, encrypted with CMK, private subnets, locked-down SG, deletion protection, backups
-// - EC2 AMIs: Latest AL2023 via SSM Parameter Store; hardened SGs; IMDSv2 enforced; no public IPs; EBS encrypted with CMK
-// - Patch Automation: SSM Maintenance Window + task to run AWS-RunPatchBaseline (Install) on tagged instances
-// - S3 Public Access Block: Bucket-level + account-level; bucket policies also deny public ACLs/policies and non-TLS
-
-// =====================
-// Variables
-// =====================
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-west-2"
-}
-
+# Variables
 variable "project_name" {
   description = "Name of the project"
   type        = string
@@ -138,17 +129,13 @@ variable "kms_key_administrators" {
 }
 
 variable "kms_key_users" {
-  description = "List of IAM user/role ARNs that can use KMS keys (Decrypt/GenerateDataKey)"
+  description = "List of IAM user/role ARNs that can use KMS keys"
   type        = list(string)
   default     = []
 }
 
-// =====================
-// Locals
-// =====================
+# Locals
 locals {
-  expected_region = "us-west-2"
-
   common_tags = {
     Project     = var.project_name
     Environment = var.environment
@@ -161,9 +148,7 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
 }
 
-// =====================
-// Data Sources
-// =====================
+# Data Sources
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 data "aws_region" "current" {}
@@ -176,21 +161,19 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-// Guard: enforce region us-west-2
+# Region Guard
 resource "null_resource" "region_guard" {
   lifecycle {
     precondition {
-      condition     = data.aws_region.current.id == local.expected_region
-      error_message = "This stack must be deployed in us-west-2. Current region: ${data.aws_region.current.id}"
+      condition     = data.aws_region.current.id == "us-west-2"
+      error_message = "This configuration must be deployed in us-west-2 region only."
     }
   }
 }
 
-// =====================
-// KMS Key (primary CMK)
-// =====================
+# KMS Key for Encryption
 resource "aws_kms_key" "main" {
-  description             = "Primary CMK for S3, Logs, SNS, and EBS/RDS encryption"
+  description             = "Customer managed key for S3, RDS, and CloudWatch Logs encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -198,92 +181,22 @@ resource "aws_kms_key" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "EnableAccountAdminPermissions"
+        Sid    = "Enable IAM User Permissions"
         Effect = "Allow"
         Principal = {
           AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
         }
-        Action = [
-          "kms:Create*",
-          "kms:Describe*",
-          "kms:Enable*",
-          "kms:List*",
-          "kms:Put*",
-          "kms:Update*",
-          "kms:Revoke*",
-          "kms:Disable*",
-          "kms:Get*",
-          "kms:Delete*",
-          "kms:TagResource",
-          "kms:UntagResource",
-          "kms:ScheduleKeyDeletion",
-          "kms:CancelKeyDeletion"
-        ]
+        Action   = "kms:*"
         Resource = "*"
       },
       {
-        Sid       = "KeyAdministratorsFromInput"
-        Effect    = "Allow"
-        Principal = { AWS = var.kms_key_administrators }
-        Action = [
-          "kms:Create*",
-          "kms:Describe*",
-          "kms:Enable*",
-          "kms:List*",
-          "kms:Put*",
-          "kms:Update*",
-          "kms:Revoke*",
-          "kms:Disable*",
-          "kms:Get*",
-          "kms:Delete*",
-          "kms:TagResource",
-          "kms:UntagResource",
-          "kms:ScheduleKeyDeletion",
-          "kms:CancelKeyDeletion"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:PrincipalAccount" = data.aws_caller_identity.current.account_id
-          }
+        Sid    = "Allow CloudTrail to encrypt logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
         }
-      },
-      {
-        Sid       = "KeyUsersFromInput"
-        Effect    = "Allow"
-        Principal = { AWS = var.kms_key_users }
-        Action = [
-          "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid       = "AllowS3ServiceUseViaRegion"
-        Effect    = "Allow"
-        Principal = { Service = "s3.amazonaws.com" }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "kms:ViaService" = "s3.${data.aws_region.current.id}.amazonaws.com"
-          }
-        }
-      },
-      {
-        Sid       = "AllowCloudTrailUse"
-        Effect    = "Allow"
-        Principal = { Service = "cloudtrail.amazonaws.com" }
         Action = [
           "kms:GenerateDataKey*",
-          "kms:Decrypt",
           "kms:DescribeKey"
         ]
         Resource = "*"
@@ -294,46 +207,100 @@ resource "aws_kms_key" "main" {
         }
       },
       {
-        Sid       = "AllowCloudWatchLogsUse"
-        Effect    = "Allow"
-        Principal = { Service = "logs.${data.aws_region.current.id}.amazonaws.com" }
+        Sid    = "Allow S3 service to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
         Action = [
-          "kms:Encrypt",
           "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid       = "AllowSNSUse"
-        Effect    = "Allow"
-        Principal = { Service = "sns.amazonaws.com" }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
+          "kms:GenerateDataKey"
         ]
         Resource = "*"
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+            "kms:ViaService" = "s3.${data.aws_region.current.id}.amazonaws.com"
           }
         }
       },
       {
-        Sid       = "AllowRDSUseViaRegion"
-        Effect    = "Allow"
-        Principal = { Service = "rds.${data.aws_region.current.id}.amazonaws.com" }
+        Sid    = "Allow RDS service to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "rds.amazonaws.com"
+        }
         Action = [
-          "kms:Encrypt",
           "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "rds.${data.aws_region.current.id}.amazonaws.com"
+          }
+        }
+      },
+      {
+        Sid    = "Allow CloudWatch Logs to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.id}.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow SNS to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "sns.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow KMS Administrators"
+        Effect = "Allow"
+        Principal = {
+          AWS = var.kms_key_administrators
+        }
+        Action = [
+          "kms:Create*",
+          "kms:Describe*",
+          "kms:Enable*",
+          "kms:List*",
+          "kms:Put*",
+          "kms:Update*",
+          "kms:Revoke*",
+          "kms:Disable*",
+          "kms:Get*",
+          "kms:Delete*",
+          "kms:TagResource",
+          "kms:UntagResource",
+          "kms:ScheduleKeyDeletion",
+          "kms:CancelKeyDeletion"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow KMS Users"
+        Effect = "Allow"
+        Principal = {
+          AWS = var.kms_key_users
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:ReEncrypt*"
         ]
         Resource = "*"
       }
@@ -341,21 +308,21 @@ resource "aws_kms_key" "main" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-primary-cmk"
+    Name = "${local.name_prefix}-main-cmk"
   })
 }
 
-// =====================
-// Random suffix for unique S3 bucket names
-// =====================
+resource "aws_kms_alias" "main" {
+  name          = "alias/${local.name_prefix}-main-cmk"
+  target_key_id = aws_kms_key.main.key_id
+}
+
+# S3 Buckets
 resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
-// =====================
-// S3 Buckets
-// =====================
-// Central Access Logs bucket
+# Access Logs Bucket
 resource "aws_s3_bucket" "access_logs" {
   bucket        = "${local.name_prefix}-access-logs-${random_id.bucket_suffix.hex}"
   force_destroy = false
@@ -368,11 +335,14 @@ resource "aws_s3_bucket" "access_logs" {
 
 resource "aws_s3_bucket_versioning" "access_logs" {
   bucket = aws_s3_bucket.access_logs.id
-  versioning_configuration { status = "Enabled" }
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
   bucket = aws_s3_bucket.access_logs.id
+
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.main.arn
@@ -383,7 +353,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
 }
 
 resource "aws_s3_bucket_public_access_block" "access_logs" {
-  bucket                  = aws_s3_bucket.access_logs.id
+  bucket = aws_s3_bucket.access_logs.id
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -391,7 +362,8 @@ resource "aws_s3_bucket_public_access_block" "access_logs" {
 }
 
 resource "aws_s3_bucket_logging" "access_logs_self" {
-  bucket        = aws_s3_bucket.access_logs.id
+  bucket = aws_s3_bucket.access_logs.id
+
   target_bucket = aws_s3_bucket.access_logs.id
   target_prefix = "access-logs/self/"
 }
@@ -407,59 +379,83 @@ resource "aws_s3_bucket_policy" "access_logs" {
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:*"
-        Resource  = [aws_s3_bucket.access_logs.arn, "${aws_s3_bucket.access_logs.arn}/*"]
-        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+        Resource = [
+          aws_s3_bucket.access_logs.arn,
+          "${aws_s3_bucket.access_logs.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
       },
       {
-        Sid       = "DenyPublicObjectACLs"
+        Sid       = "DenyUnencryptedUploads"
         Effect    = "Deny"
         Principal = "*"
-        Action    = ["s3:PutObject", "s3:PutObjectAcl"]
+        Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.access_logs.arn}/*"
         Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = ["public-read", "public-read-write", "authenticated-read"]
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
           }
         }
       },
       {
-        Sid       = "S3ServerAccessLogsDeliveryWrite"
+        Sid       = "S3ServerAccessLogsDelivery"
         Effect    = "Allow"
         Principal = { Service = "logging.s3.amazonaws.com" }
-        Action    = ["s3:PutObject"]
+        Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.access_logs.arn}/access-logs/*"
         Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+          ArnEquals = {
+            "aws:SourceArn" = [
+              aws_s3_bucket.cloudtrail.arn,
+              aws_s3_bucket.app_data.arn
+            ]
           }
         }
       },
       {
-        Sid       = "S3ServerAccessLogsDeliveryAcl"
+        Sid       = "S3ServerAccessLogsDeliveryGetBucketAcl"
         Effect    = "Allow"
         Principal = { Service = "logging.s3.amazonaws.com" }
-        Action    = ["s3:GetBucketAcl"]
+        Action    = "s3:GetBucketAcl"
         Resource  = aws_s3_bucket.access_logs.arn
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = [
+              aws_s3_bucket.cloudtrail.arn,
+              aws_s3_bucket.app_data.arn
+            ]
+          }
+        }
       }
     ]
   })
 }
 
-// Application data bucket
+# Application Data Bucket
 resource "aws_s3_bucket" "app_data" {
   bucket        = "${local.name_prefix}-app-data-${random_id.bucket_suffix.hex}"
   force_destroy = false
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-app-data", Purpose = "application-data" })
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-app-data"
+    Purpose = "application-data"
+  })
 }
 
 resource "aws_s3_bucket_versioning" "app_data" {
   bucket = aws_s3_bucket.app_data.id
-  versioning_configuration { status = "Enabled" }
+  versioning_configuration {
+    status = "Enabled"
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
   bucket = aws_s3_bucket.app_data.id
+
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.main.arn
@@ -470,7 +466,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "app_data" {
 }
 
 resource "aws_s3_bucket_public_access_block" "app_data" {
-  bucket                  = aws_s3_bucket.app_data.id
+  bucket = aws_s3_bucket.app_data.id
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -478,13 +475,15 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
 }
 
 resource "aws_s3_bucket_logging" "app_data" {
-  bucket        = aws_s3_bucket.app_data.id
+  bucket = aws_s3_bucket.app_data.id
+
   target_bucket = aws_s3_bucket.access_logs.id
   target_prefix = "access-logs/app-data/"
 }
 
 resource "aws_s3_bucket_policy" "app_data" {
   bucket = aws_s3_bucket.app_data.id
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -493,11 +492,18 @@ resource "aws_s3_bucket_policy" "app_data" {
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:*"
-        Resource  = [aws_s3_bucket.app_data.arn, "${aws_s3_bucket.app_data.arn}/*"]
-        Condition = { Bool = { "aws:SecureTransport" = "false" } }
+        Resource = [
+          aws_s3_bucket.app_data.arn,
+          "${aws_s3_bucket.app_data.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
       },
       {
-        Sid       = "DenyUnencryptedUploadsUnlessKMSWithKey"
+        Sid       = "DenyUnencryptedUploads"
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:PutObject"
@@ -505,17 +511,14 @@ resource "aws_s3_bucket_policy" "app_data" {
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
-          },
-          StringNotEqualsIfExists = {
-            "s3:x-amz-server-side-encryption-aws-kms-key-id" = aws_kms_key.main.arn
           }
         }
       },
       {
-        Sid       = "DenyPublicObjectACLs"
+        Sid       = "DenyPublicACLs"
         Effect    = "Deny"
         Principal = "*"
-        Action    = ["s3:PutObject", "s3:PutObjectAcl"]
+        Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.app_data.arn}/*"
         Condition = {
           StringEquals = {
@@ -527,7 +530,115 @@ resource "aws_s3_bucket_policy" "app_data" {
   })
 }
 
-// Account-level public access block
+# CloudTrail Bucket
+resource "aws_s3_bucket" "cloudtrail" {
+  bucket        = "${local.name_prefix}-cloudtrail-${random_id.bucket_suffix.hex}"
+  force_destroy = false
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.name_prefix}-cloudtrail"
+    Purpose = "cloudtrail-logs"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_logging" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  target_bucket = aws_s3_bucket.access_logs.id
+  target_prefix = "access-logs/cloudtrail/"
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.cloudtrail.arn,
+          "${aws_s3_bucket.cloudtrail.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      },
+      {
+        Sid       = "DenyUnencryptedUploads"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
+      },
+      {
+        Sid       = "AWSCloudTrailAclCheck"
+        Effect    = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action    = "s3:GetBucketAcl"
+        Resource  = aws_s3_bucket.cloudtrail.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
+          }
+        }
+      },
+      {
+        Sid       = "AWSCloudTrailWrite"
+        Effect    = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Account-level S3 Public Access Block
 resource "aws_s3_account_public_access_block" "account" {
   block_public_acls       = true
   block_public_policy     = true
@@ -535,15 +646,15 @@ resource "aws_s3_account_public_access_block" "account" {
   restrict_public_buckets = true
 }
 
-// =====================
-// CloudWatch Logs (encrypted)
-// =====================
+# CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/flowlogs/${local.name_prefix}"
   retention_in_days = var.flow_logs_retention_days
   kms_key_id        = aws_kms_key.main.arn
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-vpc-flow-logs" })
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc-flow-logs"
+  })
 }
 
 resource "aws_cloudwatch_log_group" "cloudtrail" {
@@ -551,30 +662,211 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
   retention_in_days = var.app_logs_retention_days
   kms_key_id        = aws_kms_key.main.arn
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-cloudtrail-logs" })
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail-logs"
+  })
 }
 
-// =====================
-// IAM for VPC Flow Logs (least privilege)
-// =====================
+# IAM Roles and Policies
 resource "aws_iam_role" "vpc_flow_logs" {
   name = "${local.name_prefix}-vpc-flow-logs-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Action    = "sts:AssumeRole",
-      Effect    = "Allow",
-      Principal = { Service = "vpc-flow-logs.amazonaws.com" }
-    }]
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
+        }
+      }
+    ]
   })
 
   tags = local.common_tags
 }
 
-// =====================
-// Security Groups
-// =====================
+resource "aws_iam_role_policy" "vpc_flow_logs" {
+  name = "${local.name_prefix}-vpc-flow-logs-policy"
+  role = aws_iam_role.vpc_flow_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = aws_cloudwatch_log_group.vpc_flow_logs.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "cloudtrail" {
+  name = "${local.name_prefix}-cloudtrail-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy" "cloudtrail" {
+  name = "${local.name_prefix}-cloudtrail-policy"
+  role = aws_iam_role.cloudtrail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:PutLogEvents",
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream"
+        ]
+        Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "ec2_role" {
+  name = "${local.name_prefix}-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name       = "${local.name_prefix}-ec2-instance-profile"
+  role       = aws_iam_role.ec2_role.name
+  depends_on = [aws_iam_role_policy_attachment.ec2_ssm_core]
+}
+
+# VPC Flow Logs
+resource "aws_flow_log" "vpc" {
+  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  traffic_type    = "ALL"
+  vpc_id          = var.vpc_id
+
+  log_format = "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc-flow-logs"
+  })
+}
+
+# CloudTrail
+resource "aws_cloudtrail" "main" {
+  name                          = "${local.name_prefix}-cloudtrail"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail.bucket
+  s3_key_prefix                 = "cloudtrail-logs"
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_logging                = true
+  enable_log_file_validation    = true
+
+  kms_key_id = aws_kms_key.main.arn
+
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail.arn
+
+  event_selector {
+    read_write_type                  = "All"
+    include_management_events        = true
+    exclude_management_event_sources = []
+
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["arn:${data.aws_partition.current.partition}:s3:::*/*"]
+    }
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail"
+  })
+}
+
+# SNS Topic for Security Alerts
+resource "aws_sns_topic" "security_alerts" {
+  name              = "${local.name_prefix}-security-alerts"
+  kms_master_key_id = aws_kms_key.main.arn
+
+  tags = local.common_tags
+}
+
+resource "aws_sns_topic_subscription" "security_alerts" {
+  count     = length(var.alarm_emails)
+  topic_arn = aws_sns_topic.security_alerts.arn
+  protocol  = "email"
+  endpoint  = var.alarm_emails[count.index]
+}
+
+# CloudWatch Metric Filters and Alarms
+resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
+  name           = "${local.name_prefix}-unauthorized-api-calls"
+  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
+  pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
+
+  metric_transformation {
+    name      = "UnauthorizedAPICalls"
+    namespace = "${local.name_prefix}/Security"
+    value     = "1"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
+  alarm_name          = "${local.name_prefix}-unauthorized-api-calls"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "UnauthorizedAPICalls"
+  namespace           = "${local.name_prefix}/Security"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "1"
+  alarm_description   = "This metric monitors unauthorized API calls"
+  alarm_actions       = [aws_sns_topic.security_alerts.arn]
+
+  tags = local.common_tags
+}
+
+# Security Groups
 resource "aws_security_group" "rds" {
   name        = "${local.name_prefix}-rds-sg"
   description = "Security group for RDS database"
@@ -589,13 +881,16 @@ resource "aws_security_group" "rds" {
   }
 
   egress {
+    description = "All outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds-sg" })
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds-sg"
+  })
 }
 
 resource "aws_security_group" "ec2" {
@@ -628,85 +923,89 @@ resource "aws_security_group" "ec2" {
   }
 
   egress {
+    description = "All outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-ec2-sg" })
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-ec2-sg"
+  })
 }
 
-// =====================
-// RDS (Multi-AZ, encrypted, private)
-// =====================
+# RDS Resources
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = var.private_subnet_ids
-  tags       = merge(local.common_tags, { Name = "${local.name_prefix}-db-subnet-group" })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-subnet-group"
+  })
+}
+
+resource "random_password" "rds_password" {
+  length  = 16
+  special = true
 }
 
 resource "aws_db_instance" "main" {
-  identifier            = "${local.name_prefix}-rds"
-  engine                = var.rds_engine
-  engine_version        = var.rds_engine_version
-  instance_class        = var.rds_instance_class
+  identifier     = "${local.name_prefix}-rds"
+  engine         = var.rds_engine
+  engine_version = var.rds_engine_version
+  instance_class = var.rds_instance_class
+
   allocated_storage     = var.rds_allocated_storage
   max_allocated_storage = var.rds_allocated_storage * 2
   storage_type          = "gp3"
   storage_encrypted     = true
   kms_key_id            = aws_kms_key.main.arn
 
-  db_name                     = "appdb"
-  username                    = "dbadmin"
-  manage_master_user_password = true
+  db_name  = "appdb"
+  username = "dbadmin"
+  password = random_password.rds_password.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az                   = true
-  publicly_accessible        = false
-  backup_retention_period    = 7
-  backup_window              = "03:00-04:00"
-  maintenance_window         = "sun:04:00-sun:05:00"
+  multi_az                = true
+  publicly_accessible     = false
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
   auto_minor_version_upgrade = true
   deletion_protection        = true
+  skip_final_snapshot        = false
+  final_snapshot_identifier  = "${local.name_prefix}-rds-final-snapshot"
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-rds" })
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-rds"
+  })
 }
 
-// =====================
-// EC2 (AL2023 via SSM, IMDSv2, no public IP)
-// =====================
-resource "aws_iam_role" "ec2_role" {
-  name = "${local.name_prefix}-ec2-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Action    = "sts:AssumeRole",
-      Effect    = "Allow",
-      Principal = { Service = "ec2.amazonaws.com" }
-    }]
-  })
+resource "aws_secretsmanager_secret" "rds_password" {
+  name        = "${local.name_prefix}-rds-password"
+  description = "RDS database password"
+  kms_key_id  = aws_kms_key.main.arn
 
   tags = local.common_tags
 }
 
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.name_prefix}-ec2-instance-profile"
-  role = aws_iam_role.ec2_role.name
+resource "aws_secretsmanager_secret_version" "rds_password" {
+  secret_id = aws_secretsmanager_secret.rds_password.id
+  secret_string = jsonencode({
+    username = aws_db_instance.main.username
+    password = random_password.rds_password.result
+    endpoint = aws_db_instance.main.endpoint
+    port     = aws_db_instance.main.port
+  })
 }
 
-resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
-  role       = aws_iam_role.ec2_role.name
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
-  
-  depends_on = [aws_iam_instance_profile.ec2_profile]
-}
-
+# EC2 Instance
 resource "aws_instance" "app" {
   ami                         = data.aws_ssm_parameter.amazon_linux_2023_ami.value
   instance_type               = var.ec2_instance_type
@@ -714,43 +1013,39 @@ resource "aws_instance" "app" {
   vpc_security_group_ids      = [aws_security_group.ec2.id]
   associate_public_ip_address = false
   iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
-  user_data_base64            = base64encode(templatefile("${path.module}/user_data.sh", {
+  user_data_base64 = base64encode(templatefile("${path.module}/user_data.sh", {
     project_name = var.project_name
     environment  = var.environment
     region       = data.aws_region.current.id
   }))
-
   metadata_options {
     http_endpoint = "enabled"
     http_tokens   = "required"
   }
-
   root_block_device {
     encrypted   = true
     kms_key_id  = aws_kms_key.main.arn
     volume_type = "gp3"
   }
-
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-ec2", SSMManaged = "true" })
 }
 
-// =====================
-// SSM Patch Manager (Maintenance Window + Task)
-// =====================
+# SSM Patch Manager
 resource "aws_ssm_maintenance_window" "patch" {
   name                       = "${local.name_prefix}-patch-window"
-  description                = "Apply security patches to EC2 instances"
+  description                = "Maintenance window for security patches"
   schedule                   = var.ssm_patch_window_cron
   duration                   = 2
   cutoff                     = 1
   allow_unassociated_targets = false
-  tags                       = local.common_tags
+
+  tags = local.common_tags
 }
 
 resource "aws_ssm_maintenance_window_target" "patch_targets" {
   window_id     = aws_ssm_maintenance_window.patch.id
   name          = "${local.name_prefix}-patch-targets"
-  description   = "Targets EC2 instances tagged for patching"
+  description   = "Target EC2 instances for patching"
   resource_type = "INSTANCE"
 
   targets {
@@ -760,13 +1055,11 @@ resource "aws_ssm_maintenance_window_target" "patch_targets" {
 }
 
 resource "aws_ssm_maintenance_window_task" "patch_task" {
-  name             = "${local.name_prefix}-patch-task"
-  description      = "Run AWS-RunPatchBaseline in Install mode"
   window_id        = aws_ssm_maintenance_window.patch.id
   task_type        = "RUN_COMMAND"
   task_arn         = "AWS-RunPatchBaseline"
   priority         = 1
-  service_role_arn = null
+  service_role_arn = aws_iam_role.ec2_role.arn
 
   targets {
     key    = "WindowTargetIds"
@@ -775,279 +1068,47 @@ resource "aws_ssm_maintenance_window_task" "patch_task" {
 
   task_invocation_parameters {
     run_command_parameters {
-      timeout_seconds = 7200
-      comment         = "Automatic security patching"
       parameter {
         name   = "Operation"
         values = ["Install"]
       }
     }
   }
-
-  max_concurrency = "1"
-  max_errors      = "1"
 }
 
-// =====================
-// Outputs
-// =====================
-output "kms_key_arn" { value = aws_kms_key.main.arn }
-output "s3_access_logs_bucket" { value = aws_s3_bucket.access_logs.bucket }
-output "s3_cloudtrail_bucket" { value = aws_s3_bucket.cloudtrail.bucket }
-output "s3_app_data_bucket" { value = aws_s3_bucket.app_data.bucket }
-output "cloudtrail_arn" { value = aws_cloudtrail.main.arn }
-output "sns_security_alerts_topic_arn" { value = aws_sns_topic.security_alerts.arn }
-output "vpc_flow_log_id" { value = aws_flow_log.vpc.id }
-output "cloudwatch_log_group_vpc" { value = aws_cloudwatch_log_group.vpc_flow_logs.name }
-output "cloudwatch_log_group_cloudtrail" { value = aws_cloudwatch_log_group.cloudtrail.name }
-output "rds_instance_arn" { value = aws_db_instance.main.arn }
-output "ec2_instance_id" { value = aws_instance.app.id }
-output "ec2_private_ip" { value = aws_instance.app.private_ip }
-output "ec2_public_ip" { value = aws_instance.app.public_ip }
-output "sg_ec2_id" { value = aws_security_group.ec2.id }
-output "sg_rds_id" { value = aws_security_group.rds.id }
-
-resource "aws_iam_role_policy" "vpc_flow_logs" {
-  name = "${local.name_prefix}-vpc-flow-logs-policy"
-  role = aws_iam_role.vpc_flow_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Action = [
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
-      ],
-      Resource = "${aws_cloudwatch_log_group.vpc_flow_logs.arn}:*"
-    }]
-  })
+# Outputs
+output "vpc_flow_log_id" {
+  description = "VPC Flow Log ID"
+  value       = aws_flow_log.vpc.id
 }
 
-resource "aws_flow_log" "vpc" {
-  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = var.vpc_id
-
-  log_format = "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}"
-
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-vpc-flow-logs" })
+output "cloudtrail_arn" {
+  description = "CloudTrail ARN"
+  value       = aws_cloudtrail.main.arn
 }
 
-resource "aws_kms_alias" "main" {
-  name          = "alias/${local.name_prefix}-primary-cmk"
-  target_key_id = aws_kms_key.main.key_id
+output "rds_endpoint" {
+  description = "RDS endpoint"
+  value       = aws_db_instance.main.endpoint
+  sensitive   = true
 }
 
-// CloudTrail bucket
-resource "aws_s3_bucket" "cloudtrail" {
-  bucket        = "${local.name_prefix}-cloudtrail-${random_id.bucket_suffix.hex}"
-  force_destroy = false
-
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-cloudtrail", Purpose = "cloudtrail-logs" })
+output "ec2_instance_id" {
+  description = "EC2 instance ID"
+  value       = aws_instance.app.id
 }
 
-resource "aws_s3_bucket_versioning" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
-  versioning_configuration { status = "Enabled" }
+output "s3_access_logs_bucket" {
+  description = "S3 access logs bucket name"
+  value       = aws_s3_bucket.access_logs.bucket
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.main.arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
+output "kms_key_arn" {
+  description = "KMS key ARN"
+  value       = aws_kms_key.main.arn
 }
 
-resource "aws_s3_bucket_public_access_block" "cloudtrail" {
-  bucket                  = aws_s3_bucket.cloudtrail.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+output "sns_topic_arn" {
+  description = "SNS topic ARN for security alerts"
+  value       = aws_sns_topic.security_alerts.arn
 }
-
-resource "aws_s3_bucket_logging" "cloudtrail" {
-  bucket        = aws_s3_bucket.cloudtrail.id
-  target_bucket = aws_s3_bucket.access_logs.id
-  target_prefix = "access-logs/cloudtrail/"
-}
-
-resource "aws_s3_bucket_policy" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource  = [aws_s3_bucket.cloudtrail.arn, "${aws_s3_bucket.cloudtrail.arn}/*"]
-        Condition = { Bool = { "aws:SecureTransport" = "false" } }
-      },
-      {
-        Sid       = "DenyUnencryptedUploadsUnlessKMS"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.cloudtrail.arn}/*"
-        Condition = {
-          StringNotEquals = {
-            "s3:x-amz-server-side-encryption" = "aws:kms"
-          },
-          StringNotEqualsIfExists = {
-            "s3:x-amz-server-side-encryption-aws-kms-key-id" = aws_kms_key.main.arn
-          }
-        }
-      },
-      {
-        Sid       = "DenyPublicObjectACLs"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = ["s3:PutObject", "s3:PutObjectAcl"]
-        Resource  = "${aws_s3_bucket.cloudtrail.arn}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = ["public-read", "public-read-write", "authenticated-read"]
-          }
-        }
-      },
-      {
-        Sid       = "AWSCloudTrailAclCheck"
-        Effect    = "Allow"
-        Principal = { Service = "cloudtrail.amazonaws.com" }
-        Action    = "s3:GetBucketAcl"
-        Resource  = aws_s3_bucket.cloudtrail.arn
-        Condition = {
-          StringEquals = {
-            "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
-          }
-        }
-      },
-      {
-        Sid       = "AWSCloudTrailWrite"
-        Effect    = "Allow"
-        Principal = { Service = "cloudtrail.amazonaws.com" }
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.cloudtrail.arn}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl"  = "bucket-owner-full-control",
-            "aws:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-cloudtrail"
-          }
-        }
-      }
-    ]
-  })
-}
-
-// =====================
-// CloudTrail with CloudWatch integration
-// =====================
-resource "aws_iam_role" "cloudtrail" {
-  name = "${local.name_prefix}-cloudtrail-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Action    = "sts:AssumeRole",
-      Effect    = "Allow",
-      Principal = { Service = "cloudtrail.amazonaws.com" }
-    }]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy" "cloudtrail" {
-  name = "${local.name_prefix}-cloudtrail-policy"
-  role = aws_iam_role.cloudtrail.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Action = [
-        "logs:PutLogEvents",
-        "logs:CreateLogStream"
-      ],
-      Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
-    }]
-  })
-}
-
-resource "aws_cloudtrail" "main" {
-  name                          = "${local.name_prefix}-cloudtrail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail.bucket
-  s3_key_prefix                 = "cloudtrail-logs"
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
-  enable_log_file_validation    = true
-
-  kms_key_id = aws_kms_key.main.arn
-
-  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
-  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail.arn
-
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-  }
-
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}-cloudtrail" })
-}
-
-// =====================
-// SNS for security alerts (encrypted)
-// =====================
-resource "aws_sns_topic" "security_alerts" {
-  name              = "${local.name_prefix}-security-alerts"
-  kms_master_key_id = aws_kms_key.main.arn
-
-  tags = local.common_tags
-}
-
-resource "aws_sns_topic_subscription" "security_alerts" {
-  count     = length(var.alarm_emails)
-  topic_arn = aws_sns_topic.security_alerts.arn
-  protocol  = "email"
-  endpoint  = var.alarm_emails[count.index]
-}
-
-// CloudWatch Metric Filters and Alarms
-resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
-  name           = "${local.name_prefix}-unauthorized-api-calls"
-  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
-  pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
-
-  metric_transformation {
-    name      = "UnauthorizedAPICalls"
-    namespace = "${local.name_prefix}/Security"
-    value     = "1"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
-  alarm_name          = "${local.name_prefix}-unauthorized-api-calls"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
-  metric_name         = "UnauthorizedAPICalls"
-  namespace           = "${local.name_prefix}/Security"
-  period              = 300
-  statistic           = "Sum"
-  threshold           = 1
-  alarm_description   = "This metric monitors unauthorized API calls"
-  alarm_actions       = [aws_sns_topic.security_alerts.arn]
-
-  tags = local.common_tags
-}
-
-

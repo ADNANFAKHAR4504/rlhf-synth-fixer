@@ -12,11 +12,11 @@ terraform {
 
   # S3 backend configuration (ensure bucket/table exist beforehand)
   backend "s3" {
-    bucket         = "iac-rlhf-tf-states"
-    key            = "iac-test-automations/lib/terraform.tfstate"
-    region         = "us-west-2"
-    use_lockfile   = true
-    encrypt        = true
+    bucket       = "iac-rlhf-tf-states"
+    key          = "iac-test-automations/lib/terraform.tfstate"
+    region       = "us-west-2"
+    use_lockfile = true
+    encrypt      = true
   }
 }
 
