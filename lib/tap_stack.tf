@@ -839,10 +839,10 @@ resource "aws_cloudwatch_log_group" "app_logs" {
 }
 
 resource "aws_cloudwatch_log_group" "app_logs_secondary" {
-  provider          = aws.secondary
-  name_prefix       = "/app/nova-project-logs-secondary-"
-  retention_in_days = 14
-  tags              = merge(local.common_tags, { Name = "cw-log-group-app-secondary-${local.deployment_suffix}" })
+  provider          = aws.secondary
+  name_prefix       = "/app/nova-project-logs-secondary-"
+  retention_in_days = 14
+  tags              = merge(local.common_tags, { Name = "cw-log-group-app-secondary-${local.deployment_suffix}" })
 }
 
 resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
@@ -1010,4 +1010,89 @@ output "private_key_path" {
 output "lambda_function_name" {
   description = "Name of the cost-saving Lambda function"
   value       = aws_lambda_function.cost_saver.function_name
+}
+
+output "primary_alb_name" {
+  description = "Name of the primary ALB"
+  value       = aws_lb.primary_app.name
+}
+
+output "secondary_alb_name" {
+  description = "Name of the secondary ALB"
+  value       = aws_lb.secondary_app.name
+}
+
+output "primary_alb_arn" {
+  description = "ARN of the primary ALB"
+  value       = aws_lb.primary_app.arn
+}
+
+output "secondary_alb_arn" {
+  description = "ARN of the secondary ALB"
+  value       = aws_lb.secondary_app.arn
+}
+
+output "primary_asg_name" {
+  description = "Name of the primary Auto Scaling Group"
+  value       = aws_autoscaling_group.primary_app.name
+}
+
+output "secondary_asg_name" {
+  description = "Name of the secondary Auto Scaling Group"
+  value       = aws_autoscaling_group.secondary_app.name
+}
+
+output "primary_db_identifier" {
+  description = "Identifier of the primary RDS instance"
+  value       = aws_db_instance.primary_db.identifier
+}
+
+output "event_rule_name" {
+  description = "Name of the CloudWatch Event Rule"
+  value       = aws_cloudwatch_event_rule.daily_shutdown.name
+}
+
+output "primary_vpc_id" {
+  description = "ID of the primary VPC"
+  value       = aws_vpc.primary.id
+}
+
+output "secondary_vpc_id" {
+  description = "ID of the secondary VPC"
+  value       = aws_vpc.secondary.id
+}
+
+output "vpc_peering_connection_id" {
+  description = "ID of the VPC peering connection"
+  value       = aws_vpc_peering_connection.peer.id
+}
+
+output "primary_vpc_cidr" {
+  description = "CIDR block of the primary VPC"
+  value       = aws_vpc.primary.cidr_block
+}
+
+output "secondary_vpc_cidr" {
+  description = "CIDR block of the secondary VPC"
+  value       = aws_vpc.secondary.cidr_block
+}
+
+output "s3_bucket_versioning_status" {
+  description = "Versioning status of the S3 bucket"
+  value       = aws_s3_bucket_versioning.artifacts.versioning_configuration[0].status
+}
+
+output "rds_multi_az" {
+  description = "Multi-AZ status of the RDS instance"
+  value       = aws_db_instance.primary_db.multi_az
+}
+
+output "rds_backup_retention_period" {
+  description = "Backup retention period for RDS"
+  value       = aws_db_instance.primary_db.backup_retention_period
+}
+
+output "rds_storage_encrypted" {
+  description = "Storage encryption status of the RDS instance"
+  value       = aws_db_instance.primary_db.storage_encrypted
 }
