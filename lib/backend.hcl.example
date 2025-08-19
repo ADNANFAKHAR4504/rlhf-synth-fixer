@@ -3,7 +3,6 @@
 
 bucket         = "YOUR_TF_STATE_BUCKET"
 key            = "iac-test-automations/lib/terraform.tfstate"
-region         = "us-east-1"
+region         = "us-west-2"
 # dynamodb_table = "YOUR_TF_STATE_LOCKS_TABLE"  # Optional but recommended for state locking
 encrypt        = true
-

@@ -1,19 +1,11 @@
-# Production-ready AWS infrastructure with security and compliance controls
-#
-# VALIDATION NOTES / REQUIREMENTS CHECKLIST:
-# ✅ Security Groups (Ingress): aws_security_group resources restrict ingress to var.allowed_ingress_cidrs
-# ✅ S3 Encryption (CMK): aws_kms_key.main with rotation, all buckets use customer-managed key
-# ✅ S3 Access Logging: Central logging bucket with server access logging for all buckets
-# ✅ IAM Least Privilege: All roles/policies scoped with resource ARNs and conditions
-# ✅ CloudWatch Alarms: Metric filters on CloudTrail for unauthorized API calls with SNS alerts
-# ✅ VPC Flow Logs: Enabled to CloudWatch Logs with retention and least-privilege role
-# ✅ RDS High Availability: Multi-AZ, encrypted, private subnets, locked-down security groups
-# ✅ EC2 AMIs: Latest AMIs via SSM Parameter lookup, hardened security groups
-# ✅ Patch Automation: SSM Patch Manager with maintenance windows and associations
-# ✅ S3 Public Access Block: Enabled at bucket level with restrictive bucket policies
-# ✅ Region guard: ensures deployment only in us-west-2 (see null_resource.region_guard precondition)
 
 # Variables
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-west-2"
+}
+
 variable "project_name" {
   description = "Name of the project"
   type        = string
