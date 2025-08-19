@@ -10,7 +10,7 @@
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Database Management",
-    "Security Configuration", 
+    "Security Configuration",
     "Network Configuration",
     "Performance Optimization"
   ],
@@ -25,5 +25,11 @@
     "InternetGateway",
     "RouteTable",
     "KeyPair"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
