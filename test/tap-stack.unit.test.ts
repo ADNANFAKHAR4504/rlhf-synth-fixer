@@ -96,26 +96,20 @@ describe('TapStack CloudFormation Template - Unit', () => {
       );
     });
 
-    test('defines NAT gateways with EIPs', () => {
+    test('defines NAT gateway with EIP', () => {
       const r = template.Resources;
-      expect(r.NatGateway1EIP).toBeDefined();
-      expect(r.NatGateway1EIP.Type).toBe('AWS::EC2::EIP');
-      expect(r.NatGateway2EIP).toBeDefined();
-      expect(r.NatGateway2EIP.Type).toBe('AWS::EC2::EIP');
-      expect(r.NatGateway1).toBeDefined();
-      expect(r.NatGateway1.Type).toBe('AWS::EC2::NatGateway');
-      expect(r.NatGateway2).toBeDefined();
-      expect(r.NatGateway2.Type).toBe('AWS::EC2::NatGateway');
+      expect(r.NatGatewayEIP).toBeDefined();
+      expect(r.NatGatewayEIP.Type).toBe('AWS::EC2::EIP');
+      expect(r.NatGateway).toBeDefined();
+      expect(r.NatGateway.Type).toBe('AWS::EC2::NatGateway');
     });
 
     test('defines route tables and associations', () => {
       const r = template.Resources;
       expect(r.PublicRouteTable).toBeDefined();
-      expect(r.PrivateRouteTable1).toBeDefined();
-      expect(r.PrivateRouteTable2).toBeDefined();
+      expect(r.PrivateRouteTable).toBeDefined();
       expect(r.DefaultPublicRoute).toBeDefined();
-      expect(r.DefaultPrivateRoute1).toBeDefined();
-      expect(r.DefaultPrivateRoute2).toBeDefined();
+      expect(r.DefaultPrivateRoute).toBeDefined();
     });
 
     test('defines VPC flow logs', () => {

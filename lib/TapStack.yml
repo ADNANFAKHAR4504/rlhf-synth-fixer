@@ -166,48 +166,26 @@ Resources:
         - Key: Type
           Value: Private
 
-  # NAT Gateways
-  NatGateway1EIP:
+  # NAT Gateway (Single for cost optimization and to avoid limits)
+  NatGatewayEIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-EIP-1'
+          Value: !Sub '${AWS::StackName}-NAT-EIP'
         - Key: Environment
           Value: !Ref Environment
 
-  NatGateway2EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-EIP-2'
-        - Key: Environment
-          Value: !Ref Environment
-
-  NatGateway1:
+  NatGateway:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-Gateway-1'
-        - Key: Environment
-          Value: !Ref Environment
-
-  NatGateway2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatGateway2EIP.AllocationId
-      SubnetId: !Ref PublicSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-NAT-Gateway-2'
+          Value: !Sub '${AWS::StackName}-NAT-Gateway'
         - Key: Environment
           Value: !Ref Environment
 
@@ -242,50 +220,33 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
 
-  PrivateRouteTable1:
+  PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Routes-1'
+          Value: !Sub '${AWS::StackName}-Private-Routes'
         - Key: Environment
           Value: !Ref Environment
 
-  DefaultPrivateRoute1:
+  DefaultPrivateRoute:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
+      RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway1
+      NatGatewayId: !Ref NatGateway
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
+      RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet1
-
-  PrivateRouteTable2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-Private-Routes-2'
-        - Key: Environment
-          Value: !Ref Environment
-
-  DefaultPrivateRoute2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway2
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable2
+      RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet2
 
   # Security Groups
