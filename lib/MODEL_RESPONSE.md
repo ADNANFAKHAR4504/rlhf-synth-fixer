@@ -1,6 +1,6 @@
 I'll design a comprehensive multi-environment Terraform setup that meets all your requirements. Here's the implementation:
 
-## provider.tf
+# provider.tf
 
 ```hcl
 terraform {
