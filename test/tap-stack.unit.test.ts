@@ -108,7 +108,7 @@ describe('ServerlessApp CloudFormation Template Unit Tests', () => {
       expect(template.Outputs.ApiEndpoint).toBeDefined();
       const output = template.Outputs.ApiEndpoint;
       expect(output.Value).toBeDefined();
-      expect(output.Value['Sub']).toContain('ServerlessRestApi');
+      expect(output.Value.Sub).toContain('ServerlessRestApi');
     });
   });
 
