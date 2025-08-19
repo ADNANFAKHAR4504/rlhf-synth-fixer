@@ -16,7 +16,7 @@ type TfOutputValue<T> = {
 };
 
 type StructuredOutputs = {
-  cloud_front_domain_name?: TfOutputValue<string>;
+  cloudfront_domain_name?: TfOutputValue<string>;
   cloudfront_distribution_id?: TfOutputValue<string>;
 };
 
@@ -27,10 +27,10 @@ function readStructuredOutputs() {
   }
   const out = JSON.parse(fs.readFileSync(p, "utf8")) as StructuredOutputs;
 
-  if (!out.cloud_front_domain_name?.value) {
-    throw new Error("cloud_front_domain_name.value missing in cfn-outputs/all-outputs.json");
+  if (!out.cloudfront_domain_name?.value) {
+    throw new Error("cloudfront_domain_name.value missing in cfn-outputs/all-outputs.json");
   }
-  const domain = out.cloud_front_domain_name.value;
+  const domain = out.cloudfront_domain_name.value;
   const distributionId = out.cloudfront_distribution_id?.value;
 
   return { domain, distributionId };
