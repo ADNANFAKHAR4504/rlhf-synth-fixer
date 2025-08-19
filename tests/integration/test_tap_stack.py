@@ -53,7 +53,7 @@ def budgets_client():
   return boto3.client("budgets", region_name=SECONDARY_REGION)
 
 
-# ---- S3 Bucket Tests ------------------------------------------------------
+# ---- S3 Bucket Tests------------------------------------------------------
 
 def test_state_bucket_exists(s3_client):
   """Verify state bucket exists."""
