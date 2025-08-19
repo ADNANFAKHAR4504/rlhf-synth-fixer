@@ -52,6 +52,7 @@ describe('TapStack CloudFormation Template', () => {
       'ExistingEC2RoleName',
       'CreateNATGateway',
       'CreateS3Bucket',
+      'CreateEC2Instance',
     ];
 
     test('should have all required parameters', () => {
@@ -193,6 +194,7 @@ describe('TapStack CloudFormation Template', () => {
       'CreateNewDatabase',
       'CreateNATGateway',
       'CreateNewS3Bucket',
+      'CreateNewEC2Instance',
     ];
 
     test('should have all required conditions', () => {
@@ -240,6 +242,13 @@ describe('TapStack CloudFormation Template', () => {
       const condition = template.Conditions?.CreateNewS3Bucket;
       expect(condition['Fn::Equals']).toBeDefined();
       expect(condition['Fn::Equals'][0]['Ref']).toBe('CreateS3Bucket');
+      expect(condition['Fn::Equals'][1]).toBe('yes');
+    });
+
+    test('CreateNewEC2Instance condition should check CreateEC2Instance parameter', () => {
+      const condition = template.Conditions?.CreateNewEC2Instance;
+      expect(condition['Fn::Equals']).toBeDefined();
+      expect(condition['Fn::Equals'][0]['Ref']).toBe('CreateEC2Instance');
       expect(condition['Fn::Equals'][1]).toBe('yes');
     });
   });
@@ -536,9 +545,10 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     describe('Compute Resources', () => {
-      test('LaunchTemplate should have correct properties', () => {
+      test('LaunchTemplate should be conditional and have correct properties', () => {
         const lt = template.Resources.LaunchTemplate;
         expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
+        expect(lt.Condition).toBe('CreateNewEC2Instance');
         expect(lt.Properties.LaunchTemplateData).toBeDefined();
         expect(
           lt.Properties.LaunchTemplateData.ImageId['Fn::FindInMap']
@@ -564,9 +574,10 @@ describe('TapStack CloudFormation Template', () => {
         expect(metadata.HttpPutResponseHopLimit).toBe(2);
       });
 
-      test('WebInstance should reference LaunchTemplate', () => {
+      test('WebInstance should be conditional and reference LaunchTemplate', () => {
         const instance = template.Resources.WebInstance;
         expect(instance.Type).toBe('AWS::EC2::Instance');
+        expect(instance.Condition).toBe('CreateNewEC2Instance');
         expect(instance.Properties.LaunchTemplate.LaunchTemplateId['Ref']).toBe(
           'LaunchTemplate'
         );
@@ -655,10 +666,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
 
-    test('WebInstanceId output should reference instance', () => {
+    test('WebInstanceId output should be conditional', () => {
       const output = template.Outputs.WebInstanceId;
       expect(output.Description).toBeDefined();
-      expect(output.Value['Ref']).toBe('WebInstance');
+      expect(output.Value['Fn::If']).toBeDefined();
+      expect(output.Value['Fn::If'][0]).toBe('CreateNewEC2Instance');
+      expect(output.Value['Fn::If'][1]['Ref']).toBe('WebInstance');
+      expect(output.Value['Fn::If'][2]).toBe('No instance created');
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
   });
@@ -686,7 +700,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(15);
+      expect(parameterCount).toBe(16);
     });
 
     test('should have correct number of outputs', () => {
@@ -696,7 +710,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of conditions', () => {
       const conditionCount = Object.keys(template.Conditions || {}).length;
-      expect(conditionCount).toBe(6);
+      expect(conditionCount).toBe(7);
     });
   });
 

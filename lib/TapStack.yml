@@ -30,6 +30,7 @@ Metadata:
           - ExistingEC2RoleName
           - CreateNATGateway
           - CreateS3Bucket
+          - CreateEC2Instance
     ParameterLabels:
       UseExistingVPC:
         default: 'Use Existing VPC?'
@@ -61,6 +62,8 @@ Metadata:
         default: 'Create NAT Gateway?'
       CreateS3Bucket:
         default: 'Create S3 Bucket?'
+      CreateEC2Instance:
+        default: 'Create EC2 Instance?'
   cfn-lint:
     config:
       ignore_checks:
@@ -160,6 +163,11 @@ Parameters:
     Default: 'yes'
     AllowedValues: ['yes', 'no']
     Description: 'Select "yes" to create a new S3 bucket for application logs. Select "no" to skip bucket creation.'
+  CreateEC2Instance:
+    Type: String
+    Default: 'yes'
+    AllowedValues: ['yes', 'no']
+    Description: 'Select "yes" to create an EC2 instance. Select "no" to skip instance creation.'
 
 Mappings:
   RegionMap:
@@ -175,6 +183,7 @@ Conditions:
   CreateNewDatabase: !Equals [!Ref CreateDatabase, 'yes']
   CreateNATGateway: !Equals [!Ref CreateNATGateway, 'yes']
   CreateNewS3Bucket: !Equals [!Ref CreateS3Bucket, 'yes']
+  CreateNewEC2Instance: !Equals [!Ref CreateEC2Instance, 'yes']
 
 Resources:
   ###############################################################################
@@ -645,6 +654,7 @@ Resources:
   ###############################################################################
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    Condition: CreateNewEC2Instance
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-lt'
       LaunchTemplateData:
@@ -654,7 +664,6 @@ Resources:
           - CreateNewEC2Role
           - Arn: !GetAtt EC2InstanceProfile.Arn
           - Name: !Ref ExistingEC2RoleName
-        KeyName: default
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
@@ -696,6 +705,7 @@ Resources:
 
   WebInstance:
     Type: AWS::EC2::Instance
+    Condition: CreateNewEC2Instance
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
@@ -766,6 +776,6 @@ Outputs:
       Name: !Sub '${AWS::StackName}-KMSKeyArn'
   WebInstanceId:
     Description: The ID of the launched EC2 Web Instance.
-    Value: !Ref WebInstance
+    Value: !If [CreateNewEC2Instance, !Ref WebInstance, 'No instance created']
     Export:
       Name: !Sub '${AWS::StackName}-WebInstanceId'

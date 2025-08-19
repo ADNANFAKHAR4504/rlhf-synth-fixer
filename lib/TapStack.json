@@ -44,7 +44,8 @@
                         "UseExistingEC2Role",
                         "ExistingEC2RoleName",
                         "CreateNATGateway",
-                        "CreateS3Bucket"
+                        "CreateS3Bucket",
+                        "CreateEC2Instance"
                     ]
                 }
             ],
@@ -93,6 +94,9 @@
                 },
                 "CreateS3Bucket": {
                     "default": "Create S3 Bucket?"
+                },
+                "CreateEC2Instance": {
+                    "default": "Create EC2 Instance?"
                 }
             }
         },
@@ -232,6 +236,15 @@
                 "no"
             ],
             "Description": "Select \"yes\" to create a new S3 bucket for application logs. Select \"no\" to skip bucket creation."
+        },
+        "CreateEC2Instance": {
+            "Type": "String",
+            "Default": "yes",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to create an EC2 instance. Select \"no\" to skip instance creation."
         }
     },
     "Mappings": {
@@ -289,6 +302,14 @@
             "Fn::Equals": [
                 {
                     "Ref": "CreateS3Bucket"
+                },
+                "yes"
+            ]
+        },
+        "CreateNewEC2Instance": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateEC2Instance"
                 },
                 "yes"
             ]
@@ -1222,6 +1243,7 @@
         },
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
+            "Condition": "CreateNewEC2Instance",
             "Properties": {
                 "LaunchTemplateName": {
                     "Fn::Sub": "${AWS::StackName}-lt"
@@ -1257,7 +1279,6 @@
                             }
                         ]
                     },
-                    "KeyName": "default",
                     "BlockDeviceMappings": [
                         {
                             "DeviceName": "/dev/xvda",
@@ -1333,6 +1354,7 @@
         },
         "WebInstance": {
             "Type": "AWS::EC2::Instance",
+            "Condition": "CreateNewEC2Instance",
             "Properties": {
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
@@ -1526,7 +1548,13 @@
         "WebInstanceId": {
             "Description": "The ID of the launched EC2 Web Instance.",
             "Value": {
-                "Ref": "WebInstance"
+                "Fn::If": [
+                    "CreateNewEC2Instance",
+                    {
+                        "Ref": "WebInstance"
+                    },
+                    "No instance created"
+                ]
             },
             "Export": {
                 "Name": {
