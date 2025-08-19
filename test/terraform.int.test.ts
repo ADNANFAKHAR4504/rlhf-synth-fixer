@@ -605,7 +605,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       );
       
       expect(responseTimeAlarm).toBeDefined();
-      expect(responseTimeAlarm!.MetricName).toBe("TargetResponseTime");
+      expect(responseTimeAlarm!.MetricName).toBe("ResponseTime");
       expect(responseTimeAlarm!.Namespace).toBe("AWS/ApplicationELB");
       expect(responseTimeAlarm!.Threshold).toBe(1.0);
       
