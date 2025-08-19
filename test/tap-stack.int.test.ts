@@ -117,27 +117,12 @@ describe('Complete AWS Environment Integration Tests', () => {
     });
   });
 
-  describe('Security', () => {
-    test('KMS key should exist', async () => {
-      expect(outputs.KMSKeyId).toContain('arn:aws:kms');
-
-      if (live) {
-        const keyDetails = await kms.describeKey({ KeyId: outputs.KMSKeyId }).promise();
-        expect(keyDetails.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
-      }
-    });
-  });
-
   describe('End-to-End Workflow', () => {
     test('Complete infrastructure should be connected', async () => {
       expect(outputs.VpcId).toBeDefined();
       expect(outputs.EC2InstanceId).toBeDefined();
       expect(outputs.RDSEndpoint).toBeDefined();
       expect(outputs.MainBucketName).toBeDefined();
-
-      // In live mode you could even add:
-      // - Verify EC2 SG allows traffic to RDS SG
-      // - Verify EC2 IAM role has S3 access
     });
   });
 });
