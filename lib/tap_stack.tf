@@ -89,26 +89,26 @@ locals {
   # Common naming convention
   primary_name_prefix   = "${var.project_name}-${var.environment}-primary"
   secondary_name_prefix = "${var.project_name}-${var.environment}-secondary"
-  
+
   # Availability zones
   primary_azs   = ["${var.aws_region}a", "${var.aws_region}b"]
   secondary_azs = ["${var.secondary_region}a", "${var.secondary_region}b"]
-  
+
   # Subnet calculations for primary region
   primary_public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
   primary_private_subnets = ["10.0.10.0/24", "10.0.11.0/24"]
-  
+
   # Subnet calculations for secondary region
   secondary_public_subnets  = ["10.1.1.0/24", "10.1.2.0/24"]
   secondary_private_subnets = ["10.1.10.0/24", "10.1.11.0/24"]
-  
+
   # Common tags with environment and region
   primary_tags = merge(var.common_tags, {
     Environment = var.environment
     Region      = var.aws_region
     Type        = "Primary"
   })
-  
+
   secondary_tags = merge(var.common_tags, {
     Environment = var.environment
     Region      = var.secondary_region
@@ -282,7 +282,7 @@ resource "aws_vpc" "secondary" {
 
 # Secondary Internet Gateway
 resource "aws_internet_gateway" "secondary" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   vpc_id = aws_vpc.secondary.id
 
@@ -293,7 +293,7 @@ resource "aws_internet_gateway" "secondary" {
 
 # Secondary Public Subnets
 resource "aws_subnet" "secondary_public" {
-  provider = aws.secondary
+  provider = aws.us_west_1
   count    = length(local.secondary_public_subnets)
 
   vpc_id                  = aws_vpc.secondary.id
@@ -309,7 +309,7 @@ resource "aws_subnet" "secondary_public" {
 
 # Secondary Private Subnets
 resource "aws_subnet" "secondary_private" {
-  provider = aws.secondary
+  provider = aws.us_west_1
   count    = length(local.secondary_private_subnets)
 
   vpc_id            = aws_vpc.secondary.id
@@ -324,7 +324,7 @@ resource "aws_subnet" "secondary_private" {
 
 # Secondary NAT Gateway Elastic IPs
 resource "aws_eip" "secondary_nat" {
-  provider = aws.secondary
+  provider = aws.us_west_1
   count    = length(local.secondary_public_subnets)
 
   domain = "vpc"
@@ -337,7 +337,7 @@ resource "aws_eip" "secondary_nat" {
 
 # Secondary NAT Gateways
 resource "aws_nat_gateway" "secondary" {
-  provider = aws.secondary
+  provider = aws.us_west_1
   count    = length(local.secondary_public_subnets)
 
   allocation_id = aws_eip.secondary_nat[count.index].id
@@ -352,7 +352,7 @@ resource "aws_nat_gateway" "secondary" {
 
 # Secondary Public Route Table
 resource "aws_route_table" "secondary_public" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   vpc_id = aws_vpc.secondary.id
 
@@ -368,7 +368,7 @@ resource "aws_route_table" "secondary_public" {
 
 # Secondary Private Route Tables
 resource "aws_route_table" "secondary_private" {
-  provider = aws.secondary
+  provider = aws.us_west_1
   count    = length(local.secondary_private_subnets)
 
   vpc_id = aws_vpc.secondary.id
@@ -385,7 +385,7 @@ resource "aws_route_table" "secondary_private" {
 
 # Secondary Public Route Table Associations
 resource "aws_route_table_association" "secondary_public" {
-  provider = aws.secondary
+  provider = aws.us_west_1
   count    = length(aws_subnet.secondary_public)
 
   subnet_id      = aws_subnet.secondary_public[count.index].id
@@ -394,7 +394,7 @@ resource "aws_route_table_association" "secondary_public" {
 
 # Secondary Private Route Table Associations
 resource "aws_route_table_association" "secondary_private" {
-  provider = aws.secondary
+  provider = aws.us_west_1
   count    = length(aws_subnet.secondary_private)
 
   subnet_id      = aws_subnet.secondary_private[count.index].id
@@ -438,7 +438,7 @@ resource "aws_security_group" "primary_rds" {
 
 # Secondary RDS Security Group
 resource "aws_security_group" "secondary_rds" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   name_prefix = "${local.secondary_name_prefix}-rds-"
   vpc_id      = aws_vpc.secondary.id
@@ -491,7 +491,7 @@ resource "aws_kms_alias" "primary_rds" {
 
 # Secondary KMS Key for RDS encryption
 resource "aws_kms_key" "secondary_rds" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   description             = "KMS key for secondary RDS encryption"
   deletion_window_in_days = 7
@@ -503,7 +503,7 @@ resource "aws_kms_key" "secondary_rds" {
 }
 
 resource "aws_kms_alias" "secondary_rds" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   name          = "alias/${local.secondary_name_prefix}-rds-key"
   target_key_id = aws_kms_key.secondary_rds.key_id
@@ -525,7 +525,7 @@ resource "aws_db_subnet_group" "primary" {
 
 # Secondary RDS Subnet Group
 resource "aws_db_subnet_group" "secondary" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   name       = "${local.secondary_name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.secondary_private[*].id
@@ -566,7 +566,7 @@ resource "aws_db_parameter_group" "primary" {
 
 # Secondary RDS Parameter Group
 resource "aws_db_parameter_group" "secondary" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   family = "mysql8.0"
   name   = "${local.secondary_name_prefix}-db-params"
@@ -658,7 +658,7 @@ resource "aws_db_instance" "primary" {
 
 # Secondary RDS Instance
 resource "aws_db_instance" "secondary" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   identifier = "${local.secondary_name_prefix}-database"
 
@@ -747,7 +747,7 @@ resource "aws_secretsmanager_secret_version" "primary_db_password" {
 
 # Secondary RDS Password Secret
 resource "aws_secretsmanager_secret" "secondary_db_password" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   name        = "${local.secondary_name_prefix}-db-password"
   description = "Password for secondary RDS instance"
@@ -759,7 +759,7 @@ resource "aws_secretsmanager_secret" "secondary_db_password" {
 }
 
 resource "aws_secretsmanager_secret_version" "secondary_db_password" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   secret_id     = aws_secretsmanager_secret.secondary_db_password.id
   secret_string = jsonencode({
@@ -804,7 +804,7 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
 
 # RDS Enhanced Monitoring Role (Secondary Region)
 resource "aws_iam_role" "secondary_rds_enhanced_monitoring" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   name = "${local.secondary_name_prefix}-rds-monitoring-role"
 
@@ -827,7 +827,7 @@ resource "aws_iam_role" "secondary_rds_enhanced_monitoring" {
 }
 
 resource "aws_iam_role_policy_attachment" "secondary_rds_enhanced_monitoring" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   role       = aws_iam_role.secondary_rds_enhanced_monitoring.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
@@ -964,19 +964,19 @@ resource "aws_cloudwatch_log_group" "primary_rds_slow_query" {
 
 # Secondary Region RDS Log Groups
 resource "aws_cloudwatch_log_group" "secondary_rds_error" {
-  provider          = aws.secondary
+  provider          = aws.us_west_1
   name              = "/aws/rds/instance/${local.secondary_name_prefix}-database/error"
   retention_in_days = 30
   tags              = local.secondary_tags
 }
 resource "aws_cloudwatch_log_group" "secondary_rds_general" {
-  provider          = aws.secondary
+  provider          = aws.us_west_1
   name              = "/aws/rds/instance/${local.secondary_name_prefix}-database/general"
   retention_in_days = 30
   tags              = local.secondary_tags
 }
 resource "aws_cloudwatch_log_group" "secondary_rds_slow_query" {
-  provider          = aws.secondary
+  provider          = aws.us_west_1
   name              = "/aws/rds/instance/${local.secondary_name_prefix}-database/slowquery"
   retention_in_days = 30
   tags              = local.secondary_tags
