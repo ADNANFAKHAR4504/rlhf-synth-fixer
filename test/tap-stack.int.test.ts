@@ -111,8 +111,7 @@ describe('TapStack Integration Tests', () => {
 
     // Skip AWS API calls if credentials are not configured
     if (!hasAwsCredentials) {
-      console.log('AWS credentials not configured. Skipping integration tests.');
-      return;
+      console.log('AWS credentials not configured. Skipping AWS API calls.');
     }
   });
 

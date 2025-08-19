@@ -632,10 +632,40 @@ Outputs:
       - - !Ref TapPublicSubnet1
         - !Ref TapPublicSubnet2
 
+  PublicSubnet1Id:
+    Description: 'Public Subnet 1 ID for testing'
+    Value: !Ref TapPublicSubnet1
+
+  PublicSubnet2Id:
+    Description: 'Public Subnet 2 ID for testing'
+    Value: !Ref TapPublicSubnet2
+
   PrivateSubnetIds:
     Description: 'Private subnet IDs for integration testing'
     Value: !Join
       - ','
+      - - !Ref TapPrivateSubnet1
+        - !Ref TapPrivateSubnet2
+
+  PrivateSubnet1Id:
+    Description: 'Private Subnet 1 ID for testing'
+    Value: !Ref TapPrivateSubnet1
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID for testing'
+    Value: !Ref TapPrivateSubnet2
+
+  PublicSubnets:
+    Description: 'Public subnet IDs as comma-separated string for testing'
+    Value: !Join
+      - ', '
+      - - !Ref TapPublicSubnet1
+        - !Ref TapPublicSubnet2
+
+  PrivateSubnets:
+    Description: 'Private subnet IDs as comma-separated string for testing'
+    Value: !Join
+      - ', '
       - - !Ref TapPrivateSubnet1
         - !Ref TapPrivateSubnet2
 
@@ -644,8 +674,16 @@ Outputs:
     Description: 'EC2 Security Group ID for testing'
     Value: !Ref TapEC2SecurityGroup
 
+  ALBSecurityGroupId:
+    Description: 'ALB Security Group ID for testing (alias for EC2 Security Group)'
+    Value: !Ref TapEC2SecurityGroup
+
   RDSSecurityGroupId:
     Description: 'RDS Security Group ID for testing'
+    Value: !Ref TapRDSSecurityGroup
+
+  WebServerSecurityGroupId:
+    Description: 'Web Server Security Group ID for testing (alias for RDS Security Group)'
     Value: !Ref TapRDSSecurityGroup
 
   LambdaSecurityGroupId:
@@ -656,6 +694,22 @@ Outputs:
   AutoScalingGroupName:
     Description: 'Auto Scaling Group name for testing'
     Value: !Ref TapAutoScalingGroup
+
+  MinSize:
+    Description: 'Auto Scaling Group minimum size for testing'
+    Value: 2
+
+  MaxSize:
+    Description: 'Auto Scaling Group maximum size for testing'
+    Value: 4
+
+  DesiredCapacity:
+    Description: 'Auto Scaling Group desired capacity for testing'
+    Value: 2
+
+  InstanceType:
+    Description: 'EC2 Instance type for testing'
+    Value: 't3.micro'
 
   LaunchTemplateId:
     Description: 'Launch Template ID for testing'
@@ -733,6 +787,18 @@ Outputs:
   CloudWatchAlarmName:
     Description: 'CloudWatch Alarm Name for testing'
     Value: !Ref TapCPUAlarm
+
+  CPUAlarmHighArn:
+    Description: 'CPU Alarm High ARN for testing'
+    Value: !Sub 'arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${TapCPUAlarm}'
+
+  CPUAlarmLowArn:
+    Description: 'CPU Alarm Low ARN for testing (alias for CPU Alarm High)'
+    Value: !Sub 'arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${TapCPUAlarm}'
+
+  ASGCapacityAlarmArn:
+    Description: 'ASG Capacity Alarm ARN for testing (alias for CPU Alarm)'
+    Value: !Sub 'arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${TapCPUAlarm}'
 
   # Network Configuration Outputs
   VpcCidrBlock:
