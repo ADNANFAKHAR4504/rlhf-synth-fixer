@@ -28,7 +28,7 @@ Resources:
   # ===========================
   # KMS Encryption Resources
   # ===========================
-  
+
   InfrastructureKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -73,7 +73,7 @@ Resources:
   # ===========================
   # Network Infrastructure
   # ===========================
-  
+
   SecureVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -390,7 +390,7 @@ Resources:
   # ===========================
   # Security Groups
   # ===========================
-  
+
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -470,7 +470,7 @@ Resources:
   # ===========================
   # IAM Roles and Policies
   # ===========================
-  
+
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -526,7 +526,7 @@ Resources:
   # ===========================
   # Storage Resources
   # ===========================
-  
+
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -578,7 +578,7 @@ Resources:
   # ===========================
   # Database Resources
   # ===========================
-  
+
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -652,7 +652,7 @@ Resources:
   # ===========================
   # Compute Resources
   # ===========================
-  
+
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -677,14 +677,14 @@ Resources:
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent httpd mod_ssl
-            
+
             # Configure HTTPS
             systemctl start httpd
             systemctl enable httpd
-            
+
             # Create a simple HTTPS endpoint
             echo "<h1>Secure Infrastructure - Environment: ${EnvironmentSuffix}</h1>" > /var/www/html/index.html
-            
+
             # Install and configure CloudWatch agent
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config \
@@ -863,18 +863,21 @@ Outputs:
 ## Key Security Features Implemented
 
 ### 1. SSL/TLS Enforcement
+
 - **Application Load Balancer**: HTTP to HTTPS redirect configured
 - **Target Groups**: HTTPS protocol for backend communication
 - **S3 Bucket Policy**: Denies all non-SSL connections
 - **Database**: Encrypted connections enforced
 
 ### 2. IAM Roles (Minimized Credential Exposure)
+
 - **EC2 Instance Role**: Uses IAM roles instead of long-term credentials
 - **Least Privilege**: Only necessary permissions granted
 - **Instance Profile**: Automatic credential rotation
 - **Secrets Manager Integration**: Database passwords managed securely
 
 ### 3. KMS Encryption at Rest
+
 - **Centralized KMS Key**: Single key for all encryption needs
 - **S3 Bucket**: Server-side encryption with KMS
 - **RDS Database**: Storage encryption enabled
@@ -883,11 +886,13 @@ Outputs:
 - **Performance Insights**: Encrypted monitoring data
 
 ### 4. Organizational Tagging Policy
+
 - **Consistent Tags**: Environment, Project, Owner on all resources
 - **Tag Propagation**: Auto Scaling instances inherit tags
 - **Resource Tracking**: Easy identification and cost allocation
 
 ### 5. Private Database Deployment
+
 - **Isolated Subnets**: Database in dedicated private subnets
 - **No Internet Route**: Database subnets have no NAT or IGW access
 - **Security Group**: Restrictive access only from application tier
@@ -896,11 +901,13 @@ Outputs:
 ## Architecture Highlights
 
 ### Network Segmentation
+
 - **Three-Tier Architecture**: Public, Private App, and Private DB subnets
 - **High Availability**: Resources span multiple availability zones
 - **NAT Gateways**: Redundant outbound internet access for private resources
 
 ### Security Best Practices
+
 - **Defense in Depth**: Multiple layers of security controls
 - **Principle of Least Privilege**: Minimal necessary permissions
 - **Encryption Everywhere**: Data encrypted in transit and at rest
@@ -908,6 +915,7 @@ Outputs:
 - **Version Control**: S3 versioning enabled
 
 ### Operational Excellence
+
 - **CloudWatch Integration**: Monitoring and logging configured
 - **Auto Scaling**: Dynamic capacity based on demand
 - **Performance Insights**: Database performance monitoring
@@ -925,11 +933,12 @@ Outputs:
 ## Compliance and Validation
 
 This template fully addresses all specified requirements:
-- ✅ SSL/TLS enforced on all endpoints
-- ✅ IAM roles minimize credential exposure
-- ✅ KMS encryption for all data at rest
-- ✅ Comprehensive organizational tagging
-- ✅ Database in private subnets with no public access
-- ✅ All resources include environment suffix for isolation
-- ✅ Resources are destroyable (no retention policies)
-- ✅ CloudFormation linting passes without errors
+
+- SSL/TLS enforced on all endpoints
+- IAM roles minimize credential exposure
+- KMS encryption for all data at rest
+- Comprehensive organizational tagging
+- Database in private subnets with no public access
+- All resources include environment suffix for isolation
+- Resources are destroyable (no retention policies)
+- CloudFormation linting passes without errors
