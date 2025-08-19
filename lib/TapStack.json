@@ -20,8 +20,23 @@
             ]
         },
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "EC2 Key Pair for SSH access (if needed for emergency access)"
+            "Type": "String",
+            "Default": "",
+            "Description": "EC2 Key Pair for SSH access (if needed for emergency access). Leave empty if no SSH access needed."
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -763,7 +778,15 @@
                         "Ref": "InstanceType"
                     },
                     "KeyName": {
-                        "Ref": "KeyPairName"
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     },
                     "IamInstanceProfile": {
                         "Name": {

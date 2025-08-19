@@ -44,7 +44,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have KeyPairName parameter', () => {
       expect(template.Parameters.KeyPairName).toBeDefined();
-      expect(template.Parameters.KeyPairName.Type).toBe('AWS::EC2::KeyPair::KeyName');
+      expect(template.Parameters.KeyPairName.Type).toBe('String');
     });
   });
 
