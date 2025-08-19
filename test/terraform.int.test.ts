@@ -101,12 +101,4 @@ describe('Terraform Infrastructure Integration Tests', () => {
   it('should output a valid instance profile name', () => {
     expect(tf.instance_profile_name.value).toBeDefined();
   });
-
-  it('should output a valid S3 logs bucket name', () => {
-    expect(tf.s3_logs_bucket_name.value).toMatch(/^[a-z0-9.-]{3,63}$/);
-  });
-
-  it('should output a valid S3 logs bucket ARN', () => {
-    expect(tf.s3_logs_bucket_arn.value).toMatch(/^arn:aws:s3:::[a-z0-9.-]+$/);
-  });
 });
