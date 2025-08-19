@@ -41,7 +41,7 @@ resource "aws_lambda_function" "primary" {
   function_name    = "${var.name_prefix}-${var.environment}-function-primary"
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambda_function.lambda_handler"
-  runtime          = "python3.9"
+  runtime          = "python3.12"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   memory_size      = 128
   timeout          = 10
@@ -66,7 +66,7 @@ resource "aws_lambda_function" "secondary" {
   function_name    = "${var.name_prefix}-${var.environment}-function-secondary"
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambda_function.lambda_handler"
-  runtime          = "python3.9"
+  runtime          = "python3.12"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
   memory_size      = 128
   timeout          = 10

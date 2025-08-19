@@ -1,3 +1,14 @@
+variable "aws_region_primary" {
+  description = "Primary AWS region for resource ARNs"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "aws_region_secondary" {
+  description = "Secondary AWS region for resource ARNs"
+  type        = string
+  default     = "us-west-2"
+}
 ########################
 # IAM Roles and Policies (Least-Privilege, Explicit)
 ########################
@@ -35,7 +46,10 @@ resource "aws_iam_role_policy" "vpc_flow_log" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:logs:${var.aws_region_primary}:*:*",
+          "arn:aws:logs:${var.aws_region_secondary}:*:*"
+        ]
       }
     ]
   })
@@ -72,7 +86,16 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
-          "logs:PutLogEvents",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "arn:aws:logs:${var.aws_region_primary}:*:*",
+          "arn:aws:logs:${var.aws_region_secondary}:*:*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "ec2:CreateNetworkInterface",
           "ec2:DescribeNetworkInterfaces",
           "ec2:DeleteNetworkInterface"
@@ -125,7 +148,10 @@ resource "aws_iam_role_policy" "ec2_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:logs:${var.aws_region_primary}:*:*",
+          "arn:aws:logs:${var.aws_region_secondary}:*:*"
+        ]
       },
       {
         Effect = "Allow"
