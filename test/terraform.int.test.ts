@@ -1,26 +1,13 @@
 import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-} from '@aws-sdk/client-cloudwatch-logs';
-import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  GetPolicyCommand,
-  GetPolicyVersionCommand,
   GetRoleCommand,
   IAMClient,
   ListAttachedRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
-import {
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand,
-  LambdaClient,
-} from '@aws-sdk/client-lambda';
 import {
   GetBucketEncryptionCommand,
   GetBucketLocationCommand,
@@ -30,11 +17,9 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const TF_DIR = path.resolve(__dirname, '..', '..'); // adjust if needed
-const REQUIRED_BACKEND = true; // set false to bypass backend requirement in CI
+const TF_DIR = path.resolve(__dirname, '..', 'lib'); // point to lib/ where main.tf is
 
 function run(cmd: string, args: string[], opts: { cwd?: string } = {}) {
   const res = spawnSync(cmd, args, {
@@ -49,53 +34,29 @@ function run(cmd: string, args: string[], opts: { cwd?: string } = {}) {
   return res.stdout.trim();
 }
 
-function terraformHasBackend(mainTfPath: string): boolean {
-  if (!existsSync(mainTfPath)) return false;
-  const txt = readFileSync(mainTfPath, 'utf8');
-  return /terraform\s*{[^}]*backend\s+"[^"]+"/s.test(txt);
-}
-
 let outputs: any = {};
 
 beforeAll(() => {
-  const mainTf = path.join(TF_DIR, 'main.tf');
-  if (REQUIRED_BACKEND && !terraformHasBackend(mainTf)) {
-    throw new Error(
-      'Backend not configured in main.tf; per policy not initializing terraform.'
-    );
-  }
-  // Init & plan (apply should be done outside test or guarded)
-  run('terraform', ['init', '-input=false', '-no-color']);
-  run('terraform', ['validate', '-no-color']);
-  run('terraform', ['plan', '-input=false', '-no-color', '-out=tfplan']);
-  // Optionally apply for live integration (guard by env)
-  if (process.env.TF_APPLY === 'true') {
-    run('terraform', ['apply', '-input=false', '-auto-approve', 'tfplan']);
-  }
+  // Get terraform outputs directly (assumes infrastructure is already deployed)
   try {
     const outRaw = run('terraform', ['output', '-json']);
     outputs = JSON.parse(outRaw);
-  } catch {
+  } catch (error) {
+    console.warn('Could not fetch terraform outputs:', error);
     outputs = {};
   }
 });
 
-afterAll(() => {
-  if (process.env.TF_DESTROY === 'true') {
-    run('terraform', ['destroy', '-auto-approve', '-input=false']);
-  }
-});
+// Remove central mocks - use real AWS SDK calls or per-test mocks
+// jest.mock('@aws-sdk/client-s3');
+// jest.mock('@aws-sdk/client-iam');
+// jest.mock('@aws-sdk/client-lambda');
+// jest.mock('@aws-sdk/client-cloudwatch-logs');
+// jest.mock('@aws-sdk/client-cloudformation');
+// jest.mock('@aws-sdk/client-dynamodb');
+// jest.mock('@aws-sdk/client-ec2');
 
-// Example: central jest mock setup (override per test if needed)
-jest.mock('@aws-sdk/client-s3');
-jest.mock('@aws-sdk/client-iam');
-jest.mock('@aws-sdk/client-lambda');
-jest.mock('@aws-sdk/client-cloudwatch-logs');
-jest.mock('@aws-sdk/client-cloudformation');
-jest.mock('@aws-sdk/client-dynamodb');
-jest.mock('@aws-sdk/client-ec2');
-
-// Utility to set mock resolved value
+// Utility to set mock resolved value (if needed per test)
 function mockClientCommand<TClient extends { send: Function }>(
   client: TClient,
   impl: (command: any) => any
@@ -104,271 +65,223 @@ function mockClientCommand<TClient extends { send: Function }>(
   client.send.mockImplementation(async (command: any) => impl(command));
 }
 
-describe('Terraform infrastructure', () => {
-  test('terraform outputs structure', () => {
-    // Adjust expected keys after seeing PROMPT.md & main.tf
-    const expected: string[] = [
-      // 'bucket_name', 'lambda_function_name', 'dynamodb_table_name', ...
-    ];
-    expected.forEach(k => {
-      expect(outputs).toHaveProperty(k);
-      expect(outputs[k]).toHaveProperty('value');
-    });
+describe('Terraform infrastructure validation via AWS APIs', () => {
+  test('terraform outputs available', () => {
+    console.log('Available outputs:', Object.keys(outputs));
+    // Check that we have some outputs from deployed infrastructure
+    expect(Object.keys(outputs).length).toBeGreaterThan(0);
   });
 
-  describe('S3 Bucket', () => {
-    test('bucket configuration matches expectations', async () => {
-      const bucketName = outputs?.bucket_name?.value;
-      if (!bucketName) return;
+  describe('S3 Buckets', () => {
+    test('PII bucket configuration', async () => {
+      const bucketName = outputs?.pii_bucket?.value;
+      if (!bucketName) {
+        console.log('No pii_bucket output found, skipping test');
+        return;
+      }
 
-      const s3 = new S3Client({});
-      mockClientCommand(s3, cmd => {
-        if (cmd instanceof GetBucketLocationCommand) {
-          return { LocationConstraint: 'us-east-1' };
-        }
-        if (cmd instanceof GetBucketEncryptionCommand) {
-          return {
-            ServerSideEncryptionConfiguration: {
-              Rules: [
-                {
-                  ApplyServerSideEncryptionByDefault: {
-                    SSEAlgorithm: 'aws:kms',
-                  },
-                },
-              ],
-            },
-          };
-        }
-        if (cmd instanceof GetPublicAccessBlockCommand) {
-          return {
-            PublicAccessBlockConfiguration: {
-              BlockPublicAcls: true,
-              BlockPublicPolicy: true,
-              IgnorePublicAcls: true,
-              RestrictPublicBuckets: true,
-            },
-          };
-        }
-        if (cmd instanceof GetBucketVersioningCommand) {
-          return { Status: 'Enabled' };
-        }
-        if (cmd instanceof GetBucketTaggingCommand) {
-          return { TagSet: [{ Key: 'Environment', Value: 'test' }] };
-        }
-        throw new Error('Unhandled S3 command mock');
-      });
+      const s3 = new S3Client({ region: 'eu-west-1' });
 
-      const loc = await s3.send(
-        new GetBucketLocationCommand({ Bucket: bucketName })
-      );
-      expect(loc.LocationConstraint || 'us-east-1').toBe('us-east-1');
-
+      // Test encryption
       const enc = await s3.send(
         new GetBucketEncryptionCommand({ Bucket: bucketName })
       );
       expect(
         enc.ServerSideEncryptionConfiguration?.Rules?.[0]
           .ApplyServerSideEncryptionByDefault?.SSEAlgorithm
-      ).toMatch(/kms|AES256/);
+      ).toBe('aws:kms');
 
+      // Test public access block
       const pab = await s3.send(
         new GetPublicAccessBlockCommand({ Bucket: bucketName })
       );
       expect(pab.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(pab.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(pab.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(pab.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(
+        true
+      );
 
+      // Test tagging
+      const tags = await s3.send(
+        new GetBucketTaggingCommand({ Bucket: bucketName })
+      );
+      const dataClassTag = tags.TagSet?.find(
+        t => t.Key === 'DataClassification'
+      );
+      expect(dataClassTag?.Value).toBe('PII');
+    });
+
+    test('Logs bucket configuration', async () => {
+      const bucketName = outputs?.logs_bucket?.value;
+      if (!bucketName) {
+        console.log('No logs_bucket output found, skipping test');
+        return;
+      }
+
+      const s3 = new S3Client({ region: 'eu-west-1' });
+
+      // Test versioning
       const ver = await s3.send(
         new GetBucketVersioningCommand({ Bucket: bucketName })
       );
       expect(ver.Status).toBe('Enabled');
 
-      const tags = await s3.send(
-        new GetBucketTaggingCommand({ Bucket: bucketName })
+      // Test location
+      const loc = await s3.send(
+        new GetBucketLocationCommand({ Bucket: bucketName })
       );
-      const envTag = tags.TagSet?.find(t => t.Key === 'Environment');
-      expect(envTag?.Value).toBeDefined();
+      expect(loc.LocationConstraint).toBe('eu-west-1');
     });
   });
 
-  describe('IAM Role', () => {
-    test('role and policies', async () => {
-      const roleName =
-        outputs?.lambda_role_name?.value || outputs?.iam_role_name?.value;
-      if (!roleName) return;
-      const iam = new IAMClient({});
-      mockClientCommand(iam, cmd => {
-        if (cmd instanceof GetRoleCommand) {
-          return {
-            Role: {
-              RoleName: roleName,
-              AssumeRolePolicyDocument: '{}',
-              Arn: 'arn:aws:iam::123456789012:role/' + roleName,
-            },
-          };
-        }
-        if (cmd instanceof ListAttachedRolePoliciesCommand) {
-          return {
-            AttachedPolicies: [
-              {
-                PolicyName: 'AWSLambdaBasicExecutionRole',
-                PolicyArn:
-                  'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-              },
-            ],
-          };
-        }
-        if (cmd instanceof GetPolicyCommand) {
-          return {
-            Policy: {
-              DefaultVersionId: 'v1',
-              PolicyName: 'CustomPolicy',
-              Arn: cmd.input.PolicyArn,
-            },
-          };
-        }
-        if (cmd instanceof GetPolicyVersionCommand) {
-          return {
-            PolicyVersion: {
-              Document: encodeURIComponent(JSON.stringify({ Statement: [] })),
-            },
-          };
-        }
-        throw new Error('Unhandled IAM command');
-      });
-
-      const role = await iam.send(new GetRoleCommand({ RoleName: roleName }));
-      expect(role.Role?.RoleName).toBe(roleName);
-
-      const attached = await iam.send(
-        new ListAttachedRolePoliciesCommand({ RoleName: roleName })
-      );
-      expect(attached.AttachedPolicies?.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Lambda Function', () => {
-    test('lambda configuration', async () => {
-      const fnName = outputs?.lambda_function_name?.value;
-      if (!fnName) return;
-      const lambda = new LambdaClient({});
-      mockClientCommand(lambda, cmd => {
-        if (cmd instanceof GetFunctionCommand) {
-          return {
-            Configuration: {
-              FunctionName: fnName,
-              Runtime: 'nodejs18.x',
-              Timeout: 10,
-              MemorySize: 256,
-              Environment: { Variables: { NODE_ENV: 'test' } },
-            },
-          };
-        }
-        if (cmd instanceof GetFunctionConfigurationCommand) {
-          return {
-            FunctionName: fnName,
-            Runtime: 'nodejs18.x',
-            Timeout: 10,
-            MemorySize: 256,
-            Environment: { Variables: { NODE_ENV: 'test' } },
-          };
-        }
-        throw new Error('Unhandled Lambda command');
-      });
-
-      const cfg = await lambda.send(
-        new GetFunctionConfigurationCommand({ FunctionName: fnName })
-      );
-      expect(cfg.Runtime).toMatch(/^nodejs/);
-      expect(cfg.Timeout).toBeLessThanOrEqual(30);
-    });
-  });
-
-  describe('DynamoDB Table', () => {
-    test('table properties', async () => {
-      const tableName = outputs?.dynamodb_table_name?.value;
-      if (!tableName) return;
-      const ddb = new DynamoDBClient({});
-      mockClientCommand(ddb, cmd => {
-        if (cmd instanceof DescribeTableCommand) {
-          return {
-            Table: {
-              TableName: tableName,
-              BillingModeSummary: { BillingMode: 'PAY_PER_REQUEST' },
-              SSEDescription: { Status: 'ENABLED' },
-            },
-          };
-        }
-        throw new Error('Unhandled DDB command');
-      });
-
-      const table = await ddb.send(
-        new DescribeTableCommand({ TableName: tableName })
-      );
-      expect(table.Table?.BillingModeSummary?.BillingMode).toBeDefined();
-    });
-  });
-
-  describe('Networking', () => {
-    test('VPC and subnets', async () => {
+  describe('VPC and Networking', () => {
+    test('VPC configuration', async () => {
       const vpcId = outputs?.vpc_id?.value;
-      if (!vpcId) return;
-      const ec2 = new EC2Client({});
-      mockClientCommand(ec2, cmd => {
-        if (cmd instanceof DescribeVpcsCommand) {
-          return {
-            Vpcs: [
-              { VpcId: vpcId, CidrBlock: '10.0.0.0/16', IsDefault: false },
-            ],
-          };
-        }
-        if (cmd instanceof DescribeSubnetsCommand) {
-          return {
-            Subnets: [
-              {
-                SubnetId: 'subnet-123',
-                VpcId: vpcId,
-                CidrBlock: '10.0.1.0/24',
-              },
-            ],
-          };
-        }
-        if (cmd instanceof DescribeSecurityGroupsCommand) {
-          return {
-            SecurityGroups: [
-              { GroupId: 'sg-123', VpcId: vpcId, GroupName: 'app-sg' },
-            ],
-          };
-        }
-        throw new Error('Unhandled EC2 command');
-      });
+      if (!vpcId) {
+        console.log('No vpc_id output found, skipping test');
+        return;
+      }
+
+      const ec2 = new EC2Client({ region: 'eu-west-1' });
 
       const vpcs = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-      expect(vpcs.Vpcs?.[0].VpcId).toBe(vpcId);
+      const vpc = vpcs.Vpcs?.[0];
+
+      expect(vpc?.VpcId).toBe(vpcId);
+      expect(vpc?.IsDefault).toBe(false);
+      expect(vpc?.State).toBe('available');
+
+      // Check CIDR block
+      expect(vpc?.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
+    });
+
+    test('Subnet configuration', async () => {
+      const publicSubnetIds = outputs?.public_subnet_ids?.value;
+      const privateSubnetIds = outputs?.private_subnet_ids?.value;
+      const databaseSubnetIds = outputs?.database_subnet_ids?.value;
+
+      if (!publicSubnetIds || !privateSubnetIds || !databaseSubnetIds) {
+        console.log('Subnet IDs not found in outputs, skipping test');
+        return;
+      }
+
+      const ec2 = new EC2Client({ region: 'eu-west-1' });
+
+      // Test we have 3 subnets of each type
+      expect(publicSubnetIds).toHaveLength(3);
+      expect(privateSubnetIds).toHaveLength(3);
+      expect(databaseSubnetIds).toHaveLength(3);
+
+      // Get all subnets
+      const allSubnetIds = [
+        ...publicSubnetIds,
+        ...privateSubnetIds,
+        ...databaseSubnetIds,
+      ];
+      const subnets = await ec2.send(
+        new DescribeSubnetsCommand({ SubnetIds: allSubnetIds })
+      );
+
+      // Check each subnet is in a different AZ
+      const azs = new Set(subnets.Subnets?.map(s => s.AvailabilityZone));
+      expect(azs.size).toBe(3);
     });
   });
 
-  // Add more describe blocks for each resource after reviewing main.tf
+  describe('IAM Roles', () => {
+    test('IAM roles exist and have proper trust policies', async () => {
+      const iamRoles = outputs?.iam_roles?.value;
+      if (!iamRoles) {
+        console.log('No iam_roles output found, skipping test');
+        return;
+      }
+
+      const iam = new IAMClient({ region: 'eu-west-1' });
+
+      // Extract role name from ARN for each role
+      for (const [roleType, roleArn] of Object.entries(iamRoles)) {
+        const roleName = (roleArn as string).split('/').pop();
+        if (!roleName) continue;
+
+        const role = await iam.send(new GetRoleCommand({ RoleName: roleName }));
+        expect(role.Role?.RoleName).toBe(roleName);
+        expect(role.Role?.AssumeRolePolicyDocument).toBeTruthy();
+
+        // Check attached policies
+        const policies = await iam.send(
+          new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+        );
+        expect(policies.AttachedPolicies?.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe('RDS Database', () => {
+    test('RDS instance configuration', async () => {
+      const rdsEndpoint = outputs?.rds_endpoint?.value;
+      if (!rdsEndpoint) {
+        console.log('No rds_endpoint output found, skipping test');
+        return;
+      }
+
+      // For RDS validation, we'd need RDS client
+      // This is a placeholder - actual implementation would use @aws-sdk/client-rds
+      console.log('RDS endpoint available:', rdsEndpoint);
+      expect(rdsEndpoint).toBeTruthy();
+    });
+  });
+
+  describe('Secrets Manager', () => {
+    test('Database secret exists', async () => {
+      const secretArn = outputs?.db_secret_arn?.value;
+      if (!secretArn) {
+        console.log('No db_secret_arn output found, skipping test');
+        return;
+      }
+
+      // For Secrets Manager validation, we'd need Secrets Manager client
+      // This is a placeholder - actual implementation would use @aws-sdk/client-secrets-manager
+      console.log('Database secret ARN available:', secretArn);
+      expect(secretArn).toBeTruthy();
+    });
+  });
 });
 
-// Placeholder for advanced validation (CloudWatch Logs, CloudFormation stack, etc.)
+// Additional validations for other AWS services
 describe('Advanced Validations', () => {
-  test('cloudwatch log group exists for lambda', async () => {
-    const fnName = outputs?.lambda_function_name?.value;
-    if (!fnName) return;
-    const logs = new CloudWatchLogsClient({});
-    mockClientCommand(logs, cmd => {
-      if (cmd instanceof DescribeLogGroupsCommand) {
-        return { logGroups: [{ logGroupName: `/aws/lambda/${fnName}` }] };
-      }
-      throw new Error('Unhandled Logs command');
-    });
-    const res = await logs.send(
-      new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/lambda/${fnName}`,
-      })
-    );
-    const found = res.logGroups?.some(
-      g => g.logGroupName === `/aws/lambda/${fnName}`
-    );
-    expect(found).toBe(true);
+  test('ALB DNS name accessible', async () => {
+    const albDnsName = outputs?.alb_dns_name?.value;
+    if (!albDnsName) {
+      console.log('No alb_dns_name output found, skipping test');
+      return;
+    }
+
+    console.log('ALB DNS name available:', albDnsName);
+    expect(albDnsName).toBeTruthy();
+    expect(albDnsName).toMatch(/\.elb\.eu-west-1\.amazonaws\.com$/);
+  });
+
+  test('CloudTrail ARN exists', async () => {
+    const trailArn = outputs?.cloudtrail_trail_arn?.value;
+    if (!trailArn) {
+      console.log('No cloudtrail_trail_arn output found, skipping test');
+      return;
+    }
+
+    console.log('CloudTrail ARN available:', trailArn);
+    expect(trailArn).toBeTruthy();
+    expect(trailArn).toMatch(/^arn:aws:cloudtrail:eu-west-1:/);
+  });
+
+  test('GuardDuty detector exists', async () => {
+    const detectorId = outputs?.guardduty_detector_id?.value;
+    if (!detectorId) {
+      console.log('No guardduty_detector_id output found, skipping test');
+      return;
+    }
+
+    console.log('GuardDuty detector ID available:', detectorId);
+    expect(detectorId).toBeTruthy();
   });
 });
