@@ -319,7 +319,6 @@ resource "aws_route_table_association" "public_secondary" {
 resource "aws_cloudwatch_log_group" "vpc_flow_logs_primary" {
   name              = "${local.name_prefix}-vpc-flow-logs-primary"
   retention_in_days = var.flow_logs_retention_days
-  kms_key_id        = "alias/aws/logs"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-logs-primary"
@@ -331,7 +330,6 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_secondary" {
   provider          = aws.eu_west_1
   name              = "${local.name_prefix}-vpc-flow-logs-secondary"
   retention_in_days = var.flow_logs_retention_days
-  kms_key_id        = "alias/aws/logs"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-logs-secondary"

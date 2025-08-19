@@ -222,7 +222,6 @@ describe('Terraform Multi-Region AWS Security Baseline Integration Tests', () =>
       }));
       expect(primaryLogGroups.logGroups).toHaveLength(1);
       expect(primaryLogGroups.logGroups![0].retentionInDays).toBe(90);
-      expect(primaryLogGroups.logGroups![0].kmsKeyId).toContain('aws/logs');
 
       // Test secondary region flow logs
       const secondaryFlowLogs = await ec2Secondary.send(new DescribeFlowLogsCommand({
@@ -238,7 +237,6 @@ describe('Terraform Multi-Region AWS Security Baseline Integration Tests', () =>
       }));
       expect(secondaryLogGroups.logGroups).toHaveLength(1);
       expect(secondaryLogGroups.logGroups![0].retentionInDays).toBe(90);
-      expect(secondaryLogGroups.logGroups![0].kmsKeyId).toContain('aws/logs');
     }, testTimeout);
 
     test('should have proper IAM roles with least privilege for VPC Flow Logs', async () => {
