@@ -1,0 +1,687 @@
+/* eslint-disable prettier/prettier */
+/**
+ * Multi-region AWS infrastructure stack using Pulumi TypeScript
+ * 
+ * This stack implements a highly available, multi-region infrastructure
+ * for a business-critical web application across us-east-1, us-west-2, and eu-central-1.
+ * 
+ * Features:
+ * - Auto Scaling Groups with EC2 instances
+ * - Centralized logging with S3 and lifecycle policies
+ * - VPC with public/private subnets
+ * - Multi-AZ RDS deployment
+ * - Lambda functions for log processing
+ * - AWS WAF with OWASP rules
+ * - KMS encryption for data at rest
+ * - IAM roles with least privilege
+ */
+
+import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
+import * as awsx from '@pulumi/awsx';
+
+export interface TapStackArgs {
+  tags?: { [key: string]: string };
+}
+
+export class TapStack extends pulumi.ComponentResource {
+  public readonly regions = ['us-east-1', 'us-west-2', 'eu-central-1'];
+  public readonly vpcs: { [region: string]: awsx.ec2.Vpc } = {};
+  public readonly autoScalingGroups: { [region: string]: aws.autoscaling.Group } = {};
+  public readonly rdsInstances: { [region: string]: aws.rds.Instance } = {};
+  public readonly logsBucket: aws.s3.Bucket;
+  public readonly kmsKey: aws.kms.Key;
+  public readonly wafWebAcl: aws.wafv2.WebAcl;
+  public readonly logProcessingLambda: aws.lambda.Function;
+
+  constructor(name: string, args: TapStackArgs = {}, opts?: pulumi.ComponentResourceOptions) {
+    super('tap:infrastructure:TapStack', name, {}, opts);
+
+    const defaultTags = {
+      Environment: pulumi.getStack(),
+      Application: 'nova-model-breaking',
+      Owner: 'infrastructure-team',
+      Project: 'IaC-AWS-Nova-Model-Breaking',
+      ...args.tags,
+    };
+
+    // Create KMS key for encryption
+    this.kmsKey = this.createKmsKey(defaultTags);
+
+    // Create centralized S3 bucket for logs
+    this.logsBucket = this.createLogsBucket(defaultTags);
+
+    // Create Lambda function for log processing
+    this.logProcessingLambda = this.createLogProcessingLambda(defaultTags);
+
+    // Create WAF Web ACL with OWASP rules
+    this.wafWebAcl = this.createWafWebAcl(defaultTags);
+
+    // Deploy infrastructure in each region
+    this.regions.forEach(region => {
+      this.deployRegionalInfrastructure(region, defaultTags);
+    });
+
+    this.registerOutputs({
+      regions: this.regions,
+      logsBucket: this.logsBucket.bucket,
+      kmsKeyId: this.kmsKey.keyId,
+      wafWebAclArn: this.wafWebAcl.arn,
+    });
+  }
+
+  private createKmsKey(tags: { [key: string]: string }): aws.kms.Key {
+    return new aws.kms.Key('infrastructure-kms-key', {
+      description: 'KMS key for encrypting infrastructure data at rest',
+      keyUsage: 'ENCRYPT_DECRYPT',
+      keySpec: 'SYMMETRIC_DEFAULT',
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::${aws.getCallerIdentity().accountId}:root`,
+            },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+        ],
+      }),
+      tags,
+    }, { parent: this });
+  }
+
+  private createLogsBucket(tags: { [key: string]: string }): aws.s3.Bucket {
+    const bucket = new aws.s3.Bucket('centralized-logs-bucket', {
+      bucket: `nova-model-logs-${pulumi.getStack()}-${Date.now()}`,
+      versioning: {
+        enabled: true,
+      },
+      serverSideEncryptionConfiguration: {
+        rule: {
+          applyServerSideEncryptionByDefault: {
+            sseAlgorithm: 'aws:kms',
+            kmsMasterKeyId: this.kmsKey.arn,
+          },
+        },
+      },
+      lifecycleRules: [
+        {
+          id: 'transition-to-glacier',
+          enabled: true,
+          transitions: [
+            {
+              days: 30,
+              storageClass: 'GLACIER',
+            },
+          ],
+        },
+      ],
+      publicAccessBlock: {
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      tags,
+    }, { parent: this });
+
+    // Create bucket policy for VPC endpoint access
+    new aws.s3.BucketPolicy('logs-bucket-policy', {
+      bucket: bucket.id,
+      policy: pulumi.jsonStringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Deny',
+            Principal: '*',
+            Action: 's3:*',
+            Resource: [
+              pulumi.interpolate`${bucket.arn}`,
+              pulumi.interpolate`${bucket.arn}/*`,
+            ],
+            Condition: {
+              StringNotEquals: {
+                'aws:PrincipalServiceName': [
+                  'ec2.amazonaws.com',
+                  'lambda.amazonaws.com',
+                ],
+              },
+            },
+          },
+        ],
+      }),
+    }, { parent: this });
+
+    return bucket;
+  }
+
+  private createLogProcessingLambda(tags: { [key: string]: string }): aws.lambda.Function {
+    // Create IAM role for Lambda
+    const lambdaRole = new aws.iam.Role('log-processing-lambda-role', {
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'lambda.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags,
+    }, { parent: this });
+
+    // Attach basic execution policy
+    new aws.iam.RolePolicyAttachment('lambda-basic-execution', {
+      role: lambdaRole.name,
+      policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+    }, { parent: this });
+
+    // Create custom policy for S3 access
+    const lambdaS3Policy = new aws.iam.RolePolicy('lambda-s3-policy', {
+      role: lambdaRole.id,
+      policy: pulumi.jsonStringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              's3:GetObject',
+              's3:PutObject',
+              's3:DeleteObject',
+            ],
+            Resource: pulumi.interpolate`${this.logsBucket.arn}/*`,
+          },
+          {
+            Effect: 'Allow',
+            Action: [
+              'kms:Decrypt',
+              'kms:DescribeKey',
+            ],
+            Resource: this.kmsKey.arn,
+          },
+        ],
+      }),
+    }, { parent: this });
+
+    return new aws.lambda.Function('log-processing-function', {
+      runtime: 'python3.9',
+      code: new pulumi.asset.AssetArchive({
+        'lambda_function.py': new pulumi.asset.StringAsset(`
+import json
+import boto3
+import gzip
+import base64
+from datetime import datetime
+
+def lambda_handler(event, context):
+    """
+    Process CloudWatch logs and store them in S3
+    """
+    s3 = boto3.client('s3')
+    
+    # Decode and decompress the log data
+    compressed_payload = base64.b64decode(event['awslogs']['data'])
+    uncompressed_payload = gzip.decompress(compressed_payload)
+    log_data = json.loads(uncompressed_payload)
+    
+    # Process each log event
+    processed_logs = []
+    for log_event in log_data['logEvents']:
+        processed_log = {
+            'timestamp': datetime.fromtimestamp(log_event['timestamp'] / 1000).isoformat(),
+            'message': log_event['message'],
+            'logGroup': log_data['logGroup'],
+            'logStream': log_data['logStream']
+        }
+        processed_logs.append(processed_log)
+    
+    # Store processed logs in S3
+    bucket_name = context.function_name.split('-')[0] + '-logs'
+    key = f"processed-logs/{datetime.now().strftime('%Y/%m/%d')}/{context.aws_request_id}.json"
+    
+    try:
+        s3.put_object(
+            Bucket=bucket_name,
+            Key=key,
+            Body=json.dumps(processed_logs),
+            ContentType='application/json'
+        )
+        return {
+            'statusCode': 200,
+            'body': json.dumps(f'Successfully processed {len(processed_logs)} log events')
+        }
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps(f'Error processing logs: {str(e)}')
+        }
+        `),
+      }),
+      handler: 'lambda_function.lambda_handler',
+      role: lambdaRole.arn,
+      timeout: 300,
+      environment: {
+        variables: {
+          LOGS_BUCKET: this.logsBucket.bucket,
+        },
+      },
+      tags,
+    }, { parent: this, dependsOn: [lambdaS3Policy] });
+  }
+
+  private createWafWebAcl(tags: { [key: string]: string }): aws.wafv2.WebAcl {
+    return new aws.wafv2.WebAcl('owasp-web-acl', {
+      scope: 'REGIONAL',
+      defaultAction: {
+        allow: {},
+      },
+      rules: [
+        {
+          name: 'AWSManagedRulesCommonRuleSet',
+          priority: 1,
+          overrideAction: {
+            none: {},
+          },
+          statement: {
+            managedRuleGroupStatement: {
+              name: 'AWSManagedRulesCommonRuleSet',
+              vendorName: 'AWS',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudwatchMetricsEnabled: true,
+            metricName: 'CommonRuleSetMetric',
+          },
+        },
+        {
+          name: 'AWSManagedRulesOWASPTop10',
+          priority: 2,
+          overrideAction: {
+            none: {},
+          },
+          statement: {
+            managedRuleGroupStatement: {
+              name: 'AWSManagedRulesOWASPTop10',
+              vendorName: 'AWS',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudwatchMetricsEnabled: true,
+            metricName: 'OWASPTop10Metric',
+          },
+        },
+      ],
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudwatchMetricsEnabled: true,
+        metricName: 'WebACLMetric',
+      },
+      tags,
+    }, { parent: this });
+  }
+
+  private deployRegionalInfrastructure(region: string, tags: { [key: string]: string }): void {
+    const provider = new aws.Provider(`provider-${region}`, {
+      region: region,
+    }, { parent: this });
+
+    // Create VPC
+    const vpc = new awsx.ec2.Vpc(`vpc-${region}`, {
+      cidrBlock: this.getCidrBlockForRegion(region),
+      numberOfAvailabilityZones: 2,
+      numberOfNatGateways: 2,
+      subnets: [
+        { type: 'public', name: 'public', cidrMask: 24 },
+        { type: 'private', name: 'private', cidrMask: 24 },
+      ],
+      tags,
+    }, { parent: this, provider });
+
+    this.vpcs[region] = vpc;
+
+    // Create security groups
+    const webSecurityGroup = this.createWebSecurityGroup(region, vpc, tags, provider);
+    const dbSecurityGroup = this.createDbSecurityGroup(region, vpc, webSecurityGroup, tags, provider);
+
+    // Create IAM role for EC2 instances
+    const ec2Role = this.createEc2Role(region, tags, provider);
+
+    // Create instance profile
+    const instanceProfile = new aws.iam.InstanceProfile(`ec2-instance-profile-${region}`, {
+      role: ec2Role.name,
+    }, { parent: this, provider });
+
+    // Create launch template
+    const launchTemplate = this.createLaunchTemplate(region, webSecurityGroup, instanceProfile, tags, provider);
+
+    // Create Auto Scaling Group
+    const asg = new aws.autoscaling.Group(`asg-${region}`, {
+      name: `nova-model-asg-${region}`,
+      minSize: 2,
+      maxSize: 6,
+      desiredCapacity: 2,
+      vpcZoneIdentifiers: vpc.privateSubnetIds,
+      launchTemplate: {
+        id: launchTemplate.id,
+        version: '$Latest',
+      },
+      healthCheckType: 'ELB',
+      healthCheckGracePeriod: 300,
+      tags: Object.entries(tags).map(([key, value]) => ({
+        key,
+        value,
+        propagateAtLaunch: true,
+      })),
+    }, { parent: this, provider });
+
+    this.autoScalingGroups[region] = asg;
+
+    // Create RDS subnet group
+    const dbSubnetGroup = new aws.rds.SubnetGroup(`db-subnet-group-${region}`, {
+      subnetIds: vpc.privateSubnetIds,
+      tags,
+    }, { parent: this, provider });
+
+    // Create RDS instance
+    const rdsInstance = new aws.rds.Instance(`rds-${region}`, {
+      identifier: `nova-model-db-${region}`,
+      engine: 'mysql',
+      engineVersion: '8.0',
+      instanceClass: 'db.t3.micro',
+      allocatedStorage: 20,
+      storageType: 'gp2',
+      storageEncrypted: true,
+      kmsKeyId: this.kmsKey.arn,
+      dbName: 'novamodel',
+      username: 'admin',
+      password: 'temporarypassword123!', // In production, use AWS Secrets Manager
+      vpcSecurityGroupIds: [dbSecurityGroup.id],
+      dbSubnetGroupName: dbSubnetGroup.name,
+      multiAz: true,
+      backupRetentionPeriod: 7,
+      backupWindow: '03:00-04:00',
+      maintenanceWindow: 'sun:04:00-sun:05:00',
+      skipFinalSnapshot: true,
+      tags,
+    }, { parent: this, provider });
+
+    this.rdsInstances[region] = rdsInstance;
+
+    // Create Application Load Balancer
+    this.createApplicationLoadBalancer(region, vpc, webSecurityGroup, asg, tags, provider);
+  }
+
+  private getCidrBlockForRegion(region: string): string {
+    const cidrBlocks = {
+      'us-east-1': '10.0.0.0/16',
+      'us-west-2': '10.1.0.0/16',
+      'eu-central-1': '10.2.0.0/16',
+    };
+    return cidrBlocks[region] || '10.0.0.0/16';
+  }
+
+  private createWebSecurityGroup(
+    region: string,
+    vpc: awsx.ec2.Vpc,
+    tags: { [key: string]: string },
+    provider: aws.Provider
+  ): aws.ec2.SecurityGroup {
+    return new aws.ec2.SecurityGroup(`web-sg-${region}`, {
+      namePrefix: `nova-model-web-${region}-`,
+      vpcId: vpc.vpcId,
+      description: 'Security group for web servers',
+      ingress: [
+        {
+          description: 'HTTP',
+          fromPort: 80,
+          toPort: 80,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+        {
+          description: 'HTTPS',
+          fromPort: 443,
+          toPort: 443,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+        {
+          description: 'SSH from specific IP',
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
+          cidrBlocks: ['203.0.113.0/32'], // Replace with actual admin IP
+        },
+      ],
+      egress: [
+        {
+          description: 'All outbound traffic',
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      tags,
+    }, { parent: this, provider });
+  }
+
+  private createDbSecurityGroup(
+    region: string,
+    vpc: awsx.ec2.Vpc,
+    webSecurityGroup: aws.ec2.SecurityGroup,
+    tags: { [key: string]: string },
+    provider: aws.Provider
+  ): aws.ec2.SecurityGroup {
+    return new aws.ec2.SecurityGroup(`db-sg-${region}`, {
+      namePrefix: `nova-model-db-${region}-`,
+      vpcId: vpc.vpcId,
+      description: 'Security group for database servers',
+      ingress: [
+        {
+          description: 'MySQL from web servers',
+          fromPort: 3306,
+          toPort: 3306,
+          protocol: 'tcp',
+          securityGroups: [webSecurityGroup.id],
+        },
+      ],
+      tags,
+    }, { parent: this, provider });
+  }
+
+  private createEc2Role(region: string, tags: { [key: string]: string }, provider: aws.Provider): aws.iam.Role {
+    const role = new aws.iam.Role(`ec2-role-${region}`, {
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags,
+    }, { parent: this, provider });
+
+    // Attach CloudWatch Agent policy
+    new aws.iam.RolePolicyAttachment(`ec2-cloudwatch-agent-${region}`, {
+      role: role.name,
+      policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
+    }, { parent: this, provider });
+
+    // Attach S3 access policy for logs
+    new aws.iam.RolePolicy(`ec2-s3-logs-policy-${region}`, {
+      role: role.id,
+      policy: pulumi.jsonStringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              's3:PutObject',
+              's3:GetObject',
+            ],
+            Resource: pulumi.interpolate`${this.logsBucket.arn}/ec2-logs/*`,
+          },
+        ],
+      }),
+    }, { parent: this, provider });
+
+    return role;
+  }
+
+  private createLaunchTemplate(
+    region: string,
+    securityGroup: aws.ec2.SecurityGroup,
+    instanceProfile: aws.iam.InstanceProfile,
+    tags: { [key: string]: string },
+    provider: aws.Provider
+  ): aws.ec2.LaunchTemplate {
+    const userData = Buffer.from(`#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
+
+# Install CloudWatch agent
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+rpm -U ./amazon-cloudwatch-agent.rpm
+
+# Configure CloudWatch agent
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/httpd/access_log",
+            "log_group_name": "/aws/ec2/httpd/access",
+            "log_stream_name": "{instance_id}"
+          }
+        ]
+      }
+    }
+  }
+}
+EOF
+
+# Start CloudWatch agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+`).toString('base64');
+
+    return new aws.ec2.LaunchTemplate(`launch-template-${region}`, {
+      namePrefix: `nova-model-${region}-`,
+      imageId: aws.ec2.getAmi({
+        mostRecent: true,
+        owners: ['amazon'],
+        filters: [
+          {
+            name: 'name',
+            values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+          },
+        ],
+      }, { provider }).then(ami => ami.id),
+      instanceType: 't3.micro',
+      vpcSecurityGroupIds: [securityGroup.id],
+      iamInstanceProfile: {
+        name: instanceProfile.name,
+      },
+      userData,
+      blockDeviceMappings: [
+        {
+          deviceName: '/dev/xvda',
+          ebs: {
+            volumeSize: 20,
+            volumeType: 'gp3',
+            encrypted: true,
+            kmsKeyId: this.kmsKey.arn,
+          },
+        },
+      ],
+      tagSpecifications: [
+        {
+          resourceType: 'instance',
+          tags,
+        },
+        {
+          resourceType: 'volume',
+          tags,
+        },
+      ],
+    }, { parent: this, provider });
+  }
+
+  private createApplicationLoadBalancer(
+    region: string,
+    vpc: awsx.ec2.Vpc,
+    securityGroup: aws.ec2.SecurityGroup,
+    asg: aws.autoscaling.Group,
+    tags: { [key: string]: string },
+    provider: aws.Provider
+  ): void {
+    const alb = new aws.lb.LoadBalancer(`alb-${region}`, {
+      name: `nova-model-alb-${region}`,
+      loadBalancerType: 'application',
+      subnets: vpc.publicSubnetIds,
+      securityGroups: [securityGroup.id],
+      tags,
+    }, { parent: this, provider });
+
+    const targetGroup = new aws.lb.TargetGroup(`tg-${region}`, {
+      name: `nova-model-tg-${region}`,
+      port: 80,
+      protocol: 'HTTP',
+      vpcId: vpc.vpcId,
+      healthCheck: {
+        enabled: true,
+        healthyThreshold: 2,
+        interval: 30,
+        matcher: '200',
+        path: '/',
+        port: 'traffic-port',
+        protocol: 'HTTP',
+        timeout: 5,
+        unhealthyThreshold: 2,
+      },
+      tags,
+    }, { parent: this, provider });
+
+    new aws.lb.Listener(`listener-${region}`, {
+      loadBalancerArn: alb.arn,
+      port: '80',
+      protocol: 'HTTP',
+      defaultActions: [
+        {
+          type: 'forward',
+          targetGroupArn: targetGroup.arn,
+        },
+      ],
+    }, { parent: this, provider });
+
+    new aws.autoscaling.Attachment(`asg-attachment-${region}`, {
+      autoscalingGroupName: asg.id,
+      lbTargetGroupArn: targetGroup.arn,
+    }, { parent: this, provider });
+
+    // Associate WAF with ALB
+    new aws.wafv2.WebAclAssociation(`waf-association-${region}`, {
+      resourceArn: alb.arn,
+      webAclArn: this.wafWebAcl.arn,
+    }, { parent: this, provider });
+  }
+}
