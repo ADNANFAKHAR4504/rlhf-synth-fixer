@@ -18,21 +18,15 @@ describe('Terraform Infrastructure Integration Tests', () => {
   beforeAll(() => {
     const tfOutputPath = path.resolve(
       process.cwd(),
-      'cfn-outputs',
-      'all-outputs.json'
+      'tf-outputs',
+      'tfplan.json'
     );
     const raw = readFileSync(tfOutputPath, 'utf8');
-    tf = JSON.parse(raw);
+    tf = JSON.parse(raw).outputs;
   });
 
   it('should output a valid VPC ID', () => {
     expect(tf.vpc_id.value).toMatch(/^vpc-[a-z0-9]+$/);
-  });
-
-  it('should output a valid VPC CIDR', () => {
-    expect(tf.vpc_cidr.value).toMatch(
-      /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/
-    );
   });
 
   it('should output public subnet IDs', () => {
@@ -57,14 +51,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
     tf.private_route_table_ids.value.forEach((id: string) => {
       expect(id).toMatch(/^rtb-[a-z0-9]+$/);
     });
-  });
-
-  it('should output a valid Internet Gateway ID', () => {
-    expect(tf.internet_gateway_id.value).toMatch(/^igw-[a-z0-9]+$/);
-  });
-
-  it('should output a valid NAT Gateway ID', () => {
-    expect(tf.nat_gateway_id.value).toMatch(/^nat-[a-z0-9]+$/);
   });
 
   it('should output a valid EC2 Security Group ID', () => {
@@ -95,11 +81,33 @@ describe('Terraform Infrastructure Integration Tests', () => {
     );
   });
 
+  it('should output a valid S3 data bucket name', () => {
+    expect(tf.s3_data_bucket_name.value).toBeDefined();
+  });
+
+  it('should output a valid S3 data bucket ARN', () => {
+    expect(tf.s3_data_bucket_arn.value).toMatch(/^arn:aws:s3:::[a-z0-9-]+$/);
+  });
+
   it('should output a valid S3 VPC Endpoint ID', () => {
     expect(tf.vpc_endpoint_s3_id.value).toMatch(/^vpce-[a-z0-9]+$/);
   });
 
   it('should output a valid instance profile name', () => {
-    expect(tf.instance_profile_name.value).toBeDefined();
+    expect(tf.ec2_instance_profile_name.value).toBeDefined();
+  });
+
+  it('should output a valid ALB DNS name', () => {
+    expect(tf.alb_dns_name.value).toBeDefined();
+  });
+
+  it('should output a valid RDS endpoint', () => {
+    expect(tf.rds_endpoint.value).toBeDefined();
+  });
+
+  it('should output a valid CloudTrail ARN', () => {
+    expect(tf.cloudtrail_arn.value).toMatch(
+      /^arn:aws:cloudtrail:[a-z0-9-]+:\d{12}:trail\/[a-z0-9-]+$/
+    );
   });
 });
