@@ -28,8 +28,11 @@ import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
 
 import { Instance } from '@cdktf/provider-aws/lib/instance';
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 
 export interface SecurityModulesConfig {
   allowedCidr: string;
@@ -56,6 +59,22 @@ export class SecurityModules extends Construct {
 
     // Get current AWS account ID
     const callerIdentity = new DataAwsCallerIdentity(this, 'current');
+
+    // Get the latest Amazon Linux 2 AMI
+    const amazonLinuxAmi = new DataAwsAmi(this, 'amazon-linux', {
+      mostRecent: true,
+      owners: ['amazon'],
+      filter: [
+        {
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+        },
+        {
+          name: 'virtualization-type',
+          values: ['hvm'],
+        },
+      ],
+    });
 
     // Create VPC for network isolation
     this.vpc = new Vpc(this, 'MyApp-VPC-Main', {
@@ -110,6 +129,25 @@ export class SecurityModules extends Construct {
       },
     });
 
+    // Elastic IP for NAT Gateway
+    const natEip = new Eip(this, 'MyApp-EIP-NAT', {
+      domain: 'vpc',
+      tags: {
+        Name: 'MyApp-EIP-NAT',
+      },
+      dependsOn: [igw],
+    });
+
+    // NAT Gateway for private subnet internet access
+    const natGateway = new NatGateway(this, 'MyApp-NAT-Main', {
+      allocationId: natEip.id,
+      subnetId: publicSubnet.id,
+      tags: {
+        Name: 'MyApp-NAT-Main',
+      },
+      dependsOn: [igw],
+    });
+
     // Route table for public subnet
     const publicRouteTable = new RouteTable(this, 'MyApp-RT-Public', {
       vpcId: this.vpc.id,
@@ -127,6 +165,30 @@ export class SecurityModules extends Construct {
     new RouteTableAssociation(this, 'MyApp-RTA-Public', {
       subnetId: publicSubnet.id,
       routeTableId: publicRouteTable.id,
+    });
+
+    // Route table for private subnets
+    const privateRouteTable = new RouteTable(this, 'MyApp-RT-Private', {
+      vpcId: this.vpc.id,
+      tags: {
+        Name: 'MyApp-RT-Private',
+      },
+    });
+
+    new Route(this, 'MyApp-Route-Private', {
+      routeTableId: privateRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      natGatewayId: natGateway.id,
+    });
+
+    new RouteTableAssociation(this, 'MyApp-RTA-Private-1', {
+      subnetId: privateSubnet1.id,
+      routeTableId: privateRouteTable.id,
+    });
+
+    new RouteTableAssociation(this, 'MyApp-RTA-Private-2', {
+      subnetId: privateSubnet2.id,
+      routeTableId: privateRouteTable.id,
     });
 
     // KMS Key for encryption - Created early as other resources depend on it
@@ -171,6 +233,9 @@ export class SecurityModules extends Construct {
       targetKeyId: this.kmsKey.keyId,
     });
 
+    // Generate unique bucket name to avoid conflicts
+    const uniqueSuffix = Math.random().toString(36).substring(2, 8);
+
     // IAM Role with least privilege principle
     this.iamRole = new IamRole(this, 'MyApp-IAM-Role-EC2', {
       name: 'MyApp-IAM-Role-EC2',
@@ -194,23 +259,7 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // CREATE IAM INSTANCE PROFILE
-    this.instanceProfile = new IamInstanceProfile(
-      this,
-      'MyApp-InstanceProfile',
-      {
-        name: 'MyApp-InstanceProfile-EC2',
-        role: this.iamRole.name,
-        tags: {
-          Name: 'MyApp-InstanceProfile-EC2',
-        },
-      }
-    );
-
-    // Generate unique bucket name to avoid conflicts
-    const uniqueSuffix = Math.random().toString(36).substring(2, 8);
-
-    // IAM Policy with minimal required permissions - Updated with bucket name
+    // IAM Policy with minimal required permissions
     const iamPolicy = new IamPolicy(this, 'MyApp-IAM-Policy-EC2', {
       name: 'MyApp-IAM-Policy-EC2',
       description:
@@ -219,7 +268,6 @@ export class SecurityModules extends Construct {
         Version: '2012-10-17',
         Statement: [
           {
-            // Allow CloudWatch metrics publishing for monitoring
             Effect: 'Allow',
             Action: [
               'cloudwatch:PutMetricData',
@@ -229,7 +277,6 @@ export class SecurityModules extends Construct {
             Resource: '*',
           },
           {
-            // Allow access only to our specific S3 bucket
             Effect: 'Allow',
             Action: ['s3:GetObject', 's3:PutObject'],
             Resource: `arn:aws:s3:::myapp-secure-data-${uniqueSuffix}/*`,
@@ -244,7 +291,20 @@ export class SecurityModules extends Construct {
       policyArn: iamPolicy.arn,
     });
 
-    // Security Group for EC2 instances - Created FIRST
+    // CREATE IAM INSTANCE PROFILE
+    this.instanceProfile = new IamInstanceProfile(
+      this,
+      'MyApp-InstanceProfile',
+      {
+        name: 'MyApp-InstanceProfile-EC2',
+        role: this.iamRole.name,
+        tags: {
+          Name: 'MyApp-InstanceProfile-EC2',
+        },
+      }
+    );
+
+    // Security Group for EC2 instances
     this.securityGroup = new SecurityGroup(this, 'MyApp-SG-EC2', {
       name: 'MyApp-SG-EC2',
       description:
@@ -304,7 +364,7 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // RDS Security Group - Created SECOND, references EC2 security group
+    // RDS Security Group
     this.dbSecurityGroup = new SecurityGroup(this, 'MyApp-SG-RDS', {
       name: 'MyApp-SG-RDS',
       description:
@@ -320,7 +380,7 @@ export class SecurityModules extends Construct {
           cidrBlocks: [],
           ipv6CidrBlocks: [],
           prefixListIds: [],
-          securityGroups: [this.securityGroup.id], // Reference EC2 security group
+          securityGroups: [this.securityGroup.id],
         },
       ],
 
@@ -343,14 +403,13 @@ export class SecurityModules extends Construct {
         Purpose: 'RDS',
       },
 
-      // Explicit dependency on EC2 security group
       dependsOn: [this.securityGroup],
     });
 
-    // S3 Bucket for sensitive data with unique name
+    // S3 Bucket for sensitive data
     this.s3Bucket = new S3Bucket(this, 'MyApp-S3-SecureData', {
       bucket: `myapp-secure-data-${uniqueSuffix}`,
-      forceDestroy: true, // Allow destruction for development
+      forceDestroy: true,
       tags: {
         Name: 'MyApp-S3-SecureData',
         DataClassification: 'Sensitive',
@@ -454,9 +513,9 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // EC2 Instance - Created BEFORE RDS to establish proper dependencies
+    // EC2 Instance with proper dependencies
     this.ec2Instance = new Instance(this, 'MyApp-EC2-Main', {
-      ami: 'ami-0c94855ba95b798c7',
+      ami: amazonLinuxAmi.id, // Use dynamic AMI lookup
       instanceType: config.instanceType,
       subnetId: privateSubnet1.id,
       vpcSecurityGroupIds: [this.securityGroup.id],
@@ -471,17 +530,32 @@ export class SecurityModules extends Construct {
         deleteOnTermination: true,
       },
 
+      userData: Buffer.from(
+        `#!/bin/bash
+yum update -y
+yum install -y amazon-cloudwatch-agent
+# Configure CloudWatch agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    -a fetch-config -m ec2 -s -c default
+`
+      ).toString('base64'),
+
       tags: {
         Name: 'MyApp-EC2-Main',
         Environment: 'Production',
         Monitoring: 'Enabled',
       },
 
-      // Explicit dependencies
-      dependsOn: [this.instanceProfile, this.securityGroup],
+      // Explicit dependencies to ensure proper creation order
+      dependsOn: [
+        this.instanceProfile,
+        this.securityGroup,
+        natGateway, // Ensure NAT Gateway is ready for outbound connectivity
+        privateRouteTable, // Ensure routing is configured
+      ],
     });
 
-    // RDS Instance - Created AFTER EC2 instance
+    // RDS Instance
     this.rdsInstance = new DbInstance(this, 'MyApp-RDS-Main', {
       identifier: 'myapp-rds-main',
       engine: 'mysql',
@@ -505,8 +579,8 @@ export class SecurityModules extends Construct {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
 
-      deletionProtection: false, // Disable for development
-      skipFinalSnapshot: true, // Skip snapshot for development
+      deletionProtection: false,
+      skipFinalSnapshot: true,
 
       tags: {
         Name: 'MyApp-RDS-Main',
@@ -515,14 +589,7 @@ export class SecurityModules extends Construct {
         Environment: 'Production',
       },
 
-      // Explicit dependencies
-      dependsOn: [dbSubnetGroup, this.dbSecurityGroup, this.ec2Instance],
-    });
-
-    // CRITICAL FIX: Add lifecycle management to security groups
-    // This prevents the security group from being destroyed before RDS is fully cleaned up
-    this.dbSecurityGroup.addOverride('lifecycle', {
-      create_before_destroy: true,
+      dependsOn: [dbSubnetGroup, this.dbSecurityGroup],
     });
 
     // CloudTrail for comprehensive API activity monitoring
@@ -587,7 +654,6 @@ export class SecurityModules extends Construct {
           Threshold: '80%',
         },
 
-        // Explicit dependency
         dependsOn: [this.ec2Instance],
       }
     );
