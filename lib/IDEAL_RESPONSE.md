@@ -1,52 +1,175 @@
+# IDEAL_RESPONSE.md
+
+ This CloudFormation template represents the corrected, production-ready version
+ of the model-generated TapStack template. It aligns fully with the requirements
+ in **PROMPT.md** and addresses all shortcomings identified in **MODEL_FAILURES.md**.
+
+## Key Improvements:
+  - Conditional creation of AWS Config recorder to prevent deployment conflicts
+  - Valid IAM roles and managed policies for security and functionality
+  - Secure and least-privilege security group and S3 bucket configurations
+  - Latest Lambda runtime versions for compliance and security
+  - Multi-region CloudTrail logging enabled for enterprise monitoring
+
+ Use this template as the canonical reference for deployment and testing.
+
+
+
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Enterprise Security CloudFormation Template (Deployment-Safe & Idempotent)
-  Includes conditional creation for VPC, Subnets, CloudTrail, Config, EC2, S3, RDS, IAM, and Lambda.
+  TapStack - Secure Production Environment (production-hardened, idempotent, conditional)
+  - Multi-AZ VPC (optional)
+  - Separate ALB & Instance security groups
+  - Encrypted CloudTrail to KMS-backed S3
+  - AWS Config recorder
+  - Optional encrypted RDS (multi-AZ)
+  - Custom S3 cleanup custom resource (Lambda)
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Networking'
+        Parameters:
+          - UseExistingVPC
+          - VpcId
+          - UseExistingPublicSubnets
+          - PublicSubnetIds
+          - UseExistingPrivateSubnets
+          - PrivateSubnetIds
+      - Label:
+          default: 'Certificate'
+        Parameters:
+          - CertificateArn
+    ParameterLabels:
+      VpcId:
+        default: 'VPC ID'
+      PublicSubnetIds:
+        default: 'Public Subnet IDs (comma-delimited)'
+      PrivateSubnetIds:
+        default: 'Private Subnet IDs (comma-delimited)'
+      CertificateArn:
+        default: 'ACM Certificate ARN'
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1030
 
 Parameters:
   CompanyPrefix:
     Type: String
-    Default: "corp-sec"
-    Description: "Prefix for all resources"
+    Default: 'prod'
+    Description: 'Resource name prefix'
 
   UseExistingVPC:
     Type: String
-    Default: "false"
-    AllowedValues: ["true", "false"]
-    Description: "If true, use existing VPC"
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'If true, use existing VPC (provide VpcId)'
 
-  ExistingVPCId:
+  VpcId:
     Type: String
-    Default: ""
-    Description: "Existing VPC ID if UseExistingVPC is true"
+    Default: ''
+    Description: 'Existing VPC ID to use when UseExistingVPC is true (leave blank otherwise)'
+    AllowedPattern: '^$|^vpc-([0-9a-f]{8}|[0-9a-f]{17})$'
+
+  UseExistingPublicSubnets:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'If true, use existing public subnets (provide PublicSubnetIds)'
+
+  PublicSubnetIds:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: 'Existing public subnet IDs (comma-separated)'
+
+  UseExistingPrivateSubnets:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'If true, use existing private subnets (provide PrivateSubnetIds)'
+
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: 'Existing private subnet IDs (comma-separated)'
+
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: 'Optional ACM certificate ARN for ALB HTTPS listener'
 
   AllowedSSHIP:
     Type: String
-    Default: "203.0.113.0/24"
-    Description: "CIDR block for SSH"
+    Default: '203.0.113.0/24'
+    Description: 'CIDR block allowed for SSH access to instances (no 0.0.0.0/0)'
 
   UseExistingCloudTrail:
     Type: String
-    Default: "false"
-    AllowedValues: ["true","false"]
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'If true, assume an existing CloudTrail & bucket (provide CloudTrailBucketName)'
 
-  UseExistingConfig:
+  CloudTrailBucketName:
     Type: String
-    Default: "false"
-    AllowedValues: ["true","false"]
+    Default: ''
+    Description: 'Optional existing CloudTrail bucket name to reuse when UseExistingCloudTrail is true'
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'SSM parameter holding latest Amazon Linux 2 AMI in the region (can override)'
+
+  CreateRDS:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'If true, create an encrypted, multi-AZ RDS instance'
+
+  DBMasterUser:
+    Type: String
+    Default: 'dbadmin'
+    Description: 'RDS master username (used only if CreateRDS=true)'
+
+  DBPasswordSecretName:
+    Type: String
+    Default: ''
+    Description: 'Optional Secrets Manager secret name for DB password (if blank, a new secret will be created)'
+
+  UseExistingConfigRecorder:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'If true, assume an existing AWS Config recorder (set to true if you already have one)'
+
+Mappings:
+  RegionMap:
+    us-west-2:
+      AZs: ['us-west-2a', 'us-west-2b', 'us-west-2c']
+    us-east-1:
+      AZs: ['us-east-1a', 'us-east-1b', 'us-east-1c']
+    eu-west-1:
+      AZs: ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
 
 Conditions:
-  CreateVPC: !Equals [ !Ref UseExistingVPC, "false" ]
-  CreateCloudTrail: !Equals [ !Ref UseExistingCloudTrail, "false" ]
-  CreateConfig: !Equals [ !Ref UseExistingConfig, "false" ]
+  CreateVPC: !Equals [!Ref UseExistingVPC, 'false']
+  CreatePublicSubnets: !Equals [!Ref UseExistingPublicSubnets, 'false']
+  CreatePrivateSubnets: !Equals [!Ref UseExistingPrivateSubnets, 'false']
+  CreateVPCAndPublicSubnets:
+    !And [!Condition CreateVPC, !Condition CreatePublicSubnets]
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+  CreateCloudTrail: !Equals [!Ref UseExistingCloudTrail, 'false']
+  CreateRDSFlag: !Equals [!Ref CreateRDS, 'true']
+  HasCloudTrailBucketName: !Not [!Equals [!Ref CloudTrailBucketName, '']]
+  HasDBPasswordSecretName: !Not [!Equals [!Ref DBPasswordSecretName, '']]
+  CreateConfigRecorder: !Equals [!Ref UseExistingConfigRecorder, 'false']
 
 Resources:
-
-  ##################################
-  # VPC and Subnets
-  ##################################
-  CorpVPC:
+  #############################
+  # VPC & Networking (conditional creation)
+  #############################
+  ProdVPC:
     Type: AWS::EC2::VPC
     Condition: CreateVPC
     Properties:
@@ -55,64 +178,234 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyPrefix}-vpc"
+          Value: !Sub '${CompanyPrefix}-vpc'
+        - Key: Environment
+          Value: Production
+        - Key: Project
+          Value: IaC - AWS Nova Model Breaking
 
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
     Condition: CreateVPC
     Properties:
-      VpcId: !Ref CorpVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-igw'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateVPC
+    Properties:
+      VpcId: !Ref ProdVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public subnets (create only if CreatePublicSubnets)
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Condition: CreatePublicSubnets
+    Properties:
+      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone:
+        !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-public-subnet-a'
+        - Key: Environment
+          Value: Production
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: CreatePublicSubnets
+    Properties:
+      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs ""]
+      AvailabilityZone:
+        !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyPrefix}-public-subnet-1"
+          Value: !Sub '${CompanyPrefix}-public-subnet-b'
+        - Key: Environment
+          Value: Production
 
-  PublicSubnet2:
+  # Private subnets (create only if CreatePrivateSubnets)
+  PrivateSubnetA:
     Type: AWS::EC2::Subnet
-    Condition: CreateVPC
+    Condition: CreatePrivateSubnets
     Properties:
-      VpcId: !Ref CorpVPC
+      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyPrefix}-public-subnet-2"
-
-  PrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Condition: CreateVPC
-    Properties:
-      VpcId: !Ref CorpVPC
-      CidrBlock: 10.0.101.0/24
-      AvailabilityZone: !Select [0, !GetAZs ""]
+      AvailabilityZone:
+        !Select [0, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyPrefix}-private-subnet-1"
+          Value: !Sub '${CompanyPrefix}-private-subnet-a'
+        - Key: Environment
+          Value: Production
 
-  PrivateSubnet2:
+  PrivateSubnetB:
     Type: AWS::EC2::Subnet
-    Condition: CreateVPC
+    Condition: CreatePrivateSubnets
     Properties:
-      VpcId: !Ref CorpVPC
-      CidrBlock: 10.0.102.0/24
-      AvailabilityZone: !Select [1, !GetAZs ""]
+      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone:
+        !Select [1, !FindInMap [RegionMap, !Ref 'AWS::Region', AZs]]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyPrefix}-private-subnet-2"
+          Value: !Sub '${CompanyPrefix}-private-subnet-b'
+        - Key: Environment
+          Value: Production
 
-  ##################################
-  # Security Groups
-  ##################################
-  EC2SecurityGroup:
+  # NAT Gateways & EIPs (only if we create VPC)
+  NatEIP1:
+    Type: AWS::EC2::EIP
+    Condition: CreateVPC
+    Properties:
+      Domain: vpc
+
+  NatGW1:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateVPC
+    Properties:
+      AllocationId: !GetAtt NatEIP1.AllocationId
+      SubnetId:
+        !If [CreatePublicSubnets, !Ref PublicSubnetA, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-nat-gw-a'
+
+  NatEIP2:
+    Type: AWS::EC2::EIP
+    Condition: CreateVPC
+    Properties:
+      Domain: vpc
+
+  NatGW2:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateVPC
+    Properties:
+      AllocationId: !GetAtt NatEIP2.AllocationId
+      SubnetId:
+        !If [CreatePublicSubnets, !Ref PublicSubnetB, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-nat-gw-b'
+
+  # Route tables & routes
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateVPC
+    Properties:
+      VpcId: !Ref ProdVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-public-rt'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateVPC
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateVPCAndPublicSubnets
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateVPCAndPublicSubnets
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Condition: CreatePrivateSubnets
+    Properties:
+      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-private-rt-a'
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Condition: CreatePrivateSubnets
+    Properties:
+      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-private-rt-b'
+
+  PrivateSubnetARoute:
+    Type: AWS::EC2::Route
+    Condition: CreatePrivateSubnets
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If [CreateVPC, !Ref NatGW1, !Ref 'AWS::NoValue']
+
+  PrivateSubnetBRoute:
+    Type: AWS::EC2::Route
+    Condition: CreatePrivateSubnets
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !If [CreateVPC, !Ref NatGW2, !Ref 'AWS::NoValue']
+
+  PrivateSubnetARouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreatePrivateSubnets
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
+
+  PrivateSubnetBRouteAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreatePrivateSubnets
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
+
+  #############################
+  # Security Groups (separated)
+  #############################
+  ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "EC2 Security Group with restricted SSH/HTTP"
-      VpcId: !If [CreateVPC, !Ref CorpVPC, !Ref ExistingVPCId]
+      GroupDescription: 'ALB security group (public access for HTTP/HTTPS)'
+      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-alb-sg'
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Instance security group - restrict SSH and accept ALB traffic'
+      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -121,191 +414,483 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyPrefix}-ec2-sg"
+          Value: !Sub '${CompanyPrefix}-instance-sg'
 
-  ##################################
+  #############################
   # IAM Roles
-  ##################################
-  AdminRole:
+  #############################
+  EC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${CompanyPrefix}-admin-role"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              AWS: "*"
+              Service:
+                - ec2.amazonaws.com
             Action: sts:AssumeRole
-            Condition:
-              IpAddress:
-                aws:SourceIp: !Ref AllowedSSHIP
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AdministratorAccess
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-ec2-role'
 
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
     Properties:
-      RoleName: !Sub "${CompanyPrefix}-lambda-role"
-      AssumeRolePolicyDocument:
+      Roles:
+        - !Ref EC2Role
+
+  #############################
+  # KMS Key & CloudTrail Bucket (parameterized)
+  #############################
+  CloudTrailKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for CloudTrail encryption'
+      KeyPolicy:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: 'kms:*'
+            Resource: '*'
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:Decrypt
+              - kms:Encrypt
+              - kms:DescribeKey
+              - kms:ReEncrypt*
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-cloudtrail-key'
 
-  ##################################
-  # S3 Buckets
-  ##################################
-  CorpS3Bucket:
+  ProdTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${CompanyPrefix}-s3-bucket"
-      AccessControl: Private
+      BucketName: !If
+        - CreateCloudTrail
+        - !Sub '${CompanyPrefix}-cloudtrail-bucket-${AWS::AccountId}-${AWS::Region}'
+        - !If [
+            HasCloudTrailBucketName,
+            !Ref CloudTrailBucketName,
+            !Sub '${CompanyPrefix}-cloudtrail-bucket-${AWS::AccountId}-${AWS::Region}',
+          ]
+      VersioningConfiguration:
+        Status: Enabled
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref CloudTrailKMSKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-cloudtrail-bucket'
 
-  S3BucketPolicy:
+  ProdTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref CorpS3Bucket
+      Bucket: !Ref ProdTrailBucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: "DenyHTTP"
-            Effect: Deny
-            Principal: "*"
-            Action: "s3:*"
-            Resource:
-              - !Sub "${CorpS3Bucket.Arn}/*"
-              - !GetAtt CorpS3Bucket.Arn
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ProdTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ProdTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
             Condition:
-              Bool:
-                aws:SecureTransport: false
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+                'aws:SourceAccount': !Ref 'AWS::AccountId'
 
-  ##################################
-  # RDS (Encrypted)
-  ##################################
+  #############################
+  # CloudTrail
+  #############################
+  ProdCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Condition: CreateCloudTrail
+    DependsOn: ProdTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${CompanyPrefix}-cloudtrail'
+      S3BucketName: !Ref ProdTrailBucket
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      KMSKeyId: !Ref CloudTrailKMSKey
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+
+  #############################
+  # Launch Template & ASG (use SSM AMI)
+  #############################
+  ProdLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${CompanyPrefix}-ec2-lt'
+      LaunchTemplateData:
+        InstanceType: t3.micro
+        ImageId: !Ref LatestAmiId
+        SecurityGroupIds:
+          - !Ref InstanceSecurityGroup
+        IamInstanceProfile:
+          Name: !Ref EC2InstanceProfile
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${CompanyPrefix}-ec2-instance'
+
+  ProdASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !If [CreatePrivateSubnets, !Ref PrivateSubnetA, !Ref 'AWS::NoValue']
+        - !If [CreatePrivateSubnets, !Ref PrivateSubnetB, !Ref 'AWS::NoValue']
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ProdLaunchTemplate
+        Version: !GetAtt ProdLaunchTemplate.LatestVersionNumber
+      MinSize: '2'
+      MaxSize: '4'
+      DesiredCapacity: '2'
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-asg'
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: Production
+          PropagateAtLaunch: true
+
+  #############################
+  # ALB & Target Group & Listeners
+  #############################
+  ProdALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${CompanyPrefix}-alb'
+      Subnets:
+        - !If [CreatePublicSubnets, !Ref PublicSubnetA, !Ref 'AWS::NoValue']
+        - !If [CreatePublicSubnets, !Ref PublicSubnetB, !Ref 'AWS::NoValue']
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Scheme: internet-facing
+      Type: application
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  ProdTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${CompanyPrefix}-tg'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
+      TargetType: instance
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: '80'
+      HealthCheckPath: '/'
+
+  ProdHTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: HasCertificate
+    Properties:
+      LoadBalancerArn: !Ref ProdALB
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ProdTargetGroup
+
+  ProdHTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ProdALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions: !If
+        - HasCertificate
+        - - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              StatusCode: HTTP_301
+        - - Type: forward
+            TargetGroupArn: !Ref ProdTargetGroup
+
+  #############################
+  # AWS Config Recorder & Delivery
+  #############################
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Condition: CreateConfigRecorder
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateConfigRecorder
+    Properties:
+      Name: !Sub '${CompanyPrefix}-config-recorder'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Condition: CreateConfigRecorder
+    Properties:
+      Name: !Sub '${CompanyPrefix}-config-delivery'
+      S3BucketName: !Ref ProdTrailBucket
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  #############################
+  # S3 Cleanup Lambda (Custom Resource) - python3.11 with cfn-response helper inline
+  #############################
+  S3BucketCleanupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Cleanup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                  - s3:ListBucketVersions
+                Resource:
+                  - !GetAtt ProdTrailBucket.Arn
+                  - !Sub '${ProdTrailBucket.Arn}/*'
+
+  S3BucketCleanupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${CompanyPrefix}-s3-cleanup'
+      Handler: index.handler
+      Runtime: python3.11
+      Role: !GetAtt S3BucketCleanupRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import urllib.request
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def send_response(event, context, status, data=None, physical_resource_id=None):
+              response_url = event.get('ResponseURL')
+              if not response_url:
+                  return
+              response_body = {
+                  'Status': status,
+                  'Reason': f'See the details in CloudWatch Log Stream: {context.log_stream_name}',
+                  'PhysicalResourceId': physical_resource_id or context.log_stream_name,
+                  'StackId': event.get('StackId'),
+                  'RequestId': event.get('RequestId'),
+                  'LogicalResourceId': event.get('LogicalResourceId'),
+                  'Data': data or {}
+              }
+              json_response_body = json.dumps(response_body).encode('utf-8')
+              req = urllib.request.Request(response_url, data=json_response_body, method='PUT')
+              req.add_header('Content-Type', '')
+              req.add_header('Content-Length', str(len(json_response_body)))
+              try:
+                  with urllib.request.urlopen(req) as response:
+                      logger.info('CloudFormation returned status code: %s', response.getcode())
+              except Exception as e:
+                  logger.error('send_response failed: %s', str(e))
+
+          def handler(event, context):
+              s3 = boto3.resource('s3')
+              try:
+                  logger.info("Received event: %s", json.dumps(event))
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  if event['RequestType'] == 'Delete':
+                      bucket = s3.Bucket(bucket_name)
+                      # delete all object versions and markers
+                      bucket.object_versions.delete()
+                  send_response(event, context, "SUCCESS")
+              except Exception as e:
+                  logger.exception("Error during cleanup")
+                  send_response(event, context, "FAILED", { "Message": str(e) })
+
+  S3BucketCleanup:
+    Type: Custom::S3BucketCleanup
+    Properties:
+      ServiceToken: !GetAtt S3BucketCleanupFunction.Arn
+      BucketName: !Ref ProdTrailBucket
+
+  #############################
+  # Optional RDS (encrypted, multi-AZ) - guarded by CreateRDSFlag
+  #############################
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: CreateRDSFlag
+    Properties:
+      Name: !Sub '${CompanyPrefix}-rds-master-secret'
+      Description: 'RDS master credentials'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBMasterUser}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludePunctuation: true
+
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateRDSFlag
+    Properties:
+      DBSubnetGroupDescription: !Sub '${CompanyPrefix}-rds-subnet-group'
+      SubnetIds:
+        - !If [CreatePrivateSubnets, !Ref PrivateSubnetA, !Ref 'AWS::NoValue']
+        - !If [CreatePrivateSubnets, !Ref PrivateSubnetB, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Name
+          Value: !Sub '${CompanyPrefix}-rds-subnet-group'
+
   CorpRDS:
     Type: AWS::RDS::DBInstance
+    Condition: CreateRDSFlag
     Properties:
-      DBInstanceIdentifier: !Sub "${CompanyPrefix}-rds"
+      DBInstanceIdentifier: !Sub '${CompanyPrefix}-rds'
       Engine: mysql
-      MasterUsername: admin
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Ref DBMasterUser
+      MasterUserPassword:
+        !If [
+          HasDBPasswordSecretName,
+          !Sub '{{resolve:secretsmanager:${DBPasswordSecretName}:SecretString:password}}',
+          !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}',
+        ]
       AllocatedStorage: 20
       DBInstanceClass: db.t3.medium
       StorageEncrypted: true
       MultiAZ: true
       PubliclyAccessible: false
       VPCSecurityGroups:
-        - !Ref EC2SecurityGroup
-      DBSubnetGroupName:
-        Ref: RDSSubnetGroup
-
-  RDSSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: "Subnets for RDS"
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      DBSubnetGroupName: !Sub "${CompanyPrefix}-rds-subnet-group"
-
-  ##################################
-  # CloudTrail
-  ##################################
-  CorpCloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Condition: CreateCloudTrail
-    Properties:
-      TrailName: !Sub "${CompanyPrefix}-cloudtrail"
-      S3BucketName: !Ref CorpS3Bucket
-      IsLogging: true
-      IncludeGlobalServiceEvents: true
-      EnableLogFileValidation: true
-
-  ##################################
-  # AWS Config
-  ##################################
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Condition: CreateConfig
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Condition: CreateConfig
-    Properties:
-      Name: !Sub "${CompanyPrefix}-config-recorder"
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ##################################
-  # Lambda Security Audit
-  ##################################
-  SecurityGroupAuditFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub "${CompanyPrefix}-sg-audit"
-      Handler: index.handler
-      Runtime: python3.11
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Timeout: 60
-      Code:
-        ZipFile: |
-          import boto3
-          ec2 = boto3.client('ec2')
-          def handler(event, context):
-              violations = []
-              for sg in ec2.describe_security_groups()['SecurityGroups']:
-                  for perm in sg.get('IpPermissions', []):
-                      for ip_range in perm.get('IpRanges', []):
-                          if ip_range.get('CidrIp') == '0.0.0.0/0':
-                              violations.append(sg['GroupId'])
-              return {"Violations": violations}
+        - !Ref InstanceSecurityGroup
+      DBSubnetGroupName: !Ref RDSSubnetGroup
 
 Outputs:
-  CloudTrailName:
-    Description: "CloudTrail Name (if created)"
-    Value: !If [CreateCloudTrail, !Ref CorpCloudTrail, "Using existing CloudTrail"]
+  VPCId:
+    Description: 'VPC ID (created or existing)'
+    Value: !If [CreateVPC, !Ref ProdVPC, !Ref VpcId]
+
+  PublicSubnets:
+    Description: 'Public Subnet IDs (created or reused)'
+    Value: !If
+      - CreatePublicSubnets
+      - !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+      - !Join [',', !Ref PublicSubnetIds]
+
+  PrivateSubnets:
+    Description: 'Private Subnet IDs (created or reused)'
+    Value: !If
+      - CreatePrivateSubnets
+      - !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
+      - !Join [',', !Ref PrivateSubnetIds]
+
+  ALBEndpoint:
+    Description: 'ALB DNS Name'
+    Value: !GetAtt ProdALB.DNSName
+
+  ProdSecurityGroupId:
+    Description: 'ALB Security Group ID'
+    Value: !Ref ALBSecurityGroup
+
+  InstanceSecurityGroupId:
+    Description: 'Instance Security Group ID'
+    Value: !Ref InstanceSecurityGroup
+
+  ProdTrailBucketName:
+    Description: 'CloudTrail S3 bucket name (created or provided)'
+    Value: !Ref ProdTrailBucket
+
+  CloudTrailKMSKeyId:
+    Description: 'CloudTrail KMS Key ID'
+    Value: !Ref CloudTrailKMSKey
+
+  ProdCloudTrailName:
+    Description: 'CloudTrail Name (if created)'
+    Value:
+      !If [CreateCloudTrail, !Ref ProdCloudTrail, 'Using existing CloudTrail']
+
+  ProdASGName:
+    Description: 'Auto Scaling Group Name'
+    Value: !Ref ProdASG
+
+  ProdLaunchTemplateName:
+    Description: 'Launch Template Name'
+    Value: !Ref ProdLaunchTemplate
 
   ConfigRecorderName:
-    Description: "AWS Config Recorder (if created)"
-    Value: !If [CreateConfig, !Ref ConfigRecorder, "Using existing Config"]
+    Description: 'Config Recorder Name'
+    Value:
+      !If [
+        CreateConfigRecorder,
+        !Ref ConfigRecorder,
+        'Using existing Config Recorder',
+      ]
 
-  VPCId:
-    Description: "VPC ID (new or existing)"
-    Value: !If [CreateVPC, !Ref CorpVPC, !Ref ExistingVPCId]
-
-  S3BucketName:
-    Description: "S3 Bucket Name"
-    Value: !Ref CorpS3Bucket
+  S3BucketCleanupFunctionName:
+    Description: 'S3 Bucket Cleanup Lambda Function Name'
+    Value: !Ref S3BucketCleanupFunction
 ```

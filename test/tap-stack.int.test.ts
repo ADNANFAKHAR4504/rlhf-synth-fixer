@@ -444,7 +444,10 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
-      if (outputs.ConfigRecorderName) {
+      if (
+        outputs.ConfigRecorderName &&
+        outputs.ConfigRecorderName !== 'Using existing Config Recorder'
+      ) {
         const command = new DescribeConfigurationRecordersCommand({});
         const response = await configClient.send(command);
 
@@ -454,6 +457,9 @@ describe('TapStack Integration Tests', () => {
         expect(recorder).toBeDefined();
         expect(recorder!.recordingGroup?.allSupported).toBe(true);
         expect(recorder!.recordingGroup?.includeGlobalResourceTypes).toBe(true);
+      } else {
+        // Config Recorder is not created, which is expected when UseExistingConfigRecorder is true
+        console.log('Config Recorder not created - using existing one');
       }
     });
   });
