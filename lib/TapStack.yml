@@ -14,8 +14,7 @@ Parameters:
     Description: 'Environment name'
 
   ExistingVpcId:
-    Type: String
-    Default: 'vpc-12345678'
+    Type: 'AWS::EC2::VPC::Id'
     Description: 'Existing VPC ID where security groups will be created'
 
 Resources:
@@ -83,11 +82,6 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: 'secure-data-access-logs/'
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-secure-data-${Environment}'
@@ -328,6 +322,7 @@ Resources:
       S3KeyPrefix: 'cloudtrail-logs/'
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
+      IsLogging: true
       EnableLogFileValidation: true
       KMSKeyId: !Ref DataEncryptionKey
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
@@ -339,9 +334,6 @@ Resources:
             - Type: 'AWS::S3::Object'
               Values:
                 - !Sub '${SecureDataBucket}/*'
-            - Type: 'AWS::S3::Bucket'
-              Values:
-                - !Ref SecureDataBucket
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-security-audit-${Environment}'

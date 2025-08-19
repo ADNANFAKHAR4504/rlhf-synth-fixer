@@ -1,114 +1,39 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TAP Stack - Secure Task Assignment Platform with comprehensive security controls",
-    "Metadata": {
-        "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [
-                {
-                    "Label": {
-                        "default": "Environment Configuration"
-                    },
-                    "Parameters": [
-                        "EnvironmentSuffix",
-                        "EnableSecurity",
-                        "EnableCloudTrail",
-                        "EnableKMSEncryption"
-                    ]
-                }
-            ]
-        }
-    },
+    "Description": "Secure AWS Infrastructure with IAM, KMS, S3, VPC Security Groups, and CloudTrail",
     "Parameters": {
-        "EnvironmentSuffix": {
+        "ProjectName": {
             "Type": "String",
-            "Default": "dev",
-            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
-            "AllowedPattern": "^[a-zA-Z0-9]+$",
-            "ConstraintDescription": "Must contain only alphanumeric characters"
+            "Default": "myapp",
+            "Description": "Project name for resource naming"
         },
-        "EnableSecurity": {
+        "Environment": {
             "Type": "String",
-            "Default": "true",
+            "Default": "prod",
             "AllowedValues": [
-                "true",
-                "false"
+                "dev",
+                "staging",
+                "prod"
             ],
-            "Description": "Enable comprehensive security features (KMS, IAM, Security Groups)"
+            "Description": "Environment name"
         },
-        "EnableCloudTrail": {
-            "Type": "String",
-            "Default": "true",
-            "AllowedValues": [
-                "true",
-                "false"
-            ],
-            "Description": "Enable CloudTrail audit logging"
-        },
-        "EnableKMSEncryption": {
-            "Type": "String",
-            "Default": "true",
-            "AllowedValues": [
-                "true",
-                "false"
-            ],
-            "Description": "Enable KMS encryption for all resources"
-        }
-    },
-    "Conditions": {
-        "SecurityEnabled": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnableSecurity"
-                },
-                "true"
-            ]
-        },
-        "CloudTrailEnabled": {
-            "Fn::And": [
-                {
-                    "Condition": "SecurityEnabled"
-                },
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "EnableCloudTrail"
-                        },
-                        "true"
-                    ]
-                }
-            ]
-        },
-        "KMSEnabled": {
-            "Fn::And": [
-                {
-                    "Condition": "SecurityEnabled"
-                },
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "EnableKMSEncryption"
-                        },
-                        "true"
-                    ]
-                }
-            ]
+        "ExistingVpcId": {
+            "Type": "AWS::EC2::VPC::Id",
+            "Description": "Existing VPC ID where security groups will be created"
         }
     },
     "Resources": {
-        "TapStackKMSKey": {
+        "DataEncryptionKey": {
             "Type": "AWS::KMS::Key",
-            "Condition": "KMSEnabled",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "Description": {
-                    "Fn::Sub": "TAP-${EnvironmentSuffix}-${AWS::AccountId} - Master encryption key"
+                    "Fn::Sub": "${ProjectName}-data-${Environment} - KMS key for data encryption"
                 },
                 "KeyPolicy": {
                     "Version": "2012-10-17",
                     "Statement": [
                         {
-                            "Sid": "EnableIAMUserPermissions",
+                            "Sid": "Enable IAM User Permissions",
                             "Effect": "Allow",
                             "Principal": {
                                 "AWS": {
@@ -119,131 +44,74 @@
                             "Resource": "*"
                         },
                         {
-                            "Sid": "AllowCloudTrailEncryption",
+                            "Sid": "Allow CloudTrail to encrypt logs",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
                             },
                             "Action": [
                                 "kms:GenerateDataKey*",
-                                "kms:DescribeKey",
-                                "kms:CreateGrant"
+                                "kms:DescribeKey"
                             ],
-                            "Resource": "*",
-                            "Condition": {
-                                "StringEquals": {
-                                    "kms:EncryptionContext:aws:cloudtrail:arn": {
-                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TAP-${EnvironmentSuffix}-audit-trail-${AWS::AccountId}"
-                                    }
-                                }
-                            }
+                            "Resource": "*"
                         },
                         {
-                            "Sid": "AllowS3ServiceAccess",
+                            "Sid": "Allow S3 service to use the key",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "s3.amazonaws.com"
                             },
                             "Action": [
                                 "kms:Decrypt",
-                                "kms:GenerateDataKey*",
-                                "kms:DescribeKey"
-                            ],
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "AllowDynamoDBAccess",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "dynamodb.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:Decrypt",
-                                "kms:DescribeKey",
-                                "kms:Encrypt",
-                                "kms:GenerateDataKey*",
-                                "kms:ReEncrypt*"
+                                "kms:GenerateDataKey"
                             ],
                             "Resource": "*"
                         }
                     ]
                 },
-                "EnableKeyRotation": true,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TAP-${EnvironmentSuffix}-KMS-${AWS::AccountId}"
+                            "Fn::Sub": "${ProjectName}-data-${Environment}"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "Environment"
                         }
-                    },
-                    {
-                        "Key": "Purpose",
-                        "Value": "Data encryption for TAP stack"
-                    },
-                    {
-                        "Key": "Security",
-                        "Value": "High"
                     }
                 ]
             }
         },
-        "TapStackKMSKeyAlias": {
+        "DataEncryptionKeyAlias": {
             "Type": "AWS::KMS::Alias",
-            "Condition": "KMSEnabled",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/tap-${EnvironmentSuffix}-key-${AWS::AccountId}"
+                    "Fn::Sub": "alias/${ProjectName}-data-${Environment}"
                 },
                 "TargetKeyId": {
-                    "Ref": "TapStackKMSKey"
+                    "Ref": "DataEncryptionKey"
                 }
             }
         },
-        "TapStackDataBucket": {
+        "SecureDataBucket": {
             "Type": "AWS::S3::Bucket",
-            "Condition": "SecurityEnabled",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "tap-${EnvironmentSuffix}-data-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${ProjectName}-secure-data-${Environment}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": {
-                                    "Fn::If": [
-                                        "KMSEnabled",
-                                        "aws:kms",
-                                        "AES256"
-                                    ]
-                                },
+                                "SSEAlgorithm": "aws:kms",
                                 "KMSMasterKeyID": {
-                                    "Fn::If": [
-                                        "KMSEnabled",
-                                        {
-                                            "Ref": "TapStackKMSKey"
-                                        },
-                                        {
-                                            "Ref": "AWS::NoValue"
-                                        }
-                                    ]
+                                    "Ref": "DataEncryptionKey"
                                 }
                             },
-                            "BucketKeyEnabled": {
-                                "Fn::If": [
-                                    "KMSEnabled",
-                                    true,
-                                    false
-                                ]
-                            }
+                            "BucketKeyEnabled": true
                         }
                     ]
                 },
@@ -256,13 +124,58 @@
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "AccessLogsBucket"
+                    },
+                    "LogFilePrefix": "secure-data-access-logs/"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-secure-data-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "AccessLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-access-logs-${Environment}-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "DataEncryptionKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
                 "LifecycleConfiguration": {
                     "Rules": [
                         {
-                            "Id": "DataRetentionPolicy",
+                            "Id": "DeleteOldLogs",
                             "Status": "Enabled",
-                            "ExpirationInDays": 365,
-                            "NoncurrentVersionExpirationInDays": 30
+                            "ExpirationInDays": 90
                         }
                     ]
                 },
@@ -270,82 +183,106 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TAP-${EnvironmentSuffix}-Data-${AWS::AccountId}"
+                            "Fn::Sub": "${ProjectName}-access-logs-${Environment}"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Security",
-                        "Value": "High"
-                    },
-                    {
-                        "Key": "Encrypted",
-                        "Value": {
-                            "Fn::If": [
-                                "KMSEnabled",
-                                "KMS",
-                                "AES256"
-                            ]
+                            "Ref": "Environment"
                         }
                     }
                 ]
             }
         },
-        "TapStackLogGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Condition": "CloudTrailEnabled",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Delete",
+        "CloudTrailBucket": {
+            "Type": "AWS::S3::Bucket",
             "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/aws/tap/${EnvironmentSuffix}/audit-logs"
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-cloudtrail-${Environment}-${AWS::AccountId}"
                 },
-                "RetentionInDays": 90,
-                "KmsKeyId": {
-                    "Fn::If": [
-                        "KMSEnabled",
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
                         {
-                            "Fn::GetAtt": [
-                                "TapStackKMSKey",
-                                "Arn"
-                            ]
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "DataEncryptionKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-cloudtrail-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudTrailBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudTrailBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CloudTrailBucket",
+                                    "Arn"
+                                ]
+                            }
                         },
                         {
-                            "Ref": "AWS::NoValue"
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
                         }
                     ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "TAP-${EnvironmentSuffix}-Logs"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Security",
-                        "Value": "High"
-                    }
-                ]
+                }
             }
         },
-        "TapStackServiceRole": {
+        "WebServerRole": {
             "Type": "AWS::IAM::Role",
-            "Condition": "SecurityEnabled",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "TAP-${EnvironmentSuffix}-ServiceRole-${AWS::AccountId}"
+                    "Fn::Sub": "${ProjectName}-web-${Environment}-role"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -353,11 +290,7 @@
                         {
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": [
-                                    "ec2.amazonaws.com",
-                                    "lambda.amazonaws.com",
-                                    "ecs-tasks.amazonaws.com"
-                                ]
+                                "Service": "ec2.amazonaws.com"
                             },
                             "Action": "sts:AssumeRole"
                         }
@@ -368,45 +301,92 @@
                 ],
                 "Policies": [
                     {
-                        "PolicyName": "DynamoDBAccessPolicy",
+                        "PolicyName": "S3ReadOnlyAccess",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "dynamodb:GetItem",
-                                        "dynamodb:PutItem",
-                                        "dynamodb:UpdateItem",
-                                        "dynamodb:DeleteItem",
-                                        "dynamodb:Query",
-                                        "dynamodb:Scan"
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion"
                                     ],
                                     "Resource": {
-                                        "Fn::GetAtt": [
-                                            "TurnAroundPromptTable",
-                                            "Arn"
-                                        ]
+                                        "Fn::Sub": "${SecureDataBucket}/*"
                                     }
                                 },
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "dynamodb:DescribeTable",
-                                        "dynamodb:DescribeStream"
+                                        "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Fn::GetAtt": [
-                                            "TurnAroundPromptTable",
-                                            "Arn"
-                                        ]
+                                        "Ref": "SecureDataBucket"
                                     }
                                 }
                             ]
                         }
                     },
                     {
-                        "PolicyName": "S3AccessPolicy",
+                        "PolicyName": "KMSDecryptAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DataEncryptionKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-web-${Environment}-role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "WebServerInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${ProjectName}-web-${Environment}-profile"
+                },
+                "Roles": [
+                    {
+                        "Ref": "WebServerRole"
+                    }
+                ]
+            }
+        },
+        "DeveloperGroup": {
+            "Type": "AWS::IAM::Group",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-developers-${Environment}"
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "DeveloperS3Access",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -418,15 +398,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::If": [
-                                            "SecurityEnabled",
-                                            {
-                                                "Fn::Sub": "${TapStackDataBucket}/*"
-                                            },
-                                            {
-                                                "Ref": "AWS::NoValue"
-                                            }
-                                        ]
+                                        "Fn::Sub": "${SecureDataBucket}/dev/*"
                                     }
                                 },
                                 {
@@ -435,21 +407,11 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Fn::If": [
-                                            "SecurityEnabled",
-                                            {
-                                                "Ref": "TapStackDataBucket"
-                                            },
-                                            {
-                                                "Ref": "AWS::NoValue"
-                                            }
-                                        ]
+                                        "Ref": "SecureDataBucket"
                                     },
                                     "Condition": {
-                                        "StringEquals": {
-                                            "s3:prefix": {
-                                                "Fn::Sub": "${EnvironmentSuffix}/*"
-                                            }
+                                        "StringLike": {
+                                            "s3:prefix": "dev/*"
                                         }
                                     }
                                 }
@@ -457,91 +419,33 @@
                         }
                     },
                     {
-                        "PolicyName": "KMSAccessPolicy",
+                        "PolicyName": "ReadOnlyCloudTrail",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "kms:Decrypt",
-                                        "kms:DescribeKey",
-                                        "kms:Encrypt",
-                                        "kms:GenerateDataKey*",
-                                        "kms:ReEncrypt*"
+                                        "cloudtrail:LookupEvents",
+                                        "cloudtrail:GetTrailStatus"
                                     ],
-                                    "Resource": {
-                                        "Fn::If": [
-                                            "KMSEnabled",
-                                            {
-                                                "Fn::GetAtt": [
-                                                    "TapStackKMSKey",
-                                                    "Arn"
-                                                ]
-                                            },
-                                            {
-                                                "Ref": "AWS::NoValue"
-                                            }
-                                        ]
-                                    }
+                                    "Resource": "*"
                                 }
                             ]
                         }
                     }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "TAP-${EnvironmentSuffix}-ServiceRole"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Security",
-                        "Value": "High"
-                    }
                 ]
             }
         },
-        "TapStackVPC": {
-            "Type": "AWS::EC2::VPC",
-            "Condition": "SecurityEnabled",
-            "Properties": {
-                "CidrBlock": "10.0.0.0/16",
-                "EnableDnsHostnames": true,
-                "EnableDnsSupport": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "TAP-${EnvironmentSuffix}-VPC-${AWS::AccountId}"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "TapStackSecurityGroup": {
+        "WebServerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
-            "Condition": "SecurityEnabled",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "TAP-${EnvironmentSuffix}-HTTPS-SG-${AWS::AccountId}"
+                    "Fn::Sub": "${ProjectName}-web-${Environment}-sg"
                 },
-                "GroupDescription": "Security group allowing HTTPS traffic only for TAP stack",
+                "GroupDescription": "Security group for web servers - HTTPS traffic only",
                 "VpcId": {
-                    "Ref": "TapStackVPC"
+                    "Ref": "ExistingVpcId"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -549,7 +453,7 @@
                         "FromPort": 443,
                         "ToPort": 443,
                         "CidrIp": "0.0.0.0/0",
-                        "Description": "HTTPS inbound traffic"
+                        "Description": "HTTPS traffic from anywhere"
                     }
                 ],
                 "SecurityGroupEgress": [
@@ -565,147 +469,54 @@
                         "FromPort": 80,
                         "ToPort": 80,
                         "CidrIp": "0.0.0.0/0",
-                        "Description": "HTTP outbound for updates"
+                        "Description": "HTTP outbound for package updates"
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TAP-${EnvironmentSuffix}-HTTPS-SG"
+                            "Fn::Sub": "${ProjectName}-web-${Environment}-sg"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "Environment"
                         }
-                    },
-                    {
-                        "Key": "Security",
-                        "Value": "High"
                     }
                 ]
             }
         },
-        "TapStackCloudTrailBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Condition": "CloudTrailEnabled",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Delete",
+        "S3AccessLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "tap-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}"
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/s3/${ProjectName}-${Environment}"
                 },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": {
-                                    "Fn::If": [
-                                        "KMSEnabled",
-                                        "aws:kms",
-                                        "AES256"
-                                    ]
-                                },
-                                "KMSMasterKeyID": {
-                                    "Fn::If": [
-                                        "KMSEnabled",
-                                        {
-                                            "Ref": "TapStackKMSKey"
-                                        },
-                                        {
-                                            "Ref": "AWS::NoValue"
-                                        }
-                                    ]
-                                }
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "LifecycleConfiguration": {
-                    "Rules": [
-                        {
-                            "Id": "CloudTrailLogRetention",
-                            "Status": "Enabled",
-                            "ExpirationInDays": 365,
-                            "NoncurrentVersionExpirationInDays": 30
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "TAP-${EnvironmentSuffix}-CloudTrail"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Security",
-                        "Value": "High"
-                    }
-                ]
-            }
-        },
-        "TapStackCloudTrailBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Condition": "CloudTrailEnabled",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "TapStackCloudTrailBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSCloudTrailAclCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::Sub": "${TapStackCloudTrailBucket}"
-                            }
-                        },
-                        {
-                            "Sid": "AWSCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${TapStackCloudTrailBucket}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        }
-                    ]
+                "RetentionInDays": 30,
+                "KmsKeyId": {
+                    "Ref": "DataEncryptionKey"
                 }
             }
         },
-        "TapStackCloudTrailRole": {
+        "CloudTrailLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/cloudtrail/${ProjectName}-${Environment}"
+                },
+                "RetentionInDays": 90,
+                "KmsKeyId": {
+                    "Ref": "DataEncryptionKey"
+                }
+            }
+        },
+        "CloudTrailRole": {
             "Type": "AWS::IAM::Role",
-            "Condition": "CloudTrailEnabled",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "TAP-${EnvironmentSuffix}-CloudTrailRole-${AWS::AccountId}"
+                    "Fn::Sub": "${ProjectName}-cloudtrail-${Environment}-role"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -733,7 +544,7 @@
                                     ],
                                     "Resource": {
                                         "Fn::GetAtt": [
-                                            "TapStackLogGroup",
+                                            "CloudTrailLogGroup",
                                             "Arn"
                                         ]
                                     }
@@ -744,16 +555,15 @@
                 ]
             }
         },
-        "TapStackCloudTrail": {
+        "SecurityAuditTrail": {
             "Type": "AWS::CloudTrail::Trail",
-            "Condition": "CloudTrailEnabled",
-            "DependsOn": "TapStackCloudTrailBucketPolicy",
+            "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "TAP-${EnvironmentSuffix}-audit-trail-${AWS::AccountId}"
+                    "Fn::Sub": "${ProjectName}-security-audit-${Environment}"
                 },
                 "S3BucketName": {
-                    "Ref": "TapStackCloudTrailBucket"
+                    "Ref": "CloudTrailBucket"
                 },
                 "S3KeyPrefix": "cloudtrail-logs/",
                 "IncludeGlobalServiceEvents": true,
@@ -761,25 +571,17 @@
                 "IsLogging": true,
                 "EnableLogFileValidation": true,
                 "KMSKeyId": {
-                    "Fn::If": [
-                        "KMSEnabled",
-                        {
-                            "Ref": "TapStackKMSKey"
-                        },
-                        {
-                            "Ref": "AWS::NoValue"
-                        }
-                    ]
+                    "Ref": "DataEncryptionKey"
                 },
                 "CloudWatchLogsLogGroupArn": {
                     "Fn::GetAtt": [
-                        "TapStackLogGroup",
+                        "CloudTrailLogGroup",
                         "Arn"
                     ]
                 },
                 "CloudWatchLogsRoleArn": {
                     "Fn::GetAtt": [
-                        "TapStackCloudTrailRole",
+                        "CloudTrailRole",
                         "Arn"
                     ]
                 },
@@ -789,29 +591,10 @@
                         "IncludeManagementEvents": true,
                         "DataResources": [
                             {
-                                "Type": "AWS::DynamoDB::Table",
-                                "Values": [
-                                    {
-                                        "Fn::GetAtt": [
-                                            "TurnAroundPromptTable",
-                                            "Arn"
-                                        ]
-                                    }
-                                ]
-                            },
-                            {
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::If": [
-                                            "SecurityEnabled",
-                                            {
-                                                "Fn::Sub": "${TapStackDataBucket}/*"
-                                            },
-                                            {
-                                                "Ref": "AWS::NoValue"
-                                            }
-                                        ]
+                                        "Fn::Sub": "${SecureDataBucket}/*"
                                     }
                                 ]
                             }
@@ -822,130 +605,13 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "TAP-${EnvironmentSuffix}-audit-trail"
+                            "Fn::Sub": "${ProjectName}-security-audit-${Environment}"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Security",
-                        "Value": "Critical"
-                    }
-                ]
-            }
-        },
-        "TurnAroundPromptTable": {
-            "Type": "AWS::DynamoDB::Table",
-            "DeletionPolicy": "Delete",
-            "UpdateReplacePolicy": "Delete",
-            "Properties": {
-                "TableName": {
-                    "Fn::Sub": "TAP-${EnvironmentSuffix}-TurnAroundPrompts-${AWS::AccountId}"
-                },
-                "AttributeDefinitions": [
-                    {
-                        "AttributeName": "id",
-                        "AttributeType": "S"
-                    },
-                    {
-                        "AttributeName": "userId",
-                        "AttributeType": "S"
-                    },
-                    {
-                        "AttributeName": "timestamp",
-                        "AttributeType": "N"
-                    }
-                ],
-                "KeySchema": [
-                    {
-                        "AttributeName": "id",
-                        "KeyType": "HASH"
-                    }
-                ],
-                "GlobalSecondaryIndexes": [
-                    {
-                        "IndexName": "UserIndex",
-                        "KeySchema": [
-                            {
-                                "AttributeName": "userId",
-                                "KeyType": "HASH"
-                            },
-                            {
-                                "AttributeName": "timestamp",
-                                "KeyType": "RANGE"
-                            }
-                        ],
-                        "Projection": {
-                            "ProjectionType": "ALL"
-                        }
-                    }
-                ],
-                "BillingMode": "PAY_PER_REQUEST",
-                "DeletionProtectionEnabled": false,
-                "StreamSpecification": {
-                    "StreamViewType": "NEW_AND_OLD_IMAGES"
-                },
-                "SSESpecification": {
-                    "SSEEnabled": {
-                        "Fn::If": [
-                            "KMSEnabled",
-                            true,
-                            false
-                        ]
-                    },
-                    "SSEType": {
-                        "Fn::If": [
-                            "KMSEnabled",
-                            "KMS",
-                            {
-                                "Ref": "AWS::NoValue"
-                            }
-                        ]
-                    },
-                    "KMSMasterKeyId": {
-                        "Fn::If": [
-                            "KMSEnabled",
-                            {
-                                "Ref": "TapStackKMSKey"
-                            },
-                            {
-                                "Ref": "AWS::NoValue"
-                            }
-                        ]
-                    }
-                },
-                "PointInTimeRecoverySpecification": {
-                    "PointInTimeRecoveryEnabled": true
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "TAP-${EnvironmentSuffix}-TurnAroundPrompts"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Security",
-                        "Value": "High"
-                    },
-                    {
-                        "Key": "Encrypted",
-                        "Value": {
-                            "Fn::If": [
-                                "KMSEnabled",
-                                "KMS",
-                                "Default"
-                            ]
+                            "Ref": "Environment"
                         }
                     }
                 ]
@@ -953,72 +619,10 @@
         }
     },
     "Outputs": {
-        "StackName": {
-            "Description": "Name of this CloudFormation stack",
-            "Value": {
-                "Ref": "AWS::StackName"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-StackName"
-                }
-            }
-        },
-        "EnvironmentSuffix": {
-            "Description": "Environment suffix used for this deployment",
-            "Value": {
-                "Ref": "EnvironmentSuffix"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
-                }
-            }
-        },
-        "TurnAroundPromptTableName": {
-            "Description": "Name of the DynamoDB table",
-            "Value": {
-                "Ref": "TurnAroundPromptTable"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
-                }
-            }
-        },
-        "TurnAroundPromptTableArn": {
-            "Description": "ARN of the DynamoDB table",
-            "Value": {
-                "Fn::GetAtt": [
-                    "TurnAroundPromptTable",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
-                }
-            }
-        },
-        "TurnAroundPromptTableStreamArn": {
-            "Description": "Stream ARN of the DynamoDB table",
-            "Value": {
-                "Fn::GetAtt": [
-                    "TurnAroundPromptTable",
-                    "StreamArn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableStreamArn"
-                }
-            }
-        },
         "KMSKeyId": {
-            "Condition": "KMSEnabled",
-            "Description": "KMS Key ID for encryption",
+            "Description": "KMS Key ID for data encryption",
             "Value": {
-                "Ref": "TapStackKMSKey"
+                "Ref": "DataEncryptionKey"
             },
             "Export": {
                 "Name": {
@@ -1027,11 +631,10 @@
             }
         },
         "KMSKeyArn": {
-            "Condition": "KMSEnabled",
-            "Description": "KMS Key ARN for encryption",
+            "Description": "KMS Key ARN for data encryption",
             "Value": {
                 "Fn::GetAtt": [
-                    "TapStackKMSKey",
+                    "DataEncryptionKey",
                     "Arn"
                 ]
             },
@@ -1041,165 +644,53 @@
                 }
             }
         },
-        "KMSKeyAlias": {
-            "Condition": "KMSEnabled",
-            "Description": "KMS Key Alias",
+        "SecureDataBucketName": {
+            "Description": "Name of the secure S3 bucket",
             "Value": {
-                "Ref": "TapStackKMSKeyAlias"
+                "Ref": "SecureDataBucket"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-KMSKeyAlias"
+                    "Fn::Sub": "${AWS::StackName}-SecureDataBucket"
                 }
             }
         },
-        "ServiceRoleArn": {
-            "Condition": "SecurityEnabled",
-            "Description": "IAM Service Role ARN for applications",
+        "WebServerSecurityGroupId": {
+            "Description": "Security Group ID for web servers",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebServerSG"
+                }
+            }
+        },
+        "WebServerRoleArn": {
+            "Description": "IAM Role ARN for web servers",
             "Value": {
                 "Fn::GetAtt": [
-                    "TapStackServiceRole",
+                    "WebServerRole",
                     "Arn"
                 ]
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-ServiceRoleArn"
-                }
-            }
-        },
-        "SecurityGroupId": {
-            "Condition": "SecurityEnabled",
-            "Description": "Security Group ID for HTTPS access",
-            "Value": {
-                "Ref": "TapStackSecurityGroup"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
-                }
-            }
-        },
-        "VPCId": {
-            "Condition": "SecurityEnabled",
-            "Description": "VPC ID for secure networking",
-            "Value": {
-                "Ref": "TapStackVPC"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-VPCId"
-                }
-            }
-        },
-        "DataBucketName": {
-            "Condition": "SecurityEnabled",
-            "Description": "Name of the secure S3 data bucket",
-            "Value": {
-                "Ref": "TapStackDataBucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-DataBucketName"
-                }
-            }
-        },
-        "DataBucketArn": {
-            "Condition": "SecurityEnabled",
-            "Description": "ARN of the secure S3 data bucket",
-            "Value": {
-                "Fn::Sub": "${TapStackDataBucket}"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-DataBucketArn"
+                    "Fn::Sub": "${AWS::StackName}-WebServerRole"
                 }
             }
         },
         "CloudTrailArn": {
-            "Condition": "CloudTrailEnabled",
             "Description": "CloudTrail ARN for audit logging",
             "Value": {
                 "Fn::GetAtt": [
-                    "TapStackCloudTrail",
+                    "SecurityAuditTrail",
                     "Arn"
                 ]
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-CloudTrailArn"
-                }
-            }
-        },
-        "CloudTrailBucketName": {
-            "Condition": "CloudTrailEnabled",
-            "Description": "CloudTrail S3 bucket name",
-            "Value": {
-                "Ref": "TapStackCloudTrailBucket"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-CloudTrailBucketName"
-                }
-            }
-        },
-        "LogGroupName": {
-            "Condition": "CloudTrailEnabled",
-            "Description": "CloudWatch Log Group name for audit logs",
-            "Value": {
-                "Ref": "TapStackLogGroup"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-LogGroupName"
-                }
-            }
-        },
-        "LogGroupArn": {
-            "Condition": "CloudTrailEnabled",
-            "Description": "CloudWatch Log Group ARN for audit logs",
-            "Value": {
-                "Fn::GetAtt": [
-                    "TapStackLogGroup",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-LogGroupArn"
-                }
-            }
-        },
-        "SecurityEnabled": {
-            "Description": "Whether security features are enabled",
-            "Value": {
-                "Ref": "EnableSecurity"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-SecurityEnabled"
-                }
-            }
-        },
-        "EncryptionEnabled": {
-            "Description": "Whether KMS encryption is enabled",
-            "Value": {
-                "Ref": "EnableKMSEncryption"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-EncryptionEnabled"
-                }
-            }
-        },
-        "AuditingEnabled": {
-            "Description": "Whether CloudTrail auditing is enabled",
-            "Value": {
-                "Ref": "EnableCloudTrail"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-AuditingEnabled"
+                    "Fn::Sub": "${AWS::StackName}-CloudTrail"
                 }
             }
         }
