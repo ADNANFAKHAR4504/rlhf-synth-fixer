@@ -30,7 +30,7 @@ Required Code Structure:
 
 Organize the entire output into the following two files:
 
-1. lib/modules.ts
+lib/modules.ts
 
 This file must contain all the reusable, modular components for the infrastructure.
 
@@ -40,7 +40,7 @@ Create separate, well-defined classes for key resources like Security Groups, S3
 
 These modules should be designed to accept configuration parameters through their constructors to ensure they are reusable.
 
-2. lib/tap-stack.ts
+lib/tap-stack.ts
 
 This file will define the main stack class, which extends TerraformStack.
 

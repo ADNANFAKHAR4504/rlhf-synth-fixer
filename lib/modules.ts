@@ -652,18 +652,6 @@ export class CloudTrailModule extends Construct {
       includeGlobalServiceEvents: config.includeGlobalServiceEvents,
       isMultiRegionTrail: config.isMultiRegionTrail,
       enableLogging: true,
-      eventSelector: [
-        {
-          readWriteType: 'All',
-          includeManagementEvents: true,
-          dataResource: [
-            {
-              type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/*'],
-            },
-          ],
-        },
-      ],
       tags: {
         Name: config.name,
         Environment: 'production',
