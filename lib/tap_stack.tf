@@ -1,3 +1,4 @@
+```hcl
 ############################################
 # tap_stack.tf — Prod baseline, single file
 ############################################
@@ -17,7 +18,7 @@ terraform {
 
   # STEP 2 (after first apply): Uncomment and `terraform init -migrate-state`
   # to enable remote state using the bucket/key created below.
-  #
+  # Ensure the bucket name is globally unique by replacing <your-unique-suffix>.
   # backend "s3" {
   #   bucket         = "prod-tfstate-<your-unique-suffix>"
   #   key            = "global/terraform.tfstate"
@@ -51,7 +52,7 @@ variable "name_prefix" {
 variable "allowed_ssh_cidr" {
   description = "CIDR allowed to SSH into bastion (use /32 for a single IP)."
   type        = string
-  default     = "203.0.113.0/32" # replace with your IP
+  default     = "203.0.113.0/32" # Replace with your IP or pipeline CIDR
   validation {
     condition     = var.allowed_ssh_cidr != "0.0.0.0/0"
     error_message = "Do not allow 0.0.0.0/0 for SSH."
@@ -80,12 +81,6 @@ variable "availability_zone_count" {
   }
 }
 
-variable "unique_suffix" {
-  description = "Unique suffix for globally unique resource names"
-  type        = string
-  default     = "12345" # Change this to something unique
-}
-
 ############################
 # Locals
 ############################
@@ -102,9 +97,9 @@ locals {
   private1_cidr   = "10.0.2.0/24"
   private2_cidr   = "10.0.3.0/24"
 
-  # Bucket names must be globally unique. Add a suffix if desired.
-  data_bucket_name    = "${var.name_prefix}-data-bucket-${var.unique_suffix}"
-  tfstate_bucket_name = "prod-tfstate-${var.unique_suffix}"
+  # Bucket names must be globally unique
+  data_bucket_name    = "${var.name_prefix}-data-bucket"
+  tfstate_bucket_name = "${var.name_prefix}-tfstate"
 }
 
 ############################
@@ -119,12 +114,47 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Check for existing KMS aliases
+data "aws_kms_alias" "existing_app" {
+  count = 1
+  name  = "alias/${var.name_prefix}-app-kms"
+}
+
+data "aws_kms_alias" "existing_tfstate" {
+  count = 1
+  name  = "alias/${var.name_prefix}-tfstate-kms"
+}
+
+# Check for existing S3 buckets
+data "aws_s3_bucket" "existing_data" {
+  count  = 1
+  bucket = local.data_bucket_name
+}
+
+data "aws_s3_bucket" "existing_tfstate" {
+  count  = 1
+  bucket = local.tfstate_bucket_name
+}
+
+# Check for existing IAM role
+data "aws_iam_role" "existing_ec2_role" {
+  count = 1
+  name  = "${var.name_prefix}-ec2-role"
+}
+
+# Check for existing DynamoDB table
+data "aws_dynamodb_table" "existing_tf_locks" {
+  count = 1
+  name  = "${var.name_prefix}-tf-locks"
+}
+
 ############################
 # KMS Keys
 ############################
 
 # General KMS key for application data (S3, EBS)
 resource "aws_kms_key" "app" {
+  count                   = length(data.aws_kms_alias.existing_app) == 0 ? 1 : 0
   description             = "KMS key for ${var.name_prefix} app data"
   deletion_window_in_days = 10
   enable_key_rotation     = true
@@ -132,12 +162,14 @@ resource "aws_kms_key" "app" {
 }
 
 resource "aws_kms_alias" "app" {
-  name          = "alias/${var.name_prefix}-app-kms-${var.unique_suffix}"
-  target_key_id = aws_kms_key.app.key_id
+  count         = length(data.aws_kms_alias.existing_app) == 0 ? 1 : 0
+  name          = "alias/${var.name_prefix}-app-kms"
+  target_key_id = aws_kms_key.app[0].key_id
 }
 
 # Dedicated KMS key for Terraform state bucket
 resource "aws_kms_key" "tfstate" {
+  count                   = length(data.aws_kms_alias.existing_tfstate) == 0 ? 1 : 0
   description             = "KMS key for Terraform state encryption"
   deletion_window_in_days = 10
   enable_key_rotation     = true
@@ -145,8 +177,9 @@ resource "aws_kms_key" "tfstate" {
 }
 
 resource "aws_kms_alias" "tfstate" {
-  name          = "alias/prod-tfstate-kms-${var.unique_suffix}"
-  target_key_id = aws_kms_key.tfstate.key_id
+  count         = length(data.aws_kms_alias.existing_tfstate) == 0 ? 1 : 0
+  name          = "alias/${var.name_prefix}-tfstate-kms"
+  target_key_id = aws_kms_key.tfstate[0].key_id
 }
 
 ############################
@@ -264,7 +297,7 @@ resource "aws_route_table_association" "private_b_assoc" {
 
 # Bastion SG: SSH from a specific IP
 resource "aws_security_group" "bastion_sg" {
-  name        = "${var.name_prefix}-bastion-sg-${var.unique_suffix}"
+  name        = "${var.name_prefix}-bastion-sg"
   description = "Allow SSH from allowed CIDR"
   vpc_id      = aws_vpc.main.id
 
@@ -284,11 +317,15 @@ resource "aws_security_group" "bastion_sg" {
   }
 
   tags = merge(local.tags, { Name = "${var.name_prefix}-bastion-sg" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Private EC2 SG: SSH only from bastion SG
 resource "aws_security_group" "private_ec2_sg" {
-  name        = "${var.name_prefix}-private-ec2-sg-${var.unique_suffix}"
+  name        = "${var.name_prefix}-private-ec2-sg"
   description = "Restrict SSH to bastion; allow egress"
   vpc_id      = aws_vpc.main.id
 
@@ -308,6 +345,10 @@ resource "aws_security_group" "private_ec2_sg" {
   }
 
   tags = merge(local.tags, { Name = "${var.name_prefix}-private-ec2-sg" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 ############################
@@ -320,9 +361,13 @@ resource "tls_private_key" "ssh" {
 }
 
 resource "aws_key_pair" "main" {
-  key_name   = "${var.name_prefix}-key-${var.unique_suffix}" # Unique name
+  key_name   = "${var.name_prefix}-key"
   public_key = tls_private_key.ssh.public_key_openssh
   tags       = merge(local.tags, { Name = "${var.name_prefix}-key" })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 ############################
@@ -330,30 +375,31 @@ resource "aws_key_pair" "main" {
 ############################
 
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.name_prefix}-ec2-role-${var.unique_suffix}" # Unique name
+  count = length(data.aws_iam_role.existing_ec2_role) == 0 ? 1 : 0
+  name  = "${var.name_prefix}-ec2-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "ec2.amazonaws.com" },
-      Action   = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = local.tags
 }
 
 resource "aws_iam_policy" "s3_access" {
-  name = "${var.name_prefix}-s3-access-${var.unique_suffix}" # Unique name
+  name = "${var.name_prefix}-s3-access"
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid      = "S3AccessBucketObjects",
-        Effect   = "Allow",
-        Action   = ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+        Sid    = "S3AccessBucketObjects",
+        Effect = "Allow",
+        Action = ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
         Resource = [
-          aws_s3_bucket.data.arn,
-          "${aws_s3_bucket.data.arn}/*"
+          length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].arn : aws_s3_bucket.data[0].arn,
+          "${length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].arn : aws_s3_bucket.data[0].arn}/*"
         ]
       }
     ]
@@ -362,13 +408,13 @@ resource "aws_iam_policy" "s3_access" {
 }
 
 resource "aws_iam_role_policy_attachment" "attach_s3" {
-  role       = aws_iam_role.ec2_role.name
+  role       = length(data.aws_iam_role.existing_ec2_role) > 0 ? data.aws_iam_role.existing_ec2_role[0].name : aws_iam_role.ec2_role[0].name
   policy_arn = aws_iam_policy.s3_access.arn
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.name_prefix}-ec2-profile-${var.unique_suffix}" # Unique name
-  role = aws_iam_role.ec2_role.name
+  name = "${var.name_prefix}-ec2-profile"
+  role = length(data.aws_iam_role.existing_ec2_role) > 0 ? data.aws_iam_role.existing_ec2_role[0].name : aws_iam_role.ec2_role[0].name
   tags = local.tags
 }
 
@@ -378,22 +424,23 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # Application data bucket with versioning + KMS
 resource "aws_s3_bucket" "data" {
+  count  = length(data.aws_s3_bucket.existing_data) == 0 ? 1 : 0
   bucket = local.data_bucket_name
   tags   = merge(local.tags, { Name = "${var.name_prefix}-data-bucket" })
 }
 
 resource "aws_s3_bucket_versioning" "data" {
-  bucket = aws_s3_bucket.data.id
+  bucket = length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].id : aws_s3_bucket.data[0].id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
-  bucket = aws_s3_bucket.data.id
+  bucket = length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].id : aws_s3_bucket.data[0].id
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.app.arn
+      kms_master_key_id = length(data.aws_kms_alias.existing_app) > 0 ? data.aws_kms_alias.existing_app[0].target_key_arn : aws_kms_key.app[0].arn
       sse_algorithm     = "aws:kms"
     }
     bucket_key_enabled = true
@@ -401,7 +448,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
 }
 
 resource "aws_s3_bucket_public_access_block" "data" {
-  bucket                  = aws_s3_bucket.data.id
+  bucket                  = length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].id : aws_s3_bucket.data[0].id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -409,31 +456,29 @@ resource "aws_s3_bucket_public_access_block" "data" {
 }
 
 resource "aws_s3_bucket_policy" "data" {
-  bucket = aws_s3_bucket.data.id
+  bucket = length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].id : aws_s3_bucket.data[0].id
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      # Enforce TLS
       {
-        Sid:    "DenyInsecureTransport",
-        Effect: "Deny",
-        Principal: "*",
-        Action: "s3:*",
-        Resource: [
-          aws_s3_bucket.data.arn,
-          "${aws_s3_bucket.data.arn}/*"
+        Sid       = "DenyInsecureTransport",
+        Effect    = "Deny",
+        Principal = "*",
+        Action    = "s3:*",
+        Resource = [
+          length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].arn : aws_s3_bucket.data[0].arn,
+          "${length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].arn : aws_s3_bucket.data[0].arn}/*"
         ],
-        Condition: { Bool: { "aws:SecureTransport": "false" } }
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
       },
-      # Enforce KMS
       {
-        Sid: "DenyUnEncryptedObjectUploads",
-        Effect: "Deny",
-        Principal: "*",
-        Action: "s3:PutObject",
-        Resource: "${aws_s3_bucket.data.arn}/*",
-        Condition: {
-          StringNotEquals: { "s3:x-amz-server-side-encryption": "aws:kms" }
+        Sid       = "DenyUnEncryptedObjectUploads",
+        Effect    = "Deny",
+        Principal = "*",
+        Action    = "s3:PutObject",
+        Resource  = "${length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].arn : aws_s3_bucket.data[0].arn}/*",
+        Condition = {
+          StringNotEquals = { "s3:x-amz-server-side-encryption" = "aws:kms" }
         }
       }
     ]
@@ -442,22 +487,23 @@ resource "aws_s3_bucket_policy" "data" {
 
 # Terraform state bucket with versioning + KMS
 resource "aws_s3_bucket" "tfstate" {
+  count  = length(data.aws_s3_bucket.existing_tfstate) == 0 ? 1 : 0
   bucket = local.tfstate_bucket_name
   tags   = merge(local.tags, { Name = "tfstate-bucket" })
 }
 
 resource "aws_s3_bucket_versioning" "tfstate" {
-  bucket = aws_s3_bucket.tfstate.id
+  bucket = length(data.aws_s3_bucket.existing_tfstate) > 0 ? data.aws_s3_bucket.existing_tfstate[0].id : aws_s3_bucket.tfstate[0].id
   versioning_configuration {
     status = "Enabled"
   }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "tfstate" {
-  bucket = aws_s3_bucket.tfstate.id
+  bucket = length(data.aws_s3_bucket.existing_tfstate) > 0 ? data.aws_s3_bucket.existing_tfstate[0].id : aws_s3_bucket.tfstate[0].id
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.tfstate.arn
+      kms_master_key_id = length(data.aws_kms_alias.existing_tfstate) > 0 ? data.aws_kms_alias.existing_tfstate[0].target_key_arn : aws_kms_key.tfstate[0].arn
       sse_algorithm     = "aws:kms"
     }
     bucket_key_enabled = true
@@ -465,7 +511,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "tfstate" {
 }
 
 resource "aws_s3_bucket_public_access_block" "tfstate" {
-  bucket                  = aws_s3_bucket.tfstate.id
+  bucket                  = length(data.aws_s3_bucket.existing_tfstate) > 0 ? data.aws_s3_bucket.existing_tfstate[0].id : aws_s3_bucket.tfstate[0].id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -473,20 +519,20 @@ resource "aws_s3_bucket_public_access_block" "tfstate" {
 }
 
 resource "aws_s3_bucket_policy" "tfstate" {
-  bucket = aws_s3_bucket.tfstate.id
+  bucket = length(data.aws_s3_bucket.existing_tfstate) > 0 ? data.aws_s3_bucket.existing_tfstate[0].id : aws_s3_bucket.tfstate[0].id
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid: "DenyInsecureTransport",
-        Effect: "Deny",
-        Principal: "*",
-        Action: "s3:*",
-        Resource: [
-          aws_s3_bucket.tfstate.arn,
-          "${aws_s3_bucket.tfstate.arn}/*"
+        Sid       = "DenyInsecureTransport",
+        Effect    = "Deny",
+        Principal = "*",
+        Action    = "s3:*",
+        Resource = [
+          length(data.aws_s3_bucket.existing_tfstate) > 0 ? data.aws_s3_bucket.existing_tfstate[0].arn : aws_s3_bucket.tfstate[0].arn,
+          "${length(data.aws_s3_bucket.existing_tfstate) > 0 ? data.aws_s3_bucket.existing_tfstate[0].arn : aws_s3_bucket.tfstate[0].arn}/*"
         ],
-        Condition: { Bool: { "aws:SecureTransport": "false" } }
+        Condition = { Bool = { "aws:SecureTransport" = "false" } }
       }
     ]
   })
@@ -494,7 +540,8 @@ resource "aws_s3_bucket_policy" "tfstate" {
 
 # DynamoDB table for state locking (best practice)
 resource "aws_dynamodb_table" "tf_locks" {
-  name         = "prod-tf-locks-${var.unique_suffix}" # Unique name
+  count        = length(data.aws_dynamodb_table.existing_tf_locks) == 0 ? 1 : 0
+  name         = "${var.name_prefix}-tf-locks"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -503,7 +550,7 @@ resource "aws_dynamodb_table" "tf_locks" {
     type = "S"
   }
 
-  tags = merge(local.tags, { Name = "prod-tf-locks" })
+  tags = merge(local.tags, { Name = "${var.name_prefix}-tf-locks" })
 }
 
 ############################
@@ -525,13 +572,13 @@ resource "aws_instance" "bastion" {
   instance_type               = var.instance_type_bastion
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
-  key_name                    = aws_key_pair.main.key_name # Use the new unique key
+  key_name                    = aws_key_pair.main.key_name
   associate_public_ip_address = true
-  monitoring                  = true # Detailed monitoring
+  monitoring                  = true
 
   root_block_device {
     encrypted   = true
-    kms_key_id  = aws_kms_key.app.arn
+    kms_key_id  = length(data.aws_kms_alias.existing_app) > 0 ? data.aws_kms_alias.existing_app[0].target_key_arn : aws_kms_key.app[0].arn
     volume_type = "gp3"
   }
 
@@ -547,18 +594,17 @@ resource "aws_instance" "private_ec2" {
   instance_type          = var.instance_type_private
   subnet_id              = aws_subnet.private_a.id
   vpc_security_group_ids = [aws_security_group.private_ec2_sg.id]
-  key_name               = aws_key_pair.main.key_name # Use the new unique key
+  key_name               = aws_key_pair.main.key_name
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
   associate_public_ip_address = false
-  monitoring                  = true # Detailed monitoring
+  monitoring                  = true
 
   root_block_device {
     encrypted   = true
-    kms_key_id  = aws_kms_key.app.arn
+    kms_key_id  = length(data.aws_kms_alias.existing_app) > 0 ? data.aws_kms_alias.existing_app[0].target_key_arn : aws_kms_key.app[0].arn
     volume_type = "gp3"
   }
 
-  # Optional: small user_data to harden SSH
   user_data = <<-EOF
               #!/bin/bash
               set -eux
@@ -568,7 +614,6 @@ resource "aws_instance" "private_ec2" {
 
   tags = merge(local.tags, { Name = "${var.name_prefix}-private-ec2" })
 
-  # Sanity preconditions
   lifecycle {
     precondition {
       condition     = !can(regex("\\.\\d+/0$", var.allowed_ssh_cidr))
@@ -612,22 +657,22 @@ output "private_instance_id" {
 }
 
 output "data_bucket_name" {
-  value       = aws_s3_bucket.data.bucket
+  value       = length(data.aws_s3_bucket.existing_data) > 0 ? data.aws_s3_bucket.existing_data[0].bucket : aws_s3_bucket.data[0].bucket
   description = "S3 data bucket with versioning + KMS"
 }
 
 output "tfstate_bucket_name" {
-  value       = aws_s3_bucket.tfstate.bucket
+  value       = length(data.aws_s3_bucket.existing_tfstate) > 0 ? data.aws_s3_bucket.existing_tfstate[0].bucket : aws_s3_bucket.tfstate[0].bucket
   description = "S3 bucket to be used for Terraform remote state"
 }
 
 output "kms_app_key_arn" {
-  value       = aws_kms_key.app.arn
+  value       = length(data.aws_kms_alias.existing_app) > 0 ? data.aws_kms_alias.existing_app[0].target_key_arn : aws_kms_key.app[0].arn
   description = "KMS key for app data (S3, EBS)"
 }
 
 output "kms_tfstate_key_arn" {
-  value       = aws_kms_key.tfstate.arn
+  value       = length(data.aws_kms_alias.existing_tfstate) > 0 ? data.aws_kms_alias.existing_tfstate[0].target_key_arn : aws_kms_key.tfstate[0].arn
   description = "KMS key for Terraform state"
 }
 
@@ -636,3 +681,4 @@ output "ssh_private_key" {
   description = "Private key for SSH access (save this securely)"
   sensitive   = true
 }
+```
