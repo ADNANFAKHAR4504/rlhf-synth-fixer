@@ -1,65 +1,88 @@
-
-
-Hey team, I need help creating a production-ready AWS infrastructure in a single Terraform file called **`tap_stack.tf`**.
-
-We already have `provider.tf` set up with AWS provider and backend configuration, so **do not repeat or duplicate backend config in `tap_stack.tf`**. Everything else (variables, resources, outputs) should live inside `tap_stack.tf`.
-
-## What We’re Building
-
-We need a secure VPC stack in AWS with the following components:
-
-* **VPC**: /16 (default `10.0.0.0/16`)
-* **Subnets**: 1 public subnet and 2 private subnets in different AZs
-* **Networking**: Internet Gateway, NAT Gateway with Elastic IP
-* **Bastion Host**: In the public subnet, SSH restricted by a **variable** `bastion_allowed_cidr`
-* **App Server**: In a private subnet, reachable only via the bastion
-* **S3 Bucket**: Secure bucket with versioning, KMS encryption, and blocked public access
-* **KMS Key**: Customer-managed key with rotation enabled
-* **IAM Roles**: Minimal permissions, attached only where needed
-* **Security Groups**: No dynamic IPs — must rely on variables like `bastion_allowed_cidr`
-* **Monitoring**: Detailed monitoring enabled on EC2 instances
-
-## Important Constraints
-
-1. Everything must go in **`tap_stack.tf`** (variables, locals, resources, outputs).
-2. **All variables must be declared in this file** — including `aws_region`, `vpc_cidr`, subnets, instance types, and especially `bastion_allowed_cidr`.
-3. Do not use external modules or import existing resources — build everything new.
-4. Do not add backend configuration — it already exists in `provider.tf`.
-5. Use modern Terraform practices: version constraints, least-privilege IAM, tagging.
-6. Naming convention: `prod-<resource>-<purpose>` (e.g., `prod-bastion-host`).
-7. Tag everything with `Environment=Prod` plus other useful tags.
-
-## Security Must-Haves
-
-* Bastion host restricted by `bastion_allowed_cidr` (must be explicitly declared).
-* Private EC2 accessible only from the bastion host.
-* S3 bucket fully locked down (versioning, KMS, block public access).
-* KMS CMK with rotation enabled.
-* Minimal IAM roles.
-* Detailed monitoring enabled.
-
-## Variables (must be declared in the file)
-
-* `aws_region` = "us-east-1"
-* `vpc_cidr` = "10.0.0.0/16"
-* `public_subnet` = "10.0.1.0/24"
-* `private_subnets` = \["10.0.2.0/24", "10.0.3.0/24"]
-* `bastion_allowed_cidr` = "" (required — no default 0.0.0.0/0)
-* `bastion_instance_type` = "t3.micro"
-* `app_instance_type` = "t3.small"
-
-## Deliverable
-
-* A single `tap_stack.tf` containing all variables, resources, and outputs.
-* Clear comments explaining non-trivial parts (like security groups, KMS).
-* Short usage instructions at the top (`terraform init`, `terraform plan`, `terraform apply`).
-* Must pass `terraform fmt` and `terraform validate`.
-* Terraform plan should show:
-
-  * VPC + networking
-  * Bastion + app servers
-  * S3 bucket with KMS and versioning
-  * IAM roles + policies
-  * Security groups with locked-down rules
-  * Monitoring and tagging applied everywhere
-
+You are an expert Terraform engineer. Generate **production-grade Terraform for AWS** that meets the spec below. **Return ONLY code files** (no extra prose):
+1. `tap_stack.tf` (everything in one file)
+2. `tests/terraform.int.test.ts` (offline output checks)
+---
+### Context
+* `provider.tf` already exists and configures the AWS provider + optional S3 backend. It **reads `var.aws_region`**. **Do not** redefine provider/backends in `tap_stack.tf`.
+* Region: **us-east-1 (N. Virginia)**. Declare `variable "aws_region"` in `tap_stack.tf` with default `"us-east-1"` so `provider.tf` can consume it.
+* **One-file approach:** Put **all variables, locals, data sources, resources, IAM policies, and outputs** in `tap_stack.tf`. **No external modules**.
+* Naming: `env-resource-type` (e.g., `prod-web-server`). Use `locals { env = "prod"; name_prefix = local.env }`.
+* Tags: Every resource must include `Environment = "Prod"` and a common set via `local.common_tags` (include `Name` and `Owner`).
+* Best practices: explicit CIDRs, least-privilege IAM, S3 block public access, enforce TLS and SSE-KMS, detailed EC2 monitoring.
+---
+### Required Infrastructure
+**1) Network (VPC & Routing)**
+* VPC CIDR: `10.0.0.0/16`
+* Subnets:
+  * **1 public**: `10.0.0.0/24`
+  * **2 private**: `10.0.1.0/24`, `10.0.2.0/24` (distinct AZs via `data.aws_availability_zones`)
+* IGW attached to VPC.
+* **NAT Gateway** in the **public** subnet with an Elastic IP.
+* Route tables:
+  * Public RT → default route to IGW; associated to public subnet.
+  * Private RT(s) → default route to NAT; associated to both private subnets.
+**2) Bastion Host (public subnet)**
+* Amazon Linux 2 EC2 in the **public** subnet.
+* **Security Group:** Inbound **SSH 22** **only from** `var.allowed_ssh_cidr`; egress all.
+* SSH key:
+  * Support **creating a new key pair** when `var.bastion_key_name` and (optionally) a `var.bastion_ssh_public_key` are provided; otherwise allow using an existing key by name.
+* **monitoring = true**; proper `Name` + common tags.
+**3) Private EC2 (app host, private subnet)**
+* Amazon Linux 2 EC2 in the **first private subnet**, **no public IP**.
+* **monitoring = true**.
+* **Security Group:** Inbound **SSH 22** from **bastion’s SG only**; egress all.
+* IAM Role + Instance Profile for S3 access (see #4).
+* Least-privilege policy: `s3:ListBucket` on the bucket and `s3:GetObject/PutObject/DeleteObject` on a restricted prefix (e.g., `app/*`).
+* Basic `user_data` hardening (disable password auth, update packages; add commented CloudWatch agent hints).
+**4) S3 (application data)**
+* One **S3 bucket** for application data.
+* **Versioning enabled**, **Block Public Access = true**.
+* Default encryption: **SSE-KMS** with a **CMK created in this stack**.
+* Bucket policy:
+  * Deny unencrypted (non-TLS) requests.
+  * Enforce bucket objects use the created **CMK**.
+* Output bucket name & ARN.
+**6) KMS**
+* CMK for app data: alias **`alias/prod-app-kms`**.
+* Key policies: root/admin allowed; S3 usage allowed; least-privilege principals for resources created here.
+**7) Security Groups (summary)**
+* Bastion SG: SSH from `var.allowed_ssh_cidr` only.
+* Private EC2 SG: SSH from **Bastion SG** only; no public ingress anywhere else.
+* Egress open as needed.
+**8) IAM (EC2 → S3)**
+* Role (trust: EC2), inline/attached least-privilege policy to the app bucket prefix.
+* Instance Profile attached to the private EC2.
+* Output role and instance profile ARNs.
+**9) Monitoring & Compliance**
+* `monitoring = true` on both EC2s.
+* S3 at-rest encryption via CMKs; TLS enforced in bucket policies.
+* All resources tagged with `Environment = "Prod"` + `local.common_tags`.
+---
+### Variables, Locals, Outputs (in `tap_stack.tf`)
+**Variables** (type, description, sane defaults):
+* `aws_region` (default `"us-east-1"`) — consumed by `provider.tf`.
+* `vpc_cidr` (default `"10.0.0.0/16"`).
+* `public_subnet_cidr` (default `"10.0.0.0/24"`).
+* `private_subnet1_cidr` (default `"10.0.1.0/24"`).
+* `private_subnet2_cidr` (default `"10.0.2.0/24"`).
+* `allowed_ssh_cidr` (no default; document example like `"203.0.113.10/32"`).
+* `bastion_key_name` (optional; supports create/use).
+* `bastion_ssh_public_key` (optional; for new key pair).
+* `owner` (default `"platform-team"`; used in tags).
+**Locals**
+* `env = "prod"`, `name_prefix = local.env`,
+* `common_tags = { Environment = "Prod", Owner = var.owner }`.
+**Outputs**
+* `vpc_id`
+* `public_subnet_id`
+* `private_subnet_ids`
+* `igw_id`
+* `nat_gateway_id`
+* `bastion_instance_id`
+* `bastion_public_ip`
+* `private_instance_id`
+* `private_instance_profile_arn`
+* `private_instance_role_arn`
+* `s3_app_bucket_name`
+* `s3_app_bucket_arn`
+* `kms_app_key_arn`
