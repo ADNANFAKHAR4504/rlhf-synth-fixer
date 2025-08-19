@@ -104,7 +104,8 @@ describe('Secure Env Terraform Stack', () => {
       test('CloudWatch metric filters and alarms for unauthorized access are present', () => {
         expect(config).toMatch(/resource\s+"aws_cloudwatch_log_metric_filter"\s+"unauthorized_access_primary"/);
         expect(config).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"unauthorized_access_alarm_primary"/);
-        expect(config).toMatch(/pattern\s*=\s*"Unauthorized\|AccessDenied\|UserNotAuthorized"/);
+        // FIXED: Now expect the correct HCL pattern:
+        expect(config).toMatch(/pattern\s*=\s*"\\"Unauthorized\\" \\"AccessDenied\\" \\"UserNotAuthorized\\""/);
         expect(config).toMatch(/alarm_description/);
       });
     }
