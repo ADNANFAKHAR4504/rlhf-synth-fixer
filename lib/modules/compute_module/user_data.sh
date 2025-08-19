@@ -1,10 +1,10 @@
 #!/bin/bash
-yum update -y
-yum install -y httpd
+apt-get update -y
+apt-get install -y apache2
 
 # Start and enable Apache
-systemctl start httpd
-systemctl enable httpd
+systemctl enable apache2
+systemctl start apache2
 
 # Create a simple HTML page with region information
 cat > /var/www/html/index.html << EOF
