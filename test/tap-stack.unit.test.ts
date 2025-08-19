@@ -419,8 +419,8 @@ describe('High Availability Web Application CloudFormation Template Unit Tests',
       expect(dashboard).toBeDefined();
       expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
       expect(dashboard.Properties.DashboardName).toEqual({ 'Fn::Sub': '${AWS::StackName}-dashboard' });
-      expect(dashboard.Properties.DashboardBody).toContain('ASG CPU Utilization');
-      expect(dashboard.Properties.DashboardBody).toContain('RDS CPU Utilization');
+     expect(dashboard.Properties.DashboardBody['Fn::Sub']).toContain('ASG CPU Utilization');
+expect(dashboard.Properties.DashboardBody['Fn::Sub']).toContain('RDS CPU Utilization');
     });
   });
 
