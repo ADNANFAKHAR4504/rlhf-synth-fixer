@@ -32,5 +32,5 @@ output "kms_key_arn" {
 
 output "ec2_instance_profile_name" {
   description = "Name of the EC2 instance profile"
-  value       = data.aws_iam_user.app_user.user_name
+  value       = ""
 }

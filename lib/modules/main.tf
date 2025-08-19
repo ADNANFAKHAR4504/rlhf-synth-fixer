@@ -542,10 +542,6 @@ resource "null_resource" "delete_backup_vault" {
   }
 }
 
-output "vpc_id" {
-  value = aws_vpc.main.id
-}
-
 output "vpc_cidr" {
   value = aws_vpc.main.cidr_block
 }
@@ -566,10 +562,6 @@ output "internet_gateway_id" {
   value = aws_internet_gateway.main.id
 }
 
-output "nat_gateway_id" {
-  value = aws_nat_gateway.main.id
-}
-
 output "ec2_sg_id" {
   value = aws_security_group.ec2.id
 }
@@ -584,10 +576,6 @@ output "rds_sg_id" {
 
 output "vpc_endpoint_sg_id" {
   value = aws_security_group.vpc_endpoint.id
-}
-
-output "s3_data_bucket_name" {
-  value = aws_s3_bucket.data.bucket
 }
 
 output "s3_data_bucket_arn" {
@@ -606,14 +594,6 @@ output "kms_key_id" {
   value = data.aws_kms_key.main.key_id
 }
 
-output "kms_key_arn" {
-  value = data.aws_kms_key.main.arn
-}
-
 output "vpc_endpoint_s3_id" {
   value = aws_vpc_endpoint.s3.id
-}
-
-output "ec2_instance_profile_name" {
-  value = "" # This is a placeholder, as there is no instance profile defined in the module
 }
