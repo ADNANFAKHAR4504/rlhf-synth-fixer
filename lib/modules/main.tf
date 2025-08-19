@@ -527,9 +527,17 @@ data "aws_iam_user" "app_user" {
   user_name = "${var.project_name}-app-user"
 }
 
-resource "null_resource" "delete_backup_vault" {
+resource "null_resource" "empty_s3_bucket" {
   provisioner "local-exec" {
     when    = destroy
-    command = "aws backup list-recovery-points-by-backup-vault --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --region us-east-1 --output json | jq -r '.RecoveryPoints[].RecoveryPointArn' | xargs -I {} aws backup delete-recovery-point --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --recovery-point-arn {} --region us-east-1"
+    command = "aws s3 rm s3://${aws_s3_bucket.logs.id} --recursive"
+  }
+}
+
+resource "null_resource" "delete_backup_vault" {
+  depends_on = [null_resource.empty_s3_bucket]
+  provisioner "local-exec" {
+    when    = destroy
+    command = "aws backup list-recovery-points-by-backup-vault --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --region us-east-1 --output json | jq -r '.RecoveryPoints[].RecoveryPointArn' | xargs -I {} aws backup delete-recovery-point --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --recovery-point-arn {} --region us-east-1 && aws backup delete-backup-vault --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --region us-east-1"
   }
 }
