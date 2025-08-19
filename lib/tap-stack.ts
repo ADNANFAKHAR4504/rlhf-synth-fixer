@@ -40,6 +40,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly subnetId: pulumi.Output<string>;
   public readonly securityGroupId: pulumi.Output<string>;
   public readonly instancePublicIp: pulumi.Output<string>;
+  public readonly instancePrivateIp: pulumi.Output<string>;
   public readonly s3BucketArn: pulumi.Output<string>;
 
   /**
@@ -280,6 +281,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.subnetId = publicSubnet.id;
     this.securityGroupId = securityGroup.id;
     this.instancePublicIp = instance.publicIp;
+    this.instancePrivateIp = instance.privateIp;
     this.s3BucketArn = bucket.arn;
 
     // Register the outputs of this component
@@ -290,6 +292,7 @@ export class TapStack extends pulumi.ComponentResource {
       subnetId: this.subnetId,
       securityGroupId: this.securityGroupId,
       instancePublicIp: this.instancePublicIp,
+      instancePrivateIp: this.instancePrivateIp,
       s3BucketArn: this.s3BucketArn,
     });
   }

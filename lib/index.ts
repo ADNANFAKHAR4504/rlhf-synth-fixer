@@ -26,4 +26,5 @@ export const VPCId = tapStack.vpcId;
 export const SubnetId = tapStack.subnetId;
 export const SecurityGroupId = tapStack.securityGroupId;
 export const InstancePublicIp = tapStack.instancePublicIp;
+export const InstancePrivateIp = tapStack.instancePrivateIp;
 export const S3BucketArn = tapStack.s3BucketArn;
