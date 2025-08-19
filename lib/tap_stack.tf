@@ -98,7 +98,7 @@ resource "aws_kms_key" "primary" {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
-        Resource = "*"
+        Resource = aws_kms_key.primary.arn
       },
       {
         Sid    = "Allow CloudTrail to encrypt logs"
@@ -114,7 +114,7 @@ resource "aws_kms_key" "primary" {
           "kms:CreateGrant",
           "kms:Decrypt"
         ]
-        Resource = "*"
+        Resource = aws_kms_key.primary.arn
         Condition = {
           StringLike = {
             "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
@@ -151,7 +151,7 @@ resource "aws_kms_key" "secondary" {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
-        Resource = "*"
+        Resource = aws_kms_key.secondary.arn
       },
       {
         Sid    = "Allow CloudTrail to encrypt logs"
@@ -167,7 +167,7 @@ resource "aws_kms_key" "secondary" {
           "kms:CreateGrant",
           "kms:Decrypt"
         ]
-        Resource = "*"
+        Resource = aws_kms_key.secondary.arn
         Condition = {
           StringLike = {
             "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"

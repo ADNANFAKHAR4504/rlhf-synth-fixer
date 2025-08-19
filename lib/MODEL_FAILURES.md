@@ -389,3 +389,38 @@ The integration tests now provide complete validation of:
 - Update all region-specific resources and references
 - Validate Terraform configuration
 - Commit and push changes
+
+## 21. KMS Key Policy Least-Privilege — Resolved
+
+**Problem**:
+
+- KMS key policies for both primary and secondary keys used wildcard `Resource = "*"` in statements, which violates least-privilege and caused security test failures that forbid overly permissive IAM/KMS policies.
+
+**Fix**:
+
+- In `lib/tap_stack.tf`, replaced wildcard resources with specific ARNs:
+  - `aws_kms_key.primary` policy statements now use `Resource = aws_kms_key.primary.arn`.
+  - `aws_kms_key.secondary` policy statements now use `Resource = aws_kms_key.secondary.arn`.
+- Maintained CloudTrail-specific `Condition` to scope encryption context appropriately.
+
+**Impact**:
+
+- Aligns with AWS best practices and satisfies tests that ensure no permissive `"Resource": "*"` patterns in sensitive policies.
+
+## 22. Explicit Random Provider Declaration — Resolved
+
+**Problem**:
+
+- `random_string` resources were used without explicitly declaring the `random` provider, which can lead to `terraform init` provider resolution inconsistencies across environments.
+
+**Fix**:
+
+- In `lib/provider.tf`, added `random` under `required_providers` with `source = "hashicorp/random"` and version constraint `~> 3.0`.
+
+**Impact**:
+
+- Ensures reproducible provider installation. Keeps `terraform init/validate/plan` stable across CI and local runs.
+
+## Note on CloudTrail PutObject and S3 Ownership Controls
+
+- We enforce S3 bucket ownership with `aws_s3_bucket_ownership_controls.logging` set to `BucketOwnerEnforced`. With this setting, CloudTrail’s historical requirement for the `s3:x-amz-acl = bucket-owner-full-control` condition is not applicable, because ACLs are disabled. The bucket policy remains least-privilege and references only the required ARNs and the current account ID.
