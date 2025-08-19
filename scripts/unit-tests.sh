@@ -27,6 +27,21 @@ if [ "$LANGUAGE" = "ts" ] && [ "$PLATFORM" = "cdktf" ]; then
 elif [ "$LANGUAGE" = "ts" ]; then
   echo "✅ TypeScript project detected, running unit tests..."
   npm run test:unit
+elif [ "$LANGUAGE" = "go" ]; then
+  echo "✅ Go project detected, running go unit tests..."
+  if [ -d "lib" ]; then
+    # Ensure Go sees tests even if they live under root tests/
+    if [ -d "tests/unit" ]; then
+      echo "📦 Copying tests/unit into lib/ for Go module scope"
+      mkdir -p lib/tests
+      cp -r tests/unit lib/tests/ || true
+    fi
+    cd lib
+    go test ./... -v -coverprofile=../coverage.out
+    cd ..
+  else
+    echo "ℹ️ lib directory not found, skipping Go unit tests"
+  fi
 elif [ "$LANGUAGE" = "py" ]; then
   echo "✅ Python project detected, running pytest unit tests..."
   pipenv run test-py-unit

@@ -25,6 +25,21 @@ echo "CI mode: $CI"
 if [ "$LANGUAGE" = "py" ]; then
   echo "✅ Python project detected, running integration tests..."
   pipenv run test-py-integration
+elif [ "$LANGUAGE" = "go" ]; then
+  echo "✅ Go project detected, running integration tests..."
+  if [ -d "lib" ]; then
+    # Ensure Go sees tests even if they live under root tests/
+    if [ -d "tests/integration" ]; then
+      echo "📦 Copying tests/integration into lib/ for Go module scope"
+      mkdir -p lib/tests
+      cp -r tests/integration lib/tests/ || true
+    fi
+    cd lib
+    go test ./... -v -tags "integration"
+    cd ..
+  else
+    echo "ℹ️ lib directory not found, skipping Go integration tests"
+  fi
 else
   echo "✅ Running default integration tests..."
   npm run test:integration

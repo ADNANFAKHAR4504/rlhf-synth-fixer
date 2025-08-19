@@ -14,6 +14,7 @@ PIPENV_VERSION=${PIPENV_VERSION:-2025.0.4}
 DOWNLOAD_ARTIFACTS=${DOWNLOAD_ARTIFACTS:-false}
 UPLOAD_ARTIFACTS=${UPLOAD_ARTIFACTS:-false}
 PLATFORM=${PLATFORM:-""}
+LANGUAGE=${LANGUAGE:-""}
 
 echo "Environment setup configuration:"
 echo "  Node.js version: $NODE_VERSION"
@@ -22,6 +23,7 @@ echo "  Pulumi version: $PULUMI_VERSION"
 echo "  Python version: $PYTHON_VERSION" 
 echo "  Pipenv version: $PIPENV_VERSION"
 echo "  Platform: $PLATFORM"
+echo "  Language: $LANGUAGE"
 echo "  Download artifacts: $DOWNLOAD_ARTIFACTS"
 echo "  Upload artifacts: $UPLOAD_ARTIFACTS"
 
@@ -83,6 +85,30 @@ if [ "$PLATFORM" = "pulumi" ] || [ "$PLATFORM" = "" ]; then
     if [ "$PLATFORM" = "pulumi" ]; then
       exit 1
     fi
+  fi
+fi
+
+# Setup Go for CDKTF Go projects
+if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
+  echo "📦 Verifying Go toolchain for CDKTF Go..."
+  if command -v go >/dev/null 2>&1; then
+    echo "Go: $(go version)"
+  else
+    echo "❌ Go not found in PATH (should be installed by setup-environment action)"
+    exit 1
+  fi
+
+  # Initialize a Go module inside lib/ if missing and tidy dependencies
+  if [ -d "lib" ]; then
+    echo "📦 Initializing Go module in lib/ (if needed)"
+    cd lib
+    if [ ! -f go.mod ]; then
+      echo "Creating go.mod in lib/"
+      go mod init "github.com/${GITHUB_REPOSITORY:-local}/lib" || true
+    fi
+    echo "Tidying Go modules in lib/"
+    go mod tidy || true
+    cd ..
   fi
 fi
 

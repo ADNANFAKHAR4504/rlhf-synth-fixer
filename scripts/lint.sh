@@ -17,6 +17,21 @@ echo "Running linting for platform: $PLATFORM, language: $LANGUAGE"
 if [ "$LANGUAGE" = "ts" ]; then
     echo "✅ TypeScript project detected, running ESLint..."
     npm run lint
+elif [ "$LANGUAGE" = "go" ]; then
+    echo "✅ Go project detected, running go fmt and go vet..."
+    if [ -d "lib" ]; then
+        cd lib
+        UNFORMATTED=$(gofmt -l . || true)
+        if [ -n "$UNFORMATTED" ]; then
+            echo "❌ The following files are not gofmt formatted:" 
+            echo "$UNFORMATTED"
+            exit 1
+        fi
+        go vet ./...
+        cd ..
+    else
+        echo "ℹ️ lib directory not found, skipping Go lint"
+    fi
 elif [ "$LANGUAGE" = "py" ]; then
     LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
     LINT_EXIT_CODE=$?
