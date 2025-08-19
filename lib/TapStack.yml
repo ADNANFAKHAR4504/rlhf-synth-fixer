@@ -827,7 +827,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${Environment}-app-alb-${AWS::StackName}'
+      Name: !Sub '${Environment}-alb-${AWS::StackName}'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -848,7 +848,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
         - Key: Name
-          Value: !Sub '${Environment}-app-alb-${AWS::StackName}'
+          Value: !Sub '${Environment}-alb-${AWS::StackName}'
 
   ApplicationTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
