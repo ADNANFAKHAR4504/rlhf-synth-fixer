@@ -1404,12 +1404,42 @@
                         {
                             "Effect": "Allow",
                             "Principal": {
+                                "AWS": "arn:aws:iam::127311923021:root"
+                            },
+                            "Action": [
+                                "s3:PutObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
                                 "Service": "elasticloadbalancing.amazonaws.com"
                             },
                             "Action": [
                                 "s3:GetBucketLocation",
                                 "s3:ListBucket",
                                 "s3:GetEncryptionConfiguration"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "arn:aws:iam::127311923021:root"
+                            },
+                            "Action": [
+                                "s3:GetBucketLocation",
+                                "s3:ListBucket"
                             ],
                             "Resource": {
                                 "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"
