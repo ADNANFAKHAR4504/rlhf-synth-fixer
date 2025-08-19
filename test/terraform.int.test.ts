@@ -6,6 +6,64 @@ const LIB_DIR = path.resolve(__dirname, '../lib');
 const TEST_VARS_FILE = path.join(LIB_DIR, 'terraform.tfvars.test');
 const TEST_TIMEOUT = 180000; // 3 minutes per test
 
+// Isolated init-only suite that does not use the tap stack
+describe('@terraform.init (provider-only)', () => {
+  const INIT_DIR = path.join(__dirname, 'tf-init-only');
+
+  beforeAll(() => {
+    // Prepare isolated directory
+    if (!fs.existsSync(INIT_DIR)) fs.mkdirSync(INIT_DIR, { recursive: true });
+
+    // Copy only provider.tf
+    const providerSrc = path.join(LIB_DIR, 'provider.tf');
+    const providerDst = path.join(INIT_DIR, 'provider.tf');
+    if (fs.existsSync(providerSrc)) {
+      fs.copyFileSync(providerSrc, providerDst);
+    } else {
+      throw new Error(`Missing provider.tf at ${providerSrc}`);
+    }
+  });
+
+  afterAll(() => {
+    // Cleanup init directory contents
+    const files = fs.readdirSync(INIT_DIR);
+    for (const f of files) {
+      try { fs.rmSync(path.join(INIT_DIR, f), { recursive: true, force: true }); } catch {}
+    }
+    try { fs.rmdirSync(INIT_DIR); } catch {}
+  });
+
+  test('terraform init succeeds', () => {
+    expect(() => {
+      execSync('terraform init -reconfigure -lock=false -upgrade', {
+        cwd: INIT_DIR,
+        stdio: 'pipe',
+        timeout: 120000,
+      });
+    }).not.toThrow();
+  }, TEST_TIMEOUT);
+
+  test('terraform validate passes', () => {
+    expect(() => {
+      execSync('terraform validate', {
+        cwd: INIT_DIR,
+        stdio: 'pipe',
+        timeout: 30000,
+      });
+    }).not.toThrow();
+  }, TEST_TIMEOUT);
+
+  test('terraform fmt check passes', () => {
+    expect(() => {
+      execSync('terraform fmt -check -recursive', {
+        cwd: INIT_DIR,
+        stdio: 'pipe',
+        timeout: 30000,
+      });
+    }).not.toThrow();
+  }, TEST_TIMEOUT);
+});
+
 describe('Terraform Multi-Region Integration Tests', () => {
   let originalCwd: string;
 
