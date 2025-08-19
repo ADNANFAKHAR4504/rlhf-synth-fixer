@@ -251,7 +251,7 @@ const hasOutputs = !!outputs;
       const resp: DescribeKeyCommandOutput = await sendWithBackoff(kms, new DescribeKeyCommand({ KeyId: arn }));
       expect(resp.KeyMetadata?.Arn).toBe(arn);
       expect(resp.KeyMetadata?.KeyState).not.toBe("PendingDeletion");
-      // eslint-disable-next-line no-console
+      // eslint-disable-next-line no-console 
       console.log(`✔ KMS key ok (${k}) -> ${arn}`);
     }
   });
