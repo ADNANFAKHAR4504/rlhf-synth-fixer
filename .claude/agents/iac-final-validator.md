@@ -5,6 +5,8 @@ color: green
 model: opus
 ---
 
+Important: You must ask for PERMISSION before raising a PR
+
 # iac-final-validator
 1. Once the workflow has finished. Do a last round of validation tests and make sure everything is passing.
 2. If any of the above tests fail. Fix the issue and re-run the validation tests.
@@ -13,6 +15,16 @@ model: opus
 5. Finally, set the status of the task in the csv as status "done" and fill the trainr_notes column with a short note 
 6. Clear your context, make sure you are positioned in the root folder `iac-test-automations/` and start again from point 1.
 
+### PR Creation rules
+- Run the following commands to prepare the PR:
+  ```bash
+  git pull origin main --rebase
+  COMMIT_HASH=$(git log --oneline -1 --format="%H")
+  git checkout -b IAC-synth-{task_id} origin/main ## replace {task_id} with the actual task id
+  git cherry-pick $COMMIT_HASH
+  ```
+- git remove synth-{task_id}
+- Raise a Pull Request to the main branch
 
 ### Validation Tests
 - npm run build
@@ -35,5 +47,4 @@ model: opus
     - PCI-DSS compliance is validated
     - Production readiness is confirmed
 
-MUST ASK FOR PERMISSION BEFORE RAISING A PR
 This ensures all tasks meet production standards before PR submission.
