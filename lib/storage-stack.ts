@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 export interface StorageStackArgs {
@@ -72,9 +72,9 @@ export class StorageStack extends pulumi.ComponentResource {
     );
 
     new aws.kms.Alias(
-      `tap-rds-key-alias-${region}-${environmentSuffix}`,
+      `tap-rds-key-alias-${region}-${environmentSuffix}-primary`,
       {
-        name: `alias/tap-rds-${region}-${environmentSuffix}`,
+        name: `alias/tap-rds-${region}-${environmentSuffix}-primary`,
         targetKeyId: kmsKey.keyId,
       },
       { parent: this }
