@@ -1,34 +1,8 @@
-I need your help designing a Terraform multi-environment setup that supports both staging and production. The solution should be consistent, maintainable, and reusable, following Terraform best practices.
 
-Requirements
-	1.	Environment separation
-	•	Use Terraform workspaces to separate staging and production environments cleanly.
-	2.	Consistency
-	•	Ensure variable names are consistent across environments for predictability and easier management.
-	3.	Reusability
-	•	Implement Terraform modules for common infrastructure components so that code duplication is minimized.
-	4.	Shared outputs
-	•	Define output values that can be shared across environments (useful for deployments and CI/CD pipelines).
-	5.	Multi-region support
-	•	Deploy the infrastructure in two AWS regions:
-	•	us-west-2
-	•	eu-west-1
-	•	Each environment should have its own dedicated workspace.
+Hey,
 
-Expected Outcome
+I’m working on a Terraform setup and I want it to handle both staging and production environments. My main goals are to keep things easy to maintain, avoid repeating myself, and stick to best practices. I’d like to use workspaces to keep the environments separate, and I want variable names to be consistent so it’s not confusing when switching between them.
 
-A Terraform codebase that:
-	•	Correctly uses workspaces for environment separation
-	•	Leverages modules to reuse infrastructure components
-	•	Applies consistent naming conventions for variables
-	•	Exposes useful output values that can be shared across environments
+I’m planning to use modules for the common stuff, so we don’t have to copy-paste code everywhere. It’s also important for me to have some outputs that can be shared between environments, especially for deployment and CI/CD. We need to deploy in both us-west-2 and eu-west-1, and each environment should have its own workspace.
 
-Constraints
-	•	Must rely on Terraform workspaces for environment separation
-	•	Must follow consistent naming conventions for environment variables
-	•	Must avoid duplication by using modules
-	•	Must define shared output values
-
-File Structure
-	•	provider.tf
-	•	tap_stack.tf
+Let’s keep the main logic in provider.tf and tap_stack.tf. If you have any suggestions or see a better way to organize things, let me know!
