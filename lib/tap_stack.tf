@@ -1,88 +1,101 @@
 ############################################
-# tap_stack.tf
-# Production-grade Terraform (single file)
-# - VPC (10.0.0.0/16), 1 public + 2 private subnets, IGW, NAT, routes
-# - Bastion EC2 (public) with SSH allowed only from allowed_ssh_cidr
-# - Private EC2 (no public IP) with SSH allowed only from Bastion SG
-# - S3 app bucket (versioned, SSE-KMS with CMK alias/prod-app-kms, strict policy)
-# - IAM role/profile for EC2 → S3 (least-privilege + KMS permissions)
-# - Detailed monitoring on EC2
-# - Uniform tagging with Environment=Prod
+# tap_stack.tf — Production-grade AWS stack
 ############################################
 
-############################################
+#################
 # Variables
-############################################
+#################
 variable "aws_region" {
+  description = "AWS region to deploy resources in. Consumed by provider.tf."
   type        = string
-  description = "AWS region used by provider.tf"
   default     = "us-east-1"
 }
 
-variable "allowed_ssh_cidr" {
-  description = "CIDR allowed to SSH to bastion (e.g. 203.0.113.10/32)"
+variable "vpc_cidr" {
+  description = "CIDR for the VPC."
   type        = string
-  default     = "203.0.113.10/32"
-
-  validation {
-    condition     = can(cidrnetmask(var.allowed_ssh_cidr)) && var.allowed_ssh_cidr != "0.0.0.0/0"
-    error_message = "Provide a valid CIDR (e.g., 203.0.113.10/32). 0.0.0.0/0 is not allowed."
-  }
+  default     = "10.0.0.0/16"
 }
 
-
-
 variable "public_subnet_cidr" {
+  description = "CIDR for the public subnet."
   type        = string
-  description = "Public subnet CIDR"
   default     = "10.0.0.0/24"
-  validation {
-    condition     = can(cidrnetmask(var.public_subnet_cidr))
-    error_message = "public_subnet_cidr must be a valid CIDR."
-  }
 }
 
 variable "private_subnet1_cidr" {
+  description = "CIDR for the first private subnet."
   type        = string
-  description = "Private subnet 1 CIDR"
   default     = "10.0.1.0/24"
-  validation {
-    condition     = can(cidrnetmask(var.private_subnet1_cidr))
-    error_message = "private_subnet1_cidr must be a valid CIDR."
-  }
 }
 
 variable "private_subnet2_cidr" {
+  description = "CIDR for the second private subnet."
   type        = string
-  description = "Private subnet 2 CIDR"
   default     = "10.0.2.0/24"
-  validation {
-    condition     = can(cidrnetmask(var.private_subnet2_cidr))
-    error_message = "private_subnet2_cidr must be a valid CIDR."
-  }
+}
+
+variable "allowed_ssh_cidr" {
+  description = "CIDR allowed to SSH into the bastion host. Example: \"203.0.113.10/32\"."
+  type        = string
+  default     = "203.0.113.10/32"
 }
 
 variable "bastion_key_name" {
+  description = "Optional: existing EC2 key pair name to use for the bastion. If empty, a new key pair is created."
   type        = string
-  description = "Key pair name for bastion. If bastion_ssh_public_key is set, a new key pair with this name is created; otherwise an existing key with this name is used."
-  default     = "prod-bastion-key"
+  default     = ""
 }
 
 variable "bastion_ssh_public_key" {
+  description = "Optional: public key material for creating a new key pair. If empty, a key is generated."
   type        = string
-  description = "SSH public key to create the bastion key pair. Leave empty to use an existing key pair by name."
   default     = ""
 }
 
 variable "owner" {
+  description = "Owner tag for all resources."
   type        = string
-  description = "Owner tag value"
   default     = "platform-team"
 }
 
-############################################
-# Locals & Data
-############################################
+#################
+# Data Sources
+#################
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+data "aws_caller_identity" "current" {}
+
+data "aws_ami" "amazon_linux2" {
+  owners      = ["amazon"]
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-2.0.*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+#################
+# Locals
+#################
 locals {
   env         = "prod"
   name_prefix = local.env
@@ -91,58 +104,37 @@ locals {
     Environment = "Prod"
     Owner       = var.owner
   }
+
+  az_a = data.aws_availability_zones.available.names[0]
+  az_b = data.aws_availability_zones.available.names[1]
+
+  # Compute the final key name: use provided one or create a named one
+  bastion_key_name_final = var.bastion_key_name != "" ? var.bastion_key_name : "${local.name_prefix}-bastion-key-${random_id.key_suffix.hex}"
+
+  # S3 bucket name (globally unique with account & region baked in)
+  app_bucket_name = lower("${local.name_prefix}-app-${data.aws_caller_identity.current.account_id}-${var.aws_region}")
+
+  # App object prefix
+  app_prefix = "app/"
 }
 
-data "aws_availability_zones" "available" {
-  state = "available"
+#################
+# Random Suffix for Uniqueness
+#################
+resource "random_id" "key_suffix" {
+  byte_length = 2
 }
 
-data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
-
-############################################
-# Networking
-############################################
+#################
+# Networking - VPC, Subnets, IGW, NAT, Routes
+#################
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
-  enable_dns_support   = true
   enable_dns_hostnames = true
+  enable_dns_support   = true
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
-  })
-}
-
-resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr
-  availability_zone       = data.aws_availability_zones.available.names[0]
-  map_public_ip_on_launch = true
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-public-subnet"
-  })
-}
-
-resource "aws_subnet" "private_1" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.private_subnet1_cidr
-  availability_zone       = data.aws_availability_zones.available.names[0]
-  map_public_ip_on_launch = false
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-subnet-1"
-  })
-}
-
-resource "aws_subnet" "private_2" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.private_subnet2_cidr
-  availability_zone       = data.aws_availability_zones.available.names[1]
-  map_public_ip_on_launch = false
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-subnet-2"
   })
 }
 
@@ -151,6 +143,37 @@ resource "aws_internet_gateway" "igw" {
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-igw"
+  })
+}
+
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidr
+  availability_zone       = local.az_a
+  map_public_ip_on_launch = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-subnet"
+  })
+}
+
+resource "aws_subnet" "private1" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.private_subnet1_cidr
+  availability_zone = local.az_a
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet-a"
+  })
+}
+
+resource "aws_subnet" "private2" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.private_subnet2_cidr
+  availability_zone = local.az_b
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet-b"
   })
 }
 
@@ -163,8 +186,8 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "nat" {
-  subnet_id     = aws_subnet.public.id
   allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public.id
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-gw"
@@ -186,8 +209,8 @@ resource "aws_route" "public_default" {
 }
 
 resource "aws_route_table_association" "public_assoc" {
-  route_table_id = aws_route_table.public.id
   subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
 }
 
 resource "aws_route_table" "private" {
@@ -204,210 +227,22 @@ resource "aws_route" "private_default" {
   nat_gateway_id         = aws_nat_gateway.nat.id
 }
 
-resource "aws_route_table_association" "private_assoc_1" {
+resource "aws_route_table_association" "private_assoc_a" {
+  subnet_id      = aws_subnet.private1.id
   route_table_id = aws_route_table.private.id
-  subnet_id      = aws_subnet.private_1.id
 }
 
-resource "aws_route_table_association" "private_assoc_2" {
+resource "aws_route_table_association" "private_assoc_b" {
+  subnet_id      = aws_subnet.private2.id
   route_table_id = aws_route_table.private.id
-  subnet_id      = aws_subnet.private_2.id
 }
 
-############################################
-# KMS (App CMK)
-############################################
-resource "aws_kms_key" "app" {
-  description         = "CMK for app S3 encryption"
-  enable_key_rotation = true
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-kms-key"
-  })
-}
-
-resource "aws_kms_alias" "app" {
-  name          = "alias/prod-app-kms"
-  target_key_id = aws_kms_key.app.key_id
-}
-
-############################################
-# S3 Application Bucket (versioned, SSE-KMS, block public)
-############################################
-locals {
-  app_bucket_name = lower("${local.name_prefix}-app-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}")
-}
-
-resource "aws_s3_bucket" "app" {
-  bucket = local.app_bucket_name
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-bucket"
-  })
-}
-
-resource "aws_s3_bucket_public_access_block" "app" {
-  bucket                  = aws_s3_bucket.app.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_versioning" "app" {
-  bucket = aws_s3_bucket.app.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
-  bucket = aws_s3_bucket.app.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.app.arn
-    }
-  }
-}
-
-data "aws_iam_policy_document" "s3_app_policy" {
-  statement {
-    sid     = "DenyInsecureTransport"
-    effect  = "Deny"
-    actions = ["s3:*"]
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-    resources = [
-      aws_s3_bucket.app.arn,
-      "${aws_s3_bucket.app.arn}/*"
-    ]
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
-    }
-  }
-
-  statement {
-    sid     = "DenyUnencryptedObjectUploads"
-    effect  = "Deny"
-    actions = ["s3:PutObject"]
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-    resources = ["${aws_s3_bucket.app.arn}/*"]
-    condition {
-      test     = "StringNotEquals"
-      variable = "s3:x-amz-server-side-encryption"
-      values   = ["aws:kms"]
-    }
-  }
-
-  statement {
-    sid     = "DenyIncorrectKMSKey"
-    effect  = "Deny"
-    actions = ["s3:PutObject"]
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-    resources = ["${aws_s3_bucket.app.arn}/*"]
-    condition {
-      test     = "StringNotEquals"
-      variable = "s3:x-amz-server-side-encryption-aws-kms-key-id"
-      values   = [aws_kms_key.app.arn]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "app" {
-  bucket = aws_s3_bucket.app.id
-  policy = data.aws_iam_policy_document.s3_app_policy.json
-}
-
-############################################
-# IAM for EC2 → S3 (least privilege + KMS)
-############################################
-data "aws_iam_policy_document" "ec2_trust" {
-  statement {
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-    actions = ["sts:AssumeRole"]
-  }
-}
-
-resource "aws_iam_role" "private_ec2" {
-  name               = "${local.name_prefix}-private-ec2-role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_trust.json
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-ec2-role"
-  })
-}
-
-data "aws_iam_policy_document" "private_ec2_s3_kms" {
-  statement {
-    sid     = "ListBucket"
-    effect  = "Allow"
-    actions = ["s3:ListBucket"]
-    resources = [
-      aws_s3_bucket.app.arn
-    ]
-  }
-
-  statement {
-    sid     = "ObjectCrudInPrefix"
-    effect  = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
-      "s3:AbortMultipartUpload",
-      "s3:ListMultipartUploadParts"
-    ]
-    resources = ["${aws_s3_bucket.app.arn}/app/*"]
-  }
-
-  # KMS permissions required for SSE-KMS object operations
-  statement {
-    sid     = "KmsUseKeyForS3Objects"
-    effect  = "Allow"
-    actions = [
-      "kms:Encrypt",
-      "kms:Decrypt",
-      "kms:ReEncrypt*",
-      "kms:GenerateDataKey*",
-      "kms:DescribeKey"
-    ]
-    resources = [aws_kms_key.app.arn]
-  }
-}
-
-resource "aws_iam_role_policy" "private_ec2" {
-  name   = "${local.name_prefix}-private-ec2-s3-policy"
-  role   = aws_iam_role.private_ec2.id
-  policy = data.aws_iam_policy_document.private_ec2_s3_kms.json
-}
-
-resource "aws_iam_instance_profile" "private_ec2" {
-  name = "${local.name_prefix}-private-ec2-profile"
-  role = aws_iam_role.private_ec2.name
-}
-
-############################################
+#################
 # Security Groups
-############################################
-resource "aws_security_group" "bastion" {
+#################
+resource "aws_security_group" "bastion_sg" {
   name        = "${local.name_prefix}-bastion-sg"
-  description = "Allow SSH from allowed CIDR to bastion"
+  description = "Allow SSH from allowed CIDR"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -419,6 +254,7 @@ resource "aws_security_group" "bastion" {
   }
 
   egress {
+    description = "All egress"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -430,21 +266,21 @@ resource "aws_security_group" "bastion" {
   })
 }
 
-resource "aws_security_group" "private" {
-  name        = "${local.name_prefix}-private-sg"
-  description = "Allow SSH only from bastion"
+resource "aws_security_group" "app_sg" {
+  name        = "${local.name_prefix}-app-sg"
+  description = "Allow SSH from bastion only"
   vpc_id      = aws_vpc.main.id
 
-  # Use source_security_group_id to restrict SSH to bastion SG
   ingress {
-    description              = "SSH from bastion SG"
-    from_port                = 22
-    to_port                  = 22
-    protocol                 = "tcp"
-    source_security_group_id = aws_security_group.bastion.id
+    description     = "SSH from bastion SG only"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion_sg.id]
   }
 
   egress {
+    description = "All egress"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -452,175 +288,401 @@ resource "aws_security_group" "private" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-sg"
+    Name = "${local.name_prefix}-app-sg"
   })
 }
 
-############################################
-# AMI (Amazon Linux 2)
-############################################
-data "aws_ami" "al2" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
+#################
+# EC2 Key Pair (Create by default; supports existing if provided)
+#################
+# Generate a key if the user did not provide one
+resource "tls_private_key" "bastion" {
+  count     = var.bastion_ssh_public_key == "" && var.bastion_key_name == "" ? 1 : 0
+  algorithm = "RSA"
+  rsa_bits  = 4096
 }
 
-############################################
-# Bastion Key Pair (optional create)
-############################################
 resource "aws_key_pair" "bastion" {
-  count      = var.bastion_ssh_public_key != "" ? 1 : 0
-  key_name   = var.bastion_key_name
-  public_key = var.bastion_ssh_public_key
+  count     = var.bastion_key_name == "" ? 1 : 0
+  key_name  = local.bastion_key_name_final
+  public_key = var.bastion_ssh_public_key != "" ?
+    var.bastion_ssh_public_key :
+    tls_private_key.bastion[0].public_key_openssh
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-bastion-key"
+    Name = local.bastion_key_name_final
   })
 }
 
-locals {
-  bastion_key_name_effective = var.bastion_ssh_public_key != "" ? aws_key_pair.bastion[0].key_name : var.bastion_key_name
-}
+#################
+# Bastion Host (Public)
+#################
+resource "aws_instance" "bastion" {
+  ami                         = data.aws_ami.amazon_linux2.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.public.id
+  vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
+  associate_public_ip_address = true
+  monitoring                  = true
+  key_name                    = local.bastion_key_name_final
 
-############################################
-# Bastion Instance (Public)
-############################################
-locals {
-  bastion_user_data = <<-EOT
+  user_data = <<-EOF
     #!/bin/bash
     set -euo pipefail
     yum update -y
-    # Harden SSH (disable password auth)
-    sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config || true
-    sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config || true
+    # Harden SSH: disable password auth
+    sed -i 's/^#\\?PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
     systemctl restart sshd
-    # (Optional) Install CloudWatch Agent - placeholder
+    # CloudWatch agent (optional):
+    # amazon-linux-extras install -y collectd
     # yum install -y amazon-cloudwatch-agent
-    # /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c ssm:AmazonCloudWatch-linux -s
-  EOT
-}
-
-resource "aws_instance" "bastion" {
-  ami                         = data.aws_ami.al2.id
-  instance_type               = "t3.micro"
-  subnet_id                   = aws_subnet.public.id
-  vpc_security_group_ids      = [aws_security_group.bastion.id]
-  associate_public_ip_address = true
-  key_name                    = local.bastion_key_name_effective
-  monitoring                  = true
-  user_data                   = local.bastion_user_data
-
-  root_block_device {
-    encrypted = true
-    volume_size = 8
-  }
-
-  metadata_options {
-    http_tokens = "required"
-  }
+    # /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c ssm:YourParameterOrFile -s
+  EOF
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-bastion"
   })
 }
 
-############################################
-# Private Instance (No public IP)
-############################################
-locals {
-  private_user_data = <<-EOT
-    #!/bin/bash
-    set -euo pipefail
-    yum update -y
-    # Harden SSH (disable password auth)
-    sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config || true
-    sed -i 's/^PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config || true
-    systemctl restart sshd
-    # (Optional) CloudWatch Agent - placeholder
-    # yum install -y amazon-cloudwatch-agent
-  EOT
-}
-
-resource "aws_instance" "private" {
-  ami                         = data.aws_ami.al2.id
-  instance_type               = "t3.micro"
-  subnet_id                   = aws_subnet.private_1.id
-  vpc_security_group_ids      = [aws_security_group.private.id]
-  associate_public_ip_address = false
-  iam_instance_profile        = aws_iam_instance_profile.private_ec2.name
-  monitoring                  = true
-  user_data                   = local.private_user_data
-
-  root_block_device {
-    encrypted = true
-    volume_size = 8
-  }
-
-  metadata_options {
-    http_tokens = "required"
-  }
+#################
+# IAM for Private EC2 -> S3 + KMS
+#################
+resource "aws_iam_role" "app_role" {
+  name               = "${local.name_prefix}-app-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Sid    = "EC2Trust"
+      Effect = "Allow",
+      Principal = { Service = "ec2.amazonaws.com" },
+      Action   = "sts:AssumeRole"
+    }]
+  })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-ec2"
+    Name = "${local.name_prefix}-app-role"
   })
 }
 
-############################################
+# Least-privilege S3 access to bucket + restricted prefix
+resource "aws_iam_policy" "app_s3_policy" {
+  name        = "${local.name_prefix}-app-s3-policy"
+  description = "Least-privilege S3 access to application bucket prefix"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid    = "ListBucketRestrictedToPrefix"
+        Effect = "Allow",
+        Action = ["s3:ListBucket"],
+        Resource = "arn:aws:s3:::${local.app_bucket_name}",
+        Condition = {
+          StringLike = {
+            "s3:prefix" = ["${local.app_prefix}*"]
+          }
+        }
+      },
+      {
+        Sid      = "RWOnAppPrefix"
+        Effect   = "Allow",
+        Action   = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ],
+        Resource = "arn:aws:s3:::${local.app_bucket_name}/${local.app_prefix}*"
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-s3-policy"
+  })
+}
+
+# KMS usage for encrypt/decrypt with the CMK
+resource "aws_iam_policy" "app_kms_policy" {
+  name        = "${local.name_prefix}-app-kms-policy"
+  description = "Allow app instance to use CMK for S3 encryption/decryption"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Sid    = "KMSUse"
+      Effect = "Allow"
+      Action = [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:DescribeKey"
+      ]
+      Resource = aws_kms_key.app.arn
+    }]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-kms-policy"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_app_s3" {
+  role       = aws_iam_role.app_role.name
+  policy_arn = aws_iam_policy.app_s3_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "attach_app_kms" {
+  role       = aws_iam_role.app_role.name
+  policy_arn = aws_iam_policy.app_kms_policy.arn
+}
+
+resource "aws_iam_instance_profile" "app_profile" {
+  name = "${local.name_prefix}-app-instance-profile"
+  role = aws_iam_role.app_role.name
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-instance-profile"
+  })
+}
+
+#################
+# KMS CMK for S3
+#################
+resource "aws_kms_key" "app" {
+  description             = "CMK for ${local.name_prefix} application data"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      # Root/admin permissions
+      {
+        Sid      = "EnableRootPermissions",
+        Effect   = "Allow",
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        },
+        Action   = "kms:*",
+        Resource = "*"
+      },
+      # Allow the app role to use the key
+      {
+        Sid    = "AllowAppRoleUseOfKey",
+        Effect = "Allow",
+        Principal = {
+          AWS = aws_iam_role.app_role.arn
+        },
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-kms-key"
+  })
+}
+
+resource "aws_kms_alias" "app_alias" {
+  name          = "alias/${local.name_prefix}-app-kms"
+  target_key_id = aws_kms_key.app.key_id
+}
+
+#################
+# S3 Bucket (Versioning, Public Access Block, SSE-KMS, Policy)
+#################
+resource "aws_s3_bucket" "app" {
+  bucket = local.app_bucket_name
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-bucket"
+  })
+}
+
+resource "aws_s3_bucket_versioning" "app" {
+  bucket = aws_s3_bucket.app.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "app" {
+  bucket                  = aws_s3_bucket.app.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
+  bucket = aws_s3_bucket.app.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.app.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_policy" "app" {
+  bucket = aws_s3_bucket.app.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      # Enforce TLS
+      {
+        Sid      = "DenyInsecureTransport",
+        Effect   = "Deny",
+        Principal = "*",
+        Action   = "s3:*",
+        Resource = [
+          aws_s3_bucket.app.arn,
+          "${aws_s3_bucket.app.arn}/*"
+        ],
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+        }
+      },
+      # Enforce KMS usage with our CMK on object PUT
+      {
+        Sid      = "DenyIncorrectEncryptionHeader",
+        Effect   = "Deny",
+        Principal = "*",
+        Action   = "s3:PutObject",
+        Resource = "${aws_s3_bucket.app.arn}/*",
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
+      },
+      {
+        Sid      = "DenyWrongKmsKey",
+        Effect   = "Deny",
+        Principal = "*",
+        Action   = "s3:PutObject",
+        Resource = "${aws_s3_bucket.app.arn}/*",
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption-aws-kms-key-id" = aws_kms_key.app.arn
+          }
+        }
+      }
+    ]
+  })
+}
+
+#################
+# Private EC2 (App Host)
+#################
+resource "aws_instance" "app" {
+  ami                    = data.aws_ami.amazon_linux2.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.private1.id
+  vpc_security_group_ids = [aws_security_group.app_sg.id]
+  associate_public_ip_address = false
+  monitoring             = true
+  iam_instance_profile   = aws_iam_instance_profile.app_profile.name
+
+  user_data = <<-EOF
+    #!/bin/bash
+    set -euo pipefail
+    yum update -y
+    # Harden SSH: disable password auth
+    sed -i 's/^#\\?PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+    systemctl restart sshd
+    # Placeholder for app bootstrap...
+    # CloudWatch agent hints (optional)
+    # yum install -y amazon-cloudwatch-agent
+    # /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c ssm:YourParameterOrFile -s
+  EOF
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-app-instance"
+  })
+}
+
+#################
 # Outputs
-############################################
+#################
 output "vpc_id" {
-  value = aws_vpc.main.id
+  description = "The VPC ID."
+  value       = aws_vpc.main.id
 }
 
 output "public_subnet_id" {
-  value = aws_subnet.public.id
+  description = "The public subnet ID."
+  value       = aws_subnet.public.id
 }
 
 output "private_subnet_ids" {
-  value = [aws_subnet.private_1.id, aws_subnet.private_2.id]
+  description = "The private subnet IDs."
+  value       = [aws_subnet.private1.id, aws_subnet.private2.id]
 }
 
 output "igw_id" {
-  value = aws_internet_gateway.igw.id
+  description = "The Internet Gateway ID."
+  value       = aws_internet_gateway.igw.id
 }
 
 output "nat_gateway_id" {
-  value = aws_nat_gateway.nat.id
+  description = "The NAT Gateway ID."
+  value       = aws_nat_gateway.nat.id
 }
 
 output "bastion_instance_id" {
-  value = aws_instance.bastion.id
+  description = "The bastion EC2 instance ID."
+  value       = aws_instance.bastion.id
 }
 
 output "bastion_public_ip" {
-  value = aws_instance.bastion.public_ip
+  description = "The bastion public IP."
+  value       = aws_instance.bastion.public_ip
 }
 
 output "private_instance_id" {
-  value = aws_instance.private.id
+  description = "The private EC2 (app) instance ID."
+  value       = aws_instance.app.id
 }
 
 output "private_instance_profile_arn" {
-  value = aws_iam_instance_profile.private_ec2.arn
+  description = "The IAM instance profile ARN for the private instance."
+  value       = aws_iam_instance_profile.app_profile.arn
 }
 
 output "private_instance_role_arn" {
-  value = aws_iam_role.private_ec2.arn
+  description = "The IAM role ARN attached to the private instance."
+  value       = aws_iam_role.app_role.arn
 }
 
 output "s3_app_bucket_name" {
-  value = aws_s3_bucket.app.bucket
+  description = "The S3 application bucket name."
+  value       = aws_s3_bucket.app.bucket
 }
 
 output "s3_app_bucket_arn" {
-  value = aws_s3_bucket.app.arn
+  description = "The S3 application bucket ARN."
+  value       = aws_s3_bucket.app.arn
 }
 
 output "kms_app_key_arn" {
-  value = aws_kms_key.app.arn
+  description = "The KMS CMK ARN for application data."
+  value       = aws_kms_key.app.arn
 }
 
+# Sensitive output with generated private key (only when generated)
+output "bastion_private_key_pem" {
+  description = "Generated private key PEM for bastion (if Terraform generated it)."
+  value       = try(tls_private_key.bastion[0].private_key_pem, null)
+  sensitive   = true
+}
