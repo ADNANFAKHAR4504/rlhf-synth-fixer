@@ -68,22 +68,6 @@ jobs:
 
       - name: Build
         run: ./scripts/build.sh
-      
-      - name: Re-upload artifacts for Pulumi
-        if: ${{ needs.detect-metadata.outputs.platform == 'pulumi' && needs.detect-metadata.outputs.language == 'ts' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          include-hidden-files: true
-          overwrite: true
-          path: |
-            bin/
-            bin/
-            lib/
-            package*.json
-            Pipfile
-            Pipfile.lock
-            tsconfig.json
 
   synth:
     name: Synth
@@ -303,7 +287,7 @@ jobs:
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           CI: '1' # Set CI for the entire step
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}  
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
