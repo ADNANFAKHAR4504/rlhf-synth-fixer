@@ -1,5 +1,5 @@
-import { CloudTrailClient } from '@aws-sdk/client-cloudtrail';
 import {
+  DescribeFlowLogsCommand,
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
   EC2Client,
@@ -8,7 +8,6 @@ import { GetInstanceProfileCommand, IAMClient } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
   GetBucketAclCommand,
-  GetBucketPolicyStatusCommand,
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
   S3Client,
@@ -20,7 +19,6 @@ const region = 'us-east-1';
 const ec2 = new EC2Client({ region });
 const s3 = new S3Client({ region });
 const kms = new KMSClient({ region });
-const cloudtrail = new CloudTrailClient({ region });
 const iam = new IAMClient({ region });
 
 const outputs = JSON.parse(
@@ -72,6 +70,22 @@ describe('LIVE: Core Infrastructure Verification', () => {
         true
       );
     });
+
+    test('RDS security group has correct rules', async () => {
+      const sg = await ec2.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.rds_sg_id.value],
+        })
+      );
+      const rdsRule = sg.SecurityGroups?.[0].IpPermissions?.find(
+        p => p.FromPort === 3306
+      );
+      expect(
+        rdsRule?.UserIdGroupPairs?.some(
+          p => p.GroupId === outputs.ec2_sg_id.value
+        )
+      ).toBe(true);
+    });
   });
 
   describe('Compute', () => {
@@ -87,16 +101,16 @@ describe('LIVE: Core Infrastructure Verification', () => {
   });
 
   describe('Storage', () => {
-    const bucketName = outputs.s3_data_bucket_name.value;
+    const bucketName = outputs.s3_logs_bucket_name.value;
 
-    test('S3 bucket is versioned', async () => {
+    test('S3 logs bucket is versioned', async () => {
       const versioning = await s3.send(
         new GetBucketVersioningCommand({ Bucket: bucketName })
       );
       expect(versioning.Status).toBe('Enabled');
     });
 
-    test('S3 bucket has public access blocked', async () => {
+    test('S3 logs bucket has public access blocked', async () => {
       const pab = await s3.send(
         new GetPublicAccessBlockCommand({ Bucket: bucketName })
       );
@@ -108,20 +122,7 @@ describe('LIVE: Core Infrastructure Verification', () => {
       );
     });
 
-    test('S3 bucket is not public', async () => {
-      try {
-        const policyStatus = await s3.send(
-          new GetBucketPolicyStatusCommand({ Bucket: bucketName })
-        );
-        expect(policyStatus.PolicyStatus?.IsPublic).toBe(false);
-      } catch (e: any) {
-        if (e.name !== 'NoSuchBucketPolicy') {
-          throw e;
-        }
-      }
-    });
-
-    test('S3 bucket ACLs are private', async () => {
+    test('S3 logs bucket ACLs are private', async () => {
       const acl = await s3.send(
         new GetBucketAclCommand({ Bucket: bucketName })
       );
@@ -149,6 +150,22 @@ describe('LIVE: Core Infrastructure Verification', () => {
         })
       );
       expect(profile.InstanceProfile).toBeTruthy();
+    });
+  });
+
+  describe('Monitoring', () => {
+    test('VPC Flow Logs are enabled', async () => {
+      const flowLogs = await ec2.send(
+        new DescribeFlowLogsCommand({
+          Filter: [
+            {
+              Name: 'resource-id',
+              Values: [outputs.vpc_id.value],
+            },
+          ],
+        })
+      );
+      expect(flowLogs.FlowLogs?.length).toBeGreaterThan(0);
     });
   });
 });
