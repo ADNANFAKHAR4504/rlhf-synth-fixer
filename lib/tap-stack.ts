@@ -109,7 +109,6 @@ export class TapStack extends pulumi.ComponentResource {
     const timestamp = Date.now();
     let bucketName = `nova-model-logs-${stackName}-${timestamp}`;
     
-    // Ensure bucket name is within S3 63-character limit
     if (bucketName.length > 63) {
       const prefix = 'nova-model-logs-';
       const suffix = `-${timestamp}`;
@@ -154,46 +153,11 @@ export class TapStack extends pulumi.ComponentResource {
       restrictPublicBuckets: true,
     }, { parent: this });
   
-    // Create a more permissive bucket policy that allows legitimate access
-    const callerIdentity = aws.getCallerIdentity();
+    // Removed the bucket policy that was causing access denied errors
     
-    new aws.s3.BucketPolicy('logs-bucket-policy', {
-      bucket: bucket.id,
-      policy: callerIdentity.then(identity => JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              AWS: `arn:aws:iam::${identity.accountId}:root`
-            },
-            Action: 's3:*',
-            Resource: [
-              pulumi.interpolate`${bucket.arn}`,
-              pulumi.interpolate`${bucket.arn}/*`,
-            ],
-          },
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: [
-                'ec2.amazonaws.com',
-                'lambda.amazonaws.com',
-              ],
-            },
-            Action: [
-              's3:GetObject',
-              's3:PutObject',
-              's3:DeleteObject',
-            ],
-            Resource: pulumi.interpolate`${bucket.arn}/*`,
-          },
-        ],
-      })),
-    }, { parent: this });
-  
     return { bucket, publicAccessBlock };
   }
+  
   
   
 
