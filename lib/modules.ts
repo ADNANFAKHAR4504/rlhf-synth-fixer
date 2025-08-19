@@ -3,13 +3,13 @@ import { Construct } from 'constructs';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile'; // ADD THIS
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy'; // ADD THIS
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 
@@ -40,8 +40,9 @@ export interface SecurityModulesConfig {
 
 export class SecurityModules extends Construct {
   public readonly iamRole: IamRole;
-  public readonly instanceProfile: IamInstanceProfile; // ADD THIS
+  public readonly instanceProfile: IamInstanceProfile;
   public readonly securityGroup: SecurityGroup;
+  public readonly dbSecurityGroup: SecurityGroup; // SEPARATE SECURITY GROUP FOR RDS
   public readonly s3Bucket: S3Bucket;
   public readonly cloudTrail: cloudtrail.Cloudtrail;
   public readonly kmsKey: KmsKey;
@@ -52,6 +53,9 @@ export class SecurityModules extends Construct {
 
   constructor(scope: Construct, id: string, config: SecurityModulesConfig) {
     super(scope, id);
+
+    // Get current AWS account ID
+    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
 
     // Create VPC for network isolation
     this.vpc = new Vpc(this, 'MyApp-VPC-Main', {
@@ -125,9 +129,6 @@ export class SecurityModules extends Construct {
       routeTableId: publicRouteTable.id,
     });
 
-    // Get current AWS account ID
-    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
-
     // KMS Key for encryption - Created early as other resources depend on it
     this.kmsKey = new KmsKey(this, 'MyApp-KMS-Main', {
       description:
@@ -193,14 +194,18 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // CREATE IAM INSTANCE PROFILE - FIX FOR EC2 ERROR
-    this.instanceProfile = new IamInstanceProfile(this, 'MyApp-InstanceProfile', {
-      name: 'MyApp-InstanceProfile-EC2',
-      role: this.iamRole.name,
-      tags: {
-        Name: 'MyApp-InstanceProfile-EC2',
-      },
-    });
+    // CREATE IAM INSTANCE PROFILE
+    this.instanceProfile = new IamInstanceProfile(
+      this,
+      'MyApp-InstanceProfile',
+      {
+        name: 'MyApp-InstanceProfile-EC2',
+        role: this.iamRole.name,
+        tags: {
+          Name: 'MyApp-InstanceProfile-EC2',
+        },
+      }
+    );
 
     // IAM Policy with minimal required permissions
     const iamPolicy = new IamPolicy(this, 'MyApp-IAM-Policy-EC2', {
@@ -236,11 +241,11 @@ export class SecurityModules extends Construct {
       policyArn: iamPolicy.arn,
     });
 
-    // Security Group with restricted access
-    this.securityGroup = new SecurityGroup(this, 'MyApp-SG-Restricted', {
-      name: 'MyApp-SG-Restricted',
+    // Security Group for EC2 instances
+    this.securityGroup = new SecurityGroup(this, 'MyApp-SG-EC2', {
+      name: 'MyApp-SG-EC2',
       description:
-        'Security group allowing inbound traffic only from trusted IP range',
+        'Security group for EC2 instances - allowing inbound traffic only from trusted IP range',
       vpcId: this.vpc.id,
 
       ingress: [
@@ -290,15 +295,55 @@ export class SecurityModules extends Construct {
       ],
 
       tags: {
-        Name: 'MyApp-SG-Restricted',
+        Name: 'MyApp-SG-EC2',
         Security: 'Restricted',
         AllowedCIDR: config.allowedCidr,
       },
     });
 
+    // SEPARATE SECURITY GROUP FOR RDS - FIX FOR ENI PERMISSION ISSUE
+    this.dbSecurityGroup = new SecurityGroup(this, 'MyApp-SG-RDS', {
+      name: 'MyApp-SG-RDS',
+      description:
+        'Security group for RDS instances - only allows MySQL access from EC2 security group',
+      vpcId: this.vpc.id,
+
+      ingress: [
+        {
+          description: 'MySQL from EC2 instances only',
+          fromPort: 3306,
+          toPort: 3306,
+          protocol: 'tcp',
+          cidrBlocks: [],
+          ipv6CidrBlocks: [],
+          prefixListIds: [],
+          securityGroups: [this.securityGroup.id], // Only allow access from EC2 security group
+        },
+      ],
+
+      egress: [
+        {
+          description: 'All outbound traffic',
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+          ipv6CidrBlocks: [],
+          prefixListIds: [],
+          securityGroups: [],
+        },
+      ],
+
+      tags: {
+        Name: 'MyApp-SG-RDS',
+        Security: 'DatabaseOnly',
+        Purpose: 'RDS',
+      },
+    });
+
     // S3 Bucket for sensitive data
     this.s3Bucket = new S3Bucket(this, 'MyApp-S3-SecureData', {
-      bucket: `myapp-secure-data-f2jxva`, // Use the exact bucket name from error
+      bucket: 'myapp-secure-data-f2jxva',
       forceDestroy: false,
       tags: {
         Name: 'MyApp-S3-SecureData',
@@ -307,44 +352,62 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // ADD S3 BUCKET POLICY FOR CLOUDTRAIL - FIX FOR CLOUDTRAIL ERROR
-    new S3BucketPolicy(this, 'MyApp-S3-CloudTrailPolicy', {
-      bucket: this.s3Bucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'AWSCloudTrailAclCheck',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:GetBucketAcl',
-            Resource: this.s3Bucket.arn,
-            Condition: {
-              StringEquals: {
-                'AWS:SourceArn': `arn:aws:cloudtrail:${config.region}:${callerIdentity.accountId}:trail/MyApp-CloudTrail-Main`,
+    // FIXED S3 BUCKET POLICY FOR CLOUDTRAIL - CORRECTED POLICY STRUCTURE
+    const s3BucketPolicy = new S3BucketPolicy(
+      this,
+      'MyApp-S3-CloudTrailPolicy',
+      {
+        bucket: this.s3Bucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketAcl',
+              Resource: this.s3Bucket.arn,
+              Condition: {
+                StringEquals: {
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${config.region}:${callerIdentity.accountId}:trail/MyApp-CloudTrail-Main`,
+                },
               },
             },
-          },
-          {
-            Sid: 'AWSCloudTrailWrite',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.s3Bucket.arn}/cloudtrail-logs/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
-                'AWS:SourceArn': `arn:aws:cloudtrail:${config.region}:${callerIdentity.accountId}:trail/MyApp-CloudTrail-Main`,
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:PutObject',
+              Resource: `${this.s3Bucket.arn}/cloudtrail-logs/*`,
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${config.region}:${callerIdentity.accountId}:trail/MyApp-CloudTrail-Main`,
+                },
               },
             },
-          },
-        ],
-      }),
-    });
+            {
+              Sid: 'AWSCloudTrailGetBucketLocation',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'cloudtrail.amazonaws.com',
+              },
+              Action: 's3:GetBucketLocation',
+              Resource: this.s3Bucket.arn,
+              Condition: {
+                StringEquals: {
+                  'AWS:SourceArn': `arn:aws:cloudtrail:${config.region}:${callerIdentity.accountId}:trail/MyApp-CloudTrail-Main`,
+                },
+              },
+            },
+          ],
+        }),
+      }
+    );
 
     // S3 Bucket encryption configuration
     new S3BucketServerSideEncryptionConfigurationA(
@@ -373,7 +436,79 @@ export class SecurityModules extends Construct {
       restrictPublicBuckets: true,
     });
 
-    // CloudTrail for comprehensive API activity monitoring
+    // DB Subnet Group for RDS
+    const dbSubnetGroup = new DbSubnetGroup(this, 'MyApp-DB-SubnetGroup', {
+      name: 'myapp-db-subnet-group',
+      description:
+        'Subnet group for RDS instances - private subnets only for security',
+      subnetIds: [privateSubnet1.id, privateSubnet2.id],
+      tags: {
+        Name: 'MyApp-DB-SubnetGroup',
+        Type: 'Private',
+      },
+    });
+
+    // RDS Instance - USING SEPARATE SECURITY GROUP
+    this.rdsInstance = new DbInstance(this, 'MyApp-RDS-Main', {
+      identifier: 'myapp-rds-main',
+      engine: 'mysql',
+      engineVersion: '8.0',
+      instanceClass: config.dbInstanceClass,
+      allocatedStorage: 20,
+      storageType: 'gp2',
+
+      dbName: 'myappdb',
+      username: 'admin',
+      password: 'ChangeMe123!',
+
+      dbSubnetGroupName: dbSubnetGroup.name,
+      vpcSecurityGroupIds: [this.dbSecurityGroup.id], // USE SEPARATE DB SECURITY GROUP
+      publiclyAccessible: false,
+
+      storageEncrypted: true,
+      kmsKeyId: this.kmsKey.arn,
+
+      backupRetentionPeriod: 7,
+      backupWindow: '03:00-04:00',
+      maintenanceWindow: 'sun:04:00-sun:05:00',
+
+      deletionProtection: true,
+      skipFinalSnapshot: false,
+      finalSnapshotIdentifier: 'myapp-rds-final-snapshot',
+
+      tags: {
+        Name: 'MyApp-RDS-Main',
+        Access: 'Private',
+        Encryption: 'Enabled',
+        Environment: 'Production',
+      },
+    });
+
+    // EC2 Instance
+    this.ec2Instance = new Instance(this, 'MyApp-EC2-Main', {
+      ami: 'ami-0c94855ba95b798c7',
+      instanceType: config.instanceType,
+      subnetId: privateSubnet1.id,
+      vpcSecurityGroupIds: [this.securityGroup.id],
+
+      iamInstanceProfile: this.instanceProfile.name,
+
+      rootBlockDevice: {
+        volumeType: 'gp3',
+        volumeSize: 20,
+        encrypted: true,
+        kmsKeyId: this.kmsKey.arn,
+        deleteOnTermination: true,
+      },
+
+      tags: {
+        Name: 'MyApp-EC2-Main',
+        Environment: 'Production',
+        Monitoring: 'Enabled',
+      },
+    });
+
+    // CloudTrail for comprehensive API activity monitoring - ENSURE PROPER DEPENDENCIES
     this.cloudTrail = new cloudtrail.Cloudtrail(this, 'MyApp-CloudTrail-Main', {
       name: 'MyApp-CloudTrail-Main',
       s3BucketName: this.s3Bucket.bucket,
@@ -404,81 +539,8 @@ export class SecurityModules extends Construct {
         Scope: 'AllAPIActivity',
       },
 
-      // ADD DEPENDENCY TO ENSURE BUCKET POLICY IS CREATED FIRST
-      dependsOn: [this.s3Bucket],
-    });
-
-    // DB Subnet Group for RDS
-    const dbSubnetGroup = new DbSubnetGroup(this, 'MyApp-DB-SubnetGroup', {
-      name: 'myapp-db-subnet-group',
-      description:
-        'Subnet group for RDS instances - private subnets only for security',
-      subnetIds: [privateSubnet1.id, privateSubnet2.id],
-      tags: {
-        Name: 'MyApp-DB-SubnetGroup',
-        Type: 'Private',
-      },
-    });
-
-    // RDS Instance
-    this.rdsInstance = new DbInstance(this, 'MyApp-RDS-Main', {
-      identifier: 'myapp-rds-main',
-      engine: 'mysql',
-      engineVersion: '8.0',
-      instanceClass: config.dbInstanceClass,
-      allocatedStorage: 20,
-      storageType: 'gp2',
-
-      dbName: 'myappdb',
-      username: 'admin',
-      password: 'ChangeMe123!',
-
-      dbSubnetGroupName: dbSubnetGroup.name,
-      vpcSecurityGroupIds: [this.securityGroup.id],
-      publiclyAccessible: false,
-
-      storageEncrypted: true,
-      kmsKeyId: this.kmsKey.arn,
-
-      backupRetentionPeriod: 7,
-      backupWindow: '03:00-04:00',
-      maintenanceWindow: 'sun:04:00-sun:05:00',
-
-      deletionProtection: true,
-      skipFinalSnapshot: false,
-      finalSnapshotIdentifier: 'myapp-rds-final-snapshot',
-
-      tags: {
-        Name: 'MyApp-RDS-Main',
-        Access: 'Private',
-        Encryption: 'Enabled',
-        Environment: 'Production',
-      },
-    });
-
-    // EC2 Instance - FIXED TO USE INSTANCE PROFILE
-    this.ec2Instance = new Instance(this, 'MyApp-EC2-Main', {
-      ami: 'ami-0c94855ba95b798c7',
-      instanceType: config.instanceType,
-      subnetId: privateSubnet1.id,
-      vpcSecurityGroupIds: [this.securityGroup.id],
-
-      // USE INSTANCE PROFILE INSTEAD OF ROLE DIRECTLY
-      iamInstanceProfile: this.instanceProfile.name,
-
-      rootBlockDevice: {
-        volumeType: 'gp3',
-        volumeSize: 20,
-        encrypted: true,
-        kmsKeyId: this.kmsKey.arn,
-        deleteOnTermination: true,
-      },
-
-      tags: {
-        Name: 'MyApp-EC2-Main',
-        Environment: 'Production',
-        Monitoring: 'Enabled',
-      },
+      // ENSURE BUCKET POLICY IS CREATED FIRST
+      dependsOn: [s3BucketPolicy],
     });
 
     // CloudWatch Alarm for EC2 CPU monitoring
@@ -487,8 +549,7 @@ export class SecurityModules extends Construct {
       'MyApp-CW-CPUAlarm',
       {
         alarmName: 'MyApp-EC2-HighCPU',
-        alarmDescription:
-          'Alarm when EC2 instance CPU exceeds 80%',
+        alarmDescription: 'Alarm when EC2 instance CPU exceeds 80%',
 
         metricName: 'CPUUtilization',
         namespace: 'AWS/EC2',
