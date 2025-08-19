@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const LIB_DIR = path.resolve(__dirname, '../lib');
+const TEST_DIR = __dirname; // run terraform commands within test directory using local backend
 const TEST_TIMEOUT = 300000; // 5 minutes
 
 interface TerraformOutput {
@@ -12,6 +13,39 @@ interface TerraformOutput {
   };
 }
 
+// Set up test environment with local backend in test directory
+function setupTestEnvironment(): void {
+  // Always copy core files
+  const coreFiles = ['tap_stack.tf', 'provider.tf'];
+  coreFiles.forEach(file => {
+    const src = path.join(LIB_DIR, file);
+    const dst = path.join(TEST_DIR, file);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, dst);
+    }
+  });
+
+  // Ensure we have a tfvars for tests: prefer terraform.tfvars.test else fallback to terraform.tfvars
+  const tfvarsTestSrc = path.join(LIB_DIR, 'terraform.tfvars.test');
+  const tfvarsSrc = path.join(LIB_DIR, 'terraform.tfvars');
+  const tfvarsDst = path.join(TEST_DIR, 'terraform.tfvars.test');
+  if (fs.existsSync(tfvarsTestSrc)) {
+    fs.copyFileSync(tfvarsTestSrc, tfvarsDst);
+  } else if (fs.existsSync(tfvarsSrc)) {
+    fs.copyFileSync(tfvarsSrc, tfvarsDst);
+  }
+
+  // Remove previous plan file if exists
+  const planPath = path.join(TEST_DIR, 'tfplan');
+  if (fs.existsSync(planPath)) {
+    fs.unlinkSync(planPath);
+  }
+
+  // Initialize and format within the test directory
+  execSync('terraform init', { cwd: TEST_DIR, stdio: 'pipe', timeout: 60000 });
+  execSync('terraform fmt', { cwd: TEST_DIR, stdio: 'pipe', timeout: 10000 });
+}
+
 describe('Terraform Configuration Integration Tests', () => {
   beforeAll(async () => {
     // Set up test environment variables
@@ -19,17 +53,18 @@ describe('Terraform Configuration Integration Tests', () => {
     process.env.TF_VAR_ec2_key_pair_name = process.env.TF_VAR_ec2_key_pair_name || 'test-key-pair';
     process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
     process.env.AWS_DEFAULT_REGION = process.env.AWS_DEFAULT_REGION || 'us-east-1';
-    
-    // Ensure we're in the lib directory
-    process.chdir(LIB_DIR);
-    
-    // Clean up any existing state
+
+    // Prepare local test environment
+    setupTestEnvironment();
+
+    // Clean up any existing state in test directory
     try {
-      execSync('terraform destroy -auto-approve -lock=false', { 
+      execSync('terraform destroy -auto-approve -lock=false', {
+        cwd: TEST_DIR,
         stdio: 'pipe',
-        timeout: 60000 
+        timeout: 60000,
       });
-    } catch (error) {
+    } catch (_) {
       // Ignore errors if no state exists
     }
   }, TEST_TIMEOUT);
@@ -37,9 +72,10 @@ describe('Terraform Configuration Integration Tests', () => {
   afterAll(async () => {
     // Clean up resources after tests
     try {
-      execSync('terraform destroy -auto-approve -lock=false', { 
+      execSync('terraform destroy -auto-approve -lock=false', {
+        cwd: TEST_DIR,
         stdio: 'pipe',
-        timeout: 300000 
+        timeout: 300000,
       });
     } catch (error) {
       console.error('Failed to destroy resources:', error);
@@ -49,27 +85,30 @@ describe('Terraform Configuration Integration Tests', () => {
   describe('Terraform Initialization and Validation', () => {
     test('terraform init succeeds', () => {
       expect(() => {
-        execSync('terraform init -reconfigure -lock=false', { 
+        execSync('terraform init -reconfigure -lock=false', {
+          cwd: TEST_DIR,
           stdio: 'pipe',
-          timeout: 60000 
+          timeout: 60000,
         });
       }).not.toThrow();
     }, TEST_TIMEOUT);
 
     test('terraform validate passes', () => {
       expect(() => {
-        execSync('terraform validate', { 
+        execSync('terraform validate', {
+          cwd: TEST_DIR,
           stdio: 'pipe',
-          timeout: 30000 
+          timeout: 30000,
         });
       }).not.toThrow();
     }, TEST_TIMEOUT);
 
     test('terraform fmt check passes', () => {
       expect(() => {
-        execSync('terraform fmt -check -recursive', { 
+        execSync('terraform fmt -check -recursive', {
+          cwd: TEST_DIR,
           stdio: 'pipe',
-          timeout: 30000 
+          timeout: 30000,
         });
       }).not.toThrow();
     }, TEST_TIMEOUT);
@@ -78,21 +117,23 @@ describe('Terraform Configuration Integration Tests', () => {
   describe('Terraform Plan', () => {
     test('terraform plan succeeds without errors', () => {
       expect(() => {
-        execSync('terraform plan -lock=false -out=tfplan', { 
+        execSync('terraform plan -lock=false -var-file=terraform.tfvars.test -out=tfplan', {
+          cwd: TEST_DIR,
           stdio: 'pipe',
-          timeout: 120000 
+          timeout: 120000,
         });
       }).not.toThrow();
     }, TEST_TIMEOUT);
 
     test('plan file is created', () => {
-      expect(fs.existsSync(path.join(LIB_DIR, 'tfplan'))).toBe(true);
+      expect(fs.existsSync(path.join(TEST_DIR, 'tfplan'))).toBe(true);
     });
 
     test('plan shows expected resource changes', () => {
-      const planOutput = execSync('terraform show -json tfplan', { 
+      const planOutput = execSync('terraform show -json tfplan', {
+        cwd: TEST_DIR,
         encoding: 'utf8',
-        timeout: 30000 
+        timeout: 30000,
       });
       const plan = JSON.parse(planOutput);
 
@@ -113,17 +154,19 @@ describe('Terraform Configuration Integration Tests', () => {
   describe('Terraform Apply', () => {
     test('terraform apply succeeds', () => {
       expect(() => {
-        execSync('terraform apply -auto-approve -lock=false tfplan', { 
+        execSync('terraform apply -auto-approve -lock=false tfplan', {
+          cwd: TEST_DIR,
           stdio: 'pipe',
-          timeout: 600000 // 10 minutes for apply
+          timeout: 600000, // 10 minutes for apply
         });
       }).not.toThrow();
     }, TEST_TIMEOUT);
 
     test('terraform state list shows expected resources', () => {
-      const stateList = execSync('terraform state list', { 
+      const stateList = execSync('terraform state list', {
+        cwd: TEST_DIR,
         encoding: 'utf8',
-        timeout: 30000 
+        timeout: 30000,
       });
 
       // Check for key resources in state (VPC-dependent resources may not exist if create_vpcs=false)
@@ -150,9 +193,10 @@ describe('Terraform Configuration Integration Tests', () => {
     let outputs: TerraformOutput;
 
     beforeAll(() => {
-      const outputJson = execSync('terraform output -json', { 
+      const outputJson = execSync('terraform output -json', {
+        cwd: TEST_DIR,
         encoding: 'utf8',
-        timeout: 30000 
+        timeout: 30000,
       });
       outputs = JSON.parse(outputJson);
     });
@@ -201,9 +245,10 @@ describe('Terraform Configuration Integration Tests', () => {
 
   describe('AWS Resource Validation', () => {
     test('VPCs are created with correct CIDR blocks (if create_vpcs=true)', () => {
-      const vpcState = execSync('terraform show -json', { 
+      const vpcState = execSync('terraform show -json', {
+        cwd: TEST_DIR,
         encoding: 'utf8',
-        timeout: 30000 
+        timeout: 30000,
       });
       const state = JSON.parse(vpcState);
 
@@ -218,9 +263,10 @@ describe('Terraform Configuration Integration Tests', () => {
     });
 
     test('Security groups have correct rules (if create_vpcs=true)', () => {
-      const sgState = execSync('terraform show -json', { 
+      const sgState = execSync('terraform show -json', {
+        cwd: TEST_DIR,
         encoding: 'utf8',
-        timeout: 30000 
+        timeout: 30000,
       });
       const state = JSON.parse(sgState);
 
@@ -236,9 +282,10 @@ describe('Terraform Configuration Integration Tests', () => {
     });
 
     test('RDS instances have encryption enabled (if create_vpcs=true)', () => {
-      const rdsState = execSync('terraform show -json', { 
+      const rdsState = execSync('terraform show -json', {
+        cwd: TEST_DIR,
         encoding: 'utf8',
-        timeout: 30000 
+        timeout: 30000,
       });
       const state = JSON.parse(rdsState);
 
@@ -253,9 +300,10 @@ describe('Terraform Configuration Integration Tests', () => {
     });
 
     test('EC2 instances have encrypted volumes (if create_vpcs=true)', () => {
-      const ec2State = execSync('terraform show -json', { 
+      const ec2State = execSync('terraform show -json', {
+        cwd: TEST_DIR,
         encoding: 'utf8',
-        timeout: 30000 
+        timeout: 30000,
       });
       const state = JSON.parse(ec2State);
 

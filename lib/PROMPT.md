@@ -12,10 +12,8 @@ This is where the bulk of the work will be. I want to define all our resources i
 
 Here's a rundown of what we need:
 
-Networking 🌐
 Let's start by setting up a VPC in each region. Once those are up, we'll need to link them with a VPC peering connection and add the necessary routes so they can talk to each other privately.
 
-Data & Databases 💾
 This is the critical part. I'm thinking:
 
 S3 Buckets: One in each region, with cross-region replication set up to copy data from the primary to the secondary bucket.
@@ -24,10 +22,8 @@ DynamoDB Global Tables: A single global table that automatically replicates data
 
 RDS Instances: An RDS instance in each region, and both absolutely must be Multi-AZ for high availability.
 
-Compute 🖥️
 We'll need an EC2 instance in each region. To keep things consistent, let's use variables for the instance type and key pair name. It would also be great to use a data source to automatically find the latest Amazon Linux 2 AMI in each region.
 
-Security & Logging 🔒
 Security first, always!
 
 Let's create a KMS key in each region and make sure all our services—S3, DynamoDB, RDS, and even the EC2 drives—are using these keys for encryption at rest.
