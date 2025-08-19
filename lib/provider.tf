@@ -27,7 +27,40 @@ provider "aws" {
 resource "null_resource" "backup_recovery_point_cleanup" {
   triggers = {
     always_run = timestamp()
+    variable "s3_bucket_name_to_clean" {
+  description = "The name of the S3 bucket to empty before deletion."
+  type        = string
+}
+
+resource "null_resource" "backup_recovery_point_cleanup" {
+  triggers = {
+    always_run = timestamp()
     backup_vault_name = var.backup_vault_name_to_clean
+  }
+
+  provisioner "local-exec" {
+    when       = destroy
+    command    = <<EOT
+      echo "Attempting to delete recovery points from backup vault: ${self.triggers.backup_vault_name}"
+      RECOVERY_POINT_ARNS=$(aws backup list-recovery-points-by-backup-vault 
+        --backup-vault-name ${self.triggers.backup_vault_name}
+        --query 'RecoveryPoints[].RecoveryPointArn'
+        --output text)
+
+      if [ -z "$RECOVERY_POINT_ARNS" ]; then
+        echo "No recovery points found in ${self.triggers.backup_vault_name}."
+      else
+        for arn in $RECOVERY_POINT_ARNS;
+        do
+          echo "Deleting recovery point: $arn"
+          aws backup delete-recovery-point --recovery-point-arn $arn
+        done
+        echo "Finished deleting recovery points from ${self.triggers.backup_vault_name}."
+      fi
+    EOT
+    interpreter = ["bash", "-c"]
+  }
+}
   }
 
   provisioner "local-exec" {
