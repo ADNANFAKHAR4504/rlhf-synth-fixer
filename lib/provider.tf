@@ -52,6 +52,7 @@ resource "null_resource" "backup_recovery_point_cleanup" {
     EOT
     interpreter = ["bash", "-c"]
   }
+}
 
 
 resource "null_resource" "s3_bucket_cleanup" {
