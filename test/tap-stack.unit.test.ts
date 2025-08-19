@@ -292,7 +292,7 @@ describe('TAP Stack CloudFormation Template - Unit Tests', () => {
     });
 
     test('outputs should have proper export names', () => {
-      const expectedExportNames = {
+      const expectedExportNames: { [key: string]: string } = {
         'KMSKeyId': 'KMSKeyId',
         'KMSKeyArn': 'KMSKeyArn', 
         'SecureDataBucketName': 'SecureDataBucket',
