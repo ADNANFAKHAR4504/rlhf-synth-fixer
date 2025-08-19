@@ -403,6 +403,13 @@ data "aws_iam_user" "app_user" {
   user_name = "${var.project_name}-app-user"
 }
 
+resource "null_resource" "force_delete_s3_bucket" {
+  provisioner "local-exec" {
+    when    = destroy
+    command = "aws s3 rb s3://tap-app-dev-064031-qcf7m9d3-logs-bucket --force"
+  }
+}
+
 
 
 output "vpc_cidr" {
