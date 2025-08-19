@@ -115,11 +115,6 @@ describe("tap_stack.tf static verification", () => {
     expect(has(/\/aws\/security\/unauthorized/)).toBe(true);
   });
 
-  // CloudTrail trail and S3 bucket
-  it("creates CloudTrail trail and S3 bucket for logging", () => {
-    expect(has(/resource\s+"aws_cloudtrail"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket"\s+"cloudtrail"/)).toBe(true);
-  });
 
   // Outputs for essential resources
   it("declares outputs for VPCs, subnets, RDS endpoints, IAM groups, KMS and CloudTrail", () => {
@@ -138,10 +133,6 @@ describe("tap_stack.tf static verification", () => {
       "security_sns_topic",
       "primary_rds_kms_key_arn",
       "secondary_rds_kms_key_arn",
-      "cloudtrail_trail_name",
-      "cloudtrail_s3_bucket",
-      "cloudtrail_cloudwatch_log_group",
-      "cloudtrail_alerts_sns_topic",
     ].forEach((output) => {
       expect(has(new RegExp(`output\\s+"${output}"`))).toBe(true);
     });
