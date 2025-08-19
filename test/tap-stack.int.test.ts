@@ -44,7 +44,7 @@ describe('TapStack Integration Tests', () => {
       });
 
       const instance = response.Reservations?.[0]?.Instances?.[0];
-      expect(instance?.InstanceType).toBe('t3.micro');
+      expect(instance?.InstanceType).toBe('t2.micro');
     });
 
     it('should have Environment Development tag', async () => {

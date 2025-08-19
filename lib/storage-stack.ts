@@ -318,8 +318,19 @@ export class StorageStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Create CloudWatch Log Group for EventBridge
+    const logGroup = new aws.cloudwatch.LogGroup(
+      `tap-s3-events-log-${environmentSuffix}`,
+      {
+        name: `/aws/events/tap-s3-events-${environmentSuffix}`,
+        retentionInDays: 7,
+        tags,
+      },
+      { parent: this }
+    );
+
     // Create EventBridge rule for S3 notifications
-    new aws.cloudwatch.EventRule(
+    const eventRule = new aws.cloudwatch.EventRule(
       `tap-s3-event-rule-${environmentSuffix}`,
       {
         description: 'Capture S3 bucket events',
@@ -332,6 +343,16 @@ export class StorageStack extends pulumi.ComponentResource {
           },
         }),
         tags,
+      },
+      { parent: this }
+    );
+
+    // Create EventBridge target to send events to CloudWatch Logs
+    new aws.cloudwatch.EventTarget(
+      `tap-s3-event-target-${environmentSuffix}`,
+      {
+        rule: eventRule.name,
+        arn: logGroup.arn,
       },
       { parent: this }
     );
