@@ -247,7 +247,7 @@ describe('Terraform IAM Infrastructure Unit Tests', () => {
     it('should include breakglass role example', () => {
       expect(tapStackContent).toContain('breakglass');
       expect(tapStackContent).toContain('Emergency access');
-      expect(tapStackContent).toContain('max_session_duration = 900');
+      expect(tapStackContent).toContain('max_session_duration = 3600');
     });
   });
 
