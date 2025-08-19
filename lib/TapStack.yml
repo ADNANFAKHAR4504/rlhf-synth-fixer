@@ -1220,7 +1220,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "static-content-tapstackpr1604-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "static-content-tapstackpr1697-${AWS::AccountId}-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
