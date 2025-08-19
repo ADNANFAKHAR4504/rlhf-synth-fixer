@@ -109,6 +109,12 @@ variable "acm_certificate_arn" {
   default     = ""
 }
 
+variable "create_rds" {
+  description = "Create RDS resources (use false to avoid ENI/subnet deletion issues or when permissions are limited)"
+  type        = bool
+  default     = false
+}
+
 variable "enable_config" {
   description = "Enable AWS Config resources (guard against account recorder limits)"
   type        = bool
@@ -807,12 +813,14 @@ resource "aws_autoscaling_group" "main" {
 # RDS (private, encrypted, multi-AZ)
 ########################
 resource "aws_db_subnet_group" "main" {
+  count      = var.create_rds ? 1 : 0
   name       = "${local.name_prefix}-db-subnets"
   subnet_ids = aws_subnet.database[*].id
   tags       = merge(local.common_tags, { Name = "${local.name_prefix}-db-subnets" })
 }
 
 resource "aws_db_parameter_group" "main" {
+  count       = var.create_rds ? 1 : 0
   name        = "${local.name_prefix}-pg"
   family      = "postgres17"
   description = "Parameter group for ${local.name_prefix}"
@@ -820,6 +828,7 @@ resource "aws_db_parameter_group" "main" {
 }
 
 resource "aws_db_instance" "main" {
+  count                    = var.create_rds ? 1 : 0
   identifier               = "${local.name_prefix}-db"
   engine                   = "postgres"
   engine_version           = var.rds_engine_version != "" ? var.rds_engine_version : null
@@ -828,7 +837,7 @@ resource "aws_db_instance" "main" {
   storage_type             = "gp3"
   storage_encrypted        = true
   kms_key_id               = aws_kms_key.rds.arn
-  db_subnet_group_name     = aws_db_subnet_group.main.name
+  db_subnet_group_name     = var.create_rds ? aws_db_subnet_group.main[0].name : null
   vpc_security_group_ids   = [aws_security_group.rds.id]
   username                 = var.rds_username
   password                 = var.rds_password
@@ -838,7 +847,7 @@ resource "aws_db_instance" "main" {
   delete_automated_backups = true
   deletion_protection      = false
   skip_final_snapshot      = true
-  parameter_group_name     = aws_db_parameter_group.main.name
+  parameter_group_name     = var.create_rds ? aws_db_parameter_group.main[0].name : null
   apply_immediately        = true
   tags                     = merge(local.common_tags, { Name = "${local.name_prefix}-rds" })
 }

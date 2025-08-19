@@ -139,7 +139,11 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
     const c = readStack();
     expect(c).toMatch(/resource\s+"aws_lb"\s+"main"/);
     expect(c).toMatch(/resource\s+"aws_lb_listener"\s+"https"/);
-    expect(c).toMatch(/resource\s+"aws_lb_listener"\s+"http"/);
+    const hasSingleHttp = /resource\s+"aws_lb_listener"\s+"http"/.test(c);
+    const hasSplitHttp =
+      /resource\s+"aws_lb_listener"\s+"http_redirect"/.test(c) &&
+      /resource\s+"aws_lb_listener"\s+"http_forward"/.test(c);
+    expect(hasSingleHttp || hasSplitHttp).toBe(true);
   });
 
   test('EC2 LT + ASG in private subnets and no external templatefile', () => {
