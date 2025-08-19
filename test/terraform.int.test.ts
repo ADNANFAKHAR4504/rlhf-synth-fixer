@@ -106,7 +106,7 @@ describe('Terraform IAM Infrastructure Integration Tests', () => {
       expect(tfvarsContent).toContain('lambda:CreateFunction');
       expect(tfvarsContent).toContain('lambda:UpdateFunctionCode');
       expect(tfvarsContent).toContain('arn:aws:lambda:*:123456789012:function:corp-*');
-      expect(tfvarsContent).toContain('max_session_duration = 1800');
+      expect(tfvarsContent).toContain('max_session_duration = 3600');
     });
 
     it('should configure breakglass role with MFA requirement', () => {
@@ -115,7 +115,7 @@ describe('Terraform IAM Infrastructure Integration Tests', () => {
       
       expect(tfvarsContent).toContain('breakglass');
       expect(tfvarsContent).toContain('require_mfa          = true');
-      expect(tfvarsContent).toContain('max_session_duration = 900');
+      expect(tfvarsContent).toContain('max_session_duration = 3600');
       expect(tfvarsContent).toContain('emergency-access');
     });
   });
