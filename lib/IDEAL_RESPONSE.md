@@ -4,6 +4,63 @@ This document contains the ideal, validated Terraform HCL configuration for a se
 
 ---
 
+## variables.tf
+
+```hcl
+variable "aws_region" {
+  description = "Primary AWS provider region"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "secondary_region" {
+  description = "Secondary AWS provider region"
+  type        = string
+  default     = "us-west-2"
+}
+
+variable "environment" {
+  description = "Environment suffix for resource names (must start with a letter, use only letters and numbers)"
+  type        = string
+  default     = "dev"
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9]*$", var.environment))
+    error_message = "Environment must start with a letter and contain only letters and numbers."
+  }
+}
+variable "name_prefix" {
+  description = "Prefix for all resource names"
+  type        = string
+  default     = "secure-env"
+}
+
+variable "bucket_name" {
+  description = "Name of the S3 bucket (should include environment suffix)"
+  type        = string
+  default     = "secure-env-dev-s3-bucket"
+}
+
+variable "vpc_cidr_primary" {
+  description = "CIDR block for primary VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "vpc_cidr_secondary" {
+  description = "CIDR block for secondary VPC"
+  type        = string
+  default     = "10.1.0.0/16"
+}
+
+variable "allowed_ssh_cidr" {
+  description = "CIDR blocks allowed for SSH access to public EC2 instances"
+  type        = list(string)
+  default     = ["10.0.0.0/8"]
+}
+```
+
+---
+
 ## provider.tf
 
 ```hcl
@@ -15,13 +72,11 @@ terraform {
       version = ">= 5.0"
     }
   }
-  backend "s3" {
-    region = "us-east-1"
-  }
 }
 
 provider "aws" {
   alias  = "primary"
+  region = var.aws_region
   default_tags {
     tags = {
       Environment = var.environment
@@ -47,76 +102,39 @@ provider "aws" {
 ## tap_stack.tf
 
 ```hcl
-variable "aws_region" {
-  description = "Primary AWS provider region"
-  type        = string
-  default     = "us-east-1"
+module "tap_stack" {
+  source           = "./tap_stack"
+  name_prefix      = var.name_prefix
+  environment      = var.environment
+  aws_region       = var.aws_region
+  secondary_region = var.secondary_region
 }
 
-variable "secondary_region" {
-  description = "Secondary AWS provider region"
-  type        = string
+resource "aws_s3_bucket" "primary" {
+  provider = aws.primary
+  bucket   = "${var.name_prefix}-primary-${var.environment}"
 }
 
-variable "environment" {
-  description = "Environment suffix for resource names (must start with a letter, use only letters and numbers)"
-  type        = string
-  default     = "dev"
-  validation {
-    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9]*$", var.environment))
-    error_message = "Environment must start with a letter and contain only letters and numbers."
-  }
+resource "aws_s3_bucket" "secondary" {
+  provider = aws.secondary
+  bucket   = "${var.name_prefix}-secondary-${var.environment}"
 }
-
-variable "name_prefix" {
-  description = "Prefix for all resource names"
-  type        = string
-  default     = "secure-env"
-}
-
-variable "bucket_name" {
-  description = "Name of the S3 bucket (should include environment suffix)"
-  type        = string
-  default     = "secure-env-dev-s3-bucket"
-}
-
-########################
-# S3 Bucket
-########################
 
 resource "aws_s3_bucket" "this" {
   provider = aws.primary
-  bucket   = "${var.name_prefix}-${var.environment}-s3-bucket"
-  tags = {
-    Project     = "secure-env"
-    Environment = var.environment
-    ManagedBy   = "terraform"
-  }
+  bucket   = "${var.name_prefix}-this-${var.environment}"
 }
 
-resource "aws_s3_bucket_public_access_block" "this" {
-  provider                = aws.primary
-  bucket                  = aws_s3_bucket.this.id
-  block_public_acls       = true
-  ignore_public_acls      = true
-  block_public_policy     = true
-  restrict_public_buckets = true
+output "primary_bucket_id" {
+  value = aws_s3_bucket.primary.id
 }
 
-resource "aws_s3_bucket_versioning" "this" {
-  provider = aws.primary
-  bucket   = aws_s3_bucket.this.id
-  versioning_configuration {
-    status = "Enabled"
-  }
+output "secondary_bucket_id" {
+  value = aws_s3_bucket.secondary.id
 }
 
-output "bucket_name" {
-  value = aws_s3_bucket.this.bucket
-}
-
-output "bucket_tags" {
-  value = aws_s3_bucket.this.tags
+output "this_bucket_id" {
+  value = aws_s3_bucket.this.id
 }
 ```
 
@@ -125,84 +143,22 @@ output "bucket_tags" {
 ## vpc.tf
 
 ```hcl
-variable "vpc_cidr_primary" {
-  description = "CIDR block for primary VPC"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "vpc_cidr_secondary" {
-  description = "CIDR block for secondary VPC"
-  type        = string
-  default     = "10.1.0.0/16"
-}
-
-resource "aws_vpc" "primary" {
-  provider              = aws.primary
-  cidr_block            = var.vpc_cidr_primary
-  enable_dns_hostnames  = true
-  enable_dns_support    = true
+resource "aws_vpc" "main" {
+  provider = aws.primary
+  cidr_block = "10.0.0.0/16"
   tags = {
-    Name = "${var.name_prefix}-${var.environment}-vpc-primary"
+    Name = "${var.name_prefix}-vpc-${var.environment}"
   }
 }
 
-resource "aws_vpc" "secondary" {
-  provider              = aws.secondary
-  cidr_block            = var.vpc_cidr_secondary
-  enable_dns_hostnames  = true
-  enable_dns_support    = true
+resource "aws_subnet" "main" {
+  provider = aws.primary
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "${var.aws_region}a"
   tags = {
-    Name = "${var.name_prefix}-${var.environment}-vpc-secondary"
+    Name = "${var.name_prefix}-subnet-${var.environment}"
   }
-}
-
-resource "aws_subnet" "private_primary_1" {
-  provider            = aws.primary
-  vpc_id              = aws_vpc.primary.id
-  cidr_block          = cidrsubnet(var.vpc_cidr_primary, 4, 1)
-  availability_zone   = "us-east-1a"
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-private-subnet-primary-1"
-  }
-}
-
-resource "aws_subnet" "private_primary_2" {
-  provider            = aws.primary
-  vpc_id              = aws_vpc.primary.id
-  cidr_block          = cidrsubnet(var.vpc_cidr_primary, 4, 2)
-  availability_zone   = "us-east-1b"
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-private-subnet-primary-2"
-  }
-}
-
-resource "aws_subnet" "private_secondary_1" {
-  provider            = aws.secondary
-  vpc_id              = aws_vpc.secondary.id
-  cidr_block          = cidrsubnet(var.vpc_cidr_secondary, 4, 1)
-  availability_zone   = "us-west-2a"
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-private-subnet-secondary-1"
-  }
-}
-
-resource "aws_subnet" "private_secondary_2" {
-  provider            = aws.secondary
-  vpc_id              = aws_vpc.secondary.id
-  cidr_block          = cidrsubnet(var.vpc_cidr_secondary, 4, 2)
-  availability_zone   = "us-west-2b"
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-private-subnet-secondary-2"
-  }
-}
-
-output "vpc_id_primary" {
-  value = aws_vpc.primary.id
-}
-
-output "vpc_id_secondary" {
-  value = aws_vpc.secondary.id
 }
 ```
 
@@ -211,96 +167,16 @@ output "vpc_id_secondary" {
 ## kms.tf
 
 ```hcl
-data "aws_caller_identity" "current" {}
-
-resource "aws_kms_key" "primary" {
-  provider                = aws.primary
-  description             = "${var.name_prefix}-${var.environment}-kms-key-primary"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "Allow administration of the key",
-        Effect   = "Allow",
-        Principal = {
-          AWS = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
-        },
-        Action   = ["kms:*"]
-        Resource = "*"
-      },
-      {
-        Sid      = "Allow CloudWatch Logs to use the key",
-        Effect   = "Allow",
-        Principal = {
-          Service = "logs.us-east-1.amazonaws.com"
-        },
-        Action   = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ],
-        Resource = "*"
-      }
-    ]
-  })
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-kms-key-primary"
-  }
+resource "aws_kms_key" "cloudtrail" {
+  provider = aws.primary
+  description = "KMS key for CloudTrail logs"
+  enable_key_rotation = true
 }
 
-resource "aws_kms_alias" "primary" {
-  provider      = aws.primary
-  name          = "alias/${var.name_prefix}-${var.environment}-primary"
-  target_key_id = aws_kms_key.primary.key_id
-}
-
-resource "aws_kms_key" "secondary" {
-  provider                = aws.secondary
-  description             = "${var.name_prefix}-${var.environment}-kms-key-secondary"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid      = "Allow administration of the key",
-        Effect   = "Allow",
-        Principal = {
-          AWS = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
-        },
-        Action   = ["kms:*"]
-        Resource = "*"
-      },
-      {
-        Sid      = "Allow CloudWatch Logs to use the key",
-        Effect   = "Allow",
-        Principal = {
-          Service = "logs.us-west-2.amazonaws.com"
-        },
-        Action   = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ],
-        Resource = "*"
-      }
-    ]
-  })
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-kms-key-secondary"
-  }
-}
-
-resource "aws_kms_alias" "secondary" {
-  provider      = aws.secondary
-  name          = "alias/${var.name_prefix}-${var.environment}-secondary"
-  target_key_id = aws_kms_key.secondary.key_id
+resource "aws_kms_key" "s3" {
+  provider = aws.primary
+  description = "KMS key for S3 encryption"
+  enable_key_rotation = true
 }
 ```
 
@@ -319,7 +195,6 @@ resource "aws_iam_role" "vpc_flow_log" {
         Principal = {
           Service = "vpc-flow-logs.amazonaws.com"
         }
-        Action = "sts:AssumeRole"
       }
     ]
   })
@@ -346,6 +221,51 @@ resource "aws_iam_role_policy" "vpc_flow_log" {
     ]
   })
 }
+
+resource "aws_iam_role" "lambda_exec" {
+  provider = aws.primary
+  name = "${var.name_prefix}-lambda-exec-${var.environment}"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_policy" "lambda_policy" {
+  provider = aws.primary
+  name        = "${var.name_prefix}-lambda-policy-${var.environment}"
+  description = "Policy for Lambda execution"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_attach" {
+  provider = aws.primary
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = aws_iam_policy.lambda_policy.arn
+}
 ```
 
 ---
@@ -353,42 +273,10 @@ resource "aws_iam_role_policy" "vpc_flow_log" {
 ## monitoring.tf
 
 ```hcl
-resource "aws_cloudwatch_metric_alarm" "bastion_primary_cpu_high" {
+resource "aws_cloudwatch_log_group" "lambda" {
   provider = aws.primary
-  alarm_name          = "${var.name_prefix}-${var.environment}-bastion-primary-cpu-high"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 80
-  alarm_description   = "Alarm if CPU > 80% for 10 minutes"
-  dimensions = {
-    InstanceId = aws_instance.bastion_primary.id
-  }
-  tags = {
-    Project = "secure-env"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "bastion_secondary_cpu_high" {
-  provider = aws.secondary
-  alarm_name          = "${var.name_prefix}-${var.environment}-bastion-secondary-cpu-high"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 80
-  alarm_description   = "Alarm if CPU > 80% for 10 minutes"
-  dimensions = {
-    InstanceId = aws_instance.bastion_secondary.id
-  }
-  tags = {
-    Project = "secure-env"
-  }
+  name              = "/aws/lambda/${aws_lambda_function.image_processor.function_name}"
+  retention_in_days = 14
 }
 ```
 
@@ -397,12 +285,6 @@ resource "aws_cloudwatch_metric_alarm" "bastion_secondary_cpu_high" {
 ## security_groups.tf
 
 ```hcl
-variable "allowed_ssh_cidr" {
-  description = "CIDR blocks allowed for SSH access to public EC2 instances"
-  type        = list(string)
-  default     = ["10.0.0.0/8"]
-}
-
 resource "aws_security_group" "public_ec2_primary" {
   provider    = aws.primary
   name        = "${var.name_prefix}-${var.environment}-public-ec2-sg-primary"
@@ -413,7 +295,6 @@ resource "aws_security_group" "public_ec2_primary" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ssh_cidr
   }
   egress {
     description = "All outbound traffic"
@@ -532,6 +413,27 @@ resource "aws_security_group" "lambda_secondary" {
     Name = "${var.name_prefix}-${var.environment}-lambda-sg-secondary"
   }
 }
+
+resource "aws_security_group" "main" {
+  provider = aws.primary
+  name        = "${var.name_prefix}-sg-${var.environment}"
+  description = "Main security group"
+  vpc_id      = aws_vpc.primary.id
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
 ```
 
 ---
@@ -539,77 +441,18 @@ resource "aws_security_group" "lambda_secondary" {
 ## lambda.tf
 
 ```hcl
-resource "aws_cloudwatch_log_group" "lambda_logs_primary" {
-  provider          = aws.primary
-  name              = "/aws/lambda/${var.name_prefix}-${var.environment}-function-primary"
-  retention_in_days = 14
-  kms_key_id        = aws_kms_key.primary.arn
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-lambda-logs-primary"
-  }
-}
-
-resource "aws_cloudwatch_log_group" "lambda_logs_secondary" {
-  provider          = aws.secondary
-  name              = "/aws/lambda/${var.name_prefix}-${var.environment}-function-secondary"
-  retention_in_days = 14
-  kms_key_id        = aws_kms_key.secondary.arn
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-lambda-logs-secondary"
-  }
-}
-
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_file = "${path.module}/lambda_function.py"
-  output_path = "${path.module}/lambda_function.zip"
-}
-
-resource "aws_lambda_function" "primary" {
-  provider         = aws.primary
-  filename         = data.archive_file.lambda_zip.output_path
-  function_name    = "${var.name_prefix}-${var.environment}-function-primary"
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "lambda_function.lambda_handler"
-  runtime          = "python3.9"
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  memory_size      = 128
-  timeout          = 10
-  vpc_config {
-    subnet_ids         = [aws_subnet.private_primary_1.id, aws_subnet.private_primary_2.id]
-    security_group_ids = [aws_security_group.lambda_primary.id]
-  }
+resource "aws_lambda_function" "image_processor" {
+  provider = aws.primary
+  function_name = "${var.name_prefix}-image-processor-${var.environment}"
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.9"
+  role          = aws_iam_role.lambda_exec.arn
+  filename      = "${path.module}/lambda_function.zip"
+  source_code_hash = filebase64sha256("${path.module}/lambda_function.zip")
   environment {
     variables = {
-      ENVIRONMENT = var.environment
+      BUCKET_NAME = aws_s3_bucket.primary.id
     }
-  }
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-function-primary"
-  }
-}
-
-resource "aws_lambda_function" "secondary" {
-  provider         = aws.secondary
-  filename         = data.archive_file.lambda_zip.output_path
-  function_name    = "${var.name_prefix}-${var.environment}-function-secondary"
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "lambda_function.lambda_handler"
-  runtime          = "python3.9"
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  memory_size      = 128
-  timeout          = 10
-  vpc_config {
-    subnet_ids         = [aws_subnet.private_secondary_1.id, aws_subnet.private_secondary_2.id]
-    security_group_ids = [aws_security_group.lambda_secondary.id]
-  }
-  environment {
-    variables = {
-      ENVIRONMENT = var.environment
-    }
-  }
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-function-secondary"
   }
 }
 ```
@@ -619,56 +462,27 @@ resource "aws_lambda_function" "secondary" {
 ## alerting.tf
 
 ```hcl
-resource "aws_cloudwatch_log_metric_filter" "unauthorized_access_primary" {
-  provider         = aws.primary
-  name             = "${var.name_prefix}-${var.environment}-unauthorized-access-primary"
-  log_group_name   = aws_cloudwatch_log_group.lambda_logs_primary.name
-  pattern          = "Unauthorized|AccessDenied|UserNotAuthorized"
-  metric_transformation {
-    name      = "UnauthorizedAccessCount"
-    namespace = "${var.name_prefix}/${var.environment}/Security"
-    value     = "1"
+resource "aws_cloudwatch_metric_alarm" "cpu_utilization" {
+  provider = aws.primary
+  alarm_name          = "${var.name_prefix}-cpu-utilization-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 120
+  statistic           = "Average"
+  threshold           = 80
+  alarm_description   = "Alarm when CPU exceeds 80%"
+  actions_enabled     = true
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  dimensions = {
+    InstanceId = aws_instance.main.id
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm_primary" {
-  provider            = aws.primary
-  alarm_name          = "${var.name_prefix}-${var.environment}-unauthorized-access-alarm-primary"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
-  metric_name         = aws_cloudwatch_log_metric_filter.unauthorized_access_primary.metric_transformation[0].name
-  namespace           = aws_cloudwatch_log_metric_filter.unauthorized_access_primary.metric_transformation[0].namespace
-  period              = 60
-  statistic           = "Sum"
-  threshold           = 1
-  alarm_description   = "Alert for unauthorized access attempts detected in Lambda logs (primary region)"
-  actions_enabled     = false
-}
-
-resource "aws_cloudwatch_log_metric_filter" "unauthorized_access_secondary" {
-  provider         = aws.secondary
-  name             = "${var.name_prefix}-${var.environment}-unauthorized-access-secondary"
-  log_group_name   = aws_cloudwatch_log_group.lambda_logs_secondary.name
-  pattern          = "Unauthorized|AccessDenied|UserNotAuthorized"
-  metric_transformation {
-    name      = "UnauthorizedAccessCount"
-    namespace = "${var.name_prefix}/${var.environment}/Security"
-    value     = "1"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm_secondary" {
-  provider            = aws.secondary
-  alarm_name          = "${var.name_prefix}-${var.environment}-unauthorized-access-alarm-secondary"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
-  metric_name         = aws_cloudwatch_log_metric_filter.unauthorized_access_secondary.metric_transformation[0].name
-  namespace           = aws_cloudwatch_log_metric_filter.unauthorized_access_secondary.metric_transformation[0].namespace
-  period              = 60
-  statistic           = "Sum"
-  threshold           = 1
-  alarm_description   = "Alert for unauthorized access attempts detected in Lambda logs (secondary region)"
-  actions_enabled     = false
+resource "aws_sns_topic" "alerts" {
+  provider = aws.primary
+  name = "${var.name_prefix}-alerts-${var.environment}"
 }
 ```
 
@@ -766,6 +580,53 @@ resource "aws_iam_role_policy" "cloudtrail_logs" {
 
 output "cloudtrail_arn" {
   value = aws_cloudtrail.main.arn
+}
+```
+
+---
+
+## s3_encryption.tf
+
+```hcl
+resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
+  provider = aws.primary
+  bucket   = aws_s3_bucket.primary.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.s3.arn
+    }
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
+  provider = aws.secondary
+  bucket   = aws_s3_bucket.secondary.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.s3.arn
+    }
+  }
+}
+```
+
+---
+
+## ec2.tf
+
+```hcl
+resource "aws_instance" "main" {
+  provider = aws.primary
+  ami           = "ami-12345678"
+  instance_type = "t3.micro"
+  subnet_id     = aws_subnet.main.id
+  vpc_security_group_ids = [aws_security_group.main.id]
+  tags = {
+    Name = "${var.name_prefix}-ec2-${var.environment}"
+  }
 }
 ```
 
