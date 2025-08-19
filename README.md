@@ -2,8 +2,6 @@
 
 # Get ready.
 
-# Since now Claude Code is available and ready for attempting to complete TAP tasks.
-
 # Medium: solution in 30 mins
 
 # Hard: 2h
@@ -83,7 +81,7 @@ Since engineers don't have direct access to the AWS Console, an EC2 instance has
 **Login to the EC2 instance:**
 
 ```bash
-ssh -o PreferredAuthentications=password devuser@34.231.140.94
+ssh -o PreferredAuthentications=password trainer@52.201.128.13
 ```
 
 **Password**: Ask your team leader for the password.
@@ -117,6 +115,7 @@ This command will launch an interactive prompt that guides you through:
 3. **Complexity Level**: Set the task complexity (Medium, Hard, Expert)
 4. **Turn Type**: Choose between Single or Multi-turn interactions
 5. **Task ID**: Enter a unique identifier for the task
+6. **Team Selection**: Choose from team 1-6 or the synth team
 
 The CLI will:
 
@@ -181,6 +180,20 @@ After running the CLI, you'll have:
 - `npm run cfn:destroy-yaml` destroy CloudFormation YAML stack and all resources
 - `npm run cfn:destroy-json` destroy CloudFormation JSON stack and all resources
 
+### Terraform Commands
+Quick Note:
+Install terraform cli on your computer: https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli
+
+- To init Terraform config: `npm run tf:init`
+- To preview changes: `npm run tf:plan`
+- To Deploy your changes: `npm run tf:deploy`
+- To Destroy your changes: `npm run tf:destroy`
+- To Refresh TF state your changes: `npm run tf:refresh`
+- To Get lost state file: `npm run tf:reconfigure`
+- To Format your changes: `npm run tf:fmt`
+- For Quick reminder: `npm run tf:help`
+- For Validate Hashicorp syntax: `npm run tf:validate`
+- For Get TF state in json: `npm run tf:output`
 ### CloudFormation (cfn-yaml/cfn-json) S3 Bucket Setup
 
 **Important Note**: When deploying CloudFormation templates to a specific AWS region for the first time, you need to create the S3 bucket that stores the CloudFormation state files.
@@ -213,8 +226,10 @@ Templates are stored in the `templates/` directory and organized by platform and
 ```text
 templates/
 ├── cdk-ts/       # CDK TypeScript template
+├── cdk-ts/       # CDK TypeScript template
 ├── cfn-yaml/     # CloudFormation YAML template
 ├── cfn-json/     # CloudFormation JSON template
+├── tf-hcl/       # Terraform Hashicorp template
 └── ...
 ```
 

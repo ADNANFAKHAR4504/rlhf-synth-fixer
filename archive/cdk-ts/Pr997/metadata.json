@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291374",
+  "team": "2",
+  "startedAt": "2025-08-12T10:39:25.117Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohitkadel",
+  "dockerS3Location": ""
+}
