@@ -79,9 +79,9 @@ value = module.infra.instance_profile_name
 ```terraform
 # IaC - AWS Nova Model Breaking
 
-**Author**: ngwakoleslieelijah  
-**Created**: 2025-08-14 21:08:49 UTC  
-**Infrastructure Tool**: Terraform (HCL)  
+**Author**: ngwakoleslieelijah
+**Created**: 2025-08-14 21:08:49 UTC
+**Infrastructure Tool**: Terraform (HCL)
 **Target Region**: us-east-1
 
 ## Architecture Overview
@@ -89,29 +89,32 @@ value = module.infra.instance_profile_name
 This Terraform configuration establishes a secure, production-ready AWS infrastructure with proper resource connectivity and security isolation. The architecture follows AWS Well-Architected Framework principles with defense-in-depth security.
 
 ```
+
 ┌─────────────────────────────────────────────────────────────────┐
-│                           VPC (10.0.0.0/16)                    │
+│ VPC (10.0.0.0/16) │
 ├─────────────────────────────────────────────────────────────────┤
-│  Public Subnets          │           Private Subnets            │
-│  ┌─────────────────┐     │     ┌─────────────────────────────┐   │
-│  │      ALB        │     │     │        EC2 Instances        │   │
-│  │   (us-east-1a)  │     │     │       (us-east-1a/1b)      │   │
-│  │   10.0.1.0/24   │────────▶ │       10.0.10.0/24         │   │
-│  └─────────────────┘     │     │       10.0.20.0/24         │   │
-│  ┌─────────────────┐     │     └─────────────────────────────┘   │
-│  │   NAT Gateway   │     │     ┌─────────────────────────────┐   │
-│  │   (us-east-1b)  │     │     │         RDS MySQL           │   │
-│  │   10.0.2.0/24   │     │     │       (us-east-1a/1b)      │   │
-│  └─────────────────┘     │     │     Private Subnets         │   │
-│                           │     └─────────────────────────────┘   │
+│ Public Subnets │ Private Subnets │
+│ ┌─────────────────┐ │ ┌─────────────────────────────┐ │
+│ │ ALB │ │ │ EC2 Instances │ │
+│ │ (us-east-1a) │ │ │ (us-east-1a/1b) │ │
+│ │ 10.0.1.0/24 │────────▶ │ 10.0.10.0/24 │ │
+│ └─────────────────┘ │ │ 10.0.20.0/24 │ │
+│ ┌─────────────────┐ │ └─────────────────────────────┘ │
+│ │ NAT Gateway │ │ ┌─────────────────────────────┐ │
+│ │ (us-east-1b) │ │ │ RDS MySQL │ │
+│ │ 10.0.2.0/24 │ │ │ (us-east-1a/1b) │ │
+│ └─────────────────┘ │ │ Private Subnets │ │
+│ │ └─────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────────────┤
-│                    VPC Endpoints & S3 Buckets                  │
+│ VPC Endpoints & S3 Buckets │
 └─────────────────────────────────────────────────────────────────┘
+
 ```
 
 ## Project Structure
 
 ```
+
 .
 ├── main.tf
 ├── variables.tf
@@ -119,35 +122,36 @@ This Terraform configuration establishes a secure, production-ready AWS infrastr
 ├── terraform.tfvars
 ├── README.md
 └── modules/
-    ├── networking/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    ├── security/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    ├── compute/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    ├── database/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    ├── storage/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    ├── iam/
-    │   ├── main.tf
-    │   ├── variables.tf
-    │   └── outputs.tf
-    └── monitoring/
-        ├── main.tf
-        ├── variables.tf
-        └── outputs.tf
-```
+├── networking/
+│ ├── main.tf
+│ ├── variables.tf
+│ └── outputs.tf
+├── security/
+│ ├── main.tf
+│ ├── variables.tf
+│ └── outputs.tf
+├── compute/
+│ ├── main.tf
+│ ├── variables.tf
+│ └── outputs.tf
+├── database/
+│ ├── main.tf
+│ ├── variables.tf
+│ └── outputs.tf
+├── storage/
+│ ├── main.tf
+│ ├── variables.tf
+│ └── outputs.tf
+├── iam/
+│ ├── main.tf
+│ ├── variables.tf
+│ └── outputs.tf
+└── monitoring/
+├── main.tf
+├── variables.tf
+└── outputs.tf
+
+````
 
 ## Root Configuration
 
@@ -263,7 +267,7 @@ module "monitoring" {
   vpc_id      = module.networking.vpc_id
   s3_logs_bucket_name = module.storage.s3_logs_bucket_name
 }
-```
+````
 
 ### variables.tf
 
@@ -812,6 +816,7 @@ resource "aws_kms_alias" "main" {
 # S3 Data Bucket
 resource "aws_s3_bucket" "data" {
   bucket = "${lower(var.project_name)}-data-${random_string.bucket_suffix.result}"
+  force_destroy = true
 
   tags = {
     Name = "${var.project_name}-data-bucket"
@@ -822,6 +827,7 @@ resource "aws_s3_bucket" "data" {
 # S3 Logs Bucket
 resource "aws_s3_bucket" "logs" {
   bucket = "${lower(var.project_name)}-logs-${random_string.bucket_suffix.result}"
+  force_destroy = true
 
   tags = {
     Name = "${var.project_name}-logs-bucket"
