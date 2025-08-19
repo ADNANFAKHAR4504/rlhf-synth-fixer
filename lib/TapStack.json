@@ -421,7 +421,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "securewebapp${EnvironmentSuffix}-ALB-SG"
+                    "Fn::Sub": "SecureWebApp-${EnvironmentSuffix}-ALB-SG"
                 },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
@@ -464,7 +464,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "securewebapp${EnvironmentSuffix}-WebServer-SG"
+                    "Fn::Sub": "SecureWebApp-${EnvironmentSuffix}-WebServer-SG"
                 },
                 "GroupDescription": "Security group for web servers",
                 "VpcId": {
@@ -520,7 +520,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "securewebapp${EnvironmentSuffix}-Database-SG"
+                    "Fn::Sub": "SecureWebApp-${EnvironmentSuffix}-Database-SG"
                 },
                 "GroupDescription": "Security group for database",
                 "VpcId": {
@@ -558,7 +558,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "securewebapp${EnvironmentSuffix}-Bastion-SG"
+                    "Fn::Sub": "SecureWebApp-${EnvironmentSuffix}-Bastion-SG"
                 },
                 "GroupDescription": "Security group for bastion host",
                 "VpcId": {
@@ -594,7 +594,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "nexus-${EnvironmentSuffix}-${AWS::AccountId}-webapp-quantum-${AWS::Region}"
+                    "Fn::Sub": "securewebapp-${EnvironmentSuffix}-${AWS::AccountId}-webapp-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -630,7 +630,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "nexus-${EnvironmentSuffix}-${AWS::AccountId}-logs-vortex-${AWS::Region}"
+                    "Fn::Sub": "securewebapp-${EnvironmentSuffix}-${AWS::AccountId}-logs-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -660,7 +660,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "nexus-${EnvironmentSuffix}-${AWS::AccountId}-trail-aurora-${AWS::Region}"
+                    "Fn::Sub": "securewebapp-${EnvironmentSuffix}-${AWS::AccountId}-trail-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -732,7 +732,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "securewebapp${EnvironmentSuffix}-EC2-Role"
+                    "Fn::Sub": "SecureWebApp-${EnvironmentSuffix}-EC2-Role"
                 },
                 "AssumeRolePolicyDocument": {
                     "Statement": [
@@ -812,7 +812,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "securewebapp${EnvironmentSuffix}-CloudTrail-Role"
+                    "Fn::Sub": "SecureWebApp-${EnvironmentSuffix}-CloudTrail-Role"
                 },
                 "AssumeRolePolicyDocument": {
                     "Statement": [
@@ -853,7 +853,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/cloudtrail/securewebapp${EnvironmentSuffix}"
+                    "Fn::Sub": "/aws/cloudtrail/SecureWebApp-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 90
             }
@@ -862,7 +862,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/s3/securewebapp${EnvironmentSuffix}"
+                    "Fn::Sub": "/aws/s3/SecureWebApp-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 30
             }

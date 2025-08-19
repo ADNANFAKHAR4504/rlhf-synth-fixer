@@ -241,7 +241,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'securewebapp${EnvironmentSuffix}-ALB-SG'
+      GroupName: !Sub 'SecureWebApp-${EnvironmentSuffix}-ALB-SG'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -266,7 +266,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'securewebapp${EnvironmentSuffix}-WebServer-SG'
+      GroupName: !Sub 'SecureWebApp-${EnvironmentSuffix}-WebServer-SG'
       GroupDescription: Security group for web servers
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -296,7 +296,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'securewebapp${EnvironmentSuffix}-Database-SG'
+      GroupName: !Sub 'SecureWebApp-${EnvironmentSuffix}-Database-SG'
       GroupDescription: Security group for database
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -316,7 +316,7 @@ Resources:
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'securewebapp${EnvironmentSuffix}-Bastion-SG'
+      GroupName: !Sub 'SecureWebApp-${EnvironmentSuffix}-Bastion-SG'
       GroupDescription: Security group for bastion host
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -337,7 +337,7 @@ Resources:
   WebAppS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'nexus-${EnvironmentSuffix}-${AWS::AccountId}-webapp-quantum-${AWS::Region}'
+      BucketName: !Sub 'securewebapp-${EnvironmentSuffix}-${AWS::AccountId}-webapp-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -358,7 +358,7 @@ Resources:
   LoggingS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'nexus-${EnvironmentSuffix}-${AWS::AccountId}-logs-vortex-${AWS::Region}'
+      BucketName: !Sub 'securewebapp-${EnvironmentSuffix}-${AWS::AccountId}-logs-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -376,7 +376,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'nexus-${EnvironmentSuffix}-${AWS::AccountId}-trail-aurora-${AWS::Region}'
+      BucketName: !Sub 'securewebapp-${EnvironmentSuffix}-${AWS::AccountId}-trail-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -418,7 +418,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'securewebapp${EnvironmentSuffix}-EC2-Role'
+      RoleName: !Sub 'SecureWebApp-${EnvironmentSuffix}-EC2-Role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -457,7 +457,7 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'securewebapp${EnvironmentSuffix}-CloudTrail-Role'
+      RoleName: !Sub 'SecureWebApp-${EnvironmentSuffix}-CloudTrail-Role'
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -482,13 +482,13 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/securewebapp${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/cloudtrail/SecureWebApp-${EnvironmentSuffix}'
       RetentionInDays: 90
 
   S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/securewebapp${EnvironmentSuffix}'
+      LogGroupName: !Sub '/aws/s3/SecureWebApp-${EnvironmentSuffix}'
       RetentionInDays: 30
 
   # CloudTrail

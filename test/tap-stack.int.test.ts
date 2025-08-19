@@ -544,10 +544,10 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
       
       // Most resources should include the stack name or environment suffix
       const properlyNamedResources = resourcesWithNames.filter(resource => {
-        const physicalId = resource.PhysicalResourceId!;
-        return physicalId.includes('SecureWebApp') || 
-               physicalId.includes(environmentSuffix) ||
-               physicalId.includes(stackName);
+        const physicalId = resource.PhysicalResourceId!.toLowerCase();
+        return physicalId.includes('securewebapp') || 
+               physicalId.includes(environmentSuffix.toLowerCase()) ||
+               physicalId.includes(stackName.toLowerCase());
       });
       
       // At least 80% of resources should follow naming conventions
