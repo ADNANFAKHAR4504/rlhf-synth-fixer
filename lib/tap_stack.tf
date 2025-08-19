@@ -507,19 +507,21 @@ resource "aws_launch_template" "main" {
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
+  }
+
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2.name
   }
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    yum update -y
-    yum install -y amazon-ssm-agent
-    systemctl enable amazon-ssm-agent
-    systemctl start amazon-ssm-agent
-    
-    # Signal instance is ready
-    /opt/aws/bin/cfn-signal -e $? --stack ${var.project_name}-${var.environment_suffix} --region ${var.aws_region} --resource AutoScalingGroup || true
+    set -euxo pipefail
+    dnf -y update || true
+    # AL2023 includes SSM agent; ensure it is enabled and running
+    systemctl enable --now amazon-ssm-agent || true
   EOF
   )
 
@@ -562,6 +564,12 @@ resource "aws_autoscaling_group" "main" {
       propagate_at_launch = true
     }
   }
+
+  # Ensure networking (NAT + private route associations) are ready before instance launch
+  depends_on = [
+    aws_nat_gateway.main,
+    aws_route_table_association.private
+  ]
 }
 
 # SNS Topic

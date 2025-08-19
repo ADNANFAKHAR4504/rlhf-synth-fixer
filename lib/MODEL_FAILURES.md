@@ -1,5 +1,7 @@
 # Model Failures and Fixes
 
+This document records concrete issues observed in this repository and the corrective actions taken. The intent is to provide clear, human-authored guidance without marketing language or emojis.
+
 ## Changes from Original MODEL_RESPONSE.md
 
 The current configuration has been significantly improved from the original MODEL_RESPONSE.md. Here are the key differences and improvements:
@@ -103,18 +105,18 @@ The current configuration has been significantly improved from the original MODE
 
 ## Production Readiness Verification
 
-The configuration now includes:
+The configuration includes:
 
-- ✅ Multi-region CloudTrail
-- ✅ Encrypted S3 buckets with versioning
-- ✅ VPC Flow Logs enabled
-- ✅ Private subnets for EC2 instances
-- ✅ Conditional SSH access based on allowed CIDRs
-- ✅ Lambda-based security group remediation
-- ✅ CloudWatch monitoring and alerting
-- ✅ Proper IAM least-privilege policies
-- ✅ Public access blocked on S3 buckets
-- ✅ TLS-only S3 bucket policies
+- Multi-region CloudTrail (configurable)
+- Encrypted S3 buckets with versioning
+- VPC Flow Logs enabled
+- Private subnets for EC2 instances
+- Conditional SSH access based on allowed CIDRs
+- Lambda-based security group remediation
+- CloudWatch monitoring and alerting
+- IAM least-privilege policies
+- S3 block public access
+- TLS-only S3 bucket policies
 
 ## Test Coverage
 
@@ -158,7 +160,7 @@ The current configuration includes all improvements from the original MODEL_RESP
 - **Integration Tests**: 19 comprehensive tests covering all scenarios
 - **Validation**: Terraform init, validate, plan, and fmt all passing
 
-### ✅ **Security Enhancements**
+### Security Enhancements
 
 - Variable validation prevents misconfigurations
 - Latest AMI references for security patches
@@ -166,7 +168,7 @@ The current configuration includes all improvements from the original MODEL_RESP
 - Proper resource naming prevents conflicts
 - S3 backend enables audit trails and collaboration
 
-### 📋 **Deployment Checklist**
+### Deployment Checklist
 
 Before deploying this configuration:
 
@@ -176,7 +178,23 @@ Before deploying this configuration:
 4. **Resource Limits**: Check AWS service limits in target region
 5. **Naming Conflicts**: Ensure `environment_suffix` is unique
 
-The configuration is now significantly more robust, secure, and production-ready compared to the original MODEL_RESPONSE.md version.
+## Recent Fixes: Auto Scaling Group Startup Reliability
+
+Context: The Auto Scaling Group (`aws_autoscaling_group.main`) occasionally timed out waiting for healthy instances. Root causes included AL2023 user-data incompatibilities and race conditions with networking readiness.
+
+Fixes implemented in `lib/tap_stack.tf`:
+
+- Amazon Linux 2023 user data corrected:
+  - Switched from `yum` to `dnf` and removed CloudFormation `cfn-signal` usage.
+  - Ensured SSM agent is enabled and running on boot.
+- Enforced IMDSv2 on instances via `metadata_options { http_tokens = "required" }`.
+- Added explicit `depends_on` for the ASG to wait for NAT gateways and private route table associations before instance launch.
+
+Expected outcome:
+
+- Instances in private subnets obtain outbound connectivity through NAT consistently.
+- User data runs without early failures on AL2023.
+- ASG reaches desired capacity within the grace period without spurious unhealthy transitions.
 
 ### 20. Integration Test Fixes Without Modifying Working Configuration
 
