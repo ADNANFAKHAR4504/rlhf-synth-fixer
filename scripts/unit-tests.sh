@@ -42,6 +42,9 @@ elif [ "$LANGUAGE" = "go" ]; then
   else
     echo "ℹ️ lib directory not found, skipping Go unit tests"
   fi
+elif [ "$LANGUAGE" = "js" ]; then
+  echo "✅ JavaScript project detected, running unit tests..."
+  npm run test:unit-js
 elif [ "$LANGUAGE" = "py" ]; then
   echo "✅ Python project detected, running pytest unit tests..."
   pipenv run test-py-unit
