@@ -35,10 +35,6 @@ output "vpc_id" {
   value       = module.infra.vpc_id
 }
 
-output "s3_data_bucket_name" {
-  description = "Name of the S3 data bucket"
-  value       = module.infra.s3_data_bucket_name
-}
 
 output "nat_gateway_id" {
   description = "ID of the NAT Gateway"
@@ -100,20 +96,6 @@ output "vpc_endpoint_sg_id" {
   value       = module.infra.vpc_endpoint_sg_id
 }
 
-output "s3_data_bucket_arn" {
-  description = "ARN of the S3 data bucket"
-  value       = module.infra.s3_data_bucket_arn
-}
-
-output "s3_logs_bucket_name" {
-  description = "Name of the S3 logs bucket"
-  value       = module.infra.s3_logs_bucket_name
-}
-
-output "s3_logs_bucket_arn" {
-  description = "ARN of the S3 logs bucket"
-  value       = module.infra.s3_logs_bucket_arn
-}
 
 output "kms_key_id" {
   description = "ID of the KMS key"

@@ -16,11 +16,6 @@ output "nat_gateway_id" {
 # Storage Outputs
 ######################
 
-output "s3_data_bucket_name" {
-  description = "Name of the S3 data bucket"
-  value       = aws_s3_bucket.data.bucket
-}
-
 output "kms_key_arn" {
   description = "ARN of the KMS key"
   value       = data.aws_kms_key.main.arn
