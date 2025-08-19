@@ -53,7 +53,7 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
 
 resource "aws_iam_user" "main" {
   count = length(var.iam_users)
-  name_prefix = var.iam_users[count.index]
+  name = var.iam_users[count.index]
 }
 
 resource "aws_iam_user_login_profile" "main" {

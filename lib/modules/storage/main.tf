@@ -1,3 +1,20 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    "aws.us-west-2" = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    "aws.ap-northeast-1" = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
 resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.project_name}"
   deletion_window_in_days = 10
