@@ -1,6 +1,6 @@
+import * as cdk from 'aws-cdk-lib';
 import fs from 'fs';
 import path from 'path';
-import * as cdk from 'aws-cdk-lib';
 
 // Mock environment variable for testing
 const originalEnv = process.env.ENVIRONMENT_SUFFIX;
@@ -9,7 +9,6 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 describe('TapStack Unit Tests', () => {
   let template: any;
   let app: cdk.App;
-  let stack: cdk.Stack;
 
   beforeAll(() => {
     // Test CloudFormation JSON template
@@ -39,9 +38,7 @@ describe('TapStack Unit Tests', () => {
 
   afterEach(() => {
     // Clean up after each test
-    if (stack) {
-      stack.node.tryGetContext = jest.fn();
-    }
+    // No specific cleanup needed for this test
   });
 
   afterAll(() => {
@@ -106,7 +103,9 @@ describe('TapStack Unit Tests', () => {
       if (template) {
         expect(template.Conditions).toBeDefined();
         expect(template.Conditions.IsProdEnvironment).toBeDefined();
-        expect(template.Conditions.IsProdEnvironment['Fn::Equals']).toBeDefined();
+        expect(
+          template.Conditions.IsProdEnvironment['Fn::Equals']
+        ).toBeDefined();
       } else {
         // Test with CDK synthesis if template doesn't exist
         expect(app.node.tryGetContext('environmentSuffix')).toBe(
@@ -147,7 +146,7 @@ describe('TapStack Unit Tests', () => {
     test('should validate parameter constraints', () => {
       if (template) {
         const envSuffixParam = template.Parameters.EnvironmentSuffix;
-        
+
         expect(envSuffixParam.Type).toBe('String');
         expect(envSuffixParam.Default).toBe('dev');
         expect(envSuffixParam.Description).toBeDefined();
@@ -230,20 +229,22 @@ describe('TapStack Unit Tests', () => {
       }
     });
 
-          test('should validate resource naming convention with environment suffix', () => {
-        if (template) {
-          const vpc = template.Resources.SecureVPC;
-          const vpcTags = vpc.Properties.Tags;
-          const nameTag = vpcTags.find((tag: any) => tag.Key === 'Name');
-          
-          expect(nameTag.Value['Fn::Sub']).toBe('secure-vpc-${EnvironmentSuffix}');
-        } else {
-          // Test with CDK synthesis if template doesn't exist
-          expect(app.node.tryGetContext('environmentSuffix')).toBe(
-            environmentSuffix
-          );
-        }
-      });
+    test('should validate resource naming convention with environment suffix', () => {
+      if (template) {
+        const vpc = template.Resources.SecureVPC;
+        const vpcTags = vpc.Properties.Tags;
+        const nameTag = vpcTags.find((tag: any) => tag.Key === 'Name');
+
+        expect(nameTag.Value['Fn::Sub']).toBe(
+          'secure-vpc-${EnvironmentSuffix}'
+        );
+      } else {
+        // Test with CDK synthesis if template doesn't exist
+        expect(app.node.tryGetContext('environmentSuffix')).toBe(
+          environmentSuffix
+        );
+      }
+    });
   });
 
   describe('Outputs Validation', () => {
@@ -390,8 +391,10 @@ describe('TapStack Unit Tests', () => {
         const vpc = template.Resources.SecureVPC;
         const vpcTags = vpc.Properties.Tags;
         const nameTag = vpcTags.find((tag: any) => tag.Key === 'Name');
-        
-        expect(nameTag.Value['Fn::Sub']).toBe('secure-vpc-${EnvironmentSuffix}');
+
+        expect(nameTag.Value['Fn::Sub']).toBe(
+          'secure-vpc-${EnvironmentSuffix}'
+        );
       } else {
         // Test with CDK synthesis if template doesn't exist
         expect(app.node.tryGetContext('environmentSuffix')).toBe(
@@ -406,7 +409,9 @@ describe('TapStack Unit Tests', () => {
           const resource = template.Resources[resourceKey];
           if (resource.Properties && resource.Properties.Tags) {
             const tags = resource.Properties.Tags;
-            const environmentTag = tags.find((tag: any) => tag.Key === 'Environment');
+            const environmentTag = tags.find(
+              (tag: any) => tag.Key === 'Environment'
+            );
             expect(environmentTag).toBeDefined();
             expect(environmentTag.Value.Ref).toBe('EnvironmentSuffix');
           }
@@ -512,10 +517,12 @@ describe('TapStack Unit Tests', () => {
       if (template) {
         const vpc = template.Resources.SecureVPC;
         const cidrBlock = vpc.Properties.CidrBlock;
-        
+
         // Validate CIDR block format
-        expect(cidrBlock).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/);
-        
+        expect(cidrBlock).toMatch(
+          /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/
+        );
+
         // Validate it's a private IP range
         const ipParts = cidrBlock.split('/')[0].split('.');
         const firstOctet = parseInt(ipParts[0]);
@@ -548,7 +555,7 @@ describe('TapStack Unit Tests', () => {
       if (template) {
         const privateSubnet = template.Resources.PrivateSubnet;
         const publicSubnet = template.Resources.PublicSubnet;
-        
+
         expect(privateSubnet.Properties.CidrBlock).toBe('10.0.1.0/24');
         expect(publicSubnet.Properties.CidrBlock).toBe('10.0.2.0/24');
         expect(publicSubnet.Properties.MapPublicIpOnLaunch).toBe(true);
