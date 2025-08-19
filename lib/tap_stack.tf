@@ -92,7 +92,7 @@ locals {
 
   # Availability zones
   primary_azs   = ["${var.aws_region}a", "${var.aws_region}b"]
-  secondary_azs = ["${var.secondary_region}a", "${var.secondary_region}b"]
+  secondary_azs = ["${var.secondary_region}a", "${var.secondary_region}c"]
 
   # Subnet calculations for primary region
   primary_public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
@@ -130,11 +130,13 @@ data "aws_region" "current" {}
 resource "random_password" "primary_db_password" {
   length  = 16
   special = true
+  override_characters = "!#$%&()*+-=:?@^_"
 }
 
 resource "random_password" "secondary_db_password" {
   length  = 16
   special = true
+  override_characters = "!#$%&()*+-=:?@^_"
 }
 
 #==============================================================================
