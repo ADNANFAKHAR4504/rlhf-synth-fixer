@@ -551,11 +551,3 @@ output "generated_private_key_path" {
   sensitive   = true
 }
 
-# Partial backend config: values are injected at `terraform init` time
-  backend "s3" {
-    bucket         = "prod-terraform-state-unique"
-    key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "prod-terraform-locks"
-  }
