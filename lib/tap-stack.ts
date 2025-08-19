@@ -9,6 +9,8 @@ import { Construct } from 'constructs';
 import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets'; // Changed from DataAwsSubnet
 import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
+import { LbTargetGroupAttachment } from '@cdktf/provider-aws/lib/lb-target-group-attachment';
+
 import {
   KmsModule,
   SecurityGroupModule,
@@ -104,14 +106,14 @@ export class TapStack extends TerraformStack {
 
     // 2. Create S3 bucket for CloudTrail logs
     const cloudTrailS3Module = new S3Module(this, 'cloudtrail-s3-module', {
-      bucketName: 'secure-app-cloudtrail-logs-${random_id.bucket_suffix.hex}',
+      bucketName: `secure-app-cloudtrail-logs-${environmentSuffix}`,
       enableVersioning: true,
       kmsKeyId: kmsModule.kmsKey.arn,
     });
 
     // 3. Create S3 bucket for application data
     const appS3Module = new S3Module(this, 'app-s3-module', {
-      bucketName: 'secure-app-data-${random_id.bucket_suffix.hex}',
+      bucketName: `secure-app-data-${environmentSuffix}`,
       enableVersioning: true,
       kmsKeyId: kmsModule.kmsKey.arn,
     });
@@ -271,8 +273,12 @@ echo "OK" > /var/www/html/health`,
     });
 
     // 10. Attach EC2 instances to ALB target group
-    ec2Modules.forEach((ec2Module: any) => {
-      albModule.attachTarget(ec2Module.instance.id, 80);
+    ec2Modules.forEach((ec2Module: any, index: number) => {
+      new LbTargetGroupAttachment(this, `ec2-target-attachment-${index}`, {
+        targetGroupArn: albModule.targetGroup.arn,
+        targetId: ec2Module.instance.id,
+        port: 80,
+      });
     });
 
     // 11. Create CloudTrail for audit logging
