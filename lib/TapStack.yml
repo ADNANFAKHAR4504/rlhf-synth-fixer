@@ -28,6 +28,7 @@ Metadata:
           - ExistingKMSKeyARN
           - UseExistingEC2Role
           - ExistingEC2RoleName
+          - CreateNATGateway
     ParameterLabels:
       UseExistingVPC:
         default: 'Use Existing VPC?'
@@ -55,6 +56,8 @@ Metadata:
         default: 'Use Existing EC2 Role?'
       ExistingEC2RoleName:
         default: 'Existing EC2 Role Name'
+      CreateNATGateway:
+        default: 'Create NAT Gateway?'
   cfn-lint:
     config:
       ignore_checks:
@@ -144,6 +147,11 @@ Parameters:
     Default: 'yes'
     AllowedValues: ['yes', 'no']
     Description: 'Select "yes" to create a new RDS database. Select "no" to skip database creation.'
+  CreateNATGateway:
+    Type: String
+    Default: 'no'
+    AllowedValues: ['yes', 'no']
+    Description: 'Select "yes" to create a NAT Gateway (may hit service limits). Select "no" to use Internet Gateway only.'
 
 Mappings:
   RegionMap:
@@ -157,6 +165,7 @@ Conditions:
   CreateNewKMSKey: !Equals [!Ref UseExistingKMSKey, 'no']
   CreateNewEC2Role: !Equals [!Ref UseExistingEC2Role, 'no']
   CreateNewDatabase: !Equals [!Ref CreateDatabase, 'yes']
+  CreateNATGateway: !Equals [!Ref CreateNATGateway, 'yes']
 
 Resources:
   ###############################################################################
@@ -248,7 +257,7 @@ Resources:
 
   NatGatewayEIP:
     Type: AWS::EC2::EIP
-    Condition: CreateNewVPC
+    Condition: CreateNATGateway
     DependsOn: VPCGatewayAttachment
     Properties:
       Domain: vpc
@@ -260,7 +269,7 @@ Resources:
 
   NatGateway:
     Type: AWS::EC2::NatGateway
-    Condition: CreateNewVPC
+    Condition: CreateNATGateway
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -321,7 +330,9 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
+      GatewayId:
+        !If [CreateNATGateway, !Ref 'AWS::NoValue', !Ref InternetGateway]
+      NatGatewayId: !If [CreateNATGateway, !Ref NatGateway, !Ref 'AWS::NoValue']
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation

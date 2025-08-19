@@ -50,6 +50,7 @@ describe('TapStack CloudFormation Template', () => {
       'ExistingKMSKeyARN',
       'UseExistingEC2Role',
       'ExistingEC2RoleName',
+      'CreateNATGateway',
     ];
 
     test('should have all required parameters', () => {
@@ -189,6 +190,7 @@ describe('TapStack CloudFormation Template', () => {
       'CreateNewKMSKey',
       'CreateNewEC2Role',
       'CreateNewDatabase',
+      'CreateNATGateway',
     ];
 
     test('should have all required conditions', () => {
@@ -222,6 +224,13 @@ describe('TapStack CloudFormation Template', () => {
       const condition = template.Conditions?.CreateNewDatabase;
       expect(condition['Fn::Equals']).toBeDefined();
       expect(condition['Fn::Equals'][0]['Ref']).toBe('CreateDatabase');
+      expect(condition['Fn::Equals'][1]).toBe('yes');
+    });
+
+    test('CreateNATGateway condition should check CreateNATGateway parameter', () => {
+      const condition = template.Conditions?.CreateNATGateway;
+      expect(condition['Fn::Equals']).toBeDefined();
+      expect(condition['Fn::Equals'][0]['Ref']).toBe('CreateNATGateway');
       expect(condition['Fn::Equals'][1]).toBe('yes');
     });
   });
@@ -327,7 +336,7 @@ describe('TapStack CloudFormation Template', () => {
       test('NAT Gateway should be conditional and have correct properties', () => {
         const natGateway = template.Resources.NatGateway;
         expect(natGateway.Type).toBe('AWS::EC2::NatGateway');
-        expect(natGateway.Condition).toBe('CreateNewVPC');
+        expect(natGateway.Condition).toBe('CreateNATGateway');
         expect(natGateway.Properties.AllocationId['Fn::GetAtt']).toEqual([
           'NatGatewayEIP',
           'AllocationId',
@@ -648,7 +657,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(13);
+      expect(parameterCount).toBe(14);
     });
 
     test('should have correct number of outputs', () => {
@@ -658,7 +667,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of conditions', () => {
       const conditionCount = Object.keys(template.Conditions || {}).length;
-      expect(conditionCount).toBe(4);
+      expect(conditionCount).toBe(5);
     });
   });
 

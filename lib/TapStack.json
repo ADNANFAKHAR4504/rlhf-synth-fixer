@@ -42,7 +42,8 @@
                         "UseExistingKMSKey",
                         "ExistingKMSKeyARN",
                         "UseExistingEC2Role",
-                        "ExistingEC2RoleName"
+                        "ExistingEC2RoleName",
+                        "CreateNATGateway"
                     ]
                 }
             ],
@@ -85,6 +86,9 @@
                 },
                 "ExistingEC2RoleName": {
                     "default": "Existing EC2 Role Name"
+                },
+                "CreateNATGateway": {
+                    "default": "Create NAT Gateway?"
                 }
             }
         },
@@ -206,6 +210,15 @@
                 "no"
             ],
             "Description": "Select \"yes\" to create a new RDS database. Select \"no\" to skip database creation."
+        },
+        "CreateNATGateway": {
+            "Type": "String",
+            "Default": "no",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to create a NAT Gateway (may hit service limits). Select \"no\" to use Internet Gateway only."
         }
     },
     "Mappings": {
@@ -247,6 +260,14 @@
             "Fn::Equals": [
                 {
                     "Ref": "CreateDatabase"
+                },
+                "yes"
+            ]
+        },
+        "CreateNATGateway": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateNATGateway"
                 },
                 "yes"
             ]
@@ -482,7 +503,7 @@
         },
         "NatGatewayEIP": {
             "Type": "AWS::EC2::EIP",
-            "Condition": "CreateNewVPC",
+            "Condition": "CreateNATGateway",
             "DependsOn": "VPCGatewayAttachment",
             "Properties": {
                 "Domain": "vpc",
@@ -502,7 +523,7 @@
         },
         "NatGateway": {
             "Type": "AWS::EC2::NatGateway",
-            "Condition": "CreateNewVPC",
+            "Condition": "CreateNATGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
@@ -615,8 +636,27 @@
                     "Ref": "PrivateRouteTable"
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Fn::If": [
+                        "CreateNATGateway",
+                        {
+                            "Ref": "AWS::NoValue"
+                        },
+                        {
+                            "Ref": "InternetGateway"
+                        }
+                    ]
+                },
                 "NatGatewayId": {
-                    "Ref": "NatGateway"
+                    "Fn::If": [
+                        "CreateNATGateway",
+                        {
+                            "Ref": "NatGateway"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
                 }
             }
         },
