@@ -120,9 +120,9 @@ export class ComputeStack extends pulumi.ComponentResource {
 
     // Application Load Balancer
     const alb = new aws.lb.LoadBalancer(
-      `tap-alb-${region}-${environmentSuffix}`,
+      `tap-alb-${region}-${environmentSuffix}-primary`,
       {
-        name: `tap-alb-${region}-${environmentSuffix}`,
+        name: `tap-alb-${region}-${environmentSuffix}-primary`,
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [albSecurityGroupIdToUse],
@@ -131,7 +131,7 @@ export class ComputeStack extends pulumi.ComponentResource {
         dropInvalidHeaderFields: true,
         tags: {
           ...tags,
-          Name: `tap-alb-${region}-${environmentSuffix}`,
+          Name: `tap-alb-${region}-${environmentSuffix}-primary`,
         },
       },
       { parent: this }

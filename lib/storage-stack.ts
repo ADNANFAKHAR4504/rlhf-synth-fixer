@@ -241,13 +241,13 @@ export class StorageStack extends pulumi.ComponentResource {
 
     // RDS Subnet Group
     const rdsSubnetGroup = new aws.rds.SubnetGroup(
-      `tap-rds-subnet-group-${region}-${environmentSuffix}`,
+      `tap-rds-subnet-group-${region}-${environmentSuffix}-primary`,
       {
-        name: `tap-rds-subnet-group-${region}-${environmentSuffix}`,
+        name: `tap-rds-subnet-group-${region}-${environmentSuffix}-primary`,
         subnetIds: privateSubnetIdsToUse,
         tags: {
           ...tags,
-          Name: `tap-rds-subnet-group-${region}-${environmentSuffix}`,
+          Name: `tap-rds-subnet-group-${region}-${environmentSuffix}-primary`,
         },
       },
       { parent: this }
