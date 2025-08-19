@@ -673,6 +673,61 @@
         ]
       }
     },
+    "ALBLogDeliveryRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "${AWS::StackName}-ALB-Log-Delivery-Role"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "elasticloadbalancing.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ALBLogDeliveryPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject",
+                    "s3:DeleteObject",
+                    "s3:PutObjectAcl"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
     "EC2Role": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -729,9 +784,13 @@
                   "Action": [
                     "s3:GetObject",
                     "s3:PutObject",
-                    "s3:DeleteObject"
+                    "s3:DeleteObject",
+                    "s3:ListBucket"
                   ],
                   "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"
+                    },
                     {
                       "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
                     }
@@ -889,7 +948,10 @@
     },
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-      "DependsOn": "S3BucketPolicy",
+      "DependsOn": [
+        "S3BucketPolicy",
+        "ALBLogDeliveryRole"
+      ],
       "Properties": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-ALB"
@@ -1292,7 +1354,9 @@
                 }
               },
               "Action": [
-                "s3:PutObject"
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject"
               ],
               "Resource": {
                 "Fn::Join": [
@@ -1344,16 +1408,44 @@
                 "Service": "elasticloadbalancing.amazonaws.com"
               },
               "Action": [
-                "s3:PutObject"
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject",
+                "s3:PutObjectAcl"
               ],
-              "Resource": {
-                "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
-              },
-              "Condition": {
-                "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"
+                },
+                {
+                  "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
                 }
-              }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::GetAtt": [
+                    "ALBLogDeliveryRole",
+                    "Arn"
+                  ]
+                }
+              },
+              "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject",
+                "s3:PutObjectAcl"
+              ],
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"
+                },
+                {
+                  "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
+                }
+              ]
             }
           ]
         }
@@ -1458,6 +1550,20 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-Region"
+        }
+      }
+    },
+    "ALBLogDeliveryRoleArn": {
+      "Description": "ARN of the ALB Log Delivery IAM Role",
+      "Value": {
+        "Fn::GetAtt": [
+          "ALBLogDeliveryRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALB-Log-Delivery-Role-ARN"
         }
       }
     }

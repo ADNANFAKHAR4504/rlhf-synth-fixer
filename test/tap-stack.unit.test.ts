@@ -390,6 +390,16 @@ describe('TapStack CloudFormation Template - Unit', () => {
         'AWS Region where the stack is deployed'
       );
     });
+
+    test('outputs include ALB log delivery role ARN', () => {
+      expect(template.Outputs.ALBLogDeliveryRoleArn).toBeDefined();
+      expect(template.Outputs.ALBLogDeliveryRoleArn.Description).toBe(
+        'ARN of the ALB Log Delivery IAM Role'
+      );
+      expect(
+        template.Outputs.ALBLogDeliveryRoleArn.Value['Fn::GetAtt']
+      ).toBeDefined();
+    });
   });
 
   describe('Resource Counts', () => {
@@ -405,7 +415,7 @@ describe('TapStack CloudFormation Template - Unit', () => {
 
     test('has correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7); // Updated count
+      expect(outputCount).toBe(8); // Updated count to include ALBLogDeliveryRoleArn
     });
   });
 });
