@@ -620,10 +620,10 @@ describe('AWS Infrastructure Integration Tests', () => {
       expect(primaryRecord).toBeDefined();
       expect(secondaryRecord).toBeDefined();
       expect(primaryRecord!.HealthCheckId).toBe(
-        outputs.primary_route53_health_check_id
+        outputs.primary_health_check_id
       );
       expect(secondaryRecord!.HealthCheckId).toBe(
-        outputs.secondary_route53_health_check_id
+        outputs.secondary_health_check_id
       );
     });
   });
