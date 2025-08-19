@@ -65,7 +65,7 @@ resource "aws_db_instance" "main" {
   apply_immediately        = true
 
   # Performance Insights - disabled for t3.micro
-  performance_insights_enabled          = false
+  performance_insights_enabled = false
 
   tags = {
     Name        = "${var.project_name}-${var.environment_suffix}-db"
