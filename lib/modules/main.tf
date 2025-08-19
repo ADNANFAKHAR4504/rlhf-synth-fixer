@@ -41,7 +41,9 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "${var.project_name}-vpc"
+    Name        = "${var.project_name}-vpc"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -50,7 +52,9 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "${var.project_name}-igw"
+    Name        = "${var.project_name}-igw"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -64,8 +68,10 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project_name}-public-subnet-${count.index + 1}"
-    Type = "Public"
+    Name        = "${var.project_name}-public-subnet-${count.index + 1}"
+    Type        = "Public"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -78,8 +84,10 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name = "${var.project_name}-private-subnet-${count.index + 1}"
-    Type = "Private"
+    Name        = "${var.project_name}-private-subnet-${count.index + 1}"
+    Type        = "Private"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -88,7 +96,9 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "${var.project_name}-nat-eip"
+    Name        = "${var.project_name}-nat-eip"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -98,7 +108,9 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[0].id
   depends_on    = [aws_internet_gateway.main]
   tags = {
-    Name = "${var.project_name}-nat-gateway"
+    Name        = "${var.project_name}-nat-gateway"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -112,7 +124,9 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "${var.project_name}-public-rt"
+    Name        = "${var.project_name}-public-rt"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -128,7 +142,9 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "${var.project_name}-private-rt-${count.index + 1}"
+    Name        = "${var.project_name}-private-rt-${count.index + 1}"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -177,7 +193,9 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name = "${var.project_name}-ec2-sg"
+    Name        = "${var.project_name}-ec2-sg"
+    Project     = var.project_name
+    Environment = var.environment
   }
 
   lifecycle {
@@ -232,7 +250,9 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "${var.project_name}-alb-sg"
+    Name        = "${var.project_name}-alb-sg"
+    Project     = var.project_name
+    Environment = var.environment
   }
 
   lifecycle {
@@ -295,7 +315,9 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name = "${var.project_name}-rds-sg"
+    Name        = "${var.project_name}-rds-sg"
+    Project     = var.project_name
+    Environment = var.environment
   }
 
   lifecycle {
@@ -328,7 +350,9 @@ resource "aws_security_group" "vpc_endpoint" {
   }
 
   tags = {
-    Name = "${var.project_name}-vpc-endpoint-sg"
+    Name        = "${var.project_name}-vpc-endpoint-sg"
+    Project     = var.project_name
+    Environment = var.environment
   }
 
   lifecycle {
@@ -388,7 +412,9 @@ resource "aws_vpc_endpoint" "s3" {
   route_table_ids   = aws_route_table.private[*].id
 
   tags = {
-    Name = "${var.project_name}-s3-endpoint"
+    Name        = "${var.project_name}-s3-endpoint"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -402,8 +428,10 @@ resource "aws_s3_bucket" "data" {
   force_destroy = true
 
   tags = {
-    Name = "${var.project_name}-data-bucket"
-    Type = "Data"
+    Name        = "${var.project_name}-data-bucket"
+    Type        = "Data"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
@@ -416,6 +444,55 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
       kms_master_key_id = aws_kms_key.main.arn
     }
   }
+}
+
+resource "aws_s3_bucket_versioning" "data" {
+  bucket = aws_s3_bucket.data.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "data" {
+  bucket = aws_s3_bucket.data.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid       = "DenyIncorrectEncryptionHeader",
+        Effect    = "Deny",
+        Principal = "*",
+        Action    = "s3:PutObject",
+        Resource  = "${aws_s3_bucket.data.arn}/*",
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
+      },
+      {
+        Sid       = "DenyUnEncryptedObjectUploads",
+        Effect    = "Deny",
+        Principal = "*",
+        Action    = "s3:PutObject",
+        Resource  = "${aws_s3_bucket.data.arn}/*",
+        Condition = {
+          Null = {
+            "s3:x-amz-server-side-encryption" = "true"
+          }
+        }
+      }
+    ]
+  })
 }
 
 
@@ -460,4 +537,77 @@ resource "aws_iam_role" "ec2" {
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-ec2-instance-profile"
   role = aws_iam_role.ec2.name
+}
+
+resource "aws_db_subnet_group" "main" {
+  name       = "${var.project_name}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = {
+    Name        = "${var.project_name}-db-subnet-group"
+    Project     = var.project_name
+    Environment = var.environment
+  }
+}
+
+resource "aws_db_instance" "main" {
+  allocated_storage    = 20
+  engine               = "mysql"
+  engine_version       = "8.0.28"
+  instance_class       = "db.t3.micro"
+  name                 = "${var.project_name}db"
+  username             = var.db_username
+  password             = var.db_password
+  db_subnet_group_name = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  skip_final_snapshot  = true
+}
+
+resource "aws_launch_configuration" "main" {
+  name_prefix   = "${var.project_name}-"
+  image_id      = var.ami_id
+  instance_type = var.instance_type
+  security_groups = [aws_security_group.ec2.id]
+  iam_instance_profile = aws_iam_instance_profile.ec2.name
+}
+
+resource "aws_autoscaling_group" "main" {
+  name                 = "${var.project_name}-asg"
+  launch_configuration = aws_launch_configuration.main.id
+  min_size             = 1
+  max_size             = 3
+  desired_capacity     = 2
+  vpc_zone_identifier  = aws_subnet.private[*].id
+
+  tag {
+    key                 = "Name"
+    value               = "${var.project_name}-instance"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_lb" "main" {
+  name               = "${var.project_name}-lb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = aws_subnet.public[*].id
+}
+
+resource "aws_lb_target_group" "main" {
+  name     = "${var.project_name}-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+}
+
+resource "aws_lb_listener" "main" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
+  }
 }

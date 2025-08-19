@@ -1,59 +1,46 @@
 variable "project_name" {
-  description = "Name of the project"
   type        = string
-  default     = "IaC-AWS-Nova-Model-Breaking"
+  description = "The name of the project"
 }
 
-variable "author" {
-  description = "Author of the project"
+variable "environment" {
   type        = string
-  default     = "ngwakoleslieelijah"
-}
-
-variable "created_date" {
-  description = "Creation date of the project"
-  type        = string
-  default     = "2025-08-14T21:08:49Z"
-}
-
-variable "aws_region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-east-1"
-  
-  validation {
-    condition     = var.aws_region == "us-east-1"
-    error_message = "Region must be us-east-1 as strictly enforced."
-  }
+  description = "The environment name"
 }
 
 variable "vpc_cidr" {
-  description = "CIDR block for VPC"
   type        = string
-  default     = "10.0.0.0/16"
+  description = "The CIDR block for the VPC"
 }
 
 variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
   type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+  description = "The CIDR blocks for the public subnets"
 }
 
 variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
   type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.20.0/24"]
+  description = "The CIDR blocks for the private subnets"
 }
 
-
-variable "environment" {
-  description = "Environment name"
+variable "db_username" {
   type        = string
-  default     = "dev"
+  description = "The username for the RDS instance"
+  sensitive   = true
 }
 
-variable "availability_zones" {
-  description = "List of availability zones"
-  type        = list(string)
-   default     = []
+variable "db_password" {
+  type        = string
+  description = "The password for the RDS instance"
+  sensitive   = true
+}
+
+variable "ami_id" {
+  type        = string
+  description = "The ID of the AMI to use for the EC2 instances"
+}
+
+variable "instance_type" {
+  type        = string
+  description = "The instance type to use for the EC2 instances"
 }
