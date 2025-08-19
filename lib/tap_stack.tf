@@ -19,6 +19,16 @@ variable "environment" {
   }
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming"
+  type        = string
+  default     = "001"
+  validation {
+    condition     = can(regex("^[a-z0-9]+$", var.environment_suffix))
+    error_message = "Environment suffix must contain only lowercase letters and numbers."
+  }
+}
+
 variable "vpc_cidr_primary" {
   description = "CIDR block for primary VPC"
   type        = string
@@ -62,21 +72,8 @@ locals {
     Environment = var.environment
     ManagedBy   = "Terraform"
   }, var.tags)
-  
-  name_prefix = "${var.org_prefix}-${var.environment}"
-  
-  regions = {
-    primary = {
-      provider_alias = "default"
-      region_name    = "us-east-1"
-      vpc_cidr       = var.vpc_cidr_primary
-    }
-    secondary = {
-      provider_alias = "eu_west_1"
-      region_name    = "eu-west-1"
-      vpc_cidr       = var.vpc_cidr_secondary
-    }
-  }
+
+  name_prefix = "${var.org_prefix}-${var.environment}-${var.environment_suffix}"
 }
 
 # Data sources for availability zones
@@ -112,9 +109,7 @@ data "aws_iam_policy_document" "flow_logs_assume_role" {
   }
 }
 
-data "aws_iam_policy_document" "flow_logs_policy" {
-  for_each = local.regions
-  
+data "aws_iam_policy_document" "flow_logs_policy_primary" {
   statement {
     effect = "Allow"
     actions = [
@@ -125,237 +120,392 @@ data "aws_iam_policy_document" "flow_logs_policy" {
       "logs:DescribeLogStreams"
     ]
     resources = [
-      "arn:aws:logs:${each.value.region_name}:*:log-group:${local.name_prefix}-vpc-flow-logs-${each.key}",
-      "arn:aws:logs:${each.value.region_name}:*:log-group:${local.name_prefix}-vpc-flow-logs-${each.key}:*"
+      "arn:aws:logs:us-east-1:*:log-group:${local.name_prefix}-vpc-flow-logs-primary",
+      "arn:aws:logs:us-east-1:*:log-group:${local.name_prefix}-vpc-flow-logs-primary:*"
     ]
   }
 }
 
-# IAM Role for VPC Flow Logs
-resource "aws_iam_role" "flow_logs_role" {
-  for_each = local.regions
-  
-  provider           = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  name               = "${local.name_prefix}-vpc-flow-logs-role-${each.key}"
+data "aws_iam_policy_document" "flow_logs_policy_secondary" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "logs:CreateLogGroup",
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams"
+    ]
+    resources = [
+      "arn:aws:logs:eu-west-1:*:log-group:${local.name_prefix}-vpc-flow-logs-secondary",
+      "arn:aws:logs:eu-west-1:*:log-group:${local.name_prefix}-vpc-flow-logs-secondary:*"
+    ]
+  }
+}
+
+# IAM Role for VPC Flow Logs - Primary Region
+resource "aws_iam_role" "flow_logs_role_primary" {
+  name               = "${local.name_prefix}-vpc-flow-logs-role-primary"
   assume_role_policy = data.aws_iam_policy_document.flow_logs_assume_role.json
-  
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-logs-role-${each.key}"
+    Name = "${local.name_prefix}-vpc-flow-logs-role-primary"
   })
 }
 
-# IAM Policy for VPC Flow Logs
-resource "aws_iam_role_policy" "flow_logs_policy" {
-  for_each = local.regions
-  
-  provider = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  name     = "${local.name_prefix}-vpc-flow-logs-policy-${each.key}"
-  role     = aws_iam_role.flow_logs_role[each.key].id
-  policy   = data.aws_iam_policy_document.flow_logs_policy[each.key].json
+# IAM Role for VPC Flow Logs - Secondary Region
+resource "aws_iam_role" "flow_logs_role_secondary" {
+  provider           = aws.eu_west_1
+  name               = "${local.name_prefix}-vpc-flow-logs-role-secondary"
+  assume_role_policy = data.aws_iam_policy_document.flow_logs_assume_role.json
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc-flow-logs-role-secondary"
+  })
 }
 
-# VPCs
-resource "aws_vpc" "main" {
-  for_each = local.regions
-  
-  provider             = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  cidr_block           = each.value.vpc_cidr
+# IAM Policy for VPC Flow Logs - Primary Region
+resource "aws_iam_role_policy" "flow_logs_policy_primary" {
+  name   = "${local.name_prefix}-vpc-flow-logs-policy-primary"
+  role   = aws_iam_role.flow_logs_role_primary.id
+  policy = data.aws_iam_policy_document.flow_logs_policy_primary.json
+}
+
+# IAM Policy for VPC Flow Logs - Secondary Region
+resource "aws_iam_role_policy" "flow_logs_policy_secondary" {
+  provider = aws.eu_west_1
+  name     = "${local.name_prefix}-vpc-flow-logs-policy-secondary"
+  role     = aws_iam_role.flow_logs_role_secondary.id
+  policy   = data.aws_iam_policy_document.flow_logs_policy_secondary.json
+}
+
+# VPC - Primary Region
+resource "aws_vpc" "primary" {
+  cidr_block           = var.vpc_cidr_primary
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-${each.key}"
+    Name = "${local.name_prefix}-vpc-primary"
   })
 }
 
-# Internet Gateways
-resource "aws_internet_gateway" "main" {
-  for_each = local.regions
-  
-  provider = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  vpc_id   = aws_vpc.main[each.key].id
-  
+# VPC - Secondary Region
+resource "aws_vpc" "secondary" {
+  provider             = aws.eu_west_1
+  cidr_block           = var.vpc_cidr_secondary
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-igw-${each.key}"
+    Name = "${local.name_prefix}-vpc-secondary"
   })
 }
 
-# Public Subnets
-resource "aws_subnet" "public" {
-  for_each = local.regions
-  
-  provider                = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  vpc_id                  = aws_vpc.main[each.key].id
-  cidr_block              = cidrsubnet(each.value.vpc_cidr, 8, 1)
-  availability_zone       = each.key == "primary" ? data.aws_availability_zones.primary.names[0] : data.aws_availability_zones.secondary.names[0]
+# Internet Gateway - Primary Region
+resource "aws_internet_gateway" "primary" {
+  vpc_id = aws_vpc.primary.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-igw-primary"
+  })
+}
+
+# Internet Gateway - Secondary Region
+resource "aws_internet_gateway" "secondary" {
+  provider = aws.eu_west_1
+  vpc_id   = aws_vpc.secondary.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-igw-secondary"
+  })
+}
+
+# Public Subnet - Primary Region
+resource "aws_subnet" "public_primary" {
+  vpc_id                  = aws_vpc.primary.id
+  cidr_block              = cidrsubnet(var.vpc_cidr_primary, 8, 1)
+  availability_zone       = data.aws_availability_zones.primary.names[0]
   map_public_ip_on_launch = false
-  
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-public-subnet-${each.key}"
+    Name = "${local.name_prefix}-public-subnet-primary"
     Type = "Public"
   })
 }
 
-# Private Subnets
-resource "aws_subnet" "private" {
-  for_each = local.regions
-  
-  provider          = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  vpc_id            = aws_vpc.main[each.key].id
-  cidr_block        = cidrsubnet(each.value.vpc_cidr, 8, 2)
-  availability_zone = each.key == "primary" ? data.aws_availability_zones.primary.names[1] : data.aws_availability_zones.secondary.names[1]
-  
+# Public Subnet - Secondary Region
+resource "aws_subnet" "public_secondary" {
+  provider                = aws.eu_west_1
+  vpc_id                  = aws_vpc.secondary.id
+  cidr_block              = cidrsubnet(var.vpc_cidr_secondary, 8, 1)
+  availability_zone       = data.aws_availability_zones.secondary.names[0]
+  map_public_ip_on_launch = false
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-subnet-${each.key}"
+    Name = "${local.name_prefix}-public-subnet-secondary"
+    Type = "Public"
+  })
+}
+
+# Private Subnet - Primary Region
+resource "aws_subnet" "private_primary" {
+  vpc_id            = aws_vpc.primary.id
+  cidr_block        = cidrsubnet(var.vpc_cidr_primary, 8, 2)
+  availability_zone = data.aws_availability_zones.primary.names[1]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet-primary"
     Type = "Private"
   })
 }
 
-# Route Tables for Public Subnets
-resource "aws_route_table" "public" {
-  for_each = local.regions
-  
-  provider = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  vpc_id   = aws_vpc.main[each.key].id
-  
+# Private Subnet - Secondary Region
+resource "aws_subnet" "private_secondary" {
+  provider          = aws.eu_west_1
+  vpc_id            = aws_vpc.secondary.id
+  cidr_block        = cidrsubnet(var.vpc_cidr_secondary, 8, 2)
+  availability_zone = data.aws_availability_zones.secondary.names[1]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet-secondary"
+    Type = "Private"
+  })
+}
+
+# Route Table for Public Subnet - Primary Region
+resource "aws_route_table" "public_primary" {
+  vpc_id = aws_vpc.primary.id
+
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main[each.key].id
+    gateway_id = aws_internet_gateway.primary.id
   }
-  
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-public-rt-${each.key}"
+    Name = "${local.name_prefix}-public-rt-primary"
   })
 }
 
-# Route Table Associations
-resource "aws_route_table_association" "public" {
-  for_each = local.regions
-  
-  provider       = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  subnet_id      = aws_subnet.public[each.key].id
-  route_table_id = aws_route_table.public[each.key].id
+# Route Table for Public Subnet - Secondary Region
+resource "aws_route_table" "public_secondary" {
+  provider = aws.eu_west_1
+  vpc_id   = aws_vpc.secondary.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.secondary.id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-rt-secondary"
+  })
 }
 
-# CloudWatch Log Groups for VPC Flow Logs
-resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  for_each = local.regions
-  
-  provider          = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  name              = "${local.name_prefix}-vpc-flow-logs-${each.key}"
+# Route Table Association - Primary Region
+resource "aws_route_table_association" "public_primary" {
+  subnet_id      = aws_subnet.public_primary.id
+  route_table_id = aws_route_table.public_primary.id
+}
+
+# Route Table Association - Secondary Region
+resource "aws_route_table_association" "public_secondary" {
+  provider       = aws.eu_west_1
+  subnet_id      = aws_subnet.public_secondary.id
+  route_table_id = aws_route_table.public_secondary.id
+}
+
+# CloudWatch Log Group for VPC Flow Logs - Primary Region
+resource "aws_cloudwatch_log_group" "vpc_flow_logs_primary" {
+  name              = "${local.name_prefix}-vpc-flow-logs-primary"
   retention_in_days = var.flow_logs_retention_days
   kms_key_id        = "alias/aws/logs"
-  
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-logs-${each.key}"
+    Name = "${local.name_prefix}-vpc-flow-logs-primary"
   })
 }
 
-# VPC Flow Logs
-resource "aws_flow_log" "vpc_flow_logs" {
-  for_each = local.regions
-  
-  provider        = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  iam_role_arn    = aws_iam_role.flow_logs_role[each.key].arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs[each.key].arn
+# CloudWatch Log Group for VPC Flow Logs - Secondary Region
+resource "aws_cloudwatch_log_group" "vpc_flow_logs_secondary" {
+  provider          = aws.eu_west_1
+  name              = "${local.name_prefix}-vpc-flow-logs-secondary"
+  retention_in_days = var.flow_logs_retention_days
+  kms_key_id        = "alias/aws/logs"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc-flow-logs-secondary"
+  })
+}
+
+# VPC Flow Log - Primary Region
+resource "aws_flow_log" "vpc_flow_logs_primary" {
+  iam_role_arn    = aws_iam_role.flow_logs_role_primary.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs_primary.arn
   traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main[each.key].id
-  
+  vpc_id          = aws_vpc.primary.id
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-log-${each.key}"
+    Name = "${local.name_prefix}-vpc-flow-log-primary"
   })
 }
 
-# Security Group for Bastion/App Access
-resource "aws_security_group" "bastion_app" {
-  for_each = local.regions
-  
-  provider    = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  name        = "${local.name_prefix}-bastion-app-sg-${each.key}"
+# VPC Flow Log - Secondary Region
+resource "aws_flow_log" "vpc_flow_logs_secondary" {
+  provider        = aws.eu_west_1
+  iam_role_arn    = aws_iam_role.flow_logs_role_secondary.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs_secondary.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.secondary.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc-flow-log-secondary"
+  })
+}
+
+# Security Group for Bastion/App Access - Primary Region
+resource "aws_security_group" "bastion_app_primary" {
+  name        = "${local.name_prefix}-bastion-app-sg-primary"
   description = "Security group for bastion/app access with restricted ingress"
-  vpc_id      = aws_vpc.main[each.key].id
-  
+  vpc_id      = aws_vpc.primary.id
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-bastion-app-sg-${each.key}"
+    Name = "${local.name_prefix}-bastion-app-sg-primary"
   })
 }
 
-# Security Group Rules for Ingress
-resource "aws_security_group_rule" "bastion_app_ingress" {
+# Security Group for Bastion/App Access - Secondary Region
+resource "aws_security_group" "bastion_app_secondary" {
+  provider    = aws.eu_west_1
+  name        = "${local.name_prefix}-bastion-app-sg-secondary"
+  description = "Security group for bastion/app access with restricted ingress"
+  vpc_id      = aws_vpc.secondary.id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-bastion-app-sg-secondary"
+  })
+}
+
+# Security Group Rules for Ingress - Primary Region
+resource "aws_security_group_rule" "bastion_app_ingress_primary" {
   for_each = {
-    for combo in setproduct(keys(local.regions), var.allowed_ports, var.allowed_ingress_cidrs) :
-    "${combo[0]}-${combo[1]}-${replace(combo[2], "/", "-")}" => {
-      region = combo[0]
-      port   = combo[1]
-      cidr   = combo[2]
+    for combo in setproduct(var.allowed_ports, var.allowed_ingress_cidrs) :
+    "${combo[0]}-${replace(combo[1], "/", "-")}" => {
+      port = combo[0]
+      cidr = combo[1]
     }
   }
-  
-  provider          = local.regions[each.value.region].provider_alias == "default" ? aws : aws.eu_west_1
+
   type              = "ingress"
   from_port         = each.value.port
   to_port           = each.value.port
   protocol          = "tcp"
   cidr_blocks       = [each.value.cidr]
-  security_group_id = aws_security_group.bastion_app[each.value.region].id
+  security_group_id = aws_security_group.bastion_app_primary.id
   description       = "Allow port ${each.value.port} from ${each.value.cidr}"
 }
 
-# Security Group Rules for Egress (HTTPS and DNS only)
-resource "aws_security_group_rule" "bastion_app_egress_https" {
-  for_each = local.regions
-  
-  provider          = each.value.provider_alias == "default" ? aws : aws.eu_west_1
+# Security Group Rules for Ingress - Secondary Region
+resource "aws_security_group_rule" "bastion_app_ingress_secondary" {
+  for_each = {
+    for combo in setproduct(var.allowed_ports, var.allowed_ingress_cidrs) :
+    "${combo[0]}-${replace(combo[1], "/", "-")}" => {
+      port = combo[0]
+      cidr = combo[1]
+    }
+  }
+
+  provider          = aws.eu_west_1
+  type              = "ingress"
+  from_port         = each.value.port
+  to_port           = each.value.port
+  protocol          = "tcp"
+  cidr_blocks       = [each.value.cidr]
+  security_group_id = aws_security_group.bastion_app_secondary.id
+  description       = "Allow port ${each.value.port} from ${each.value.cidr}"
+}
+
+# Security Group Rules for Egress (HTTPS and DNS only) - Primary Region
+resource "aws_security_group_rule" "bastion_app_egress_https_primary" {
   type              = "egress"
   from_port         = 443
   to_port           = 443
   protocol          = "tcp"
   cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.bastion_app[each.key].id
+  security_group_id = aws_security_group.bastion_app_primary.id
   description       = "Allow HTTPS outbound for package updates and API calls"
 }
 
-resource "aws_security_group_rule" "bastion_app_egress_dns" {
-  for_each = local.regions
-  
-  provider          = each.value.provider_alias == "default" ? aws : aws.eu_west_1
+resource "aws_security_group_rule" "bastion_app_egress_dns_primary" {
   type              = "egress"
   from_port         = 53
   to_port           = 53
   protocol          = "udp"
   cidr_blocks       = ["0.0.0.0/0"]
-  security_group_id = aws_security_group.bastion_app[each.key].id
+  security_group_id = aws_security_group.bastion_app_primary.id
   description       = "Allow DNS resolution"
 }
 
-# S3 Bucket for Audit Logs (one per region)
-resource "aws_s3_bucket" "audit_logs" {
-  for_each = local.regions
-  
-  provider = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  bucket   = "${local.name_prefix}-audit-logs-${each.key}-${random_string.bucket_suffix[each.key].result}"
-  
+# Security Group Rules for Egress (HTTPS and DNS only) - Secondary Region
+resource "aws_security_group_rule" "bastion_app_egress_https_secondary" {
+  provider          = aws.eu_west_1
+  type              = "egress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.bastion_app_secondary.id
+  description       = "Allow HTTPS outbound for package updates and API calls"
+}
+
+resource "aws_security_group_rule" "bastion_app_egress_dns_secondary" {
+  provider          = aws.eu_west_1
+  type              = "egress"
+  from_port         = 53
+  to_port           = 53
+  protocol          = "udp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.bastion_app_secondary.id
+  description       = "Allow DNS resolution"
+}
+
+# S3 Bucket for Audit Logs - Primary Region
+resource "aws_s3_bucket" "audit_logs_primary" {
+  bucket = "${local.name_prefix}-audit-logs-primary-${random_string.bucket_suffix_primary.result}"
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-audit-logs-${each.key}"
+    Name = "${local.name_prefix}-audit-logs-primary"
   })
 }
 
-# Random string for S3 bucket uniqueness
-resource "random_string" "bucket_suffix" {
-  for_each = local.regions
-  
+# S3 Bucket for Audit Logs - Secondary Region
+resource "aws_s3_bucket" "audit_logs_secondary" {
+  provider = aws.eu_west_1
+  bucket   = "${local.name_prefix}-audit-logs-secondary-${random_string.bucket_suffix_secondary.result}"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-audit-logs-secondary"
+  })
+}
+
+# Random string for S3 bucket uniqueness - Primary Region
+resource "random_string" "bucket_suffix_primary" {
   length  = 8
   special = false
   upper   = false
 }
 
-# S3 Bucket Encryption
-resource "aws_s3_bucket_server_side_encryption_configuration" "audit_logs" {
-  for_each = local.regions
-  
-  provider = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  bucket   = aws_s3_bucket.audit_logs[each.key].id
-  
+# Random string for S3 bucket uniqueness - Secondary Region
+resource "random_string" "bucket_suffix_secondary" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+# S3 Bucket Encryption - Primary Region
+resource "aws_s3_bucket_server_side_encryption_configuration" "audit_logs_primary" {
+  bucket = aws_s3_bucket.audit_logs_primary.id
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -364,22 +514,40 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "audit_logs" {
   }
 }
 
-# S3 Bucket Public Access Block
-resource "aws_s3_bucket_public_access_block" "audit_logs" {
-  for_each = local.regions
-  
-  provider                = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  bucket                  = aws_s3_bucket.audit_logs[each.key].id
+# S3 Bucket Encryption - Secondary Region
+resource "aws_s3_bucket_server_side_encryption_configuration" "audit_logs_secondary" {
+  provider = aws.eu_west_1
+  bucket   = aws_s3_bucket.audit_logs_secondary.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# S3 Bucket Public Access Block - Primary Region
+resource "aws_s3_bucket_public_access_block" "audit_logs_primary" {
+  bucket                  = aws_s3_bucket.audit_logs_primary.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 
-# S3 Bucket Policy for TLS-only access
-data "aws_iam_policy_document" "s3_tls_only" {
-  for_each = local.regions
-  
+# S3 Bucket Public Access Block - Secondary Region
+resource "aws_s3_bucket_public_access_block" "audit_logs_secondary" {
+  provider                = aws.eu_west_1
+  bucket                  = aws_s3_bucket.audit_logs_secondary.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 Bucket Policy for TLS-only access - Primary Region
+data "aws_iam_policy_document" "s3_tls_only_primary" {
   statement {
     sid    = "DenyInsecureConnections"
     effect = "Deny"
@@ -387,10 +555,10 @@ data "aws_iam_policy_document" "s3_tls_only" {
       type        = "*"
       identifiers = ["*"]
     }
-    actions   = ["s3:*"]
+    actions = ["s3:*"]
     resources = [
-      aws_s3_bucket.audit_logs[each.key].arn,
-      "${aws_s3_bucket.audit_logs[each.key].arn}/*"
+      aws_s3_bucket.audit_logs_primary.arn,
+      "${aws_s3_bucket.audit_logs_primary.arn}/*"
     ]
     condition {
       test     = "Bool"
@@ -400,60 +568,92 @@ data "aws_iam_policy_document" "s3_tls_only" {
   }
 }
 
-resource "aws_s3_bucket_policy" "audit_logs_tls_only" {
-  for_each = local.regions
-  
-  provider = each.value.provider_alias == "default" ? aws : aws.eu_west_1
-  bucket   = aws_s3_bucket.audit_logs[each.key].id
-  policy   = data.aws_iam_policy_document.s3_tls_only[each.key].json
+# S3 Bucket Policy for TLS-only access - Secondary Region
+data "aws_iam_policy_document" "s3_tls_only_secondary" {
+  statement {
+    sid    = "DenyInsecureConnections"
+    effect = "Deny"
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+    actions = ["s3:*"]
+    resources = [
+      aws_s3_bucket.audit_logs_secondary.arn,
+      "${aws_s3_bucket.audit_logs_secondary.arn}/*"
+    ]
+    condition {
+      test     = "Bool"
+      variable = "aws:SecureTransport"
+      values   = ["false"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "audit_logs_tls_only_primary" {
+  bucket = aws_s3_bucket.audit_logs_primary.id
+  policy = data.aws_iam_policy_document.s3_tls_only_primary.json
+}
+
+resource "aws_s3_bucket_policy" "audit_logs_tls_only_secondary" {
+  provider = aws.eu_west_1
+  bucket   = aws_s3_bucket.audit_logs_secondary.id
+  policy   = data.aws_iam_policy_document.s3_tls_only_secondary.json
 }
 
 # Outputs
 output "vpc_ids" {
   description = "VPC IDs for both regions"
   value = {
-    for k, v in aws_vpc.main : k => v.id
+    primary   = aws_vpc.primary.id
+    secondary = aws_vpc.secondary.id
   }
 }
 
 output "public_subnet_ids" {
   description = "Public subnet IDs for both regions"
   value = {
-    for k, v in aws_subnet.public : k => v.id
+    primary   = aws_subnet.public_primary.id
+    secondary = aws_subnet.public_secondary.id
   }
 }
 
 output "private_subnet_ids" {
   description = "Private subnet IDs for both regions"
   value = {
-    for k, v in aws_subnet.private : k => v.id
+    primary   = aws_subnet.private_primary.id
+    secondary = aws_subnet.private_secondary.id
   }
 }
 
 output "flow_log_ids" {
   description = "VPC Flow Log IDs for both regions"
   value = {
-    for k, v in aws_flow_log.vpc_flow_logs : k => v.id
+    primary   = aws_flow_log.vpc_flow_logs_primary.id
+    secondary = aws_flow_log.vpc_flow_logs_secondary.id
   }
 }
 
 output "flow_log_group_arns" {
   description = "CloudWatch Log Group ARNs for VPC Flow Logs"
   value = {
-    for k, v in aws_cloudwatch_log_group.vpc_flow_logs : k => v.arn
+    primary   = aws_cloudwatch_log_group.vpc_flow_logs_primary.arn
+    secondary = aws_cloudwatch_log_group.vpc_flow_logs_secondary.arn
   }
 }
 
 output "security_group_ids" {
   description = "Security Group IDs for bastion/app access"
   value = {
-    for k, v in aws_security_group.bastion_app : k => v.id
+    primary   = aws_security_group.bastion_app_primary.id
+    secondary = aws_security_group.bastion_app_secondary.id
   }
 }
 
 output "s3_audit_bucket_names" {
   description = "S3 bucket names for audit logs"
   value = {
-    for k, v in aws_s3_bucket.audit_logs : k => v.id
+    primary   = aws_s3_bucket.audit_logs_primary.id
+    secondary = aws_s3_bucket.audit_logs_secondary.id
   }
 }
