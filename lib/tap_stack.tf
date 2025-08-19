@@ -25,38 +25,7 @@ module "infra" {
   caller_arn           = data.aws_caller_identity.current.arn
 }
 
-variable "backup_vault_name_to_clean" {
-  description = "The name of the AWS Backup vault to clean recovery points from."
-  type        = string
-}
 
-resource "null_resource" "backup_recovery_point_cleanup" {
-  triggers = {
-    always_run = timestamp()
-  }
-
-  provisioner "local-exec" {
-    when       = destroy
-    command    = <<EOT
-      echo "Attempting to delete recovery points from backup vault: ${var.backup_vault_name_to_clean}"
-      RECOVERY_POINT_ARNS=$(aws backup list-recovery-points-by-backup-vault \
-        --backup-vault-name ${var.backup_vault_name_to_clean} \
-        --query 'RecoveryPoints[].RecoveryPointArn' \
-        --output text)
-
-      if [ -z "$RECOVERY_POINT_ARNS" ]; then
-        echo "No recovery points found in ${var.backup_vault_name_to_clean}."
-      else
-        for arn in $RECOVERY_POINT_ARNS; do
-          echo "Deleting recovery point: $arn"
-          aws backup delete-recovery-point --recovery-point-arn $arn
-        done
-        echo "Finished deleting recovery points from ${var.backup_vault_name_to_clean}."
-      fi
-    EOT
-    interpreter = ["bash", "-c"]
-  }
-}
 ######################
 # Outputs
 ######################

@@ -27,71 +27,68 @@ provider "aws" {
 resource "null_resource" "backup_recovery_point_cleanup" {
   triggers = {
     always_run = timestamp()
+    backup_vault_name = var.backup_vault_name_to_clean
   }
 
   provisioner "local-exec" {
     when       = destroy
     command    = <<EOT
-      echo "Attempting to delete recovery points from backup vault: ${var.backup_vault_name_to_clean}"
+      echo "Attempting to delete recovery points from backup vault: ${self.triggers.backup_vault_name}"
       RECOVERY_POINT_ARNS=$(aws backup list-recovery-points-by-backup-vault \
-        --backup-vault-name ${var.backup_vault_name_to_clean}
+        --backup-vault-name ${self.triggers.backup_vault_name}
         --query 'RecoveryPoints[].RecoveryPointArn'
         --output text)
 
       if [ -z "$RECOVERY_POINT_ARNS" ]; then
-        echo "No recovery points found in ${var.backup_vault_name_to_clean}."
+        echo "No recovery points found in ${self.triggers.backup_vault_name}."
       else
         for arn in $RECOVERY_POINT_ARNS;
         do
           echo "Deleting recovery point: $arn"
           aws backup delete-recovery-point --recovery-point-arn $arn
         done
-        echo "Finished deleting recovery points from ${var.backup_vault_name_to_clean}."
+        echo "Finished deleting recovery points from ${self.triggers.backup_vault_name}."
       fi
     EOT
     interpreter = ["bash", "-c"]
   }
 }
 
-variable "s3_bucket_name_to_clean" {
-  description = "The name of the S3 bucket to empty before deletion."
-  type        = string
-}
-
 resource "null_resource" "s3_bucket_cleanup" {
   triggers = {
     always_run = timestamp()
+    s3_bucket_name = var.s3_bucket_name_to_clean
   }
 
   provisioner "local-exec" {
     when       = destroy
     command    = <<EOT
-      echo "Attempting to empty S3 bucket: ${var.s3_bucket_name_to_clean}"
-      aws s3 rm s3://${var.s3_bucket_name_to_clean} --recursive
+      echo "Attempting to empty S3 bucket: ${self.triggers.s3_bucket_name}"
+      aws s3 rm s3://${self.triggers.s3_bucket_name} --recursive
 
       # Check if versioning is enabled and delete object versions
-      BUCKET_VERSIONING=$(aws s3api get-bucket-versioning --bucket ${var.s3_bucket_name_to_clean} --query 'Status' --output text)
+      BUCKET_VERSIONING=$(aws s3api get-bucket-versioning --bucket ${self.triggers.s3_bucket_name} --query 'Status' --output text)
       if [ "$BUCKET_VERSIONING" == "Enabled" ]; then
-        echo "Versioning is enabled for ${var.s3_bucket_name_to_clean}. Deleting object versions..."
-        aws s3api list-object-versions --bucket ${var.s3_bucket_name_to_clean} \
+        echo "Versioning is enabled for ${self.triggers.s3_bucket_name}. Deleting object versions..."
+        aws s3api list-object-versions --bucket ${self.triggers.s3_bucket_name} \
           --query 'Versions[*].{Key:Key,VersionId:VersionId}' --output json | \
           jq -c '.[]' | while read -r item; do
             KEY=$(echo $item | jq -r '.Key')
             VERSION_ID=$(echo $item | jq -r '.VersionId')
             echo "Deleting version: $KEY (VersionId: $VERSION_ID)"
-            aws s3api delete-object --bucket ${var.s3_bucket_name_to_clean} --key "$KEY" --version-id "$VERSION_ID"
+            aws s3api delete-object --bucket ${self.triggers.s3_bucket_name} --key "$KEY" --version-id "$VERSION_ID"
           done
-        aws s3api list-object-versions --bucket ${var.s3_bucket_name_to_clean} \
+        aws s3api list-object-versions --bucket ${self.triggers.s3_bucket_name} \
           --query 'DeleteMarkers[*].{Key:Key,VersionId:VersionId}' --output json | \
           jq -c '.[]' | while read -r item; do
             KEY=$(echo $item | jq -r '.Key')
             VERSION_ID=$(echo $item | jq -r '.VersionId')
             echo "Deleting delete marker: $KEY (VersionId: $VERSION_ID)"
-            aws s3api delete-object --bucket ${var.s3_bucket_name_to_clean} --key "$KEY" --version-id "$VERSION_ID"
+            aws s3api delete-object --bucket ${self.triggers.s3_bucket_name} --key "$KEY" --version-id "$VERSION_ID"
           done
-        echo "Finished deleting object versions from ${var.s3_bucket_name_to_clean}."
+        echo "Finished deleting object versions from ${self.triggers.s3_bucket_name}."
       fi
-      echo "Finished emptying S3 bucket: ${var.s3_bucket_name_to_clean}."
+      echo "Finished emptying S3 bucket: ${self.triggers.s3_bucket_name}."
     EOT
     interpreter = ["bash", "-c"]
   }
