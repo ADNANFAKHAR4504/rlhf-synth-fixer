@@ -156,11 +156,11 @@
         "DBPassword": {
             "Type": "String",
             "NoEcho": true,
-            "Description": "Database administrator password.",
+            "Description": "Database administrator password (Secrets Manager ARN or plain text).",
             "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "[a-zA-Z0-9!#$%&*+-/=?^_`{|}~@]+",
-            "ConstraintDescription": "Must be 8-41 characters long and contain only alphanumeric characters or the following symbols: !#$%&*+-/=?^_`{|}~@"
+            "MaxLength": 200,
+            "AllowedPattern": "^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[a-zA-Z0-9/_+=.@-]+$|[a-zA-Z0-9!#$%&*+-/=?^_`{|}~@]+",
+            "ConstraintDescription": "Must be either a valid Secrets Manager ARN or 8-41 characters long containing only alphanumeric characters or the following symbols: !#$%&*+-/=?^_`{|}~@"
         },
         "UseExistingKMSKey": {
             "Type": "String",
@@ -223,6 +223,24 @@
                     "Ref": "UseExistingEC2Role"
                 },
                 "no"
+            ]
+        },
+        "IsSecretsManagerARN": {
+            "Fn::Equals": [
+                {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Split": [
+                                ":",
+                                {
+                                    "Ref": "DBPassword"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "arn"
             ]
         }
     },
@@ -1053,7 +1071,15 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::If": [
+                        "IsSecretsManagerARN",
+                        {
+                            "Fn::Sub": "{{resolve:secretsmanager:${DBPassword}}}"
+                        },
+                        {
+                            "Ref": "DBPassword"
+                        }
+                    ]
                 },
                 "BackupRetentionPeriod": 7,
                 "StorageEncrypted": true,
