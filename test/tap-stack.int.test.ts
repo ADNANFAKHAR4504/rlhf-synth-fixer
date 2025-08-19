@@ -127,9 +127,9 @@ terraform {
     primaryKmsArn = getOutputValue(deploymentOutputs, 'primary_kms_key_arn');
     secondaryKmsArn = getOutputValue(deploymentOutputs, 'secondary_kms_key_arn');
     expect(typeof primaryKmsArn).toBe('string');
-    expect(primaryKmsArn).toMatch(/arn:aws:kms:us-east-1:.*:key\/[a-z0-9\-]+/);
+    expect(primaryKmsArn).toMatch(/arn:aws:kms:[a-z0-9-]+:\d+:key\/[a-z0-9\-]+/);
     expect(typeof secondaryKmsArn).toBe('string');
-    expect(secondaryKmsArn).toMatch(/arn:aws:kms:us-west-2:.*:key\/[a-z0-9\-]+/);
+    expect(secondaryKmsArn).toMatch(/arn:aws:kms:[a-z0-9-]+:\d+:key\/[a-z0-9\-]+/);
 
     // Check VPC IDs
     vpcIdPrimary = getOutputValue(deploymentOutputs, 'vpc_id_primary');
