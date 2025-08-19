@@ -47,6 +47,38 @@ jest.mock('../lib/modules', () => {
     CloudFrontModule: jest.fn(() => ({})),
     CloudTrailModule: jest.fn(() => ({})),
     IamModule: jest.fn(() => ({})),
+    // Export the aliases as well
+    ComputeModule: jest.fn(() => ({
+      instance: {
+        id: 'mock-instance-id',
+        privateIp: 'mock-private-ip',
+      },
+    })),
+    DatabaseModule: jest.fn(() => ({
+      db: {
+        id: 'mock-rds-id',
+        endpoint: 'mock-rds-endpoint',
+      },
+      dbSecret: { arn: 'mock-rds-secret-arn' },
+    })),
+    NetworkModule: jest.fn(() => ({
+      vpc: { id: 'mock-vpc-id' },
+      privateSubnetIds: ['mock-private-subnet-1', 'mock-private-subnet-2'],
+    })),
+    StorageModule: jest.fn((scope, id, props) => ({
+      bucket: {
+        bucket: 'mock-s3-bucket',
+        arn: 'mock-s3-bucket-arn',
+        bucketRegionalDomainName: 'mock-s3-domain.com',
+      },
+      // Only include OAI if CloudFront is enabled
+      ...(props?.enableCloudFront && {
+        oai: {
+          cloudfrontAccessIdentityPath: 'origin-access-identity/cloudfront/mock-oai-id',
+          iamArn: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity mock-oai-id',
+        },
+      }),
+    })),
   };
 });
 
@@ -187,11 +219,20 @@ describe('TapStack Unit Tests', () => {
       test('should pass enableCloudFront: false to S3Module when no ACM cert provided', () => {
         expect(S3Module).toHaveBeenCalledWith(
           expect.anything(),
-          's3',
+          'storage', // Updated to match new module ID
           expect.objectContaining({
             enableCloudFront: false,
           })
         );
+      });
+
+      test('should use correct module IDs matching existing state', () => {
+        expect(VpcModule).toHaveBeenCalledWith(expect.anything(), 'network', expect.anything());
+        expect(S3Module).toHaveBeenCalledWith(expect.anything(), 'storage', expect.anything());
+        expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'database', expect.anything());
+        expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'compute', expect.anything());
+        expect(CloudTrailModule).toHaveBeenCalledWith(expect.anything(), 'cloudtrail', expect.anything());
+        expect(IamModule).toHaveBeenCalledWith(expect.anything(), 'iam', expect.anything());
       });
     });
 
@@ -220,7 +261,7 @@ describe('TapStack Unit Tests', () => {
       test('should pass enableCloudFront: true to S3Module when ACM cert is provided', () => {
         expect(S3Module).toHaveBeenCalledWith(
           expect.anything(),
-          's3',
+          'storage', // Updated to match new module ID
           expect.objectContaining({
             enableCloudFront: true,
           })
@@ -229,16 +270,16 @@ describe('TapStack Unit Tests', () => {
 
       test('should wire KMS key correctly to dependent modules', () => {
         const kms = KmsModule.mock.results[0].value;
-        expect(S3Module).toHaveBeenCalledWith(expect.anything(), 's3', expect.objectContaining({ kmsKeyArn: kms.kmsKey.arn }));
-        expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'rds', expect.objectContaining({ kmsKeyArn: kms.kmsKey.arn }));
-        expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'ec2', expect.objectContaining({ kmsKeyId: kms.kmsKey.id }));
+        expect(S3Module).toHaveBeenCalledWith(expect.anything(), 'storage', expect.objectContaining({ kmsKeyArn: kms.kmsKey.arn }));
+        expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'database', expect.objectContaining({ kmsKeyArn: kms.kmsKey.arn }));
+        expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'compute', expect.objectContaining({ kmsKeyId: kms.kmsKey.id }));
         expect(CloudTrailModule).toHaveBeenCalledWith(expect.anything(), 'cloudtrail', expect.objectContaining({ kmsKeyId: kms.kmsKey.id }));
       });
 
       test('should wire VPC components correctly to dependent modules', () => {
         const vpc = VpcModule.mock.results[0].value;
-        expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'ec2', expect.objectContaining({ vpcId: vpc.vpc.id, subnetId: vpc.privateSubnetIds[0] }));
-        expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'rds', expect.objectContaining({ subnetIds: vpc.privateSubnetIds }));
+        expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'compute', expect.objectContaining({ vpcId: vpc.vpc.id, subnetId: vpc.privateSubnetIds[0] }));
+        expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'database', expect.objectContaining({ subnetIds: vpc.privateSubnetIds }));
       });
 
       test('should wire CloudFront correctly with S3 OAI', () => {
@@ -352,5 +393,93 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
+  // ------------------------
+  // Module Naming Convention Tests
+  // ------------------------
+  describe('Module Naming Convention', () => {
+    test('should use correct module identifiers that match existing Terraform state', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestModuleNaming');
+      Testing.fullSynth(stack);
 
+      // Verify the correct module IDs are used for state compatibility
+      expect(VpcModule).toHaveBeenCalledWith(expect.anything(), 'network', expect.anything());
+      expect(S3Module).toHaveBeenCalledWith(expect.anything(), 'storage', expect.anything());
+      expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'database', expect.anything());
+      expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'compute', expect.anything());
+      expect(KmsModule).toHaveBeenCalledWith(expect.anything(), 'kms', expect.anything());
+      expect(CloudTrailModule).toHaveBeenCalledWith(expect.anything(), 'cloudtrail', expect.anything());
+      expect(IamModule).toHaveBeenCalledWith(expect.anything(), 'iam', expect.anything());
+    });
+
+    test('should maintain consistent module instantiation order for dependency resolution', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestModuleOrder');
+      Testing.fullSynth(stack);
+
+      // Verify modules are called in the correct dependency order
+      const callOrder = [
+        KmsModule.mock.invocationCallOrder[0],
+        VpcModule.mock.invocationCallOrder[0],
+        S3Module.mock.invocationCallOrder[0],
+        RdsModule.mock.invocationCallOrder[0],
+        Ec2Module.mock.invocationCallOrder[0],
+        CloudTrailModule.mock.invocationCallOrder[0],
+        IamModule.mock.invocationCallOrder[0],
+      ];
+
+      // Verify call order is sequential (each subsequent call comes after the previous)
+      for (let i = 1; i < callOrder.length; i++) {
+        expect(callOrder[i]).toBeGreaterThan(callOrder[i - 1]);
+      }
+    });
+  });
+
+  // ------------------------
+  // Resource Dependency Tests
+  // ------------------------
+  describe('Resource Dependencies', () => {
+    test('should correctly pass project and environment properties to all modules', () => {
+      const customProject = 'my-custom-project';
+      const customEnv = 'production';
+
+      app = new App();
+      stack = new TapStack(app, 'TestDependencies', {
+        project: customProject,
+        environmentSuffix: customEnv,
+      });
+      Testing.fullSynth(stack);
+
+      // Verify project and env are passed to all relevant modules
+      expect(KmsModule).toHaveBeenCalledWith(expect.anything(), 'kms', expect.objectContaining({
+        project: customProject,
+        env: customEnv,
+      }));
+      
+      expect(S3Module).toHaveBeenCalledWith(expect.anything(), 'storage', expect.objectContaining({
+        project: customProject,
+        env: customEnv,
+      }));
+      
+      expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'database', expect.objectContaining({
+        project: customProject,
+        env: customEnv,
+      }));
+      
+      expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'compute', expect.objectContaining({
+        project: customProject,
+        env: customEnv,
+      }));
+      
+      expect(CloudTrailModule).toHaveBeenCalledWith(expect.anything(), 'cloudtrail', expect.objectContaining({
+        project: customProject,
+        env: customEnv,
+      }));
+      
+      expect(IamModule).toHaveBeenCalledWith(expect.anything(), 'iam', expect.objectContaining({
+        project: customProject,
+        env: customEnv,
+      }));
+    });
+  });
 });

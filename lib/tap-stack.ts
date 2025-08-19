@@ -28,9 +28,6 @@ interface TapStackProps {
   acmCertArn?: string;
 }
 
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
-
 const AWS_REGION_OVERRIDE = 'us-west-2';
 
 export class TapStack extends TerraformStack {
@@ -47,27 +44,23 @@ export class TapStack extends TerraformStack {
     const project = props?.project || 'tap';
     const acmCertArn = props?.acmCertArn;
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Configure AWS Provider
     const awsProvider = new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
     });
 
-    // Configure Random Provider for password generation
+    // Configure Random Provider
     new RandomProvider(this, 'random', {});
 
-    // Configure S3 Backend with native state locking
+    // Configure S3 Backend
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
-
-    // Instantiate your modules in logical order
 
     // 1. KMS Key (needed by other modules)
     const kmsModule = new KmsModule(this, 'kms', {
@@ -76,45 +69,45 @@ export class TapStack extends TerraformStack {
       provider: awsProvider,
     });
 
-    // 2. VPC and networking
-    const vpcModule = new VpcModule(this, 'vpc', awsProvider);
+    // 2. VPC and networking - USE 'network' to match existing state
+    const networkModule = new VpcModule(this, 'network', awsProvider);
 
-    // 3. S3 bucket with KMS encryption and optional CloudFront support
-    const s3Module = new S3Module(this, 's3', {
+    // 3. S3 bucket - USE 'storage' to match existing state
+    const storageModule = new S3Module(this, 'storage', {
       project,
       env: environmentSuffix,
       kmsKeyArn: kmsModule.kmsKey.arn,
       provider: awsProvider,
-      enableCloudFront: !!acmCertArn, // Enable CloudFront support if ACM cert is provided
+      enableCloudFront: !!acmCertArn,
     });
 
-    // 4. RDS with Secrets Manager
-    const rdsModule = new RdsModule(this, 'rds', {
+    // 4. RDS - USE 'database' to match existing state
+    const databaseModule = new RdsModule(this, 'database', {
       project,
       env: environmentSuffix,
-      subnetIds: vpcModule.privateSubnetIds,
+      subnetIds: networkModule.privateSubnetIds,
       kmsKeyArn: kmsModule.kmsKey.arn,
       provider: awsProvider,
     });
 
-    // 5. EC2 instance
-    const ec2Module = new Ec2Module(this, 'ec2', {
+    // 5. EC2 instance - USE 'compute' to match existing state
+    const computeModule = new Ec2Module(this, 'compute', {
       project,
       env: environmentSuffix,
-      vpcId: vpcModule.vpc.id,
-      subnetId: vpcModule.privateSubnetIds[0],
+      vpcId: networkModule.vpc.id,
+      subnetId: networkModule.privateSubnetIds[0],
       kmsKeyId: kmsModule.kmsKey.id,
       provider: awsProvider,
     });
 
-    // 6. CloudFront distribution (only if ACM cert is provided)
-    if (acmCertArn && s3Module.oai) {
+    // 6. CloudFront distribution
+    if (acmCertArn && storageModule.oai) {
       new CloudFrontModule(this, 'cloudfront', {
         project,
         env: environmentSuffix,
         acmCertArn,
-        s3OriginDomainName: s3Module.bucket.bucketRegionalDomainName,
-        originAccessIdentity: s3Module.oai.cloudfrontAccessIdentityPath,
+        s3OriginDomainName: storageModule.bucket.bucketRegionalDomainName,
+        originAccessIdentity: storageModule.oai.cloudfrontAccessIdentityPath,
         provider: awsProvider,
       });
     }
@@ -137,47 +130,47 @@ export class TapStack extends TerraformStack {
     // --- Outputs ---
     new TerraformOutput(this, 'VpcId', {
       description: 'ID of the provisioned VPC',
-      value: vpcModule.vpc.id,
+      value: networkModule.vpc.id, // Updated reference
     });
 
     new TerraformOutput(this, 'PrivateSubnetIds', {
       description: 'IDs of the private subnets',
-      value: vpcModule.privateSubnetIds,
+      value: networkModule.privateSubnetIds, // Updated reference
     });
 
     new TerraformOutput(this, 'S3BucketName', {
       description: 'Name of the secure S3 bucket',
-      value: s3Module.bucket.bucket,
+      value: storageModule.bucket.bucket,
     });
 
     new TerraformOutput(this, 'S3BucketArn', {
       description: 'ARN of the secure S3 bucket',
-      value: s3Module.bucket.arn,
+      value: storageModule.bucket.arn,
     });
 
     new TerraformOutput(this, 'Ec2InstanceId', {
       description: 'ID of the EC2 instance',
-      value: ec2Module.instance.id,
+      value: computeModule.instance.id,
     });
 
     new TerraformOutput(this, 'Ec2InstancePrivateIp', {
       description: 'Private IP address of the EC2 instance',
-      value: ec2Module.instance.privateIp,
+      value: computeModule.instance.privateIp,
     });
 
     new TerraformOutput(this, 'RdsInstanceId', {
       description: 'ID of the RDS instance',
-      value: rdsModule.db.id,
+      value: databaseModule.db.id,
     });
 
     new TerraformOutput(this, 'RdsEndpoint', {
       description: 'RDS instance endpoint',
-      value: rdsModule.db.endpoint,
+      value: databaseModule.db.endpoint,
     });
 
     new TerraformOutput(this, 'RdsSecretArn', {
       description: 'ARN of the RDS credentials secret',
-      value: rdsModule.dbSecret.arn,
+      value: databaseModule.dbSecret.arn,
     });
 
     new TerraformOutput(this, 'KmsKeyId', {
