@@ -14,7 +14,15 @@ import {
   RevokeSecurityGroupIngressCommand,
   RunInstancesCommand,
   TerminateInstancesCommand,
-  DescribeInstancesCommand
+  DescribeInstancesCommand,
+  DescribeVpcsCommandOutput,
+  DescribeSubnetsCommandOutput,
+  DescribeInternetGatewaysCommandOutput,
+  DescribeNatGatewaysCommandOutput,
+  DescribeRouteTablesCommandOutput,
+  DescribeSecurityGroupsCommandOutput,
+  DescribeNetworkAclsCommandOutput,
+  DescribeInstancesCommandOutput
 } from '@aws-sdk/client-ec2';
 
 const outputs = JSON.parse(
@@ -29,10 +37,10 @@ const ec2Client = new EC2Client({ region });
 
 // Helper function to find resources by tag
 const findResourceByTag = async (command: any, tagKey: string, tagValue: string) => {
-  const response = await ec2Client.send(command);
-  const resources = response.Vpcs || response.Subnets || response.InternetGateways || 
-                   response.NatGateways || response.RouteTables || response.SecurityGroups || 
-                   response.NetworkAcls || response.Instances;
+  const response = await ec2Client.send(command) as DescribeVpcsCommandOutput | DescribeSubnetsCommandOutput | DescribeInternetGatewaysCommandOutput | DescribeNatGatewaysCommandOutput | DescribeRouteTablesCommandOutput | DescribeSecurityGroupsCommandOutput | DescribeNetworkAclsCommandOutput | DescribeInstancesCommandOutput;
+  const resources = (response as any).Vpcs || (response as any).Subnets || (response as any).InternetGateways || 
+                   (response as any).NatGateways || (response as any).RouteTables || (response as any).SecurityGroups || 
+                   (response as any).NetworkAcls || (response as any).Instances;
   return resources?.find((resource: any) => 
     resource.Tags?.some((tag: any) => tag.Key === tagKey && tag.Value.includes(tagValue))
   );
@@ -83,7 +91,7 @@ describe('High Availability Network Infrastructure - Integration Tests', () => {
       
       expect(igw.InternetGateways).toHaveLength(1);
       const igwDetails = igw.InternetGateways![0];
-      expect(igwDetails.State).toBe('available');
+      expect((igwDetails as any).State).toBe('available');
       expect(igwDetails.Attachments).toHaveLength(1);
       expect(igwDetails.Attachments![0].VpcId).toBe(outputs.VPC);
       expect(igwDetails.Attachments![0].State).toBe('attached');

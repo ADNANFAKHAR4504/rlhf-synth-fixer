@@ -73,7 +73,7 @@ describe('TapStack CloudFormation Template - High Availability Network Infrastru
       expect(vpc.Properties.EnableDnsSupport).toBe(true);
       
       // Check naming convention with environment suffix and account ID
-      const nameTag = vpc.Properties.Tags.find(tag => tag.Key === 'Name');
+      const nameTag = vpc.Properties.Tags.find((tag: any) => tag.Key === 'Name');
       expect(nameTag.Value['Fn::Sub']).toBe('HA-Prod-VPC-${EnvironmentSuffix}-${AWS::AccountId}');
     });
 
@@ -82,7 +82,7 @@ describe('TapStack CloudFormation Template - High Availability Network Infrastru
       expect(igw).toBeDefined();
       expect(igw.Type).toBe('AWS::EC2::InternetGateway');
       
-      const nameTag = igw.Properties.Tags.find(tag => tag.Key === 'Name');
+      const nameTag = igw.Properties.Tags.find((tag: any) => tag.Key === 'Name');
       expect(nameTag.Value['Fn::Sub']).toBe('HA-Prod-IGW-${EnvironmentSuffix}-${AWS::AccountId}');
     });
 
@@ -108,7 +108,7 @@ describe('TapStack CloudFormation Template - High Availability Network Infrastru
       expect(subnet.Properties.AvailabilityZone['Fn::Select']).toEqual([0, {'Fn::GetAZs': ''}]);
       
       // Check naming convention
-      const nameTag = subnet.Properties.Tags.find(tag => tag.Key === 'Name');
+      const nameTag = subnet.Properties.Tags.find((tag: any) => tag.Key === 'Name');
       expect(nameTag.Value['Fn::Sub']).toBe('HA-Prod-PubSub1-${EnvironmentSuffix}-${AWS::AccountId}');
     });
 
@@ -157,7 +157,7 @@ describe('TapStack CloudFormation Template - High Availability Network Infrastru
       expect(eip.Properties.Domain).toBe('vpc');
       expect(eip.DependsOn).toBe('InternetGatewayAttachment');
       
-      const nameTag = eip.Properties.Tags.find(tag => tag.Key === 'Name');
+      const nameTag = eip.Properties.Tags.find((tag: any) => tag.Key === 'Name');
       expect(nameTag.Value['Fn::Sub']).toBe('HA-Prod-NAT1-EIP-${EnvironmentSuffix}-${AWS::AccountId}');
     });
 
@@ -285,10 +285,10 @@ describe('TapStack CloudFormation Template - High Availability Network Infrastru
       // Check restricted egress rules (no blanket 0.0.0.0/0 -1 rule)
       const egress = sg.Properties.SecurityGroupEgress;
       expect(egress).toHaveLength(4);
-      expect(egress.some(rule => rule.IpProtocol === -1)).toBe(false);
+      expect(egress.some((rule: any) => rule.IpProtocol === -1)).toBe(false);
       
       // Check specific egress rules
-      const httpEgress = egress.find(rule => rule.FromPort === 80);
+      const httpEgress = egress.find((rule: any) => rule.FromPort === 80);
       expect(httpEgress).toBeDefined();
       expect(httpEgress.IpProtocol).toBe('tcp');
       expect(httpEgress.CidrIp).toBe('0.0.0.0/0');
@@ -316,10 +316,10 @@ describe('TapStack CloudFormation Template - High Availability Network Infrastru
       // Check restricted egress rules (no blanket -1 rule)
       const egress = sg.Properties.SecurityGroupEgress;
       expect(egress).toHaveLength(5);
-      expect(egress.some(rule => rule.IpProtocol === -1)).toBe(false);
+      expect(egress.some((rule: any) => rule.IpProtocol === -1)).toBe(false);
       
       // Check VPC SSH rule
-      const vpcSshEgress = egress.find(rule => rule.FromPort === 22 && rule.CidrIp === '10.0.0.0/16');
+      const vpcSshEgress = egress.find((rule: any) => rule.FromPort === 22 && rule.CidrIp === '10.0.0.0/16');
       expect(vpcSshEgress).toBeDefined();
       expect(vpcSshEgress.Description).toBe('Allow SSH to other instances within VPC');
     });
@@ -425,7 +425,7 @@ describe('TapStack CloudFormation Template - High Availability Network Infrastru
       resourcesWithNames.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource.Properties.Tags) {
-          const nameTag = resource.Properties.Tags.find(tag => tag.Key === 'Name');
+          const nameTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Name');
           if (nameTag) {
             expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentSuffix}');
             expect(nameTag.Value['Fn::Sub']).toContain('${AWS::AccountId}');
@@ -445,7 +445,7 @@ describe('TapStack CloudFormation Template - High Availability Network Infrastru
 
       resourcesWithTags.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        const envSuffixTag = resource.Properties.Tags.find(tag => tag.Key === 'EnvironmentSuffix');
+        const envSuffixTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'EnvironmentSuffix');
         expect(envSuffixTag).toBeDefined();
         expect(envSuffixTag.Value.Ref).toBe('EnvironmentSuffix');
       });
@@ -507,7 +507,7 @@ describe('TapStack CloudFormation Template - High Availability Network Infrastru
 
       securityGroups.forEach(sg => {
         const egress = sg.Properties.SecurityGroupEgress || [];
-        const blanketRules = egress.filter(rule => 
+        const blanketRules = egress.filter((rule: any) => 
           rule.IpProtocol === -1 || 
           (rule.IpProtocol === '-1' && rule.CidrIp === '0.0.0.0/0')
         );
