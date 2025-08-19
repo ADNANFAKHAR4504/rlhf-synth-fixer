@@ -781,7 +781,7 @@ EOF
 
     new aws.lb.Listener(`listener-${region}`, {
       loadBalancerArn: alb.arn,
-      port: '80',
+      port: 80,
       protocol: 'HTTP',
       defaultActions: [
         {
