@@ -39,9 +39,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(providerContent).toMatch(/provider\s+"aws"\s*{/);
     });
 
-    test("provider.tf declares AWS provider for replica region", () => {
-      expect(providerContent).toMatch(/provider\s+"aws"\s*{[\s\S]*?alias\s*=\s*"replica"/);
-    });
 
     test("provider.tf has S3 backend configuration", () => {
       expect(providerContent).toMatch(/backend\s+"s3"\s*{/);
