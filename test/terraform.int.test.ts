@@ -18,6 +18,11 @@ describe('Terraform Infrastructure Integration Tests', () => {
     if (fs.existsSync(outputsPath)) {
       const outputsContent = fs.readFileSync(outputsPath, 'utf8');
       deploymentOutputs = JSON.parse(outputsContent);
+      
+      // Parse security_summary if it's a JSON string
+      if (typeof deploymentOutputs.security_summary === 'string') {
+        deploymentOutputs.security_summary = JSON.parse(deploymentOutputs.security_summary);
+      }
     } else {
       throw new Error('Deployment outputs not found. Run deployment first.');
     }
