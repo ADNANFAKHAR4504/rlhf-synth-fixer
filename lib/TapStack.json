@@ -1,257 +1,343 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "AWS CloudFormation template to deploy a highly available web application. This solution uses an Application Load Balancer, an Auto Scaling Group with dynamic scaling policies, and an S3 bucket for logging with a lifecycle policy to transition logs to Glacier after 30 days for cost optimization.\n",
+    "Description": "Highly Available Web Application Infrastructure on AWS",
     "Parameters": {
-        "VPCId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "The ID of your existing VPC."
+        "VpcCIDR": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for the VPC"
         },
-        "SubnetId1": {
-            "Type": "AWS::EC2::Subnet::Id",
-            "Description": "The ID of a subnet in Availability Zone 1."
+        "PublicSubnet1CIDR": {
+            "Type": "String",
+            "Default": "10.0.1.0/24",
+            "Description": "CIDR block for public subnet in AZ1"
         },
-        "SubnetId2": {
-            "Type": "AWS::EC2::Subnet::Id",
-            "Description": "The ID of a subnet in Availability Zone 2."
+        "PublicSubnet2CIDR": {
+            "Type": "String",
+            "Default": "10.0.2.0/24",
+            "Description": "CIDR block for public subnet in AZ2"
         },
         "InstanceType": {
-            "Description": "EC2 instance type for the web servers.",
             "Type": "String",
             "Default": "t3.micro",
             "AllowedValues": [
+                "t2.micro",
                 "t3.micro",
                 "t3.small",
                 "t3.medium"
-            ]
+            ],
+            "Description": "EC2 instance type"
         },
-        "LatestAmiId": {
-            "Description": "The latest Amazon Linux 2 AMI ID.",
-            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-            "Default": "/aws/service/ami-amazon-linux-2/latest/amzn2-ami-hvm-x86_64-gp2"
+        "Environment": {
+            "Type": "String",
+            "Default": "Production",
+            "Description": "Environment tag"
         }
     },
     "Resources": {
-        "WebServerSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
             "Properties": {
-                "GroupName": "WebAppSecurityGroup",
-                "GroupDescription": "Enable HTTP/HTTPS and SSH access to the web servers.",
-                "VpcId": {
-                    "Ref": "VPCId"
+                "CidrBlock": {
+                    "Ref": "VpcCIDR"
                 },
-                "SecurityGroupIngress": [
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "Tags": [
                     {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "SourceSecurityGroupId": {
-                            "Fn::GetAtt": [
-                                "LoadBalancerSecurityGroup",
-                                "GroupId"
-                            ]
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-VPC"
                         }
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "CidrIp": "0.0.0.0/0"
                     }
                 ]
             }
         },
-        "LoadBalancerSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
             "Properties": {
-                "GroupName": "LoadBalancerSecurityGroup",
-                "GroupDescription": "Enable HTTP/HTTPS access to the Application Load Balancer.",
-                "VpcId": {
-                    "Ref": "VPCId"
-                },
-                "SecurityGroupIngress": [
+                "Tags": [
                     {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0"
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-IGW"
+                        }
                     }
                 ]
             }
         },
-        "WebAppLogBucket": {
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet1CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-PublicSubnet1"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet2CIDR"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-PublicSubnet2"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-Public-RT"
+                        }
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "AppLogBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "webapp-logs-${AWS::AccountId}-${AWS::Region}"
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
+                    "Fn::Sub": "${AWS::StackName}-logs-${AWS::Region}-${AWS::AccountId}"
                 },
                 "LifecycleConfiguration": {
                     "Rules": [
                         {
-                            "Id": "MoveToGlacier",
+                            "Id": "TransitionLogsToGlacier",
                             "Status": "Enabled",
                             "Transitions": [
                                 {
-                                    "TransitionInDays": 30,
-                                    "StorageClass": "GLACIER"
+                                    "StorageClass": "GLACIER",
+                                    "TransitionInDays": 30
                                 }
                             ]
                         }
                     ]
-                }
-            }
-        },
-        "S3BucketPolicyForELBAccessLogs": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "WebAppLogBucket"
                 },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "elasticloadbalancing.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${WebAppLogBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
-                            }
-                        }
-                    ]
-                }
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "AppLogBucket"
+                    }
+                ]
             }
         },
-        "WebServerLaunchTemplate": {
-            "Type": "AWS::EC2::LaunchTemplate",
+        "InstanceSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "LaunchTemplateName": "WebAppLaunchTemplate",
-                "LaunchTemplateData": {
-                    "ImageId": {
-                        "Ref": "LatestAmiId"
-                    },
-                    "InstanceType": {
-                        "Ref": "InstanceType"
-                    },
-                    "SecurityGroupIds": [
-                        {
-                            "Fn::GetAtt": [
-                                "WebServerSecurityGroup",
-                                "GroupId"
-                            ]
-                        }
-                    ],
-                    "UserData": {
-                        "Fn::Base64": "#!/bin/bash -xe\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<html><body><h1>Hello from a highly available web server!</h1></body></html>\" > /var/www/html/index.html\n"
-                    }
-                }
-            }
-        },
-        "WebAppAutoScalingGroup": {
-            "Type": "AWS::AutoScaling::AutoScalingGroup",
-            "Properties": {
-                "AutoScalingGroupName": "WebAppAutoScalingGroup",
-                "VPCZoneIdentifier": [
-                    {
-                        "Ref": "SubnetId1"
-                    },
-                    {
-                        "Ref": "SubnetId2"
-                    }
-                ],
-                "LaunchTemplate": {
-                    "LaunchTemplateId": {
-                        "Ref": "WebServerLaunchTemplate"
-                    },
-                    "Version": {
-                        "Fn::GetAtt": [
-                            "WebServerLaunchTemplate",
-                            "DefaultVersionNumber"
-                        ]
-                    }
+                "GroupDescription": "Allow HTTP traffic",
+                "VpcId": {
+                    "Ref": "VPC"
                 },
-                "MinSize": "2",
-                "MaxSize": "10",
-                "DesiredCapacity": "2",
-                "TargetGroupARNs": [
+                "SecurityGroupIngress": [
                     {
-                        "Ref": "LoadBalancerTargetGroup"
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ],
-                "HealthCheckType": "ELB",
-                "HealthCheckGracePeriod": 300
-            }
-        },
-        "WebAppLoadBalancer": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-                "Name": "WebAppLoadBalancer",
-                "Subnets": [
+                "Tags": [
                     {
-                        "Ref": "SubnetId1"
-                    },
-                    {
-                        "Ref": "SubnetId2"
-                    }
-                ],
-                "SecurityGroups": [
-                    {
-                        "Fn::GetAtt": [
-                            "LoadBalancerSecurityGroup",
-                            "GroupId"
-                        ]
-                    }
-                ],
-                "LoadBalancerAttributes": [
-                    {
-                        "Key": "access_logs.s3.enabled",
-                        "Value": "true"
-                    },
-                    {
-                        "Key": "access_logs.s3.bucket",
+                        "Key": "Name",
                         "Value": {
-                            "Ref": "WebAppLogBucket"
-                        }
-                    },
-                    {
-                        "Key": "access_logs.s3.prefix",
-                        "Value": {
-                            "Fn::Sub": "AWSLogs/${AWS::AccountId}/"
+                            "Fn::Sub": "${Environment}-WebSG"
                         }
                     }
                 ]
             }
         },
-        "LoadBalancerTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "Name": "WebAppTargetGroup",
-                "VpcId": {
-                    "Ref": "VPCId"
+                "LaunchTemplateData": {
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "ImageId": "ami-0c55b159cbfafe1f0",
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "InstanceSecurityGroup"
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Welcome to the High Availability Web App\" > /var/www/html/index.html\n"
+                    }
                 },
-                "Port": 80,
-                "Protocol": "HTTP",
-                "HealthCheckEnabled": true,
-                "HealthCheckPath": "/",
-                "HealthyThresholdCount": 5,
-                "UnhealthyThresholdCount": 2,
-                "Matcher": {
-                    "HttpCode": "200"
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${Environment}-WebAppLT"
                 }
             }
         },
-        "LoadBalancerListener": {
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Allow web traffic to ALB",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-ALBSG"
+                        }
+                    }
+                ]
+            }
+        },
+        "LoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-ALB"
+                },
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-ALB"
+                        }
+                    }
+                ]
+            }
+        },
+        "TargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-TG"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckPort": 80,
+                "HealthCheckPath": "/",
+                "TargetType": "instance",
+                "Matcher": {
+                    "HttpCode": 200
+                }
+            }
+        },
+        "Listener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
             "Properties": {
                 "LoadBalancerArn": {
-                    "Ref": "WebAppLoadBalancer"
+                    "Ref": "LoadBalancer"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -259,119 +345,90 @@
                     {
                         "Type": "forward",
                         "TargetGroupArn": {
-                            "Ref": "LoadBalancerTargetGroup"
+                            "Ref": "TargetGroup"
                         }
                     }
                 ]
             }
         },
-        "ScaleUpPolicy": {
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": "2",
+                "MaxSize": "10",
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "TargetGroup"
+                    }
+                ],
+                "HealthCheckType": "EC2",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-WebASG"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "CPUScalingPolicy": {
             "Type": "AWS::AutoScaling::ScalingPolicy",
             "Properties": {
                 "AutoScalingGroupName": {
-                    "Ref": "WebAppAutoScalingGroup"
+                    "Ref": "AutoScalingGroup"
                 },
-                "AdjustmentType": "ChangeInCapacity",
-                "ScalingAdjustment": 2,
-                "Cooldown": 300
-            }
-        },
-        "ScaleDownPolicy": {
-            "Type": "AWS::AutoScaling::ScalingPolicy",
-            "Properties": {
-                "AutoScalingGroupName": {
-                    "Ref": "WebAppAutoScalingGroup"
-                },
-                "AdjustmentType": "ChangeInCapacity",
-                "ScalingAdjustment": -1,
-                "Cooldown": 300
-            }
-        },
-        "CPUHighAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmDescription": "Alarm to add more instances when CPU is high.",
-                "Namespace": "AWS/EC2",
-                "MetricName": "CPUUtilization",
-                "Dimensions": [
-                    {
-                        "Name": "AutoScalingGroupName",
-                        "Value": {
-                            "Ref": "WebAppAutoScalingGroup"
-                        }
-                    }
-                ],
-                "Statistic": "Average",
-                "Period": 60,
-                "EvaluationPeriods": 2,
-                "Threshold": 70,
-                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
-                "AlarmActions": [
-                    {
-                        "Ref": "ScaleUpPolicy"
-                    }
-                ]
-            }
-        },
-        "CPULowAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmDescription": "Alarm to remove instances when CPU is low.",
-                "Namespace": "AWS/EC2",
-                "MetricName": "CPUUtilization",
-                "Dimensions": [
-                    {
-                        "Name": "AutoScalingGroupName",
-                        "Value": {
-                            "Ref": "WebAppAutoScalingGroup"
-                        }
-                    }
-                ],
-                "Statistic": "Average",
-                "Period": 300,
-                "EvaluationPeriods": 2,
-                "Threshold": 30,
-                "ComparisonOperator": "LessThanOrEqualToThreshold",
-                "AlarmActions": [
-                    {
-                        "Ref": "ScaleDownPolicy"
-                    }
-                ]
+                "PolicyType": "TargetTrackingScaling",
+                "TargetTrackingConfiguration": {
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "ASGAverageCPUUtilization"
+                    },
+                    "TargetValue": 50.0
+                }
             }
         }
     },
     "Outputs": {
-        "WebsiteURL": {
-            "Description": "The URL for the highly available web application.",
+        "LoadBalancerDNS": {
+            "Description": "DNS Name of the Load Balancer",
             "Value": {
                 "Fn::GetAtt": [
-                    "WebAppLoadBalancer",
+                    "LoadBalancer",
                     "DNSName"
                 ]
             }
         },
-        "WebAppLogBucketName": {
-            "Description": "The name of the S3 bucket used for logs.",
+        "LogBucketName": {
+            "Description": "Name of the S3 bucket for logs",
             "Value": {
-                "Ref": "WebAppLogBucket"
+                "Ref": "AppLogBucket"
             }
         },
         "AutoScalingGroupName": {
-            "Description": "The name of the Auto Scaling Group.",
+            "Description": "Name of the Auto Scaling Group",
             "Value": {
-                "Ref": "WebAppAutoScalingGroup"
-            }
-        },
-        "LoadBalancerSecurityGroupId": {
-            "Description": "The ID of the Security Group for the Load Balancer.",
-            "Value": {
-                "Ref": "LoadBalancerSecurityGroup"
-            }
-        },
-        "WebServerSecurityGroupId": {
-            "Description": "The ID of the Security Group for the web servers.",
-            "Value": {
-                "Ref": "WebServerSecurityGroup"
+                "Ref": "AutoScalingGroup"
             }
         }
     }
