@@ -808,6 +808,47 @@ resource "aws_s3_bucket_policy" "logs" {
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.logs.arn
+      },
+      {
+        Sid    = "AllowALBAccessLogs"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::156460612806:root"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/alb/*"
+      },
+      {
+        Sid    = "AllowALBGetBucketAcl"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
+      },
+      {
+        Sid    = "AllowConfigDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/config/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid    = "AllowConfigGetBucketAcl"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
       }
     ]
   })
@@ -1096,7 +1137,12 @@ resource "aws_iam_role_policy" "secret_rotation_lambda" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue", "secretsmanager:PutSecretValue", "secretsmanager:DescribeSecret"]
+        Action   = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:UpdateSecretVersionStage"
+        ]
         Resource = aws_secretsmanager_secret.db_credentials.arn
       },
       {
@@ -1135,6 +1181,15 @@ resource "aws_lambda_function" "secret_rotation" {
       SECRET_ID = aws_secretsmanager_secret.db_credentials.id
     }
   }
+}
+
+# Allow Secrets Manager service to invoke the rotation Lambda for this specific secret
+resource "aws_lambda_permission" "allow_secretsmanager_rotation" {
+  statement_id  = "AllowSecretsManagerRotation"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.secret_rotation.function_name
+  principal     = "secretsmanager.amazonaws.com"
+  source_arn    = aws_secretsmanager_secret.db_credentials.arn
 }
 
 resource "aws_secretsmanager_secret_rotation" "db_credentials" {
@@ -1181,6 +1236,29 @@ resource "aws_security_group" "rds" {
   tags = local.pii_tags
 }
 
+# IAM role for RDS Enhanced Monitoring (required when monitoring_interval > 0)
+resource "aws_iam_role" "rds_enhanced_monitoring" {
+  name = "${var.project_name}-${var.environment}-rds-monitoring"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "monitoring.rds.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
+  role       = aws_iam_role.rds_enhanced_monitoring.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
 resource "aws_db_instance" "mysql" {
   identifier                 = "${var.project_name}-${var.environment}-mysql"
   engine                     = "mysql"
@@ -1204,7 +1282,7 @@ resource "aws_db_instance" "mysql" {
   auto_minor_version_upgrade = true
   parameter_group_name       = aws_db_parameter_group.mysql.name
   monitoring_interval        = 60
-  monitoring_role_arn        = null
+  monitoring_role_arn        = aws_iam_role.rds_enhanced_monitoring.arn
   performance_insights_enabled = true
   performance_insights_kms_key_id = aws_kms_key.rds.arn
   tags = local.pii_tags
@@ -1319,7 +1397,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config_attach" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
 }
 
 resource "aws_config_configuration_recorder" "main" {
@@ -1360,7 +1438,7 @@ resource "aws_config_config_rule" "kms_rotation" {
   name = "kms-key-rotation-enabled"
   source {
     owner             = "AWS"
-    source_identifier = "KMS_KEY_ROTATION_ENABLED"
+    source_identifier = "CMK_BACKING_KEY_ROTATION_ENABLED"
   }
 }
 
