@@ -275,7 +275,6 @@ export class TapStack extends cdk.Stack {
 
     // S3 Buckets
     const dataBucket = new s3.Bucket(this, `corp-${projectName}-data-bucket`, {
-      bucketName: `corp-${projectName}-data${environmentSuffix}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
@@ -284,7 +283,6 @@ export class TapStack extends cdk.Stack {
     });
 
     const logsBucket = new s3.Bucket(this, `corp-${projectName}-logs-bucket`, {
-      bucketName: `corp-${projectName}-logs${environmentSuffix}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
