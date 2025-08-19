@@ -399,7 +399,6 @@ export class StorageStack extends pulumi.ComponentResource {
       {
         rule: eventRule.name,
         arn: logGroup.arn,
-        roleArn: eventBridgeRole.arn,
       },
       { parent: this }
     );
