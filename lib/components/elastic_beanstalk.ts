@@ -212,8 +212,8 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
    * Create Elastic Beanstalk Environment
    */
   private createEnvironment(): aws.elasticbeanstalk.Environment {
-    const suffix = this.randomSuffix();
-    const envName = `nova-env-${this.regionSuffix}-${suffix}`;
+    // Use deterministic naming based on environment suffix (no random components)
+    const envName = `nova-env-${this.regionSuffix}-${this.environmentSuffix}`;
 
     console.log(`🚀 Creating Elastic Beanstalk environment: ${envName}`);
 
@@ -228,18 +228,6 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
       },
       { parent: this }
     );
-  }
-
-  /**
-   * Generate random suffix for unique naming
-   */
-  private randomSuffix(length: number = 6): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
   }
 
   // Property getters for easy access

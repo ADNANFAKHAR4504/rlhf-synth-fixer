@@ -472,22 +472,91 @@ describe("Infrastructure Components End-to-End Tests", () => {
       expect(envCname).toMatch(/\.elasticbeanstalk\.com$/);
     });
 
-    it("should generate random suffix", () => {
-      const suffix1 = (eb as any).randomSuffix();
-      const suffix2 = (eb as any).randomSuffix();
+    it("should use deterministic environment naming based on environmentSuffix", async () => {
+      const envName = await resolveOutput(eb.environmentName);
       
-      expect(suffix1).toHaveLength(6);
-      expect(suffix2).toHaveLength(6);
-      expect(suffix1).not.toBe(suffix2);
-      expect(suffix1).toMatch(/^[a-z0-9]+$/);
+      // Environment name should include the region suffix and environment suffix
+      expect(envName).toMatch(/^nova-env-useast1-/);
+      expect(envName).toContain("useast1-test");
     });
 
-    it("should handle different suffix lengths", () => {
-      const shortSuffix = (eb as any).randomSuffix(3);
-      const longSuffix = (eb as any).randomSuffix(10);
-      
-      expect(shortSuffix).toHaveLength(3);
-      expect(longSuffix).toHaveLength(10);
+    it("should create consistent environment names across multiple instances", async () => {
+      // Create two instances with the same parameters
+      const eb1 = new ElasticBeanstalkInfrastructure("test-eb-1", {
+        region: "us-east-1",
+        isPrimary: true,
+        environment: "test",
+        environmentSuffix: "consistent-test",
+        vpcId: networking.vpcId,
+        publicSubnetIds: networking.publicSubnetIds,
+        privateSubnetIds: networking.privateSubnetIds,
+        albSecurityGroupId: networking.albSecurityGroupId,
+        ebSecurityGroupId: networking.ebSecurityGroupId,
+        ebServiceRoleArn: identity.ebServiceRoleArn,
+        ebInstanceProfileName: identity.ebInstanceProfileName,
+        tags: testTags,
+      });
+
+      const eb2 = new ElasticBeanstalkInfrastructure("test-eb-2", {
+        region: "us-east-1",
+        isPrimary: true,
+        environment: "test",
+        environmentSuffix: "consistent-test",
+        vpcId: networking.vpcId,
+        publicSubnetIds: networking.publicSubnetIds,
+        privateSubnetIds: networking.privateSubnetIds,
+        albSecurityGroupId: networking.albSecurityGroupId,
+        ebSecurityGroupId: networking.ebSecurityGroupId,
+        ebServiceRoleArn: identity.ebServiceRoleArn,
+        ebInstanceProfileName: identity.ebInstanceProfileName,
+        tags: testTags,
+      });
+
+      const envName1 = await resolveOutput(eb1.environmentName);
+      const envName2 = await resolveOutput(eb2.environmentName);
+
+      // Both should follow the same naming pattern (deterministic)
+      expect(envName1).toMatch(/^nova-env-useast1-consistent-test$/);
+      expect(envName2).toMatch(/^nova-env-useast1-consistent-test$/);
+    });
+
+    it("should use different environment names for different environmentSuffix values", async () => {
+      const eb1 = new ElasticBeanstalkInfrastructure("test-eb-diff-1", {
+        region: "us-east-1",
+        isPrimary: true,
+        environment: "test",
+        environmentSuffix: "suffix1",
+        vpcId: networking.vpcId,
+        publicSubnetIds: networking.publicSubnetIds,
+        privateSubnetIds: networking.privateSubnetIds,
+        albSecurityGroupId: networking.albSecurityGroupId,
+        ebSecurityGroupId: networking.ebSecurityGroupId,
+        ebServiceRoleArn: identity.ebServiceRoleArn,
+        ebInstanceProfileName: identity.ebInstanceProfileName,
+        tags: testTags,
+      });
+
+      const eb2 = new ElasticBeanstalkInfrastructure("test-eb-diff-2", {
+        region: "us-west-1",
+        isPrimary: false,
+        environment: "test", 
+        environmentSuffix: "suffix2",
+        vpcId: networking.vpcId,
+        publicSubnetIds: networking.publicSubnetIds,
+        privateSubnetIds: networking.privateSubnetIds,
+        albSecurityGroupId: networking.albSecurityGroupId,
+        ebSecurityGroupId: networking.ebSecurityGroupId,
+        ebServiceRoleArn: identity.ebServiceRoleArn,
+        ebInstanceProfileName: identity.ebInstanceProfileName,
+        tags: testTags,
+      });
+
+      const envName1 = await resolveOutput(eb1.environmentName);
+      const envName2 = await resolveOutput(eb2.environmentName);
+
+      expect(envName1).toBe("nova-env-useast1-suffix1");
+      expect(envName2).toBe("nova-env-uswest1-suffix2");
+      expect(envName1).not.toBe(envName2);
     });
   });
 
