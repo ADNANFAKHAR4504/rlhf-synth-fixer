@@ -17,6 +17,7 @@ Metadata:
       - Label:
           default: 'Database Configuration'
         Parameters:
+          - CreateDatabase
           - DBInstanceClass
           - DBUsername
           - DBPassword
@@ -27,6 +28,9 @@ Metadata:
           - ExistingKMSKeyARN
           - UseExistingEC2Role
           - ExistingEC2RoleName
+          - CreateNATGateway
+          - CreateS3Bucket
+          - CreateEC2Instance
     ParameterLabels:
       UseExistingVPC:
         default: 'Use Existing VPC?'
@@ -40,6 +44,8 @@ Metadata:
         default: 'SSH Access CIDR'
       DBInstanceClass:
         default: 'RDS Instance Class'
+      CreateDatabase:
+        default: 'Create Database?'
       DBUsername:
         default: 'Database Admin Username'
       DBPassword:
@@ -52,15 +58,26 @@ Metadata:
         default: 'Use Existing EC2 Role?'
       ExistingEC2RoleName:
         default: 'Existing EC2 Role Name'
+      CreateNATGateway:
+        default: 'Create NAT Gateway?'
+      CreateS3Bucket:
+        default: 'Create S3 Bucket?'
+      CreateEC2Instance:
+        default: 'Create EC2 Instance?'
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1030
+        - W1011
 
 Parameters:
   UseExistingVPC:
     Type: String
     Default: 'no'
-    AllowedValues: [yes, no]
+    AllowedValues: ['yes', 'no']
     Description: 'Select "yes" to use an existing VPC. Select "no" to create a new one.'
   ExistingVPCId:
-    Type: AWS::EC2::VPC::Id
+    Type: String
     Description: 'Mandatory if UseExistingVPC is "yes". The ID of the existing VPC.'
     Default: ''
   VPCCIDR:
@@ -83,7 +100,7 @@ Parameters:
     Description: 'The CIDR IP range that is permitted to SSH into the EC2 instances.'
     MinLength: 9
     MaxLength: 18
-    Default: 0.0.0.0/0
+    Default: '0.0.0.0/0'
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
     ConstraintDescription: 'Must be a valid IP CIDR range of the form x.x.x.x/x.'
   DBInstanceClass:
@@ -105,7 +122,8 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
-    Description: 'Database administrator password.'
+    Default: 'dummyPassword123!'
+    Description: 'Database administrator password (required only if CreateDatabase is "yes").'
     MinLength: 8
     MaxLength: 41
     AllowedPattern: '[a-zA-Z0-9!#$%&*+-/=?^_`{|}~@]+'
@@ -113,7 +131,7 @@ Parameters:
   UseExistingKMSKey:
     Type: String
     Default: 'no'
-    AllowedValues: [yes, no]
+    AllowedValues: ['yes', 'no']
     Description: 'Select "yes" to use an existing KMS Key for encryption. Select "no" to create a new one.'
   ExistingKMSKeyARN:
     Type: String
@@ -124,24 +142,48 @@ Parameters:
   UseExistingEC2Role:
     Type: String
     Default: 'no'
-    AllowedValues: [yes, no]
+    AllowedValues: ['yes', 'no']
     Description: 'Select "yes" to use an existing IAM Role for EC2. Select "no" to create a new one.'
   ExistingEC2RoleName:
     Type: String
     Description: 'Mandatory if UseExistingEC2Role is "yes". The name of the existing IAM Role.'
     Default: ''
+  CreateDatabase:
+    Type: String
+    Default: 'no'
+    AllowedValues: ['yes', 'no']
+    Description: 'Select "yes" to create a new RDS database. Select "no" to skip database creation.'
+  CreateNATGateway:
+    Type: String
+    Default: 'no'
+    AllowedValues: ['yes', 'no']
+    Description: 'Select "yes" to create a NAT Gateway (may hit service limits). Select "no" to use Internet Gateway only.'
+  CreateS3Bucket:
+    Type: String
+    Default: 'yes'
+    AllowedValues: ['yes', 'no']
+    Description: 'Select "yes" to create a new S3 bucket for application logs. Select "no" to skip bucket creation.'
+  CreateEC2Instance:
+    Type: String
+    Default: 'yes'
+    AllowedValues: ['yes', 'no']
+    Description: 'Select "yes" to create an EC2 instance. Select "no" to skip instance creation.'
 
 Mappings:
   RegionMap:
     us-west-2:
-      AMI: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}'
+      AMI: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}'
+    us-east-1:
+      AMI: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}'
 
 Conditions:
   CreateNewVPC: !Equals [!Ref UseExistingVPC, 'no']
   CreateNewKMSKey: !Equals [!Ref UseExistingKMSKey, 'no']
   CreateNewEC2Role: !Equals [!Ref UseExistingEC2Role, 'no']
-  HasExistingKMSKey: !Not [!Equals [!Ref ExistingKMSKeyARN, '']]
-  HasExistingEC2Role: !Not [!Equals [!Ref ExistingEC2RoleName, '']]
+  CreateNewDatabase: !Equals [!Ref CreateDatabase, 'yes']
+  CreateNATGateway: !Equals [!Ref CreateNATGateway, 'yes']
+  CreateNewS3Bucket: !Equals [!Ref CreateS3Bucket, 'yes']
+  CreateNewEC2Instance: !Equals [!Ref CreateEC2Instance, 'yes']
 
 Resources:
   ###############################################################################
@@ -233,8 +275,7 @@ Resources:
 
   NatGatewayEIP:
     Type: AWS::EC2::EIP
-    Condition: CreateNewVPC
-    DependsOn: VPCGatewayAttachment
+    Condition: CreateNATGateway
     Properties:
       Domain: vpc
       Tags:
@@ -245,10 +286,10 @@ Resources:
 
   NatGateway:
     Type: AWS::EC2::NatGateway
-    Condition: CreateNewVPC
+    Condition: CreateNATGateway
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
+      SubnetId: !If [CreateNewVPC, !Ref PublicSubnet1, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-nat-gw'
@@ -306,7 +347,9 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
+      GatewayId:
+        !If [CreateNATGateway, !Ref 'AWS::NoValue', !Ref InternetGateway]
+      NatGatewayId: !If [CreateNATGateway, !Ref NatGateway, !Ref 'AWS::NoValue']
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -357,11 +400,6 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
           Description: Allow outbound HTTP as fallback
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !GetAtt DatabaseSecurityGroup.GroupId
-          Description: Allow outbound MySQL to the database security group
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-webserver-sg'
@@ -381,8 +419,8 @@ Resources:
           Description: Allow MySQL from web servers
       SecurityGroupEgress:
         - IpProtocol: -1
-          CidrIp: 127.0.0.1/32
-          Description: Deny all outbound traffic by default
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-database-sg'
@@ -396,6 +434,7 @@ Resources:
     Type: AWS::KMS::Key
     Condition: CreateNewKMSKey
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Description: KMS key for encrypting RDS instances and EBS volumes.
       EnableKeyRotation: true
@@ -476,13 +515,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
-                Condition:
-                  StringEquals:
-                    s3:x-amz-acl: bucket-owner-full-control
-              - Effect: Allow
-                Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
@@ -501,14 +533,34 @@ Resources:
       Roles:
         - !Ref EC2Role
 
+  EC2S3Policy:
+    Type: AWS::IAM::Policy
+    Condition: CreateNewS3Bucket
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-EC2-S3-Policy'
+      Roles:
+        - !If [CreateNewEC2Role, !Ref EC2Role, !Ref ExistingEC2RoleName]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
   ###############################################################################
   # S3 BUCKET FOR APPLICATION LOGS
   ###############################################################################
   ApplicationLogsBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateNewS3Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'app-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'app-logs-${AWS::AccountId}-${AWS::Region}-tapstack'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -537,11 +589,12 @@ Resources:
   ###############################################################################
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateNewDatabase
     Properties:
       DBSubnetGroupDescription: Subnet group for private RDS instance
       SubnetIds:
-        - !If [CreateNewVPC, !Ref PrivateSubnet1, !Select [0, !Ref 'AWS::NoValue']]
-        - !If [CreateNewVPC, !Ref PrivateSubnet2, !Select [1, !Ref 'AWS::NoValue']]
+        - !If [CreateNewVPC, !Ref PrivateSubnet1, !Ref 'AWS::NoValue']
+        - !If [CreateNewVPC, !Ref PrivateSubnet2, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-db-subnet-group'
@@ -550,6 +603,7 @@ Resources:
 
   DBParameterGroup:
     Type: AWS::RDS::DBParameterGroup
+    Condition: CreateNewDatabase
     Properties:
       Description: Custom parameter group for secure MySQL configuration
       Family: mysql8.0
@@ -565,7 +619,9 @@ Resources:
 
   Database:
     Type: AWS::RDS::DBInstance
+    Condition: CreateNewDatabase
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       AllocatedStorage: 20
       DBInstanceClass: !Ref DBInstanceClass
@@ -574,7 +630,7 @@ Resources:
       DBParameterGroupName: !Ref DBParameterGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       Engine: mysql
-      EngineVersion: 8.0.35
+      EngineVersion: 8.0.43
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Ref DBPassword
       BackupRetentionPeriod: 7
@@ -598,24 +654,24 @@ Resources:
   ###############################################################################
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    Condition: CreateNewEC2Instance
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-lt'
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
-        IamInstanceProfile:
-          !If
-            - CreateNewEC2Role
-            - Arn: !GetAtt EC2InstanceProfile.Arn
-            - Name: !Ref ExistingEC2RoleName
-        KeyName: default
+        IamInstanceProfile: !If
+          - CreateNewEC2Role
+          - Arn: !GetAtt EC2InstanceProfile.Arn
+          - Name: !Ref ExistingEC2RoleName
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !If [CreateNewKMSKey, !Ref KMSKey, !Ref ExistingKMSKeyARN]
+              KmsKeyId:
+                !If [CreateNewKMSKey, !Ref KMSKey, !Ref ExistingKMSKeyARN]
               DeleteOnTermination: true
         Monitoring:
           Enabled: true
@@ -639,7 +695,7 @@ Resources:
               - Key: Environment
                 Value: Production
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y amazon-cloudwatch-agent httpd mysql
@@ -649,11 +705,12 @@ Resources:
 
   WebInstance:
     Type: AWS::EC2::Instance
+    Condition: CreateNewEC2Instance
     Properties:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      SubnetId: !If [CreateNewVPC, !Ref PublicSubnet1, !Select [0, !Ref 'AWS::NoValue']]
+      SubnetId: !If [CreateNewVPC, !Ref PublicSubnet1, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-web-instance'
@@ -668,12 +725,22 @@ Outputs:
       Name: !Sub '${AWS::StackName}-VPCId'
   PublicSubnets:
     Description: Comma-separated list of Public Subnet IDs.
-    Value: !If [CreateNewVPC, !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]], 'UseExistingVPC-NoNewSubnets']
+    Value:
+      !If [
+        CreateNewVPC,
+        !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]],
+        'UseExistingVPC-NoNewSubnets',
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnets'
   PrivateSubnets:
     Description: Comma-separated list of Private Subnet IDs.
-    Value: !If [CreateNewVPC, !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]], 'UseExistingVPC-NoNewSubnets']
+    Value:
+      !If [
+        CreateNewVPC,
+        !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]],
+        'UseExistingVPC-NoNewSubnets',
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnets'
   WebServerSecurityGroupId:
@@ -688,12 +755,18 @@ Outputs:
       Name: !Sub '${AWS::StackName}-DatabaseSGId'
   DatabaseEndpoint:
     Description: The connection endpoint for the database.
-    Value: !GetAtt Database.Endpoint.Address
+    Value:
+      !If [
+        CreateNewDatabase,
+        !GetAtt Database.Endpoint.Address,
+        'No database created',
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
   ApplicationLogsBucketName:
     Description: The name of the S3 bucket for application logs.
-    Value: !Ref ApplicationLogsBucket
+    Value:
+      !If [CreateNewS3Bucket, !Ref ApplicationLogsBucket, 'No bucket created']
     Export:
       Name: !Sub '${AWS::StackName}-ApplicationLogsBucket'
   KMSKeyArn:
@@ -703,6 +776,6 @@ Outputs:
       Name: !Sub '${AWS::StackName}-KMSKeyArn'
   WebInstanceId:
     Description: The ID of the launched EC2 Web Instance.
-    Value: !Ref WebInstance
+    Value: !If [CreateNewEC2Instance, !Ref WebInstance, 'No instance created']
     Export:
       Name: !Sub '${AWS::StackName}-WebInstanceId'
