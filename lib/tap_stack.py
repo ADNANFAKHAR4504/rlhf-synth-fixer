@@ -5,15 +5,15 @@
 # using Pulumi in Python that integrates seamlessly with GitHub Actions CI/CD pipeline.
 #
 # PROMPT REQUIREMENTS ADDRESSED:
-# ✔ Multi-region deployment (us-west-2 primary, us-east-1 secondary)
-# ✔ GitHub Actions CI/CD integration with automatic deployment on main branch pushes
-# ✔ Automated testing in AWS with strict $15/month budget cap
-# ✔ Secure management of sensitive information using AWS Secrets Manager
-# ✔ Automatic rollback functionality for failed deployments
-# ✔ Comprehensive documentation and adherence to Pulumi best practices
-# ✔ Zero-downtime deployments using Lambda aliases and CodeDeploy traffic shifting
-# ✔ Cost monitoring and budget enforcement
-# ✔ Security best practices (KMS encryption, least-privilege IAM, public access blocks)
+# - Multi-region deployment (us-west-2 primary, us-east-1 secondary)
+# - GitHub Actions CI/CD integration with automatic deployment on main branch pushes
+# - Automated testing in AWS with strict $15/month budget cap
+# - Secure management of sensitive information using AWS Secrets Manager
+# - Automatic rollback functionality for failed deployments
+# - Comprehensive documentation and adherence to Pulumi best practices
+# - Zero-downtime deployments using Lambda aliases and CodeDeploy traffic shifting
+# - Cost monitoring and budget enforcement
+# - Security best practices (KMS encryption, least-privilege IAM, public access blocks)
 #
 # ARCHITECTURE:
 # - Primary region: us-west-2 (as specified in prompt)
