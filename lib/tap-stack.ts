@@ -64,6 +64,7 @@ export class TapStack extends TerraformStack {
       cidrBlock: '10.0.0.0/16',
       enableDnsHostnames: true,
       enableDnsSupport: true,
+      availabilityZones: [`${awsRegion}a`, `${awsRegion}b`],
     });
 
     // 2. Create KMS Key for encryption with automatic rotation

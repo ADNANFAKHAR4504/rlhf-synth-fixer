@@ -25,7 +25,6 @@ import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 
 // Interface definitions for module configurations
 export interface VpcModuleConfig {
@@ -33,6 +32,7 @@ export interface VpcModuleConfig {
   cidrBlock: string;
   enableDnsHostnames: boolean;
   enableDnsSupport: boolean;
+  availabilityZones: string[];
 }
 
 export interface SecurityGroupModuleConfig {
@@ -113,21 +113,22 @@ export interface CloudTrailModuleConfig {
 /**
  * VPC Module - Creates VPC with public and private subnets
  */
+/**
+ * VPC Module - Creates VPC with public and private subnets
+ */
 export class VpcModule extends Construct {
   public readonly vpc: Vpc;
   public readonly publicSubnets: Subnet[];
   public readonly privateSubnets: Subnet[];
   public readonly internetGateway: InternetGateway;
   public readonly natGateways: NatGateway[];
-  public readonly availabilityZones: DataAwsAvailabilityZones;
 
-  constructor(scope: Construct, id: string, config: VpcModuleConfig) {
+  constructor(
+    scope: Construct,
+    id: string,
+    config: VpcModuleConfig & { availabilityZones: string[] }
+  ) {
     super(scope, id);
-
-    // Get available AZs
-    this.availabilityZones = new DataAwsAvailabilityZones(this, 'azs', {
-      state: 'available',
-    });
 
     // Create VPC
     this.vpc = new Vpc(this, 'vpc', {
@@ -159,7 +160,7 @@ export class VpcModule extends Construct {
       const publicSubnet = new Subnet(this, `public-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: publicSubnetCidrs[i],
-        availabilityZone: `\${data.aws_availability_zones.azs.names[${i}]}`,
+        availabilityZone: config.availabilityZones[i], // Use hardcoded AZ
         mapPublicIpOnLaunch: true,
         tags: {
           Name: `${config.name}-public-subnet-${i + 1}`,
@@ -179,7 +180,7 @@ export class VpcModule extends Construct {
       const privateSubnet = new Subnet(this, `private-subnet-${i}`, {
         vpcId: this.vpc.id,
         cidrBlock: privateSubnetCidrs[i],
-        availabilityZone: `\${data.aws_availability_zones.azs.names[${i}]}`,
+        availabilityZone: config.availabilityZones[i], // Use hardcoded AZ
         mapPublicIpOnLaunch: false,
         tags: {
           Name: `${config.name}-private-subnet-${i + 1}`,
