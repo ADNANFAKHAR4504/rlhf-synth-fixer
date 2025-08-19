@@ -244,9 +244,7 @@
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
-                    "ImageId": {
-                        "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
-                    },
+                    "ImageId": "ami-00ca32bbc84273381",
                     "SecurityGroupIds": [
                         {
                             "Ref": "InstanceSecurityGroup"
