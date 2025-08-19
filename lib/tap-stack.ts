@@ -681,53 +681,47 @@ export class TapStack extends cdk.Stack {
   }
 
   private createOutputs(): void {
-    // Stack outputs for integration testing
     new cdk.CfnOutput(this, 'VpcId', {
       description: 'VPC ID for the Nova security baseline',
       value: this.vpc.vpcId,
       exportName: `NovaVpcId-${this.stackName}`,
     });
-
+  
+    // 🔹 Add Private Subnets for tests
+    new cdk.CfnOutput(this, 'PrivateSubnet1Id', {
+      description: 'Private Subnet 1 ID',
+      value: this.vpc.privateSubnets[0].subnetId,
+    });
+  
+    new cdk.CfnOutput(this, 'PrivateSubnet2Id', {
+      description: 'Private Subnet 2 ID',
+      value: this.vpc.privateSubnets[1].subnetId,
+    });
+  
     new cdk.CfnOutput(this, 'KmsKeyId', {
       description: 'KMS Key ID for encryption',
       value: this.kmsKey.keyId,
       exportName: `NovaKmsKeyId-${this.stackName}`,
     });
-
-    new cdk.CfnOutput(this, 'KmsKeyArn', {
-      description: 'KMS Key ARN for encryption',
-      value: this.kmsKey.keyArn,
-      exportName: `NovaKmsKeyArn-${this.stackName}`,
-    });
-
+  
     new cdk.CfnOutput(this, 'LogsBucketName', {
       description: 'S3 bucket name for logs storage',
       value: this.logsBucket.bucketName,
       exportName: `NovaLogsBucketName-${this.stackName}`,
     });
-
-    new cdk.CfnOutput(this, 'LogsBucketArn', {
-      description: 'S3 bucket ARN for logs storage',
-      value: this.logsBucket.bucketArn,
-      exportName: `NovaLogsBucketArn-${this.stackName}`,
-    });
-
-    new cdk.CfnOutput(this, 'ApiGatewayId', {
-      description: 'API Gateway REST API ID',
-      value: this.apiGateway.restApiId,
-      exportName: `NovaApiGatewayId-${this.stackName}`,
-    });
-
-    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
-      description: 'API Gateway URL',
+  
+    // 🔹 Add ApiEndpointUrl (tests expect this name)
+    new cdk.CfnOutput(this, 'ApiEndpointUrl', {
+      description: 'API Gateway endpoint URL',
       value: this.apiGateway.url,
-      exportName: `NovaApiGatewayUrl-${this.stackName}`,
     });
-
+  
+    // You can still keep HealthCheckEndpoint
     new cdk.CfnOutput(this, 'HealthCheckEndpoint', {
       description: 'Health check endpoint URL',
       value: `${this.apiGateway.url}health`,
       exportName: `NovaHealthCheckEndpoint-${this.stackName}`,
     });
   }
+  
 }
