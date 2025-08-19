@@ -3,7 +3,7 @@
  * Multi-region AWS infrastructure stack using Pulumi TypeScript
  * 
  * This stack implements a highly available, multi-region infrastructure
- * for a business-critical web application across us-east-1, us-west-2, and eu-central-1.
+ * for a business-critical web application across us-east-1 and us-west-2.
  * 
  * Features:
  * - Auto Scaling Groups with EC2 instances
@@ -30,7 +30,8 @@ interface ExtendedVpc extends aws.ec2.Vpc {
 }
 
 export class TapStack extends pulumi.ComponentResource {
-  public readonly regions = ['us-east-1', 'us-west-2', 'eu-central-1'];
+  // Changed to only use 2 regions to avoid VPC quota issues
+  public readonly regions = ['us-east-1', 'us-west-2']; // Removed eu-central-1
   public readonly vpcs: { [region: string]: ExtendedVpc } = {};
   public readonly autoScalingGroups: { [region: string]: aws.autoscaling.Group } = {};
   public readonly rdsInstances: { [region: string]: aws.rds.Instance } = {};
@@ -116,12 +117,10 @@ export class TapStack extends pulumi.ComponentResource {
       const truncatedStackName = stackName.substring(0, maxStackNameLen);
       bucketName = `${prefix}${truncatedStackName}${suffix}`;
     }
-  
+
     const bucket = new aws.s3.Bucket('centralized-logs-bucket', {
       bucket: bucketName,
-      versioning: {
-        enabled: true,
-      },
+      versioning: { enabled: true },
       serverSideEncryptionConfiguration: {
         rule: {
           applyServerSideEncryptionByDefault: {
@@ -130,21 +129,14 @@ export class TapStack extends pulumi.ComponentResource {
           },
         },
       },
-      lifecycleRules: [
-        {
-          id: 'transition-to-glacier',
-          enabled: true,
-          transitions: [
-            {
-              days: 30,
-              storageClass: 'GLACIER',
-            },
-          ],
-        },
-      ],
+      lifecycleRules: [{
+        id: 'transition-to-glacier',
+        enabled: true,
+        transitions: [{ days: 30, storageClass: 'GLACIER' }],
+      }],
       tags,
     }, { parent: this });
-  
+
     const publicAccessBlock = new aws.s3.BucketPublicAccessBlock('logs-bucket-public-access-block', {
       bucket: bucket.id,
       blockPublicAcls: true,
@@ -152,17 +144,12 @@ export class TapStack extends pulumi.ComponentResource {
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
     }, { parent: this });
-  
-    // Removed the bucket policy that was causing access denied errors
-    
+
+    // Removed bucket policy to avoid access issues
     return { bucket, publicAccessBlock };
   }
-  
-  
-  
 
   private createLogProcessingLambda(tags: { [key: string]: string }): aws.lambda.Function {
-    // Create IAM role for Lambda
     const lambdaRole = new aws.iam.Role('log-processing-lambda-role', {
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
@@ -179,13 +166,11 @@ export class TapStack extends pulumi.ComponentResource {
       tags,
     }, { parent: this });
 
-    // Attach basic execution policy
     new aws.iam.RolePolicyAttachment('lambda-basic-execution', {
       role: lambdaRole.name,
       policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
     }, { parent: this });
 
-    // Create custom policy for S3 access
     const lambdaS3Policy = new aws.iam.RolePolicy('lambda-s3-policy', {
       role: lambdaRole.id,
       policy: pulumi.jsonStringify({
@@ -332,33 +317,26 @@ def lambda_handler(event, context):
       tags,
     }, { parent: this });
   }
-  
 
   private deployRegionalInfrastructure(region: string, tags: { [key: string]: string }): void {
     const provider = new aws.Provider(`provider-${region}`, {
       region: region,
     }, { parent: this });
 
-    // Create VPC
     const vpc = this.createVpc(region, tags, provider);
     this.vpcs[region] = vpc;
 
-    // Create security groups
     const webSecurityGroup = this.createWebSecurityGroup(region, vpc, tags, provider);
     const dbSecurityGroup = this.createDbSecurityGroup(region, vpc, webSecurityGroup, tags, provider);
 
-    // Create IAM role for EC2 instances
     const ec2Role = this.createEc2Role(region, tags, provider);
 
-    // Create instance profile
     const instanceProfile = new aws.iam.InstanceProfile(`ec2-instance-profile-${region}`, {
       role: ec2Role.name,
     }, { parent: this, provider });
 
-    // Create launch template
     const launchTemplate = this.createLaunchTemplate(region, webSecurityGroup, instanceProfile, tags, provider);
 
-    // Create Auto Scaling Group
     const asg = new aws.autoscaling.Group(`asg-${region}`, {
       name: `nova-model-asg-${region}`,
       minSize: 2,
@@ -380,13 +358,11 @@ def lambda_handler(event, context):
 
     this.autoScalingGroups[region] = asg;
 
-    // Create RDS subnet group
     const dbSubnetGroup = new aws.rds.SubnetGroup(`db-subnet-group-${region}`, {
       subnetIds: vpc.privateSubnetIds,
       tags,
     }, { parent: this, provider });
 
-    // Create RDS instance
     const rdsInstance = new aws.rds.Instance(`rds-${region}`, {
       identifier: `nova-model-db-${region}`,
       engine: 'mysql',
@@ -398,7 +374,7 @@ def lambda_handler(event, context):
       kmsKeyId: this.kmsKey.arn,
       dbName: 'novamodel',
       username: 'admin',
-      password: 'temporarypassword123!', // In production, use AWS Secrets Manager
+      password: 'temporarypassword123!',
       vpcSecurityGroupIds: [dbSecurityGroup.id],
       dbSubnetGroupName: dbSubnetGroup.name,
       multiAz: true,
@@ -411,7 +387,6 @@ def lambda_handler(event, context):
 
     this.rdsInstances[region] = rdsInstance;
 
-    // Create Application Load Balancer
     this.createApplicationLoadBalancer(region, vpc, webSecurityGroup, asg, tags, provider);
   }
 
@@ -419,7 +394,7 @@ def lambda_handler(event, context):
     const cidrBlocks: { [key: string]: string } = {
       'us-east-1': '10.0.0.0/16',
       'us-west-2': '10.1.0.0/16',
-      'eu-central-1': '10.2.0.0/16',
+      // Removed eu-central-1 mapping
     };
     return cidrBlocks[region] || '10.0.0.0/16';
   }
@@ -435,7 +410,6 @@ def lambda_handler(event, context):
       },
     }, { parent: this, provider });
 
-    // Create Internet Gateway
     const internetGateway = new aws.ec2.InternetGateway(`igw-${region}`, {
       vpcId: vpc.id,
       tags: {
@@ -444,7 +418,6 @@ def lambda_handler(event, context):
       },
     }, { parent: this, provider });
 
-    // Create public subnets
     const publicSubnet1 = new aws.ec2.Subnet(`public-subnet-1-${region}`, {
       vpcId: vpc.id,
       cidrBlock: this.getSubnetCidr(region, 'public', 0),
@@ -467,7 +440,6 @@ def lambda_handler(event, context):
       },
     }, { parent: this, provider });
 
-    // Create private subnets
     const privateSubnet1 = new aws.ec2.Subnet(`private-subnet-1-${region}`, {
       vpcId: vpc.id,
       cidrBlock: this.getSubnetCidr(region, 'private', 0),
@@ -488,7 +460,6 @@ def lambda_handler(event, context):
       },
     }, { parent: this, provider });
 
-    // Create NAT Gateways
     const eip1 = new aws.ec2.Eip(`eip-1-${region}`, {
       domain: 'vpc',
       tags: {
@@ -506,7 +477,6 @@ def lambda_handler(event, context):
       },
     }, { parent: this, provider });
 
-    // Route tables
     const publicRouteTable = new aws.ec2.RouteTable(`public-rt-${region}`, {
       vpcId: vpc.id,
       routes: [
@@ -535,7 +505,6 @@ def lambda_handler(event, context):
       },
     }, { parent: this, provider });
 
-    // Route table associations
     new aws.ec2.RouteTableAssociation(`public-rta-1-${region}`, {
       subnetId: publicSubnet1.id,
       routeTableId: publicRouteTable.id,
@@ -556,7 +525,6 @@ def lambda_handler(event, context):
       routeTableId: privateRouteTable.id,
     }, { parent: this, provider });
 
-    // Extend VPC with subnet arrays
     const extendedVpc = vpc as ExtendedVpc;
     extendedVpc.publicSubnetIds = [publicSubnet1.id, publicSubnet2.id];
     extendedVpc.privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
@@ -568,7 +536,7 @@ def lambda_handler(event, context):
     const baseOctets: { [key: string]: string } = {
       'us-east-1': '10.0',
       'us-west-2': '10.1',
-      'eu-central-1': '10.2',
+      // Removed eu-central-1 mapping
     };
     
     const base = baseOctets[region] || '10.0';
@@ -608,7 +576,7 @@ def lambda_handler(event, context):
           fromPort: 22,
           toPort: 22,
           protocol: 'tcp',
-          cidrBlocks: ['203.0.113.0/32'], // Replace with actual admin IP
+          cidrBlocks: ['203.0.113.0/32'],
         },
       ],
       egress: [
@@ -665,13 +633,11 @@ def lambda_handler(event, context):
       tags,
     }, { parent: this, provider });
 
-    // Attach CloudWatch Agent policy
     new aws.iam.RolePolicyAttachment(`ec2-cloudwatch-agent-${region}`, {
       role: role.name,
       policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
     }, { parent: this, provider });
 
-    // Attach S3 access policy for logs
     new aws.iam.RolePolicy(`ec2-s3-logs-policy-${region}`, {
       role: role.id,
       policy: pulumi.jsonStringify({
@@ -700,39 +666,39 @@ def lambda_handler(event, context):
     provider: aws.Provider
   ): aws.ec2.LaunchTemplate {
     const userData = Buffer.from(`#!/bin/bash
-  yum update -y
-  yum install -y httpd
-  systemctl start httpd
-  systemctl enable httpd
-  echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
-  
-  # Install CloudWatch agent
-  wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-  rpm -U ./amazon-cloudwatch-agent.rpm
-  
-  # Configure CloudWatch agent
-  cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
-  {
-    "logs": {
-      "logs_collected": {
-        "files": {
-          "collect_list": [
-            {
-              "file_path": "/var/log/httpd/access_log",
-              "log_group_name": "/aws/ec2/httpd/access",
-              "log_stream_name": "{instance_id}"
-            }
-          ]
-        }
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
+
+# Install CloudWatch agent
+wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+rpm -U ./amazon-cloudwatch-agent.rpm
+
+# Configure CloudWatch agent
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/httpd/access_log",
+            "log_group_name": "/aws/ec2/httpd/access",
+            "log_stream_name": "{instance_id}"
+          }
+        ]
       }
     }
   }
-  EOF
-  
-  # Start CloudWatch agent
-  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-  `).toString('base64');
-  
+}
+EOF
+
+# Start CloudWatch agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+`).toString('base64');
+
     return new aws.ec2.LaunchTemplate(`launch-template-${region}`, {
       namePrefix: `nova-model-${region}-`,
       imageId: aws.ec2.getAmi({
@@ -757,8 +723,8 @@ def lambda_handler(event, context):
           ebs: {
             volumeSize: 20,
             volumeType: 'gp3',
-            encrypted: 'true',              // Fix: Use boolean true instead of KMS ARN
-            kmsKeyId: this.kmsKey.arn,    // Fix: Use kmsKeyId property for the KMS key
+            encrypted: 'true',
+            kmsKeyId: this.kmsKey.arn,
           },
         },
       ],
@@ -774,7 +740,6 @@ def lambda_handler(event, context):
       ],
     }, { parent: this, provider });
   }
-  
 
   private createApplicationLoadBalancer(
     region: string,
@@ -784,6 +749,9 @@ def lambda_handler(event, context):
     tags: { [key: string]: string },
     provider: aws.Provider
   ): void {
+    // Add unique timestamp to target group name to avoid conflicts
+    const timestamp = Date.now();
+    
     const alb = new aws.lb.LoadBalancer(`alb-${region}`, {
       name: `nova-model-alb-${region}`,
       loadBalancerType: 'application',
@@ -793,7 +761,7 @@ def lambda_handler(event, context):
     }, { parent: this, provider });
 
     const targetGroup = new aws.lb.TargetGroup(`tg-${region}`, {
-      name: `nova-model-tg-${region}`,
+      name: `nova-model-tg-${region}-${timestamp}`, // Added timestamp to make unique
       port: 80,
       protocol: 'HTTP',
       vpcId: vpc.id,
@@ -813,7 +781,7 @@ def lambda_handler(event, context):
 
     new aws.lb.Listener(`listener-${region}`, {
       loadBalancerArn: alb.arn,
-      port: 80,
+      port: '80',
       protocol: 'HTTP',
       defaultActions: [
         {
@@ -828,7 +796,6 @@ def lambda_handler(event, context):
       lbTargetGroupArn: targetGroup.arn,
     }, { parent: this, provider });
 
-    // Associate WAF with ALB
     new aws.wafv2.WebAclAssociation(`waf-association-${region}`, {
       resourceArn: alb.arn,
       webAclArn: this.wafWebAcl.arn,

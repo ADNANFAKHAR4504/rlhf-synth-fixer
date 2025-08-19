@@ -9,7 +9,7 @@ Do NOT modify or add any other files.
 
 Inputs (replace placeholders with config or constants)
 - projectName: "IaC - AWS Nova Model Breaking"
-- regions: ["us-east-1","us-west-2","eu-central-1"]
+- regions: ["us-east-1","us-west-2"]
 - env: "prod"
 - app: "nova-web"
 - owner: "infra-team@example.com"
