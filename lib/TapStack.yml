@@ -17,6 +17,7 @@ Metadata:
       - Label:
           default: 'Database Configuration'
         Parameters:
+          - CreateDatabase
           - DBInstanceClass
           - DBUsername
           - DBPassword
@@ -40,6 +41,8 @@ Metadata:
         default: 'SSH Access CIDR'
       DBInstanceClass:
         default: 'RDS Instance Class'
+      CreateDatabase:
+        default: 'Create Database?'
       DBUsername:
         default: 'Database Admin Username'
       DBPassword:
@@ -110,7 +113,7 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
-    Description: 'Database administrator password.'
+    Description: 'Database administrator password (required only if CreateDatabase is "yes").'
     MinLength: 8
     MaxLength: 41
     AllowedPattern: '[a-zA-Z0-9!#$%&*+-/=?^_`{|}~@]+'
@@ -135,6 +138,11 @@ Parameters:
     Type: String
     Description: 'Mandatory if UseExistingEC2Role is "yes". The name of the existing IAM Role.'
     Default: ''
+  CreateDatabase:
+    Type: String
+    Default: 'yes'
+    AllowedValues: ['yes', 'no']
+    Description: 'Select "yes" to create a new RDS database. Select "no" to skip database creation.'
 
 Mappings:
   RegionMap:
@@ -145,6 +153,7 @@ Conditions:
   CreateNewVPC: !Equals [!Ref UseExistingVPC, 'no']
   CreateNewKMSKey: !Equals [!Ref UseExistingKMSKey, 'no']
   CreateNewEC2Role: !Equals [!Ref UseExistingEC2Role, 'no']
+  CreateNewDatabase: !Equals [!Ref CreateDatabase, 'yes']
 
 Resources:
   ###############################################################################
@@ -537,6 +546,7 @@ Resources:
   ###############################################################################
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateNewDatabase
     Properties:
       DBSubnetGroupDescription: Subnet group for private RDS instance
       SubnetIds:
@@ -550,6 +560,7 @@ Resources:
 
   DBParameterGroup:
     Type: AWS::RDS::DBParameterGroup
+    Condition: CreateNewDatabase
     Properties:
       Description: Custom parameter group for secure MySQL configuration
       Family: mysql8.0
@@ -565,6 +576,7 @@ Resources:
 
   Database:
     Type: AWS::RDS::DBInstance
+    Condition: CreateNewDatabase
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
@@ -699,7 +711,12 @@ Outputs:
       Name: !Sub '${AWS::StackName}-DatabaseSGId'
   DatabaseEndpoint:
     Description: The connection endpoint for the database.
-    Value: !GetAtt Database.Endpoint.Address
+    Value:
+      !If [
+        CreateNewDatabase,
+        !GetAtt Database.Endpoint.Address,
+        'No database created',
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
   ApplicationLogsBucketName:

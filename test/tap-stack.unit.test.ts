@@ -42,6 +42,7 @@ describe('TapStack CloudFormation Template', () => {
       'VPCCIDR',
       'InstanceType',
       'SSHLocation',
+      'CreateDatabase',
       'DBInstanceClass',
       'DBUsername',
       'DBPassword',
@@ -178,6 +179,7 @@ describe('TapStack CloudFormation Template', () => {
       'CreateNewVPC',
       'CreateNewKMSKey',
       'CreateNewEC2Role',
+      'CreateNewDatabase',
     ];
 
     test('should have all required conditions', () => {
@@ -205,6 +207,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(condition['Fn::Equals']).toBeDefined();
       expect(condition['Fn::Equals'][0]['Ref']).toBe('UseExistingEC2Role');
       expect(condition['Fn::Equals'][1]).toBe('no');
+    });
+
+    test('CreateNewDatabase condition should check CreateDatabase parameter', () => {
+      const condition = template.Conditions?.CreateNewDatabase;
+      expect(condition['Fn::Equals']).toBeDefined();
+      expect(condition['Fn::Equals'][0]['Ref']).toBe('CreateDatabase');
+      expect(condition['Fn::Equals'][1]).toBe('yes');
     });
   });
 
@@ -442,23 +451,26 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     describe('Database Resources', () => {
-      test('DBSubnetGroup should have correct properties', () => {
+      test('DBSubnetGroup should be conditional and have correct properties', () => {
         const subnetGroup = template.Resources.DBSubnetGroup;
         expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
+        expect(subnetGroup.Condition).toBe('CreateNewDatabase');
         expect(subnetGroup.Properties.DBSubnetGroupDescription).toBeDefined();
         expect(subnetGroup.Properties.SubnetIds).toBeDefined();
       });
 
-      test('DBParameterGroup should have correct properties', () => {
+      test('DBParameterGroup should be conditional and have correct properties', () => {
         const paramGroup = template.Resources.DBParameterGroup;
         expect(paramGroup.Type).toBe('AWS::RDS::DBParameterGroup');
+        expect(paramGroup.Condition).toBe('CreateNewDatabase');
         expect(paramGroup.Properties.Family).toBe('mysql8.0');
         expect(paramGroup.Properties.Parameters).toBeDefined();
       });
 
-      test('Database should have correct properties', () => {
+      test('Database should be conditional and have correct properties', () => {
         const database = template.Resources.Database;
         expect(database.Type).toBe('AWS::RDS::DBInstance');
+        expect(database.Condition).toBe('CreateNewDatabase');
         expect(database.DeletionPolicy).toBe('Snapshot');
         expect(database.Properties.Engine).toBe('mysql');
         expect(database.Properties.EngineVersion).toBe('8.0.43');
@@ -575,13 +587,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
 
-    test('DatabaseEndpoint output should get database endpoint', () => {
+    test('DatabaseEndpoint output should be conditional', () => {
       const output = template.Outputs.DatabaseEndpoint;
       expect(output.Description).toBeDefined();
-      expect(output.Value['Fn::GetAtt']).toEqual([
-        'Database',
-        'Endpoint.Address',
-      ]);
+      expect(output.Value['Fn::If']).toBeDefined();
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
 
@@ -630,7 +639,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(12);
+      expect(parameterCount).toBe(13);
     });
 
     test('should have correct number of outputs', () => {
@@ -640,7 +649,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of conditions', () => {
       const conditionCount = Object.keys(template.Conditions || {}).length;
-      expect(conditionCount).toBe(3);
+      expect(conditionCount).toBe(4);
     });
   });
 
