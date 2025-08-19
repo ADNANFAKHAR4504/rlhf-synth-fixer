@@ -1,50 +1,27 @@
-Generate a single-file Terraform configuration at ./lib/main.tf that meets the following requirements and best practices:
+We want Terraform code for a single file (./lib/main.tf). The idea is to spin up a secure, highly available web app infra in AWS, but keep everything in one place (no external modules).
 
-1. **Backend & Providers**
-   - Configure a remote backend in S3 with DynamoDB for state locking.
-   - Restrict deployment to AWS regions `us-west-2` (primary) and `us-east-1` (secondary).
-   - Declare `aws_region` variable in main.tf and use it in provider.tf.
-   - No provider block in main.tf (already in provider.tf).
+Some key points we need to hit:
 
-2. **IAM & Security**
-   - Implement IAM roles and policies following the principle of least privilege.
-   - Create IAM instance profiles for all compute resources with only required permissions.
-   - Ensure Security Groups and NACLs block all public access by default; explicitly allow only what’s necessary.
+Backend / providers: The backend is S3 + DynamoDB for locking (already set up in provider.tf so don’t add provider blocks again). Should only work in us-west-2 or us-east-1. Let’s have an aws_region variable that ties into the provider.
 
-3. **Storage**
-   - All S3 buckets must have server-side encryption enabled with AWS-KMS.
-   - Deny unencrypted uploads.
-   - Block all public access.
-   - Tag all resources with consistent keys: Environment, Project, Owner, ManagedBy=terraform.
+IAM & security: Follow least privilege. All compute (EC2, etc.) should have IAM instance profiles with only what they need. Security groups and NACLs should block by default, then explicitly allow the necessary traffic.
 
-4. **Networking**
-   - Create a VPC with both public and private subnets across multiple AZs.
-   - Sensitive resources (EC2, RDS) must only be in private subnets.
-   - Use NAT Gateway for outbound internet from private subnets.
-   - Bastion host deployed in public subnet for controlled SSH access.
+Storage: S3 buckets for logs, app data, etc. need KMS encryption, no unencrypted uploads, and block public access. Everything should be tagged consistently: Environment, Project, Owner, and ManagedBy=terraform.
 
-5. **Compute**
-   - EC2 instances launched into private subnets with correct IAM instance profiles.
-   - Security groups must not allow `0.0.0.0/0` for sensitive ports (e.g., SSH restricted to Bastion only).
+Networking: One VPC with public + private subnets across multiple AZs. EC2 and RDS stay in private subnets. NAT gateway for internet egress. Bastion host goes in public subnet for SSH access.
 
-6. **Monitoring & Logging**
-   - Enable CloudTrail for all regions and deliver logs to a secure, encrypted S3 bucket.
-   - CloudWatch log groups must use KMS encryption and a retention of 90 days.
+Compute: EC2s in private subnets, correct IAM roles, no wide-open SG rules (SSH must go only via bastion).
 
-7. **Outputs**
-   - Output non-sensitive information required by CI/CD:
-     - VPC ID
-     - Subnet IDs
-     - Bastion host public IP
-     - S3 bucket names (state, logging, app)
-     - CloudTrail bucket ARN
-   - Do not output secrets.
+Monitoring/logging: CloudTrail enabled (make it conditional so we don’t break if account already has max trails). Logs go to encrypted S3. CloudWatch log groups need KMS and keep data 90 days.
 
-**Constraints:**
-- Single-file configuration in ./lib/main.tf
-- Terraform >= 0.15.0
-- No external modules (all resources created directly in main.tf)
-- No provider blocks in main.tf (provider.tf already contains AWS provider + S3 backend)
-- Code must pass terraform validate and follow AWS security best practices.
+Outputs: We need to output safe stuff for CI/CD pipelines: VPC ID, subnet IDs, bastion IP, bucket names, CloudTrail bucket ARN. Don’t expose secrets.
 
-Produce the complete ./lib/main.tf with all variables, locals, resources, and outputs included.
+Constraints:
+
+Must be a single file (main.tf).
+
+Works with Terraform >= 0.15.
+
+No external modules.
+
+Must pass terraform validate and follow AWS security best practices.
