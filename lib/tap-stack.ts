@@ -10,6 +10,7 @@ import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets'; // Ch
 import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { LbTargetGroupAttachment } from '@cdktf/provider-aws/lib/lb-target-group-attachment';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { Fn } from 'cdktf';
 import {
   KmsModule,
@@ -52,6 +53,9 @@ export class TapStack extends TerraformStack {
       region: awsRegion,
       defaultTags: defaultTags,
     });
+
+    // Add this line to get current AWS account information
+    const current = new DataAwsCallerIdentity(this, 'current');
 
     // Configure S3 Backend with native state locking
     new S3Backend(this, {
@@ -102,6 +106,7 @@ export class TapStack extends TerraformStack {
       name: 'app-kms-key',
       description: 'KMS key for application encryption with automatic rotation',
       enableKeyRotation: true,
+      accountId: current.accountId,
     });
 
     // 2. Create S3 bucket for CloudTrail logs

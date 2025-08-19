@@ -44,6 +44,7 @@ export interface KmsModuleConfig {
   name: string;
   description: string;
   enableKeyRotation: boolean;
+  accountId: string;
 }
 
 export interface S3ModuleConfig {
@@ -114,7 +115,7 @@ export class KmsModule extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
+              AWS: `arn:aws:iam::${config.accountId}:root`, // Use the passed account ID
             },
             Action: 'kms:*',
             Resource: '*',
