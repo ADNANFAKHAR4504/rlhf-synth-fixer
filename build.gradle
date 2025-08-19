@@ -1,0 +1,29 @@
+plugins {
+    id 'application'
+}
+
+repositories {
+    maven {
+        url("https://maven-central.storage-download.googleapis.com/maven2/")
+    }
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    implementation 'com.pulumi:pulumi:0.11.0'
+    implementation 'com.pulumi:aws:7.4.0'
+}
+
+// Configure source directories to point to lib/
+sourceSets {
+    main.java {
+        srcDirs = ['lib/src/main/java']
+    }
+}
+
+application {
+    mainClass = project.hasProperty("mainClass")
+            ? project.getProperty("mainClass")
+            : 'app.Main'
+}
