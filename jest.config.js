@@ -10,7 +10,7 @@ module.exports = {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
-    '^.+\\.tsx?$': ['ts-jest'],
+    '^.+\\.tsx?$': 'ts-jest',
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
