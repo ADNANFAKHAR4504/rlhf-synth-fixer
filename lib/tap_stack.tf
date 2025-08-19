@@ -1,4 +1,4 @@
-# tap_stack.tf - Complete Terraform configuration for production AWS infrastructure
+# tap_stack.tf - Updated Terraform configuration with fixes
 
 # Variables
 variable "aws_region" {
@@ -58,10 +58,10 @@ locals {
   }
 }
 
-# VPC Module
+# VPC Module - Updated to use newer version
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 3.0"
+  version = "~> 5.0"
 
   name = "${local.name_prefix}-vpc"
   cidr = var.vpc_cidr
@@ -152,6 +152,7 @@ resource "aws_instance" "private_instance" {
   subnet_id              = module.vpc.private_subnets[0]
   vpc_security_group_ids = [aws_security_group.private_instance.id]
   key_name               = var.key_name
+  iam_instance_profile   = aws_iam_instance_profile.ec2_s3_access.name
 
   monitoring = true
 
@@ -208,7 +209,7 @@ resource "aws_iam_instance_profile" "ec2_s3_access" {
   role = aws_iam_role.ec2_s3_access.name
 }
 
-# S3 Bucket with Versioning and Encryption
+# S3 Bucket with Versioning and Encryption - Updated to use new resources
 resource "aws_kms_key" "s3" {
   description             = "KMS key for S3 bucket encryption"
   deletion_window_in_days = 10
@@ -219,51 +220,67 @@ resource "aws_kms_key" "s3" {
 
 resource "aws_s3_bucket" "data" {
   bucket = "${local.name_prefix}-data-bucket"
-  acl    = "private"
-
-  versioning {
-    enabled = true
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.s3.arn
-        sse_algorithm     = "aws:kms"
-      }
-    }
-  }
-
-  tags = local.common_tags
+  tags   = local.common_tags
 }
 
-# Terraform State Bucket
-resource "aws_s3_bucket" "terraform_state" {
-  bucket = "${local.name_prefix}-terraform-state"
+resource "aws_s3_bucket_acl" "data" {
+  bucket = aws_s3_bucket.data.id
   acl    = "private"
-
-  versioning {
-    enabled = true
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.terraform_state.arn
-        sse_algorithm     = "aws:kms"
-      }
-    }
-  }
-
-  tags = local.common_tags
 }
 
+resource "aws_s3_bucket_versioning" "data" {
+  bucket = aws_s3_bucket.data.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.s3.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+# Terraform State Bucket - Updated to use new resources
 resource "aws_kms_key" "terraform_state" {
   description             = "KMS key for Terraform state encryption"
   deletion_window_in_days = 10
   enable_key_rotation     = true
 
   tags = local.common_tags
+}
+
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "${local.name_prefix}-terraform-state"
+  tags   = local.common_tags
+}
+
+resource "aws_s3_bucket_acl" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  acl    = "private"
+}
+
+resource "aws_s3_bucket_versioning" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.terraform_state.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
 }
 
 # Data sources
