@@ -419,6 +419,7 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
+      // Check if CloudTrail should be created based on the output
       if (
         outputs.ProdCloudTrailName &&
         outputs.ProdCloudTrailName !== 'Using existing CloudTrail'
@@ -434,6 +435,24 @@ describe('TapStack Integration Tests', () => {
         expect(trail.LogFileValidationEnabled).toBe(true);
         expect(trail.IncludeGlobalServiceEvents).toBe(true);
         expect(trail.S3BucketName).toBe(outputs.ProdTrailBucketName);
+      } else {
+        // CloudTrail is not created, which is expected when UseExistingCloudTrail is true
+        console.log('CloudTrail not created - using existing one');
+
+        // Verify that the S3 bucket exists for CloudTrail logs
+        if (outputs.ProdTrailBucketName) {
+          try {
+            const encryptionCommand = new GetBucketEncryptionCommand({
+              Bucket: outputs.ProdTrailBucketName,
+            });
+            await s3Client.send(encryptionCommand);
+            // If we can get bucket encryption, the bucket exists and is properly configured
+          } catch (error) {
+            throw new Error(
+              `CloudTrail S3 bucket ${outputs.ProdTrailBucketName} not found or not accessible`
+            );
+          }
+        }
       }
     });
   });
