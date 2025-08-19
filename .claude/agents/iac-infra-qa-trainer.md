@@ -113,6 +113,9 @@ initial `lib/MODEL_RESPONSE`. Do not mention the QA process. only focus in the i
 
 - Destroy all AWS resources (empty S3 buckets first)
 - Ensure complete cleanup regardless of success/failure
+- If cleanup fails, report specific resources that couldn't be cleaned up
+- Retry cleanup operations at least 3 times before reporting failure
+- For stuck resources, provide manual cleanup instructions to coordinator
 
 ## Key Constraints
 
