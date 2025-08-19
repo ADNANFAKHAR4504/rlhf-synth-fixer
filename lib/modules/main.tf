@@ -530,7 +530,7 @@ data "aws_iam_user" "app_user" {
 resource "null_resource" "empty_s3_bucket" {
   provisioner "local-exec" {
     when    = destroy
-    command = "aws s3 rm s3://${aws_s3_bucket.logs.id} --recursive"
+    command = "aws s3 rm s3://tap-app-dev-064031-qcf7m9d3-logs-bucket --recursive"
   }
 }
 
