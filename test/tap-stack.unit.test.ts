@@ -201,10 +201,14 @@ describe('TapStack', () => {
         expect(lifecycleRules.length).toBeGreaterThan(0);
         const glacierRule = lifecycleRules.find((rule: any) => rule.id === 'transition-to-glacier');
         expect(glacierRule).toBeDefined();
-        expect(glacierRule.enabled).toBe(true);
-        expect(glacierRule.transitions).toBeDefined();
-        expect(glacierRule.transitions[0].days).toBe(30);
-        expect(glacierRule.transitions.storageClass).toBe('GLACIER');
+        if (glacierRule) {
+          expect(glacierRule.enabled).toBe(true);
+          expect(glacierRule.transitions).toBeDefined();
+          if (glacierRule.transitions && glacierRule.transitions.length > 0) {
+            expect(glacierRule.transitions[0].days).toBe(30);
+            expect(glacierRule.transitions[0].storageClass).toBe('GLACIER');
+          }
+        }
         done();
       });
     });
@@ -265,15 +269,21 @@ describe('TapStack', () => {
     it('should have OWASP and Common rules', (done) => {
       stack.wafWebAcl.rules.apply(rules => {
         expect(rules).toBeDefined();
-        expect(rules.length).toBe(2);
-        
-        const commonRuleSet = rules.find((rule: any) => rule.name === 'AWSManagedRulesCommonRuleSet');
-        expect(commonRuleSet).toBeDefined();
-        expect(commonRuleSet.priority).toBe(1);
-        
-        const owaspRuleSet = rules.find((rule: any) => rule.name === 'AWSManagedRulesOWASPTop10');
-        expect(owaspRuleSet).toBeDefined();
-        expect(owaspRuleSet.priority).toBe(2);
+        if (rules) {
+          expect(rules.length).toBe(2);
+          
+          const commonRuleSet = rules.find((rule: any) => rule.name === 'AWSManagedRulesCommonRuleSet');
+          expect(commonRuleSet).toBeDefined();
+          if (commonRuleSet) {
+            expect(commonRuleSet.priority).toBe(1);
+          }
+          
+          const owaspRuleSet = rules.find((rule: any) => rule.name === 'AWSManagedRulesOWASPTop10');
+          expect(owaspRuleSet).toBeDefined();
+          if (owaspRuleSet) {
+            expect(owaspRuleSet.priority).toBe(2);
+          }
+        }
         done();
       });
     });

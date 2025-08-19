@@ -23,9 +23,15 @@ export interface TapStackArgs {
   tags?: { [key: string]: string };
 }
 
+// Extended VPC interface to include subnet arrays
+interface ExtendedVpc extends aws.ec2.Vpc {
+  publicSubnetIds: pulumi.Output<string>[];
+  privateSubnetIds: pulumi.Output<string>[];
+}
+
 export class TapStack extends pulumi.ComponentResource {
   public readonly regions = ['us-east-1', 'us-west-2', 'eu-central-1'];
-  public readonly vpcs: { [region: string]: aws.ec2.Vpc } = {};
+  public readonly vpcs: { [region: string]: ExtendedVpc } = {};
   public readonly autoScalingGroups: { [region: string]: aws.autoscaling.Group } = {};
   public readonly rdsInstances: { [region: string]: aws.rds.Instance } = {};
   public readonly logsBucket: aws.s3.Bucket;
@@ -365,7 +371,7 @@ def lambda_handler(event, context):
       minSize: 2,
       maxSize: 6,
       desiredCapacity: 2,
-      vpcZoneIdentifiers: [vpc.privateSubnetIds[0], vpc.privateSubnetIds[1]],
+      vpcZoneIdentifiers: vpc.privateSubnetIds,
       launchTemplate: {
         id: launchTemplate.id,
         version: '$Latest',
@@ -383,7 +389,7 @@ def lambda_handler(event, context):
 
     // Create RDS subnet group
     const dbSubnetGroup = new aws.rds.SubnetGroup(`db-subnet-group-${region}`, {
-      subnetIds: [vpc.privateSubnetIds[0], vpc.privateSubnetIds[1]],
+      subnetIds: vpc.privateSubnetIds,
       tags,
     }, { parent: this, provider });
 
@@ -425,7 +431,7 @@ def lambda_handler(event, context):
     return cidrBlocks[region] || '10.0.0.0/16';
   }
 
-  private createVpc(region: string, tags: { [key: string]: string }, provider: aws.Provider): aws.ec2.Vpc {
+  private createVpc(region: string, tags: { [key: string]: string }, provider: aws.Provider): ExtendedVpc {
     const vpc = new aws.ec2.Vpc(`vpc-${region}`, {
       cidrBlock: this.getCidrBlockForRegion(region),
       enableDnsHostnames: true,
@@ -557,11 +563,12 @@ def lambda_handler(event, context):
       routeTableId: privateRouteTable.id,
     }, { parent: this, provider });
 
-    // Add properties to VPC for compatibility
-    (vpc as any).publicSubnetIds = [publicSubnet1.id, publicSubnet2.id];
-    (vpc as any).privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
+    // Extend VPC with subnet arrays
+    const extendedVpc = vpc as ExtendedVpc;
+    extendedVpc.publicSubnetIds = [publicSubnet1.id, publicSubnet2.id];
+    extendedVpc.privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
 
-    return vpc;
+    return extendedVpc;
   }
 
   private getSubnetCidr(region: string, type: 'public' | 'private', index: number): string {
@@ -772,12 +779,12 @@ EOF
           tags,
         },
       ],
-    }, { parent: this, provider }); 
+    }, { parent: this, provider });
   }
 
   private createApplicationLoadBalancer(
     region: string,
-    vpc: aws.ec2.Vpc,
+    vpc: ExtendedVpc,
     securityGroup: aws.ec2.SecurityGroup,
     asg: aws.autoscaling.Group,
     tags: { [key: string]: string },
@@ -786,7 +793,7 @@ EOF
     const alb = new aws.lb.LoadBalancer(`alb-${region}`, {
       name: `nova-model-alb-${region}`,
       loadBalancerType: 'application',
-      subnets: (vpc as any).publicSubnetIds,
+      subnets: vpc.publicSubnetIds,
       securityGroups: [securityGroup.id],
       tags,
     }, { parent: this, provider });
