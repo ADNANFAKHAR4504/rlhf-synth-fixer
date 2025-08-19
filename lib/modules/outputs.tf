@@ -96,8 +96,3 @@ output "vpc_endpoint_s3_id" {
   description = "ID of the S3 VPC Endpoint"
   value       = aws_vpc_endpoint.s3.id
 }
-
-output "cloudtrail_arn" {
-  description = "ARN of the CloudTrail"
-  value       = aws_cloudtrail.main.arn
-}
