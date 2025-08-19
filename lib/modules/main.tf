@@ -527,12 +527,6 @@ data "aws_iam_user" "app_user" {
   user_name = "${var.project_name}-app-user"
 }
 
-resource "null_resource" "empty_s3_bucket" {
-  provisioner "local-exec" {
-    when    = destroy
-    command = "aws s3 rm s3://tap-app-dev-064031-qcf7m9d3-logs-bucket --recursive"
-  }
-}
 
 
 output "vpc_cidr" {
