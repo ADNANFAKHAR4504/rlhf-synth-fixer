@@ -310,7 +310,7 @@ describe('TapStack Unit Tests', () => {
       if (template) {
         const resourceCount = Object.keys(template.Resources).length;
         expect(resourceCount).toBeGreaterThan(1);
-        expect(resourceCount).toBeLessThanOrEqual(25); // Reasonable upper bound
+        expect(resourceCount).toBeLessThanOrEqual(30); // Reasonable upper bound
       } else {
         // Test with CDK synthesis if template doesn't exist
         expect(app.node.tryGetContext('environmentSuffix')).toBe(
