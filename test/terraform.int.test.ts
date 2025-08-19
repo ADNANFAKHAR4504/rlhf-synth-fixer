@@ -14,6 +14,8 @@ import {
   ListAliasesCommandOutput,
   GetKeyPolicyCommand,
   ListKeysCommand,
+  GetKeyRotationStatusCommand,
+  ListResourceTagsCommand,
 } from "@aws-sdk/client-kms";
 
 import {
@@ -327,8 +329,8 @@ const hasOutputs = !!outputs;
       expect(region).toBeTruthy();
       const kms = kmsClients[String(region)];
       
-      const resp = await kms.send(new DescribeKeyCommand({ KeyId: arn }));
-      expect(resp.KeyMetadata?.KeyRotationStatus).toBe(true);
+      const resp = await kms.send(new GetKeyRotationStatusCommand({ KeyId: arn }));
+      expect(resp.KeyRotationEnabled).toBe(true);
       
       // eslint-disable-next-line no-console
       console.log(`✔ KMS key rotation enabled (${k}) -> ${arn}`);
@@ -559,13 +561,13 @@ const hasOutputs = !!outputs;
       expect(region).toBeTruthy();
       const kms = kmsClients[String(region)];
       
-      const resp = await kms.send(new DescribeKeyCommand({ KeyId: arn }));
-      const tags = resp.KeyMetadata?.Tags || [];
+      const resp = await kms.send(new ListResourceTagsCommand({ KeyId: arn }));
+      const tags = resp.Tags || [];
       
       // Verify required tags exist
-      const nameTag = tags.find(tag => tag.TagKey === 'Name');
-      const envTag = tags.find(tag => tag.TagKey === 'Environment');
-      const regionTag = tags.find(tag => tag.TagKey === 'Region');
+      const nameTag = tags.find((tag: { TagKey?: string; TagValue?: string }) => tag.TagKey === 'Name');
+      const envTag = tags.find((tag: { TagKey?: string; TagValue?: string }) => tag.TagKey === 'Environment');
+      const regionTag = tags.find((tag: { TagKey?: string; TagValue?: string }) => tag.TagKey === 'Region');
       
       expect(nameTag?.TagValue).toBeTruthy();
       expect(envTag?.TagValue).toBe(env);
