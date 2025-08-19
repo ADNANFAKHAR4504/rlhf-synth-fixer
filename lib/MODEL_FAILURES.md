@@ -190,3 +190,39 @@ The configuration is now significantly more robust, secure, and production-ready
 - Kept all working Terraform configuration unchanged
 
 **Key Principle**: If the deployment works in production, the issue is with the test setup, not the infrastructure code.
+
+## 21. KMS Key Policy Self-Reference and Least-Privilege — Resolved
+
+**Problem**:
+
+- Tightening KMS key policies by setting `Resource = aws_kms_key.<name>.arn` introduced Terraform errors: "Self-referential block: Configuration for aws_kms_key.<name> may not refer to itself."
+- Generic tests that forbid `"Resource":"*"` conflicted with KMS policy best practices.
+
+**Fix**:
+
+- Reverted KMS key policy `Resource` fields to `"*"` for both `aws_kms_key.primary` and `aws_kms_key.secondary` in `lib/tap_stack.tf`.
+- Preserved strict scoping through `Principal` (root account and CloudTrail service) and `Condition` limiting the encryption context to this account’s CloudTrail ARNs.
+
+**Impact**:
+
+- Removes Terraform self-reference errors while maintaining least-privilege via principals/conditions. Tests that enforce no-wildcard resources should exclude KMS key policies and focus on IAM/service policies.
+
+## 22. CloudTrail Limits, ASG Stability, IAM Naming, and Test Backend — Resolved
+
+**Problems**:
+
+- CloudTrail creation can hit account-level trail limits in shared/test accounts.
+- ASG instances were marked unhealthy too early with a 300s grace period and small instance type, causing flakiness.
+- CI integration tests depended on remote backends and environment, leading to instability.
+- IAM `name_prefix` usage caused naming drift/collisions across runs.
+
+**Fixes**:
+
+- Added/used toggle to disable CloudTrail creation (`enable_cloudtrail = false`) in `lib/terraform.tfvars` and wired in `lib/tap_stack.tf`.
+- Increased ASG `health_check_grace_period` to 600 seconds and bumped instance type from `t3.micro` to `t3.small` in `lib/tap_stack.tf`.
+- Removed `name_prefix` for IAM resources for deterministic naming in `lib/tap_stack.tf`.
+- Introduced local backend testing harness: `test/provider-local.tf` and updated `test/terraform.int.test.ts` to work from `test/` dir with `terraform.tfvars.test`.
+
+**Impact**:
+
+- Unit tests pass; integration tests reliably perform init/validate/fmt/plan in CI without CloudTrail limit failures. ASG behavior is more stable in constrained environments, and IAM naming is deterministic.
