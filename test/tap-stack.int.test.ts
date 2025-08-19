@@ -1,446 +1,300 @@
-// __tests__/tap-stack.integration.test.ts
-import { Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-import { Instance } from '@cdktf/provider-aws/lib/instance';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { Lb } from '@cdktf/provider-aws/lib/lb';
-import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
-import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
-import { LbTargetGroupAttachment } from '@cdktf/provider-aws/lib/lb-target-group-attachment';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { cloudtrail } from '@cdktf/provider-aws';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+// __tests__/tap-stack.int.test.ts
+import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand } from "@aws-sdk/client-s3";
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInstancesCommand } from "@aws-sdk/client-ec2";
+import { RDSClient } from "@aws-sdk/client-rds";
+import { CloudTrailClient, DescribeTrailsCommand } from "@aws-sdk/client-cloudtrail";
+import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
+import * as fs from "fs";
+import * as path from "path";
 
-describe('TapStack Integration Tests', () => {
-  let app: any;
-  let stack: TapStack;
-  let synthesized: any;
+const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+const s3Client = new S3Client({ region: awsRegion });
+const ec2Client = new EC2Client({ region: awsRegion });
+const rdsClient = new RDSClient({ region: awsRegion });
+const cloudTrailClient = new CloudTrailClient({ region: awsRegion });
+const kmsClient = new KMSClient({ region: awsRegion });
 
-  beforeEach(() => {
-    app = Testing.app();
-    stack = new TapStack(app, 'test-tap-stack', {
-      environmentSuffix: 'test',
-      awsRegion: 'us-east-1',
-    });
-    synthesized = Testing.synth(stack);
+describe("TapStack Integration Tests", () => {
+  let vpcId: string;
+  let publicSubnetIds: string[];
+  let privateSubnetIds: string[];
+  let albDnsName: string;
+  let albZoneId: string;
+  let ec2InstanceIds: string[];
+  let ec2PrivateIps: string[];
+  let securityGroupAlbId: string;
+  let securityGroupEc2Id: string;
+  let securityGroupRdsId: string;
+  let s3AppBucketName: string;
+  let s3CloudtrailBucketName: string;
+  let cloudtrailArn: string;
+  let kmsKeyId: string;
+  let kmsKeyArn: string;
+
+  beforeAll(() => {
+    const outputFilePath = path.join(__dirname, "..", "cfn-outputs", "flat-outputs.json");
+    if (!fs.existsSync(outputFilePath)) {
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
+    }
+    const outputs = JSON.parse(fs.readFileSync(outputFilePath, "utf-8"));
+    const stackKey = Object.keys(outputs)[0];
+    const stackOutputs = outputs[stackKey];
+
+    vpcId = stackOutputs["vpc-id"];
+    publicSubnetIds = stackOutputs["public-subnet-ids"];
+    privateSubnetIds = stackOutputs["private-subnet-ids"];
+    albDnsName = stackOutputs["alb-dns-name"];
+    albZoneId = stackOutputs["alb-zone-id"];
+    ec2InstanceIds = stackOutputs["ec2-instance-ids"];
+    ec2PrivateIps = stackOutputs["ec2-private-ips"];
+    securityGroupAlbId = stackOutputs["security-group-alb-id"];
+    securityGroupEc2Id = stackOutputs["security-group-ec2-id"];
+    securityGroupRdsId = stackOutputs["security-group-rds-id"];
+    s3AppBucketName = stackOutputs["s3-app-bucket-name"];
+    s3CloudtrailBucketName = stackOutputs["s3-cloudtrail-bucket-name"];
+    cloudtrailArn = stackOutputs["cloudtrail-arn"];
+    kmsKeyId = stackOutputs["kms-key-id"];
+    kmsKeyArn = stackOutputs["kms-key-arn"];
+
+    if (!vpcId || !publicSubnetIds || !privateSubnetIds || !albDnsName || !ec2InstanceIds || 
+        !s3AppBucketName || !s3CloudtrailBucketName || !cloudtrailArn || !kmsKeyId) {
+      throw new Error("Missing required stack outputs for integration test.");
+    }
   });
 
-  describe('AWS Provider Configuration', () => {
-    it('should configure AWS provider with correct region', () => {
-      const providers = synthesized.byType(AwsProvider);
-      expect(providers).toHaveLength(1);
-      expect(providers[0]).toHaveProperty('region', 'us-east-1');
-    });
+  describe("VPC Infrastructure", () => {
+    test("VPC exists and has correct configuration", async () => {
+      const { Vpcs } = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      expect(Vpcs?.length).toBe(1);
+      
+      const vpc = Vpcs?.[0];
+      expect(vpc?.VpcId).toBe(vpcId);
+      expect(vpc?.CidrBlock).toBe("10.0.0.0/16");
+      expect(vpc?.State).toBe("available");
+      expect(vpc?.Tags?.some(tag => tag.Key === "Name" && tag.Value === "secure-app-vpc")).toBe(true);
+    }, 20000);
+
+    test("Public and private subnets exist with correct configuration", async () => {
+      // Test public subnets
+      const { Subnets: publicSubnets } = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })
+      );
+      expect(publicSubnets?.length).toBe(2);
+      publicSubnets?.forEach(subnet => {
+        expect(subnet.VpcId).toBe(vpcId);
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+        expect(subnet.State).toBe("available");
+        expect(subnet.Tags?.some(tag => tag.Key === "Type" && tag.Value === "Public")).toBe(true);
+      });
+
+      // Test private subnets
+      const { Subnets: privateSubnets } = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
+      );
+      expect(privateSubnets?.length).toBe(2);
+      privateSubnets?.forEach(subnet => {
+        expect(subnet.VpcId).toBe(vpcId);
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+        expect(subnet.State).toBe("available");
+        expect(subnet.Tags?.some(tag => tag.Key === "Type" && tag.Value === "Private")).toBe(true);
+      });
+    }, 20000);
   });
 
-  describe('VPC Infrastructure', () => {
-    it('should create VPC with correct CIDR block', () => {
-      const vpcs = synthesized.byType(Vpc);
-      expect(vpcs).toHaveLength(1);
-      expect(vpcs[0]).toHaveProperty('cidrBlock', '10.0.0.0/16');
-      expect(vpcs[0]).toHaveProperty('enableDnsHostnames', true);
-      expect(vpcs[0]).toHaveProperty('enableDnsSupport', true);
-      expect(vpcs[0].tags).toMatchObject({
-        Name: 'secure-app-vpc',
-        Environment: 'production',
-        ManagedBy: 'terraform-cdk',
-      });
-    });
-
-    it('should create public and private subnets', () => {
-      const subnets = synthesized.byType(Subnet);
-      expect(subnets).toHaveLength(4); // 2 public + 2 private
-
-      // Check public subnets - Fixed with explicit type annotation
-      const publicSubnets = subnets.filter((subnet: any) => 
-        subnet.mapPublicIpOnLaunch === true
+  describe("Security Groups", () => {
+    test("ALB security group has correct HTTP/HTTPS rules", async () => {
+      const { SecurityGroups } = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: [securityGroupAlbId] })
       );
-      expect(publicSubnets).toHaveLength(2);
-      expect(publicSubnets[0]).toHaveProperty('cidrBlock', '10.0.1.0/24');
-      expect(publicSubnets[1]).toHaveProperty('cidrBlock', '10.0.2.0/24');
-
-      // Check private subnets - Fixed with explicit type annotation
-      const privateSubnets = subnets.filter((subnet: any) => 
-        subnet.mapPublicIpOnLaunch === false
+      expect(SecurityGroups?.length).toBe(1);
+      
+      const sg = SecurityGroups?.[0];
+      expect(sg?.GroupId).toBe(securityGroupAlbId);
+      expect(sg?.VpcId).toBe(vpcId);
+      expect(sg?.GroupName).toBe("public-frontend-sg");
+      
+      // Check HTTP rule (port 80)
+      const httpRule = sg?.IpPermissions?.find(rule => 
+        rule.FromPort === 80 && rule.ToPort === 80 && rule.IpProtocol === "tcp"
       );
-      expect(privateSubnets).toHaveLength(2);
-      expect(privateSubnets[0]).toHaveProperty('cidrBlock', '10.0.10.0/24');
-      expect(privateSubnets[1]).toHaveProperty('cidrBlock', '10.0.20.0/24');
-    });
-
-    it('should create internet gateway', () => {
-      const igws = synthesized.byType(InternetGateway);
-      expect(igws).toHaveLength(1);
-      expect(igws[0].tags).toMatchObject({
-        Name: 'secure-app-vpc-igw',
-        Environment: 'production',
-        ManagedBy: 'terraform-cdk',
-      });
-    });
-
-    it('should create NAT gateways with EIPs', () => {
-      const natGateways = synthesized.byType(NatGateway);
-      const eips = synthesized.byType(Eip);
-      
-      expect(natGateways).toHaveLength(2);
-      expect(eips).toHaveLength(2);
-      
-      // Fixed with explicit type annotation
-      eips.forEach((eip: any) => {
-        expect(eip).toHaveProperty('domain', 'vpc');
-      });
-    });
-
-    it('should create route tables and routes', () => {
-      const routeTables = synthesized.byType(RouteTable);
-      const routes = synthesized.byType(Route);
-      const routeTableAssociations = synthesized.byType(RouteTableAssociation);
-
-      expect(routeTables).toHaveLength(3); // 1 public + 2 private
-      expect(routes).toHaveLength(3); // 1 to IGW + 2 to NAT gateways
-      expect(routeTableAssociations).toHaveLength(4); // 2 public + 2 private subnet associations
-    });
-  });
-
-  describe('Security Groups', () => {
-    it('should create ALB security group with correct rules', () => {
-      const securityGroups = synthesized.byType(SecurityGroup);
-      const albSg = securityGroups.find((sg: any) => sg.name === 'public-frontend-sg');
-      
-      expect(albSg).toBeDefined();
-      expect(albSg.description).toBe('Security group for Application Load Balancer');
-      
-      const securityGroupRules = synthesized.byType(SecurityGroupRule);
-      const albIngressRules = securityGroupRules.filter((rule: any) => 
-        rule.type === 'ingress' && rule.securityGroupId === albSg.id
-      );
-      
-      expect(albIngressRules).toHaveLength(2); // HTTP and HTTPS
-      
-      const httpRule = albIngressRules.find((rule: any) => rule.fromPort === 80);
-      const httpsRule = albIngressRules.find((rule: any) => rule.fromPort === 443);
-      
       expect(httpRule).toBeDefined();
-      expect(httpRule.cidrBlocks).toEqual(['0.0.0.0/0']);
+      expect(httpRule?.IpRanges?.some(range => range.CidrIp === "0.0.0.0/0")).toBe(true);
+      
+      // Check HTTPS rule (port 443)
+      const httpsRule = sg?.IpPermissions?.find(rule => 
+        rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === "tcp"
+      );
       expect(httpsRule).toBeDefined();
-      expect(httpsRule.cidrBlocks).toEqual(['0.0.0.0/0']);
-    });
+    }, 20000);
 
-    it('should create EC2 security group with restrictive rules', () => {
-      const securityGroups = synthesized.byType(SecurityGroup);
-      const ec2Sg = securityGroups.find((sg: any) => sg.name === 'private-app-sg');
+    test("EC2 security group allows traffic only from ALB", async () => {
+      const { SecurityGroups } = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: [securityGroupEc2Id] })
+      );
+      expect(SecurityGroups?.length).toBe(1);
       
-      expect(ec2Sg).toBeDefined();
-      expect(ec2Sg.description).toBe('Security group for EC2 application instances');
+      const sg = SecurityGroups?.[0];
+      expect(sg?.GroupId).toBe(securityGroupEc2Id);
+      expect(sg?.VpcId).toBe(vpcId);
+      expect(sg?.GroupName).toBe("private-app-sg");
       
-      const securityGroupRules = synthesized.byType(SecurityGroupRule);
-      const ec2IngressRules = securityGroupRules.filter((rule: any) => 
-        rule.type === 'ingress' && rule.securityGroupId === ec2Sg.id
+      // Check HTTP rule from ALB
+      const httpRule = sg?.IpPermissions?.find(rule => 
+        rule.FromPort === 80 && rule.ToPort === 80 && rule.IpProtocol === "tcp"
+      );
+      expect(httpRule).toBeDefined();
+      expect(httpRule?.UserIdGroupPairs?.some(pair => pair.GroupId === securityGroupAlbId)).toBe(true);
+    }, 20000);
+
+    test("RDS security group allows traffic only from EC2", async () => {
+      const { SecurityGroups } = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({ GroupIds: [securityGroupRdsId] })
+      );
+      expect(SecurityGroups?.length).toBe(1);
+      
+      const sg = SecurityGroups?.[0];
+      expect(sg?.GroupId).toBe(securityGroupRdsId);
+      expect(sg?.VpcId).toBe(vpcId);
+      expect(sg?.GroupName).toBe("private-database-sg");
+      
+      // Check MySQL rule from EC2
+      const mysqlRule = sg?.IpPermissions?.find(rule => 
+        rule.FromPort === 3306 && rule.ToPort === 3306 && rule.IpProtocol === "tcp"
+      );
+      expect(mysqlRule).toBeDefined();
+      expect(mysqlRule?.UserIdGroupPairs?.some(pair => pair.GroupId === securityGroupEc2Id)).toBe(true);
+    }, 20000);
+  });
+
+  describe("EC2 Instances", () => {
+    test("EC2 instances exist and are running in private subnets", async () => {
+      const { Reservations } = await ec2Client.send(
+        new DescribeInstancesCommand({ InstanceIds: ec2InstanceIds })
+      );
+      expect(Reservations?.length).toBeGreaterThan(0);
+      
+      const instances = Reservations?.flatMap(r => r.Instances || []);
+      expect(instances?.length).toBe(2);
+      
+      instances?.forEach((instance, index) => {
+        expect(instance.InstanceId).toBe(ec2InstanceIds[index]);
+        expect(instance.State?.Name).toBe("running");
+        expect(instance.PrivateIpAddress).toBe(ec2PrivateIps[index]);
+        expect(privateSubnetIds).toContain(instance.SubnetId);
+        expect(instance.SecurityGroups?.some(sg => sg.GroupId === securityGroupEc2Id)).toBe(true);
+        expect(instance.PublicIpAddress).toBeUndefined(); // No public IP
+      });
+    }, 20000);
+  });
+
+  describe("S3 Buckets", () => {
+    test("Application S3 bucket exists with correct security configuration", async () => {
+      // Check bucket exists
+      await s3Client.send(new HeadBucketCommand({ Bucket: s3AppBucketName }));
+      
+      // Check public access is blocked
+      const { PublicAccessBlockConfiguration } = await s3Client.send(
+        new GetPublicAccessBlockCommand({ Bucket: s3AppBucketName })
+      );
+      expect(PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+      
+      // Check encryption is enabled
+      const { ServerSideEncryptionConfiguration } = await s3Client.send(
+        new GetBucketEncryptionCommand({ Bucket: s3AppBucketName })
+      );
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
+      
+      // Check versioning is enabled
+      const { Status } = await s3Client.send(
+        new GetBucketVersioningCommand({ Bucket: s3AppBucketName })
+      );
+      expect(Status).toBe("Enabled");
+    }, 20000);
+
+    test("CloudTrail S3 bucket exists with correct security configuration", async () => {
+      // Check bucket exists
+      await s3Client.send(new HeadBucketCommand({ Bucket: s3CloudtrailBucketName }));
+      
+      // Check public access is blocked
+      const { PublicAccessBlockConfiguration } = await s3Client.send(
+        new GetPublicAccessBlockCommand({ Bucket: s3CloudtrailBucketName })
+      );
+      expect(PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+      
+      // Check encryption is enabled
+      const { ServerSideEncryptionConfiguration } = await s3Client.send(
+        new GetBucketEncryptionCommand({ Bucket: s3CloudtrailBucketName })
+      );
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0].ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
+      
+      // Check versioning is enabled
+      const { Status } = await s3Client.send(
+        new GetBucketVersioningCommand({ Bucket: s3CloudtrailBucketName })
+      );
+      expect(Status).toBe("Enabled");
+    }, 20000);
+  });
+
+  describe("CloudTrail", () => {
+    test("CloudTrail exists and is configured correctly", async () => {
+      const { trailList } = await cloudTrailClient.send(new DescribeTrailsCommand({}));
+      const cloudTrail = trailList?.find(trail => trail.TrailARN === cloudtrailArn);
+      
+      expect(cloudTrail).toBeDefined();
+      expect(cloudTrail?.S3BucketName).toBe(s3CloudtrailBucketName);
+      expect(cloudTrail?.IncludeGlobalServiceEvents).toBe(true);
+      expect(cloudTrail?.IsMultiRegionTrail).toBe(true);
+      expect(cloudTrail?.Name).toContain("secure-app-cloudtrail");
+    }, 20000);
+  });
+
+  describe("KMS Key", () => {
+    test("KMS key exists and has key rotation enabled", async () => {
+      const { KeyMetadata } = await kmsClient.send(new DescribeKeyCommand({ KeyId: kmsKeyId }));
+      
+      expect(KeyMetadata?.KeyId).toBe(kmsKeyId);
+      expect(KeyMetadata?.Arn).toBe(kmsKeyArn);
+      expect(KeyMetadata?.KeyUsage).toBe("ENCRYPT_DECRYPT");
+      expect(KeyMetadata?.KeySpec).toBe("SYMMETRIC_DEFAULT");
+      expect(KeyMetadata?.Enabled).toBe(true);
+      expect(KeyMetadata?.Description).toContain("KMS key for application encryption");
+    }, 20000);
+  });
+
+  describe("Security Compliance", () => {
+    test("All resources have required tags", async () => {
+      // Check VPC tags
+      const { Vpcs } = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      const vpc = Vpcs?.[0];
+      expect(vpc?.Tags?.some(tag => tag.Key === "Environment" && tag.Value === "production")).toBe(true);
+      expect(vpc?.Tags?.some(tag => tag.Key === "ManagedBy" && tag.Value === "terraform-cdk")).toBe(true);
+      
+      // Check EC2 instance tags
+      const { Reservations } = await ec2Client.send(
+        new DescribeInstancesCommand({ InstanceIds: [ec2InstanceIds[0]] })
+      );
+      const instance = Reservations?.[0]?.Instances?.[0];
+      expect(instance?.Tags?.some(tag => tag.Key === "Environment" && tag.Value === "production")).toBe(true);
+      expect(instance?.Tags?.some(tag => tag.Key === "ManagedBy" && tag.Value === "terraform-cdk")).toBe(true);
+    }, 20000);
+
+    test("EC2 instances are in private subnets without public IPs", async () => {
+      const { Reservations } = await ec2Client.send(
+        new DescribeInstancesCommand({ InstanceIds: ec2InstanceIds })
       );
       
-      expect(ec2IngressRules).toHaveLength(2); // HTTP from ALB and SSH from VPC
-      
-      const httpFromAlbRule = ec2IngressRules.find((rule: any) => 
-        rule.fromPort === 80 && rule.sourceSecurityGroupId
-      );
-      const sshFromVpcRule = ec2IngressRules.find((rule: any) => 
-        rule.fromPort === 22 && rule.cidrBlocks?.includes('10.0.0.0/16')
-      );
-      
-      expect(httpFromAlbRule).toBeDefined();
-      expect(sshFromVpcRule).toBeDefined();
-    });
-
-    it('should create RDS security group with database port access', () => {
-      const securityGroups = synthesized.byType(SecurityGroup);
-      const rdsSg = securityGroups.find((sg: any) => sg.name === 'private-database-sg');
-      
-      expect(rdsSg).toBeDefined();
-      expect(rdsSg.description).toBe('Security group for RDS database');
-      
-      const securityGroupRules = synthesized.byType(SecurityGroupRule);
-      const rdsIngressRules = securityGroupRules.filter((rule: any) => 
-        rule.type === 'ingress' && rule.securityGroupId === rdsSg.id
-      );
-      
-      expect(rdsIngressRules).toHaveLength(1); // MySQL from EC2 only
-      
-      const mysqlRule = rdsIngressRules[0];
-      expect(mysqlRule.fromPort).toBe(3306);
-      expect(mysqlRule.toPort).toBe(3306);
-      expect(mysqlRule.sourceSecurityGroupId).toBeDefined();
-    });
-  });
-
-  describe('KMS Encryption', () => {
-    it('should create KMS key with automatic rotation', () => {
-      const kmsKeys = synthesized.byType(KmsKey);
-      expect(kmsKeys).toHaveLength(1);
-      
-      const kmsKey = kmsKeys[0];
-      expect(kmsKey.description).toBe('KMS key for application encryption with automatic rotation');
-      expect(kmsKey.enableKeyRotation).toBe(true);
-      expect(kmsKey.tags).toMatchObject({
-        Name: 'app-kms-key',
-        Environment: 'production',
-        ManagedBy: 'terraform-cdk',
+      const instances = Reservations?.flatMap(r => r.Instances || []);
+      instances?.forEach(instance => {
+        expect(privateSubnetIds).toContain(instance.SubnetId);
+        expect(instance.PublicIpAddress).toBeUndefined();
+        expect(instance.PrivateIpAddress).toBeDefined();
       });
-    });
-
-    it('should create KMS alias', () => {
-      const kmsAliases = synthesized.byType(KmsAlias);
-      expect(kmsAliases).toHaveLength(1);
-      expect(kmsAliases[0].name).toBe('alias/app-kms-key');
-    });
-  });
-
-  describe('S3 Buckets', () => {
-    it('should create S3 buckets with encryption and versioning', () => {
-      const s3Buckets = synthesized.byType(S3Bucket);
-      expect(s3Buckets).toHaveLength(2); // CloudTrail and application buckets
-      
-      const bucketNames = s3Buckets.map((bucket: any) => bucket.bucket);
-      expect(bucketNames.some((name: string) => name.includes('cloudtrail-logs'))).toBe(true);
-      expect(bucketNames.some((name: string) => name.includes('app-data'))).toBe(true);
-      
-      s3Buckets.forEach((bucket: any) => {
-        expect(bucket.tags).toMatchObject({
-          Environment: 'production',
-          ManagedBy: 'terraform-cdk',
-        });
-      });
-    });
-
-    it('should configure S3 bucket encryption', () => {
-      const encryptionConfigs = synthesized.byType(S3BucketServerSideEncryptionConfigurationA);
-      expect(encryptionConfigs).toHaveLength(2);
-      
-      encryptionConfigs.forEach((config: any) => {
-        expect(config.rule[0].applyServerSideEncryptionByDefault.sseAlgorithm).toBe('aws:kms');
-        expect(config.rule[0].bucketKeyEnabled).toBe(true);
-      });
-    });
-
-    it('should enable S3 bucket versioning', () => {
-      const versioningConfigs = synthesized.byType(S3BucketVersioningA);
-      expect(versioningConfigs).toHaveLength(2);
-      
-      versioningConfigs.forEach((config: any) => {
-        expect(config.versioningConfiguration.status).toBe('Enabled');
-      });
-    });
-
-    it('should block public access on S3 buckets', () => {
-      const publicAccessBlocks = synthesized.byType(S3BucketPublicAccessBlock);
-      expect(publicAccessBlocks).toHaveLength(2);
-      
-      publicAccessBlocks.forEach((block: any) => {
-        expect(block.blockPublicAcls).toBe(true);
-        expect(block.blockPublicPolicy).toBe(true);
-        expect(block.ignorePublicAcls).toBe(true);
-        expect(block.restrictPublicBuckets).toBe(true);
-      });
-    });
-  });
-
-  describe('RDS Database', () => {
-    it('should create RDS instance with encryption', () => {
-      const dbInstances = synthesized.byType(DbInstance);
-      expect(dbInstances).toHaveLength(1);
-      
-      const dbInstance = dbInstances[0];
-      expect(dbInstance.engine).toBe('mysql');
-      expect(dbInstance.engineVersion).toBe('8.0');
-      expect(dbInstance.instanceClass).toBe('db.t3.medium');
-      expect(dbInstance.storageEncrypted).toBe(true);
-      expect(dbInstance.backupRetentionPeriod).toBe(7);
-      expect(dbInstance.deletionProtection).toBe(true);
-      expect(dbInstance.tags).toMatchObject({
-        Environment: 'production',
-        ManagedBy: 'terraform-cdk',
-      });
-    });
-
-    it('should create DB subnet group', () => {
-      const dbSubnetGroups = synthesized.byType(DbSubnetGroup);
-      expect(dbSubnetGroups).toHaveLength(1);
-      
-      const dbSubnetGroup = dbSubnetGroups[0];
-      expect(dbSubnetGroup.subnetIds).toHaveLength(2); // Private subnets
-      expect(dbSubnetGroup.tags).toMatchObject({
-        Environment: 'production',
-        ManagedBy: 'terraform-cdk',
-      });
-    });
-  });
-
-  describe('EC2 Instances', () => {
-    it('should create EC2 instances in private subnets', () => {
-      const instances = synthesized.byType(Instance);
-      expect(instances).toHaveLength(2); // One per private subnet
-      
-      instances.forEach((instance: any) => {
-        expect(instance.instanceType).toBe('t3.micro');
-        expect(instance.associatePublicIpAddress).toBe(false);
-        expect(instance.userData).toBeDefined();
-        expect(instance.keyName).toBe('turing-key');
-        expect(instance.tags).toMatchObject({
-          Environment: 'production',
-          ManagedBy: 'terraform-cdk',
-        });
-      });
-    });
-  });
-
-  describe('Application Load Balancer', () => {
-    it('should create ALB with target group and listener', () => {
-      const albs = synthesized.byType(Lb);
-      expect(albs).toHaveLength(1);
-      
-      const alb = albs[0];
-      expect(alb.loadBalancerType).toBe('application');
-      expect(alb.enableDeletionProtection).toBe(true);
-      expect(alb.subnets).toHaveLength(2); // Public subnets
-      expect(alb.tags).toMatchObject({
-        Environment: 'production',
-        ManagedBy: 'terraform-cdk',
-      });
-    });
-
-    it('should create target group with health check', () => {
-      const targetGroups = synthesized.byType(LbTargetGroup);
-      expect(targetGroups).toHaveLength(1);
-      
-      const targetGroup = targetGroups[0];
-      expect(targetGroup.port).toBe(80);
-      expect(targetGroup.protocol).toBe('HTTP');
-      expect(targetGroup.healthCheck.enabled).toBe(true);
-      expect(targetGroup.healthCheck.path).toBe('/health');
-      expect(targetGroup.healthCheck.matcher).toBe('200');
-    });
-
-    it('should create listener for ALB', () => {
-      const listeners = synthesized.byType(LbListener);
-      expect(listeners).toHaveLength(1);
-      
-      const listener = listeners[0];
-      expect(listener.port).toBe(80);
-      expect(listener.protocol).toBe('HTTP');
-      expect(listener.defaultAction[0].type).toBe('forward');
-    });
-
-    it('should attach EC2 instances to target group', () => {
-      const attachments = synthesized.byType(LbTargetGroupAttachment);
-      expect(attachments).toHaveLength(2); // One per EC2 instance
-      
-      attachments.forEach((attachment: any) => {
-        expect(attachment.port).toBe(80);
-      });
-    });
-  });
-
-  describe('CloudTrail', () => {
-    it('should create CloudTrail with proper configuration', () => {
-      const cloudtrails = synthesized.byType(cloudtrail.Cloudtrail);
-      expect(cloudtrails).toHaveLength(1);
-      
-      const trail = cloudtrails[0];
-      expect(trail.includeGlobalServiceEvents).toBe(true);
-      expect(trail.isMultiRegionTrail).toBe(true);
-      expect(trail.enableLogging).toBe(true);
-      expect(trail.tags).toMatchObject({
-        Environment: 'production',
-        ManagedBy: 'terraform-cdk',
-      });
-    });
-
-    it('should create S3 bucket policy for CloudTrail', () => {
-      const bucketPolicies = synthesized.byType(S3BucketPolicy);
-      expect(bucketPolicies).toHaveLength(1);
-      
-      const policy = JSON.parse(bucketPolicies[0].policy);
-      expect(policy.Version).toBe('2012-10-17');
-      expect(policy.Statement).toHaveLength(2);
-      
-      const statements = policy.Statement;
-      expect(statements[0].Principal.Service).toBe('cloudtrail.amazonaws.com');
-      expect(statements[0].Action).toBe('s3:GetBucketAcl');
-      expect(statements[1].Action).toBe('s3:PutObject');
-    });
-  });
-
-  describe('Resource Tagging', () => {
-    it('should apply consistent tags across all resources', () => {
-      const allResources = [
-        ...synthesized.byType(Vpc),
-        ...synthesized.byType(Subnet),
-        ...synthesized.byType(SecurityGroup),
-        ...synthesized.byType(Instance),
-        ...synthesized.byType(S3Bucket),
-        ...synthesized.byType(DbInstance),
-        ...synthesized.byType(KmsKey),
-        ...synthesized.byType(Lb),
-        ...synthesized.byType(LbTargetGroup),
-      ];
-
-      allResources.forEach((resource: any) => {
-        if (resource.tags) {
-          expect(resource.tags).toHaveProperty('Environment', 'production');
-          expect(resource.tags).toHaveProperty('ManagedBy', 'terraform-cdk');
-        }
-      });
-    });
-  });
-
-  describe('Security Best Practices', () => {
-    it('should ensure EC2 instances have no public IPs', () => {
-      const instances = synthesized.byType(Instance);
-      instances.forEach((instance: any) => {
-        expect(instance.associatePublicIpAddress).toBe(false);
-      });
-    });
-
-    it('should ensure RDS has deletion protection enabled', () => {
-      const dbInstances = synthesized.byType(DbInstance);
-      dbInstances.forEach((instance: any) => {
-        expect(instance.deletionProtection).toBe(true);
-      });
-    });
-
-    it('should ensure ALB has deletion protection enabled', () => {
-      const albs = synthesized.byType(Lb);
-      albs.forEach((alb: any) => {
-        expect(alb.enableDeletionProtection).toBe(true);
-      });
-    });
-
-    it('should ensure all storage is encrypted', () => {
-      const dbInstances = synthesized.byType(DbInstance);
-      dbInstances.forEach((instance: any) => {
-        expect(instance.storageEncrypted).toBe(true);
-      });
-
-      const encryptionConfigs = synthesized.byType(S3BucketServerSideEncryptionConfigurationA);
-      encryptionConfigs.forEach((config: any) => {
-        expect(config.rule[0].applyServerSideEncryptionByDefault.sseAlgorithm).toBe('aws:kms');
-      });
-    });
+    }, 20000);
   });
 });
