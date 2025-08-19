@@ -12,12 +12,6 @@ terraform {
     }
   }
 
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {
-    region = "us-east-1"
-  }
-}
-
 # Primary AWS provider (use for main region resources)
 provider "aws" {
   alias  = "primary"
