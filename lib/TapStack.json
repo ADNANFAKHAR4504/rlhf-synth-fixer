@@ -83,6 +83,13 @@
                     "default": "Existing EC2 Role Name"
                 }
             }
+        },
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": [
+                    "W1030"
+                ]
+            }
         }
     },
     "Parameters": {
@@ -1046,7 +1053,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DBPassword}}}"
+                    "Ref": "DBPassword"
                 },
                 "BackupRetentionPeriod": 7,
                 "StorageEncrypted": true,

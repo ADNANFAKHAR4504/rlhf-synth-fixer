@@ -473,7 +473,9 @@ describe('TapStack CloudFormation Template', () => {
           'DBInstanceClass'
         );
         expect(database.Properties.MasterUsername['Ref']).toBe('DBUsername');
-              expect(database.Properties.MasterUserPassword['Fn::Sub']).toBeDefined();
+        expect(database.Properties.MasterUserPassword['Ref']).toBe(
+          'DBPassword'
+        );
       });
     });
 

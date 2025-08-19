@@ -576,7 +576,7 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0.43
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPassword}}}'
+      MasterUserPassword: !Ref DBPassword
       BackupRetentionPeriod: 7
       StorageEncrypted: true
       KmsKeyId: !If [CreateNewKMSKey, !Ref KMSKey, !Ref ExistingKMSKeyARN]
