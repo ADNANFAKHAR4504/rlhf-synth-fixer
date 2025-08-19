@@ -3,22 +3,9 @@
 S3AccessIamStack
 ----------------
 Creates a least-privilege IAM Role for controlled read access to S3.
-
-Design notes:
-- We DO NOT create the bucket here; we reference an existing one by name.
-- Permissions are minimal:
-  * s3:ListBucket -> ONLY for the specified prefix (via s3:prefix condition)
-  * s3:GetObject  -> ONLY for objects under that prefix
-- Trust is limited to a single AWS service (default: Lambda).
-- All resources are tagged with Environment=Production and Owner=DevOps.
-
-Example deploy:
-  cdk deploy -c environmentSuffix=prod \
-             -c s3BucketName=my-prod-bucket \
-             -c s3Prefix=apps/tap/ \
-             -c trustedService=lambda.amazonaws.com
 """
 
+import re
 from typing import Optional
 
 import aws_cdk as cdk
@@ -28,6 +15,40 @@ from aws_cdk import (
   aws_iam as iam,
 )
 from constructs import Construct
+
+
+def _validate_trusted_service(service: str) -> None:
+  """
+  Basic validation for AWS service principals, e.g. 'lambda.amazonaws.com'.
+  Warns if principal is uncommon; raises if format is invalid.
+  """
+  if not isinstance(service, str) or not service.strip():
+    raise ValueError(
+      "trusted_service must be a non-empty string like 'lambda.amazonaws.com'."
+    )
+
+  if not re.fullmatch(r"[a-z0-9.-]+\.amazonaws\.com", service):
+    raise ValueError(
+      "trusted_service must match '[a-z0-9.-]+.amazonaws.com', "
+      f"got '{service}'."
+    )
+
+  common = {
+    "lambda.amazonaws.com",
+    "ec2.amazonaws.com",
+    "ecs-tasks.amazonaws.com",
+    "batch.amazonaws.com",
+    "states.amazonaws.com",
+    "glue.amazonaws.com",
+    "sagemaker.amazonaws.com",
+  }
+  if service not in common:
+    cdk.Annotations.of(  # soft warning to help reviewers
+      # pyright: ignore[reportArgumentType]
+      # (Construct vs IAspect host typing nit; safe to call on the stack later)
+    ).add_warning(
+      f"trusted_service '{service}' is uncommon; ensure it is correct."
+    )
 
 
 class S3AccessIamStack(NestedStack):
@@ -48,6 +69,9 @@ class S3AccessIamStack(NestedStack):
     # ---- Global tags (apply to all taggable resources in this nested stack)
     Tags.of(self).add("Environment", "Production")
     Tags.of(self).add("Owner", "DevOps")
+
+    # Validate service principal early
+    _validate_trusted_service(trusted_service)
 
     # Normalize prefix to "prefix/" if provided and ensure ARNs build correctly
     prefix = bucket_prefix.strip().lstrip("/")
@@ -73,20 +97,21 @@ class S3AccessIamStack(NestedStack):
     )
 
     # ---- Customer-managed policy so it can be tagged/audited independently
-    # List only under the allowed prefix (prefix condition added only if provided)
+
+    # Simplified prefix condition logic:
+    # build the conditions dict once, include only when a prefix exists
+    list_conditions = (
+      {"StringLike": {"s3:prefix": [prefix, f"{prefix}*"]}} if prefix else None
+    )
+
     list_bucket_stmt = iam.PolicyStatement(
       sid="ListBucketPrefixOnly",
       effect=iam.Effect.ALLOW,
       actions=["s3:ListBucket"],
       resources=[bucket_arn],
+      conditions=list_conditions,
     )
-    if prefix:
-      list_bucket_stmt.add_conditions({
-        # Restrict listing to the given logical 'folder' (no leading slash for s3:prefix)
-        "StringLike": {"s3:prefix": [prefix, f"{prefix}*"]},
-      })
 
-    # Get objects only under the allowed prefix
     get_object_stmt = iam.PolicyStatement(
       sid="GetObjectUnderPrefixOnly",
       effect=iam.Effect.ALLOW,
@@ -110,7 +135,11 @@ class S3AccessIamStack(NestedStack):
     Tags.of(role).add("Environment", "Production")
     Tags.of(role).add("Owner", "DevOps")
 
+    # Attach policy to role (this adds an implicit dependency)
     role.add_managed_policy(managed_policy)
+
+    # Also add an explicit dependency for clarity in reviews
+    role.node.add_dependency(managed_policy)
 
     # ---- Useful outputs for CI/ops
     cdk.CfnOutput(

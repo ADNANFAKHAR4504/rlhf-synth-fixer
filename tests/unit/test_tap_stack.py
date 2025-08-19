@@ -149,7 +149,3 @@ class TestTapStack(unittest.TestCase):
       "AWS::IAM::Role",
       {"RoleName": "tap-s3-readonly-dev"},
     )
-
-  @mark.it("Write Unit Tests placeholder removed")
-  def test_placeholder_removed(self):
-    self.assertTrue(True)
