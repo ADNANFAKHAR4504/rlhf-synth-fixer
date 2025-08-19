@@ -3,12 +3,12 @@ import * as fs from "fs";
 import fetch from "node-fetch";
 import { DynamoDBClient, ScanCommand, DeleteItemCommand } from "@aws-sdk/client-dynamodb";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
-import { APIGatewayV2Client, GetApiCommand } from "@aws-sdk/client-apigatewayv2";
+import { ApiGatewayV2Client, GetApiCommand } from "@aws-sdk/client-apigatewayv2";
 
 // AWS clients for integration testing
 const dynamoClient = new DynamoDBClient({});
 const lambdaClient = new LambdaClient({});
-const apiGatewayClient = new APIGatewayV2Client({});
+const apiGatewayClient = new ApiGatewayV2Client({});
 
 describe("TapStack Integration Tests", () => {
   let apiUrl: string;
