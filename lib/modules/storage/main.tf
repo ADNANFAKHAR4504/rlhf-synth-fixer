@@ -1,12 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-      configuration_aliases = [ aws.us-west-2, aws.ap-northeast-1 ]
-    }
-  }
-}
 
 resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.project_name}"
@@ -15,7 +6,6 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_s3_bucket" "data" {
-  provider = aws.us-west-2
   bucket_prefix = "${var.project_name}-data-bucket"
 
   tags = {
@@ -53,7 +43,6 @@ resource "aws_s3_bucket_public_access_block" "data" {
 }
 
 resource "aws_s3_bucket" "logs" {
-  provider = aws.ap-northeast-1
   bucket_prefix = "${var.project_name}-logs-bucket"
 
   tags = {
