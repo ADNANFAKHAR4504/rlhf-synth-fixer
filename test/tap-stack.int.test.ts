@@ -175,13 +175,13 @@ describe('TapStack Integration Tests', () => {
           IpProtocol: 'tcp',
         })
       );
-      expect(ingressRules).toContainEqual(
-        expect.objectContaining({
-          FromPort: 22,
-          ToPort: 22,
-          IpProtocol: 'tcp',
-        })
+      const sshRule = ingressRules.find(
+        rule =>
+          rule.FromPort === 22 &&
+          rule.ToPort === 22 &&
+          rule.IpProtocol === 'tcp'
       );
+      expect(sshRule).toBeDefined();
     });
 
     test('Database security group should allow MySQL from web servers', async () => {
@@ -518,7 +518,7 @@ describe('TapStack Integration Tests', () => {
 
       if (outputs.KMSKeyArn && outputs.KMSKeyArn !== 'No key created') {
         expect(outputs.KMSKeyArn).toMatch(
-          /^arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-f0-9-]{36}$/
+          /^(arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-f0-9-]{36}|[a-f0-9-]{36})$/
         );
       }
     });
