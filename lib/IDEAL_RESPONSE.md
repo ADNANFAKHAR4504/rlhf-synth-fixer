@@ -25,10 +25,7 @@ Parameters:
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
 Resources:
-  # ===========================
-  # KMS Encryption Resources
-  # ===========================
-
+  # KMS Key for encryption
   InfrastructureKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -64,16 +61,14 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
+  # KMS Key Alias
   InfrastructureKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub 'alias/infrastructure-${EnvironmentSuffix}'
       TargetKeyId: !Ref InfrastructureKMSKey
 
-  # ===========================
-  # Network Infrastructure
-  # ===========================
-
+  # VPC
   SecureVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -90,6 +85,7 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
+  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -103,13 +99,14 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
+  # Attach Internet Gateway to VPC
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref SecureVPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnets for Load Balancers and NAT Gateways
+  # Public Subnet 1
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -127,6 +124,7 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
+  # Public Subnet 2
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -144,16 +142,16 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  # Private Subnets for EC2 Instances
-  PrivateAppSubnet1:
+  # Private Subnet 1 (for database)
+  PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      CidrBlock: '10.0.10.0/24'
+      CidrBlock: '10.0.3.0/24'
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'private-app-subnet-1-${EnvironmentSuffix}'
+          Value: !Sub 'private-subnet-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
@@ -161,15 +159,16 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  PrivateAppSubnet2:
+  # Private Subnet 2 (for database)
+  PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
-      CidrBlock: '10.0.11.0/24'
+      CidrBlock: '10.0.4.0/24'
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub 'private-app-subnet-2-${EnvironmentSuffix}'
+          Value: !Sub 'private-subnet-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
@@ -177,48 +176,15 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  # Database Private Subnets (Isolated)
-  PrivateDBSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref SecureVPC
-      CidrBlock: '10.0.20.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: !Sub 'private-db-subnet-1-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'SecureInfrastructure'
-        - Key: Owner
-          Value: 'DevOpsTeam'
-
-  PrivateDBSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref SecureVPC
-      CidrBlock: '10.0.21.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: !Sub 'private-db-subnet-2-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'SecureInfrastructure'
-        - Key: Owner
-          Value: 'DevOpsTeam'
-
-  # NAT Gateways for High Availability
-  NATGateway1EIP:
+  # NAT Gateway EIP
+  NATGatewayEIP:
     Type: AWS::EC2::EIP
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'nat-eip-1-${EnvironmentSuffix}'
+          Value: !Sub 'nat-eip-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
@@ -226,29 +192,15 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  NATGateway2EIP:
-    Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'nat-eip-2-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'SecureInfrastructure'
-        - Key: Owner
-          Value: 'DevOpsTeam'
-
-  NATGateway1:
+  # NAT Gateway
+  NATGateway:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NATGateway1EIP.AllocationId
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 'nat-gateway-1-${EnvironmentSuffix}'
+          Value: !Sub 'nat-gateway-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
@@ -256,22 +208,7 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  NATGateway2:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGateway2EIP.AllocationId
-      SubnetId: !Ref PublicSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub 'nat-gateway-2-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'SecureInfrastructure'
-        - Key: Owner
-          Value: 'DevOpsTeam'
-
-  # Route Tables
+  # Public Route Table
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -286,6 +223,22 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
+  # Private Route Table
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-rt-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'SecureInfrastructure'
+        - Key: Owner
+          Value: 'DevOpsTeam'
+
+  # Public Route
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
@@ -294,6 +247,15 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
+  # Private Route
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway
+
+  # Associate Public Subnets with Public Route Table
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -306,95 +268,24 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-  PrivateRouteTable1:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref SecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'private-rt-1-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'SecureInfrastructure'
-        - Key: Owner
-          Value: 'DevOpsTeam'
-
-  PrivateRoute1:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway1
-
-  PrivateAppSubnet1RouteTableAssociation:
+  # Associate Private Subnets with Private Route Table
+  PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PrivateAppSubnet1
-      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
 
-  PrivateRouteTable2:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref SecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'private-rt-2-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'SecureInfrastructure'
-        - Key: Owner
-          Value: 'DevOpsTeam'
-
-  PrivateRoute2:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NATGateway2
-
-  PrivateAppSubnet2RouteTableAssociation:
+  PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PrivateAppSubnet2
-      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
 
-  # Database Route Table (No Internet Access)
-  DatabaseRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref SecureVPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'database-rt-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'SecureInfrastructure'
-        - Key: Owner
-          Value: 'DevOpsTeam'
-
-  PrivateDBSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateDBSubnet1
-      RouteTableId: !Ref DatabaseRouteTable
-
-  PrivateDBSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateDBSubnet2
-      RouteTableId: !Ref DatabaseRouteTable
-
-  # ===========================
-  # Security Groups
-  # ===========================
-
-  ALBSecurityGroup:
+  # Security Group for Web Servers (HTTPS only)
+  WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for Application Load Balancer - HTTPS only'
+      GroupDescription: 'Security group for web servers - HTTPS only'
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -403,17 +294,16 @@ Resources:
           CidrIp: '0.0.0.0/0'
           Description: 'HTTPS traffic'
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTP traffic for redirect to HTTPS'
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSecurityGroup
+          Description: 'SSH from bastion'
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: '0.0.0.0/0'
-          Description: 'All outbound traffic'
       Tags:
         - Key: Name
-          Value: !Sub 'alb-sg-${EnvironmentSuffix}'
+          Value: !Sub 'web-server-sg-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
@@ -421,24 +311,21 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  EC2SecurityGroup:
+  # Security Group for Bastion Host
+  BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for EC2 instances'
+      GroupDescription: 'Security group for bastion host'
       VpcId: !Ref SecureVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: 'HTTPS from ALB'
-      SecurityGroupEgress:
-        - IpProtocol: -1
+          FromPort: 22
+          ToPort: 22
           CidrIp: '0.0.0.0/0'
-          Description: 'All outbound traffic'
+          Description: 'SSH access'
       Tags:
         - Key: Name
-          Value: !Sub 'ec2-sg-${EnvironmentSuffix}'
+          Value: !Sub 'bastion-sg-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
         - Key: Project
@@ -446,6 +333,7 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
+  # Security Group for Database
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -455,8 +343,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref EC2SecurityGroup
-          Description: 'MySQL from EC2 instances'
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: 'MySQL access from web servers'
       Tags:
         - Key: Name
           Value: !Sub 'database-sg-${EnvironmentSuffix}'
@@ -467,10 +355,7 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  # ===========================
-  # IAM Roles and Policies
-  # ===========================
-
+  # IAM Role for EC2 instances
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -494,20 +379,16 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${SecureS3Bucket.Arn}/*'
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !GetAtt SecureS3Bucket.Arn
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
                   - kms:GenerateDataKey
                 Resource: !GetAtt InfrastructureKMSKey.Arn
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: !Ref DatabaseSecret
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -516,6 +397,7 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
+  # Instance Profile for EC2
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -523,10 +405,7 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  # ===========================
-  # Storage Resources
-  # ===========================
-
+  # S3 Bucket with encryption
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -544,11 +423,7 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldVersions
-            Status: Enabled
-            NoncurrentVersionExpirationInDays: 30
+      # Notification configuration removed as CloudWatchConfigurations is not supported
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -557,6 +432,7 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
+  # S3 Bucket Policy to enforce SSL
   SecureS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -569,24 +445,21 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureS3Bucket.Arn}/*'
-              - !GetAtt SecureS3Bucket.Arn
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
 
-  # ===========================
-  # Database Resources
-  # ===========================
-
+  # DB Subnet Group
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupName: !Sub 'db-subnet-group-${EnvironmentSuffix}'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
-        - !Ref PrivateDBSubnet1
-        - !Ref PrivateDBSubnet2
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -595,25 +468,7 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  DatabaseSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub 'rds-password-${EnvironmentSuffix}'
-      Description: 'RDS database password'
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
-      KmsKeyId: !Ref InfrastructureKMSKey
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: 'SecureInfrastructure'
-        - Key: Owner
-          Value: 'DevOpsTeam'
-
+  # RDS Database Instance
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
@@ -626,21 +481,16 @@ Resources:
       MasterUsername: admin
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       AllocatedStorage: 20
-      StorageType: gp3
+      StorageType: gp2
       StorageEncrypted: true
       KmsKeyId: !Ref InfrastructureKMSKey
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       BackupRetentionPeriod: 7
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       MultiAZ: false
       PubliclyAccessible: false
       DeletionProtection: false
-      EnablePerformanceInsights: true
-      PerformanceInsightsKMSKeyId: !Ref InfrastructureKMSKey
-      PerformanceInsightsRetentionPeriod: 7
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -649,84 +499,18 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  # ===========================
-  # Compute Resources
-  # ===========================
-
-  LaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
+  # Secrets Manager for Database Password
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
     Properties:
-      LaunchTemplateName: !Sub 'secure-lt-${EnvironmentSuffix}'
-      LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2023 AMI
-        InstanceType: t3.micro
-        IamInstanceProfile:
-          Arn: !GetAtt EC2InstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref EC2SecurityGroup
-        BlockDeviceMappings:
-          - DeviceName: /dev/xvda
-            Ebs:
-              VolumeSize: 20
-              VolumeType: gp3
-              Encrypted: true
-              KmsKeyId: !Ref InfrastructureKMSKey
-              DeleteOnTermination: true
-        UserData:
-          Fn::Base64: |
-            #!/bin/bash
-            yum update -y
-            yum install -y amazon-cloudwatch-agent httpd mod_ssl
-
-            # Configure HTTPS
-            systemctl start httpd
-            systemctl enable httpd
-
-            # Create a simple HTTPS endpoint
-            echo "<h1>Secure Infrastructure - Environment: ${EnvironmentSuffix}</h1>" > /var/www/html/index.html
-
-            # Install and configure CloudWatch agent
-            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-              -a fetch-config \
-              -m ec2 \
-              -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub 'secure-instance-${EnvironmentSuffix}'
-              - Key: Environment
-                Value: !Ref EnvironmentSuffix
-              - Key: Project
-                Value: 'SecureInfrastructure'
-              - Key: Owner
-                Value: 'DevOpsTeam'
-          - ResourceType: volume
-            Tags:
-              - Key: Name
-                Value: !Sub 'secure-volume-${EnvironmentSuffix}'
-              - Key: Environment
-                Value: !Ref EnvironmentSuffix
-              - Key: Project
-                Value: 'SecureInfrastructure'
-              - Key: Owner
-                Value: 'DevOpsTeam'
-
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub 'secure-tg-${EnvironmentSuffix}'
-      Port: 443
-      Protocol: HTTPS
-      VpcId: !Ref SecureVPC
-      HealthCheckProtocol: HTTPS
-      HealthCheckPath: /
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
-      Matcher:
-        HttpCode: '200,301,302'
+      Name: !Sub 'rds-password-${EnvironmentSuffix}'
+      Description: 'RDS database password'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      KmsKeyId: !Ref InfrastructureKMSKey
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -735,6 +519,7 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
+  # Application Load Balancer
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -754,54 +539,116 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
 
-  HTTPListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
+  # Security Group for ALB (HTTPS only)
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            StatusCode: HTTP_301
+      GroupDescription: 'Security group for Application Load Balancer - HTTPS only'
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS traffic'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP traffic for redirect to HTTPS'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+      Tags:
+        - Key: Name
+          Value: !Sub 'alb-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'SecureInfrastructure'
+        - Key: Owner
+          Value: 'DevOpsTeam'
 
-  # Note: HTTPS Listener requires ACM certificate
-  # Uncomment and configure when certificate is available
-  # HTTPSListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     LoadBalancerArn: !Ref ApplicationLoadBalancer
-  #     Port: 443
-  #     Protocol: HTTPS
-  #     Certificates:
-  #       - CertificateArn: !Ref ACMCertificate
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref TargetGroup
+  # Target Group for ALB
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'secure-tg-${EnvironmentSuffix}'
+      Port: 443
+      Protocol: HTTPS
+      VpcId: !Ref SecureVPC
+      HealthCheckProtocol: HTTPS
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'SecureInfrastructure'
+        - Key: Owner
+          Value: 'DevOpsTeam'
 
+  # Launch Template for Auto Scaling
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub 'secure-lt-${EnvironmentSuffix}'
+      LaunchTemplateData:
+        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI (update as needed)
+        InstanceType: t3.micro
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y amazon-cloudwatch-agent
+            # Install and configure your web application here
+            # Ensure SSL/TLS certificates are properly configured
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub 'secure-web-server-${EnvironmentSuffix}'
+              - Key: Environment
+                Value: !Ref EnvironmentSuffix
+              - Key: Project
+                Value: 'SecureInfrastructure'
+              - Key: Owner
+                Value: 'DevOpsTeam'
+
+  # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub 'secure-asg-${EnvironmentSuffix}'
       VPCZoneIdentifier:
-        - !Ref PrivateAppSubnet1
-        - !Ref PrivateAppSubnet2
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
       MinSize: 1
-      MaxSize: 4
+      MaxSize: 3
       DesiredCapacity: 2
       TargetGroupARNs:
-        - !Ref TargetGroup
+        - !Ref ALBTargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub 'secure-asg-instance-${EnvironmentSuffix}'
-          PropagateAtLaunch: true
+          Value: !Sub 'secure-asg-${EnvironmentSuffix}'
+          PropagateAtLaunch: false
         - Key: Environment
           Value: !Ref EnvironmentSuffix
           PropagateAtLaunch: true
@@ -811,16 +658,6 @@ Resources:
         - Key: Owner
           Value: 'DevOpsTeam'
           PropagateAtLaunch: true
-
-  ScalingPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AutoScalingGroupName: !Ref AutoScalingGroup
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization
-        TargetValue: 70
 
 Outputs:
   VPCId:
@@ -852,12 +689,6 @@ Outputs:
     Value: !Ref InfrastructureKMSKey
     Export:
       Name: !Sub '${AWS::StackName}-KMS-Key'
-
-  DatabaseSecretArn:
-    Description: 'ARN of the database password secret'
-    Value: !Ref DatabaseSecret
-    Export:
-      Name: !Sub '${AWS::StackName}-DB-Secret-ARN'
 ```
 
 ## Key Security Features Implemented
