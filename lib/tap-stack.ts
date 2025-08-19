@@ -30,15 +30,6 @@ export class TapStack extends cdk.Stack {
             actions: ['kms:*'],
             resources: ['*'],
           }),
-          new iam.PolicyStatement({
-            sid: 'Allow CloudWatch Logs',
-            effect: iam.Effect.ALLOW,
-            principals: [
-              new iam.ServicePrincipal('logs.us-west-2.amazonaws.com'),
-            ],
-            actions: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
-            resources: ['*'],
-          }),
         ],
       }),
     });
@@ -93,24 +84,22 @@ export class TapStack extends cdk.Stack {
     });
 
     // CloudWatch Log Groups for Lambda functions
+    // Using AWS default encryption to avoid circular dependency with KMS key
     const createItemLogGroup = new logs.LogGroup(this, 'CreateItemLogGroup', {
       logGroupName: '/aws/lambda/tap-create-item',
       retention: logs.RetentionDays.ONE_WEEK,
-      encryptionKey: kmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const getItemsLogGroup = new logs.LogGroup(this, 'GetItemsLogGroup', {
       logGroupName: '/aws/lambda/tap-get-items',
       retention: logs.RetentionDays.ONE_WEEK,
-      encryptionKey: kmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const uploadFileLogGroup = new logs.LogGroup(this, 'UploadFileLogGroup', {
       logGroupName: '/aws/lambda/tap-upload-file',
       retention: logs.RetentionDays.ONE_WEEK,
-      encryptionKey: kmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
