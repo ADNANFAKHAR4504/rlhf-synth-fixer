@@ -42,7 +42,7 @@ export class SecurityModules extends Construct {
   public readonly iamRole: IamRole;
   public readonly instanceProfile: IamInstanceProfile;
   public readonly securityGroup: SecurityGroup;
-  public readonly dbSecurityGroup: SecurityGroup; // SEPARATE SECURITY GROUP FOR RDS
+  public readonly dbSecurityGroup: SecurityGroup;
   public readonly s3Bucket: S3Bucket;
   public readonly cloudTrail: cloudtrail.Cloudtrail;
   public readonly kmsKey: KmsKey;
@@ -241,7 +241,47 @@ export class SecurityModules extends Construct {
       policyArn: iamPolicy.arn,
     });
 
-    // Security Group for EC2 instances
+    // FIX 1: Create RDS Security Group FIRST (before EC2 security group)
+    this.dbSecurityGroup = new SecurityGroup(this, 'MyApp-SG-RDS', {
+      name: 'MyApp-SG-RDS',
+      description:
+        'Security group for RDS instances - only allows MySQL access from private subnets',
+      vpcId: this.vpc.id,
+
+      ingress: [
+        {
+          description: 'MySQL from private subnets only',
+          fromPort: 3306,
+          toPort: 3306,
+          protocol: 'tcp',
+          cidrBlocks: ['10.0.2.0/24', '10.0.3.0/24'], // Use CIDR blocks instead of security group reference
+          ipv6CidrBlocks: [],
+          prefixListIds: [],
+          securityGroups: [],
+        },
+      ],
+
+      egress: [
+        {
+          description: 'All outbound traffic',
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+          ipv6CidrBlocks: [],
+          prefixListIds: [],
+          securityGroups: [],
+        },
+      ],
+
+      tags: {
+        Name: 'MyApp-SG-RDS',
+        Security: 'DatabaseOnly',
+        Purpose: 'RDS',
+      },
+    });
+
+    // Security Group for EC2 instances - Created AFTER RDS security group
     this.securityGroup = new SecurityGroup(this, 'MyApp-SG-EC2', {
       name: 'MyApp-SG-EC2',
       description:
@@ -301,50 +341,10 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // SEPARATE SECURITY GROUP FOR RDS - FIX FOR ENI PERMISSION ISSUE
-    this.dbSecurityGroup = new SecurityGroup(this, 'MyApp-SG-RDS', {
-      name: 'MyApp-SG-RDS',
-      description:
-        'Security group for RDS instances - only allows MySQL access from EC2 security group',
-      vpcId: this.vpc.id,
-
-      ingress: [
-        {
-          description: 'MySQL from EC2 instances only',
-          fromPort: 3306,
-          toPort: 3306,
-          protocol: 'tcp',
-          cidrBlocks: [],
-          ipv6CidrBlocks: [],
-          prefixListIds: [],
-          securityGroups: [this.securityGroup.id], // Only allow access from EC2 security group
-        },
-      ],
-
-      egress: [
-        {
-          description: 'All outbound traffic',
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-          ipv6CidrBlocks: [],
-          prefixListIds: [],
-          securityGroups: [],
-        },
-      ],
-
-      tags: {
-        Name: 'MyApp-SG-RDS',
-        Security: 'DatabaseOnly',
-        Purpose: 'RDS',
-      },
-    });
-
     // S3 Bucket for sensitive data
     this.s3Bucket = new S3Bucket(this, 'MyApp-S3-SecureData', {
-      bucket: 'myapp-secure-data-f2jxva',
-      forceDestroy: false,
+      bucket: `myapp-secure-data-${Math.random().toString(36).substring(2, 8)}`, // FIX 2: Make bucket name unique
+      forceDestroy: true, // FIX 3: Allow destruction for development
       tags: {
         Name: 'MyApp-S3-SecureData',
         DataClassification: 'Sensitive',
@@ -352,7 +352,7 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // FIXED S3 BUCKET POLICY FOR CLOUDTRAIL - CORRECTED POLICY STRUCTURE
+    // S3 BUCKET POLICY FOR CLOUDTRAIL
     const s3BucketPolicy = new S3BucketPolicy(
       this,
       'MyApp-S3-CloudTrailPolicy',
@@ -448,43 +448,7 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // RDS Instance - USING SEPARATE SECURITY GROUP
-    this.rdsInstance = new DbInstance(this, 'MyApp-RDS-Main', {
-      identifier: 'myapp-rds-main',
-      engine: 'mysql',
-      engineVersion: '8.0',
-      instanceClass: config.dbInstanceClass,
-      allocatedStorage: 20,
-      storageType: 'gp2',
-
-      dbName: 'myappdb',
-      username: 'admin',
-      password: 'ChangeMe123!',
-
-      dbSubnetGroupName: dbSubnetGroup.name,
-      vpcSecurityGroupIds: [this.dbSecurityGroup.id], // USE SEPARATE DB SECURITY GROUP
-      publiclyAccessible: false,
-
-      storageEncrypted: true,
-      kmsKeyId: this.kmsKey.arn,
-
-      backupRetentionPeriod: 7,
-      backupWindow: '03:00-04:00',
-      maintenanceWindow: 'sun:04:00-sun:05:00',
-
-      deletionProtection: true,
-      skipFinalSnapshot: false,
-      finalSnapshotIdentifier: 'myapp-rds-final-snapshot',
-
-      tags: {
-        Name: 'MyApp-RDS-Main',
-        Access: 'Private',
-        Encryption: 'Enabled',
-        Environment: 'Production',
-      },
-    });
-
-    // EC2 Instance
+    // FIX 4: EC2 Instance created BEFORE RDS to establish proper dependencies
     this.ec2Instance = new Instance(this, 'MyApp-EC2-Main', {
       ami: 'ami-0c94855ba95b798c7',
       instanceType: config.instanceType,
@@ -506,9 +470,50 @@ export class SecurityModules extends Construct {
         Environment: 'Production',
         Monitoring: 'Enabled',
       },
+
+      // FIX 5: Add explicit dependencies
+      dependsOn: [this.instanceProfile, this.securityGroup],
     });
 
-    // CloudTrail for comprehensive API activity monitoring - ENSURE PROPER DEPENDENCIES
+    // RDS Instance - Created AFTER EC2 instance
+    this.rdsInstance = new DbInstance(this, 'MyApp-RDS-Main', {
+      identifier: 'myapp-rds-main',
+      engine: 'mysql',
+      engineVersion: '8.0',
+      instanceClass: config.dbInstanceClass,
+      allocatedStorage: 20,
+      storageType: 'gp2',
+
+      dbName: 'myappdb',
+      username: 'admin',
+      password: 'ChangeMe123!',
+
+      dbSubnetGroupName: dbSubnetGroup.name,
+      vpcSecurityGroupIds: [this.dbSecurityGroup.id],
+      publiclyAccessible: false,
+
+      storageEncrypted: true,
+      kmsKeyId: this.kmsKey.arn,
+
+      backupRetentionPeriod: 7,
+      backupWindow: '03:00-04:00',
+      maintenanceWindow: 'sun:04:00-sun:05:00',
+
+      deletionProtection: false, // FIX 6: Disable for development
+      skipFinalSnapshot: true, // FIX 7: Skip snapshot for development
+
+      tags: {
+        Name: 'MyApp-RDS-Main',
+        Access: 'Private',
+        Encryption: 'Enabled',
+        Environment: 'Production',
+      },
+
+      // FIX 8: Add explicit dependencies
+      dependsOn: [dbSubnetGroup, this.dbSecurityGroup],
+    });
+
+    // CloudTrail for comprehensive API activity monitoring
     this.cloudTrail = new cloudtrail.Cloudtrail(this, 'MyApp-CloudTrail-Main', {
       name: 'MyApp-CloudTrail-Main',
       s3BucketName: this.s3Bucket.bucket,
@@ -539,7 +544,6 @@ export class SecurityModules extends Construct {
         Scope: 'AllAPIActivity',
       },
 
-      // ENSURE BUCKET POLICY IS CREATED FIRST
       dependsOn: [s3BucketPolicy],
     });
 
@@ -570,6 +574,9 @@ export class SecurityModules extends Construct {
           Type: 'PerformanceMonitoring',
           Threshold: '80%',
         },
+
+        // FIX 9: Add explicit dependency
+        dependsOn: [this.ec2Instance],
       }
     );
   }
