@@ -21,8 +21,10 @@ module "security" {
 module "iam" {
   source = "./modules/iam"
 
-  project_name = var.project_name
-  environment  = var.environment
+  project_name       = var.project_name
+  environment        = var.environment
+  s3_data_bucket_arn = module.storage.s3_data_bucket_arn
+  iam_users          = ["testuser1", "testuser2"]
 }
 
 module "storage" {
@@ -32,7 +34,7 @@ module "storage" {
   environment             = var.environment
   vpc_id                  = module.networking.vpc_id
   private_route_table_ids = module.networking.private_route_table_ids
-  account_id              = var.account_id
+  aws_region              = var.aws_region
 }
 
 module "database" {
