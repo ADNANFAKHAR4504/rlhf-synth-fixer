@@ -1,6 +1,6 @@
 # Ideal Terraform Multi-Region Infrastructure Solution
 
-This solution implements a production-ready, highly available multi-region AWS infrastructure using Terraform with proper environment isolation and best practices.
+This solution implements a production-ready, highly available multi-region AWS infrastructures using Terraform with proper environment isolation and best practices.
 
 ## Project Structure
 
