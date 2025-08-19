@@ -8,7 +8,7 @@ test/ → folder for unit tests.
 
 The stack must deploy a highly secure infrastructure in the us-east-1 region that includes:
 
-VPC: A new VPC with public and private subnets across at least two Availability Zones.
+VPC: A new VPC with public & private subnets across at least two Availability Zones.
 
 Security Groups: Strictly allow inbound traffic only on ports 80 (HTTP) and 443 (HTTPS) for EC2 instances. Outbound should be open only as necessary for system operations. No other inbound ports are allowed.
 
