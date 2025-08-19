@@ -751,7 +751,6 @@ EOF
   ): void {
     // Create shorter, unique names that fit within AWS limits
     const stackSuffix = pulumi.getStack().slice(-6); // Use last 6 chars of stack name
-    const timestamp = Date.now().toString().slice(-8); // Use last 8 digits of timestamp
     
     const alb = new aws.lb.LoadBalancer(`alb-${region}`, {
       name: `nova-alb-${region}`, // Shortened name
