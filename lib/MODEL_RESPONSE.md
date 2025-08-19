@@ -1,6 +1,6 @@
 # High-Availability AWS Network CloudFormation Template
 
-I'll create a comprehensive CloudFormation template that builds a resilient, multi-AZ network infrastructure following AWS best practices. Here's the complete solution:
+This CloudFormation template creates a resilient, multi-AZ network infrastructure following AWS best practices:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -408,38 +408,27 @@ Outputs:
       Name: !Sub '${AWS::StackName}-NatGateway2-ID'
 ```
 
-## Key Features and Architecture Explanation
+## Architecture Features
 
-### **High Availability Design**
+### High Availability Design
 
-- **Multi-AZ Setup**: Resources are distributed across `us-west-2a` and `us-west-2b` for fault tolerance
-- **Redundant NAT Gateways**: Each AZ has its own NAT Gateway to eliminate single points of failure
-- **Separate Route Tables**: Each private subnet has its own route table for independent routing
+Resources are distributed across us-west-2a and us-west-2b for fault tolerance. Each AZ has its own NAT Gateway to eliminate single points of failure, and each private subnet has its own route table for independent routing.
 
-### **Network Segmentation**
+### Network Segmentation
 
-- **Public Subnets** (`10.0.1.0/24`, `10.0.2.0/24`): Host internet-facing resources
-- **Private Subnets** (`10.0.11.0/24`, `10.0.12.0/24`): Host internal resources with outbound internet access via NAT
+Public subnets (10.0.1.0/24, 10.0.2.0/24) host internet-facing resources, while private subnets (10.0.11.0/24, 10.0.12.0/24) host internal resources with outbound internet access via NAT.
 
-### **Security Implementation**
+### Security Implementation
 
-- **Public Web Security Group**: Allows HTTP (80) and HTTPS (443) from anywhere
-- **Private SSH Security Group**: Allows SSH (22) only from specified CIDR range (configurable parameter)
-- **Network ACLs**: Additional security layer with explicit rules
+The template includes a public web security group that allows HTTP (80) and HTTPS (443) from anywhere, and a private SSH security group that allows SSH (22) only from a specified CIDR range. Network ACLs provide an additional security layer with explicit rules.
 
-### **Best Practices Implemented**
+### Best Practices
 
-1. **Proper Tagging**: All resources tagged with `Environment: Production`
-2. **DNS Resolution**: Enabled DNS hostnames and support
-3. **Parameterization**: SSH access CIDR is configurable
-4. **Resource Dependencies**: Proper dependency management with `DependsOn`
-5. **Outputs**: All important resource IDs exported for cross-stack references
+All resources are properly tagged with Environment: Production. DNS hostnames and support are enabled. The SSH access CIDR is configurable through a parameter. Resource dependencies are managed properly with DependsOn, and all important resource IDs are exported for cross-stack references.
 
-### **Deployment Instructions**
+### Deployment
 
-1. **Save the template** as `ha-network.yaml`
-
-2. **Deploy using AWS CLI**:
+Save the template as ha-network.yaml and deploy using AWS CLI:
 
 ```bash
 aws cloudformation create-stack \
@@ -449,9 +438,6 @@ aws cloudformation create-stack \
   --region us-west-2
 ```
 
-3. **Or deploy via AWS Console**:
-   - Navigate to CloudFormation in us-west-2
-   - Create new stack with the template
-   - Specify your allowed SSH CIDR range
+Alternatively, deploy via the AWS Console by navigating to CloudFormation in us-west-2, creating a new stack with the template, and specifying your allowed SSH CIDR range.
 
 This template creates a production-ready, highly available network infrastructure that can support web applications, databases, and other AWS services with proper security and redundancy.
