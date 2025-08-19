@@ -133,7 +133,7 @@ resource "aws_flow_log" "primary" {
   provider             = aws.primary
   vpc_id               = aws_vpc.primary.id
   log_destination_type = "cloud-watch-logs"
-  log_group_name       = aws_cloudwatch_log_group.vpc_flow_logs_primary.name
+  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs_primary.arn
   iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
   traffic_type         = "ALL"
   tags = {
@@ -145,13 +145,14 @@ resource "aws_flow_log" "secondary" {
   provider             = aws.secondary
   vpc_id               = aws_vpc.secondary.id
   log_destination_type = "cloud-watch-logs"
-  log_group_name       = aws_cloudwatch_log_group.vpc_flow_logs_secondary.name
+  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs_secondary.arn
   iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
   traffic_type         = "ALL"
   tags = {
     Name = "${var.name_prefix}-${var.environment}-vpc-flowlog-secondary"
   }
 }
+
 ########################
 # Route Tables, Associations, and NAT Gateways (Primary and Secondary Regions)
 ########################
