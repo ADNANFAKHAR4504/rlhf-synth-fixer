@@ -33,12 +33,6 @@ const cfnClient = new CloudFormationClient({ region: 'us-east-1' });
 const s3Client = new S3Client({ region: 'us-east-1' });
 const logsClient = new CloudWatchLogsClient({ region: 'us-east-1' });
 
-// Log AWS credentials (partial, for debug only - do not log full secrets in production)
-const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
-const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-console.log('AWS_ACCESS_KEY_ID:', awsAccessKeyId ? awsAccessKeyId.substring(0, 2) + '...' + awsAccessKeyId.substring(1, awsAccessKeyId.length)  + '...' + awsAccessKeyId.substring(1, awsAccessKeyId.length+1) : 'NOT SET');
-console.log('AWS_SECRET_ACCESS_KEY:', awsSecretAccessKey ? awsSecretAccessKey.substring(0, 2) + '...'  + awsSecretAccessKey.substring(1, awsSecretAccessKey.length)  + '...' + awsSecretAccessKey.substring(1, awsSecretAccessKey.length+1) : 'NOT SET');
-
 // Helper: skip all tests if stack outputs are missing
 const skipIfNoOutputs = () => {
   if (!outputs || Object.keys(outputs).length === 0) {
