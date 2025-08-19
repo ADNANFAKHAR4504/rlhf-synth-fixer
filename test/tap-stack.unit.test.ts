@@ -30,12 +30,19 @@ jest.mock('../lib/modules', () => {
       },
       dbSecret: { arn: 'mock-rds-secret-arn' },
     })),
-    S3Module: jest.fn(() => ({
+    S3Module: jest.fn((scope, id, props) => ({
       bucket: {
         bucket: 'mock-s3-bucket',
         arn: 'mock-s3-bucket-arn',
         bucketRegionalDomainName: 'mock-s3-domain.com',
       },
+      // Only include OAI if CloudFront is enabled
+      ...(props?.enableCloudFront && {
+        oai: {
+          cloudfrontAccessIdentityPath: 'origin-access-identity/cloudfront/mock-oai-id',
+          iamArn: 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity mock-oai-id',
+        },
+      }),
     })),
     CloudFrontModule: jest.fn(() => ({})),
     CloudTrailModule: jest.fn(() => ({})),
@@ -176,6 +183,16 @@ describe('TapStack Unit Tests', () => {
         expect(IamModule).toHaveBeenCalledTimes(1);
         expect(CloudFrontModule).toHaveBeenCalledTimes(0);
       });
+
+      test('should pass enableCloudFront: false to S3Module when no ACM cert provided', () => {
+        expect(S3Module).toHaveBeenCalledWith(
+          expect.anything(),
+          's3',
+          expect.objectContaining({
+            enableCloudFront: false,
+          })
+        );
+      });
     });
 
     describe('when acmCertArn IS provided', () => {
@@ -200,6 +217,16 @@ describe('TapStack Unit Tests', () => {
         expect(CloudFrontModule).toHaveBeenCalledTimes(1);
       });
 
+      test('should pass enableCloudFront: true to S3Module when ACM cert is provided', () => {
+        expect(S3Module).toHaveBeenCalledWith(
+          expect.anything(),
+          's3',
+          expect.objectContaining({
+            enableCloudFront: true,
+          })
+        );
+      });
+
       test('should wire KMS key correctly to dependent modules', () => {
         const kms = KmsModule.mock.results[0].value;
         expect(S3Module).toHaveBeenCalledWith(expect.anything(), 's3', expect.objectContaining({ kmsKeyArn: kms.kmsKey.arn }));
@@ -213,6 +240,54 @@ describe('TapStack Unit Tests', () => {
         expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'ec2', expect.objectContaining({ vpcId: vpc.vpc.id, subnetId: vpc.privateSubnetIds[0] }));
         expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'rds', expect.objectContaining({ subnetIds: vpc.privateSubnetIds }));
       });
+
+      test('should wire CloudFront correctly with S3 OAI', () => {
+        const s3 = S3Module.mock.results[0].value;
+        expect(CloudFrontModule).toHaveBeenCalledWith(
+          expect.anything(),
+          'cloudfront',
+          expect.objectContaining({
+            acmCertArn: mockAcmCertArn,
+            s3OriginDomainName: s3.bucket.bucketRegionalDomainName,
+            originAccessIdentity: s3.oai.cloudfrontAccessIdentityPath,
+          })
+        );
+      });
+    });
+  });
+
+  // ------------------------
+  // CloudFront Conditional Logic Tests
+  // ------------------------
+  describe('CloudFront Conditional Logic', () => {
+    test('should NOT create CloudFront when acmCertArn is null', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestNullCert', {
+        acmCertArn: null as any,
+      });
+      Testing.fullSynth(stack);
+
+      expect(CloudFrontModule).toHaveBeenCalledTimes(0);
+    });
+
+    test('should NOT create CloudFront when acmCertArn is empty string', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestEmptyCert', {
+        acmCertArn: '',
+      });
+      Testing.fullSynth(stack);
+
+      expect(CloudFrontModule).toHaveBeenCalledTimes(0);
+    });
+
+    test('should create CloudFront when acmCertArn is provided and S3 has OAI', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestValidCert', {
+        acmCertArn: 'arn:aws:acm:us-east-1:123456789012:certificate/valid',
+      });
+      Testing.fullSynth(stack);
+
+      expect(CloudFrontModule).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -254,5 +329,28 @@ describe('TapStack Unit Tests', () => {
         new TapStack(app, 'TestError');
       }).toThrow('KMS module failed');
     });
+
+    test('should handle missing S3 OAI gracefully when CloudFront is requested', () => {
+      // Mock S3Module to not return OAI even when enableCloudFront is true
+      S3Module.mockImplementationOnce(() => ({
+        bucket: {
+          bucket: 'mock-s3-bucket',
+          arn: 'mock-s3-bucket-arn',
+          bucketRegionalDomainName: 'mock-s3-domain.com',
+        },
+        // No OAI property
+      }));
+
+      app = new App();
+      stack = new TapStack(app, 'TestMissingOAI', {
+        acmCertArn: 'arn:aws:acm:us-east-1:123456789012:certificate/test',
+      });
+      Testing.fullSynth(stack);
+
+      // CloudFront should not be created if OAI is missing
+      expect(CloudFrontModule).toHaveBeenCalledTimes(0);
+    });
   });
+
+
 });

@@ -56,7 +56,12 @@ export class VpcModule extends Construct {
   constructor(scope: Construct, id: string, provider: AwsProvider) {
     super(scope, id);
 
-    this.vpc = new Vpc(this, 'Vpc', { cidrBlock: '10.0.0.0/16', provider });
+    this.vpc = new Vpc(this, 'Vpc', {
+      cidrBlock: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      provider,
+    });
 
     const privateSubnet1 = new Subnet(this, 'PrivateSubnet1', {
       vpcId: this.vpc.id,
@@ -77,10 +82,12 @@ export class VpcModule extends Construct {
 }
 
 // -----------------
-// 📦 S3 Module
+// 📦 S3 Module (FIXED)
 // -----------------
 export class S3Module extends Construct {
   public readonly bucket: S3Bucket;
+  public readonly oai?: CloudfrontOriginAccessIdentity;
+
   constructor(
     scope: Construct,
     id: string,
@@ -89,28 +96,71 @@ export class S3Module extends Construct {
       env: string;
       kmsKeyArn: string;
       provider: AwsProvider;
+      enableCloudFront?: boolean;
     }
   ) {
     super(scope, id);
 
+    // Create S3 bucket without inline configuration
     this.bucket = new S3Bucket(this, 'SecureBucket', {
       bucket: `${props.project}-${props.env}-bucket`,
-      serverSideEncryptionConfiguration: {
-        rule: {
+      provider: props.provider,
+    });
+
+    // Enable versioning using separate resource
+    new S3BucketVersioningA(this, 'BucketVersioning', {
+      bucket: this.bucket.id,
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
+      provider: props.provider,
+    });
+
+    // Configure server-side encryption using separate resource
+    new S3BucketServerSideEncryptionConfigurationA(this, 'BucketEncryption', {
+      bucket: this.bucket.id,
+      rule: [
+        {
           applyServerSideEncryptionByDefault: {
             sseAlgorithm: 'aws:kms',
             kmsMasterKeyId: props.kmsKeyArn,
           },
         },
-      },
-      versioning: { enabled: true },
+      ],
       provider: props.provider,
     });
+
+    // Create OAI and bucket policy if CloudFront is enabled
+    if (props.enableCloudFront) {
+      this.oai = new CloudfrontOriginAccessIdentity(this, 'Oai', {
+        comment: `OAI for ${props.project}-${props.env}`,
+        provider: props.provider,
+      });
+
+      // Create bucket policy to allow CloudFront access
+      new S3BucketPolicy(this, 'BucketPolicy', {
+        bucket: this.bucket.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                AWS: this.oai.iamArn,
+              },
+              Action: 's3:GetObject',
+              Resource: `${this.bucket.arn}/*`,
+            },
+          ],
+        }),
+        provider: props.provider,
+      });
+    }
   }
 }
 
 // -----------------
-// 🗄️ RDS Module with Secrets Manager
+// 🗄️ RDS Module with Secrets Manager (FIXED)
 // -----------------
 export class RdsModule extends Construct {
   public readonly db: DbInstance;
@@ -166,6 +216,8 @@ export class RdsModule extends Construct {
       publiclyAccessible: false,
       username: 'admin',
       password: password.result,
+      dbName: 'maindb', // REQUIRED: Database name
+      skipFinalSnapshot: true, // REQUIRED: For development environments
       provider: props.provider,
     });
   }
@@ -191,6 +243,7 @@ export class Ec2Module extends Construct {
     super(scope, id);
 
     const sg = new SecurityGroup(this, 'Ec2Sg', {
+      name: `${props.project}-${props.env}-ec2-sg`,
       vpcId: props.vpcId,
       ingress: [
         {
@@ -198,6 +251,14 @@ export class Ec2Module extends Construct {
           toPort: 22,
           protocol: 'tcp',
           cidrBlocks: ['10.0.0.0/16'],
+        },
+      ],
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
         },
       ],
       provider: props.provider,
@@ -215,14 +276,14 @@ export class Ec2Module extends Construct {
 }
 
 // -----------------
-// 🌍 CloudFront Module (Modified)
+// 🌐 CloudFront Module (FIXED)
 // -----------------
 export interface CloudFrontModuleProps {
   project: string;
   env: string;
   acmCertArn: string;
-  // This new property will receive the S3 bucket's domain name
   s3OriginDomainName: string;
+  originAccessIdentity: string;
   provider: AwsProvider;
 }
 
@@ -230,21 +291,14 @@ export class CloudFrontModule extends Construct {
   constructor(scope: Construct, id: string, props: CloudFrontModuleProps) {
     super(scope, id);
 
-    // Create an Origin Access Identity to allow CloudFront to securely access the S3 bucket
-    const oai = new CloudfrontOriginAccessIdentity(this, 'Oai', {
-      comment: `OAI for ${props.project}-${props.env}`,
-      provider: props.provider,
-    });
-
     new CloudfrontDistribution(this, 'Distribution', {
       enabled: true,
-      // Use the S3 bucket domain name passed in via props
       origin: [
         {
           domainName: props.s3OriginDomainName,
           originId: `${props.project}-${props.env}-s3-origin`,
           s3OriginConfig: {
-            originAccessIdentity: oai.cloudfrontAccessIdentityPath,
+            originAccessIdentity: props.originAccessIdentity,
           },
         },
       ],
@@ -254,6 +308,12 @@ export class CloudFrontModule extends Construct {
         allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
         cachedMethods: ['GET', 'HEAD'],
         compress: true,
+        forwardedValues: {
+          queryString: false,
+          cookies: {
+            forward: 'none',
+          },
+        },
         defaultTtl: 3600,
         minTtl: 0,
         maxTtl: 86400,
@@ -365,7 +425,7 @@ export class CloudTrailModule extends Construct {
       isMultiRegionTrail: true,
       enableLogFileValidation: true,
       kmsKeyId: props.kmsKeyId,
-      s3BucketName: this.trailBucket.bucket, // Use the created bucket
+      s3BucketName: this.trailBucket.bucket,
       provider: props.provider,
     });
   }
@@ -381,27 +441,27 @@ export class IamModule extends Construct {
     props: {
       project: string;
       env: string;
-      provider: AwsProvider; // ADD THIS LINE
+      provider: AwsProvider;
     }
   ) {
     super(scope, id);
 
     const user = new IamUser(this, 'IamUser', {
       name: `${props.project}-${props.env}-user`,
-      provider: props.provider, // ADD THIS LINE
+      provider: props.provider,
     });
 
     new IamPolicyAttachment(this, 'IamMfaPolicy', {
       name: `${props.project}-${props.env}-mfa-policy`,
       users: [user.name],
       policyArn: 'arn:aws:iam::aws:policy/IAMUserChangePassword',
-      provider: props.provider, // ADD THIS LINE
+      provider: props.provider,
     });
   }
 }
 
 // -----------------
-// 🔄 Aliases for TapStack
+// 📄 Aliases for TapStack
 // -----------------
 export { Ec2Module as ComputeModule };
 export { RdsModule as DatabaseModule };

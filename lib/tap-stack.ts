@@ -79,12 +79,13 @@ export class TapStack extends TerraformStack {
     // 2. VPC and networking
     const vpcModule = new VpcModule(this, 'vpc', awsProvider);
 
-    // 3. S3 bucket with KMS encryption
+    // 3. S3 bucket with KMS encryption and optional CloudFront support
     const s3Module = new S3Module(this, 's3', {
       project,
       env: environmentSuffix,
       kmsKeyArn: kmsModule.kmsKey.arn,
       provider: awsProvider,
+      enableCloudFront: !!acmCertArn, // Enable CloudFront support if ACM cert is provided
     });
 
     // 4. RDS with Secrets Manager
@@ -106,14 +107,14 @@ export class TapStack extends TerraformStack {
       provider: awsProvider,
     });
 
-    // 6. CloudFront distribution
-    if (acmCertArn) {
+    // 6. CloudFront distribution (only if ACM cert is provided)
+    if (acmCertArn && s3Module.oai) {
       new CloudFrontModule(this, 'cloudfront', {
         project,
         env: environmentSuffix,
         acmCertArn,
-        // Pass the actual S3 bucket domain name as the origin
         s3OriginDomainName: s3Module.bucket.bucketRegionalDomainName,
+        originAccessIdentity: s3Module.oai.cloudfrontAccessIdentityPath,
         provider: awsProvider,
       });
     }
