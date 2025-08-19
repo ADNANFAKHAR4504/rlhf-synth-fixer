@@ -1102,7 +1102,10 @@
                                 "VolumeType": "gp3",
                                 "Encrypted": true,
                                 "KmsKeyId": {
-                                    "Ref": "InfrastructureKMSKey"
+                                    "Fn::GetAtt": [
+                                        "InfrastructureKMSKey",
+                                        "Arn"
+                                    ]
                                 }
                             }
                         }
