@@ -82,8 +82,8 @@ class S3AccessIamStack(NestedStack):
     objects_arn = f"{bucket_arn}/{prefix}*" if prefix else f"{bucket_arn}/*"
 
     # ---- Trust policy: default only Lambda; override via -c trustedService=ec2.amazonaws.com
+    _validate_trusted_service(trusted_service)
     assume_role_principal = iam.ServicePrincipal(trusted_service)
-
     # ---- IAM Role (no secrets embedded; follows least privilege)
     role = iam.Role(
       self,
@@ -100,9 +100,7 @@ class S3AccessIamStack(NestedStack):
 
     # Simplified prefix condition logic:
     # build the conditions dict once, include only when a prefix exists
-    list_conditions = (
-      {"StringLike": {"s3:prefix": [prefix, f"{prefix}*"]}} if prefix else None
-    )
+    list_conditions = {"StringLike": {"s3:prefix": [f"{prefix}*"]}} if prefix else None
 
     list_bucket_stmt = iam.PolicyStatement(
       sid="ListBucketPrefixOnly",
