@@ -291,6 +291,7 @@ Resources:
   ############################
   Trail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: LogsBucketPolicy
     Properties:
       IsLogging: true
       S3BucketName: !Ref LogsBucket
