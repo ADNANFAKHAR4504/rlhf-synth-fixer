@@ -305,9 +305,7 @@ resource "tls_private_key" "bastion" {
 resource "aws_key_pair" "bastion" {
   count     = var.bastion_key_name == "" ? 1 : 0
   key_name  = local.bastion_key_name_final
-  public_key = var.bastion_ssh_public_key != "" ?
-    var.bastion_ssh_public_key :
-    tls_private_key.bastion[0].public_key_openssh
+  public_key = var.bastion_ssh_public_key != "" ? var.bastion_ssh_public_key : tls_private_key.bastion[0].public_key_openssh
 
   tags = merge(local.common_tags, {
     Name = local.bastion_key_name_final
@@ -586,13 +584,13 @@ resource "aws_s3_bucket_policy" "app" {
 # Private EC2 (App Host)
 #################
 resource "aws_instance" "app" {
-  ami                    = data.aws_ami.amazon_linux2.id
-  instance_type          = "t3.micro"
-  subnet_id              = aws_subnet.private1.id
-  vpc_security_group_ids = [aws_security_group.app_sg.id]
+  ami                         = data.aws_ami.amazon_linux2.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.private1.id
+  vpc_security_group_ids      = [aws_security_group.app_sg.id]
   associate_public_ip_address = false
-  monitoring             = true
-  iam_instance_profile   = aws_iam_instance_profile.app_profile.name
+  monitoring                  = true
+  iam_instance_profile        = aws_iam_instance_profile.app_profile.name
 
   user_data = <<-EOF
     #!/bin/bash
