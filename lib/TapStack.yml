@@ -140,7 +140,7 @@
                 "TrafficType": "ALL",
                 "LogDestinationType": "cloud-watch-logs",
                 "LogDestination": {
-                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${VPCFlowLogs}"
+                    "Ref": "VPCFlowLogs"
                 },
                 "DeliverLogsPermissionArn": {
                     "Fn::GetAtt": [
@@ -706,7 +706,7 @@
                                         "secretsmanager:GetSecretValue"
                                     ],
                                     "Resource": {
-                                        "Ref": "DatabaseSecret"
+                                        "Fn::Sub": "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${AWS::StackName}-Database-Credentials-*"
                                     },
                                     "Condition": {
                                         "StringEquals": {
@@ -731,9 +731,11 @@
                                         "s3:PutObject",
                                         "s3:DeleteObject"
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
-                                    },
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
+                                        }
+                                    ],
                                     "Condition": {
                                         "StringEquals": {
                                             "aws:RequestTag/Environment": {
@@ -1293,7 +1295,16 @@
                                 "s3:PutObject"
                             ],
                             "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        "arn:aws:s3:::",
+                                        {
+                                            "Ref": "S3Bucket"
+                                        },
+                                        "/*"
+                                    ]
+                                ]
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1310,7 +1321,16 @@
                                 "s3:PutObject"
                             ],
                             "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
+                                "Fn::Join": [
+                                    "",
+                                    [
+                                        "arn:aws:s3:::",
+                                        {
+                                            "Ref": "S3Bucket"
+                                        },
+                                        "/*"
+                                    ]
+                                ]
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1327,7 +1347,7 @@
                                 "s3:PutObject"
                             ],
                             "Resource": {
-                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
