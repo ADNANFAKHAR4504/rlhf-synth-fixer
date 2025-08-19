@@ -161,7 +161,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/tap/${EnvironmentSuffix}/audit-logs'
       RetentionInDays: 90
-      KmsKeyId: !If [KMSEnabled, !GetAtt TapStackKMSKey.Arn, !Ref 'AWS::NoValue']
+      KmsKeyId: !If [KMSEnabled, !Ref TapStackKMSKey, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub 'TAP-${EnvironmentSuffix}-Logs'
@@ -188,54 +188,76 @@ Resources:
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      Policies:
-        - PolicyName: 'DynamoDBAccessPolicy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'dynamodb:GetItem'
-                  - 'dynamodb:PutItem'
-                  - 'dynamodb:UpdateItem'
-                  - 'dynamodb:DeleteItem'
-                  - 'dynamodb:Query'
-                  - 'dynamodb:Scan'
-                Resource: !GetAtt TurnAroundPromptTable.Arn
-              - Effect: Allow
-                Action:
-                  - 'dynamodb:DescribeTable'
-                  - 'dynamodb:DescribeStream'
-                Resource: !GetAtt TurnAroundPromptTable.Arn
-        - PolicyName: 'S3AccessPolicy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetObject'
-                  - 's3:PutObject'
-                  - 's3:DeleteObject'
-                Resource: !If [SecurityEnabled, !Sub '${TapStackDataBucket}/*', !Ref 'AWS::NoValue']
-              - Effect: Allow
-                Action:
-                  - 's3:ListBucket'
-                Resource: !If [SecurityEnabled, !Ref TapStackDataBucket, !Ref 'AWS::NoValue']
-                Condition:
-                  StringEquals:
-                    's3:prefix': !Sub '${EnvironmentSuffix}/*'
-        - PolicyName: 'KMSAccessPolicy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'kms:Decrypt'
-                  - 'kms:DescribeKey'
-                  - 'kms:Encrypt'
-                  - 'kms:GenerateDataKey*'
-                  - 'kms:ReEncrypt*'
-                Resource: !If [KMSEnabled, !GetAtt TapStackKMSKey.Arn, !Ref 'AWS::NoValue']
+      Policies: !If
+        - SecurityEnabled
+        - - PolicyName: 'DynamoDBAccessPolicy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'dynamodb:GetItem'
+                    - 'dynamodb:PutItem'
+                    - 'dynamodb:UpdateItem'
+                    - 'dynamodb:DeleteItem'
+                    - 'dynamodb:Query'
+                    - 'dynamodb:Scan'
+                  Resource: !GetAtt TurnAroundPromptTable.Arn
+                - Effect: Allow
+                  Action:
+                    - 'dynamodb:DescribeTable'
+                    - 'dynamodb:DescribeStream'
+                  Resource: !GetAtt TurnAroundPromptTable.Arn
+          - PolicyName: 'S3AccessPolicy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 's3:GetObject'
+                    - 's3:PutObject'
+                    - 's3:DeleteObject'
+                  Resource: !Sub '${TapStackDataBucket}/*'
+                - Effect: Allow
+                  Action:
+                    - 's3:ListBucket'
+                  Resource: !Ref TapStackDataBucket
+                  Condition:
+                    StringEquals:
+                      's3:prefix': !Sub '${EnvironmentSuffix}/*'
+          - !If
+            - KMSEnabled
+            - PolicyName: 'KMSAccessPolicy'
+              PolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                  - Effect: Allow
+                    Action:
+                      - 'kms:Decrypt'
+                      - 'kms:DescribeKey'
+                      - 'kms:Encrypt'
+                      - 'kms:GenerateDataKey*'
+                      - 'kms:ReEncrypt*'
+                    Resource: !GetAtt TapStackKMSKey.Arn
+            - !Ref 'AWS::NoValue'
+        - - PolicyName: 'DynamoDBAccessPolicy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'dynamodb:GetItem'
+                    - 'dynamodb:PutItem'
+                    - 'dynamodb:UpdateItem'
+                    - 'dynamodb:DeleteItem'
+                    - 'dynamodb:Query'
+                    - 'dynamodb:Scan'
+                  Resource: !GetAtt TurnAroundPromptTable.Arn
+                - Effect: Allow
+                  Action:
+                    - 'dynamodb:DescribeTable'
+                    - 'dynamodb:DescribeStream'
+                  Resource: !GetAtt TurnAroundPromptTable.Arn
       Tags:
         - Key: Name
           Value: !Sub 'TAP-${EnvironmentSuffix}-ServiceRole'
@@ -397,7 +419,7 @@ Resources:
                 - !GetAtt TurnAroundPromptTable.Arn
             - Type: 'AWS::S3::Object'
               Values:
-                - !If [SecurityEnabled, !Sub '${TapStackDataBucket}/*', !Ref 'AWS::NoValue']
+                - !Sub '${TapStackDataBucket}/*'
       Tags:
         - Key: Name
           Value: !Sub 'TAP-${EnvironmentSuffix}-audit-trail'
