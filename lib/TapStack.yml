@@ -472,7 +472,7 @@ Outputs:
     Description: 'Application Secret ARN'
     Value: !Ref ApplicationSecret
 
-  SecurityGroupId:
+  WebServerSecurityGroupId:
     Description: 'Web Server Security Group ID'
     Value: !Ref WebServerSecurityGroup
     Export:
@@ -514,3 +514,7 @@ Outputs:
   Environment:
     Description: 'Environment'
     Value: production
+
+  InstanceType:
+    Description: 'EC2 Instance Type'
+    Value: !Ref InstanceType

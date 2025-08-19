@@ -331,7 +331,8 @@ describe('TapStack CloudFormation Template', () => {
         'WebServerPublicIP',
         'WebServerURL',
         'ApplicationSecretArn',
-        'SecurityGroupId'
+        'WebServerSecurityGroupId',
+        'InstanceType'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -424,7 +425,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(19);
+      expect(outputCount).toBe(20);
     });
   });
 });
