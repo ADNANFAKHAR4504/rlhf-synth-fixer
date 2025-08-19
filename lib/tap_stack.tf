@@ -765,9 +765,8 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name       = "${local.name_prefix}-ec2-instance-profile"
-  role       = aws_iam_role.ec2_role.name
-  depends_on = [aws_iam_role_policy_attachment.ec2_ssm_core]
+  name = "${local.name_prefix}-ec2-instance-profile"
+  role = aws_iam_role.ec2_role.name
 }
 
 # VPC Flow Logs
@@ -1019,6 +1018,7 @@ resource "aws_instance" "app" {
     kms_key_id  = aws_kms_key.main.arn
     volume_type = "gp3"
   }
+  depends_on = [aws_iam_role_policy_attachment.ec2_ssm_core]
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-ec2", SSMManaged = "true" })
 }
 
