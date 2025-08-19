@@ -318,6 +318,24 @@ export class StorageStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Create EventBridge rule for S3 notifications
+    new aws.cloudwatch.EventRule(
+      `tap-s3-event-rule-${environmentSuffix}`,
+      {
+        description: 'Capture S3 bucket events',
+        eventPattern: JSON.stringify({
+          source: ['aws.s3'],
+          detail: {
+            bucket: {
+              name: [s3Bucket.bucket],
+            },
+          },
+        }),
+        tags,
+      },
+      { parent: this }
+    );
+
     this.s3BucketName = s3Bucket.bucket;
     this.s3BucketArn = s3Bucket.arn;
     this.rdsEndpoint = rdsInstance.endpoint;

@@ -79,7 +79,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         environmentSuffix,
         region,
-        allowedCidr: '0.0.0.0/0',
+        allowedCidr: '10.0.0.0/8',
         tags,
       },
       { parent: this }
@@ -110,7 +110,7 @@ export class TapStack extends pulumi.ComponentResource {
         privateSubnetIds: networkStack.privateSubnetIds,
         instanceRole: iamStack.instanceRole,
         s3BucketArn: storageStack.s3BucketArn,
-        allowedCidr: '0.0.0.0/0',
+        allowedCidr: '10.0.0.0/8',
         tags,
         albSecurityGroupId: networkStack.albSecurityGroupId,
         ec2SecurityGroupId: networkStack.ec2SecurityGroupId,

@@ -96,7 +96,7 @@ export class ComputeStack extends pulumi.ComponentResource {
               protocol: 'tcp',
               fromPort: 22,
               toPort: 22,
-              cidrBlocks: [allowedCidr],
+              cidrBlocks: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'],
               description: 'SSH from allowed CIDR only',
             },
           ],
@@ -219,7 +219,7 @@ echo "<p>Environment: ${environmentSuffix}</p>" >> /var/www/html/index.html
             ],
           })
           .then(ami => ami.id),
-        instanceType: 't3.micro',
+        instanceType: 't2.micro',
         keyName: `tap-key-${region}-${environmentSuffix}`,
         vpcSecurityGroupIds: [ec2SecurityGroupIdToUse],
         iamInstanceProfile: {
