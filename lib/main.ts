@@ -143,10 +143,12 @@ export class MultiRegionStack extends TerraformStack {
 
     new SecretsmanagerSecretVersion(this, 'db-secret-version', {
       secretId: dbSecret.id,
-      secretString: JSON.stringify({
-        username: 'admin',
-        password: 'TempPassword123!-ChangeMe'
-      }),
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username: 'admin' }),
+        generateStringKey: 'password',
+        excludeCharacters: '"@/\\',
+        passwordLength: 32,
+      },
     });
 
     // IAM Role for RDS Enhanced Monitoring (minimal permissions)
