@@ -107,3 +107,70 @@ output "vpc_id_primary" {
 output "vpc_id_secondary" {
   value = aws_vpc.secondary.id
 }
+########################
+# Public Subnets & Internet Gateways (Primary and Secondary Regions)
+########################
+
+# Internet Gateway for Primary VPC
+resource "aws_internet_gateway" "primary" {
+  provider = aws.primary
+  vpc_id   = aws_vpc.primary.id
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-igw-primary"
+  }
+}
+
+# Internet Gateway for Secondary VPC
+resource "aws_internet_gateway" "secondary" {
+  provider = aws.secondary
+  vpc_id   = aws_vpc.secondary.id
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-igw-secondary"
+  }
+}
+
+# Public Subnets for Primary Region
+resource "aws_subnet" "public_primary_1" {
+  provider            = aws.primary
+  vpc_id              = aws_vpc.primary.id
+  cidr_block          = cidrsubnet(var.vpc_cidr_primary, 4, 3)
+  availability_zone   = "us-east-1a"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-public-subnet-primary-1"
+  }
+}
+
+resource "aws_subnet" "public_primary_2" {
+  provider            = aws.primary
+  vpc_id              = aws_vpc.primary.id
+  cidr_block          = cidrsubnet(var.vpc_cidr_primary, 4, 4)
+  availability_zone   = "us-east-1b"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-public-subnet-primary-2"
+  }
+}
+
+# Public Subnets for Secondary Region
+resource "aws_subnet" "public_secondary_1" {
+  provider            = aws.secondary
+  vpc_id              = aws_vpc.secondary.id
+  cidr_block          = cidrsubnet(var.vpc_cidr_secondary, 4, 3)
+  availability_zone   = "us-west-2a"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-public-subnet-secondary-1"
+  }
+}
+
+resource "aws_subnet" "public_secondary_2" {
+  provider            = aws.secondary
+  vpc_id              = aws_vpc.secondary.id
+  cidr_block          = cidrsubnet(var.vpc_cidr_secondary, 4, 4)
+  availability_zone   = "us-west-2b"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-public-subnet-secondary-2"
+  }
+}

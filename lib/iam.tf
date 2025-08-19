@@ -144,3 +144,10 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.name_prefix}-${var.environment}-ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
+
+output "lambda_role_name" {
+  value = aws_iam_role.lambda_role.name
+}
+output "lambda_policy_name" {
+  value = aws_iam_role_policy.lambda_policy.name
+}

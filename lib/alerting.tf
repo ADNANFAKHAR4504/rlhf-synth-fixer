@@ -58,3 +58,10 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm_secondary" {
   actions_enabled     = false # Set to true and add SNS topic ARN for notifications
 }
 
+
+output "unauthorized_access_alarm_primary_name" {
+  value = aws_cloudwatch_metric_alarm.unauthorized_access_alarm_primary.alarm_name
+}
+output "unauthorized_access_alarm_secondary_name" {
+  value = aws_cloudwatch_metric_alarm.unauthorized_access_alarm_secondary.alarm_name
+}

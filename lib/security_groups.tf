@@ -159,3 +159,10 @@ resource "aws_security_group" "lambda_secondary" {
     Name = "${var.name_prefix}-${var.environment}-lambda-sg-secondary"
   }
 }
+
+output "sg_lambda_primary_id" {
+  value = aws_security_group.lambda_primary.id
+}
+output "sg_lambda_secondary_id" {
+  value = aws_security_group.lambda_secondary.id
+}

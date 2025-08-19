@@ -83,3 +83,10 @@ resource "aws_lambda_function" "secondary" {
     Name = "${var.name_prefix}-${var.environment}-function-secondary"
   }
 }
+
+output "lambda_primary_name" {
+  value = aws_lambda_function.primary.function_name
+}
+output "lambda_secondary_name" {
+  value = aws_lambda_function.secondary.function_name
+}
