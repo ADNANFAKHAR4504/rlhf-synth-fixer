@@ -98,6 +98,6 @@ resource "null_resource" "s3_bucket_cleanup" {
         echo "Finished emptying and deleting S3 bucket: ${self.triggers.s3_bucket_name}".
       fi
     EOT
-    interpreter = ["bash", " -c"]
+    interpreter = ["bash", "-c"]
   }
 }
