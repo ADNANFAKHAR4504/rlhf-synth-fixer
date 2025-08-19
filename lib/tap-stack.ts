@@ -4,7 +4,6 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
 
-
 import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
 
