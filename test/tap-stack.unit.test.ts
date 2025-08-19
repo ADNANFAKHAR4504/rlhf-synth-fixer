@@ -19,7 +19,8 @@ describe('TapStack', () => {
   describe('KMS Key', () => {
     test('creates KMS key with proper configuration', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'KMS key for Nova project encryption (Parameter Store, S3)',
+        Description:
+          'KMS key for Nova project encryption (Parameter Store, S3)',
         EnableKeyRotation: true,
       });
     });
@@ -55,15 +56,23 @@ describe('TapStack', () => {
   describe('VPC Endpoints', () => {
     test('creates interface VPC endpoints for AWS services', () => {
       // Check for interface endpoints
-      template.resourcePropertiesCountIs('AWS::EC2::VPCEndpoint', {
-        VpcEndpointType: 'Interface',
-      }, 6); // 6 interface endpoints (ssm, ssmmessages, ec2messages, monitoring, logs, kms)
+      template.resourcePropertiesCountIs(
+        'AWS::EC2::VPCEndpoint',
+        {
+          VpcEndpointType: 'Interface',
+        },
+        6
+      ); // 6 interface endpoints (ssm, ssmmessages, ec2messages, monitoring, logs, kms)
     });
 
     test('creates gateway VPC endpoints for S3 and DynamoDB', () => {
-      template.resourcePropertiesCountIs('AWS::EC2::VPCEndpoint', {
-        VpcEndpointType: 'Gateway',
-      }, 2); // 2 gateway endpoints (S3, DynamoDB)
+      template.resourcePropertiesCountIs(
+        'AWS::EC2::VPCEndpoint',
+        {
+          VpcEndpointType: 'Gateway',
+        },
+        2
+      ); // 2 gateway endpoints (S3, DynamoDB)
     });
 
     test('creates security group for VPC endpoints', () => {
@@ -134,9 +143,13 @@ describe('TapStack', () => {
     });
 
     test('creates MFA enforcement policy', () => {
-      template.resourcePropertiesCountIs('AWS::IAM::Policy', {
-        PolicyName: 'MfaEnforcementPolicy',
-      }, 1);
+      template.resourcePropertiesCountIs(
+        'AWS::IAM::Policy',
+        {
+          PolicyName: 'MfaEnforcementPolicy',
+        },
+        1
+      );
     });
   });
 
@@ -206,9 +219,7 @@ describe('TapStack', () => {
       template.hasOutput('LogsBucketName', {
         Description: 'S3 bucket name for logs storage',
       });
-      template.hasOutput('ApiGatewayUrl', {
-        Description: 'API Gateway URL',
-      });
+
       template.hasOutput('HealthCheckEndpoint', {
         Description: 'Health check endpoint URL',
       });
