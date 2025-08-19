@@ -530,15 +530,13 @@ export class SecurityModules extends Construct {
         deleteOnTermination: true,
       },
 
-      userData: Buffer.from(
-        `#!/bin/bash
+      userData: `#!/bin/bash
 yum update -y
 yum install -y amazon-cloudwatch-agent
 # Configure CloudWatch agent
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\
     -a fetch-config -m ec2 -s -c default
-`
-      ).toString('base64'),
+`,
 
       tags: {
         Name: 'MyApp-EC2-Main',
@@ -651,7 +649,7 @@ yum install -y amazon-cloudwatch-agent
         tags: {
           Name: 'MyApp-CW-CPUAlarm',
           Type: 'PerformanceMonitoring',
-          Threshold: '80%',
+          Threshold: '80_percent',
         },
 
         dependsOn: [this.ec2Instance],
