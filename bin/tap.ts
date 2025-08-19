@@ -24,6 +24,12 @@ const skipDatabase =
   config.getBoolean('skipDatabase') ||
   false;
 
+// Check if we should skip auto scaling group (for instance quota issues)
+const skipAutoScaling =
+  process.env.SKIP_AUTO_SCALING === 'true' ||
+  config.getBoolean('skipAutoScaling') ||
+  false;
+
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
 const repository = config.get('repository') || 'unknown';
@@ -42,6 +48,7 @@ const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,
   skipDatabase: skipDatabase,
+  skipAutoScaling: skipAutoScaling,
 });
 
 // Export stack outputs

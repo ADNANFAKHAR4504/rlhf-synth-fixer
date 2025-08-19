@@ -12,6 +12,7 @@ export interface TapStackArgs {
   environmentSuffix?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
   skipDatabase?: boolean; // Skip RDS creation to avoid quota issues
+  skipAutoScaling?: boolean; // Skip ASG creation to avoid instance quota issues
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -27,6 +28,7 @@ export class TapStack extends pulumi.ComponentResource {
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
     const skipDatabase = args.skipDatabase || false;
+    const skipAutoScaling = args.skipAutoScaling || false;
 
     // Get availability zones
     const availableZones = aws.getAvailabilityZones({
@@ -333,132 +335,158 @@ export class TapStack extends pulumi.ComponentResource {
       ],
     });
 
-    // User data script for web servers
+    // User data script for web servers - simplified to avoid startup issues
     const userData = `#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Hello from \$(curl http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html
-yum install -y amazon-cloudwatch-agent
+echo "<h1>Hello from \$(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html
+# Skip CloudWatch agent to reduce startup time and complexity
 `;
 
-    // Create Launch Template
-    const launchTemplate = new aws.ec2.LaunchTemplate(
-      `prod-launch-template-${environmentSuffix}`,
-      {
-        name: `prod-launch-template-${environmentSuffix}`,
-        imageId: ami.then(ami => ami.id),
-        instanceType: 't3.micro',
-        keyName: undefined, // Add your key pair name if needed
-        userData: Buffer.from(userData).toString('base64'),
-        iamInstanceProfile: {
-          name: instanceProfile.name,
-        },
-        vpcSecurityGroupIds: [webServerSecurityGroup.id],
-        tagSpecifications: [
-          {
-            resourceType: 'instance',
-            tags: {
-              Name: `prod-web-server-${environmentSuffix}`,
-              ...tags,
+    // Create Launch Template only if ASG is not skipped
+    let launchTemplate: aws.ec2.LaunchTemplate | undefined;
+    if (!skipAutoScaling) {
+      launchTemplate = new aws.ec2.LaunchTemplate(
+        `prod-launch-template-${environmentSuffix}`,
+        {
+          name: `prod-launch-template-${environmentSuffix}`,
+          imageId: ami.then(ami => ami.id),
+          instanceType: 't2.micro', // Use t2.micro which is more likely to be available
+          userData: Buffer.from(userData).toString('base64'),
+          iamInstanceProfile: {
+            name: instanceProfile.name,
+          },
+          vpcSecurityGroupIds: [webServerSecurityGroup.id],
+          tagSpecifications: [
+            {
+              resourceType: 'instance',
+              tags: {
+                Name: `prod-web-server-${environmentSuffix}`,
+                ...tags,
+              },
             },
-          },
-        ],
-      },
-      { parent: this }
-    );
-
-    // Create Application Load Balancer
-    const alb = new aws.lb.LoadBalancer(
-      `prod-alb-${environmentSuffix}`,
-      {
-        name: `prod-alb-${environmentSuffix}`,
-        loadBalancerType: 'application',
-        internal: false,
-        subnets: publicSubnets.map(subnet => subnet.id),
-        securityGroups: [albSecurityGroup.id],
-        tags: {
-          Name: `prod-alb-${environmentSuffix}`,
-          ...tags,
+          ],
         },
-      },
-      { parent: this }
-    );
+        { parent: this }
+      );
+    }
 
-    const targetGroup = new aws.lb.TargetGroup(
-      `prod-tg-${environmentSuffix}`,
-      {
-        name: `prod-tg-${environmentSuffix}`,
-        port: 80,
-        protocol: 'HTTP',
-        vpcId: vpc.id,
-        healthCheck: {
-          enabled: true,
-          healthyThreshold: 2,
-          interval: 30,
-          matcher: '200',
-          path: '/',
-          port: 'traffic-port',
+    // Create ALB and related resources only if ASG is not skipped
+    let alb: aws.lb.LoadBalancer;
+    let targetGroup: aws.lb.TargetGroup | undefined;
+
+    if (!skipAutoScaling) {
+      alb = new aws.lb.LoadBalancer(
+        `prod-alb-${environmentSuffix}`,
+        {
+          name: `prod-alb-${environmentSuffix}`,
+          loadBalancerType: 'application',
+          internal: false,
+          subnets: publicSubnets.map(subnet => subnet.id),
+          securityGroups: [albSecurityGroup.id],
+          tags: {
+            Name: `prod-alb-${environmentSuffix}`,
+            ...tags,
+          },
+        },
+        { parent: this }
+      );
+
+      targetGroup = new aws.lb.TargetGroup(
+        `prod-tg-${environmentSuffix}`,
+        {
+          name: `prod-tg-${environmentSuffix}`,
+          port: 80,
           protocol: 'HTTP',
-          timeout: 5,
-          unhealthyThreshold: 2,
-        },
-        tags: {
-          Name: `prod-tg-${environmentSuffix}`,
-          ...tags,
-        },
-      },
-      { parent: this }
-    );
-
-    new aws.lb.Listener(
-      `prod-alb-listener-${environmentSuffix}`,
-      {
-        loadBalancerArn: alb.arn,
-        port: 80,
-        protocol: 'HTTP',
-        defaultActions: [
-          {
-            type: 'forward',
-            targetGroupArn: targetGroup.arn,
+          vpcId: vpc.id,
+          healthCheck: {
+            enabled: true,
+            healthyThreshold: 2,
+            interval: 30,
+            matcher: '200',
+            path: '/',
+            port: 'traffic-port',
+            protocol: 'HTTP',
+            timeout: 5,
+            unhealthyThreshold: 2,
           },
-        ],
-      },
-      { parent: this }
-    );
-
-    // Create Auto Scaling Group with reduced capacity for quota limits
-    new aws.autoscaling.Group(
-      `prod-asg-${environmentSuffix}`,
-      {
-        name: `prod-asg-${environmentSuffix}`,
-        minSize: 1,
-        maxSize: 2,
-        desiredCapacity: 1,
-        vpcZoneIdentifiers: publicSubnets.map(subnet => subnet.id),
-        targetGroupArns: [targetGroup.arn],
-        healthCheckType: 'EC2', // Use EC2 health checks to avoid dependency on ELB
-        healthCheckGracePeriod: 600, // Increased grace period for slower startup
-        launchTemplate: {
-          id: launchTemplate.id,
-          version: '$Latest',
-        },
-        tags: [
-          {
-            key: 'Name',
-            value: `prod-asg-${environmentSuffix}`,
-            propagateAtLaunch: true,
+          tags: {
+            Name: `prod-tg-${environmentSuffix}`,
+            ...tags,
           },
-          ...Object.entries(tags).map(([key, value]) => ({
-            key,
-            value,
-            propagateAtLaunch: true,
-          })),
-        ],
-      },
-      { parent: this }
-    );
+        },
+        { parent: this }
+      );
+
+      new aws.lb.Listener(
+        `prod-alb-listener-${environmentSuffix}`,
+        {
+          loadBalancerArn: alb.arn,
+          port: 80,
+          protocol: 'HTTP',
+          defaultActions: [
+            {
+              type: 'forward',
+              targetGroupArn: targetGroup.arn,
+            },
+          ],
+        },
+        { parent: this }
+      );
+    } else {
+      // Create a dummy ALB for export compatibility when ASG is skipped
+      alb = new aws.lb.LoadBalancer(
+        `prod-alb-${environmentSuffix}`,
+        {
+          name: `prod-alb-${environmentSuffix}`,
+          loadBalancerType: 'application',
+          internal: false,
+          subnets: publicSubnets.map(subnet => subnet.id),
+          securityGroups: [albSecurityGroup.id],
+          tags: {
+            Name: `prod-alb-${environmentSuffix}-minimal`,
+            ...tags,
+          },
+        },
+        { parent: this }
+      );
+    }
+
+    // Create Auto Scaling Group only if not skipped
+    if (!skipAutoScaling && launchTemplate && targetGroup) {
+      new aws.autoscaling.Group(
+        `prod-asg-${environmentSuffix}`,
+        {
+          name: `prod-asg-${environmentSuffix}`,
+          minSize: 1,
+          maxSize: 2,
+          desiredCapacity: 1,
+          vpcZoneIdentifiers: publicSubnets.map(subnet => subnet.id),
+          targetGroupArns: [targetGroup.arn],
+          healthCheckType: 'EC2', // Use EC2 health checks to avoid dependency on ELB
+          healthCheckGracePeriod: 600, // Increased grace period for slower startup
+          launchTemplate: {
+            id: launchTemplate.id,
+            version: '$Latest',
+          },
+          tags: [
+            {
+              key: 'Name',
+              value: `prod-asg-${environmentSuffix}`,
+              propagateAtLaunch: true,
+            },
+            ...Object.entries(tags).map(([key, value]) => ({
+              key,
+              value,
+              propagateAtLaunch: true,
+            })),
+          ],
+        },
+        { parent: this }
+      );
+    }
 
     // Create RDS resources only if not skipped (to avoid quota issues)
     let database: aws.rds.Instance | undefined;
