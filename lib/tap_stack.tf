@@ -1,3 +1,8 @@
+# Backend configuration for local state (prevents backend warnings)
+terraform {
+  backend "local" {}
+}
+
 # Variables for flexible role configuration
 variable "env" {
   description = "Environment (dev, staging, prod)"
@@ -50,11 +55,13 @@ variable "roles" {
   }))
   
   # Example role configurations
+  # NOTE: Do NOT use variables in default values. Replace with static placeholders.
+  # Users should override these in their own tfvars or via input.
   default = {
     security-auditor = {
       description         = "Read-only access for SOC 2 compliance auditing"
       max_session_duration = 3600
-      trusted_principals  = ["arn:aws:iam::AUDIT-ACCOUNT:root"]
+      trusted_principals  = ["arn:aws:iam::111122223333:root"] # Replace with real account
       require_external_id = true
       require_mfa        = true
       inline_policies = {
@@ -86,11 +93,11 @@ variable "roles" {
       }
       managed_policy_arns = []
     }
-    
+
     ci-deployer = {
       description         = "Limited deployment access for CI/CD pipeline"
       max_session_duration = 1800
-      trusted_principals  = ["arn:aws:iam::CI-ACCOUNT:root"]
+      trusted_principals  = ["arn:aws:iam::444455556666:root"] # Replace with real account
       require_external_id = true
       require_mfa        = false
       inline_policies = {
@@ -105,8 +112,8 @@ variable "roles" {
             "s3:DeleteObject"
           ]
           resources = [
-            "arn:aws:lambda:*:${var.target_account_id}:function:corp-*",
-            "arn:aws:s3:::corp-deployment-artifacts-${var.env}/*"
+            "arn:aws:lambda:*:123456789012:function:corp-*", # Replace 123456789012 with your account id
+            "arn:aws:s3:::corp-deployment-artifacts-dev/*"   # Replace dev with your env
           ]
           conditions = {
             resource-naming = {
@@ -119,11 +126,11 @@ variable "roles" {
       }
       managed_policy_arns = []
     }
-    
+
     breakglass = {
       description         = "Emergency access role with strict controls"
       max_session_duration = 900  # 15 minutes only
-      trusted_principals  = ["arn:aws:iam::${var.target_account_id}:root"]
+      trusted_principals  = ["arn:aws:iam::123456789012:root"] # Replace with your account id
       require_external_id = false
       require_mfa        = true
       inline_policies = {
