@@ -1,7 +1,7 @@
 /**
  * Unit tests for lib/tap_stack.tf (unit/static checks)
  *
- * These are fast, static tests that parse & validate HCL text patterns
+ * These are fast, static tests that parse & validate HCL text patterns 
  * and critical invariants (providers, regional KMS, log groups, naming).
  *
  * Run:  npx jest test/terraform.unit.test.ts
