@@ -2,7 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { Construct } from 'constructs';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { LbTargetGroupAttachment } from '@cdktf/provider-aws/lib/lb-target-group-attachment';
@@ -199,10 +199,8 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    // Parse the JSON secret to extract username and password
-    const dbCredentialsJson = `jsondecode(${dbCredentials.secretString})`;
-
     // 9. Create RDS instance in private subnets with encryption
+    // FIXED: Proper use of jsondecode function with Fn.rawString()
     const rdsModule = new RdsModule(
       this,
       'rds-module',
@@ -213,8 +211,12 @@ export class TapStack extends TerraformStack {
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         dbName: 'secureappdb',
-        username: `\${${dbCredentialsJson}.username}`,
-        password: `\${${dbCredentialsJson}.password}`,
+        username: Fn.jsondecode(
+          Fn.rawString(dbCredentials.secretString)
+        ).lookup('username'),
+        password: Fn.jsondecode(
+          Fn.rawString(dbCredentials.secretString)
+        ).lookup('password'),
         vpcSecurityGroupIds: [rdsSecurityGroupModule.securityGroup.id],
         dbSubnetGroupName: `secure-app-db-subnet-group-${environmentSuffix}`,
         kmsKeyId: kmsModule.kmsKey.arn,
@@ -260,7 +262,7 @@ yum install -y amazon-cloudwatch-agent
         subnetId: subnet.id,
         securityGroupIds: [ec2SecurityGroupModule.securityGroup.id],
         userData: Buffer.from(userData).toString('base64'),
-        keyName: 'my-key-pair', // Replace with your actual key pair name
+        keyName: 'prod-key ', // Ensure this key pair exists in your AWS account
       });
 
       ec2Instances.push(ec2Module);
@@ -274,12 +276,18 @@ yum install -y amazon-cloudwatch-agent
     });
 
     // 12. Create CloudTrail for audit logging
+    // FIXED: Add explicit dependency on S3 bucket policy
     const cloudTrailModule = new CloudTrailModule(this, 'cloudtrail-module', {
       name: `secure-app-cloudtrail-${environmentSuffix}`,
       s3BucketName: cloudTrailS3Module.bucket.bucket,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
     });
+
+    // Add explicit dependency to ensure bucket policy is created before CloudTrail
+    cloudTrailModule.cloudTrail.dependsOn = [
+      cloudTrailModule.s3BucketPolicy.fqn,
+    ];
 
     // Outputs for reference
     new TerraformOutput(this, 'vpc-id', {

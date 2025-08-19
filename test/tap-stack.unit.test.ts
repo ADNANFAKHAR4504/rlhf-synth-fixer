@@ -73,7 +73,12 @@ jest.mock("../lib/modules", () => ({
   CloudTrailModule: jest.fn((_, id, config) => ({
     cloudTrail: { 
       id: `${id}-cloudtrail-id`,
-      arn: `arn:aws:cloudtrail:us-east-1:123456789012:trail/${id}-cloudtrail`
+      arn: `arn:aws:cloudtrail:us-east-1:123456789012:trail/${id}-cloudtrail`,
+      dependsOn: [],
+      fqn: `${id}-cloudtrail-fqn`
+    },
+    s3BucketPolicy: {
+      fqn: `${id}-s3-bucket-policy-fqn`
     },
     config,
   })),
@@ -215,6 +220,7 @@ describe("TapStack Unit Tests", () => {
         cidrBlock: "10.0.0.0/16",
         enableDnsHostnames: true,
         enableDnsSupport: true,
+        availabilityZones: ["us-east-1a", "us-east-1b"],
       })
     );
   });
@@ -394,7 +400,7 @@ describe("TapStack Unit Tests", () => {
         instanceType: "t3.micro",
         subnetId: "subnet-private-1",
         securityGroupIds: ["ec2-sg-module-sg-id"],
-        keyName: "my-key-pair",
+        keyName: "prod-key",
         userData: expect.any(String),
       })
     );
@@ -407,7 +413,7 @@ describe("TapStack Unit Tests", () => {
         instanceType: "t3.micro",
         subnetId: "subnet-private-2",
         securityGroupIds: ["ec2-sg-module-sg-id"],
-        keyName: "my-key-pair",
+        keyName: "prod-key",
         userData: expect.any(String),
       })
     );
@@ -495,7 +501,7 @@ describe("TapStack Unit Tests", () => {
     const app = new App();
     new TapStack(app, "TestStackOutputs");
 
-    expect(TerraformOutput).toHaveBeenCalledTimes(16); // Updated count based on your actual outputs
+    expect(TerraformOutput).toHaveBeenCalledTimes(16);
   });
 
   test("should create stack with all components integrated", () => {
@@ -532,7 +538,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'aws',
       expect.objectContaining({
-        region: 'eu-west-1', // Should use the override if AWS_REGION_OVERRIDE is set
+        region: 'eu-west-1',
       })
     );
   });

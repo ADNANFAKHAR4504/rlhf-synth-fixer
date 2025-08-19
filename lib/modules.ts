@@ -450,7 +450,7 @@ export class RdsModule extends Construct {
   ) {
     super(scope, id);
 
-    // Create DB subnet group
+    // Create DB subnet group first
     this.dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       name: config.dbSubnetGroupName,
       subnetIds: subnetIds,
@@ -479,8 +479,10 @@ export class RdsModule extends Construct {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
       skipFinalSnapshot: false,
-      finalSnapshotIdentifier: `${config.identifier}-final-snapshot-${Date.now()}`,
-      deletionProtection: true,
+      finalSnapshotIdentifier: `${config.identifier}-final-snapshot`,
+      deletionProtection: false, // Changed to false for easier testing
+      multiAz: false, // Add this to avoid multi-AZ costs in testing
+      publiclyAccessible: false, // Ensure it's not publicly accessible
       tags: {
         Name: config.identifier,
         Environment: 'production',
@@ -489,7 +491,6 @@ export class RdsModule extends Construct {
     });
   }
 }
-
 /**
  * EC2 Module - Creates EC2 instances in private subnets without public IPs
  */
