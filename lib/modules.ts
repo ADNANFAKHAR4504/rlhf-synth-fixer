@@ -17,8 +17,24 @@ import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
 import { LbListener } from '@cdktf/provider-aws/lib/lb-listener';
 import { LbTargetGroupAttachment } from '@cdktf/provider-aws/lib/lb-target-group-attachment';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 
 // Interface definitions for module configurations
+export interface VpcModuleConfig {
+  name: string;
+  cidrBlock: string;
+  enableDnsHostnames: boolean;
+  enableDnsSupport: boolean;
+}
+
 export interface SecurityGroupModuleConfig {
   name: string;
   description: string;
@@ -95,6 +111,168 @@ export interface CloudTrailModuleConfig {
 }
 
 /**
+ * VPC Module - Creates VPC with public and private subnets
+ */
+export class VpcModule extends Construct {
+  public readonly vpc: Vpc;
+  public readonly publicSubnets: Subnet[];
+  public readonly privateSubnets: Subnet[];
+  public readonly internetGateway: InternetGateway;
+  public readonly natGateways: NatGateway[];
+  public readonly availabilityZones: DataAwsAvailabilityZones;
+
+  constructor(scope: Construct, id: string, config: VpcModuleConfig) {
+    super(scope, id);
+
+    // Get available AZs
+    this.availabilityZones = new DataAwsAvailabilityZones(this, 'azs', {
+      state: 'available',
+    });
+
+    // Create VPC
+    this.vpc = new Vpc(this, 'vpc', {
+      cidrBlock: config.cidrBlock,
+      enableDnsHostnames: config.enableDnsHostnames,
+      enableDnsSupport: config.enableDnsSupport,
+      tags: {
+        Name: config.name,
+        Environment: 'production',
+        ManagedBy: 'terraform-cdk',
+      },
+    });
+
+    // Create Internet Gateway
+    this.internetGateway = new InternetGateway(this, 'igw', {
+      vpcId: this.vpc.id,
+      tags: {
+        Name: `${config.name}-igw`,
+        Environment: 'production',
+        ManagedBy: 'terraform-cdk',
+      },
+    });
+
+    // Create public subnets (2 AZs)
+    this.publicSubnets = [];
+    const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
+
+    for (let i = 0; i < 2; i++) {
+      const publicSubnet = new Subnet(this, `public-subnet-${i}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: publicSubnetCidrs[i],
+        availabilityZone: `\${data.aws_availability_zones.azs.names[${i}]}`,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          Name: `${config.name}-public-subnet-${i + 1}`,
+          Type: 'Public',
+          Environment: 'production',
+          ManagedBy: 'terraform-cdk',
+        },
+      });
+      this.publicSubnets.push(publicSubnet);
+    }
+
+    // Create private subnets (2 AZs)
+    this.privateSubnets = [];
+    const privateSubnetCidrs = ['10.0.10.0/24', '10.0.20.0/24'];
+
+    for (let i = 0; i < 2; i++) {
+      const privateSubnet = new Subnet(this, `private-subnet-${i}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: privateSubnetCidrs[i],
+        availabilityZone: `\${data.aws_availability_zones.azs.names[${i}]}`,
+        mapPublicIpOnLaunch: false,
+        tags: {
+          Name: `${config.name}-private-subnet-${i + 1}`,
+          Type: 'Private',
+          Environment: 'production',
+          ManagedBy: 'terraform-cdk',
+        },
+      });
+      this.privateSubnets.push(privateSubnet);
+    }
+
+    // Create Elastic IPs for NAT Gateways
+    const eips = [];
+    for (let i = 0; i < 2; i++) {
+      const eip = new Eip(this, `nat-eip-${i}`, {
+        domain: 'vpc',
+        tags: {
+          Name: `${config.name}-nat-eip-${i + 1}`,
+          Environment: 'production',
+          ManagedBy: 'terraform-cdk',
+        },
+      });
+      eips.push(eip);
+    }
+
+    // Create NAT Gateways
+    this.natGateways = [];
+    for (let i = 0; i < 2; i++) {
+      const natGateway = new NatGateway(this, `nat-gateway-${i}`, {
+        allocationId: eips[i].id,
+        subnetId: this.publicSubnets[i].id,
+        tags: {
+          Name: `${config.name}-nat-gateway-${i + 1}`,
+          Environment: 'production',
+          ManagedBy: 'terraform-cdk',
+        },
+      });
+      this.natGateways.push(natGateway);
+    }
+
+    // Create route table for public subnets
+    const publicRouteTable = new RouteTable(this, 'public-rt', {
+      vpcId: this.vpc.id,
+      tags: {
+        Name: `${config.name}-public-rt`,
+        Environment: 'production',
+        ManagedBy: 'terraform-cdk',
+      },
+    });
+
+    // Create route to internet gateway
+    new Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: this.internetGateway.id,
+    });
+
+    // Associate public subnets with public route table
+    for (let i = 0; i < this.publicSubnets.length; i++) {
+      new RouteTableAssociation(this, `public-rt-association-${i}`, {
+        subnetId: this.publicSubnets[i].id,
+        routeTableId: publicRouteTable.id,
+      });
+    }
+
+    // Create route tables for private subnets
+    for (let i = 0; i < this.privateSubnets.length; i++) {
+      const privateRouteTable = new RouteTable(this, `private-rt-${i}`, {
+        vpcId: this.vpc.id,
+        tags: {
+          Name: `${config.name}-private-rt-${i + 1}`,
+          Environment: 'production',
+          ManagedBy: 'terraform-cdk',
+        },
+      });
+
+      // Create route to NAT gateway
+      new Route(this, `private-route-${i}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: this.natGateways[i].id,
+      });
+
+      // Associate private subnet with private route table
+      new RouteTableAssociation(this, `private-rt-association-${i}`, {
+        subnetId: this.privateSubnets[i].id,
+        routeTableId: privateRouteTable.id,
+      });
+    }
+  }
+}
+
+/**
  * KMS Module - Creates customer-managed KMS key with automatic rotation
  */
 export class KmsModule extends Construct {
@@ -115,7 +293,7 @@ export class KmsModule extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${config.accountId}:root`, // Use the passed account ID
+              AWS: `arn:aws:iam::${config.accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
@@ -343,7 +521,7 @@ export class Ec2Module extends Construct {
       instanceType: config.instanceType,
       subnetId: config.subnetId,
       vpcSecurityGroupIds: config.securityGroupIds,
-      associatePublicIpAddress: false, // Ensure no public IP
+      associatePublicIpAddress: false,
       userData: config.userData,
       keyName: config.keyName,
       tags: {
@@ -406,7 +584,7 @@ export class AlbModule extends Construct {
     // Create listener
     this.listener = new LbListener(this, 'listener', {
       loadBalancerArn: this.alb.arn,
-      port: 80, // Changed from "80" to 80 (number)
+      port: 80,
       protocol: 'HTTP',
       defaultAction: [
         {

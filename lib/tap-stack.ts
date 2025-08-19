@@ -4,15 +4,11 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
-
-// ? Import your stacks here
-import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets'; // Changed from DataAwsSubnet
-import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { LbTargetGroupAttachment } from '@cdktf/provider-aws/lib/lb-target-group-attachment';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { Fn } from 'cdktf';
 import {
+  VpcModule,
   KmsModule,
   SecurityGroupModule,
   S3Module,
@@ -21,7 +17,6 @@ import {
   AlbModule,
   CloudTrailModule,
 } from './modules';
-// import { MyStack } from './my-stack';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -30,9 +25,6 @@ interface TapStackProps {
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
 }
-
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
 
 const AWS_REGION_OVERRIDE = '';
 
@@ -48,60 +40,33 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
     });
 
-    // Add this line to get current AWS account information
+    // Get current AWS account information
     const current = new DataAwsCallerIdentity(this, 'current');
 
-    // Configure S3 Backend with native state locking
+    // Configure S3 Backend
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // ? Add your stack instantiations here
-    // Lookup existing VPC (replace with your actual VPC ID)
-    const vpc = new DataAwsVpc(this, 'secure-app-vpc', {
-      id: 'vpc-048096a18345d83ac', // Replace with your actual VPC ID
+    // 1. Create VPC with public and private subnets
+    const vpcModule = new VpcModule(this, 'vpc-module', {
+      name: 'secure-app-vpc',
+      cidrBlock: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
     });
 
-    // Lookup subnets in the VPC - Changed to DataAwsSubnets for multiple subnets
-    const privateSubnets = new DataAwsSubnets(this, 'private-subnets', {
-      filter: [
-        {
-          name: 'vpc-id',
-          values: [vpc.id],
-        },
-        {
-          name: 'tag:Type',
-          values: ['Private'],
-        },
-      ],
-    });
-
-    const publicSubnets = new DataAwsSubnets(this, 'public-subnets', {
-      filter: [
-        {
-          name: 'vpc-id',
-          values: [vpc.id],
-        },
-        {
-          name: 'tag:Type',
-          values: ['Public'],
-        },
-      ],
-    });
-
-    // 1. Create KMS Key for encryption with automatic rotation
+    // 2. Create KMS Key for encryption with automatic rotation
     const kmsModule = new KmsModule(this, 'app-kms-module', {
       name: 'app-kms-key',
       description: 'KMS key for application encryption with automatic rotation',
@@ -109,28 +74,28 @@ export class TapStack extends TerraformStack {
       accountId: current.accountId,
     });
 
-    // 2. Create S3 bucket for CloudTrail logs
+    // 3. Create S3 bucket for CloudTrail logs
     const cloudTrailS3Module = new S3Module(this, 'cloudtrail-s3-module', {
-      bucketName: `secure-app-cloudtrail-logs-${environmentSuffix}`,
+      bucketName: `secure-app-cloudtrail-logs-${environmentSuffix}-${current.accountId}`,
       enableVersioning: true,
       kmsKeyId: kmsModule.kmsKey.arn,
     });
 
-    // 3. Create S3 bucket for application data
+    // 4. Create S3 bucket for application data
     const appS3Module = new S3Module(this, 'app-s3-module', {
-      bucketName: `secure-app-data-${environmentSuffix}`,
+      bucketName: `secure-app-data-${environmentSuffix}-${current.accountId}`,
       enableVersioning: true,
       kmsKeyId: kmsModule.kmsKey.arn,
     });
 
-    // 4. Create Security Group for ALB (allows HTTP/HTTPS from internet)
+    // 5. Create Security Group for ALB (allows HTTP/HTTPS from internet)
     const albSecurityGroupModule = new SecurityGroupModule(
       this,
       'alb-sg-module',
       {
         name: 'public-frontend-sg',
         description: 'Security group for Application Load Balancer',
-        vpcId: vpc.id,
+        vpcId: vpcModule.vpc.id,
         ingressRules: [
           {
             fromPort: 80,
@@ -159,14 +124,14 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    // 5. Create Security Group for EC2 instances (allows traffic only from ALB)
+    // 6. Create Security Group for EC2 instances (allows traffic only from ALB)
     const ec2SecurityGroupModule = new SecurityGroupModule(
       this,
       'ec2-sg-module',
       {
         name: 'private-app-sg',
         description: 'Security group for EC2 application instances',
-        vpcId: vpc.id,
+        vpcId: vpcModule.vpc.id,
         ingressRules: [
           {
             fromPort: 80,
@@ -179,8 +144,8 @@ export class TapStack extends TerraformStack {
             fromPort: 22,
             toPort: 22,
             protocol: 'tcp',
-            cidrBlocks: ['10.0.0.0/8'], // Restrict SSH to private network only
-            description: 'Allow SSH from private network only',
+            cidrBlocks: ['10.0.0.0/16'],
+            description: 'Allow SSH from VPC only',
           },
         ],
         egressRules: [
@@ -195,194 +160,206 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    // 6. Create Security Group for RDS (allows traffic only from EC2)
+    // 7. Create Security Group for RDS (allows traffic only from EC2)
     const rdsSecurityGroupModule = new SecurityGroupModule(
       this,
       'rds-sg-module',
       {
-        name: 'private-db-sg',
+        name: 'private-database-sg',
         description: 'Security group for RDS database',
-        vpcId: vpc.id,
+        vpcId: vpcModule.vpc.id,
         ingressRules: [
           {
             fromPort: 3306,
             toPort: 3306,
             protocol: 'tcp',
             sourceSecurityGroupId: ec2SecurityGroupModule.securityGroup.id,
-            description: 'Allow MySQL from application instances only',
+            description: 'Allow MySQL from EC2 instances only',
           },
         ],
-        egressRules: [],
+        egressRules: [
+          {
+            fromPort: 0,
+            toPort: 65535,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow all outbound traffic',
+          },
+        ],
       }
     );
 
-    // Configuration parameters
-    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
+    // 8. Get database credentials from AWS Secrets Manager
+    const dbCredentials = new DataAwsSecretsmanagerSecretVersion(
       this,
-      'db-password-secret',
+      'db-credentials',
       {
-        secretId: 'my-db-password',
+        secretId: 'prod/database/credentials',
       }
     );
 
-    // 7. Create RDS instance in private subnet
+    // Parse the JSON secret to extract username and password
+    const dbCredentialsJson = `jsondecode(${dbCredentials.secretString})`;
+
+    // 9. Create RDS instance in private subnets with encryption
     const rdsModule = new RdsModule(
       this,
       'rds-module',
       {
-        identifier: 'secure-app-db',
+        identifier: `secure-app-db-${environmentSuffix}`,
         engine: 'mysql',
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         dbName: 'secureappdb',
-        username: 'admin',
-        password: dbPasswordSecret.secretString, // In production, use AWS Secrets Manager
+        username: `\${${dbCredentialsJson}.username}`,
+        password: `\${${dbCredentialsJson}.password}`,
         vpcSecurityGroupIds: [rdsSecurityGroupModule.securityGroup.id],
-        dbSubnetGroupName: 'secure-app-db-subnet-group',
+        dbSubnetGroupName: `secure-app-db-subnet-group-${environmentSuffix}`,
         kmsKeyId: kmsModule.kmsKey.arn,
         backupRetentionPeriod: 7,
         storageEncrypted: true,
       },
-      privateSubnets.ids
+      vpcModule.privateSubnets.map(subnet => subnet.id)
     );
 
-    // 8. Create EC2 instances in private subnets (no public IP)
-    // Create exactly 2 EC2 instances using Fn.element to access subnet IDs
-    const ec2Module1 = new Ec2Module(this, 'ec2-module-0', {
-      name: 'secure-app-instance-1',
-      instanceType: 't3.micro',
-      subnetId: Fn.element(privateSubnets.ids, 0),
-      securityGroupIds: [ec2SecurityGroupModule.securityGroup.id],
-      userData: `#!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Secure App Instance 1</h1>" > /var/www/html/index.html
-    echo "OK" > /var/www/html/health`,
-      keyName: 'my-dev-keypair', // Replace with your actual key pair name
-    });
-
-    const ec2Module2 = new Ec2Module(this, 'ec2-module-1', {
-      name: 'secure-app-instance-2',
-      instanceType: 't3.micro',
-      subnetId: Fn.element(privateSubnets.ids, 1),
-      securityGroupIds: [ec2SecurityGroupModule.securityGroup.id],
-      userData: `#!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Secure App Instance 2</h1>" > /var/www/html/index.html
-    echo "OK" > /var/www/html/health`,
-      keyName: 'my-dev-keypair', // Replace with your actual key pair name
-    });
-
-    const ec2Modules = [ec2Module1, ec2Module2];
-
-    // 9. Create Application Load Balancer
+    // 10. Create Application Load Balancer in public subnets
     const albModule = new AlbModule(this, 'alb-module', {
-      name: 'secure-app-alb',
-      subnets: publicSubnets.ids,
+      name: `secure-app-alb-${environmentSuffix}`,
+      subnets: vpcModule.publicSubnets.map(subnet => subnet.id),
       securityGroups: [albSecurityGroupModule.securityGroup.id],
-      targetGroupName: 'secure-app-tg',
+      targetGroupName: `secure-app-tg-${environmentSuffix}`,
       targetGroupPort: 80,
-      vpcId: vpc.id,
+      vpcId: vpcModule.vpc.id,
     });
 
-    // 10. Attach EC2 instances to ALB target group
-    new LbTargetGroupAttachment(this, 'ec2-target-attachment-0', {
-      targetGroupArn: albModule.targetGroup.arn,
-      targetId: ec2Module1.instance.id,
-      port: 80,
+    // 11. Create EC2 instances in private subnets
+    const ec2Instances: Ec2Module[] = [];
+    const userData = `#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Secure Application Server</h1>" > /var/www/html/index.html
+echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+
+# Create health check endpoint
+echo "OK" > /var/www/html/health
+
+# Install CloudWatch agent for monitoring
+yum install -y amazon-cloudwatch-agent
+`;
+
+    // Create one EC2 instance in each private subnet for high availability
+    vpcModule.privateSubnets.forEach((subnet, index) => {
+      const ec2Module = new Ec2Module(this, `ec2-module-${index}`, {
+        name: `secure-app-instance-${index + 1}`,
+        instanceType: 't3.micro',
+        subnetId: subnet.id,
+        securityGroupIds: [ec2SecurityGroupModule.securityGroup.id],
+        userData: Buffer.from(userData).toString('base64'),
+        keyName: 'my-key-pair', // Replace with your actual key pair name
+      });
+
+      ec2Instances.push(ec2Module);
+
+      // Attach EC2 instances to ALB target group
+      new LbTargetGroupAttachment(this, `target-attachment-${index}`, {
+        targetGroupArn: albModule.targetGroup.arn,
+        targetId: ec2Module.instance.id,
+        port: 80,
+      });
     });
 
-    new LbTargetGroupAttachment(this, 'ec2-target-attachment-1', {
-      targetGroupArn: albModule.targetGroup.arn,
-      targetId: ec2Module2.instance.id,
-      port: 80,
-    });
-
-    // 11. Create CloudTrail for audit logging
+    // 12. Create CloudTrail for audit logging
     const cloudTrailModule = new CloudTrailModule(this, 'cloudtrail-module', {
-      name: 'secure-app-cloudtrail',
+      name: `secure-app-cloudtrail-${environmentSuffix}`,
       s3BucketName: cloudTrailS3Module.bucket.bucket,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
     });
 
-    // Terraform Outputs
+    // Outputs for reference
     new TerraformOutput(this, 'vpc-id', {
-      description: 'ID of the VPC',
-      value: vpc.id,
-    });
-
-    new TerraformOutput(this, 'kms-key-id', {
-      description: 'ID of the KMS key',
-      value: kmsModule.kmsKey.keyId,
-    });
-
-    new TerraformOutput(this, 'kms-key-arn', {
-      description: 'ARN of the KMS key',
-      value: kmsModule.kmsKey.arn,
-    });
-
-    new TerraformOutput(this, 'app-s3-bucket-name', {
-      description: 'Name of the application S3 bucket',
-      value: appS3Module.bucket.bucket,
-    });
-
-    new TerraformOutput(this, 'cloudtrail-s3-bucket-name', {
-      description: 'Name of the CloudTrail S3 bucket',
-      value: cloudTrailS3Module.bucket.bucket,
-    });
-
-    new TerraformOutput(this, 'rds-endpoint', {
-      description: 'RDS instance endpoint',
-      value: rdsModule.dbInstance.endpoint,
-      sensitive: true,
-    });
-
-    new TerraformOutput(this, 'alb-dns-name', {
-      description: 'DNS name of the Application Load Balancer',
-      value: albModule.alb.dnsName,
-    });
-
-    new TerraformOutput(this, 'alb-zone-id', {
-      description: 'Zone ID of the Application Load Balancer',
-      value: albModule.alb.zoneId,
-    });
-
-    new TerraformOutput(this, 'ec2-instance-ids', {
-      description: 'IDs of the EC2 instances',
-      value: ec2Modules.map((module: any) => module.instance.id),
-    });
-
-    new TerraformOutput(this, 'private-subnet-ids', {
-      description: 'IDs of the private subnets',
-      value: privateSubnets.ids,
+      value: vpcModule.vpc.id,
+      description: 'VPC ID',
     });
 
     new TerraformOutput(this, 'public-subnet-ids', {
-      description: 'IDs of the public subnets',
-      value: publicSubnets.ids,
+      value: vpcModule.publicSubnets.map(subnet => subnet.id),
+      description: 'Public subnet IDs',
     });
 
-    new TerraformOutput(this, 'security-group-ids', {
-      description: 'Security group IDs',
-      value: {
-        alb: albSecurityGroupModule.securityGroup.id,
-        ec2: ec2SecurityGroupModule.securityGroup.id,
-        rds: rdsSecurityGroupModule.securityGroup.id,
-      },
+    new TerraformOutput(this, 'private-subnet-ids', {
+      value: vpcModule.privateSubnets.map(subnet => subnet.id),
+      description: 'Private subnet IDs',
+    });
+
+    new TerraformOutput(this, 'alb-dns-name', {
+      value: albModule.alb.dnsName,
+      description: 'Application Load Balancer DNS name',
+    });
+
+    new TerraformOutput(this, 'alb-zone-id', {
+      value: albModule.alb.zoneId,
+      description: 'Application Load Balancer Zone ID',
+    });
+
+    new TerraformOutput(this, 'rds-endpoint', {
+      value: rdsModule.dbInstance.endpoint,
+      description: 'RDS database endpoint',
+      sensitive: true,
+    });
+
+    new TerraformOutput(this, 'kms-key-id', {
+      value: kmsModule.kmsKey.keyId,
+      description: 'KMS Key ID',
+    });
+
+    new TerraformOutput(this, 'kms-key-arn', {
+      value: kmsModule.kmsKey.arn,
+      description: 'KMS Key ARN',
+    });
+
+    new TerraformOutput(this, 's3-app-bucket-name', {
+      value: appS3Module.bucket.bucket,
+      description: 'Application S3 bucket name',
+    });
+
+    new TerraformOutput(this, 's3-cloudtrail-bucket-name', {
+      value: cloudTrailS3Module.bucket.bucket,
+      description: 'CloudTrail S3 bucket name',
+    });
+
+    new TerraformOutput(this, 'ec2-instance-ids', {
+      value: ec2Instances.map(instance => instance.instance.id),
+      description: 'EC2 instance IDs',
+    });
+
+    new TerraformOutput(this, 'ec2-private-ips', {
+      value: ec2Instances.map(instance => instance.instance.privateIp),
+      description: 'EC2 instance private IP addresses',
     });
 
     new TerraformOutput(this, 'cloudtrail-arn', {
-      description: 'ARN of the CloudTrail',
       value: cloudTrailModule.cloudTrail.arn,
+      description: 'CloudTrail ARN',
     });
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+
+    new TerraformOutput(this, 'security-group-alb-id', {
+      value: albSecurityGroupModule.securityGroup.id,
+      description: 'ALB Security Group ID',
+    });
+
+    new TerraformOutput(this, 'security-group-ec2-id', {
+      value: ec2SecurityGroupModule.securityGroup.id,
+      description: 'EC2 Security Group ID',
+    });
+
+    new TerraformOutput(this, 'security-group-rds-id', {
+      value: rdsSecurityGroupModule.securityGroup.id,
+      description: 'RDS Security Group ID',
+    });
   }
 }
