@@ -363,26 +363,32 @@ export class StorageStack extends pulumi.ComponentResource {
             },
           ],
         }),
-        inlinePolicies: [
-          {
-            name: 'CloudWatchLogsPolicy',
-            policy: JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'logs:CreateLogGroup',
-                    'logs:CreateLogStream',
-                    'logs:PutLogEvents',
-                  ],
-                  Resource: logGroup.arn,
-                },
-              ],
-            }),
-          },
-        ],
         tags,
+      },
+      { parent: this }
+    );
+
+    // Create IAM policy for EventBridge to write to CloudWatch Logs
+    new aws.iam.RolePolicy(
+      `tap-eventbridge-policy-${environmentSuffix}`,
+      {
+        role: eventBridgeRole.id,
+        policy: logGroup.arn.apply(logGroupArn =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: `${logGroupArn}:*`,
+              },
+            ],
+          })
+        ),
       },
       { parent: this }
     );
