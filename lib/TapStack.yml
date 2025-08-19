@@ -110,11 +110,11 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
-    Description: 'Database administrator password (Secrets Manager ARN or plain text).'
+    Description: 'Database administrator password.'
     MinLength: 8
-    MaxLength: 200
-    AllowedPattern: '^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:[a-zA-Z0-9/_+=.@-]+$|[a-zA-Z0-9!#$%&*+-/=?^_`{|}~@]+'
-    ConstraintDescription: 'Must be either a valid Secrets Manager ARN or 8-41 characters long containing only alphanumeric characters or the following symbols: !#$%&*+-/=?^_`{|}~@'
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9!#$%&*+-/=?^_`{|}~@]+'
+    ConstraintDescription: 'Must be 8-41 characters long and contain only alphanumeric characters or the following symbols: !#$%&*+-/=?^_`{|}~@'
   UseExistingKMSKey:
     Type: String
     Default: 'no'
@@ -145,8 +145,6 @@ Conditions:
   CreateNewVPC: !Equals [!Ref UseExistingVPC, 'no']
   CreateNewKMSKey: !Equals [!Ref UseExistingKMSKey, 'no']
   CreateNewEC2Role: !Equals [!Ref UseExistingEC2Role, 'no']
-  IsSecretsManagerARN:
-    !Equals [!Select [0, !Split [':', !Ref DBPassword]], 'arn']
 
 Resources:
   ###############################################################################
@@ -579,10 +577,7 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0.43
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !If
-        - IsSecretsManagerARN
-        - !Sub '{{resolve:secretsmanager:${DBPassword}}}'
-        - !Ref DBPassword
+      MasterUserPassword: !Ref DBPassword
       BackupRetentionPeriod: 7
       StorageEncrypted: true
       KmsKeyId: !If [CreateNewKMSKey, !Ref KMSKey, !Ref ExistingKMSKeyARN]

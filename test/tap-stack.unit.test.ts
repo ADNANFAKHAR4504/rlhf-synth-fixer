@@ -122,7 +122,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(param.Type).toBe('String');
       expect(param.NoEcho).toBe(true);
       expect(param.MinLength).toBe(8);
-      expect(param.MaxLength).toBe(200);
+      expect(param.MaxLength).toBe(41);
       expect(param.AllowedPattern).toBeDefined();
     });
 
@@ -178,7 +178,6 @@ describe('TapStack CloudFormation Template', () => {
       'CreateNewVPC',
       'CreateNewKMSKey',
       'CreateNewEC2Role',
-      'IsSecretsManagerARN',
     ];
 
     test('should have all required conditions', () => {
@@ -474,7 +473,9 @@ describe('TapStack CloudFormation Template', () => {
           'DBInstanceClass'
         );
         expect(database.Properties.MasterUsername['Ref']).toBe('DBUsername');
-        expect(database.Properties.MasterUserPassword['Fn::If']).toBeDefined();
+        expect(database.Properties.MasterUserPassword['Ref']).toBe(
+          'DBPassword'
+        );
       });
     });
 
@@ -639,7 +640,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of conditions', () => {
       const conditionCount = Object.keys(template.Conditions || {}).length;
-      expect(conditionCount).toBe(4);
+      expect(conditionCount).toBe(3);
     });
   });
 
