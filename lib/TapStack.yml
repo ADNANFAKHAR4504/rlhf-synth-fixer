@@ -161,7 +161,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/tap/${EnvironmentSuffix}/audit-logs'
       RetentionInDays: 90
-      KmsKeyId: !If [KMSEnabled, !Ref TapStackKMSKey, !Ref 'AWS::NoValue']
+      KmsKeyId: !If [KMSEnabled, !GetAtt TapStackKMSKey.Arn, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub 'TAP-${EnvironmentSuffix}-Logs'
@@ -188,26 +188,27 @@ Resources:
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      Policies: !If
-        - SecurityEnabled
-        - - PolicyName: 'DynamoDBAccessPolicy'
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - 'dynamodb:GetItem'
-                    - 'dynamodb:PutItem'
-                    - 'dynamodb:UpdateItem'
-                    - 'dynamodb:DeleteItem'
-                    - 'dynamodb:Query'
-                    - 'dynamodb:Scan'
-                  Resource: !GetAtt TurnAroundPromptTable.Arn
-                - Effect: Allow
-                  Action:
-                    - 'dynamodb:DescribeTable'
-                    - 'dynamodb:DescribeStream'
-                  Resource: !GetAtt TurnAroundPromptTable.Arn
+      Policies:
+        - PolicyName: 'DynamoDBAccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource: !GetAtt TurnAroundPromptTable.Arn
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:DescribeTable'
+                  - 'dynamodb:DescribeStream'
+                Resource: !GetAtt TurnAroundPromptTable.Arn
+        - !If
+          - SecurityEnabled
           - PolicyName: 'S3AccessPolicy'
             PolicyDocument:
               Version: '2012-10-17'
@@ -225,39 +226,22 @@ Resources:
                   Condition:
                     StringEquals:
                       's3:prefix': !Sub '${EnvironmentSuffix}/*'
-          - !If
-            - KMSEnabled
-            - PolicyName: 'KMSAccessPolicy'
-              PolicyDocument:
-                Version: '2012-10-17'
-                Statement:
-                  - Effect: Allow
-                    Action:
-                      - 'kms:Decrypt'
-                      - 'kms:DescribeKey'
-                      - 'kms:Encrypt'
-                      - 'kms:GenerateDataKey*'
-                      - 'kms:ReEncrypt*'
-                    Resource: !GetAtt TapStackKMSKey.Arn
-            - !Ref 'AWS::NoValue'
-        - - PolicyName: 'DynamoDBAccessPolicy'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - KMSEnabled
+          - PolicyName: 'KMSAccessPolicy'
             PolicyDocument:
               Version: '2012-10-17'
               Statement:
                 - Effect: Allow
                   Action:
-                    - 'dynamodb:GetItem'
-                    - 'dynamodb:PutItem'
-                    - 'dynamodb:UpdateItem'
-                    - 'dynamodb:DeleteItem'
-                    - 'dynamodb:Query'
-                    - 'dynamodb:Scan'
-                  Resource: !GetAtt TurnAroundPromptTable.Arn
-                - Effect: Allow
-                  Action:
-                    - 'dynamodb:DescribeTable'
-                    - 'dynamodb:DescribeStream'
-                  Resource: !GetAtt TurnAroundPromptTable.Arn
+                    - 'kms:Decrypt'
+                    - 'kms:DescribeKey'
+                    - 'kms:Encrypt'
+                    - 'kms:GenerateDataKey*'
+                    - 'kms:ReEncrypt*'
+                  Resource: !GetAtt TapStackKMSKey.Arn
+          - !Ref 'AWS::NoValue'
       Tags:
         - Key: Name
           Value: !Sub 'TAP-${EnvironmentSuffix}-ServiceRole'
