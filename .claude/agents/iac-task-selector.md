@@ -1,7 +1,8 @@
 ---
-name: task-selector
+name: iac-task-selector
+description: Selects a task to perform from tasks.csv or prompts user for task input if no CSV is present. Sets up worktree and metadata.json.
 color: yellow
-type: agent
+model: opus
 ---
 
 # Task Selector

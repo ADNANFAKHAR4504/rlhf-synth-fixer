@@ -1,7 +1,8 @@
 ---
 name: iac-final-validator
+description: Final validation of the generated IaC solution. Ensures all tests pass and prepares for PR submission.
 color: green
-type: agent
+model: opus
 ---
 
 # iac-final-validator
@@ -34,4 +35,5 @@ type: agent
     - PCI-DSS compliance is validated
     - Production readiness is confirmed
 
+MUST ASK FOR PERMISSION BEFORE RAISING A PR
 This ensures all tasks meet production standards before PR submission.
