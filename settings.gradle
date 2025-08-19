@@ -1,8 +1,1 @@
 rootProject.name = 'iac-test-automations'
-
-// Ensure proper build script resolution
-gradle.projectsLoaded {
-    rootProject.allprojects {
-        buildDir = new File(rootDir, "build")
-    }
-}
