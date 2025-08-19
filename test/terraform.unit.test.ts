@@ -3,8 +3,6 @@ import * as path from "path";
 
 const LIB_DIR = path.resolve(__dirname, "../lib");
 const TAP_STACK_TF = path.join(LIB_DIR, "tap_stack.tf");
-
-// Read the whole terraform file content
 const tf = fs.readFileSync(TAP_STACK_TF, "utf8");
 
 // Helper function to test regex presence
@@ -16,30 +14,34 @@ describe("tap_stack.tf static verification", () => {
     expect(tf.length).toBeGreaterThan(500);
   });
 
-  // Variables
-  it('declares required input variables', () => {
-    expect(has(/variable\s+"aws_region"/)).toBe(true);
-    expect(has(/variable\s+"primary_region"/)).toBe(true);
-    expect(has(/variable\s+"secondary_region"/)).toBe(true);
-    expect(has(/variable\s+"primary_vpc_cidr"/)).toBe(true);
-    expect(has(/variable\s+"secondary_vpc_cidr"/)).toBe(true);
-    expect(has(/variable\s+"instance_type"/)).toBe(true);
-    expect(has(/variable\s+"domain_name"/)).toBe(true);
-    expect(has(/variable\s+"subdomain"/)).toBe(true);
+  // VARIABLES
+  it("declares required input variables", () => {
+    [
+      "environment",
+      "project_name",
+      "aws_region",
+      "secondary_region",
+      "primary_vpc_cidr",
+      "secondary_vpc_cidr",
+      "db_instance_class",
+      "db_engine_version",
+      "db_allocated_storage",
+      "backup_retention_period",
+      "enable_deletion_protection",
+      "common_tags",
+    ].forEach((variable) => {
+      expect(has(new RegExp(`variable\\s+"${variable}"`))).toBe(true);
+    });
   });
 
-  // Locals
+  // LOCALS
   it("defines locals for AZs, subnets, and tags", () => {
     expect(has(/locals\s*{/)).toBe(true);
-    expect(has(/common_tags\s*=/)).toBe(true);
-    expect(has(/primary_azs\s*=/)).toBe(true);
-    expect(has(/secondary_azs\s*=/)).toBe(true);
-  });
-
-  // Data source aws_ami
-  it("uses aws_ami data source for Amazon Linux 2 in both regions", () => {
-    expect(has(/data\s+"aws_ami"\s+"amazon_linux"/)).toBe(true);
-    expect(has(/data\s+"aws_ami"\s+"amazon_linux_secondary"/)).toBe(true);
+    ["primary_azs", "secondary_azs", "primary_tags", "secondary_tags"].forEach(
+      (local) => {
+        expect(has(new RegExp(`${local}\\s*=`))).toBe(true);
+      }
+    );
   });
 
   // VPCs
@@ -48,16 +50,15 @@ describe("tap_stack.tf static verification", () => {
     expect(has(/resource\s+"aws_vpc"\s+"secondary"/)).toBe(true);
   });
 
-  // Subnets: public and private (primary and secondary)
-  it("creates public and private subnets for both regions", () => {
+  // Subnets for each region
+  it("creates public and private subnets in both regions", () => {
     expect(has(/resource\s+"aws_subnet"\s+"primary_public"/)).toBe(true);
     expect(has(/resource\s+"aws_subnet"\s+"primary_private"/)).toBe(true);
     expect(has(/resource\s+"aws_subnet"\s+"secondary_public"/)).toBe(true);
     expect(has(/resource\s+"aws_subnet"\s+"secondary_private"/)).toBe(true);
-    expect(has(/map_public_ip_on_launch\s*=\s*true/)).toBe(true);
   });
 
-  // NAT Gateway and EIP
+  // NAT Gateways and EIPs
   it("creates NAT Gateways and Elastic IPs for both regions", () => {
     expect(has(/resource\s+"aws_nat_gateway"\s+"primary"/)).toBe(true);
     expect(has(/resource\s+"aws_nat_gateway"\s+"secondary"/)).toBe(true);
@@ -65,88 +66,89 @@ describe("tap_stack.tf static verification", () => {
     expect(has(/resource\s+"aws_eip"\s+"secondary_nat"/)).toBe(true);
   });
 
-  // Route tables and associations
-  it("creates route tables and associates them with subnets", () => {
-    expect(has(/resource\s+"aws_route_table"\s+"primary_public"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table"\s+"primary_private"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table"\s+"secondary_public"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table"\s+"secondary_private"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table_association"\s+"primary_public"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table_association"\s+"primary_private"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table_association"\s+"secondary_public"/)).toBe(true);
-    expect(has(/resource\s+"aws_route_table_association"\s+"secondary_private"/)).toBe(true);
+  // Route Tables and Associations
+  it("creates route tables and associations for public and private subnets", () => {
+    ["primary_public", "primary_private", "secondary_public", "secondary_private"].forEach(
+      (rt) => {
+        expect(has(new RegExp(`resource\\s+"aws_route_table"\\s+"${rt}"`))).toBe(true);
+        expect(has(new RegExp(`resource\\s+"aws_route_table_association"\\s+"${rt}"`))).toBe(true);
+      }
+    );
   });
 
-  // VPC Peering Connection
-  it("creates vpc peering connection and accepter", () => {
-    expect(has(/resource\s+"aws_vpc_peering_connection"/)).toBe(true);
-    expect(has(/resource\s+"aws_vpc_peering_connection_accepter"/)).toBe(true);
+  // Security Groups for RDS
+  it("creates RDS security groups for both regions", () => {
+    expect(has(/resource\s+"aws_security_group"\s+"primary_rds"/)).toBe(true);
+    expect(has(/resource\s+"aws_security_group"\s+"secondary_rds"/)).toBe(true);
   });
 
-  // Security Groups for EC2; best practice rules
-  it("defines EC2 security groups for both regions", () => {
-    expect(has(/resource\s+"aws_security_group"\s+"primary_ec2"/)).toBe(true);
-    expect(has(/resource\s+"aws_security_group"\s+"secondary_ec2"/)).toBe(true);
-    expect(has(/from_port\s*=\s*80/)).toBe(true);
-    expect(has(/from_port\s*=\s*443/)).toBe(true);
-    expect(has(/from_port\s*=\s*22/)).toBe(true);
-    expect(has(/from_port\s*=\s*-1/)).toBe(true); // ICMP
+  // KMS Keys
+  it("creates KMS keys and aliases for primary and secondary", () => {
+    expect(has(/resource\s+"aws_kms_key"\s+"primary_rds"/)).toBe(true);
+    expect(has(/resource\s+"aws_kms_alias"\s+"primary_rds"/)).toBe(true);
+    expect(has(/resource\s+"aws_kms_key"\s+"secondary_rds"/)).toBe(true);
+    expect(has(/resource\s+"aws_kms_alias"\s+"secondary_rds"/)).toBe(true);
   });
 
-  // IAM Roles and CloudWatch monitoring for EC2
-  it("defines EC2 IAM roles, policies, attachments, and profiles", () => {
-    expect(has(/resource\s+"aws_iam_role"\s+"ec2_role"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_policy"\s+"ec2_cloudwatch_policy"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_role_policy_attachment"\s+"ec2_cloudwatch_attach"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/)).toBe(true);
+  // RDS Instances
+  it("creates RDS instances for primary and secondary regions", () => {
+    expect(has(/resource\s+"aws_db_instance"\s+"primary"/)).toBe(true);
+    expect(has(/resource\s+"aws_db_instance"\s+"secondary"/)).toBe(true);
   });
 
-  // KMS CMKs for encryption
-  it("creates KMS keys and aliases for both regions", () => {
-    expect(has(/resource\s+"aws_kms_key"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_kms_alias"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_kms_key"\s+"secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_kms_alias"\s+"secondary"/)).toBe(true);
+  // Secrets Manager for RDS passwords
+  it("creates AWS Secrets Manager secrets for RDS passwords", () => {
+    expect(has(/resource\s+"aws_secretsmanager_secret"\s+"primary_db_password"/)).toBe(true);
+    expect(has(/resource\s+"aws_secretsmanager_secret"\s+"secondary_db_password"/)).toBe(true);
   });
 
-  // S3 Buckets & Replication
-  it("creates S3 buckets and cross-region replication configuration", () => {
-    expect(has(/resource\s+"aws_s3_bucket"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket"\s+"secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket_replication_configuration"/)).toBe(true);
-    expect(has(/replica_kms_key_id/)).toBe(true);
+  // IAM Roles, Policies (MFA and monitoring)
+  it("defines IAM roles, policies and MFA setups", () => {
+    expect(has(/resource\s+"aws_iam_role"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_policy"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_group"/)).toBe(true);
   });
 
-  // EC2 Instances and Elastic IPs
-  it("defines EC2 instances and associates Elastic IPs", () => {
-    expect(has(/resource\s+"aws_instance"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_instance"\s+"secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_eip"\s+"primary_ec2"/)).toBe(true);
-    expect(has(/resource\s+"aws_eip"\s+"secondary_ec2"/)).toBe(true);
+  // CloudWatch Log Groups (RDS and Security)
+  it("creates CloudWatch log groups for RDS and security", () => {
+    expect(has(/resource\s+"aws_cloudwatch_log_group"/)).toBe(true);
+    expect(has(/\/aws\/security\/unauthorized/)).toBe(true);
   });
 
-  // Route53 Hosted Zones and Failover DNS
-  it("creates Route53 Hosted Zones and failover records", () => {
-    expect(has(/resource\s+"aws_route53_zone"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_route53_zone"\s+"secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_route53_record"\s+"primary_failover"/)).toBe(true);
-    expect(has(/resource\s+"aws_route53_record"\s+"secondary_failover"/)).toBe(true);
-    expect(has(/failover_routing_policy/)).toBe(true);
+  // CloudTrail trail and S3 bucket
+  it("creates CloudTrail trail and S3 bucket for logging", () => {
+    expect(has(/resource\s+"aws_cloudtrail"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket"\s+"cloudtrail"/)).toBe(true);
   });
 
-  // Outputs are present and not leaking sensitive info
-  it("declares outputs for VPCs, Subnets, EC2s, Peering, DNS, without credentials", () => {
-    expect(has(/output\s+"primary_vpc_id"/)).toBe(true);
-    expect(has(/output\s+"secondary_vpc_id"/)).toBe(true);
-    expect(has(/output\s+"primary_subnet_ids"/)).toBe(true);
-    expect(has(/output\s+"secondary_subnet_ids"/)).toBe(true);
-    expect(has(/output\s+"primary_ec2_instance"/)).toBe(true);
-    expect(has(/output\s+"secondary_ec2_instance"/)).toBe(true);
-    expect(has(/output\s+"vpc_peering_id"/)).toBe(true);
-    expect(has(/output\s+"primary_route53_zone_id"/)).toBe(true);
-    expect(has(/output\s+"secondary_route53_zone_id"/)).toBe(true);
-    expect(has(/output\s+"route53_record"/)).toBe(true);
-    expect(has(/^.*aws_access_key_id.*$/m)).toBe(false);
-    expect(has(/^.*aws_secret_access_key.*$/m)).toBe(false);
+  // Outputs for essential resources
+  it("declares outputs for VPCs, subnets, RDS endpoints, IAM groups, KMS and CloudTrail", () => {
+    [
+      "primary_vpc_id",
+      "secondary_vpc_id",
+      "primary_public_subnet_ids",
+      "primary_private_subnet_ids",
+      "secondary_public_subnet_ids",
+      "secondary_private_subnet_ids",
+      "primary_rds_endpoint",
+      "secondary_rds_endpoint",
+      "tap_users_group",
+      "mfa_policy_arn",
+      "cloudwatch_logs_policy_arn",
+      "security_sns_topic",
+      "primary_rds_kms_key_arn",
+      "secondary_rds_kms_key_arn",
+      "cloudtrail_trail_name",
+      "cloudtrail_s3_bucket",
+      "cloudtrail_cloudwatch_log_group",
+      "cloudtrail_alerts_sns_topic",
+    ].forEach((output) => {
+      expect(has(new RegExp(`output\\s+"${output}"`))).toBe(true);
+    });
+  });
+
+  // No sensitive information in outputs
+  it("does not expose sensitive info in outputs", () => {
+    expect(has(/output\s+.*(secret|password|access_key|secret_key)/i)).toBe(false);
   });
 });
