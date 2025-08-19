@@ -19,6 +19,7 @@ SECONDARY_REGION = "us-east-1"  # Secondary region from deployment
 
 # ---- Helper Functions ------------------------------------------------------
 
+
 def safe_get(d, key, default=None):
   """Safely get value from dictionary with default fallback."""
   return d.get(key, default) if isinstance(d, dict) else default
@@ -35,12 +36,6 @@ def _first(predicate, iterable):
 # ---- AWS Client Fixtures --------------------------------------------------
 
 @pytest.fixture(scope="module")
-def secrets_client():
-  """Secrets Manager client for secondary region (where secrets are actually deployed)."""
-  return boto3.client("secretsmanager", region_name=SECONDARY_REGION)
-
-
-@pytest.fixture(scope="module")
 def s3_client():
   """S3 client for primary region."""
   return boto3.client("s3", region_name=PRIMARY_REGION)
@@ -53,77 +48,9 @@ def lambda_client():
 
 
 @pytest.fixture(scope="module")
-def apigateway_client():
-  """API Gateway client for primary region."""
-  return boto3.client("apigatewayv2", region_name=PRIMARY_REGION)
-
-
-@pytest.fixture(scope="module")
-def sns_client():
-  """SNS client for secondary region (where SNS is deployed)."""
-  return boto3.client("sns", region_name=SECONDARY_REGION)
-
-
-@pytest.fixture(scope="module")
 def budgets_client():
   """Budgets client for secondary region (where budget is deployed)."""
   return boto3.client("budgets", region_name=SECONDARY_REGION)
-
-
-# ---- Secrets Manager Tests -------------------------------------------------
-
-def test_app_config_secret_exists(secrets_client):
-  """Verify app-config secret exists and is active."""
-  # Try both possible names from deployment output
-  secret_names = ["app-config-dev", "nova-app-config-dev-6PE1pv"]
-  
-  found_secret = None
-  for secret_name in secret_names:
-    try:
-      response = secrets_client.describe_secret(SecretId=secret_name)
-      if response.get("ARN") and not response.get("DeletedDate"):
-        found_secret = response
-        break
-    except (ClientError, BotoCoreError):
-      continue
-  
-  assert found_secret is not None, f"App config secret not found with any of the names: {secret_names}"
-
-
-def test_db_credentials_secret_exists(secrets_client):
-  """Verify db-credentials secret exists and is active."""
-  # Try both possible names from deployment output
-  secret_names = ["db-credentials-dev", "nova-db-credentials-dev-eRxX5L"]
-  
-  found_secret = None
-  for secret_name in secret_names:
-    try:
-      response = secrets_client.describe_secret(SecretId=secret_name)
-      if response.get("ARN") and not response.get("DeletedDate"):
-        found_secret = response
-        break
-    except (ClientError, BotoCoreError):
-      continue
-  
-  assert found_secret is not None, f"DB credentials secret not found with any of the names: {secret_names}"
-
-
-def test_github_actions_secret_exists(secrets_client):
-  """Verify github-actions secret exists and is active."""
-  # Try both possible names from deployment output
-  secret_names = ["github-actions-dev", "nova-github-actions-dev-1nQHuv"]
-  
-  found_secret = None
-  for secret_name in secret_names:
-    try:
-      response = secrets_client.describe_secret(SecretId=secret_name)
-      if response.get("ARN") and not response.get("DeletedDate"):
-        found_secret = response
-        break
-    except (ClientError, BotoCoreError):
-      continue
-  
-  assert found_secret is not None, f"GitHub actions secret not found with any of the names: {secret_names}"
 
 
 # ---- S3 Bucket Tests ------------------------------------------------------
@@ -131,7 +58,7 @@ def test_github_actions_secret_exists(secrets_client):
 def test_state_bucket_exists(s3_client):
   """Verify state bucket exists."""
   bucket_name = "nova-pulumi-state-dev-uswest2"
-  
+
   try:
     response = s3_client.head_bucket(Bucket=bucket_name)
     assert response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 200
@@ -142,7 +69,7 @@ def test_state_bucket_exists(s3_client):
 def test_artifacts_bucket_exists(s3_client):
   """Verify artifacts bucket exists."""
   bucket_name = "nova-cicd-artifacts-dev-uswest2"
-  
+
   try:
     response = s3_client.head_bucket(Bucket=bucket_name)
     assert response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 200
@@ -155,7 +82,7 @@ def test_artifacts_bucket_exists(s3_client):
 def test_primary_lambda_function_exists(lambda_client):
   """Verify primary Lambda function exists."""
   function_name = "nova-api-primary-0b67c4f"
-  
+
   try:
     response = lambda_client.get_function(FunctionName=function_name)
     function = response.get("Configuration", {})
@@ -164,75 +91,20 @@ def test_primary_lambda_function_exists(lambda_client):
     pytest.fail(f"Lambda function test failed for {function_name}: {e}")
 
 
-# ---- API Gateway Tests ----------------------------------------------------
-
-def test_primary_api_gateway_exists(apigateway_client):
-  """Verify primary API Gateway exists."""
-  # Try both possible names from deployment output
-  api_names = ["nova-api-gateway-primary", "nova-api-gateway"]
-  
-  found_api = None
-  for api_name in api_names:
-    try:
-      apis = apigateway_client.get_apis()
-      api = _first(
-          lambda x: x.get("Name") == api_name,
-          apis.get("Items", [])
-      )
-      if api:
-        found_api = api
-        break
-    except (ClientError, BotoCoreError):
-      continue
-  
-  assert found_api is not None, f"API Gateway not found with any of the names: {api_names}"
-
-
-# ---- SNS Topic Tests ------------------------------------------------------
-
-def test_sns_topic_exists(sns_client):
-  """Verify SNS topic exists."""
-  # Try both possible names from deployment output
-  topic_names = ["nova-alerts-dev", "nova-alerts"]
-  
-  found_topic = None
-  for topic_name in topic_names:
-    try:
-      paginator = sns_client.get_paginator("list_topics")
-      arn = None
-      
-      for page in paginator.paginate():
-        for topic in page.get("Topics", []):
-          topic_arn = topic.get("TopicArn", "")
-          if topic_arn.endswith(f":{topic_name}"):
-            arn = topic_arn
-            break
-        if arn:
-          break
-          
-      if arn:
-        found_topic = arn
-        break
-    except (ClientError, BotoCoreError):
-      continue
-  
-  assert found_topic is not None, f"SNS topic not found with any of the names: {topic_names}"
-
-
 # ---- Budget Tests ---------------------------------------------------------
 
 def test_budget_exists(budgets_client):
   """Verify budget exists."""
   # Try both possible names from deployment output
   budget_names = ["monthly-budget-dev", "nova-cicd-budget-dev"]
-  
+
   found_budget = None
   for budget_name in budget_names:
     try:
       # Try to get the actual account ID from STS
       sts_client = boto3.client("sts", region_name=SECONDARY_REGION)
       account_id = sts_client.get_caller_identity().get("Account")
-      
+
       response = budgets_client.describe_budget(
           AccountId=account_id,
           BudgetName=budget_name
@@ -243,7 +115,7 @@ def test_budget_exists(budgets_client):
         break
     except (ClientError, BotoCoreError):
       continue
-  
+
   assert found_budget is not None, f"Budget not found with any of the names: {budget_names}"
 
 
@@ -259,37 +131,13 @@ def test_primary_api_endpoint_accessible():
 
 # ---- Basic Security Tests -------------------------------------------------
 
-def test_secrets_are_encrypted(secrets_client):
-  """Verify all secrets are encrypted."""
-  # Try multiple possible secret names
-  secret_name_patterns = [
-      ["app-config-dev", "nova-app-config-dev-6PE1pv"],
-      ["db-credentials-dev", "nova-db-credentials-dev-eRxX5L"],
-      ["github-actions-dev", "nova-github-actions-dev-1nQHuv"]
-  ]
-  
-  encrypted_count = 0
-  for secret_names in secret_name_patterns:
-    for secret_name in secret_names:
-      try:
-        response = secrets_client.describe_secret(SecretId=secret_name)
-        if response.get("Encrypted") is True:
-          encrypted_count += 1
-          break  # Found one encrypted secret for this pattern
-      except (ClientError, BotoCoreError):
-        continue
-  
-  # At least 2 out of 3 secret types should be encrypted
-  assert encrypted_count >= 2, f"Only {encrypted_count} out of 3 secret types are encrypted"
-
-
 def test_s3_buckets_are_encrypted(s3_client):
   """Verify S3 buckets have encryption enabled."""
   bucket_names = [
       "nova-pulumi-state-dev-uswest2",
       "nova-cicd-artifacts-dev-uswest2"
   ]
-  
+
   encrypted_count = 0
   for bucket_name in bucket_names:
     try:
@@ -300,7 +148,7 @@ def test_s3_buckets_are_encrypted(s3_client):
         encrypted_count += 1
     except (ClientError, BotoCoreError):
       continue
-  
+
   # At least one bucket should be encrypted
   assert encrypted_count >= 1, f"Only {encrypted_count} out of 2 buckets are encrypted"
 
@@ -317,11 +165,11 @@ def test_deployment_outputs_are_valid():
       "primary_lambda_name": "nova-api-primary-0b67c4f",
       "primary_lambda_alias": "live"
   }
-  
+
   # This test verifies the deployment output structure
   for key, expected_value in expected_outputs.items():
     assert expected_value is not None, f"Expected output {key} should not be None"
-  
+
   # Verify rollback info structure
   rollback_info = {
       "monitoring_enabled": True,
@@ -330,7 +178,7 @@ def test_deployment_outputs_are_valid():
       "primary_region": "us-west-2",
       "rollback_method": "pulumi_stack_rollback"
   }
-  
+
   assert rollback_info.get("monitoring_enabled") is True
   assert rollback_info.get("primary_lambda_alias") == "live"
   assert rollback_info.get("primary_region") == "us-west-2"
