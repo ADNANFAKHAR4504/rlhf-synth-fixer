@@ -48,37 +48,7 @@ export class TapStack extends cdk.Stack {
             actions: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
             resources: ['*'],
           }),
-          new iam.PolicyStatement({
-            sid: 'Allow DynamoDB Service',
-            effect: iam.Effect.ALLOW,
-            principals: [
-              new iam.ServicePrincipal(
-                `dynamodb.${cdk.Aws.REGION}.amazonaws.com`
-              ),
-            ],
-            actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow S3 Service',
-            effect: iam.Effect.ALLOW,
-            principals: [
-              new iam.ServicePrincipal(`s3.${cdk.Aws.REGION}.amazonaws.com`),
-            ],
-            actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow Secrets Manager Service',
-            effect: iam.Effect.ALLOW,
-            principals: [
-              new iam.ServicePrincipal(
-                `secretsmanager.${cdk.Aws.REGION}.amazonaws.com`
-              ),
-            ],
-            actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
-            resources: ['*'],
-          }),
+
           new iam.PolicyStatement({
             sid: 'Allow Lambda Execution Role',
             effect: iam.Effect.ALLOW,
@@ -92,17 +62,6 @@ export class TapStack extends cdk.Stack {
                 'kms:ViaService': 'lambda.us-west-2.amazonaws.com',
               },
             },
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow Lambda Service',
-            effect: iam.Effect.ALLOW,
-            principals: [
-              new iam.ServicePrincipal(
-                `lambda.${cdk.Aws.REGION}.amazonaws.com`
-              ),
-            ],
-            actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
-            resources: ['*'],
           }),
         ],
       }),
