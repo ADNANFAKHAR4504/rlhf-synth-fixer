@@ -1,3 +1,19 @@
+variable "name_prefix" {
+  description = "Prefix for all resource names"
+  type        = string
+  default     = "secure-env"
+}
+
+variable "environment" {
+  description = "Environment suffix for resource names (must start with a letter, use only letters and numbers)"
+  type        = string
+  default     = "dev"
+  validation {
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9]*$", var.environment))
+    error_message = "Environment must start with a letter and contain only letters and numbers."
+  }
+}
+
 ########################
 # ...existing code...
 ########################
