@@ -1,6 +1,6 @@
 """
 Unit tests for TapStack infrastructure.
-
+-
 Verifies stack initialization, configuration, and resource creation
 without deploying actual AWS infrastructure.
 """
