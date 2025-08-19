@@ -154,7 +154,7 @@ Provide the complete TypeScript source files for bin/tap.ts, lib/tapstack.ts, an
 
 Include build/run notes: npm install, npx cdk bootstrap, npx cdk synth, npx cdk deploy.
 
-Do not include any placeholder secrets; rely on Parameter Store.
+Do not include any placeholder secrets; rely on the Parameter Store.
 
 Keep all code compatible with Node.js 18+.
 
