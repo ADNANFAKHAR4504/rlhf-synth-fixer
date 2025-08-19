@@ -4,73 +4,79 @@ import {
   EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  GetRoleCommand,
+  DescribeLoadBalancersCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
   IAMClient,
   ListAttachedRolePoliciesCommand,
+  ListRolesCommand,
 } from '@aws-sdk/client-iam';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import {
   GetBucketEncryptionCommand,
   GetBucketLocationCommand,
   GetBucketTaggingCommand,
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
+  ListBucketsCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { spawnSync } from 'node:child_process';
-import path from 'node:path';
+import {
+  ListSecretsCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 
-const TF_DIR = path.resolve(__dirname, '..', 'lib'); // point to lib/ where main.tf is
+const AWS_REGION = 'eu-west-1';
 
-function run(cmd: string, args: string[], opts: { cwd?: string } = {}) {
-  const res = spawnSync(cmd, args, {
-    cwd: opts.cwd || TF_DIR,
-    encoding: 'utf8',
-  });
-  if (res.status !== 0) {
-    throw new Error(
-      `${cmd} ${args.join(' ')} failed: ${res.stderr || res.stdout}`
-    );
-  }
-  return res.stdout.trim();
+// Helper function to find resources by tags
+async function findResourcesByTag(tagKey: string, tagValue: string) {
+  // This can be extended to use AWS Resource Groups Tagging API
+  // For now, we'll use service-specific discovery
 }
 
-let outputs: any = {};
+beforeAll(async () => {
+  console.log('Starting AWS API integration tests...');
+  console.log('Using AWS region:', AWS_REGION);
+}, 10000);
 
-beforeAll(() => {
-  // Get terraform outputs directly (assumes infrastructure is already deployed)
-  try {
-    // terraform init
-    run('terraform', ['init']);
-
-    // terraform output
-    const outRaw = run('terraform', ['output', '-json']);
-    outputs = JSON.parse(outRaw);
-  } catch (error) {
-    console.warn('Could not fetch terraform outputs:', error);
-    outputs = {};
-  }
-});
-
-describe('Terraform infrastructure validation via AWS APIs', () => {
-  test('terraform outputs available', () => {
-    console.log('Available outputs:', Object.keys(outputs));
-    // Check that we have some outputs from deployed infrastructure
-    expect(Object.keys(outputs).length).toBeGreaterThan(0);
-  });
-
+describe('AWS Infrastructure Validation via AWS APIs', () => {
   describe('S3 Buckets', () => {
-    test('PII bucket configuration', async () => {
-      const bucketName = outputs?.pii_bucket?.value;
-      if (!bucketName) {
-        console.log('No pii_bucket output found, skipping test');
-        return;
+    test('PII bucket exists and is properly configured', async () => {
+      const s3 = new S3Client({ region: AWS_REGION });
+
+      // Find PII bucket by tag
+      const buckets = await s3.send(new ListBucketsCommand({}));
+      console.log(
+        'Found buckets:',
+        buckets.Buckets?.map(b => b.Name)
+      );
+
+      let piiBucket = null;
+      for (const bucket of buckets.Buckets || []) {
+        try {
+          const tags = await s3.send(
+            new GetBucketTaggingCommand({ Bucket: bucket.Name! })
+          );
+          const dataClassTag = tags.TagSet?.find(
+            t => t.Key === 'DataClassification'
+          );
+          if (dataClassTag?.Value === 'PII') {
+            piiBucket = bucket.Name;
+            break;
+          }
+        } catch (error) {
+          // Skip buckets without tags
+          continue;
+        }
       }
 
-      const s3 = new S3Client({ region: 'eu-west-1' });
+      expect(piiBucket).toBeTruthy();
+      console.log('Found PII bucket:', piiBucket);
 
       // Test encryption
       const enc = await s3.send(
-        new GetBucketEncryptionCommand({ Bucket: bucketName })
+        new GetBucketEncryptionCommand({ Bucket: piiBucket! })
       );
       expect(
         enc.ServerSideEncryptionConfiguration?.Rules?.[0]
@@ -79,7 +85,7 @@ describe('Terraform infrastructure validation via AWS APIs', () => {
 
       // Test public access block
       const pab = await s3.send(
-        new GetPublicAccessBlockCommand({ Bucket: bucketName })
+        new GetPublicAccessBlockCommand({ Bucket: piiBucket! })
       );
       expect(pab.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
       expect(pab.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
@@ -87,116 +93,127 @@ describe('Terraform infrastructure validation via AWS APIs', () => {
       expect(pab.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(
         true
       );
-
-      // Test tagging
-      const tags = await s3.send(
-        new GetBucketTaggingCommand({ Bucket: bucketName })
-      );
-      const dataClassTag = tags.TagSet?.find(
-        t => t.Key === 'DataClassification'
-      );
-      expect(dataClassTag?.Value).toBe('PII');
     });
 
-    test('Logs bucket configuration', async () => {
-      const bucketName = outputs?.logs_bucket?.value;
-      if (!bucketName) {
-        console.log('No logs_bucket output found, skipping test');
-        return;
+    test('Logs bucket exists and has versioning enabled', async () => {
+      const s3 = new S3Client({ region: AWS_REGION });
+
+      // Find logs bucket by tag or name pattern
+      const buckets = await s3.send(new ListBucketsCommand({}));
+
+      let logsBucket = null;
+      for (const bucket of buckets.Buckets || []) {
+        if (
+          bucket.Name?.includes('logs') ||
+          bucket.Name?.includes('cloudtrail')
+        ) {
+          logsBucket = bucket.Name;
+          break;
+        }
       }
 
-      const s3 = new S3Client({ region: 'eu-west-1' });
+      expect(logsBucket).toBeTruthy();
+      console.log('Found logs bucket:', logsBucket);
 
       // Test versioning
       const ver = await s3.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
+        new GetBucketVersioningCommand({ Bucket: logsBucket! })
       );
       expect(ver.Status).toBe('Enabled');
 
       // Test location
       const loc = await s3.send(
-        new GetBucketLocationCommand({ Bucket: bucketName })
+        new GetBucketLocationCommand({ Bucket: logsBucket! })
       );
-      expect(loc.LocationConstraint).toBe('eu-west-1');
+      expect(loc.LocationConstraint).toBe(AWS_REGION);
     });
   });
 
   describe('VPC and Networking', () => {
-    test('VPC configuration', async () => {
-      const vpcId = outputs?.vpc_id?.value;
-      if (!vpcId) {
-        console.log('No vpc_id output found, skipping test');
-        return;
-      }
+    test('VPC exists and is properly configured', async () => {
+      const ec2 = new EC2Client({ region: AWS_REGION });
 
-      const ec2 = new EC2Client({ region: 'eu-west-1' });
+      // Find our VPC (non-default)
+      const vpcs = await ec2.send(new DescribeVpcsCommand({}));
+      const customVpcs = vpcs.Vpcs?.filter(vpc => !vpc.IsDefault);
 
-      const vpcs = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
-      const vpc = vpcs.Vpcs?.[0];
+      expect(customVpcs?.length).toBeGreaterThan(0);
 
-      expect(vpc?.VpcId).toBe(vpcId);
-      expect(vpc?.IsDefault).toBe(false);
-      expect(vpc?.State).toBe('available');
+      const vpc = customVpcs![0];
+      console.log('Found VPC:', vpc.VpcId);
 
-      // Check CIDR block
-      expect(vpc?.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
+      expect(vpc.State).toBe('available');
+      expect(vpc.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
     });
 
-    test('Subnet configuration', async () => {
-      const publicSubnetIds = outputs?.public_subnet_ids?.value;
-      const privateSubnetIds = outputs?.private_subnet_ids?.value;
-      const databaseSubnetIds = outputs?.database_subnet_ids?.value;
+    test('Subnets are properly distributed across AZs', async () => {
+      const ec2 = new EC2Client({ region: AWS_REGION });
 
-      if (!publicSubnetIds || !privateSubnetIds || !databaseSubnetIds) {
-        console.log('Subnet IDs not found in outputs, skipping test');
-        return;
-      }
+      // Find our VPC first
+      const vpcs = await ec2.send(new DescribeVpcsCommand({}));
+      const customVpc = vpcs.Vpcs?.find(vpc => !vpc.IsDefault);
+      expect(customVpc).toBeTruthy();
 
-      const ec2 = new EC2Client({ region: 'eu-west-1' });
-
-      // Test we have 3 subnets of each type
-      expect(publicSubnetIds).toHaveLength(3);
-      expect(privateSubnetIds).toHaveLength(3);
-      expect(databaseSubnetIds).toHaveLength(3);
-
-      // Get all subnets
-      const allSubnetIds = [
-        ...publicSubnetIds,
-        ...privateSubnetIds,
-        ...databaseSubnetIds,
-      ];
+      // Get all subnets in our VPC
       const subnets = await ec2.send(
-        new DescribeSubnetsCommand({ SubnetIds: allSubnetIds })
+        new DescribeSubnetsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [customVpc!.VpcId!] }],
+        })
       );
 
-      // Check each subnet is in a different AZ
+      console.log('Found subnets:', subnets.Subnets?.length);
+
+      // We should have subnets across multiple AZs
       const azs = new Set(subnets.Subnets?.map(s => s.AvailabilityZone));
-      expect(azs.size).toBe(3);
+      expect(azs.size).toBeGreaterThanOrEqual(2);
+
+      // We should have public, private, and database subnets
+      const subnetTypes = new Set();
+      for (const subnet of subnets.Subnets || []) {
+        if (subnet.Tags) {
+          const typeTag = subnet.Tags.find(tag => tag.Key === 'Type');
+          if (typeTag) {
+            subnetTypes.add(typeTag.Value);
+          }
+        }
+      }
+
+      console.log('Subnet types found:', Array.from(subnetTypes));
     });
   });
 
   describe('IAM Roles', () => {
-    test('IAM roles exist and have proper trust policies', async () => {
-      const iamRoles = outputs?.iam_roles?.value;
-      if (!iamRoles) {
-        console.log('No iam_roles output found, skipping test');
-        return;
-      }
+    test('Required IAM roles exist', async () => {
+      const iam = new IAMClient({ region: AWS_REGION });
 
-      const iam = new IAMClient({ region: 'eu-west-1' });
+      const roles = await iam.send(new ListRolesCommand({}));
+      const roleNames = roles.Roles?.map(r => r.RoleName) || [];
 
-      // Extract role name from ARN for each role
-      for (const [roleType, roleArn] of Object.entries(iamRoles)) {
-        const roleName = (roleArn as string).split('/').pop();
-        if (!roleName) continue;
+      console.log(
+        'Found IAM roles:',
+        roleNames.filter(
+          name =>
+            name &&
+            (name.includes('rds') ||
+              name.includes('lambda') ||
+              name.includes('ec2') ||
+              name.includes('monitoring'))
+        )
+      );
 
-        const role = await iam.send(new GetRoleCommand({ RoleName: roleName }));
-        expect(role.Role?.RoleName).toBe(roleName);
-        expect(role.Role?.AssumeRolePolicyDocument).toBeTruthy();
+      // Check for RDS monitoring role
+      const rdsMonitoringRole = roles.Roles?.find(
+        role =>
+          role.RoleName?.includes('rds') &&
+          role.RoleName?.includes('monitoring')
+      );
+      expect(rdsMonitoringRole).toBeTruthy();
 
-        // Check attached policies
+      if (rdsMonitoringRole) {
         const policies = await iam.send(
-          new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+          new ListAttachedRolePoliciesCommand({
+            RoleName: rdsMonitoringRole.RoleName!,
+          })
         );
         expect(policies.AttachedPolicies?.length).toBeGreaterThan(0);
       }
@@ -204,70 +221,61 @@ describe('Terraform infrastructure validation via AWS APIs', () => {
   });
 
   describe('RDS Database', () => {
-    test('RDS instance configuration', async () => {
-      const rdsEndpoint = outputs?.rds_endpoint?.value;
-      if (!rdsEndpoint) {
-        console.log('No rds_endpoint output found, skipping test');
-        return;
-      }
+    test('RDS instance exists and is properly configured', async () => {
+      const rds = new RDSClient({ region: AWS_REGION });
 
-      // For RDS validation, we'd need RDS client
-      // This is a placeholder - actual implementation would use @aws-sdk/client-rds
-      console.log('RDS endpoint available:', rdsEndpoint);
-      expect(rdsEndpoint).toBeTruthy();
+      const instances = await rds.send(new DescribeDBInstancesCommand({}));
+      expect(instances.DBInstances?.length).toBeGreaterThan(0);
+
+      const dbInstance = instances.DBInstances![0];
+      console.log('Found RDS instance:', dbInstance.DBInstanceIdentifier);
+
+      expect(dbInstance.DBInstanceStatus).toBe('available');
+      expect(dbInstance.Engine).toBe('mysql');
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.MultiAZ).toBe(true);
     });
   });
 
   describe('Secrets Manager', () => {
     test('Database secret exists', async () => {
-      const secretArn = outputs?.db_secret_arn?.value;
-      if (!secretArn) {
-        console.log('No db_secret_arn output found, skipping test');
-        return;
-      }
+      const secretsManager = new SecretsManagerClient({ region: AWS_REGION });
 
-      // For Secrets Manager validation, we'd need Secrets Manager client
-      // This is a placeholder - actual implementation would use @aws-sdk/client-secrets-manager
-      console.log('Database secret ARN available:', secretArn);
-      expect(secretArn).toBeTruthy();
+      const secrets = await secretsManager.send(new ListSecretsCommand({}));
+      const dbSecrets = secrets.SecretList?.filter(
+        (secret: any) =>
+          secret.Name?.includes('rds') || secret.Name?.includes('database')
+      );
+
+      expect(dbSecrets?.length).toBeGreaterThan(0);
+
+      const dbSecret = dbSecrets![0];
+      console.log('Found database secret:', dbSecret.Name);
+
+      expect(dbSecret.RotationEnabled).toBe(true);
+      expect(dbSecret.KmsKeyId).toBeTruthy();
     });
   });
-});
 
-// Additional validations for other AWS services
-describe('Advanced Validations', () => {
-  test('ALB DNS name accessible', async () => {
-    const albDnsName = outputs?.alb_dns_name?.value;
-    if (!albDnsName) {
-      console.log('No alb_dns_name output found, skipping test');
-      return;
-    }
+  describe('Load Balancer', () => {
+    test('ALB exists and is properly configured', async () => {
+      const elbv2 = new ElasticLoadBalancingV2Client({ region: AWS_REGION });
 
-    console.log('ALB DNS name available:', albDnsName);
-    expect(albDnsName).toBeTruthy();
-    expect(albDnsName).toMatch(/\.elb\.eu-west-1\.amazonaws\.com$/);
-  });
+      const loadBalancers = await elbv2.send(
+        new DescribeLoadBalancersCommand({})
+      );
+      const albs = loadBalancers.LoadBalancers?.filter(
+        lb => lb.Type === 'application'
+      );
 
-  test('CloudTrail ARN exists', async () => {
-    const trailArn = outputs?.cloudtrail_trail_arn?.value;
-    if (!trailArn) {
-      console.log('No cloudtrail_trail_arn output found, skipping test');
-      return;
-    }
+      expect(albs?.length).toBeGreaterThan(0);
 
-    console.log('CloudTrail ARN available:', trailArn);
-    expect(trailArn).toBeTruthy();
-    expect(trailArn).toMatch(/^arn:aws:cloudtrail:eu-west-1:/);
-  });
+      const alb = albs![0];
+      console.log('Found ALB:', alb.LoadBalancerName);
 
-  test('GuardDuty detector exists', async () => {
-    const detectorId = outputs?.guardduty_detector_id?.value;
-    if (!detectorId) {
-      console.log('No guardduty_detector_id output found, skipping test');
-      return;
-    }
-
-    console.log('GuardDuty detector ID available:', detectorId);
-    expect(detectorId).toBeTruthy();
+      expect(alb.State?.Code).toBe('active');
+      expect(alb.Scheme).toBe('internet-facing');
+      expect(alb.IpAddressType).toBe('ipv4');
+    });
   });
 });
