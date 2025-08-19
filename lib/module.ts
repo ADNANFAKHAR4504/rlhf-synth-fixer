@@ -141,7 +141,6 @@ export class S3Module extends Construct {
     super(scope, id);
     const logBucket = new S3Bucket(this, 'log-bucket', {
       bucket: props.logBucketName,
-      acl: 'log-delivery-write',
       tags: { Name: props.logBucketName, Purpose: 'Logging' },
     });
 
