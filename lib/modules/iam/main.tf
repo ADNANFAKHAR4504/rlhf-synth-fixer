@@ -26,30 +26,6 @@ resource "aws_iam_role" "ec2" {
   }
 }
 
-resource "aws_iam_policy" "s3_access" {
-  name_prefix = "${var.project_name}-s3-access-policy"
-  description = "Allow EC2 to access S3 data bucket"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-        ]
-        Effect   = "Allow"
-        Resource = "${var.s3_data_bucket_arn}/*"
-      },
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "s3_access" {
-  role       = aws_iam_role.ec2.name
-  policy_arn = aws_iam_policy.s3_access.arn
-}
 
 resource "aws_iam_user" "main" {
   count = length(var.iam_users)
