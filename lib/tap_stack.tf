@@ -14,13 +14,13 @@ variable "ec2_key_pair_name" {
 variable "aws_region" {
   description = "Primary AWS region"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-south-1"
 }
 
 variable "secondary_aws_region" {
   description = "Secondary AWS region"
   type        = string
-  default     = "eu-west-1"
+  default     = "ap-southeast-2"
 }
 
 variable "db_password" {
@@ -52,7 +52,7 @@ variable "create_cloudtrail" {
 data "aws_caller_identity" "current" {}
 
 # Data sources for latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux_us_east_1" {
+data "aws_ami" "amazon_linux_ap_south_1" {
   most_recent = true
   owners      = ["amazon"]
 
@@ -67,8 +67,8 @@ data "aws_ami" "amazon_linux_us_east_1" {
   }
 }
 
-data "aws_ami" "amazon_linux_eu_west_1" {
-  provider    = aws.eu_west_1
+data "aws_ami" "amazon_linux_ap_southeast_2" {
+  provider    = aws.ap_southeast_2
   most_recent = true
   owners      = ["amazon"]
 
@@ -85,7 +85,7 @@ data "aws_ami" "amazon_linux_eu_west_1" {
 
 # KMS Keys
 resource "aws_kms_key" "primary" {
-  description             = "KMS key for primary region (us-east-1)"
+  description             = "KMS key for primary region (ap-south-1)"
   deletion_window_in_days = 7
 
   policy = jsonencode({
@@ -127,7 +127,7 @@ resource "aws_kms_key" "primary" {
   tags = {
     Name        = "primary-kms-key"
     Environment = "production"
-    Region      = "us-east-1"
+    Region      = "ap-south-1"
   }
 }
 
@@ -137,8 +137,8 @@ resource "aws_kms_alias" "primary" {
 }
 
 resource "aws_kms_key" "secondary" {
-  provider                = aws.eu_west_1
-  description             = "KMS key for secondary region (eu-west-1)"
+  provider                = aws.ap_southeast_2
+  description             = "KMS key for secondary region (ap-southeast-2)"
   deletion_window_in_days = 7
 
   policy = jsonencode({
@@ -180,12 +180,12 @@ resource "aws_kms_key" "secondary" {
   tags = {
     Name        = "secondary-kms-key"
     Environment = "production"
-    Region      = "eu-west-1"
+    Region      = "ap-southeast-2"
   }
 }
 
 resource "aws_kms_alias" "secondary" {
-  provider      = aws.eu_west_1
+  provider      = aws.ap_southeast_2
   name          = "alias/secondary-key-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.secondary.key_id
 }
@@ -200,13 +200,13 @@ resource "aws_vpc" "primary" {
   tags = {
     Name        = "primary-vpc"
     Environment = "production"
-    Region      = "us-east-1"
+    Region      = "ap-south-1"
   }
 }
 
 resource "aws_vpc" "secondary" {
   count                = var.create_vpcs ? 1 : 0
-  provider             = aws.eu_west_1
+  provider             = aws.ap_southeast_2
   cidr_block           = "10.1.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -214,7 +214,7 @@ resource "aws_vpc" "secondary" {
   tags = {
     Name        = "secondary-vpc"
     Environment = "production"
-    Region      = "eu-west-1"
+    Region      = "ap-southeast-2"
   }
 }
 
@@ -230,7 +230,7 @@ resource "aws_internet_gateway" "primary" {
 
 resource "aws_internet_gateway" "secondary" {
   count    = var.create_vpcs ? 1 : 0
-  provider = aws.eu_west_1
+  provider = aws.ap_southeast_2
   vpc_id   = aws_vpc.secondary[0].id
 
   tags = {
@@ -243,7 +243,7 @@ resource "aws_subnet" "primary_public" {
   count                   = var.create_vpcs ? 1 : 0
   vpc_id                  = aws_vpc.primary[0].id
   cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-1a"
+  availability_zone       = "ap-south-1a"
   map_public_ip_on_launch = true
 
   tags = {
@@ -255,7 +255,7 @@ resource "aws_subnet" "primary_private" {
   count             = var.create_vpcs ? 1 : 0
   vpc_id            = aws_vpc.primary[0].id
   cidr_block        = "10.0.2.0/24"
-  availability_zone = "us-east-1b"
+  availability_zone = "ap-south-1b"
 
   tags = {
     Name = "primary-private-subnet"
@@ -264,10 +264,10 @@ resource "aws_subnet" "primary_private" {
 
 resource "aws_subnet" "secondary_public" {
   count                   = var.create_vpcs ? 1 : 0
-  provider                = aws.eu_west_1
+  provider                = aws.ap_southeast_2
   vpc_id                  = aws_vpc.secondary[0].id
   cidr_block              = "10.1.1.0/24"
-  availability_zone       = "eu-west-1a"
+  availability_zone       = "ap-southeast-2a"
   map_public_ip_on_launch = true
 
   tags = {
@@ -277,10 +277,10 @@ resource "aws_subnet" "secondary_public" {
 
 resource "aws_subnet" "secondary_private" {
   count             = var.create_vpcs ? 1 : 0
-  provider          = aws.eu_west_1
+  provider          = aws.ap_southeast_2
   vpc_id            = aws_vpc.secondary[0].id
   cidr_block        = "10.1.2.0/24"
-  availability_zone = "eu-west-1b"
+  availability_zone = "ap-southeast-2b"
 
   tags = {
     Name = "secondary-private-subnet"
@@ -304,7 +304,7 @@ resource "aws_route_table" "primary_public" {
 
 resource "aws_route_table" "secondary_public" {
   count    = var.create_vpcs ? 1 : 0
-  provider = aws.eu_west_1
+  provider = aws.ap_southeast_2
   vpc_id   = aws_vpc.secondary[0].id
 
   route {
@@ -326,7 +326,7 @@ resource "aws_route_table_association" "primary_public" {
 
 resource "aws_route_table_association" "secondary_public" {
   count          = var.create_vpcs ? 1 : 0
-  provider       = aws.eu_west_1
+  provider       = aws.ap_southeast_2
   subnet_id      = aws_subnet.secondary_public[0].id
   route_table_id = aws_route_table.secondary_public[0].id
 }
@@ -336,7 +336,7 @@ resource "aws_vpc_peering_connection" "primary_to_secondary" {
   count       = var.create_vpcs ? 1 : 0
   vpc_id      = aws_vpc.primary[0].id
   peer_vpc_id = aws_vpc.secondary[0].id
-  peer_region = "eu-west-1"
+  peer_region = "ap-southeast-2"
   auto_accept = false
 
   tags = {
@@ -346,7 +346,7 @@ resource "aws_vpc_peering_connection" "primary_to_secondary" {
 
 resource "aws_vpc_peering_connection_accepter" "secondary" {
   count                     = var.create_vpcs ? 1 : 0
-  provider                  = aws.eu_west_1
+  provider                  = aws.ap_southeast_2
   vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary[0].id
   auto_accept               = true
 
@@ -365,7 +365,7 @@ resource "aws_route" "primary_to_secondary" {
 
 resource "aws_route" "secondary_to_primary" {
   count                     = var.create_vpcs ? 1 : 0
-  provider                  = aws.eu_west_1
+  provider                  = aws.ap_southeast_2
   route_table_id            = aws_route_table.secondary_public[0].id
   destination_cidr_block    = aws_vpc.primary[0].cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary[0].id
@@ -405,7 +405,7 @@ resource "aws_security_group" "primary" {
 
 resource "aws_security_group" "secondary" {
   count       = var.create_vpcs ? 1 : 0
-  provider    = aws.eu_west_1
+  provider    = aws.ap_southeast_2
   name_prefix = "secondary-sg"
   vpc_id      = aws_vpc.secondary[0].id
 
@@ -442,18 +442,18 @@ resource "aws_s3_bucket" "primary" {
   tags = {
     Name        = "primary-bucket"
     Environment = "production"
-    Region      = "us-east-1"
+    Region      = "ap-south-1"
   }
 }
 
 resource "aws_s3_bucket" "secondary" {
-  provider = aws.eu_west_1
+  provider = aws.ap_southeast_2
   bucket   = "tap-stack-secondary-${random_string.bucket_suffix.result}"
 
   tags = {
     Name        = "secondary-bucket"
     Environment = "production"
-    Region      = "eu-west-1"
+    Region      = "ap-southeast-2"
   }
 }
 
@@ -492,7 +492,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
-  provider = aws.eu_west_1
+  provider = aws.ap_southeast_2
   bucket   = aws_s3_bucket.secondary.id
 
   rule {
@@ -523,7 +523,7 @@ resource "aws_s3_bucket_versioning" "primary" {
 }
 
 resource "aws_s3_bucket_versioning" "secondary" {
-  provider = aws.eu_west_1
+  provider = aws.ap_southeast_2
   bucket   = aws_s3_bucket.secondary.id
   versioning_configuration {
     status = "Enabled"
@@ -687,7 +687,7 @@ resource "aws_dynamodb_table" "primary" {
 }
 
 resource "aws_dynamodb_table" "secondary" {
-  provider         = aws.eu_west_1
+  provider         = aws.ap_southeast_2
   name             = "tap-stack-table-${random_string.resource_suffix.result}"
   billing_mode     = "PAY_PER_REQUEST"
   hash_key         = "id"
@@ -730,7 +730,7 @@ resource "aws_db_subnet_group" "primary" {
 
 resource "aws_db_subnet_group" "secondary" {
   count      = var.create_vpcs ? 1 : 0
-  provider   = aws.eu_west_1
+  provider   = aws.ap_southeast_2
   name       = "secondary-subnet-group-${random_string.resource_suffix.result}"
   subnet_ids = [aws_subnet.secondary_public[0].id, aws_subnet.secondary_private[0].id]
 
@@ -767,7 +767,7 @@ resource "aws_db_instance" "primary" {
 
 resource "aws_db_instance" "secondary" {
   count                  = var.create_vpcs ? 1 : 0
-  provider               = aws.eu_west_1
+  provider               = aws.ap_southeast_2
   identifier             = "secondary-database-${random_string.resource_suffix.result}"
   allocated_storage      = 20
   storage_type           = "gp2"
@@ -794,7 +794,7 @@ resource "aws_db_instance" "secondary" {
 # EC2 Instances (conditional)
 resource "aws_instance" "primary" {
   count                  = var.create_vpcs ? 1 : 0
-  ami                    = data.aws_ami.amazon_linux_us_east_1.id
+  ami                    = data.aws_ami.amazon_linux_ap_south_1.id
   instance_type          = var.ec2_instance_type
   key_name               = var.ec2_key_pair_name != "" ? var.ec2_key_pair_name : null
   subnet_id              = aws_subnet.primary_public[0].id
@@ -810,14 +810,14 @@ resource "aws_instance" "primary" {
   tags = {
     Name        = "primary-ec2-instance"
     Environment = "production"
-    Region      = "us-east-1"
+    Region      = "ap-south-1"
   }
 }
 
 resource "aws_instance" "secondary" {
   count                  = var.create_vpcs ? 1 : 0
-  provider               = aws.eu_west_1
-  ami                    = data.aws_ami.amazon_linux_eu_west_1.id
+  provider               = aws.ap_southeast_2
+  ami                    = data.aws_ami.amazon_linux_ap_southeast_2.id
   instance_type          = var.ec2_instance_type
   key_name               = var.ec2_key_pair_name != "" ? var.ec2_key_pair_name : null
   subnet_id              = aws_subnet.secondary_public[0].id
@@ -833,7 +833,7 @@ resource "aws_instance" "secondary" {
   tags = {
     Name        = "secondary-ec2-instance"
     Environment = "production"
-    Region      = "eu-west-1"
+    Region      = "ap-southeast-2"
   }
 }
 
@@ -943,7 +943,7 @@ resource "aws_cloudtrail" "primary" {
 
 resource "aws_cloudtrail" "secondary" {
   count                         = var.create_cloudtrail ? 1 : 0
-  provider                     = aws.eu_west_1
+  provider                     = aws.ap_southeast_2
   name                         = "secondary-cloudtrail-${random_string.resource_suffix.result}"
   s3_bucket_name               = aws_s3_bucket.logging.bucket
   s3_key_prefix                = "cloudtrail-logs"
@@ -951,7 +951,7 @@ resource "aws_cloudtrail" "secondary" {
   is_multi_region_trail        = true
   enable_log_file_validation   = true
 
-  # Use primary region KMS key because the logging S3 bucket is in us-east-1
+  # Use primary region KMS key because the logging S3 bucket is in ap-south-1
   kms_key_id = aws_kms_key.primary.arn
 
   event_selector {
