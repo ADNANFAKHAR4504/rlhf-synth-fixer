@@ -423,9 +423,9 @@ output "vpc_endpoint_s3_id" {
 }
 
 output "s3_logs_bucket_name" {
-  value = data.aws_s3_bucket.logs.bucket
+  value = aws_s3_bucket.logs.bucket
 }
 
 output "s3_logs_bucket_arn" {
-  value = data.aws_s3_bucket.logs.arn
+  value = aws_s3_bucket.logs.arn
 }
