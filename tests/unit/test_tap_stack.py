@@ -54,6 +54,8 @@ class MockRandomPassword:
                min_upper=1, min_numeric=1, min_special=1, opts=None):
     self.name = name
     self.length = length
+    # Unused arguments: special, min_lower, min_upper, min_numeric, min_special, opts
+    del special, min_lower, min_upper, min_numeric, min_special, opts
     self.result = MockOutput("SecureRandomPassword123!")
 
 class MockResource:
@@ -127,6 +129,7 @@ sys.modules['pulumi'] = mock_pulumi
 sys.modules['pulumi_aws'] = mock_aws
 sys.modules['pulumi_random'] = mock_random
 
+# pylint: disable=wrong-import-position
 from lib.tap_stack import TapStack, TapStackArgs
 
 class TestTapStackArgs(unittest.TestCase):
