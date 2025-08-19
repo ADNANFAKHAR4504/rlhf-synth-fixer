@@ -30,6 +30,11 @@ module "iam" {
 module "storage" {
   source = "./modules/storage"
 
+  providers = {
+    aws.us-west-2      = aws.us-west-2
+    aws.ap-northeast-1 = aws.ap-northeast-1
+  }
+
   project_name            = var.project_name
   environment             = var.environment
   vpc_id                  = module.networking.vpc_id
