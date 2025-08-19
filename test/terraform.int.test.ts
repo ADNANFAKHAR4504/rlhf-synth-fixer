@@ -39,6 +39,10 @@ let outputs: any = {};
 beforeAll(() => {
   // Get terraform outputs directly (assumes infrastructure is already deployed)
   try {
+    // terraform init
+    run('terraform', ['init']);
+
+    // terraform output
     const outRaw = run('terraform', ['output', '-json']);
     outputs = JSON.parse(outRaw);
   } catch (error) {
@@ -46,24 +50,6 @@ beforeAll(() => {
     outputs = {};
   }
 });
-
-// Remove central mocks - use real AWS SDK calls or per-test mocks
-// jest.mock('@aws-sdk/client-s3');
-// jest.mock('@aws-sdk/client-iam');
-// jest.mock('@aws-sdk/client-lambda');
-// jest.mock('@aws-sdk/client-cloudwatch-logs');
-// jest.mock('@aws-sdk/client-cloudformation');
-// jest.mock('@aws-sdk/client-dynamodb');
-// jest.mock('@aws-sdk/client-ec2');
-
-// Utility to set mock resolved value (if needed per test)
-function mockClientCommand<TClient extends { send: Function }>(
-  client: TClient,
-  impl: (command: any) => any
-) {
-  // @ts-ignore
-  client.send.mockImplementation(async (command: any) => impl(command));
-}
 
 describe('Terraform infrastructure validation via AWS APIs', () => {
   test('terraform outputs available', () => {
