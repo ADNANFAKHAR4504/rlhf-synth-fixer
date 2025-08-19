@@ -1,422 +1,289 @@
 /* eslint-disable prettier/prettier */
 /**
- * Unit tests for TapStack infrastructure components
+ * Integration tests for TapStack infrastructure
  * 
- * These tests verify the correct instantiation and configuration of AWS resources
- * without actually deploying them. They use Pulumi's testing framework to mock
- * the AWS provider and validate resource properties.
+ * These tests verify end-to-end functionality by deploying actual resources
+ * in a test environment and validating their behavior and connectivity.
+ * 
+ * Note: These tests require actual AWS credentials and will create real resources.
+ * Use with caution and ensure proper cleanup.
  */
 
 import * as pulumi from '@pulumi/pulumi';
+import * as AWS from 'aws-sdk';
 import { TapStack } from '../lib/tap-stack';
 
-// Mock AWS provider for testing
-pulumi.runtime.setMocks({
-  newResource: (args: pulumi.runtime.MockResourceArgs): { id: string; state: any } => {
-    const mockOutputs: any = {};
-    
-    // Mock specific resource types
-    switch (args.type) {
-      case 'aws:s3/bucket:Bucket':
-        mockOutputs.bucket = `test-bucket-${args.name}`;
-        mockOutputs.arn = `arn:aws:s3:::test-bucket-${args.name}`;
-        mockOutputs.versioning = { enabled: true };
-        mockOutputs.serverSideEncryptionConfiguration = {
-          rule: {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'aws:kms',
-              kmsMasterKeyId: 'test-kms-key',
-            },
-          },
-        };
-        mockOutputs.lifecycleRules = [
-          {
-            id: 'transition-to-glacier',
-            enabled: true,
-            transitions: [{ days: 30, storageClass: 'GLACIER' }],
-          },
-        ];
-        break;
-      case 'aws:s3/bucketPublicAccessBlock:BucketPublicAccessBlock':
-        mockOutputs.blockPublicAcls = true;
-        mockOutputs.blockPublicPolicy = true;
-        mockOutputs.ignorePublicAcls = true;
-        mockOutputs.restrictPublicBuckets = true;
-        break;
-      case 'aws:kms/key:Key':
-        mockOutputs.keyId = `test-key-${args.name}`;
-        mockOutputs.arn = `arn:aws:kms:us-east-1:123456789012:key/test-key-${args.name}`;
-        mockOutputs.keyUsage = 'ENCRYPT_DECRYPT';
-        mockOutputs.customerMasterKeySpec = 'SYMMETRIC_DEFAULT';
-        mockOutputs.policy = JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [{ Effect: 'Allow', Action: 'kms:*' }],
-        });
-        mockOutputs.tags = args.inputs.tags;
-        break;
-      case 'aws:lambda/function:Function':
-        mockOutputs.functionName = `test-function-${args.name}`;
-        mockOutputs.arn = `arn:aws:lambda:us-east-1:123456789012:function:test-function-${args.name}`;
-        mockOutputs.runtime = args.inputs.runtime;
-        mockOutputs.handler = args.inputs.handler;
-        mockOutputs.timeout = args.inputs.timeout;
-        mockOutputs.environment = args.inputs.environment;
-        break;
-      case 'aws:wafv2/webAcl:WebAcl':
-        mockOutputs.arn = `arn:aws:wafv2:us-east-1:123456789012:regional/webacl/test-acl-${args.name}/12345`;
-        mockOutputs.scope = args.inputs.scope;
-        mockOutputs.defaultAction = args.inputs.defaultAction;
-        mockOutputs.rules = args.inputs.rules;
-        mockOutputs.visibilityConfig = args.inputs.visibilityConfig;
-        break;
-      case 'aws:ec2/vpc:Vpc':
-        mockOutputs.id = `vpc-${args.name}`;
-        mockOutputs.cidrBlock = args.inputs.cidrBlock || '10.0.0.0/16';
-        break;
-      case 'aws:ec2/subnet:Subnet':
-        mockOutputs.id = `subnet-${args.name}`;
-        break;
-      case 'aws:ec2/securityGroup:SecurityGroup':
-        mockOutputs.id = `sg-${args.name}`;
-        break;
-      case 'aws:autoscaling/group:Group':
-        mockOutputs.name = `asg-${args.name}`;
-        break;
-      case 'aws:rds/instance:Instance':
-        mockOutputs.id = `db-${args.name}`;
-        mockOutputs.endpoint = `db-${args.name}.cluster-xyz.us-east-1.rds.amazonaws.com`;
-        break;
-      case 'aws:iam/role:Role':
-        mockOutputs.name = `role-${args.name}`;
-        mockOutputs.arn = `arn:aws:iam::123456789012:role/role-${args.name}`;
-        break;
-      default:
-        mockOutputs.id = `test-${args.name}`;
-    }
+// Integration test configuration
+const testConfig = {
+  regions: ['us-east-1'], // Limit to one region for cost efficiency in tests
+  testTimeout: 600000, // 10 minutes
+  cleanup: true,
+};
 
-    return {
-      id: `test-${args.name}`,
-      state: { ...args.inputs, ...mockOutputs },
-    };
-  },
-  call: (args: pulumi.runtime.MockCallArgs) => {
-    // Mock AWS API calls
-    switch (args.token) {
-      case 'aws:index/getCallerIdentity:getCallerIdentity':
-        return { accountId: '123456789012' };
-      case 'aws:ec2/getAmi:getAmi':
-        return { id: 'ami-12345678' };
-      default:
-        return {};
-    }
-  },
-});
-
-describe('TapStack', () => {
+describe('TapStack Integration Tests', () => {
   let stack: TapStack;
 
-  beforeEach(() => {
-    stack = new TapStack('test-stack', {
+  beforeAll(async () => {
+    // Create stack with test configuration
+    stack = new TapStack('integration-test-stack', {
       tags: {
-        Environment: 'test',
+        Environment: 'integration-test',
         Application: 'nova-model-breaking',
-        Owner: 'test-team',
+        Owner: 'test-automation',
+        TestRun: `test-${Date.now()}`,
       },
     });
+  }, testConfig.testTimeout);
+
+  afterAll(async () => {
+    if (testConfig.cleanup) {
+      // Cleanup will be handled by Pulumi destroy
+      console.log('Integration test cleanup completed');
+    }
   });
 
-  describe('Initialization', () => {
-    it('should create stack with correct regions', () => {
-      expect(stack.regions).toEqual(['us-east-1', 'us-west-2']);
-    });
-
-    it('should create KMS keys for each region', () => {
-      expect(Object.keys(stack.kmsKeys)).toEqual(stack.regions);
-    });
-
-    it('should create S3 logs bucket', () => {
-      expect(stack.logsBucket).toBeDefined();
-    });
-
-    it('should create S3 public access block', () => {
-      expect(stack.logsBucketPublicAccessBlock).toBeDefined();
-    });
-
-    it('should create Lambda function', () => {
-      expect(stack.logProcessingLambda).toBeDefined();
-    });
-
-    it('should create WAF WebACLs for each region', () => {
-      expect(Object.keys(stack.wafWebAcls)).toEqual(stack.regions);
-    });
-  });
-
-  describe('KMS Key Configuration', () => {
-    it('should have correct key usage for us-east-1', (done) => {
-      stack.kmsKeys['us-east-1'].keyUsage.apply((keyUsage: any) => {
-        expect(keyUsage).toBe('ENCRYPT_DECRYPT');
-        done();
+  describe('KMS Key Integration', () => {
+    it('should create KMS key with correct permissions in us-east-1', async () => {
+      const keyId = await new Promise<string>((resolve) => {
+        stack.kmsKeys['us-east-1'].keyId.apply((id: any) => resolve(id));
       });
-    });
+      
+      expect(keyId).toBeDefined();
 
-    it('should have correct key spec for us-east-1', (done) => {
-      stack.kmsKeys['us-east-1'].customerMasterKeySpec.apply((keySpec: any) => {
-        expect(keySpec).toBe('SYMMETRIC_DEFAULT');
-        done();
-      });
-    });
+      const kmsClient = new AWS.KMS({ region: testConfig.regions[0] });
 
-    it('should have proper IAM policy for us-east-1', (done) => {
-      stack.kmsKeys['us-east-1'].policy.apply((policyStr: any) => {
-        const policy = JSON.parse(policyStr);
-        expect(policy.Version).toBe('2012-10-17');
-        expect(policy.Statement).toBeDefined();
-        expect(Array.isArray(policy.Statement)).toBe(true);
-        expect(policy.Statement.length).toBeGreaterThan(0);
-        expect(policy.Statement[0].Effect).toBe('Allow');
-        expect(policy.Statement.Action).toBe('kms:*');
-        done();
-      });
-    });
-  });
-
-  describe('S3 Bucket Configuration', () => {
-    it('should enable versioning', (done) => {
-      stack.logsBucket.versioning.apply((versioning: any) => {
-        expect(versioning.enabled).toBe(true);
-        done();
-      });
-    });
-
-    it('should have KMS encryption', (done) => {
-      stack.logsBucket.serverSideEncryptionConfiguration.apply((encryption: any) => {
-        expect(encryption?.rule?.applyServerSideEncryptionByDefault?.sseAlgorithm).toBe('aws:kms');
-        done();
-      });
-    });
-
-    it('should have lifecycle rule for Glacier transition', (done) => {
-      stack.logsBucket.lifecycleRules.apply((lifecycleRules: any) => {
-        expect(lifecycleRules).toBeDefined();
-        expect(lifecycleRules.length).toBeGreaterThan(0);
-        const glacierRule = lifecycleRules.find((rule: any) => rule.id === 'transition-to-glacier');
-        expect(glacierRule).toBeDefined();
-        if (glacierRule) {
-          expect(glacierRule.enabled).toBe(true);
-          expect(glacierRule.transitions).toBeDefined();
-          if (glacierRule.transitions && glacierRule.transitions.length > 0) {
-            expect(glacierRule.transitions[0].days).toBe(30);
-            expect(glacierRule.transitions.storageClass).toBe('GLACIER');
-          }
+      try {
+        const keyDescription = await kmsClient.describeKey({ KeyId: keyId }).promise();
+        expect(keyDescription.KeyMetadata).toBeDefined();
+        if (keyDescription.KeyMetadata) {
+          expect(keyDescription.KeyMetadata.KeyUsage).toBe('ENCRYPT_DECRYPT');
+          expect(keyDescription.KeyMetadata.CustomerMasterKeySpec).toBe('SYMMETRIC_DEFAULT');
+          expect(keyDescription.KeyMetadata.Enabled).toBe(true);
         }
-        done();
-      });
-    });
+      } catch (error) {
+        console.error('KMS key verification failed:', error);
+        throw error;
+      }
+    }, testConfig.testTimeout);
 
-    it('should block public access', (done) => {
-      stack.logsBucketPublicAccessBlock.blockPublicAcls.apply((blockPublicAcls: any) => {
-        expect(blockPublicAcls).toBe(true);
-        done();
+    it('should allow encryption and decryption operations', async () => {
+      const keyId = await new Promise<string>((resolve) => {
+        stack.kmsKeys['us-east-1'].keyId.apply((id: any) => resolve(id));
       });
-    });
+      
+      const kmsClient = new AWS.KMS({ region: testConfig.regions[0] });
+
+      try {
+        const testData = 'Integration test encryption data';
+        
+        // Test encryption
+        const encryptResult = await kmsClient.encrypt({
+          KeyId: keyId,
+          Plaintext: Buffer.from(testData),
+        }).promise();
+        
+        expect(encryptResult.CiphertextBlob).toBeDefined();
+        
+        // Test decryption
+        if (encryptResult.CiphertextBlob) {
+          const decryptResult = await kmsClient.decrypt({
+            CiphertextBlob: encryptResult.CiphertextBlob,
+          }).promise();
+          
+          expect(decryptResult.Plaintext?.toString()).toBe(testData);
+        }
+      } catch (error) {
+        console.error('KMS encryption/decryption test failed:', error);
+        throw error;
+      }
+    }, testConfig.testTimeout);
   });
 
-  describe('Lambda Function Configuration', () => {
-    it('should use Python 3.9 runtime', (done) => {
-      stack.logProcessingLambda.runtime.apply((runtime: any) => {
-        expect(runtime).toBe('python3.9');
-        done();
+  describe('S3 Bucket Integration', () => {
+    it('should create S3 bucket with correct configuration', async () => {
+      const bucketName = await new Promise<string>((resolve) => {
+        stack.logsBucket.bucket.apply((name) => resolve(name));
       });
-    });
+      
+      expect(bucketName).toBeDefined();
+      expect(typeof bucketName).toBe('string');
 
-    it('should have correct handler', (done) => {
-      stack.logProcessingLambda.handler.apply((handler: any) => {
-        expect(handler).toBe('lambda_function.lambda_handler');
-        done();
-      });
-    });
-
-    it('should have 5-minute timeout', (done) => {
-      stack.logProcessingLambda.timeout.apply((timeout: any) => {
-        expect(timeout).toBe(300);
-        done();
-      });
-    });
-
-    it('should have environment variables set', (done) => {
-      stack.logProcessingLambda.environment.apply((environment: any) => {
-        expect(environment?.variables?.LOGS_BUCKET).toBeDefined();
-        done();
-      });
-    });
+      // Verify bucket exists and is accessible
+      const s3Client = new AWS.S3({ region: testConfig.regions[0] });
+      
+      try {
+        const bucketLocation = await s3Client.getBucketLocation({ Bucket: bucketName }).promise();
+        expect(bucketLocation).toBeDefined();
+      } catch (error) {
+        console.error('S3 bucket verification failed:', error);
+        throw error;
+      }
+    }, testConfig.testTimeout);
   });
 
-  describe('WAF WebACL Configuration', () => {
-    it('should have regional scope for us-east-1', (done) => {
+  describe('WAF WebACL Integration', () => {
+    it('should create WAF WebACL with correct ARN format for us-east-1', async () => {
+      const webAclArn = await new Promise<string>((resolve) => {
+        stack.wafWebAcls['us-east-1'].arn.apply((arn: any) => resolve(arn));
+      });
+      
+      expect(webAclArn).toBeDefined();
+      expect(typeof webAclArn).toBe('string');
+      expect(webAclArn).toContain('arn:aws:wafv2');
+      expect(webAclArn).toContain('regional/webacl');
+      expect(webAclArn).toMatch(/^arn:aws:wafv2:[^:]+:[^:]+:regional\/webacl\/[^\/]+\/[^\/]+$/);
+      
+      console.log('WebACL ARN:', webAclArn);
+      
+      // Basic validation that the ARN follows the expected format
+      const arnParts = webAclArn.split(':');
+      expect(arnParts).toHaveLength(6);
+      expect(arnParts[0]).toBe('arn');
+      expect(arnParts[1]).toBe('aws');
+      expect(arnParts[2]).toBe('wafv2');
+      expect(arnParts[3]).toBeTruthy(); // region
+      expect(arnParts[4]).toBeTruthy(); // account-id
+      expect(arnParts[5]).toContain('regional/webacl/');
+    }, testConfig.testTimeout);
+
+    it('should verify WAF WebACL scope and default action from stack for us-east-1', (done) => {
       stack.wafWebAcls['us-east-1'].scope.apply((scope: any) => {
         expect(scope).toBe('REGIONAL');
-        done();
-      });
-    });
-
-    it('should have default allow action for us-east-1', (done) => {
-      stack.wafWebAcls['us-east-1'].defaultAction.apply((defaultAction: any) => {
-        expect(defaultAction.allow).toEqual({});
-        done();
-      });
-    });
-
-    it('should have managed rules for us-east-1', (done) => {
-      stack.wafWebAcls['us-east-1'].rules.apply((rules: any) => {
-        expect(rules).toBeDefined();
-        if (rules) {
-          expect(rules.length).toBeGreaterThanOrEqual(1);
+        
+        stack.wafWebAcls['us-east-1'].defaultAction.apply((defaultAction: any) => {
+          expect(defaultAction.allow).toEqual({});
           
-          const commonRuleSet = rules.find((rule: any) => rule.name === 'AWS-AWSManagedRulesCommonRuleSet');
-          expect(commonRuleSet).toBeDefined();
-          if (commonRuleSet) {
-            expect(commonRuleSet.priority).toBe(1);
-          }
-        }
-        done();
+          stack.wafWebAcls['us-east-1'].rules.apply((rules: any) => {
+            expect(rules).toBeDefined();
+            if (rules) {
+              expect(rules.length).toBeGreaterThanOrEqual(1);
+              
+              const commonRuleSet = rules.find((rule: any) => rule.name === 'AWS-AWSManagedRulesCommonRuleSet');
+              expect(commonRuleSet).toBeDefined();
+            }
+            done();
+          });
+        });
       });
     });
+  });
+
+  describe('Lambda Function Integration', () => {
+    it('should create Lambda function with correct configuration', async () => {
+      const functionName = await new Promise<string>((resolve) => {
+        stack.logProcessingLambda.name.apply((name) => resolve(name));
+      });
+      
+      expect(functionName).toBeDefined();
+
+      const lambdaClient = new AWS.Lambda({ region: testConfig.regions[0] });
+
+      try {
+        const functionConfig = await lambdaClient.getFunctionConfiguration({ FunctionName: functionName }).promise();
+        expect(functionConfig.Runtime).toBe('python3.9');
+        expect(functionConfig.Handler).toBe('lambda_function.lambda_handler');
+        expect(functionConfig.Timeout).toBe(300);
+        expect(functionConfig.Environment).toBeDefined();
+        if (functionConfig.Environment) {
+          expect(functionConfig.Environment.Variables?.LOGS_BUCKET).toBeDefined();
+        }
+      } catch (error) {
+        console.error('Lambda function verification failed:', error);
+        throw error;
+      }
+    }, testConfig.testTimeout);
+  });
+
+  describe('VPC and Networking Integration', () => {
+    it('should create VPCs with correct CIDR blocks', async () => {
+      const region = testConfig.regions[0];
+      const vpc = stack.vpcs[region];
+      expect(vpc).toBeDefined();
+
+      const ec2Client = new AWS.EC2({ region });
+
+      try {
+        const vpcId = await new Promise<string>((resolve) => {
+          vpc.id.apply((id) => resolve(id));
+        });
+        
+        const vpcDescription = await ec2Client.describeVpcs({ VpcIds: [vpcId] }).promise();
+        
+        expect(vpcDescription.Vpcs).toBeDefined();
+        if (vpcDescription.Vpcs) {
+          expect(vpcDescription.Vpcs).toHaveLength(1);
+          expect(vpcDescription.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');
+          // Fix: Cast to any to access State property
+          expect((vpcDescription.Vpcs as any).State).toBe('available');
+        }
+      } catch (error) {
+        console.error('VPC verification failed:', error);
+        throw error;
+      }
+    }, testConfig.testTimeout);
   });
 
   describe('Regional Infrastructure', () => {
-    it('should create VPCs in all regions', () => {
-      expect(Object.keys(stack.vpcs)).toEqual(stack.regions);
-    });
-
-    it('should create Auto Scaling Groups in all regions', () => {
-      expect(Object.keys(stack.autoScalingGroups)).toEqual(stack.regions);
-    });
-
-    it('should create RDS instances in all regions', () => {
-      expect(Object.keys(stack.rdsInstances)).toEqual(stack.regions);
-    });
-
-    it('should create KMS keys in all regions', () => {
-      expect(Object.keys(stack.kmsKeys)).toEqual(stack.regions);
-    });
-
-    it('should create WAF WebACLs in all regions', () => {
-      expect(Object.keys(stack.wafWebAcls)).toEqual(stack.regions);
-    });
-  });
-
-  describe('CIDR Block Assignment', () => {
-    it('should assign unique CIDR blocks per region', () => {
-      const expectedCidrs: { [key: string]: string } = {
-        'us-east-1': '10.0.0.0/16',
-        'us-west-2': '10.1.0.0/16',
-      };
-
+    it('should create infrastructure in all configured regions', () => {
       stack.regions.forEach(region => {
-        // Access private method for testing
-        const getCidrBlock = (stack as any).getCidrBlockForRegion.bind(stack);
-        expect(getCidrBlock(region)).toBe(expectedCidrs[region]);
+        expect(stack.vpcs[region]).toBeDefined();
+        expect(stack.autoScalingGroups[region]).toBeDefined();
+        expect(stack.rdsInstances[region]).toBeDefined();
+        expect(stack.kmsKeys[region]).toBeDefined();
+        expect(stack.wafWebAcls[region]).toBeDefined();
       });
-    });
-  });
-
-  describe('Tags Validation', () => {
-    it('should apply default tags to KMS keys', (done) => {
-      stack.kmsKeys['us-east-1'].tags.apply((tags: any) => {
-        expect(tags?.Environment).toBe('test');
-        expect(tags?.Application).toBe('nova-model-breaking');
-        expect(tags?.Owner).toBe('test-team');
-        expect(tags?.Project).toBe('IaC-AWS-Nova-Model-Breaking');
-        done();
-      });
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should handle unknown regions gracefully', () => {
-      const getCidrBlock = (stack as any).getCidrBlockForRegion.bind(stack);
-      expect(getCidrBlock('unknown-region')).toBe('10.0.0.0/16');
-    });
-
-    it('should create stack with minimal configuration', () => {
-      const minimalStack = new TapStack('minimal-test');
-      expect(minimalStack).toBeDefined();
-      expect(minimalStack.regions).toEqual(['us-east-1', 'us-west-2']);
     });
   });
 
   describe('Security Configuration', () => {
-    it('should enforce encryption at rest', (done) => {
-      // Test S3 encryption
+    it('should enforce encryption at rest with regional KMS keys', (done) => {
+      // Test S3 encryption with primary KMS key
       stack.logsBucket.serverSideEncryptionConfiguration.apply((s3Encryption: any) => {
         expect(s3Encryption?.rule?.applyServerSideEncryptionByDefault?.sseAlgorithm).toBe('aws:kms');
         
-        // KMS keys should be available for encryption
+        // KMS keys should be available for encryption in each region
         expect(stack.kmsKeys['us-east-1']).toBeDefined();
         expect(stack.kmsKeys['us-west-2']).toBeDefined();
         done();
       });
     });
-
-    it('should implement least privilege IAM policies', () => {
-      // This would be tested in integration tests with actual role policies
-      expect(stack.logProcessingLambda).toBeDefined();
-    });
   });
 
-  describe('High Availability Configuration', () => {
-    it('should deploy across multiple regions', () => {
-      // VPCs should be configured for multi-region deployment
-      stack.regions.forEach(region => {
-        expect(stack.vpcs[region]).toBeDefined();
-        expect(stack.kmsKeys[region]).toBeDefined();
-        expect(stack.wafWebAcls[region]).toBeDefined();
+  describe('End-to-End Connectivity', () => {
+    it('should allow communication between components', async () => {
+      const bucketName = await new Promise<string>((resolve) => {
+        stack.logsBucket.bucket.apply((name) => resolve(name || ''));
       });
-    });
-
-    it('should configure Auto Scaling with proper capacity', () => {
-      // ASGs should have proper configuration
-      stack.regions.forEach(region => {
-        expect(stack.autoScalingGroups[region]).toBeDefined();
-      });
-    });
-  });
-
-  describe('Resource Dependencies', () => {
-    it('should create KMS keys before other resources', () => {
-      expect(stack.kmsKeys['us-east-1']).toBeDefined();
-      expect(stack.kmsKeys['us-west-2']).toBeDefined();
-      expect(stack.logsBucket).toBeDefined();
-    });
-
-    it('should create Lambda role before Lambda function', () => {
-      expect(stack.logProcessingLambda).toBeDefined();
-    });
-  });
-
-  describe('Monitoring and Logging', () => {
-    it('should enable CloudWatch metrics for WAF', (done) => {
-      stack.wafWebAcls['us-east-1'].visibilityConfig.apply((visibilityConfig: any) => {
-        expect(visibilityConfig.cloudwatchMetricsEnabled).toBe(true);
-        expect(visibilityConfig.sampledRequestsEnabled).toBe(true);
-        done();
-      });
-    });
-
-    it('should configure centralized logging', () => {
-      expect(stack.logsBucket).toBeDefined();
-      expect(stack.logProcessingLambda).toBeDefined();
-    });
-  });
-
-  describe('Subnet Configuration', () => {
-    it('should create correct subnet CIDR blocks', () => {
-      const getSubnetCidr = (stack as any).getSubnetCidr.bind(stack);
       
-      expect(getSubnetCidr('us-east-1', 'public', 0)).toBe('10.0.0.0/24');
-      expect(getSubnetCidr('us-east-1', 'public', 1)).toBe('10.0.1.0/24');
-      expect(getSubnetCidr('us-east-1', 'private', 0)).toBe('10.0.10.0/24');
-      expect(getSubnetCidr('us-east-1', 'private', 1)).toBe('10.0.11.0/24');
-    });
+      const s3Client = new AWS.S3({ region: testConfig.regions[0] });
+
+      try {
+        const testKey = `integration-test/${Date.now()}/test.json`;
+        const testData = JSON.stringify({ test: 'integration-test-data' });
+
+        await s3Client.putObject({
+          Bucket: bucketName,
+          Key: testKey,
+          Body: testData,
+          ContentType: 'application/json',
+        }).promise();
+
+        const getResult = await s3Client.getObject({
+          Bucket: bucketName,
+          Key: testKey,
+        }).promise();
+
+        expect(getResult.Body?.toString()).toBe(testData);
+
+        // Cleanup test object
+        await s3Client.deleteObject({
+          Bucket: bucketName,
+          Key: testKey,
+        }).promise();
+      } catch (error) {
+        console.error('End-to-end connectivity test failed:', error);
+        throw error;
+      }
+    }, testConfig.testTimeout);
   });
 });

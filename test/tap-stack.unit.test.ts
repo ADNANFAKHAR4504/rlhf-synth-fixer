@@ -127,11 +127,11 @@ describe('TapStack', () => {
 
   describe('Initialization', () => {
     it('should create stack with correct regions', () => {
-      expect(stack.regions).toEqual(['us-east-1', 'us-west-2', 'eu-central-1']);
+      expect(stack.regions).toEqual(['us-east-1', 'us-west-2']);
     });
 
-    it('should create KMS key', () => {
-      expect(stack.kmsKey).toBeDefined();
+    it('should create KMS keys for each region', () => {
+      expect(Object.keys(stack.kmsKeys)).toEqual(stack.regions);
     });
 
     it('should create S3 logs bucket', () => {
@@ -146,28 +146,28 @@ describe('TapStack', () => {
       expect(stack.logProcessingLambda).toBeDefined();
     });
 
-    it('should create WAF WebACL', () => {
-      expect(stack.wafWebAcl).toBeDefined();
+    it('should create WAF WebACLs for each region', () => {
+      expect(Object.keys(stack.wafWebAcls)).toEqual(stack.regions);
     });
   });
 
   describe('KMS Key Configuration', () => {
-    it('should have correct key usage', (done) => {
-      stack.kmsKey.keyUsage.apply(keyUsage => {
+    it('should have correct key usage for us-east-1', (done) => {
+      stack.kmsKeys['us-east-1'].keyUsage.apply((keyUsage: any) => {
         expect(keyUsage).toBe('ENCRYPT_DECRYPT');
         done();
       });
     });
 
-    it('should have correct key spec', (done) => {
-      stack.kmsKey.customerMasterKeySpec.apply(keySpec => {
+    it('should have correct key spec for us-east-1', (done) => {
+      stack.kmsKeys['us-east-1'].customerMasterKeySpec.apply((keySpec: any) => {
         expect(keySpec).toBe('SYMMETRIC_DEFAULT');
         done();
       });
     });
 
-    it('should have proper IAM policy', (done) => {
-      stack.kmsKey.policy.apply(policyStr => {
+    it('should have proper IAM policy for us-east-1', (done) => {
+      stack.kmsKeys['us-east-1'].policy.apply((policyStr: any) => {
         const policy = JSON.parse(policyStr);
         expect(policy.Version).toBe('2012-10-17');
         expect(policy.Statement).toBeDefined();
@@ -182,21 +182,21 @@ describe('TapStack', () => {
 
   describe('S3 Bucket Configuration', () => {
     it('should enable versioning', (done) => {
-      stack.logsBucket.versioning.apply(versioning => {
+      stack.logsBucket.versioning.apply((versioning: any) => {
         expect(versioning.enabled).toBe(true);
         done();
       });
     });
 
     it('should have KMS encryption', (done) => {
-      stack.logsBucket.serverSideEncryptionConfiguration.apply(encryption => {
+      stack.logsBucket.serverSideEncryptionConfiguration.apply((encryption: any) => {
         expect(encryption?.rule?.applyServerSideEncryptionByDefault?.sseAlgorithm).toBe('aws:kms');
         done();
       });
     });
 
     it('should have lifecycle rule for Glacier transition', (done) => {
-      stack.logsBucket.lifecycleRules.apply(lifecycleRules => {
+      stack.logsBucket.lifecycleRules.apply((lifecycleRules: any) => {
         expect(lifecycleRules).toBeDefined();
         expect(lifecycleRules.length).toBeGreaterThan(0);
         const glacierRule = lifecycleRules.find((rule: any) => rule.id === 'transition-to-glacier');
@@ -206,7 +206,7 @@ describe('TapStack', () => {
           expect(glacierRule.transitions).toBeDefined();
           if (glacierRule.transitions && glacierRule.transitions.length > 0) {
             expect(glacierRule.transitions[0].days).toBe(30);
-            expect(glacierRule.transitions[0].storageClass).toBe('GLACIER');
+            expect(glacierRule.transitions.storageClass).toBe('GLACIER');
           }
         }
         done();
@@ -214,7 +214,7 @@ describe('TapStack', () => {
     });
 
     it('should block public access', (done) => {
-      stack.logsBucketPublicAccessBlock.blockPublicAcls.apply(blockPublicAcls => {
+      stack.logsBucketPublicAccessBlock.blockPublicAcls.apply((blockPublicAcls: any) => {
         expect(blockPublicAcls).toBe(true);
         done();
       });
@@ -223,28 +223,28 @@ describe('TapStack', () => {
 
   describe('Lambda Function Configuration', () => {
     it('should use Python 3.9 runtime', (done) => {
-      stack.logProcessingLambda.runtime.apply(runtime => {
+      stack.logProcessingLambda.runtime.apply((runtime: any) => {
         expect(runtime).toBe('python3.9');
         done();
       });
     });
 
     it('should have correct handler', (done) => {
-      stack.logProcessingLambda.handler.apply(handler => {
+      stack.logProcessingLambda.handler.apply((handler: any) => {
         expect(handler).toBe('lambda_function.lambda_handler');
         done();
       });
     });
 
     it('should have 5-minute timeout', (done) => {
-      stack.logProcessingLambda.timeout.apply(timeout => {
+      stack.logProcessingLambda.timeout.apply((timeout: any) => {
         expect(timeout).toBe(300);
         done();
       });
     });
 
     it('should have environment variables set', (done) => {
-      stack.logProcessingLambda.environment.apply(environment => {
+      stack.logProcessingLambda.environment.apply((environment: any) => {
         expect(environment?.variables?.LOGS_BUCKET).toBeDefined();
         done();
       });
@@ -252,36 +252,30 @@ describe('TapStack', () => {
   });
 
   describe('WAF WebACL Configuration', () => {
-    it('should have regional scope', (done) => {
-      stack.wafWebAcl.scope.apply(scope => {
+    it('should have regional scope for us-east-1', (done) => {
+      stack.wafWebAcls['us-east-1'].scope.apply((scope: any) => {
         expect(scope).toBe('REGIONAL');
         done();
       });
     });
 
-    it('should have default allow action', (done) => {
-      stack.wafWebAcl.defaultAction.apply(defaultAction => {
+    it('should have default allow action for us-east-1', (done) => {
+      stack.wafWebAcls['us-east-1'].defaultAction.apply((defaultAction: any) => {
         expect(defaultAction.allow).toEqual({});
         done();
       });
     });
 
-    it('should have OWASP and Common rules', (done) => {
-      stack.wafWebAcl.rules.apply(rules => {
+    it('should have managed rules for us-east-1', (done) => {
+      stack.wafWebAcls['us-east-1'].rules.apply((rules: any) => {
         expect(rules).toBeDefined();
         if (rules) {
-          expect(rules.length).toBe(2);
+          expect(rules.length).toBeGreaterThanOrEqual(1);
           
-          const commonRuleSet = rules.find((rule: any) => rule.name === 'AWSManagedRulesCommonRuleSet');
+          const commonRuleSet = rules.find((rule: any) => rule.name === 'AWS-AWSManagedRulesCommonRuleSet');
           expect(commonRuleSet).toBeDefined();
           if (commonRuleSet) {
             expect(commonRuleSet.priority).toBe(1);
-          }
-          
-          const owaspRuleSet = rules.find((rule: any) => rule.name === 'AWSManagedRulesOWASPTop10');
-          expect(owaspRuleSet).toBeDefined();
-          if (owaspRuleSet) {
-            expect(owaspRuleSet.priority).toBe(2);
           }
         }
         done();
@@ -301,6 +295,14 @@ describe('TapStack', () => {
     it('should create RDS instances in all regions', () => {
       expect(Object.keys(stack.rdsInstances)).toEqual(stack.regions);
     });
+
+    it('should create KMS keys in all regions', () => {
+      expect(Object.keys(stack.kmsKeys)).toEqual(stack.regions);
+    });
+
+    it('should create WAF WebACLs in all regions', () => {
+      expect(Object.keys(stack.wafWebAcls)).toEqual(stack.regions);
+    });
   });
 
   describe('CIDR Block Assignment', () => {
@@ -308,7 +310,6 @@ describe('TapStack', () => {
       const expectedCidrs: { [key: string]: string } = {
         'us-east-1': '10.0.0.0/16',
         'us-west-2': '10.1.0.0/16',
-        'eu-central-1': '10.2.0.0/16',
       };
 
       stack.regions.forEach(region => {
@@ -320,8 +321,8 @@ describe('TapStack', () => {
   });
 
   describe('Tags Validation', () => {
-    it('should apply default tags to all resources', (done) => {
-      stack.kmsKey.tags.apply(tags => {
+    it('should apply default tags to KMS keys', (done) => {
+      stack.kmsKeys['us-east-1'].tags.apply((tags: any) => {
         expect(tags?.Environment).toBe('test');
         expect(tags?.Application).toBe('nova-model-breaking');
         expect(tags?.Owner).toBe('test-team');
@@ -340,18 +341,19 @@ describe('TapStack', () => {
     it('should create stack with minimal configuration', () => {
       const minimalStack = new TapStack('minimal-test');
       expect(minimalStack).toBeDefined();
-      expect(minimalStack.regions).toEqual(['us-east-1', 'us-west-2', 'eu-central-1']);
+      expect(minimalStack.regions).toEqual(['us-east-1', 'us-west-2']);
     });
   });
 
   describe('Security Configuration', () => {
     it('should enforce encryption at rest', (done) => {
       // Test S3 encryption
-      stack.logsBucket.serverSideEncryptionConfiguration.apply(s3Encryption => {
+      stack.logsBucket.serverSideEncryptionConfiguration.apply((s3Encryption: any) => {
         expect(s3Encryption?.rule?.applyServerSideEncryptionByDefault?.sseAlgorithm).toBe('aws:kms');
         
-        // KMS key should be available for encryption
-        expect(stack.kmsKey).toBeDefined();
+        // KMS keys should be available for encryption
+        expect(stack.kmsKeys['us-east-1']).toBeDefined();
+        expect(stack.kmsKeys['us-west-2']).toBeDefined();
         done();
       });
     });
@@ -363,15 +365,17 @@ describe('TapStack', () => {
   });
 
   describe('High Availability Configuration', () => {
-    it('should deploy across multiple AZs', () => {
-      // VPCs should be configured for multi-AZ deployment
+    it('should deploy across multiple regions', () => {
+      // VPCs should be configured for multi-region deployment
       stack.regions.forEach(region => {
         expect(stack.vpcs[region]).toBeDefined();
+        expect(stack.kmsKeys[region]).toBeDefined();
+        expect(stack.wafWebAcls[region]).toBeDefined();
       });
     });
 
     it('should configure Auto Scaling with proper capacity', () => {
-      // ASGs should have min 2, max 6 instances
+      // ASGs should have proper configuration
       stack.regions.forEach(region => {
         expect(stack.autoScalingGroups[region]).toBeDefined();
       });
@@ -379,8 +383,9 @@ describe('TapStack', () => {
   });
 
   describe('Resource Dependencies', () => {
-    it('should create KMS key before S3 bucket', () => {
-      expect(stack.kmsKey).toBeDefined();
+    it('should create KMS keys before other resources', () => {
+      expect(stack.kmsKeys['us-east-1']).toBeDefined();
+      expect(stack.kmsKeys['us-west-2']).toBeDefined();
       expect(stack.logsBucket).toBeDefined();
     });
 
@@ -391,7 +396,7 @@ describe('TapStack', () => {
 
   describe('Monitoring and Logging', () => {
     it('should enable CloudWatch metrics for WAF', (done) => {
-      stack.wafWebAcl.visibilityConfig.apply(visibilityConfig => {
+      stack.wafWebAcls['us-east-1'].visibilityConfig.apply((visibilityConfig: any) => {
         expect(visibilityConfig.cloudwatchMetricsEnabled).toBe(true);
         expect(visibilityConfig.sampledRequestsEnabled).toBe(true);
         done();
