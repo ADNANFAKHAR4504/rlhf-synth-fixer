@@ -252,13 +252,17 @@ export class TapStack extends cdk.Stack {
 
     cdk.Tags.of(dbSubnetGroup).add('Environment', commonTags.Environment);
 
+    // Use a supported PostgreSQL version - check what's available in your region
+    // Common supported versions: VER_15_2, VER_14_7, VER_13_10, etc.
+    const postgresVersion = rds.PostgresEngineVersion.VER_15_2; // Fallback to 15.2
+
     // RDS Parameter Group for enhanced security
     const parameterGroup = new rds.ParameterGroup(
       this,
       `TapDbParameterGroup${environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_3,
+          version: postgresVersion,
         }),
         description: 'Parameter group for TAP PostgreSQL database',
         parameters: {
@@ -277,7 +281,7 @@ export class TapStack extends cdk.Stack {
       `TapDatabase${environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_3,
+          version: postgresVersion,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
@@ -350,6 +354,11 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'KmsKeyId', {
       value: kmsKey.keyId,
       description: 'KMS Key ID for encryption',
+    });
+
+    new cdk.CfnOutput(this, 'PostgresVersion', {
+      value: postgresVersion.postgresFullVersion,
+      description: 'PostgreSQL version used',
     });
 
     // Output EC2 instance IDs
