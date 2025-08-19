@@ -7,11 +7,12 @@ CloudWatch monitoring, cross-region replication, backup strategies, and IAM leas
 """
 
 import json
+from typing import Optional
+
 import pulumi
 import pulumi_aws as aws
 import pulumi_random as random
 from pulumi import Config, ResourceOptions, Output, AssetArchive, StringAsset
-from typing import Optional
 
 class TapStackArgs:
   """Arguments for TapStack configuration"""
@@ -20,8 +21,10 @@ class TapStackArgs:
 
 class TapStack(pulumi.ComponentResource):
   """
-  Complete AWS infrastructure migration stack with S3 (KMS encryption, replication), EC2 blue/green deployment,
-  RDS with cross-region replica/promotion, compliant IAM, CloudWatch monitoring, and automated backups.
+  Complete AWS infrastructure migration stack with S3 (KMS encryption,
+  replication), EC2 blue/green deployment,
+  RDS with cross-region replica/promotion, compliant IAM, CloudWatch
+  monitoring, and automated backups.
   """
 
   def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
@@ -175,7 +178,8 @@ class TapStack(pulumi.ComponentResource):
       f"source-bucket-encryption-{self.env_suffix}",
       bucket=self.source_bucket.id,
       rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        apply_server_side_encryption_by_default=aws.s3.
+        BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
           sse_algorithm="aws:kms",
           kms_master_key_id=self.s3_source_kms_key.arn
         ),
@@ -187,7 +191,8 @@ class TapStack(pulumi.ComponentResource):
       f"target-bucket-encryption-{self.env_suffix}",
       bucket=self.target_bucket.id,
       rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-        apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        apply_server_side_encryption_by_default=aws.s3.
+        BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
           sse_algorithm="aws:kms",
           kms_master_key_id=self.s3_target_kms_key.arn
         ),
@@ -230,7 +235,8 @@ class TapStack(pulumi.ComponentResource):
     )
 
     # Replication policy (least privilege)
-    def replication_policy_doc(source_bucket_arn, target_bucket_arn, source_kms_arn, target_kms_arn):
+    def replication_policy_doc(source_bucket_arn, target_bucket_arn,
+                             source_kms_arn, target_kms_arn):
       return json.dumps({
         "Version": "2012-10-17",
         "Statement": [
@@ -319,7 +325,8 @@ class TapStack(pulumi.ComponentResource):
       opts=ResourceOptions(
         provider=self.source_provider,
         parent=self,
-        depends_on=[self.source_bucket, self.target_bucket, self.replication_role, replication_policy]
+        depends_on=[self.source_bucket, self.target_bucket,
+                  self.replication_role, replication_policy]
       )
     )
 
@@ -331,12 +338,16 @@ class TapStack(pulumi.ComponentResource):
       description="Security group for EC2 instances",
       vpc_id=self.target_vpc.id,
       ingress=[
-        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=80, to_port=80, cidr_blocks=["0.0.0.0/0"], description="HTTP"),
-        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=443, to_port=443, cidr_blocks=["0.0.0.0/0"], description="HTTPS"),
-        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=22, to_port=22, cidr_blocks=["10.0.0.0/16"], description="SSH from VPC")
+        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=80,
+          to_port=80, cidr_blocks=["0.0.0.0/0"], description="HTTP"),
+        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=443,
+          to_port=443, cidr_blocks=["0.0.0.0/0"], description="HTTPS"),
+        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=22,
+          to_port=22, cidr_blocks=["10.0.0.0/16"], description="SSH from VPC")
       ],
       egress=[
-        aws.ec2.SecurityGroupEgressArgs(protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"])
+        aws.ec2.SecurityGroupEgressArgs(protocol="-1", from_port=0,
+          to_port=0, cidr_blocks=["0.0.0.0/0"])
       ],
       tags={**self.default_tags, "Name": f"ec2-sg-{self.env_suffix}"},
       opts=ResourceOptions(provider=self.target_provider, parent=self)
@@ -375,11 +386,14 @@ class TapStack(pulumi.ComponentResource):
       description="Security group for Application Load Balancer",
       vpc_id=self.target_vpc.id,
       ingress=[
-        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=80, to_port=80, cidr_blocks=["0.0.0.0/0"]),
-        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=443, to_port=443, cidr_blocks=["0.0.0.0/0"])
+        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=80,
+          to_port=80, cidr_blocks=["0.0.0.0/0"]),
+        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=443,
+          to_port=443, cidr_blocks=["0.0.0.0/0"])
       ],
       egress=[
-        aws.ec2.SecurityGroupEgressArgs(protocol="-1", from_port=0, to_port=0, cidr_blocks=["0.0.0.0/0"])
+        aws.ec2.SecurityGroupEgressArgs(protocol="-1", from_port=0,
+          to_port=0, cidr_blocks=["0.0.0.0/0"])
       ],
       tags={**self.default_tags, "Name": f"alb-sg-{self.env_suffix}"},
       opts=ResourceOptions(provider=self.target_provider, parent=self)
@@ -474,7 +488,9 @@ class TapStack(pulumi.ComponentResource):
       description="Security group for RDS database",
       vpc_id=self.target_vpc.id,
       ingress=[
-        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=3306, to_port=3306, security_groups=[self.ec2_security_group.id], description="MySQL from EC2")
+        aws.ec2.SecurityGroupIngressArgs(protocol="tcp", from_port=3306,
+          to_port=3306, security_groups=[self.ec2_security_group.id],
+          description="MySQL from EC2")
       ],
       tags={**self.default_tags, "Name": f"rds-sg-{self.env_suffix}"},
       opts=ResourceOptions(provider=self.target_provider, parent=self)

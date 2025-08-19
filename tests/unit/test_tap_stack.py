@@ -5,10 +5,9 @@ Tests various scenarios including environment configuration, resource creation
 mocking, and edge cases for the AWS infrastructure migration stack.
 """
 
+import sys
 import unittest
 from unittest.mock import Mock, patch, MagicMock
-import sys
-import json
 
 class MockConfig:
   def __init__(self, config_dict=None):
@@ -51,7 +50,8 @@ class MockComponentResource:
     self.opts = opts
 
 class MockRandomPassword:
-  def __init__(self, name, length=32, special=True, min_lower=1, min_upper=1, min_numeric=1, min_special=1, opts=None):
+  def __init__(self, name, length=32, special=True, min_lower=1,
+               min_upper=1, min_numeric=1, min_special=1, opts=None):
     self.name = name
     self.length = length
     self.result = MockOutput("SecureRandomPassword123!")
@@ -77,7 +77,9 @@ mock_pulumi.Config = Mock(return_value=MockConfig())
 mock_pulumi.export = MagicMock()
 mock_pulumi.ResourceOptions = MockResourceOptions
 mock_pulumi.Output = MockOutput
-mock_pulumi.Output.all = Mock(return_value=MockOutput(["test-bucket-arn", "test-target-bucket-arn", "test-source-kms-arn", "test-target-kms-arn"]))
+mock_pulumi.Output.all = Mock(return_value=MockOutput([
+  "test-bucket-arn", "test-target-bucket-arn",
+  "test-source-kms-arn", "test-target-kms-arn"]))
 mock_pulumi.InvokeOptions = MockResourceOptions
 
 mock_aws = MagicMock()
@@ -93,7 +95,8 @@ mock_aws.ec2.Instance = Mock(return_value=MockResource("instance"))
 mock_aws.ec2.get_ami = Mock(return_value=MockResource("ami"))
 mock_aws.s3.BucketV2 = Mock(return_value=MockResource("bucket"))
 mock_aws.s3.BucketVersioningV2 = Mock(return_value=MockResource("versioning"))
-mock_aws.s3.BucketServerSideEncryptionConfigurationV2 = Mock(return_value=MockResource("encryption"))
+mock_aws.s3.BucketServerSideEncryptionConfigurationV2 = Mock(
+  return_value=MockResource("encryption"))
 mock_aws.s3.BucketReplicationConfig = Mock(return_value=MockResource("replication"))
 mock_aws.s3.BucketLifecycleConfigurationV2 = Mock(return_value=MockResource("lifecycle"))
 mock_aws.kms.Key = Mock(return_value=MockResource("kms"))
@@ -312,7 +315,7 @@ class TestTapStack(unittest.TestCase):
   def test_exports_functionality(self):
     """Test that exports are called with correct outputs"""
     args = TapStackArgs(environment_suffix="test")
-    stack = TapStack(name="TestStack", args=args)
+    _ = TapStack(name="TestStack", args=args)
     
     # Verify export was called
     self.assertTrue(mock_pulumi.export.called)
@@ -413,7 +416,7 @@ class TestTapStack(unittest.TestCase):
     """Test AMI lookup functionality"""
     mock_get_ami.return_value = MockResource("test-ami")
     args = TapStackArgs(environment_suffix="test")
-    stack = TapStack(name="TestStack", args=args)
+    _ = TapStack(name="TestStack", args=args)
     
     # Verify AMI lookup was called
     self.assertTrue(mock_get_ami.called)
