@@ -8,13 +8,13 @@ terraform {
   }
 }
 
-# Primary provider for ap-south-1
+# Primary provider for us-west-1
 provider "aws" {
-  region = "ap-south-1"
+  region = "us-west-1"
 }
 
-# Secondary provider for ap-southeast-2
+# Secondary provider for eu-central-1
 provider "aws" {
-  alias  = "ap_southeast_2"
-  region = "ap-southeast-2"
+  alias  = "eu_central_1"
+  region = "eu-central-1"
 }
