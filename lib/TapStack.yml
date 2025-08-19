@@ -14,8 +14,12 @@ Parameters:
     Description: 'Environment name'
 
   ExistingVpcId:
-    Type: 'AWS::EC2::VPC::Id'
-    Description: 'Existing VPC ID where security groups will be created'
+    Type: String
+    Default: ''
+    Description: 'Existing VPC ID where security groups will be created (leave empty to use default VPC)'
+
+Conditions:
+  HasExistingVpc: !Not [!Equals [!Ref ExistingVpcId, '']]
 
 Resources:
   # KMS Key for encryption
@@ -246,6 +250,7 @@ Resources:
   # Security Group for web servers (HTTPS only)
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: HasExistingVpc
     Properties:
       GroupName: !Sub '${ProjectName}-web-${Environment}-sg'
       GroupDescription: 'Security group for web servers - HTTPS traffic only'
@@ -360,6 +365,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-SecureDataBucket'
 
   WebServerSecurityGroupId:
+    Condition: HasExistingVpc
     Description: 'Security Group ID for web servers'
     Value: !Ref WebServerSecurityGroup
     Export:
