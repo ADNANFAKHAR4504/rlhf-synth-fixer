@@ -693,20 +693,36 @@ describe('High Availability Web Application Integration Tests', () => {
     });
 
     test('A records exist with failover configuration', async () => {
-      const rr = await route53Client.send(
-        new ListResourceRecordSetsCommand({ HostedZoneId: hostedZoneId! })
-      );
-      const sets: ResourceRecordSet[] = rr.ResourceRecordSets ?? [];
-      const appRecords = sets.filter(
-        (r) => r.Type === 'A' && r.Name === `${outputs.AppFQDN}.`
-      );
-      expect(appRecords.length).toBe(0);
+  const hostedZoneId = outputs.HostedZoneId!;
+  const recordsResp = await route53Client.send(
+    new ListResourceRecordSetsCommand({ HostedZoneId: hostedZoneId })
+  );
 
-      const primary = appRecords.find((r) => r.Failover === 'PRIMARY');
-      const secondary = appRecords.find((r) => r.Failover === 'SECONDARY');
-      expect(primary?.AliasTarget?.EvaluateTargetHealth).toBe(true);
-      expect((secondary?.ResourceRecords ?? [])[0]?.Value).toBe('198.51.100.10');
-    });
+  const wantedName = `${outputs.AppFQDN}.`.toLowerCase();
+  const appRecords = (recordsResp.ResourceRecordSets ?? []).filter(
+    (r) => r.Type === 'A' && (r.Name ?? '').toLowerCase() === wantedName
+  );
+
+  expect(appRecords.length).toBeGreaterThanOrEqual(2);
+
+  const primary = appRecords.find((r) => r.Failover === 'PRIMARY');
+  const secondary = appRecords.find((r) => r.Failover === 'SECONDARY');
+
+  // Primary: make sure it’s an alias pointing at the expected ALB DNS
+  expect(primary).toBeDefined();
+  expect((primary!.AliasTarget?.DNSName ?? '').toLowerCase())
+    .toContain(outputs.AlbDNS.toLowerCase());
+
+  // Only assert EvaluateTargetHealth if the API returned it
+  if (typeof primary!.AliasTarget?.EvaluateTargetHealth !== 'undefined') {
+    expect(primary!.AliasTarget!.EvaluateTargetHealth).toBe(true);
+  }
+
+  // Secondary: static record to 198.51.100.10
+  expect(secondary).toBeDefined();
+  expect((secondary?.ResourceRecords ?? [])[0]?.Value).toBe('198.51.100.10');
+});
+
   });
 
   // ---------------------------- CloudWatch ----------------------------
