@@ -22,12 +22,14 @@ variable "aws_region" {
 variable "allowed_ssh_cidr" {
   description = "CIDR allowed to SSH to bastion (e.g. 203.0.113.10/32)"
   type        = string
+  default     = "203.0.113.10/32"
 
   validation {
     condition     = can(cidrnetmask(var.allowed_ssh_cidr)) && var.allowed_ssh_cidr != "0.0.0.0/0"
     error_message = "Provide a valid CIDR (e.g., 203.0.113.10/32). 0.0.0.0/0 is not allowed."
   }
 }
+
 
 
 variable "public_subnet_cidr" {
@@ -57,15 +59,6 @@ variable "private_subnet2_cidr" {
   validation {
     condition     = can(cidrnetmask(var.private_subnet2_cidr))
     error_message = "private_subnet2_cidr must be a valid CIDR."
-  }
-}
-
-variable "allowed_ssh_cidr" {
-  type        = string
-  description = "CIDR allowed to SSH to bastion (e.g. 203.0.113.10/32)"
-  validation {
-    condition     = can(cidrnetmask(var.allowed_ssh_cidr))
-    error_message = "allowed_ssh_cidr must be a valid CIDR string."
   }
 }
 
