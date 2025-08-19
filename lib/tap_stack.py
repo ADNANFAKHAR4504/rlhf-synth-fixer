@@ -12,7 +12,8 @@ from typing import Optional
 import pulumi
 import pulumi_aws as aws
 import pulumi_random as random
-from pulumi import Config, ResourceOptions, Output, AssetArchive, StringAsset
+from pulumi import AssetArchive, Config, Output, ResourceOptions, StringAsset
+
 
 class TapStackArgs:
   """Arguments for TapStack configuration"""
@@ -763,3 +764,4 @@ def lambda_handler(event, context):
     for i, instance in enumerate(self.ec2_instances):
       pulumi.export(f"ec2_instance_{i+1}_id", instance.id)
       pulumi.export(f"ec2_instance_{i+1}_public_ip", instance.public_ip)
+
