@@ -719,14 +719,11 @@ resource "aws_lb" "main" {
   access_logs {
     bucket  = aws_s3_bucket.alb_logs.bucket
     prefix  = "alb-logs"
-    enabled = true
+    enabled = false
   }
 
   tags = local.common_tags
 
-  depends_on = [
-    aws_s3_bucket_policy.alb_logs
-  ]
 }
 
 resource "aws_lb_target_group" "nginx" {
