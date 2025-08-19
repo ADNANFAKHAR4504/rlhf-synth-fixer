@@ -1293,7 +1293,7 @@
                                 "s3:PutObject"
                             ],
                             "Resource": {
-                                "Fn::Sub": "${S3Bucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1310,7 +1310,7 @@
                                 "s3:PutObject"
                             ],
                             "Resource": {
-                                "Fn::Sub": "${S3Bucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1327,7 +1327,7 @@
                                 "s3:PutObject"
                             ],
                             "Resource": {
-                                "Fn::Sub": "${S3Bucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
