@@ -272,7 +272,7 @@ export class TapStack extends cdk.Stack {
         unhealthyThresholdCount: 3,
         healthyThresholdCount: 2,
       },
-      targetGroupName: `tg-${region}`,
+      targetGroupName: `tg-pj-${region}`,
     });
 
     // Create HTTP listener (forwards traffic directly to target group)
