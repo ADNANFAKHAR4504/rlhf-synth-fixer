@@ -34,21 +34,31 @@ resource "null_resource" "backup_recovery_point_cleanup" {
     when       = destroy
     command    = <<EOT
       echo "Attempting to delete recovery points from backup vault: ${self.triggers.backup_vault_name}"
-      RECOVERY_POINT_ARNS=$(aws backup list-recovery-points-by-backup-vault \
-        --backup-vault-name ${self.triggers.backup_vault_name}
-        --query 'RecoveryPoints[].RecoveryPointArn'
-        --output text)
+      
+      while true; do
+        RECOVERY_POINT_ARNS=$(aws backup list-recovery-points-by-backup-vault \
+          --backup-vault-name ${self.triggers.backup_vault_name} \
+          --query 'RecoveryPoints[].RecoveryPointArn' \
+          --output text)
 
-      if [ -z "$RECOVERY_POINT_ARNS" ]; then
-        echo "No recovery points found in ${self.triggers.backup_vault_name}."
-      else
-        for arn in $RECOVERY_POINT_ARNS;
-        do
-          echo "Deleting recovery point: $arn"
-          aws backup delete-recovery-point --recovery-point-arn $arn
-        done
-        echo "Finished deleting recovery points from ${self.triggers.backup_vault_name}."
-      fi
+        if [ -z "$RECOVERY_POINT_ARNS" ]; then
+          echo "No recovery points found in ${self.triggers.backup_vault_name}."
+          break
+        else
+          for arn in $RECOVERY_POINT_ARNS; do
+            echo "Deleting recovery point: $arn"
+            if aws backup delete-recovery-point --recovery-point-arn $arn; then
+              echo "Successfully deleted recovery point: $arn"
+            else
+              echo "Failed to delete recovery point: $arn. Retrying..."
+            fi
+            sleep 1 # Small delay to avoid hitting API rate limits
+          done
+          echo "Finished a pass of deleting recovery points from ${self.triggers.backup_vault_name}. Checking for more..."
+          sleep 5 # Wait a bit before checking for more recovery points
+        fi
+      done
+      echo "All recovery points deleted from ${self.triggers.backup_vault_name}."
     EOT
     interpreter = ["bash", "-c"]
   }
@@ -64,32 +74,9 @@ resource "null_resource" "s3_bucket_cleanup" {
   provisioner "local-exec" {
     when       = destroy
     command    = <<EOT
-      echo "Attempting to empty S3 bucket: ${self.triggers.s3_bucket_name}"
-      aws s3 rm s3://${self.triggers.s3_bucket_name} --recursive
-
-      # Check if versioning is enabled and delete object versions
-      BUCKET_VERSIONING=$(aws s3api get-bucket-versioning --bucket ${self.triggers.s3_bucket_name} --query 'Status' --output text)
-      if [ "$BUCKET_VERSIONING" == "Enabled" ]; then
-        echo "Versioning is enabled for ${self.triggers.s3_bucket_name}. Deleting object versions..."
-        aws s3api list-object-versions --bucket ${self.triggers.s3_bucket_name} \
-          --query 'Versions[*].{Key:Key,VersionId:VersionId}' --output json | \
-          jq -c '.[]' | while read -r item; do
-            KEY=$(echo $item | jq -r '.Key')
-            VERSION_ID=$(echo $item | jq -r '.VersionId')
-            echo "Deleting version: $KEY (VersionId: $VERSION_ID)"
-            aws s3api delete-object --bucket ${self.triggers.s3_bucket_name} --key "$KEY" --version-id "$VERSION_ID"
-          done
-        aws s3api list-object-versions --bucket ${self.triggers.s3_bucket_name} \
-          --query 'DeleteMarkers[*].{Key:Key,VersionId:VersionId}' --output json | \
-          jq -c '.[]' | while read -r item; do
-            KEY=$(echo $item | jq -r '.Key')
-            VERSION_ID=$(echo $item | jq -r '.VersionId')
-            echo "Deleting delete marker: $KEY (VersionId: $VERSION_ID)"
-            aws s3api delete-object --bucket ${self.triggers.s3_bucket_name} --key "$KEY" --version-id "$VERSION_ID"
-          done
-        echo "Finished deleting object versions from ${self.triggers.s3_bucket_name}."
-      fi
-      echo "Finished emptying S3 bucket: ${self.triggers.s3_bucket_name}."
+      echo "Attempting to force delete S3 bucket: ${self.triggers.s3_bucket_name}"
+      aws s3 rb s3://${self.triggers.s3_bucket_name} --force
+      echo "Finished force deleting S3 bucket: ${self.triggers.s3_bucket_name}."
     EOT
     interpreter = ["bash", "-c"]
   }
