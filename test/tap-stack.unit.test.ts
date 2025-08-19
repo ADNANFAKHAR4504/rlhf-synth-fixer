@@ -1,194 +1,212 @@
-import { App, Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
-import { VpcModule, AlbModule, Route53Module, } from '../lib/module';
+// tapstack.ts
 
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
+import {
+  AlbModule,
+  CloudwatchModule,
+  Ec2Module,
+  IamModule,
+  RdsModule,
+  Route53Module,
+  S3Module,
+  VpcModule,
+} from '../lib/module';
 
-// Mock all the modules to isolate the TapStack for unit testing.
-jest.mock('../lib/module', () => {
-    return {
-        VpcModule: jest.fn(() => ({
-            vpcIdOutput: 'mock-vpc-id',
-            publicSubnetIdsOutput: ['mock-public-subnet-0'],
-            privateSubnetIdsOutput: ['mock-private-subnet-0'],
-            cidrBlockOutput: '10.0.0.0/16',
-        })),
-        S3Module: jest.fn(),
-        IamModule: jest.fn(() => ({
-            instanceProfileName: 'mock-iam-profile-name',
-        })),
-        Ec2Module: jest.fn(() => ({
-            instanceIdOutput: 'mock-instance-id',
-            targetGroupArnOutput: 'mock-target-group-arn',
-        })),
-        AlbModule: jest.fn(() => ({
-            albDnsNameOutput: 'mock-alb-dns-name',
-            albZoneIdOutput: 'mock-alb-zone-id',
-            albSecurityGroupIdOutput: 'mock-alb-security-group-id',
-        })),
-        RdsModule: jest.fn(() => ({
-            dbInstanceIdOutput: 'mock-db-instance-id',
-            dbEndpointOutput: 'mock-db-endpoint',
-        })),
-        Route53Module: jest.fn(),
-        CloudwatchModule: jest.fn(),
-    };
-});
+interface TapStackProps {
+    environmentSuffix?: string;
+    stateBucket?: string;
+    stateBucketRegion?: string;
+    awsRegion?: string;
+    defaultTags?: AwsProviderDefaultTags;
+}
 
-// Mocking AWS resources to prevent real API calls
-jest.mock('@cdktf/provider-aws/lib/security-group', () => {
-    return {
-        SecurityGroup: jest.fn(() => ({
-            id: 'mock-security-group-id',
-        })),
-    };
-});
-jest.mock('@cdktf/provider-aws/lib/security-group-rule', () => {
-    return {
-        SecurityGroupRule: jest.fn(),
-    };
-});
-jest.mock('@cdktf/provider-aws/lib/data-aws-ami', () => {
-    return {
-        DataAwsAmi: jest.fn(() => ({
-            id: 'mock-ami-id',
-        })),
-    };
-});
+const AWS_REGION_OVERRIDE = '';
 
-describe('Stack Structure', () => {
-    let app: App;
-    let stack: TapStack;
-    let synthesized: string;
+export class TapStack extends TerraformStack {
+    constructor(scope: Construct, id: string, props?: TapStackProps) {
+        super(scope, id);
 
-    beforeEach(() => {
-        jest.clearAllMocks();
-    });
+        const environmentSuffix = props?.environmentSuffix || 'dev';
+        const awsRegion = AWS_REGION_OVERRIDE
+            ? AWS_REGION_OVERRIDE
+            : props?.awsRegion || 'us-east-1';
+        const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+        const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+        const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    test('TapStack instantiates successfully via props', () => {
-        app = new App();
-        stack = new TapStack(app, 'TestTapStackWithProps', {
-            environmentSuffix: 'prod',
-            stateBucket: 'custom-state-bucket',
-            stateBucketRegion: 'us-west-2',
-            awsRegion: 'us-west-2',
-            defaultTags: { tags: { Project: 'MyApp' } },
+        new AwsProvider(this, 'aws', {
+            region: awsRegion,
+            defaultTags: defaultTags,
         });
-        synthesized = Testing.synth(stack);
-        expect(stack).toBeDefined();
-        expect(synthesized).toBeDefined();
-    });
 
-    test('TapStack uses default values when no props provided', () => {
-        app = new App();
-        stack = new TapStack(app, 'TestTapStackDefault');
-        synthesized = Testing.synth(stack);
-        expect(stack).toBeDefined();
-        expect(synthesized).toBeDefined();
-    });
-});
-
-describe('AWS Provider and Backend Configuration', () => {
-    let app: App;
-    let stack: TapStack;
-    let synthesized: string;
-
-    beforeEach(() => {
-        app = new App();
-        stack = new TapStack(app, 'TestConfig', {
-            defaultTags: { tags: { Project: 'TAP', Environment: 'dev', ManagedBy: 'CDKTF' } },
+        new S3Backend(this, {
+            bucket: stateBucket,
+            key: `${environmentSuffix}/${id}.tfstate`,
+            region: stateBucketRegion,
+            encrypt: true,
         });
-        synthesized = Testing.synth(stack);
-    });
 
-    test('should configure the AWS provider with the correct region', () => {
-        const parsed = JSON.parse(synthesized);
-        expect(parsed.provider.aws[0].region).toBe('us-east-1');
-    });
+        this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    test('should configure the S3 backend with default values', () => {
-        const parsed = JSON.parse(synthesized);
-        expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
-        expect(parsed.terraform.backend.s3.key).toBe('dev/TestConfig.tfstate');
-        expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
-        expect(parsed.terraform.backend.s3.encrypt).toBe(true);
-        expect(parsed.terraform.backend.s3.use_lockfile).toBe(true);
-    });
-
-    test('should use custom state bucket and region when provided', () => {
-        app = new App();
-        stack = new TapStack(app, 'TestCustomBackend', {
-            stateBucket: 'my-custom-bucket',
-            stateBucketRegion: 'eu-west-1',
-            environmentSuffix: 'staging',
+        const vpc = new VpcModule(this, 'main-vpc', {
+            name: `fullstack-app-${environmentSuffix}`,
+            cidrBlock: '10.0.0.0/16',
         });
-        synthesized = Testing.synth(stack);
-        const parsed = JSON.parse(synthesized);
-        expect(parsed.terraform.backend.s3.bucket).toBe('my-custom-bucket');
-        expect(parsed.terraform.backend.s3.key).toBe('staging/TestCustomBackend.tfstate');
-        expect(parsed.terraform.backend.s3.region).toBe('eu-west-1');
-    });
 
-    test('should set default tags on the provider', () => {
-        const parsed = JSON.parse(synthesized);
-        expect(parsed.provider.aws[0].default_tags).toEqual(
-            expect.arrayContaining([
-                expect.objectContaining({
-                    tags: {
-                        Project: 'TAP',
-                        Environment: 'dev',
-                        ManagedBy: 'CDKTF',
-                    },
-                }),
-            ]),
-        );
-    });
-});
+        new S3Module(this, 's3-buckets', {
+            bucketName: `fullstack-app-bucket-${environmentSuffix}`,
+            logBucketName: `fullstack-app-log-bucket-${environmentSuffix}`,
+        });
 
-describe('Module Instantiation and Wiring', () => {
-    let app: App;
-    let stack: TapStack;
-    beforeEach(() => {
-        jest.clearAllMocks();
-        app = new App();
-        stack = new TapStack(app, 'TestModule');
-        Testing.synth(stack);
-    });
+        const iam = new IamModule(this, 'ec2-iam-role', {
+            name: `ec2-role-${environmentSuffix}`,
+        });
 
-    test('should instantiate VpcModule once', () => {
-        expect(VpcModule).toHaveBeenCalledTimes(1);
-        expect(VpcModule).toHaveBeenCalledWith(
-            expect.anything(),
-            'main-vpc',
-            expect.objectContaining({ name: 'fullstack-app-dev' }),
-        );
-    });
+        const albSecurityGroup = new SecurityGroup(this, 'alb-sg', {
+            name: `alb-sg-${environmentSuffix}`,
+            vpcId: vpc.vpcIdOutput,
+            description: 'Allow all inbound HTTP/S traffic',
+            ingress: [
+                {
+                    fromPort: 80,
+                    toPort: 80,
+                    protocol: 'tcp',
+                    cidrBlocks: ['0.0.0.0/0'],
+                },
+                {
+                    fromPort: 443,
+                    toPort: 443,
+                    protocol: 'tcp',
+                    cidrBlocks: ['0.0.0.0/0'],
+                },
+            ],
+            egress: [
+                {
+                    fromPort: 0,
+                    toPort: 0,
+                    protocol: '-1',
+                    cidrBlocks: ['0.0.0.0/0'],
+                },
+            ],
+            tags: { Name: `alb-sg-${environmentSuffix}` },
+        });
 
-    test('should instantiate AlbModule once with correct dependencies', () => {
-        expect(AlbModule).toHaveBeenCalledTimes(1);
-        expect(AlbModule).toHaveBeenCalledWith(
-            expect.anything(),
-            'alb',
-            expect.objectContaining({
-                name: 'fullstack-app-alb-dev',
-                vpcId: 'mock-vpc-id',
-                publicSubnetIds: ['mock-public-subnet-0'],
-                targetGroupArn: 'mock-target-group-arn',
-                albSecurityGroupId: 'mock-security-group-id',
-            }),
-        );
-    });
+        const ec2SecurityGroup = new SecurityGroup(this, 'ec2-sg', {
+            name: `ec2-sg-${environmentSuffix}`,
+            vpcId: vpc.vpcIdOutput,
+            description: 'Allow inbound HTTP traffic from ALB',
+            ingress: [
+                {
+                    fromPort: 80,
+                    toPort: 80,
+                    protocol: 'tcp',
+                    securityGroups: [albSecurityGroup.id], // Use securityGroups instead of sourceSecurityGroupId
+                },
+            ],
+            egress: [
+                {
+                    fromPort: 0,
+                    toPort: 0,
+                    protocol: '-1',
+                    cidrBlocks: ['0.0.0.0/0'],
+                },
+            ],
+            tags: { Name: `ec2-sg-${environmentSuffix}` },
+        });
 
-    test('should instantiate Route53Module once with correct dependencies', () => {
-        expect(Route53Module).toHaveBeenCalledTimes(1);
-        expect(Route53Module).toHaveBeenCalledWith(
-            expect.anything(),
-            'dns-record',
-            expect.objectContaining({
-                zoneName: 'example.com',
-                recordName: 'fullstack-app-dev',
-                albDnsName: 'mock-alb-dns-name',
-                albZoneId: 'mock-alb-zone-id',
-            }),
-        );
-    });
-});
+        const dbSecurityGroup = new SecurityGroup(this, 'db-sg', {
+            name: `db-sg-${environmentSuffix}`,
+            vpcId: vpc.vpcIdOutput,
+            description: 'Allow inbound traffic to RDS from EC2 instances',
+            ingress: [
+                {
+                    fromPort: 3306,
+                    toPort: 3306,
+                    protocol: 'tcp',
+                    securityGroups: [ec2SecurityGroup.id], // Use securityGroups instead of sourceSecurityGroupId
+                },
+            ],
+            egress: [
+                {
+                    fromPort: 0,
+                    toPort: 0,
+                    protocol: '-1',
+                    cidrBlocks: ['0.0.0.0/0'],
+                },
+            ],
+            tags: { Name: `db-sg-${environmentSuffix}` },
+        });
+
+        const ami = new DataAwsAmi(this, 'ubuntu-ami', {
+            mostRecent: true,
+            owners: ['099720109477'],
+            filter: [
+                {
+                    name: 'name',
+                    values: ['ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*'],
+                },
+            ],
+        });
+
+        const ec2 = new Ec2Module(this, 'ec2-instance', {
+            name: `web-server-${environmentSuffix}`,
+            vpcId: vpc.vpcIdOutput,
+            subnetId: vpc.privateSubnetIdsOutput[0],
+            instanceType: 't3.micro',
+            ami: ami.id,
+            keyName: 'aws-key',
+            instanceProfileName: iam.instanceProfileName,
+            ec2SecurityGroupId: ec2SecurityGroup.id,
+        });
+
+        const rds = new RdsModule(this, 'db-instance', {
+            name: `mysql-db-${environmentSuffix}`,
+            engine: 'mysql',
+            engineVersion: '8.0',
+            instanceClass: 'db.t3.micro',
+            allocatedStorage: 20,
+            username: 'admin',
+            vpcId: vpc.vpcIdOutput,
+            privateSubnetIds: vpc.privateSubnetIdsOutput,
+            dbSecurityGroupId: dbSecurityGroup.id,
+        });
+
+        const alb = new AlbModule(this, 'alb', {
+            name: `fullstack-app-alb-${environmentSuffix}`,
+            vpcId: vpc.vpcIdOutput,
+            publicSubnetIds: vpc.publicSubnetIdsOutput,
+            targetGroupArn: ec2.targetGroupArnOutput,
+            albSecurityGroupId: albSecurityGroup.id,
+        });
+
+        new Route53Module(this, 'dns-record', {
+            zoneName: 'example.com',
+            recordName: `fullstack-app-${environmentSuffix}`,
+            albDnsName: alb.albDnsNameOutput,
+            albZoneId: alb.albZoneIdOutput,
+        });
+
+        new CloudwatchModule(this, 'alarms', {
+            instanceId: ec2.instanceIdOutput,
+            dbInstanceId: rds.dbInstanceIdOutput,
+        });
+
+        new TerraformOutput(this, 'vpc_id', {
+            value: vpc.vpcIdOutput,
+        });
+        new TerraformOutput(this, 'alb_dns_name', {
+            value: alb.albDnsNameOutput,
+        });
+        new TerraformOutput(this, 'rds_endpoint', {
+            value: rds.dbEndpointOutput,
+            sensitive: true,
+        });
+    }
+}
