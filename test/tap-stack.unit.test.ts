@@ -418,7 +418,7 @@ describe('TapStack', () => {
     test('should create resources with unique names using suffix', () => {
       // This test verifies that resources use the unique suffix pattern
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp('production-app-data-.*-.*-.*')
+        BucketName: Match.stringLikeRegexp('production-app-data-.*-.*-.*-.*')
       });
     });
 

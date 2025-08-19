@@ -22,7 +22,8 @@ export class TapStack extends cdk.Stack {
     const account = this.account;
 
     // Generate a unique suffix for resource names to avoid conflicts
-    const uniqueSuffix = `${account}-${region}-${Date.now()}`;
+    // Use environment suffix and region for stability, only add timestamp for truly unique resources
+    const uniqueSuffix = `${account}-${region}-${props?.environmentSuffix || 'dev'}`;
 
     // Log region-specific information for debugging
     console.log(`🔍 Deploying to region: ${region}`);
@@ -252,7 +253,7 @@ export class TapStack extends cdk.Stack {
         vpcSubnets: {
           subnetType: ec2.SubnetType.PUBLIC,
         },
-        deletionProtection: true, // Production safety
+        deletionProtection: false, // Disabled for testing - can be enabled for production
       }
     );
 
@@ -272,7 +273,7 @@ export class TapStack extends cdk.Stack {
         unhealthyThresholdCount: 3,
         healthyThresholdCount: 2,
       },
-      targetGroupName: `tg-pj-${region}`,
+      targetGroupName: `tg-${uniqueSuffix}`,
     });
 
     // Create HTTP listener (forwards traffic directly to target group)
@@ -342,7 +343,7 @@ export class TapStack extends cdk.Stack {
 
     // Create S3 bucket with versioning and encryption
     const s3Bucket = new s3.Bucket(this, 'ProductionDataBucket', {
-      bucketName: `production-app-data-${uniqueSuffix}`, // Use unique suffix to avoid conflicts
+      bucketName: `production-app-data-${uniqueSuffix}-${Date.now()}`, // Use timestamp only for S3 bucket to ensure uniqueness
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
