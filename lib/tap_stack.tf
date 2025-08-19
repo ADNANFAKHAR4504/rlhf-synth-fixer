@@ -143,31 +143,20 @@ data "aws_iam_policy_document" "flow_logs_policy_secondary" {
   }
 }
 
-# IAM Role for VPC Flow Logs - Primary Region
-resource "aws_iam_role" "flow_logs_role_primary" {
-  name               = "${local.name_prefix}-vpc-flow-logs-role-primary"
-  assume_role_policy = data.aws_iam_policy_document.flow_logs_assume_role.json
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-logs-role-primary"
-  })
+## Use existing IAM Roles (lookup by name)
+data "aws_iam_role" "flow_logs_role_primary" {
+  name = "${local.name_prefix}-vpc-flow-logs-role-primary"
 }
 
-# IAM Role for VPC Flow Logs - Secondary Region
-resource "aws_iam_role" "flow_logs_role_secondary" {
-  provider           = aws.eu_west_1
-  name               = "${local.name_prefix}-vpc-flow-logs-role-secondary"
-  assume_role_policy = data.aws_iam_policy_document.flow_logs_assume_role.json
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-logs-role-secondary"
-  })
+data "aws_iam_role" "flow_logs_role_secondary" {
+  provider = aws.eu_west_1
+  name     = "${local.name_prefix}-vpc-flow-logs-role-secondary"
 }
 
 # IAM Policy for VPC Flow Logs - Primary Region
 resource "aws_iam_role_policy" "flow_logs_policy_primary" {
   name   = "${local.name_prefix}-vpc-flow-logs-policy-primary"
-  role   = aws_iam_role.flow_logs_role_primary.id
+  role   = data.aws_iam_role.flow_logs_role_primary.name
   policy = data.aws_iam_policy_document.flow_logs_policy_primary.json
 }
 
@@ -175,7 +164,7 @@ resource "aws_iam_role_policy" "flow_logs_policy_primary" {
 resource "aws_iam_role_policy" "flow_logs_policy_secondary" {
   provider = aws.eu_west_1
   name     = "${local.name_prefix}-vpc-flow-logs-policy-secondary"
-  role     = aws_iam_role.flow_logs_role_secondary.id
+  role     = data.aws_iam_role.flow_logs_role_secondary.name
   policy   = data.aws_iam_policy_document.flow_logs_policy_secondary.json
 }
 
@@ -338,7 +327,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_secondary" {
 
 # VPC Flow Log - Primary Region
 resource "aws_flow_log" "vpc_flow_logs_primary" {
-  iam_role_arn    = aws_iam_role.flow_logs_role_primary.arn
+  iam_role_arn    = data.aws_iam_role.flow_logs_role_primary.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs_primary.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.primary.id
@@ -351,7 +340,7 @@ resource "aws_flow_log" "vpc_flow_logs_primary" {
 # VPC Flow Log - Secondary Region
 resource "aws_flow_log" "vpc_flow_logs_secondary" {
   provider        = aws.eu_west_1
-  iam_role_arn    = aws_iam_role.flow_logs_role_secondary.arn
+  iam_role_arn    = data.aws_iam_role.flow_logs_role_secondary.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs_secondary.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.secondary.id

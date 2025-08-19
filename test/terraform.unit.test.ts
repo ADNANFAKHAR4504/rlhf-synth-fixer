@@ -147,9 +147,9 @@ describe("Terraform Multi-Region Security Baseline", () => {
       expect(stackContent).toMatch(/retention_in_days\s*=\s*var\.flow_logs_retention_days/);
     });
 
-    test("creates IAM roles for flow logs in both regions", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"flow_logs_role_primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"flow_logs_role_secondary"/);
+    test("references existing IAM roles for flow logs via data sources", () => {
+      expect(stackContent).toMatch(/data\s+"aws_iam_role"\s+"flow_logs_role_primary"/);
+      expect(stackContent).toMatch(/data\s+"aws_iam_role"\s+"flow_logs_role_secondary"/);
     });
 
     test("creates flow log resources for both regions", () => {
