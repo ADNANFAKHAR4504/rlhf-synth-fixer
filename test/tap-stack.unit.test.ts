@@ -371,7 +371,7 @@ describe('High Availability Web Application CloudFormation Template Unit Tests',
       const hostedZone = template.Resources.HostedZone;
       expect(hostedZone).toBeDefined();
       expect(hostedZone.Type).toBe('AWS::Route53::HostedZone');
-      expect(hostedZone.Properties.Name).toContain('.ha.example.com');
+     expect(hostedZone.Properties.Name).toEqual({ 'Fn::Sub': '${AWS::StackName}.ha.example.com' });
     });
 
     test('should have Primary and Secondary Alias A records with failover', () => {
@@ -418,7 +418,7 @@ describe('High Availability Web Application CloudFormation Template Unit Tests',
       const dashboard = template.Resources.Dashboard;
       expect(dashboard).toBeDefined();
       expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
-      expect(dashboard.Properties.DashboardName).toContain('-dashboard');
+      expect(dashboard.Properties.DashboardName).toEqual({ 'Fn::Sub': '${AWS::StackName}-dashboard' });
       expect(dashboard.Properties.DashboardBody).toContain('ASG CPU Utilization');
       expect(dashboard.Properties.DashboardBody).toContain('RDS CPU Utilization');
     });
