@@ -130,7 +130,7 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
           expect(stack.StackStatus).toBe('CREATE_COMPLETE');
           expect(stack.StackName).toContain('TapStack');
         } catch (error) {
-          if (error.name === 'ValidationException' && error.message.includes('does not exist')) {
+          if (error instanceof Error && error.name === 'ValidationException' && error.message.includes('does not exist')) {
             console.log('⏭️  Stack not found - likely running in CI environment without deployment');
             expect(true).toBe(true); // Pass test in CI environment
             return;
@@ -185,7 +185,7 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
           ).length;
           expect(subnetCount).toBeGreaterThanOrEqual(4);
         } catch (error) {
-          if (error.name === 'ValidationException' || error.name === 'AccessDeniedException') {
+          if (error instanceof Error && (error.name === 'ValidationException' || error.name === 'AccessDeniedException')) {
             console.log('⏭️  Stack resources not accessible - likely running in CI environment');
             expect(true).toBe(true); // Pass test in CI environment
             return;
@@ -235,7 +235,7 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
           );
           expect(cloudTrailStatement).toBeDefined();
         } catch (error) {
-          if (error.name === 'AccessDeniedException' || error.name === 'NotFoundException') {
+          if (error instanceof Error && (error.name === 'AccessDeniedException' || error.name === 'NotFoundException')) {
             console.log('⏭️  KMS resources not accessible - likely running in CI environment');
             expect(true).toBe(true); // Pass test in CI environment
             return;
@@ -334,7 +334,7 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
           expect(ourTrail.LogFileValidationEnabled).toBe(true);
           expect(ourTrail.KmsKeyId).toBeDefined();
         } catch (error) {
-          if (error.name === 'CredentialsProviderError' || error.name === 'AccessDeniedException') {
+          if (error instanceof Error && (error.name === 'CredentialsProviderError' || error.name === 'AccessDeniedException')) {
             console.log('⏭️  CloudTrail not accessible - likely running in CI environment');
             expect(true).toBe(true); // Pass test in CI environment
             return;
@@ -578,7 +578,7 @@ describe(`Nebula${integrationTestId}SecureWebApp Integration Tests`, () => {
             expect(publicIp).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
           });
         } catch (error) {
-          if (error.name === 'CredentialsProviderError' || error.name === 'AccessDeniedException') {
+          if (error instanceof Error && (error.name === 'CredentialsProviderError' || error.name === 'AccessDeniedException')) {
             console.log('⏭️  NAT gateways not accessible - likely running in CI environment');
             expect(true).toBe(true); // Pass test in CI environment
             return;
