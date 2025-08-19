@@ -9,7 +9,16 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { AlbModule, CloudwatchModule, Ec2Module, IamModule, RdsModule, Route53Module, S3Module, VpcModule } from './module';
+import {
+  AlbModule,
+  CloudwatchModule,
+  Ec2Module,
+  IamModule,
+  RdsModule,
+  Route53Module,
+  S3Module,
+  VpcModule,
+} from './module';
 
 interface TapStackProps {
   environmentSuffix?: string;
