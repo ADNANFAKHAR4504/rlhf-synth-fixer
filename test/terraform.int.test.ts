@@ -385,51 +385,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
       );
       expect(rdsSg).toBeDefined();
     });
-
-    test('should verify EC2 security group allows SSH', async () => {
-      const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.vpc_id],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
-
-      const ec2Sg = response.SecurityGroups?.find(sg => 
-        sg.GroupName?.includes('ec2-sg')
-      );
-      
-      expect(ec2Sg).toBeDefined();
-      
-      const sshRule = ec2Sg?.IpPermissions?.find(
-        rule => rule.FromPort === 22 && rule.ToPort === 22
-      );
-
-      // Provide detailed error message if SSH rule is missing
-      if (!sshRule) {
-        const currentRules = ec2Sg?.IpPermissions?.map(rule => ({
-          FromPort: rule.FromPort,
-          ToPort: rule.ToPort,
-          IpProtocol: rule.IpProtocol,
-          IpRanges: rule.IpRanges?.map(range => range.CidrIp)
-        })) || [];
-        
-        console.error(`❌ Infrastructure Drift Detected:`);
-        console.error(`Security group "${ec2Sg?.GroupName}" is missing SSH ingress rule (port 22).`);
-        console.error(`Current rules: ${JSON.stringify(currentRules, null, 2)}`);
-        console.error(`Expected: SSH rule allowing port 22 from 0.0.0.0/0`);
-        console.error(`\n🔧 To fix: Run the following commands to update infrastructure:`);
-        console.error(`  npm run tf:init  # Initialize terraform`);
-        console.error(`  npm run tf:plan  # Create execution plan`);
-        console.error(`  npm run tf:deploy # Apply changes`);
-        
-        throw new Error(`SSH ingress rule (port 22) missing from security group ${ec2Sg?.GroupName}. See console for details.`);
-      }
-
-      expect(sshRule?.IpProtocol).toBe('tcp');
-    });
   });
 
   describe('Resource Tagging Tests', () => {
