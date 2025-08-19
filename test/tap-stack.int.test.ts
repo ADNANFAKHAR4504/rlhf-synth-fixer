@@ -5,16 +5,15 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const lbDNS = outputs[`LoadBalancerDNS-${environmentSuffix}`]; // Key format: OutputName-env
-
-if (!lbDNS) {
-  throw new Error(
-    `LoadBalancerDNS not found in outputs for environment: ${environmentSuffix}`
-  );
-}
-
 describe('High Availability Web App Integration Tests', () => {
+  const lbDNS = outputs['LoadBalancerDNS'];
+  const logBucket = outputs['LogBucketName'];
+  const asgName = outputs['AutoScalingGroupName'];
+
+  if (!lbDNS) {
+    throw new Error(`LoadBalancerDNS not found in outputs`);
+  }
+
   const baseUrl = `http://${lbDNS}`;
 
   test('Load balancer should respond with HTTP 200', async () => {
@@ -28,14 +27,10 @@ describe('High Availability Web App Integration Tests', () => {
   });
 
   test('S3 bucket name should match expected naming convention', () => {
-    const bucketName = outputs[`LogBucketName-${environmentSuffix}`];
-    expect(bucketName).toMatch(
-      new RegExp(`^app-logs-[a-z0-9-]+-[0-9]{12}$`)
-    );
+    expect(logBucket).toMatch(/^app-logs-[a-z0-9-]+-[0-9]{12}$/);
   });
 
-  test('Auto Scaling Group name should be defined', () => {
-    const asgName = outputs[`AutoScalingGroupName-${environmentSuffix}`];
+  test('Auto Scaling Group name should be a non-empty string', () => {
     expect(typeof asgName).toBe('string');
     expect(asgName.length).toBeGreaterThan(0);
   });
