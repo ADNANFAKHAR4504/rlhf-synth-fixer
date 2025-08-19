@@ -19,15 +19,16 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-variable "vpc_cidr" {
+variable "allowed_ssh_cidr" {
+  description = "CIDR allowed to SSH to bastion (e.g. 203.0.113.10/32)"
   type        = string
-  description = "VPC CIDR"
-  default     = "10.0.0.0/16"
+
   validation {
-    condition     = can(cidrnetmask(var.vpc_cidr))
-    error_message = "vpc_cidr must be a valid CIDR."
+    condition     = can(cidrnetmask(var.allowed_ssh_cidr)) && var.allowed_ssh_cidr != "0.0.0.0/0"
+    error_message = "Provide a valid CIDR (e.g., 203.0.113.10/32). 0.0.0.0/0 is not allowed."
   }
 }
+
 
 variable "public_subnet_cidr" {
   type        = string
