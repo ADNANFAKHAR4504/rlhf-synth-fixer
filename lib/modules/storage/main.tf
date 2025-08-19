@@ -1,3 +1,9 @@
+resource "aws_kms_key" "main" {
+  description             = "KMS key for ${var.project_name}"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+}
+
 resource "aws_s3_bucket" "data" {
   bucket = "${var.project_name}-data-bucket"
 
@@ -13,7 +19,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.main.arn
     }
   }
 }
@@ -71,8 +78,8 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 }
 
 resource "aws_vpc_endpoint" "s3" {
-  vpc_id       = var.vpc_id
-  service_name = "com.amazonaws.${var.aws_region}.s3"
+  vpc_id          = var.vpc_id
+  service_name    = "com.amazonaws.${var.aws_region}.s3"
   route_table_ids = var.private_route_table_ids
 
   tags = {
@@ -90,7 +97,7 @@ resource "aws_s3_bucket_policy" "data" {
       {
         Action    = "s3:*"
         Effect    = "Deny"
-        Resource  = [
+        Resource = [
           aws_s3_bucket.data.arn,
           "${aws_s3_bucket.data.arn}/*",
         ]

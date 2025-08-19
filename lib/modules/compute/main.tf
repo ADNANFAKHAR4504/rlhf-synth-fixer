@@ -31,11 +31,11 @@ resource "aws_autoscaling_group" "main" {
 
   target_group_arns = [aws_lb_target_group.main.arn]
 
-  tags = [{
+  tag {
     key                 = "Name"
     value               = "${var.project_name}-ec2-instance"
     propagate_at_launch = true
-  }]
+  }
 }
 
 resource "aws_lb" "main" {
