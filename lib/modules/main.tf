@@ -345,6 +345,43 @@ data "aws_kms_key" "main" {
   key_id = "alias/${var.project_name}-key"
 }
 
+# S3 New Bucket
+resource "aws_s3_bucket" "new_bucket" {
+  bucket = "tap-app-dev-new-bucket"
+  force_destroy = true
+}
+
+# S3 Bucket Versioning - New Bucket
+resource "aws_s3_bucket_versioning" "new_bucket" {
+  bucket = aws_s3_bucket.new_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 Bucket Encryption - New Bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "new_bucket" {
+  bucket = aws_s3_bucket.new_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = data.aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Block all public access - New Bucket
+resource "aws_s3_bucket_public_access_block" "new_bucket" {
+  bucket = aws_s3_bucket.new_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 # VPC S3 Endpoint
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
@@ -411,4 +448,12 @@ output "kms_key_id" {
 
 output "vpc_endpoint_s3_id" {
   value = aws_vpc_endpoint.s3.id
+}
+
+output "s3_new_bucket_name" {
+  value = aws_s3_bucket.new_bucket.bucket
+}
+
+output "s3_new_bucket_arn" {
+  value = aws_s3_bucket.new_bucket.arn
 }
