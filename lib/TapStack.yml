@@ -112,7 +112,7 @@ Resources:
   AppLogBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-logs-${AWS::Region}-${AWS::AccountId}'
+      BucketName: !Sub 'app-logs-${AWS::Region}-${AWS::AccountId}'
       LifecycleConfiguration:
         Rules:
           - Id: TransitionLogsToGlacier
