@@ -1,49 +1,43 @@
-You are a Senior Cloud Engineer specializing in multi-region AWS architectures. Your task is to create a complete Terraform configuration (HCL) for a multi-region infrastructure migration. All resource definitions must be consolidated into a single file, tap_stack.tf, supported by a separate provider configuration.
+Hey there,
 
-Task:
+I'm working on a pretty big project to migrate some of our infrastructure, and I could really use your expertise in putting together the Terraform code. The goal is to create a mirrored, highly available setup across two AWS regions: us-east-1 as our primary and eu-west-1 as our secondary.
 
-Create the HCL code for the following two files. The configuration must provision a mirrored, highly available, and secure infrastructure across two AWS regions: us-east-1 (primary) and eu-west-1 (secondary).
+To keep things simple, I'd like to stick to just two files: provider.tf for the AWS provider setup and tap_stack.tf for, well, everything else.
 
-File 1: provider.tf
-This file must define the AWS provider for both regions using aliases.
+Provider Setup (provider.tf)
+For the provider file, we'll need to configure AWS to handle both regions. This means setting up the default provider for us-east-1 and then an aliased provider for eu-west-1 (maybe we can call the alias "eu_west_1"). This part is super important for making the multi-region magic happen.
 
-Primary Provider: Define the default aws provider for the us-east-1 region.
+The Main Stack (tap_stack.tf)
+This is where the bulk of the work will be. I want to define all our resources in this one file, using the provider alias for anything we build in the secondary region.
 
-Secondary Provider: Define an aliased aws provider for the eu-west-1 region (e.g., alias = "eu_west_1").
+Here's a rundown of what we need:
 
-File 2: tap_stack.tf
-This single file must contain all variables, resources, and outputs. You must use the provider alias (e.g., provider = aws.eu_west_1) for every resource that needs to be created in the secondary region.
+Networking 🌐
+Let's start by setting up a VPC in each region. Once those are up, we'll need to link them with a VPC peering connection and add the necessary routes so they can talk to each other privately.
 
-Variables
-Define variables for ec2_instance_type and ec2_key_pair_name to ensure consistency.
+Data & Databases 💾
+This is the critical part. I'm thinking:
 
-Networking Resources
-VPCs: An aws_vpc in us-east-1 and another aws_vpc in eu-west-1.
+S3 Buckets: One in each region, with cross-region replication set up to copy data from the primary to the secondary bucket.
 
-VPC Peering: A single aws_vpc_peering_connection resource to link the two VPCs. Remember to configure accepter and requester regions.
+DynamoDB Global Tables: A single global table that automatically replicates data between both regions. We should also add some auto-scaling policies to handle the load.
 
-Routes: The necessary aws_route resources in each VPC's route table to enable traffic over the peering connection.
+RDS Instances: An RDS instance in each region, and both absolutely must be Multi-AZ for high availability.
 
-Data Tier Resources
-S3 Buckets: An aws_s3_bucket in each region. The primary bucket must have a replication_configuration block to replicate objects to the secondary bucket.
+Compute 🖥️
+We'll need an EC2 instance in each region. To keep things consistent, let's use variables for the instance type and key pair name. It would also be great to use a data source to automatically find the latest Amazon Linux 2 AMI in each region.
 
-DynamoDB Global Table: A single aws_dynamodb_global_table resource with replica blocks for both us-east-1 and eu-west-1. Also include aws_appautoscaling_target and aws_appautoscaling_policy for read/write capacity.
+Security & Logging 🔒
+Security first, always!
 
-RDS Instances: An aws_db_instance in each region. Both instances must be Multi-AZ deployments (multi_az = true).
+Let's create a KMS key in each region and make sure all our services—S3, DynamoDB, RDS, and even the EC2 drives—are using these keys for encryption at rest.
 
-Compute Resources
-EC2 Instances: An aws_instance in each region. Use a data source (aws_ami) to find the latest Amazon Linux 2 AMI for each respective region. The instance type and key pair must be set by the variables.
+For IAM, a single global IAM role with a tight, least-privilege policy should do the trick.
 
-Security & Compliance Resources
-KMS Keys: An aws_kms_key in us-east-1 and another in eu-west-1.
+We also need CloudTrail enabled in both regions, with all the logs sent to a single, centralised S3 bucket in us-east-1. Let's also add a lifecycle policy to that bucket to manage old logs.
 
-Encryption Mandate: Ensure all services (S3, DynamoDB, RDS, EC2 EBS volumes) are configured to use the KMS key from their respective region for encryption at rest.
+Finally, it would be super helpful to have some outputs defined, like the RDS endpoints and S3 bucket names for both regions, just so we can easily find them later.
 
-IAM Role: A single, global aws_iam_role with an attached aws_iam_policy granting least-privilege permissions.
+Could you help me pull all this together into those two files? I'm looking for a clean, production-ready configuration that we can rely on.
 
-CloudTrail: An aws_cloudtrail in each region.
-
-Central Logging: A single aws_s3_bucket (created in us-east-1) to receive logs from both CloudTrail instances. Attach an aws_s3_bucket_lifecycle_configuration to this bucket to manage log retention.
-
-Outputs
-Export critical information for both regions, such as the RDS instance endpoints and S3 bucket names.
+Thanks a ton!
