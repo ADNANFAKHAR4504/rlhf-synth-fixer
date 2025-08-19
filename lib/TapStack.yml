@@ -196,6 +196,23 @@ Resources:
       SubnetId: !Ref TapPrivateSubnet2
       RouteTableId: !Ref TapPrivateRouteTable
 
+  # ==================== VPC ENDPOINTS ====================
+  
+  TapS3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref TapVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref TapPrivateRouteTable
+        - !Ref TapPublicRouteTable
+      Tags:
+        - Key: Name
+          Value: TapStack-S3-VPCEndpoint
+        - Key: Environment
+          Value: Production
+
   # ==================== SECURITY GROUPS ====================
   
   TapEC2SecurityGroup:
@@ -301,7 +318,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
         - PolicyName: S3Access
           PolicyDocument:
@@ -311,7 +328,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${AWS::StackName}-bucket-${AWS::AccountId}-${AWS::Region}/*'
+                Resource: '*'
       Tags:
         - Key: Environment
           Value: Production
@@ -393,6 +410,7 @@ Resources:
   
   TapS3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       VersioningConfiguration:
         Status: Enabled
@@ -405,14 +423,50 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt TapLambdaFunction.Arn
+      
       Tags:
         - Key: Environment
           Value: Production
+  
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref TapLambdaFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub "arn:aws:s3:::${TapS3Bucket}/*"
 
-
-
-
+  TapS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TapS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ListBucketAccess
+            Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:ListBucket
+            Resource: !Sub 'arn:aws:s3:::${TapS3Bucket}'
+            Condition:
+              StringEquals:
+                aws:SourceVpce: !Ref TapS3VPCEndpoint
+          - Sid: ObjectLevelAccess
+            Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource: !Sub 'arn:aws:s3:::${TapS3Bucket}/*'
+            Condition:
+              StringEquals:
+                aws:SourceVpce: !Ref TapS3VPCEndpoint
   # ==================== SECRETS ====================
   
   TapDBSecret:
@@ -468,7 +522,7 @@ Resources:
       BackupRetentionPeriod: 7
       MultiAZ: false
       PubliclyAccessible: false
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Name
           Value: TapStack-RDS-Instance
@@ -484,7 +538,12 @@ Resources:
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt TapLambdaExecutionRole.Arn
-
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref TapLambdaSecurityGroup
+        SubnetIds:
+          - !Ref TapPrivateSubnet1
+          - !Ref TapPrivateSubnet2
       Code:
         ZipFile: |
           import json
@@ -512,16 +571,6 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-
-  TapLambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref TapLambdaFunction
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceArn: !Sub 'arn:aws:s3:::${TapS3Bucket}/*'
-
-
 
   # ==================== MONITORING & ALERTS ====================
   

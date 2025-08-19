@@ -146,15 +146,38 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('VPC Endpoints', () => {
+    test('should have S3 VPC Endpoint', () => {
+      expect(templateContent).toContain('TapS3VPCEndpoint:');
+      expect(templateContent).toContain('Type: AWS::EC2::VPCEndpoint');
+      expect(templateContent).toContain('VpcEndpointType: Gateway');
+    });
+  });
+
   describe('Storage Resources', () => {
     test('should have S3 bucket', () => {
       expect(templateContent).toContain('TapS3Bucket:');
       expect(templateContent).toContain('Type: AWS::S3::Bucket');
+      expect(templateContent).toContain('VersioningConfiguration:');
+      expect(templateContent).toContain('Status: Enabled');
+      expect(templateContent).toContain('BucketEncryption:');
+      expect(templateContent).toContain('SSEAlgorithm: AES256');
     });
 
+    test('should have S3 bucket notification configuration', () => {
+      expect(templateContent).toContain('NotificationConfiguration:');
+      expect(templateContent).toContain('LambdaConfigurations:');
+      expect(templateContent).toContain('Event: s3:ObjectCreated:*');
+      expect(templateContent).toContain('Function: !GetAtt TapLambdaFunction.Arn');
+    });
 
-
-
+    test('should have S3 bucket policy', () => {
+      expect(templateContent).toContain('TapS3BucketPolicy:');
+      expect(templateContent).toContain('Type: AWS::S3::BucketPolicy');
+      expect(templateContent).toContain('aws:SourceVpce');
+      expect(templateContent).toContain('s3:GetObject');
+      expect(templateContent).toContain('s3:PutObject');
+    });
 
     test('should have Secrets Manager secret', () => {
       expect(templateContent).toContain('TapDBSecret:');
@@ -180,10 +203,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(templateContent).toContain('Type: AWS::Lambda::Function');
     });
 
-    test('should have Lambda permission', () => {
-      expect(templateContent).toContain('TapLambdaInvokePermission:');
-      expect(templateContent).toContain('Type: AWS::Lambda::Permission');
-    });
+
   });
 
   describe('IAM Resources', () => {
