@@ -14,7 +14,7 @@ import {
 } from "@aws-sdk/client-s3";
 import fs from "fs";
 
-const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-northeast-1";
 
 const ec2 = new EC2Client({ region });
 const s3 = new S3Client({ region });
@@ -73,7 +73,7 @@ describe("TapStack Infrastructure Integration Tests", () => {
     test("CloudTrail S3 bucket should exist in correct region", async () => {
       const bucket = outputs.CloudTrailS3Bucket; // Use the real bucket name
       const location = await s3.send(new GetBucketLocationCommand({ Bucket: bucket }));
-      const expectedRegions = region === "us-east-1" ? [undefined, null, "", "us-east-1"] : [region];
+      const expectedRegions = region === "ap-northeast-1" ? [undefined, null, "", "ap-northeast-1"] : [region];
       expect(expectedRegions).toContain(location.LocationConstraint);
     });
   });

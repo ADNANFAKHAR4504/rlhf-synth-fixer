@@ -585,7 +585,6 @@ Outputs:
      --template-body file://secure-infrastructure.yaml \
      --parameters ParameterKey=AllowedIPRange,ParameterValue=YOUR_IP_RANGE/32 \
      --capabilities CAPABILITY_NAMED_IAM \
-     --region us-east-1
    ```
 
 3. Monitor deployment progress:
@@ -593,7 +592,6 @@ Outputs:
    ```bash
    aws cloudformation describe-stacks \
      --stack-name secure-web-app-infrastructure \
-     --region us-east-1
    ```
 
 This template provides a solid foundation for a secure, production-ready web application infrastructure that meets all specified requirements and follows AWS best practices.

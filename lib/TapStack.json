@@ -653,6 +653,9 @@
                         }
                     ]
                 },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+                ],
                 "Policies": [
                     {
                         "PolicyName": "ConfigDeliveryPermissions",
