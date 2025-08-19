@@ -518,3 +518,7 @@ Outputs:
   InstanceType:
     Description: 'EC2 Instance Type'
     Value: !Ref InstanceType
+
+  EC2InstanceProfileArn:
+    Description: 'EC2 Instance Profile ARN'
+    Value: !GetAtt EC2InstanceProfile.Arn

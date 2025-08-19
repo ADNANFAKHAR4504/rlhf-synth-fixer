@@ -332,7 +332,8 @@ describe('TapStack CloudFormation Template', () => {
         'WebServerURL',
         'ApplicationSecretArn',
         'WebServerSecurityGroupId',
-        'InstanceType'
+        'InstanceType',
+        'EC2InstanceProfileArn'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -425,7 +426,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(20);
+      expect(outputCount).toBe(21);
     });
   });
 });
