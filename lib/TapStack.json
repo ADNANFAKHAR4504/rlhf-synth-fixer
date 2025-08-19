@@ -1061,7 +1061,7 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "app-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
+                    "Fn::Sub": "app-logs-${AWS::AccountId}-${AWS::Region}-tapstack"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"

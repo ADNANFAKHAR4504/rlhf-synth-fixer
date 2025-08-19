@@ -560,7 +560,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'app-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
+      BucketName: !Sub 'app-logs-${AWS::AccountId}-${AWS::Region}-tapstack'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
