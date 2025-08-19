@@ -18,6 +18,12 @@ const config = new pulumi.Config();
 const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
 
+// Check if we should skip database creation (for quota issues)
+const skipDatabase =
+  process.env.SKIP_DATABASE === 'true' ||
+  config.getBoolean('skipDatabase') ||
+  false;
+
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
 const repository = config.get('repository') || 'unknown';
@@ -35,12 +41,14 @@ const defaultTags = {
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,
+  skipDatabase: skipDatabase,
 });
 
 // Export stack outputs
 export const vpcId = stack.vpcId;
 export const loadBalancerDns = stack.loadBalancerDns;
 export const staticAssetsBucketName = stack.staticAssetsBucketName;
+export const staticAssetsUrl = stack.staticAssetsUrl;
 export const databaseEndpoint = stack.databaseEndpoint;
 
 // To use the stack outputs, you can export them.

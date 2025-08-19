@@ -11,6 +11,7 @@ import { ResourceOptions } from '@pulumi/pulumi';
 export interface TapStackArgs {
   environmentSuffix?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
+  skipDatabase?: boolean; // Skip RDS creation to avoid quota issues
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -18,13 +19,14 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly loadBalancerDns: pulumi.Output<string>;
   public readonly staticAssetsBucketName: pulumi.Output<string>;
   public readonly staticAssetsUrl: pulumi.Output<string>;
-  public readonly databaseEndpoint: pulumi.Output<string>;
+  public readonly databaseEndpoint?: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
+    const skipDatabase = args.skipDatabase || false;
 
     // Get availability zones
     const availableZones = aws.getAvailabilityZones({
@@ -426,18 +428,18 @@ yum install -y amazon-cloudwatch-agent
       { parent: this }
     );
 
-    // Create Auto Scaling Group
+    // Create Auto Scaling Group with reduced capacity for quota limits
     new aws.autoscaling.Group(
       `prod-asg-${environmentSuffix}`,
       {
         name: `prod-asg-${environmentSuffix}`,
-        minSize: 2,
-        maxSize: 6,
-        desiredCapacity: 2,
+        minSize: 1,
+        maxSize: 2,
+        desiredCapacity: 1,
         vpcZoneIdentifiers: publicSubnets.map(subnet => subnet.id),
         targetGroupArns: [targetGroup.arn],
-        healthCheckType: 'ELB',
-        healthCheckGracePeriod: 300,
+        healthCheckType: 'EC2', // Use EC2 health checks to avoid dependency on ELB
+        healthCheckGracePeriod: 600, // Increased grace period for slower startup
         launchTemplate: {
           id: launchTemplate.id,
           version: '$Latest',
@@ -458,48 +460,52 @@ yum install -y amazon-cloudwatch-agent
       { parent: this }
     );
 
-    // Create RDS Subnet Group
-    const dbSubnetGroup = new aws.rds.SubnetGroup(
-      `prod-db-subnet-group-${environmentSuffix}`,
-      {
-        name: `prod-db-subnet-group-${environmentSuffix}`,
-        subnetIds: privateSubnets.map(subnet => subnet.id),
-        tags: {
-          Name: `prod-db-subnet-group-${environmentSuffix}`,
-          ...tags,
+    // Create RDS resources only if not skipped (to avoid quota issues)
+    let database: aws.rds.Instance | undefined;
+    if (!skipDatabase) {
+      // Create RDS Subnet Group
+      const dbSubnetGroup = new aws.rds.SubnetGroup(
+        `prod-db-subnet-group-${environmentSuffix}`,
+        {
+          name: `prod-db-subnet-group-${environmentSuffix}`,
+          subnetIds: privateSubnets.map(subnet => subnet.id),
+          tags: {
+            Name: `prod-db-subnet-group-${environmentSuffix}`,
+            ...tags,
+          },
         },
-      },
-      { parent: this }
-    );
+        { parent: this }
+      );
 
-    // Create RDS instance
-    const database = new aws.rds.Instance(
-      `prod-database-${environmentSuffix}`,
-      {
-        identifier: `prod-database-${environmentSuffix}`,
-        engine: 'mysql',
-        engineVersion: '8.0',
-        instanceClass: 'db.t3.micro',
-        allocatedStorage: 20,
-        maxAllocatedStorage: 100,
-        storageType: 'gp2',
-        dbName: 'webapp',
-        username: 'admin',
-        password: 'changeme123!', // In production, use AWS Secrets Manager
-        vpcSecurityGroupIds: [dbSecurityGroup.id],
-        dbSubnetGroupName: dbSubnetGroup.name,
-        skipFinalSnapshot: true,
-        deletionProtection: false, // Allow deletion for testing
-        backupRetentionPeriod: 7,
-        backupWindow: '03:00-04:00',
-        maintenanceWindow: 'sun:04:00-sun:05:00',
-        tags: {
-          Name: `prod-database-${environmentSuffix}`,
-          ...tags,
+      // Create RDS instance
+      database = new aws.rds.Instance(
+        `prod-database-${environmentSuffix}`,
+        {
+          identifier: `prod-database-${environmentSuffix}`,
+          engine: 'mysql',
+          engineVersion: '8.0',
+          instanceClass: 'db.t3.micro',
+          allocatedStorage: 20,
+          maxAllocatedStorage: 100,
+          storageType: 'gp2',
+          dbName: 'webapp',
+          username: 'admin',
+          password: 'changeme123!', // In production, use AWS Secrets Manager
+          vpcSecurityGroupIds: [dbSecurityGroup.id],
+          dbSubnetGroupName: dbSubnetGroup.name,
+          skipFinalSnapshot: true,
+          deletionProtection: false, // Allow deletion for testing
+          backupRetentionPeriod: 7,
+          backupWindow: '03:00-04:00',
+          maintenanceWindow: 'sun:04:00-sun:05:00',
+          tags: {
+            Name: `prod-database-${environmentSuffix}`,
+            ...tags,
+          },
         },
-      },
-      { parent: this }
-    );
+        { parent: this }
+      );
+    }
 
     // Create S3 bucket for static assets
     const staticAssetsBucket = new aws.s3.Bucket(
@@ -660,14 +666,19 @@ yum install -y amazon-cloudwatch-agent
     this.loadBalancerDns = alb.dnsName;
     this.staticAssetsBucketName = staticAssetsBucket.id;
     this.staticAssetsUrl = pulumi.interpolate`https://${distribution.domainName}`;
-    this.databaseEndpoint = database.endpoint;
+    this.databaseEndpoint = database?.endpoint;
 
-    this.registerOutputs({
+    const outputs: Record<string, pulumi.Output<string>> = {
       vpcId: this.vpcId,
       loadBalancerDns: this.loadBalancerDns,
       staticAssetsBucketName: this.staticAssetsBucketName,
       staticAssetsUrl: this.staticAssetsUrl,
-      databaseEndpoint: this.databaseEndpoint,
-    });
+    };
+
+    if (database && this.databaseEndpoint) {
+      outputs.databaseEndpoint = this.databaseEndpoint;
+    }
+
+    this.registerOutputs(outputs);
   }
 }
