@@ -41,7 +41,7 @@ Resources:
           import random
           import string
           import cfnresponse
-          
+
           def handler(event, context):
               try:
                   if event['RequestType'] == 'Delete':
@@ -97,16 +97,18 @@ Resources:
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Sid: Enable IAM User Permissions
+          - Sid: EnableRootPermissions
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow CloudWatch Logs
+
+          # Allow CloudWatch Logs in THIS REGION to use the key for any log group in this account
+          - Sid: AllowCloudWatchLogsUseOfKey
             Effect: Allow
             Principal:
-              Service: 'logs.us-west-1.amazonaws.com'
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
             Action:
               - 'kms:Encrypt'
               - 'kms:Decrypt'
@@ -115,8 +117,9 @@ Resources:
               - 'kms:DescribeKey'
             Resource: '*'
             Condition:
-              ArnEquals:
-                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:us-west-1:${AWS::AccountId}:log-group:/aws/ec2/tapstack${EnvironmentSuffix}-*'
+              ArnLike:
+                # Allow any of your log groups in this account (covers /aws/ec2, /aws/s3, /aws/vpc, etc.)
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
       Tags:
         - Key: Environment
           Value: Production
@@ -199,10 +202,11 @@ Resources:
   # CloudWatch Log Groups with KMS encryption
   EC2LogGroup:
     Type: AWS::Logs::LogGroup
+    DependsOn: KMSKeyAlias
     Properties:
       LogGroupName: !Sub '/aws/ec2/tapstack${EnvironmentSuffix}-${GenerateRandomSuffix.RandomSuffix}'
       RetentionInDays: 7
-      KmsKeyId: !GetAtt KMSKey.Arn
+      KmsKeyId: !Ref KMSKey
       Tags:
         - Key: Environment
           Value: Production
@@ -211,10 +215,11 @@ Resources:
 
   S3LogGroup:
     Type: AWS::Logs::LogGroup
+    DependsOn: KMSKeyAlias
     Properties:
       LogGroupName: !Sub '/aws/s3/tapstack${EnvironmentSuffix}-${GenerateRandomSuffix.RandomSuffix}'
       RetentionInDays: 7
-      KmsKeyId: !GetAtt KMSKey.Arn
+      KmsKeyId: !Ref KMSKey
       Tags:
         - Key: Environment
           Value: Production
@@ -223,10 +228,11 @@ Resources:
 
   VPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
+    DependsOn: KMSKeyAlias
     Properties:
       LogGroupName: !Sub '/aws/vpc/tapstack${EnvironmentSuffix}-${GenerateRandomSuffix.RandomSuffix}'
       RetentionInDays: 7
-      KmsKeyId: !GetAtt KMSKey.Arn
+      KmsKeyId: !Ref KMSKey
       Tags:
         - Key: Environment
           Value: Production
