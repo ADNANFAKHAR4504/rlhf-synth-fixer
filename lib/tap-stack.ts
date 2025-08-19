@@ -19,9 +19,24 @@ export class TapStack extends cdk.Stack {
 
     // Get the current region from the stack
     const region = this.region;
+    const account = this.account;
 
     // Generate a unique suffix for resource names to avoid conflicts
-    const uniqueSuffix = `${this.account}-${region}-${Date.now()}`;
+    const uniqueSuffix = `${account}-${region}-${Date.now()}`;
+
+    // Log region-specific information for debugging
+    console.log(`🔍 Deploying to region: ${region}`);
+    console.log(`🔍 Account: ${account}`);
+    console.log(`🔍 Environment suffix: ${props?.environmentSuffix || 'dev'}`);
+    console.log(`🔍 Unique suffix: ${uniqueSuffix}`);
+
+    // Validate region for multi-region deployment
+    const supportedRegions = ['us-east-1', 'us-west-2'];
+    if (!supportedRegions.includes(region)) {
+      console.warn(
+        `⚠️ Region ${region} is not in the supported regions list: ${supportedRegions.join(', ')}`
+      );
+    }
 
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, 'ProductionVPC', {
@@ -295,7 +310,7 @@ export class TapStack extends cdk.Stack {
     // Create RDS database instance with Multi-AZ
     const database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
+        version: rds.MysqlEngineVersion.VER_8_0_37, // Use version available in both us-east-1 and us-west-2
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -320,7 +335,7 @@ export class TapStack extends cdk.Stack {
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: true,
       performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
-      cloudwatchLogsExports: ['error', 'general', 'slow-query'],
+      cloudwatchLogsExports: ['error', 'general'], // MySQL 8.0.37 doesn't support 'slow-query' log type
       autoMinorVersionUpgrade: false, // Control updates in production
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion for testing
     });

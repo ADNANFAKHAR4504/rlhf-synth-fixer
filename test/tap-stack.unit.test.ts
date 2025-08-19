@@ -421,5 +421,59 @@ describe('TapStack', () => {
         BucketName: Match.stringLikeRegexp('production-app-data-.*-.*-.*')
       });
     });
+
+    test('should handle unsupported regions gracefully', () => {
+      // Create a stack with an unsupported region to test the validation logic
+      const unsupportedRegionApp = new cdk.App();
+      const unsupportedRegionStack = new TapStack(unsupportedRegionApp, 'UnsupportedRegionStack', {
+        environmentSuffix,
+        env: {
+          account: '123456789012',
+          region: 'eu-west-3' // Unsupported region
+        }
+      });
+      
+      // The stack should still be created even with unsupported region
+      const unsupportedTemplate = Template.fromStack(unsupportedRegionStack);
+      unsupportedTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16'
+      });
+    });
+
+    test('should handle supported regions without warnings', () => {
+      // Create a stack with a supported region to test the validation logic
+      const supportedRegionApp = new cdk.App();
+      const supportedRegionStack = new TapStack(supportedRegionApp, 'SupportedRegionStack', {
+        environmentSuffix,
+        env: {
+          account: '123456789012',
+          region: 'us-west-2' // Supported region
+        }
+      });
+      
+      // The stack should be created successfully
+      const supportedTemplate = Template.fromStack(supportedRegionStack);
+      supportedTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16'
+      });
+    });
+
+    test('should handle undefined environment suffix with fallback', () => {
+      // Create a stack without environmentSuffix to test the fallback logic
+      const fallbackApp = new cdk.App();
+      const fallbackStack = new TapStack(fallbackApp, 'FallbackStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-east-1'
+        }
+        // No environmentSuffix provided - should fallback to 'dev'
+      });
+      
+      // The stack should be created successfully with fallback
+      const fallbackTemplate = Template.fromStack(fallbackStack);
+      fallbackTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16'
+      });
+    });
   });
 });

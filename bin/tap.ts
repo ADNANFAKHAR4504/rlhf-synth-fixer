@@ -16,8 +16,8 @@ Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
-new TapStack(app, 'stackName-us-east-1', {
-  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+new TapStack(app, `${stackName}-us-east-1`, {
+  stackName: `${stackName}-us-east-1`, // Region-specific stack name
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
@@ -25,8 +25,8 @@ new TapStack(app, 'stackName-us-east-1', {
   },
 });
 
-new TapStack(app, 'stackName-us-west-2', {
-  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+new TapStack(app, `${stackName}-us-west-2`, {
+  stackName: `${stackName}-us-west-2`, // Region-specific stack name
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
