@@ -48,5 +48,5 @@ Your CloudFormation template should provision the following features:
   - Load Balancer DNS name
   - S3 bucket name
   - Auto Scaling Group name
-- Focus on **cost optimization** without compromising on performance or availability.
+- Focus on **cost optimization** without compromising on performance or availability. 
 
