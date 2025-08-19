@@ -105,6 +105,19 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
             Resource: '*'
+          - Sid: Allow EC2 and EBS to use the key
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ebs.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
