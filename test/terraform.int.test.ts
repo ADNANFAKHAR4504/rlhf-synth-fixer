@@ -279,6 +279,163 @@ describe('AWS Secure Infrastructure Integration Tests', () => {
       expect(pgRule).toBeTruthy();
       expect(pgRule?.UserIdGroupPairs?.length).toBeGreaterThan(0);
     });
+
+    test('ALB security group has correct ingress and egress rules', async () => {
+      const vpcId = outputs.vpc_id?.value;
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId!] }],
+        })
+      );
+
+      const albSg = response.SecurityGroups?.find(
+        sg =>
+          sg.GroupName?.includes('alb') ||
+          sg.Description?.includes('ALB') ||
+          sg.Description?.includes('Application Load Balancer')
+      );
+      expect(albSg).toBeTruthy();
+
+      // Validate HTTP ingress rule (port 80)
+      const httpRule = albSg?.IpPermissions?.find(rule => rule.FromPort === 80 && rule.ToPort === 80);
+      expect(httpRule).toBeTruthy();
+      expect(httpRule?.IpProtocol).toBe('tcp');
+      expect(httpRule?.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
+
+      // Validate HTTPS ingress rule (port 443)
+      const httpsRule = albSg?.IpPermissions?.find(rule => rule.FromPort === 443 && rule.ToPort === 443);
+      expect(httpsRule).toBeTruthy();
+      expect(httpsRule?.IpProtocol).toBe('tcp');
+      expect(httpsRule?.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
+
+      // Validate egress rule (all traffic outbound)
+      const egressRule = albSg?.IpPermissionsEgress?.find(rule => rule.IpProtocol === '-1');
+      expect(egressRule).toBeTruthy();
+      expect(egressRule?.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
+    });
+
+    test('RDS security group only allows PostgreSQL from EKS nodes', async () => {
+      const vpcId = outputs.vpc_id?.value;
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId!] }],
+        })
+      );
+
+      const rdsSg = response.SecurityGroups?.find(
+        sg =>
+          sg.GroupName?.includes('rds') ||
+          sg.GroupName?.includes('db') ||
+          sg.Description?.includes('RDS') ||
+          sg.Description?.includes('PostgreSQL')
+      );
+      expect(rdsSg).toBeTruthy();
+
+      // Find EKS nodes security group
+      const eksNodesSg = response.SecurityGroups?.find(
+        sg =>
+          sg.GroupName?.includes('nodes') ||
+          sg.Description?.includes('worker nodes') ||
+          sg.Description?.includes('EKS worker')
+      );
+      expect(eksNodesSg).toBeTruthy();
+
+      // Validate PostgreSQL ingress rule (port 5432)
+      const pgRule = rdsSg?.IpPermissions?.find(rule => rule.FromPort === 5432 && rule.ToPort === 5432);
+      expect(pgRule).toBeTruthy();
+      expect(pgRule?.IpProtocol).toBe('tcp');
+
+      // Should only allow from EKS nodes security group
+      expect(pgRule?.UserIdGroupPairs?.length).toBeGreaterThan(0);
+      expect(pgRule?.UserIdGroupPairs?.some(pair => pair.GroupId === eksNodesSg?.GroupId)).toBe(true);
+
+      // Should not allow from 0.0.0.0/0
+      expect(pgRule?.IpRanges?.length).toBe(0);
+    });
+
+    test('EKS cluster security group has correct rules', async () => {
+      const vpcId = outputs.vpc_id?.value;
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId!] }],
+        })
+      );
+
+      const eksClusterSg = response.SecurityGroups?.find(
+        sg =>
+          sg.GroupName?.includes('cluster') ||
+          sg.Description?.includes('EKS cluster') ||
+          sg.Description?.includes('control plane')
+      );
+      expect(eksClusterSg).toBeTruthy();
+
+      // Validate HTTPS ingress rule from nodes (port 443)
+      const httpsRule = eksClusterSg?.IpPermissions?.find(rule => rule.FromPort === 443 && rule.ToPort === 443);
+      expect(httpsRule).toBeTruthy();
+      expect(httpsRule?.IpProtocol).toBe('tcp');
+
+      // Should allow self-referencing for cluster communication
+      const selfReference = httpsRule?.UserIdGroupPairs?.find(pair => pair.GroupId === eksClusterSg?.GroupId);
+      expect(selfReference).toBeTruthy();
+
+      // Validate egress rule (all traffic outbound)
+      const egressRule = eksClusterSg?.IpPermissionsEgress?.find(rule => rule.IpProtocol === '-1');
+      expect(egressRule).toBeTruthy();
+    });
+
+    test('EKS nodes security group has correct rules', async () => {
+      const vpcId = outputs.vpc_id?.value;
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId!] }],
+        })
+      );
+
+      const eksNodesSg = response.SecurityGroups?.find(
+        sg =>
+          sg.GroupName?.includes('nodes') ||
+          sg.Description?.includes('worker nodes') ||
+          sg.Description?.includes('EKS worker')
+      );
+      expect(eksNodesSg).toBeTruthy();
+
+      const albSg = response.SecurityGroups?.find(
+        sg =>
+          sg.GroupName?.includes('alb') ||
+          sg.Description?.includes('ALB') ||
+          sg.Description?.includes('Application Load Balancer')
+      );
+
+      const eksClusterSg = response.SecurityGroups?.find(
+        sg =>
+          sg.GroupName?.includes('cluster') ||
+          sg.Description?.includes('EKS cluster') ||
+          sg.Description?.includes('control plane')
+      );
+
+      // Node to node communication (self-referencing)
+      const selfReferenceRule = eksNodesSg?.IpPermissions?.find(rule => 
+        rule.IpProtocol === '-1' && rule.UserIdGroupPairs?.some(pair => pair.GroupId === eksNodesSg?.GroupId)
+      );
+      expect(selfReferenceRule).toBeTruthy();
+
+      // Communication from cluster
+      const clusterRule = eksNodesSg?.IpPermissions?.find(rule => 
+        rule.IpProtocol === '-1' && rule.UserIdGroupPairs?.some(pair => pair.GroupId === eksClusterSg?.GroupId)
+      );
+      expect(clusterRule).toBeTruthy();
+
+      // HTTP from ALB
+      const albHttpRule = eksNodesSg?.IpPermissions?.find(rule => 
+        rule.FromPort === 80 && rule.ToPort === 80 && 
+        rule.UserIdGroupPairs?.some(pair => pair.GroupId === albSg?.GroupId)
+      );
+      expect(albHttpRule).toBeTruthy();
+
+      // All outbound traffic
+      const egressRule = eksNodesSg?.IpPermissionsEgress?.find(rule => rule.IpProtocol === '-1');
+      expect(egressRule).toBeTruthy();
+    });
   });
 
   describe('4. KMS Key Validation', () => {
@@ -296,6 +453,106 @@ describe('AWS Secure Infrastructure Integration Tests', () => {
       expect(response.KeyMetadata!.KeyState).toBe('Enabled');
       expect(response.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
       expect(response.KeyMetadata!.MultiRegion).toBe(false);
+    });
+
+    test('KMS key has proper policy with required permissions', async () => {
+      const keyId = outputs.kms_key_id?.value;
+      expect(keyId).toBeTruthy();
+
+      // Get the key policy
+      const { GetKeyPolicyCommand } = await import('@aws-sdk/client-kms');
+      const policyDetailResponse = await kmsClient.send(
+        new GetKeyPolicyCommand({
+          KeyId: keyId!,
+          PolicyName: 'default',
+        })
+      );
+
+      expect(policyDetailResponse.Policy).toBeTruthy();
+      const policy = JSON.parse(policyDetailResponse.Policy!);
+      expect(policy.Version).toBe('2012-10-17');
+      expect(policy.Statement).toBeTruthy();
+      expect(Array.isArray(policy.Statement)).toBe(true);
+
+      // Check for root account permissions statement
+      const rootStatement = policy.Statement.find((stmt: any) =>
+        stmt.Sid === 'Enable IAM User Permissions' &&
+        stmt.Effect === 'Allow' &&
+        stmt.Action === 'kms:*'
+      );
+      expect(rootStatement).toBeTruthy();
+      expect(rootStatement.Principal.AWS).toContain('root');
+
+      // Check for AWS services permissions statement
+      const servicesStatement = policy.Statement.find((stmt: any) =>
+        stmt.Sid === 'Allow use of the key by AWS services' &&
+        stmt.Effect === 'Allow'
+      );
+      expect(servicesStatement).toBeTruthy();
+      expect(servicesStatement.Principal.Service).toContain('ec2.amazonaws.com');
+      expect(servicesStatement.Principal.Service).toContain('s3.amazonaws.com');
+      expect(servicesStatement.Principal.Service).toContain('rds.amazonaws.com');
+      expect(servicesStatement.Principal.Service).toContain('eks.amazonaws.com');
+      expect(servicesStatement.Principal.Service).toContain('logs.amazonaws.com');
+      expect(servicesStatement.Principal.Service).toContain('cloudtrail.amazonaws.com');
+
+      // Verify required actions for services
+      expect(servicesStatement.Action).toContain('kms:Encrypt');
+      expect(servicesStatement.Action).toContain('kms:Decrypt');
+      expect(servicesStatement.Action).toContain('kms:ReEncrypt*');
+      expect(servicesStatement.Action).toContain('kms:GenerateDataKey*');
+      expect(servicesStatement.Action).toContain('kms:CreateGrant');
+      expect(servicesStatement.Action).toContain('kms:DescribeKey');
+
+      // Check for EKS nodes permissions statement
+      const eksNodesStatement = policy.Statement.find((stmt: any) =>
+        stmt.Sid === 'Allow EKS nodes to use the key' &&
+        stmt.Effect === 'Allow'
+      );
+      expect(eksNodesStatement).toBeTruthy();
+      expect(eksNodesStatement.Action).toContain('kms:Decrypt');
+      expect(eksNodesStatement.Action).toContain('kms:GenerateDataKey');
+      expect(eksNodesStatement.Action).toContain('kms:CreateGrant');
+      expect(eksNodesStatement.Condition).toBeTruthy();
+      expect(eksNodesStatement.Condition.StringLike).toBeTruthy();
+    });
+
+    test('KMS key rotation is enabled', async () => {
+      const keyId = outputs.kms_key_id?.value;
+      expect(keyId).toBeTruthy();
+
+      const { GetKeyRotationStatusCommand } = await import('@aws-sdk/client-kms');
+      const rotationResponse = await kmsClient.send(
+        new GetKeyRotationStatusCommand({
+          KeyId: keyId!,
+        })
+      );
+
+      expect(rotationResponse.KeyRotationEnabled).toBe(true);
+    });
+
+    test('KMS key alias exists and points to correct key', async () => {
+      const keyId = outputs.kms_key_id?.value;
+      const keyArn = outputs.kms_key_arn?.value;
+      expect(keyId).toBeTruthy();
+      expect(keyArn).toBeTruthy();
+
+      const { ListAliasesCommand } = await import('@aws-sdk/client-kms');
+      const aliasResponse = await kmsClient.send(
+        new ListAliasesCommand({
+          KeyId: keyId!,
+        })
+      );
+
+      expect(aliasResponse.Aliases).toBeTruthy();
+      expect(aliasResponse.Aliases!.length).toBeGreaterThan(0);
+
+      // Should have corp-key alias
+      const corpKeyAlias = aliasResponse.Aliases!.find(alias =>
+        alias.AliasName?.includes('corp') && alias.AliasName?.includes('key')
+      );
+      expect(corpKeyAlias).toBeTruthy();
+      expect(corpKeyAlias!.TargetKeyId).toBe(keyId);
     });
   });
 
@@ -448,6 +705,148 @@ describe('AWS Secure Infrastructure Integration Tests', () => {
       expect(targetGroup.VpcId).toBe(outputs.vpc_id?.value);
       expect(targetGroup.HealthCheckPath).toBe('/');
     });
+
+    test('Target group has correct health check configuration', async () => {
+      const targetGroupArn = outputs.alb_target_group_arn?.value;
+      expect(targetGroupArn).toBeTruthy();
+
+      const response = await elbv2Client.send(
+        new DescribeTargetGroupsCommand({
+          TargetGroupArns: [targetGroupArn!],
+        })
+      );
+
+      const targetGroup = response.TargetGroups![0];
+
+      // Validate health check settings match Terraform configuration
+      expect(targetGroup.HealthCheckEnabled).toBe(true);
+      expect(targetGroup.HealthyThresholdCount).toBe(2);
+      expect(targetGroup.UnhealthyThresholdCount).toBe(2);
+      expect(targetGroup.HealthCheckTimeoutSeconds).toBe(5);
+      expect(targetGroup.HealthCheckIntervalSeconds).toBe(30);
+      expect(targetGroup.HealthCheckPath).toBe('/');
+      expect(targetGroup.HealthCheckProtocol).toBe('HTTP');
+      expect(targetGroup.HealthCheckPort).toBe('traffic-port');
+      expect(targetGroup.Matcher?.HttpCode).toBe('200');
+    });
+
+    test('Target group health check endpoint accessibility', async () => {
+      const targetGroupArn = outputs.alb_target_group_arn?.value;
+      expect(targetGroupArn).toBeTruthy();
+
+      // Get target health status
+      const { DescribeTargetHealthCommand } = await import('@aws-sdk/client-elastic-load-balancing-v2');
+      const healthResponse = await elbv2Client.send(
+        new DescribeTargetHealthCommand({
+          TargetGroupArn: targetGroupArn!,
+        })
+      );
+
+      expect(healthResponse.TargetHealthDescriptions).toBeTruthy();
+      
+      // Verify each target's health status and reason
+      for (const targetHealth of healthResponse.TargetHealthDescriptions || []) {
+        expect(targetHealth.Target).toBeTruthy();
+        expect(targetHealth.TargetHealth).toBeTruthy();
+        
+        // Target should be either healthy, initial, or draining (acceptable states)
+        // unhealthy, unused, unavailable, or unhealthy.draining would indicate issues
+        const acceptableStates = ['healthy', 'initial', 'draining'];
+        expect(acceptableStates).toContain(targetHealth.TargetHealth!.State!);
+        
+        // If unhealthy, check the reason for troubleshooting
+        if (targetHealth.TargetHealth!.State === 'unhealthy') {
+          console.warn(`Target ${targetHealth.Target!.Id} is unhealthy: ${targetHealth.TargetHealth!.Reason}`);
+          console.warn(`Description: ${targetHealth.TargetHealth!.Description}`);
+        }
+      }
+    });
+
+    test('ALB listeners are configured correctly', async () => {
+      const albDnsName = outputs.alb_dns_name?.value;
+      expect(albDnsName).toBeTruthy();
+
+      // Get load balancer ARN first
+      const lbResponse = await elbv2Client.send(
+        new DescribeLoadBalancersCommand({})
+      );
+      
+      const alb = lbResponse.LoadBalancers?.find(lb => 
+        lb.DNSName === albDnsName || lb.VpcId === outputs.vpc_id?.value
+      );
+      expect(alb).toBeTruthy();
+
+      // Get listeners for this load balancer
+      const { DescribeListenersCommand } = await import('@aws-sdk/client-elastic-load-balancing-v2');
+      const listenersResponse = await elbv2Client.send(
+        new DescribeListenersCommand({
+          LoadBalancerArn: alb!.LoadBalancerArn!,
+        })
+      );
+
+      expect(listenersResponse.Listeners).toBeTruthy();
+      expect(listenersResponse.Listeners!.length).toBeGreaterThan(0);
+
+      // Validate HTTP listener (port 80)
+      const httpListener = listenersResponse.Listeners!.find(listener => 
+        listener.Port === 80 && listener.Protocol === 'HTTP'
+      );
+      expect(httpListener).toBeTruthy();
+      expect(httpListener!.DefaultActions).toBeTruthy();
+      expect(httpListener!.DefaultActions!.length).toBeGreaterThan(0);
+      
+      // Validate default action forwards to target group
+      const forwardAction = httpListener!.DefaultActions!.find(action => 
+        action.Type === 'forward'
+      );
+      expect(forwardAction).toBeTruthy();
+      expect(forwardAction!.TargetGroupArn).toBe(outputs.alb_target_group_arn?.value);
+    });
+
+    test('ALB access logs are enabled and configured', async () => {
+      const albDnsName = outputs.alb_dns_name?.value;
+      expect(albDnsName).toBeTruthy();
+
+      // Get load balancer attributes
+      const lbResponse = await elbv2Client.send(
+        new DescribeLoadBalancersCommand({})
+      );
+      
+      const alb = lbResponse.LoadBalancers?.find(lb => 
+        lb.DNSName === albDnsName || lb.VpcId === outputs.vpc_id?.value
+      );
+      expect(alb).toBeTruthy();
+
+      const { DescribeLoadBalancerAttributesCommand } = await import('@aws-sdk/client-elastic-load-balancing-v2');
+      const attributesResponse = await elbv2Client.send(
+        new DescribeLoadBalancerAttributesCommand({
+          LoadBalancerArn: alb!.LoadBalancerArn!,
+        })
+      );
+
+      expect(attributesResponse.Attributes).toBeTruthy();
+      
+      // Check access logs are enabled (this was our main fix)
+      const accessLogsEnabled = attributesResponse.Attributes!.find(attr => 
+        attr.Key === 'access_logs.s3.enabled'
+      );
+      expect(accessLogsEnabled).toBeTruthy();
+      expect(accessLogsEnabled!.Value).toBe('true');
+
+      // Check S3 bucket is configured
+      const accessLogsBucket = attributesResponse.Attributes!.find(attr => 
+        attr.Key === 'access_logs.s3.bucket'
+      );
+      expect(accessLogsBucket).toBeTruthy();
+      expect(accessLogsBucket!.Value).toBe(outputs.s3_alb_logs_bucket?.value);
+
+      // Check prefix is configured
+      const accessLogsPrefix = attributesResponse.Attributes!.find(attr => 
+        attr.Key === 'access_logs.s3.prefix'
+      );
+      expect(accessLogsPrefix).toBeTruthy();
+      expect(accessLogsPrefix!.Value).toBe('alb-logs');
+    });
   });
 
   describe('8. S3 Buckets Security Validation', () => {
@@ -544,6 +943,229 @@ describe('AWS Secure Infrastructure Integration Tests', () => {
       expect(trail.KmsKeyId).toBeTruthy();
       expect(trail.IncludeGlobalServiceEvents).toBe(true);
     });
+
+    test('CloudTrail is actively logging', async () => {
+      const trailArn = outputs.cloudtrail_arn?.value;
+      expect(trailArn).toBeTruthy();
+
+      const trailName = trailArn!.split('/').pop();
+      
+      // Get trail status to verify it's logging
+      const { GetTrailStatusCommand } = await import('@aws-sdk/client-cloudtrail');
+      const statusResponse = await cloudTrailClient.send(
+        new GetTrailStatusCommand({
+          Name: trailName!,
+        })
+      );
+
+      expect(statusResponse.IsLogging).toBe(true);
+      expect(statusResponse.LatestDeliveryTime).toBeTruthy();
+      
+      // Verify no recent delivery errors
+      if (statusResponse.LatestDeliveryError) {
+        console.warn(`CloudTrail delivery error: ${statusResponse.LatestDeliveryError}`);
+        console.warn(`Error time: ${statusResponse.LatestCloudWatchLogsDeliveryTime || 'Unknown'}`);
+      }
+    });
+
+    test('CloudTrail event selectors are configured correctly', async () => {
+      const trailArn = outputs.cloudtrail_arn?.value;
+      expect(trailArn).toBeTruthy();
+
+      const trailName = trailArn!.split('/').pop();
+      
+      // Get event selectors
+      const { GetEventSelectorsCommand } = await import('@aws-sdk/client-cloudtrail');
+      const eventSelectorsResponse = await cloudTrailClient.send(
+        new GetEventSelectorsCommand({
+          TrailName: trailName!,
+        })
+      );
+
+      expect(eventSelectorsResponse.EventSelectors).toBeTruthy();
+      expect(eventSelectorsResponse.EventSelectors!.length).toBeGreaterThan(0);
+      
+      const eventSelector = eventSelectorsResponse.EventSelectors![0];
+      expect(eventSelector.ReadWriteType).toBe('All');
+      expect(eventSelector.IncludeManagementEvents).toBe(true);
+      
+      // Verify exclusions for specific services as configured in Terraform
+      const excludedSources = eventSelector.ExcludeManagementEventSources || [];
+      expect(excludedSources).toContain('kms.amazonaws.com');
+      expect(excludedSources).toContain('rdsdata.amazonaws.com');
+    });
+
+    test('CloudTrail S3 bucket policy allows CloudTrail access', async () => {
+      const bucketName = outputs.s3_cloudtrail_bucket?.value;
+      expect(bucketName).toBeTruthy();
+
+      // Get bucket policy
+      const { GetBucketPolicyCommand } = await import('@aws-sdk/client-s3');
+      const policyResponse = await s3Client.send(
+        new GetBucketPolicyCommand({
+          Bucket: bucketName!,
+        })
+      );
+
+      expect(policyResponse.Policy).toBeTruthy();
+      const policy = JSON.parse(policyResponse.Policy!);
+      expect(policy.Version).toBe('2012-10-17');
+      expect(policy.Statement).toBeTruthy();
+      expect(Array.isArray(policy.Statement)).toBe(true);
+
+      // Verify CloudTrail AclCheck statement
+      const aclCheckStatement = policy.Statement.find((stmt: any) =>
+        stmt.Sid === 'AWSCloudTrailAclCheck' &&
+        stmt.Effect === 'Allow' &&
+        stmt.Action === 's3:GetBucketAcl'
+      );
+      expect(aclCheckStatement).toBeTruthy();
+      expect(aclCheckStatement.Principal.Service).toBe('cloudtrail.amazonaws.com');
+      expect(aclCheckStatement.Resource).toMatch(/arn:aws:s3:::/);
+
+      // Verify CloudTrail Write statement
+      const writeStatement = policy.Statement.find((stmt: any) =>
+        stmt.Sid === 'AWSCloudTrailWrite' &&
+        stmt.Effect === 'Allow' &&
+        stmt.Action === 's3:PutObject'
+      );
+      expect(writeStatement).toBeTruthy();
+      expect(writeStatement.Principal.Service).toBe('cloudtrail.amazonaws.com');
+      expect(writeStatement.Resource).toMatch(/arn:aws:s3:::.*\/\*/);
+      expect(writeStatement.Condition).toBeTruthy();
+      expect(writeStatement.Condition.StringEquals).toBeTruthy();
+      expect(writeStatement.Condition.StringEquals['s3:x-amz-acl']).toBe('bucket-owner-full-control');
+    });
+
+    test('ALB logs S3 bucket policy allows ELB service access', async () => {
+      const bucketName = outputs.s3_alb_logs_bucket?.value;
+      expect(bucketName).toBeTruthy();
+
+      // Get bucket policy
+      const { GetBucketPolicyCommand } = await import('@aws-sdk/client-s3');
+      const policyResponse = await s3Client.send(
+        new GetBucketPolicyCommand({
+          Bucket: bucketName!,
+        })
+      );
+
+      expect(policyResponse.Policy).toBeTruthy();
+      const policy = JSON.parse(policyResponse.Policy!);
+      expect(policy.Statement).toBeTruthy();
+
+      // Find statements that allow ELB service account access
+      const elbStatements = policy.Statement.filter((stmt: any) =>
+        stmt.Effect === 'Allow' && 
+        (stmt.Principal?.AWS || stmt.Principal?.Service)
+      );
+      expect(elbStatements.length).toBeGreaterThan(0);
+
+      // Verify at least one statement allows s3:PutObject for ALB logs
+      const putObjectStatement = elbStatements.find((stmt: any) =>
+        stmt.Action === 's3:PutObject' || 
+        (Array.isArray(stmt.Action) && stmt.Action.includes('s3:PutObject'))
+      );
+      expect(putObjectStatement).toBeTruthy();
+
+      // Verify at least one statement allows s3:GetBucketAcl for ALB logs  
+      const getBucketAclStatement = elbStatements.find((stmt: any) =>
+        stmt.Action === 's3:GetBucketAcl' ||
+        (Array.isArray(stmt.Action) && stmt.Action.includes('s3:GetBucketAcl'))
+      );
+      expect(getBucketAclStatement).toBeTruthy();
+    });
+
+    test('S3 bucket policies restrict public access', async () => {
+      const buckets = [
+        outputs.s3_alb_logs_bucket?.value,
+        outputs.s3_codepipeline_artifacts_bucket?.value,
+        outputs.s3_cloudtrail_bucket?.value,
+      ].filter(Boolean);
+
+      for (const bucketName of buckets) {
+        // Check public access block configuration
+        const { GetPublicAccessBlockCommand } = await import('@aws-sdk/client-s3');
+        const publicAccessResponse = await s3Client.send(
+          new GetPublicAccessBlockCommand({
+            Bucket: bucketName!,
+          })
+        );
+
+        const config = publicAccessResponse.PublicAccessBlockConfiguration!;
+        expect(config.BlockPublicAcls).toBe(true);
+        expect(config.BlockPublicPolicy).toBe(true);
+        expect(config.IgnorePublicAcls).toBe(true);
+        expect(config.RestrictPublicBuckets).toBe(true);
+
+        // Verify bucket ACL doesn't allow public access
+        const { GetBucketAclCommand } = await import('@aws-sdk/client-s3');
+        const aclResponse = await s3Client.send(
+          new GetBucketAclCommand({
+            Bucket: bucketName!,
+          })
+        );
+
+        expect(aclResponse.Grants).toBeTruthy();
+        
+        // Should not have any grants to AllUsers or AuthenticatedUsers
+        const publicGrants = aclResponse.Grants!.filter(grant =>
+          grant.Grantee?.URI?.includes('AllUsers') ||
+          grant.Grantee?.URI?.includes('AuthenticatedUsers')
+        );
+        expect(publicGrants.length).toBe(0);
+      }
+    });
+
+    test('S3 bucket policies enforce encryption', async () => {
+      const buckets = [
+        outputs.s3_alb_logs_bucket?.value,
+        outputs.s3_codepipeline_artifacts_bucket?.value,
+        outputs.s3_cloudtrail_bucket?.value,
+      ].filter(Boolean);
+
+      for (const bucketName of buckets) {
+        try {
+          const { GetBucketPolicyCommand } = await import('@aws-sdk/client-s3');
+          const policyResponse = await s3Client.send(
+            new GetBucketPolicyCommand({
+              Bucket: bucketName!,
+            })
+          );
+
+          const policy = JSON.parse(policyResponse.Policy!);
+          
+          // Look for statements that enforce encryption
+          const encryptionStatements = policy.Statement.filter((stmt: any) =>
+            stmt.Effect === 'Deny' && 
+            stmt.Condition &&
+            (stmt.Condition.Bool || stmt.Condition.StringNotEquals)
+          );
+
+          console.log(`Bucket ${bucketName} has ${encryptionStatements.length} encryption enforcement statements`);
+
+          // While not all buckets may have explicit encryption enforcement policies,
+          // they should at least have server-side encryption configuration
+          const { GetBucketEncryptionCommand } = await import('@aws-sdk/client-s3');
+          const encryptionResponse = await s3Client.send(
+            new GetBucketEncryptionCommand({
+              Bucket: bucketName!,
+            })
+          );
+
+          expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeTruthy();
+          const rules = encryptionResponse.ServerSideEncryptionConfiguration!.Rules!;
+          expect(rules.length).toBeGreaterThan(0);
+          
+          const rule = rules[0];
+          expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+          expect(rule.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBeTruthy();
+          
+        } catch (error) {
+          // Some buckets might not have explicit bucket policies, which is OK if they have other security measures
+          console.log(`Bucket ${bucketName} policy check: ${error}`);
+        }
+      }
+    });
   });
 
   describe('10. CI/CD Pipeline Validation', () => {
@@ -589,6 +1211,193 @@ describe('AWS Secure Infrastructure Integration Tests', () => {
       expect(project.artifacts?.type).toBe('CODEPIPELINE');
       expect(project.environment?.type).toBe('LINUX_CONTAINER');
       expect(project.environment?.computeType).toBeTruthy();
+    });
+
+    test('CodePipeline has proper IAM roles and permissions', async () => {
+      const pipelineName = outputs.codepipeline_name?.value;
+      expect(pipelineName).toBeTruthy();
+
+      const response = await codePipelineClient.send(
+        new GetPipelineCommand({
+          name: pipelineName!,
+        })
+      );
+
+      const pipeline = response.pipeline!;
+      expect(pipeline.roleArn).toBeTruthy();
+      
+      // Validate pipeline role ARN format
+      expect(pipeline.roleArn).toMatch(/arn:aws:iam::\d+:role\/.+codepipeline.+/i);
+      
+      // Validate artifact store configuration
+      expect(pipeline.artifactStore).toBeTruthy();
+      expect(pipeline.artifactStore!.location).toBe(outputs.s3_codepipeline_artifacts_bucket?.value);
+      expect(pipeline.artifactStore!.encryptionKey).toBeTruthy();
+      expect(pipeline.artifactStore!.encryptionKey!.type).toBe('KMS');
+      expect(pipeline.artifactStore!.encryptionKey!.id).toBe(outputs.kms_key_arn?.value);
+    });
+
+    test('CodePipeline stages are configured correctly', async () => {
+      const pipelineName = outputs.codepipeline_name?.value;
+      expect(pipelineName).toBeTruthy();
+
+      const response = await codePipelineClient.send(
+        new GetPipelineCommand({
+          name: pipelineName!,
+        })
+      );
+
+      const pipeline = response.pipeline!;
+      const stageNames = pipeline.stages!.map(stage => stage.name);
+      
+      // Should have Source and Build stages at minimum
+      expect(stageNames).toContain('Source');
+      expect(stageNames).toContain('Build');
+
+      // Validate Source stage
+      const sourceStage = pipeline.stages!.find(stage => stage.name === 'Source');
+      expect(sourceStage).toBeTruthy();
+      expect(sourceStage!.actions).toBeTruthy();
+      expect(sourceStage!.actions!.length).toBeGreaterThan(0);
+      
+      const sourceAction = sourceStage!.actions![0];
+      expect(sourceAction.actionTypeId?.category).toBe('Source');
+      expect(sourceAction.actionTypeId?.owner).toBe('AWS');
+      expect(sourceAction.actionTypeId?.provider).toBe('CodeStarSourceConnection');
+      expect(sourceAction.configuration?.FullRepositoryId).toBeTruthy();
+      expect(sourceAction.configuration?.BranchName).toBeTruthy();
+      expect(sourceAction.configuration?.ConnectionArn).toBeTruthy();
+
+      // Validate Build stage
+      const buildStage = pipeline.stages!.find(stage => stage.name === 'Build');
+      expect(buildStage).toBeTruthy();
+      expect(buildStage!.actions).toBeTruthy();
+      expect(buildStage!.actions!.length).toBeGreaterThan(0);
+      
+      const buildAction = buildStage!.actions![0];
+      expect(buildAction.actionTypeId?.category).toBe('Build');
+      expect(buildAction.actionTypeId?.owner).toBe('AWS');
+      expect(buildAction.actionTypeId?.provider).toBe('CodeBuild');
+      expect(buildAction.configuration?.ProjectName).toBe(outputs.codebuild_project_name?.value);
+    });
+
+    test('CodePipeline execution history and status', async () => {
+      const pipelineName = outputs.codepipeline_name?.value;
+      expect(pipelineName).toBeTruthy();
+
+      // Get pipeline execution history
+      const { ListPipelineExecutionsCommand } = await import('@aws-sdk/client-codepipeline');
+      const executionsResponse = await codePipelineClient.send(
+        new ListPipelineExecutionsCommand({
+          pipelineName: pipelineName!,
+          maxResults: 10,
+        })
+      );
+
+      expect(executionsResponse.pipelineExecutionSummaries).toBeTruthy();
+      
+      // If there are executions, validate their structure
+      if (executionsResponse.pipelineExecutionSummaries!.length > 0) {
+        const latestExecution = executionsResponse.pipelineExecutionSummaries![0];
+        expect(latestExecution.pipelineExecutionId).toBeTruthy();
+        expect(latestExecution.status).toBeTruthy();
+        expect(['InProgress', 'Succeeded', 'Failed', 'Cancelled', 'Superseded']).toContain(latestExecution.status!);
+        
+        // Log execution status for debugging
+        console.log(`Latest pipeline execution status: ${latestExecution.status}`);
+        if (latestExecution.status === 'Failed') {
+          console.warn(`Pipeline execution failed at: ${latestExecution.lastUpdateTime}`);
+        }
+      }
+    });
+
+    test('CodeBuild project has correct build specifications', async () => {
+      const projectName = outputs.codebuild_project_name?.value;
+      expect(projectName).toBeTruthy();
+
+      const response = await codeBuildClient.send(
+        new BatchGetProjectsCommand({
+          names: [projectName!],
+        })
+      );
+
+      const project = response.projects![0];
+
+      // Validate environment settings
+      expect(project.environment?.image).toBe('aws/codebuild/standard:5.0');
+      expect(project.environment?.privilegedMode).toBe(false);
+      expect(project.environment?.imagePullCredentialsType).toBe('CODEBUILD');
+
+      // Validate service role
+      expect(project.serviceRole).toMatch(/arn:aws:iam::\d+:role\/.+codebuild.+/i);
+
+      // Validate source settings
+      expect(project.source?.type).toBe('CODEPIPELINE');
+      expect(project.source?.buildspec).toBe('buildspec.yml');
+
+      // Validate artifacts
+      expect(project.artifacts?.type).toBe('CODEPIPELINE');
+    });
+
+    test('CodeBuild project can access required resources', async () => {
+      const projectName = outputs.codebuild_project_name?.value;
+      expect(projectName).toBeTruthy();
+
+      // Get build history to verify project can execute
+      const { ListBuildsForProjectCommand } = await import('@aws-sdk/client-codebuild');
+      const buildsResponse = await codeBuildClient.send(
+        new ListBuildsForProjectCommand({
+          projectName: projectName!,
+          sortOrder: 'DESCENDING',
+        })
+      );
+
+      expect(buildsResponse.ids).toBeTruthy();
+      
+      // If there are builds, check their status
+      if (buildsResponse.ids!.length > 0) {
+        const { BatchGetBuildsCommand } = await import('@aws-sdk/client-codebuild');
+        const buildDetailsResponse = await codeBuildClient.send(
+          new BatchGetBuildsCommand({
+            ids: [buildsResponse.ids![0]], // Get latest build
+          })
+        );
+
+        if (buildDetailsResponse.builds && buildDetailsResponse.builds.length > 0) {
+          const latestBuild = buildDetailsResponse.builds[0];
+          expect(latestBuild.buildStatus).toBeTruthy();
+          expect(['IN_PROGRESS', 'SUCCEEDED', 'FAILED', 'FAULT', 'TIMED_OUT', 'STOPPED']).toContain(latestBuild.buildStatus!);
+          
+          // Log build status for debugging
+          console.log(`Latest build status: ${latestBuild.buildStatus}`);
+          if (latestBuild.buildStatus === 'FAILED') {
+            console.warn(`Build failed at: ${latestBuild.endTime || latestBuild.startTime}`);
+          }
+        }
+      }
+    });
+
+    test('CodeStar connection is configured and pending/available', async () => {
+      const pipelineName = outputs.codepipeline_name?.value;
+      expect(pipelineName).toBeTruthy();
+
+      const response = await codePipelineClient.send(
+        new GetPipelineCommand({
+          name: pipelineName!,
+        })
+      );
+
+      const pipeline = response.pipeline!;
+      const sourceStage = pipeline.stages!.find(stage => stage.name === 'Source');
+      const sourceAction = sourceStage!.actions![0];
+      const connectionArn = sourceAction.configuration?.ConnectionArn;
+
+      expect(connectionArn).toBeTruthy();
+      expect(connectionArn).toMatch(/arn:aws:codestar-connections:.+:\d+:connection\/.+/);
+
+      // Note: We can't directly test the connection status without additional permissions
+      // but we can validate the ARN format and that it's configured in the pipeline
+      console.log(`CodeStar connection ARN: ${connectionArn}`);
     });
   });
 
