@@ -362,7 +362,7 @@ describe("Terraform Configuration Unit Tests", () => {
         const result = execSync("cd lib && terraform validate", { encoding: 'utf8' });
         expect(result).toContain("Success");
       } catch (error: any) {
-        fail(`Terraform validation failed: ${error.message}`);
+        throw new Error(`Terraform validation failed: ${error.message}`);
       }
     });
 
