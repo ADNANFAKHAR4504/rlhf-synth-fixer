@@ -22,7 +22,10 @@ echo "Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "CI mode: $CI"
 
 # Run integration tests based on language
-if [ "$LANGUAGE" = "py" ]; then
+if [ "$LANGUAGE" = "java" ]; then
+  echo "✅ Java project detected, running integration tests..."
+  ./gradlew integrationTest --build-cache
+elif [ "$LANGUAGE" = "py" ]; then
   echo "✅ Python project detected, running integration tests..."
   pipenv run test-py-integration
 else

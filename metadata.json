@@ -1,0 +1,9 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "java-template-001",
+  "team": "synth",
+  "startedAt": "2025-08-19T00:00:00-00:00"
+}

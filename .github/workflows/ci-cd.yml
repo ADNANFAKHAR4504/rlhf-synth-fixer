@@ -531,6 +531,10 @@ jobs:
             "setup.js"
             "cdktf.json"
             "Pulumi.yaml"
+            "build.gradle"
+            "gradle"
+            "gradlew"
+            "gradlew.bat"
             )
 
           # Move paths to archive

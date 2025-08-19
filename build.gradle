@@ -1,5 +1,6 @@
 plugins {
     id 'application'
+    id 'checkstyle'
 }
 
 repositories {
@@ -10,15 +11,44 @@ repositories {
     mavenLocal()
 }
 
+// Resolve dependency conflicts
+configurations.all {
+    resolutionStrategy {
+        force 'com.google.guava:guava:33.0.0-jre'
+        eachDependency { details ->
+            if (details.requested.group == 'com.google.collections' && details.requested.name == 'google-collections') {
+                details.useTarget 'com.google.guava:guava:33.0.0-jre'
+                details.because 'google-collections is replaced by guava'
+            }
+        }
+    }
+}
+
 dependencies {
     implementation 'com.pulumi:pulumi:0.11.0'
     implementation 'com.pulumi:aws:7.4.0'
+    
+    // Test dependencies
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
+    
 }
 
 // Configure source directories to point to lib/
 sourceSets {
     main.java {
         srcDirs = ['lib/src/main/java']
+    }
+    test.java {
+        srcDirs = ['lib/src/test/java']
+    }
+    integrationTest {
+        java.srcDirs = ['lib/src/integration-test/java']
+        resources.srcDirs = ['lib/src/integration-test/resources']
+        compileClasspath += sourceSets.main.output + sourceSets.test.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.test.output
     }
 }
 
@@ -27,3 +57,40 @@ application {
             ? project.getProperty("mainClass")
             : 'app.Main'
 }
+
+// Configure integration test dependencies
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+// JUnit configuration
+test {
+    useJUnitPlatform()
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+}
+
+// Integration test task
+tasks.register('integrationTest', Test) {
+    description = 'Runs integration tests.'
+    group = 'verification'
+    
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    
+    shouldRunAfter test
+}
+
+// Checkstyle configuration
+checkstyle {
+    toolVersion = '10.12.7'
+    configFile = file('config/checkstyle/checkstyle.xml')
+    ignoreFailures = true
+    maxWarnings = 0
+}
+
+
+// Make check depend on integration tests
+check.dependsOn integrationTest

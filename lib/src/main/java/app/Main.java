@@ -13,8 +13,13 @@ import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationRuleApply
 
 import java.util.Map;
 
-public class Main {
-    public static void main(String[] args) {
+public final class Main {
+    
+    private Main() {
+        // Utility class
+    }
+    
+    public static void main(final String[] args) {
         Pulumi.run(ctx -> {
 
             Bucket bucket = new Bucket("java-app-bucket", BucketArgs.builder()
@@ -22,15 +27,24 @@ public class Main {
                     .build());
 
             new BucketVersioning(bucket.bucket().toString() + "-versioning",
-                    BucketVersioningArgs.builder().bucket(bucket.id()).versioningConfiguration(
-                            BucketVersioningVersioningConfigurationArgs.builder().status("Enabled").build()).build());
+                    BucketVersioningArgs.builder().bucket(bucket.id())
+                            .versioningConfiguration(
+                                    BucketVersioningVersioningConfigurationArgs.builder()
+                                            .status("Enabled").build()).build());
 
-            BucketServerSideEncryptionConfiguration encryption = new BucketServerSideEncryptionConfiguration(
-                    bucket.bucket().toString() + "-encryption", BucketServerSideEncryptionConfigurationArgs.builder()
-                    .bucket(bucket.id()).rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
-                            .applyServerSideEncryptionByDefault(
-                                    BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs.builder()
-                                            .sseAlgorithm("AES256").build()).build()).build());
+            BucketServerSideEncryptionConfiguration encryption =
+                    new BucketServerSideEncryptionConfiguration(
+                            bucket.bucket().toString() + "-encryption",
+                            BucketServerSideEncryptionConfigurationArgs.builder()
+                                    .bucket(bucket.id())
+                                    .rules(BucketServerSideEncryptionConfigurationRuleArgs.builder()
+                                            .applyServerSideEncryptionByDefault(
+                                                    BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs
+                                                            .builder()
+                                                            .sseAlgorithm("AES256")
+                                                            .build())
+                                            .build())
+                                    .build());
 
 
             ctx.export("bucketName", bucket.id());

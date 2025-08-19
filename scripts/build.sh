@@ -10,8 +10,12 @@ if [ -f "metadata.json" ]; then
   echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 fi
 
-# Build the project only if language is not Python
-if [ "$LANGUAGE" != "py" ]; then
+# Build the project based on language
+if [ "$LANGUAGE" = "java" ]; then
+  echo "Building Java project with Gradle..."
+  ./gradlew build --build-cache --parallel --info
+  echo "✅ Java build completed successfully"
+elif [ "$LANGUAGE" != "py" ]; then
   echo "Building project..."
   npm run build
   echo "✅ Build completed successfully"

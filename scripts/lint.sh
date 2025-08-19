@@ -49,6 +49,10 @@ elif [ "$LANGUAGE" = "py" ]; then
         echo "❌ Linting score $SCORE/10 is less than $MIN_SCORE. Linting failed."
         exit 1
     fi
+elif [ "$LANGUAGE" = "java" ]; then
+    echo "✅ Java project detected, running Checkstyle and SpotBugs..."
+    ./gradlew check --build-cache
+    echo "✅ Java linting completed successfully"
 elif [ "$PLATFORM" = "cfn" ]; then
     echo "✅ CloudFormation project detected, running CloudFormation validation..."
     if [ "$LANGUAGE" = "json" ]; then

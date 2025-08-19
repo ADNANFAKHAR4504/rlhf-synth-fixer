@@ -54,6 +54,19 @@ runs:
         python-version: "3.12.11"
         check-latest: true
 
+    - name: Setup Java 17
+      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'eclipse-temurin'
+        java-version: '17'
+
+    - name: Setup Gradle
+      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        gradle-home-cache-cleanup: true
+
     - name: Setup Terraform
       if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
       uses: hashicorp/setup-terraform@v3
@@ -101,5 +114,11 @@ runs:
           cdk.json
           metadata.json
           lambda/
+          build.gradle
+          gradle/
+          gradlew
+          gradlew.bat
+          .gradle/
+          build/
 
 
