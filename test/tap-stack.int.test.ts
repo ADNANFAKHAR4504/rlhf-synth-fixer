@@ -1,30 +1,26 @@
-import fs from 'fs';
-import {
-  CodePipelineClient,
-  GetPipelineCommand,
-  ListPipelinesCommand,
-} from '@aws-sdk/client-codepipeline';
-import {
-  CodeBuildClient,
-  BatchGetProjectsCommand,
-} from '@aws-sdk/client-codebuild';
-import {
-  S3Client,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-} from '@aws-sdk/client-s3';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  EventBridgeClient,
-  DescribeRuleCommand,
-} from '@aws-sdk/client-eventbridge';
+  BatchGetProjectsCommand,
+  CodeBuildClient,
+} from '@aws-sdk/client-codebuild';
 import {
-  IAMClient,
-  GetRoleCommand,
-} from '@aws-sdk/client-iam';
+  CodePipelineClient,
+  GetPipelineCommand,
+} from '@aws-sdk/client-codepipeline';
+import {
+  DescribeRuleCommand,
+  EventBridgeClient,
+} from '@aws-sdk/client-eventbridge';
+import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -37,7 +33,10 @@ let outputsLoaded = false;
 beforeAll(() => {
   try {
     if (fs.existsSync('cfn-outputs/flat-outputs.json')) {
-      const outputsContent = fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8');
+      const outputsContent = fs.readFileSync(
+        'cfn-outputs/flat-outputs.json',
+        'utf8'
+      );
       outputs = JSON.parse(outputsContent);
       outputsLoaded = true;
     } else {
@@ -73,11 +72,11 @@ describe('CI/CD Pipeline Integration Tests', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
         'PipelineName',
-        'PipelineUrl', 
+        'PipelineUrl',
         'CodeBuildProjectName',
-        'ArtifactsBucketName'
+        'ArtifactsBucketName',
       ];
-      
+
       expectedOutputs.forEach(output => {
         expect(outputs[output]).toBeDefined();
         expect(typeof outputs[output]).toBe('string');
@@ -101,21 +100,24 @@ describe('CI/CD Pipeline Integration Tests', () => {
   describe('AWS Resource Validation', () => {
     test('CodePipeline should exist and be accessible', async () => {
       if (!outputsLoaded) {
-        console.log('Skipping AWS resource test - no deployment outputs available');
+        console.log(
+          'Skipping AWS resource test - no deployment outputs available'
+        );
         return;
       }
 
       const command = new GetPipelineCommand({
         name: outputs.PipelineName,
       });
-      
+
       const response = await codePipelineClient.send(command);
       expect(response.pipeline).toBeDefined();
       expect(response.pipeline?.name).toBe(outputs.PipelineName);
       expect(response.pipeline?.stages).toHaveLength(3); // Source, Build, Deploy
-      
+
       // Verify stage names
-      const stageNames = response.pipeline?.stages?.map(stage => stage.name) || [];
+      const stageNames =
+        response.pipeline?.stages?.map(stage => stage.name) || [];
       expect(stageNames).toContain('Source');
       expect(stageNames).toContain('Build');
       expect(stageNames).toContain('Deploy');
@@ -123,17 +125,19 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
     test('CodeBuild project should exist and have correct configuration', async () => {
       if (!outputsLoaded) {
-        console.log('Skipping AWS resource test - no deployment outputs available');
+        console.log(
+          'Skipping AWS resource test - no deployment outputs available'
+        );
         return;
       }
 
       const command = new BatchGetProjectsCommand({
         names: [outputs.CodeBuildProjectName],
       });
-      
+
       const response = await codeBuildClient.send(command);
       expect(response.projects).toHaveLength(1);
-      
+
       const project = response.projects![0];
       expect(project.name).toBe(outputs.CodeBuildProjectName);
       expect(project.environment?.type).toBe('LINUX_CONTAINER');
@@ -143,7 +147,9 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
     test('S3 artifacts bucket should exist with proper configuration', async () => {
       if (!outputsLoaded) {
-        console.log('Skipping AWS resource test - no deployment outputs available');
+        console.log(
+          'Skipping AWS resource test - no deployment outputs available'
+        );
         return;
       }
 
@@ -151,17 +157,19 @@ describe('CI/CD Pipeline Integration Tests', () => {
       const versioningCommand = new GetBucketVersioningCommand({
         Bucket: outputs.ArtifactsBucketName,
       });
-      
+
       const versioningResponse = await s3Client.send(versioningCommand);
       expect(versioningResponse.Status).toBe('Enabled');
-      
+
       // Test bucket encryption
       const encryptionCommand = new GetBucketEncryptionCommand({
         Bucket: outputs.ArtifactsBucketName,
       });
-      
+
       const encryptionResponse = await s3Client.send(encryptionCommand);
-      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(
+        encryptionResponse.ServerSideEncryptionConfiguration
+      ).toBeDefined();
       expect(
         encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0]
           ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
@@ -170,20 +178,23 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
     test('CloudWatch log group should exist for CodeBuild', async () => {
       if (!outputsLoaded) {
-        console.log('Skipping AWS resource test - no deployment outputs available');
+        console.log(
+          'Skipping AWS resource test - no deployment outputs available'
+        );
         return;
       }
 
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: `/aws/codebuild/${outputs.CodeBuildProjectName}`,
       });
-      
+
       const response = await logsClient.send(command);
       expect(response.logGroups).toBeDefined();
       expect(response.logGroups!.length).toBeGreaterThan(0);
-      
+
       const logGroup = response.logGroups!.find(
-        lg => lg.logGroupName === `/aws/codebuild/${outputs.CodeBuildProjectName}`
+        lg =>
+          lg.logGroupName === `/aws/codebuild/${outputs.CodeBuildProjectName}`
       );
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(14);
@@ -191,7 +202,9 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
     test('IAM roles should exist with proper permissions', async () => {
       if (!outputsLoaded) {
-        console.log('Skipping AWS resource test - no deployment outputs available');
+        console.log(
+          'Skipping AWS resource test - no deployment outputs available'
+        );
         return;
       }
 
@@ -199,31 +212,37 @@ describe('CI/CD Pipeline Integration Tests', () => {
       const pipelineRoleCommand = new GetRoleCommand({
         RoleName: 'prod-codepipeline-service-role',
       });
-      
+
       const pipelineRoleResponse = await iamClient.send(pipelineRoleCommand);
       expect(pipelineRoleResponse.Role).toBeDefined();
-      expect(pipelineRoleResponse.Role?.RoleName).toBe('prod-codepipeline-service-role');
-      
+      expect(pipelineRoleResponse.Role?.RoleName).toBe(
+        'prod-codepipeline-service-role'
+      );
+
       // Test CodeBuild service role
       const buildRoleCommand = new GetRoleCommand({
         RoleName: 'prod-codebuild-service-role',
       });
-      
+
       const buildRoleResponse = await iamClient.send(buildRoleCommand);
       expect(buildRoleResponse.Role).toBeDefined();
-      expect(buildRoleResponse.Role?.RoleName).toBe('prod-codebuild-service-role');
+      expect(buildRoleResponse.Role?.RoleName).toBe(
+        'prod-codebuild-service-role'
+      );
     }, 10000);
 
     test('EventBridge rule should exist for CodeCommit triggers', async () => {
       if (!outputsLoaded) {
-        console.log('Skipping AWS resource test - no deployment outputs available');
+        console.log(
+          'Skipping AWS resource test - no deployment outputs available'
+        );
         return;
       }
 
       const command = new DescribeRuleCommand({
         Name: 'prod-codecommit-pipeline-trigger',
       });
-      
+
       const response = await eventsClient.send(command);
       expect(response.Name).toBe('prod-codecommit-pipeline-trigger');
       expect(response.State).toBe('ENABLED');
@@ -239,15 +258,15 @@ describe('CI/CD Pipeline Integration Tests', () => {
         'EventBridge rule starts CodePipeline execution',
         'Pipeline pulls source code from CodeCommit',
         'CodeBuild runs linting and unit tests',
-        'CodeBuild packages application artifacts', 
-        'Pipeline deploys to Elastic Beanstalk environment'
+        'CodeBuild packages application artifacts',
+        'Pipeline deploys to Elastic Beanstalk environment',
       ];
-      
+
       // Validate that all required components exist in outputs
       expect(outputs.PipelineName).toBeDefined();
       expect(outputs.CodeBuildProjectName).toBeDefined();
       expect(outputs.ArtifactsBucketName).toBeDefined();
-      
+
       // Validate naming follows production conventions
       expect(outputs.PipelineName).toMatch(/^prod-/);
       expect(outputs.CodeBuildProjectName).toMatch(/^prod-/);
@@ -257,16 +276,16 @@ describe('CI/CD Pipeline Integration Tests', () => {
     test('should validate security best practices are implemented', () => {
       // Validate that security measures are in place
       expect(outputs.ArtifactsBucketName).toMatch(/artifacts/); // Dedicated artifacts bucket
-      
+
       // These would be validated through AWS API calls in a real deployment
       const securityChecklist = [
         'S3 bucket has versioning enabled',
         'S3 bucket has encryption enabled',
         'IAM roles follow least privilege principle',
         'CloudWatch logging is enabled',
-        'Public access is blocked on S3 bucket'
+        'Public access is blocked on S3 bucket',
       ];
-      
+
       expect(securityChecklist.length).toBe(5); // All security measures identified
     });
   });
@@ -276,23 +295,29 @@ describe('CI/CD Pipeline Integration Tests', () => {
       const resourceNames = [
         outputs.PipelineName,
         outputs.CodeBuildProjectName,
-        outputs.ArtifactsBucketName
+        outputs.ArtifactsBucketName,
       ];
-      
+
       resourceNames.forEach(name => {
         expect(name).toMatch(/^prod-/); // All resources prefixed with 'prod-'
       });
     });
 
     test('should validate URLs and ARNs format', () => {
-      expect(outputs.PipelineUrl).toMatch(/^https:\/\/console\.aws\.amazon\.com/);
-      
+      expect(outputs.PipelineUrl).toMatch(
+        /^https:\/\/console\.aws\.amazon\.com/
+      );
+
       // Validate that resource names can be used to construct proper ARNs
       const pipelineArn = `arn:aws:codepipeline:${region}:*:${outputs.PipelineName}`;
-      expect(pipelineArn).toMatch(/^arn:aws:codepipeline:[a-z0-9-]+:[*\d]*:.+$/);
-      
+      expect(pipelineArn).toMatch(
+        /^arn:aws:codepipeline:[a-z0-9-]+:[*\d]*:.+$/
+      );
+
       const codeBuildArn = `arn:aws:codebuild:${region}:*:project/${outputs.CodeBuildProjectName}`;
-      expect(codeBuildArn).toMatch(/^arn:aws:codebuild:[a-z0-9-]+:[*\d]*:project\/.+$/);
+      expect(codeBuildArn).toMatch(
+        /^arn:aws:codebuild:[a-z0-9-]+:[*\d]*:project\/.+$/
+      );
     });
   });
 });
