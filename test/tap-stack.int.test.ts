@@ -47,10 +47,10 @@ describe('TapStack Integration Tests', () => {
       expect(subnets.length).toBeGreaterThanOrEqual(4); // At least 2 public and 2 private
 
       const publicSubnets = subnets.filter(s => 
-        s.Tags?.some(t => t.Key === 'Type' && t.Value === 'Public')
+        s.Tags?.some(t => t.Key === 'Type' && t.Value === 'public')
       );
       const privateSubnets = subnets.filter(s => 
-        s.Tags?.some(t => t.Key === 'Type' && t.Value === 'Private')
+        s.Tags?.some(t => t.Key === 'Type' && t.Value === 'private')
       );
 
       expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
