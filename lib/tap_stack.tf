@@ -351,9 +351,10 @@ resource "aws_lb_target_group" "main" {
     healthy_threshold   = 2
     unhealthy_threshold = 2
     timeout             = 5
-    interval            = 30
+    interval            = 15
     path                = "/"
-    matcher             = "200"
+    matcher             = "200-399"
+    port                = "traffic-port"
   }
 
   deregistration_delay = 30
@@ -416,8 +417,11 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${local.name_prefix}-lt-"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = local.current_config.instance_type
-
-  vpc_security_group_ids = [aws_security_group.ec2.id]
+  network_interfaces {
+    associate_public_ip_address = true
+    security_groups             = [aws_security_group.ec2.id]
+  }
+  # vpc_security_group_ids = [aws_security_group.ec2.id]
 
   iam_instance_profile {
     arn = aws_iam_instance_profile.ec2.arn
@@ -425,13 +429,19 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
-    yum update -y
-    yum install -y httpd
-    systemctl start httpd
-    systemctl enable httpd
-    echo "<h1>Hello from ${local.name_prefix} - Instance $(hostname -f)</h1>" > /var/www/html/index.html
+    set -euxo pipefail
+
+    # Fallback tiny HTTP server (immediate health) — starts first
+    nohup python3 -m http.server 80 --directory /var/www/html >/var/log/pyhttp.log 2>&1 &
+
+    # Try to switch to Apache when/if internet/NAT works
+    ( yum update -y && yum install -y httpd && systemctl enable --now httpd && pkill -f "python3 -m http.server" ) || true
+
+    mkdir -p /var/www/html
+    echo "<h1>Hello from ${local.name_prefix} - $(hostname -f)</h1>" > /var/www/html/index.html
   EOF
   )
+
 
   tag_specifications {
     resource_type = "instance"
@@ -452,11 +462,11 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600
   min_size                  = local.current_config.min_size
   max_size                  = local.current_config.max_size
   desired_capacity          = local.current_config.desired_capacity
-
+  depends_on = [aws_lb_listener.main]        # ensure LB path is ready
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
