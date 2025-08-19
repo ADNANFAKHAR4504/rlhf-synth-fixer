@@ -166,3 +166,68 @@ output "sg_lambda_primary_id" {
 output "sg_lambda_secondary_id" {
   value = aws_security_group.lambda_secondary.id
 }
+########################
+# Bastion Host Security Groups (Primary and Secondary Regions)
+########################
+
+resource "aws_security_group" "bastion_primary" {
+  provider    = aws.primary
+  name        = "${var.name_prefix}-${var.environment}-bastion-sg-primary"
+  description = "Security group for bastion host in primary region"
+  vpc_id      = aws_vpc.primary.id
+
+  ingress {
+    description = "SSH from allowed CIDRs"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ssh_cidr
+  }
+
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-bastion-sg-primary"
+    Role = "bastion"
+    Environment = var.environment
+    ManagedBy = "terraform"
+    Project = "secure-env"
+  }
+}
+
+resource "aws_security_group" "bastion_secondary" {
+  provider    = aws.secondary
+  name        = "${var.name_prefix}-${var.environment}-bastion-sg-secondary"
+  description = "Security group for bastion host in secondary region"
+  vpc_id      = aws_vpc.secondary.id
+
+  ingress {
+    description = "SSH from allowed CIDRs"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ssh_cidr
+  }
+
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-bastion-sg-secondary"
+    Role = "bastion"
+    Environment = var.environment
+    ManagedBy = "terraform"
+    Project = "secure-env"
+  }
+}

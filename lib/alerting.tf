@@ -2,6 +2,32 @@
 # Alerting for Unauthorized Access Attempts
 ########################
 
+########################
+# SNS Topics for Alarm Notifications
+########################
+
+resource "aws_sns_topic" "alarm_notifications_primary" {
+  provider = aws.primary
+  name     = "${var.name_prefix}-${var.environment}-alarm-notifications-primary"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-alarm-notifications-primary"
+    Environment = var.environment
+    ManagedBy = "terraform"
+    Project = "secure-env"
+  }
+}
+
+resource "aws_sns_topic" "alarm_notifications_secondary" {
+  provider = aws.secondary
+  name     = "${var.name_prefix}-${var.environment}-alarm-notifications-secondary"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-alarm-notifications-secondary"
+    Environment = var.environment
+    ManagedBy = "terraform"
+    Project = "secure-env"
+  }
+}
+
 # CloudWatch Metric Filter for Unauthorized Access (Primary)
 resource "aws_cloudwatch_log_metric_filter" "unauthorized_access_primary" {
   provider         = aws.primary
@@ -27,7 +53,8 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm_primary" {
   statistic           = "Sum"
   threshold           = 1
   alarm_description   = "Alert for unauthorized access attempts detected in Lambda logs (primary region)"
-  actions_enabled     = false # Set to true and add SNS topic ARN for notifications
+  actions_enabled     = true
+  alarm_actions       = [aws_sns_topic.alarm_notifications_primary.arn]
 }
 
 # CloudWatch Metric Filter for Unauthorized Access (Secondary)
@@ -55,7 +82,8 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm_secondary" {
   statistic           = "Sum"
   threshold           = 1
   alarm_description   = "Alert for unauthorized access attempts detected in Lambda logs (secondary region)"
-  actions_enabled     = false # Set to true and add SNS topic ARN for notifications
+  actions_enabled     = true
+  alarm_actions       = [aws_sns_topic.alarm_notifications_secondary.arn]
 }
 
 

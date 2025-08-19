@@ -108,6 +108,204 @@ output "vpc_id_secondary" {
   value = aws_vpc.secondary.id
 }
 ########################
+# VPC Flow Logs (Primary and Secondary Regions)
+########################
+
+resource "aws_cloudwatch_log_group" "vpc_flow_logs_primary" {
+  provider = aws.primary
+  name     = "/aws/vpc/flowlogs/primary"
+  retention_in_days = 30
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-vpc-flowlogs-primary"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "vpc_flow_logs_secondary" {
+  provider = aws.secondary
+  name     = "/aws/vpc/flowlogs/secondary"
+  retention_in_days = 30
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-vpc-flowlogs-secondary"
+  }
+}
+
+resource "aws_flow_log" "primary" {
+  provider             = aws.primary
+  vpc_id               = aws_vpc.primary.id
+  log_destination_type = "cloud-watch-logs"
+  log_group_name       = aws_cloudwatch_log_group.vpc_flow_logs_primary.name
+  iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
+  traffic_type         = "ALL"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-vpc-flowlog-primary"
+  }
+}
+
+resource "aws_flow_log" "secondary" {
+  provider             = aws.secondary
+  vpc_id               = aws_vpc.secondary.id
+  log_destination_type = "cloud-watch-logs"
+  log_group_name       = aws_cloudwatch_log_group.vpc_flow_logs_secondary.name
+  iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
+  traffic_type         = "ALL"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-vpc-flowlog-secondary"
+  }
+}
+########################
+# Route Tables, Associations, and NAT Gateways (Primary and Secondary Regions)
+########################
+
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat_primary" {
+  provider = aws.primary
+  vpc      = true
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-nat-eip-primary"
+  }
+}
+
+resource "aws_eip" "nat_secondary" {
+  provider = aws.secondary
+  vpc      = true
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-nat-eip-secondary"
+  }
+}
+
+# NAT Gateways
+resource "aws_nat_gateway" "primary" {
+  provider      = aws.primary
+  allocation_id = aws_eip.nat_primary.id
+  subnet_id     = aws_subnet.public_primary_1.id
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-nat-gateway-primary"
+  }
+}
+
+resource "aws_nat_gateway" "secondary" {
+  provider      = aws.secondary
+  allocation_id = aws_eip.nat_secondary.id
+  subnet_id     = aws_subnet.public_secondary_1.id
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-nat-gateway-secondary"
+  }
+}
+
+# Public Route Tables
+resource "aws_route_table" "public_primary" {
+  provider = aws.primary
+  vpc_id   = aws_vpc.primary.id
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-public-rt-primary"
+  }
+}
+
+resource "aws_route_table" "public_secondary" {
+  provider = aws.secondary
+  vpc_id   = aws_vpc.secondary.id
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-public-rt-secondary"
+  }
+}
+
+# Public Route Table Routes
+resource "aws_route" "public_primary_igw" {
+  provider               = aws.primary
+  route_table_id         = aws_route_table.public_primary.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.primary.id
+}
+
+resource "aws_route" "public_secondary_igw" {
+  provider               = aws.secondary
+  route_table_id         = aws_route_table.public_secondary.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.secondary.id
+}
+
+# Public Route Table Associations
+resource "aws_route_table_association" "public_primary_1" {
+  provider       = aws.primary
+  subnet_id      = aws_subnet.public_primary_1.id
+  route_table_id = aws_route_table.public_primary.id
+}
+
+resource "aws_route_table_association" "public_primary_2" {
+  provider       = aws.primary
+  subnet_id      = aws_subnet.public_primary_2.id
+  route_table_id = aws_route_table.public_primary.id
+}
+
+resource "aws_route_table_association" "public_secondary_1" {
+  provider       = aws.secondary
+  subnet_id      = aws_subnet.public_secondary_1.id
+  route_table_id = aws_route_table.public_secondary.id
+}
+
+resource "aws_route_table_association" "public_secondary_2" {
+  provider       = aws.secondary
+  subnet_id      = aws_subnet.public_secondary_2.id
+  route_table_id = aws_route_table.public_secondary.id
+}
+
+# Private Route Tables
+resource "aws_route_table" "private_primary" {
+  provider = aws.primary
+  vpc_id   = aws_vpc.primary.id
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-private-rt-primary"
+  }
+}
+
+resource "aws_route_table" "private_secondary" {
+  provider = aws.secondary
+  vpc_id   = aws_vpc.secondary.id
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-private-rt-secondary"
+  }
+}
+
+# Private Route Table Routes (NAT Gateway)
+resource "aws_route" "private_primary_nat" {
+  provider               = aws.primary
+  route_table_id         = aws_route_table.private_primary.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.primary.id
+}
+
+resource "aws_route" "private_secondary_nat" {
+  provider               = aws.secondary
+  route_table_id         = aws_route_table.private_secondary.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.secondary.id
+}
+
+# Private Route Table Associations
+resource "aws_route_table_association" "private_primary_1" {
+  provider       = aws.primary
+  subnet_id      = aws_subnet.private_primary_1.id
+  route_table_id = aws_route_table.private_primary.id
+}
+
+resource "aws_route_table_association" "private_primary_2" {
+  provider       = aws.primary
+  subnet_id      = aws_subnet.private_primary_2.id
+  route_table_id = aws_route_table.private_primary.id
+}
+
+resource "aws_route_table_association" "private_secondary_1" {
+  provider       = aws.secondary
+  subnet_id      = aws_subnet.private_secondary_1.id
+  route_table_id = aws_route_table.private_secondary.id
+}
+
+resource "aws_route_table_association" "private_secondary_2" {
+  provider       = aws.secondary
+  subnet_id      = aws_subnet.private_secondary_2.id
+  route_table_id = aws_route_table.private_secondary.id
+}
+########################
 # Public Subnets & Internet Gateways (Primary and Secondary Regions)
 ########################
 
