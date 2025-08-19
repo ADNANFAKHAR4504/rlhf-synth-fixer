@@ -24,9 +24,9 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
     expect(content).not.toMatch(/\bprovider\s+"aws"\s*{/);
   });
 
-  test("declares aws_region variable in tap_stack.tf", () => {
+  test("declares env variable in tap_stack.tf", () => {
     const content = fs.readFileSync(stackPath, "utf8");
-    expect(content).toMatch(/variable\s+"aws_region"\s*{/);
+    expect(content).toMatch(/variable\s+"env"\s*{/);
   });
 
 });
