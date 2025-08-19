@@ -1,6 +1,6 @@
 # Infrastructure Code Response - Production Ready
 
-I'll create a production-ready basic cloud environment on AWS using Pulumi TypeScript that meets all your requirements and follows best practices.
+I'll create a production-ready basic cloud environment on AWS using Pulumi TypeScript that meets all your requirements and follows best practices. The implementation uses a modular architecture with separate stacks for better maintainability and separation of concerns.
 
 ## lib/tap-stack.ts
 
@@ -17,6 +17,10 @@ I'll create a production-ready basic cloud environment on AWS using Pulumi TypeS
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
+import { NetworkStack } from './network-stack';
+import { IamStack } from './iam-stack';
+import { StorageStack } from './storage-stack';
+import { ComputeStack } from './compute-stack';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -43,6 +47,12 @@ export interface TapStackArgs {
 export class TapStack extends pulumi.ComponentResource {
   public readonly bucketName: pulumi.Output<string>;
   public readonly instanceId: pulumi.Output<string>;
+  public readonly vpcId: pulumi.Output<string>;
+  public readonly subnetId: pulumi.Output<string>;
+  public readonly securityGroupId: pulumi.Output<string>;
+  public readonly instancePublicIp: pulumi.Output<string>;
+  public readonly instancePrivateIp: pulumi.Output<string>;
+  public readonly s3BucketArn: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.

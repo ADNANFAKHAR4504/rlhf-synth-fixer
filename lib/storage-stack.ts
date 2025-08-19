@@ -347,12 +347,53 @@ export class StorageStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Create IAM role for EventBridge to write to CloudWatch Logs
+    const eventBridgeRole = new aws.iam.Role(
+      `tap-eventbridge-role-${environmentSuffix}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'events.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        inlinePolicies: [
+          {
+            name: 'CloudWatchLogsPolicy',
+            policy: JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                  ],
+                  Resource: logGroup.arn,
+                },
+              ],
+            }),
+          },
+        ],
+        tags,
+      },
+      { parent: this }
+    );
+
     // Create EventBridge target to send events to CloudWatch Logs
     new aws.cloudwatch.EventTarget(
       `tap-s3-event-target-${environmentSuffix}`,
       {
         rule: eventRule.name,
         arn: logGroup.arn,
+        roleArn: eventBridgeRole.arn,
       },
       { parent: this }
     );
