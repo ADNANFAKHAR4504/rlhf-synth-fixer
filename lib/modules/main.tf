@@ -345,11 +345,38 @@ resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.project_name}"
   deletion_window_in_days = 10
   enable_key_rotation     = true
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid = "Enable IAM User Permissions",
+        Effect = "Allow",
+        Principal = {
+          AWS = "arn:aws:iam::${var.account_id}:root"
+        },
+        Action = "kms:*",
+        Resource = "*"
+      },
+      {
+        Sid = "Allow CloudTrail to encrypt logs",
+        Effect = "Allow",
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        },
+        Action = "kms:GenerateDataKey*",
+        Resource = "*",
+        Condition = {
+          StringLike = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${var.account_id}:trail/${var.project_name}-trail"
+          }
+        }
+      }
+    ]
+  })
 }
 
-resource "aws_kms_alias" "main" {
-  name          = "alias/${var.project_name}-key"
-  target_key_id = aws_kms_key.main.key_id
+data "aws_kms_alias" "main" {
+  name = "alias/${var.project_name}-key"
 }
 
 
@@ -399,47 +426,17 @@ resource "random_string" "bucket_suffix" {
 }
 
 # IAM User with MFA requirement
-resource "aws_iam_user" "app_user" {
-  name = "${var.project_name}-app-user"
-  path = "/"
+data "aws_iam_user" "app_user" {
+  user_name = "${var.project_name}-app-user"
 }
 
-resource "aws_iam_policy" "mfa_policy" {
-  name        = "${var.project_name}-mfa-policy"
-  description = "Enforces MFA for all IAM users"
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid      = "AllowAllActionsWithMFA",
-        Effect   = "Allow",
-        Action   = "*",
-        Resource = "*",
-        Condition = {
-          Bool = {
-            "aws:MultiFactorAuthPresent" = "true"
-          }
-        }
-      },
-      {
-        Sid      = "DenyAllActionsWithoutMFA",
-        Effect   = "Deny",
-        Action   = "*",
-        Resource = "*",
-        Condition = {
-          BoolIfExists = {
-            "aws:MultiFactorAuthPresent" = "false"
-          }
-        }
-      }
-    ]
-  })
+data "aws_iam_policy" "mfa_policy" {
+  name = "${var.project_name}-mfa-policy"
 }
 
 resource "aws_iam_user_policy_attachment" "mfa_attachment" {
-  user       = aws_iam_user.app_user.name
-  policy_arn = aws_iam_policy.mfa_policy.arn
+  user       = data.aws_iam_user.app_user.user_name
+  policy_arn = data.aws_iam_policy.mfa_policy.arn
 }
 
 # IAM Role for EC2
