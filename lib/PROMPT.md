@@ -2,7 +2,7 @@
 
 Build a scalable web application infrastructure using Terraform on AWS.
 
-## Requirements
+## Requirements 
 
 - **Region**: us-west-2
 - **Platform**: Terraform (version 1.1.0+)
