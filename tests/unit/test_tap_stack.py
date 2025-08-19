@@ -6,6 +6,7 @@ without deploying actual AWS infrastructure.
 """
 
 import json
+import os
 import re
 from typing import Any, Dict, List
 
@@ -190,8 +191,9 @@ def test_secrets_manager_resources():
   args = TapStackArgs()
   stack = TapStack("test-stack", args)
 
-  # Verify basic attributes
-  assert stack.env == "dev"
+  # Verify basic attributes - use actual environment suffix instead of hardcoded "dev"
+  expected_env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+  assert stack.env == expected_env
   assert stack.primary_region == "us-west-2"
   assert stack.budget_limit == 15.0
 
@@ -207,8 +209,9 @@ def test_s3_buckets_security():
   args = TapStackArgs()
   stack = TapStack("test-stack", args)
 
-  # Verify basic attributes
-  assert stack.env == "dev"
+  # Verify basic attributes - use actual environment suffix instead of hardcoded "dev"
+  expected_env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+  assert stack.env == expected_env
   assert stack.primary_region == "us-west-2"
 
   # Test with mocks (but don't fassil if mocks don't work)
@@ -223,9 +226,10 @@ def test_budget_management():
   args = TapStackArgs(budget_limit=25.0)
   stack = TapStack("test-stack", args)
 
-  # Verify basic attributes
+  # Verify basic attributes - use actual environment suffix instead of hardcoded "dev"
+  expected_env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
   assert stack.budget_limit == 25.0
-  assert stack.env == "dev"
+  assert stack.env == expected_env
 
   # Test with mocks (but don't fail if moocks don't work)
   ledger = run_program()
@@ -239,8 +243,9 @@ def test_lambda_functions():
   args = TapStackArgs()
   stack = TapStack("test-stack", args)
 
-  # Verify basic attributes
-  assert stack.env == "dev"
+  # Verify basic attributes - use actual environment suffix instead of hardcoded "dev"
+  expected_env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+  assert stack.env == expected_env
   assert stack.primary_region == "us-west-2"
 
   # Test with mocks (but don't fail if mockss don't work)
@@ -255,8 +260,9 @@ def test_api_gateway_resources():
   args = TapStackArgs()
   stack = TapStack("test-stack", args)
 
-  # Verify basic attributes
-  assert stack.env == "dev"
+  # Verify basic attributes - use actual environment suffix instead of hardcoded "dev"
+  expected_env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+  assert stack.env == expected_env
   assert stack.primary_region == "us-west-2"
 
   # Test with mocks (but don't fail if mocks don't work)
@@ -271,8 +277,9 @@ def test_monitoring_and_alarms():
   args = TapStackArgs()
   stack = TapStack("test-stack", args)
 
-  # Verify basic attributes
-  assert stack.env == "dev"
+  # Verify basic attributes - use actual environment suffix instead of hardcoded "dev"
+  expected_env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
+  assert stack.env == expected_env
   assert stack.primary_region == "us-west-2"
 
   # Test with mocks (but don't fail if mocks don't work)
