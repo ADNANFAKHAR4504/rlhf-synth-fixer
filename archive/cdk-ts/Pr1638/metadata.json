@@ -10,7 +10,7 @@
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Web Application Deployment",
-    "Database Management", 
+    "Database Management",
     "Security Configuration",
     "Network Configuration",
     "Monitoring Setup",
@@ -31,5 +31,11 @@
     "Systems Manager Parameter Store",
     "Secrets Manager",
     "Auto Scaling"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
