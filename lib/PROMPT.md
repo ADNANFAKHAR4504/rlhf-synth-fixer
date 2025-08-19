@@ -42,7 +42,7 @@ Have server-side encryption enabled.
 
 Block all public access.
 
-IAM policies and roles must:
+IAM policies & roles must:
 
 Follow the least privilege principle.
 
