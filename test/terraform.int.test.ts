@@ -2,8 +2,9 @@ import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 
+const TEST_DIR = path.resolve(__dirname);
 const LIB_DIR = path.resolve(__dirname, '../lib');
-const TEST_VARS_FILE = path.join(LIB_DIR, 'terraform.tfvars.test');
+const TEST_VARS_FILE = path.join(TEST_DIR, 'terraform.tfvars.test');
 const TEST_TIMEOUT = 120000; // 2 minutes per test
 
 describe('Terraform Integration Tests', () => {
@@ -40,7 +41,7 @@ tags = {
       'tfplan.test',
     ];
     filesToClean.forEach(file => {
-      const filePath = path.join(LIB_DIR, file);
+      const filePath = path.join(TEST_DIR, file);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
@@ -53,7 +54,7 @@ tags = {
       () => {
         expect(() => {
           execSync('terraform init -backend=false -reconfigure', {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             stdio: 'pipe',
             timeout: 60000,
           });
@@ -67,7 +68,7 @@ tags = {
       () => {
         expect(() => {
           execSync('terraform validate', {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             stdio: 'pipe',
             timeout: 30000,
           });
@@ -81,7 +82,7 @@ tags = {
       () => {
         expect(() => {
           execSync('terraform fmt -check -recursive', {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             stdio: 'pipe',
             timeout: 30000,
           });
@@ -97,7 +98,7 @@ tags = {
           execSync(
             `terraform plan -var-file=${TEST_VARS_FILE} -out=tfplan.test`,
             {
-              cwd: LIB_DIR,
+              cwd: TEST_DIR,
               stdio: 'pipe',
               timeout: 120000,
             }
@@ -105,7 +106,7 @@ tags = {
         }).not.toThrow();
 
         // Clean up plan file
-        const planFile = path.join(LIB_DIR, 'tfplan.test');
+        const planFile = path.join(TEST_DIR, 'tfplan.test');
         if (fs.existsSync(planFile)) {
           fs.unlinkSync(planFile);
         }
@@ -121,7 +122,7 @@ tags = {
         const planOutput = execSync(
           `terraform plan -var-file=${TEST_VARS_FILE}`,
           {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             encoding: 'utf8',
             timeout: 120000,
           }
@@ -156,7 +157,7 @@ tags = {
         const planOutput = execSync(
           `terraform plan -var-file=${TEST_VARS_FILE}`,
           {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             encoding: 'utf8',
             timeout: 120000,
           }

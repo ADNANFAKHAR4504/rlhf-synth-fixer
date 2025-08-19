@@ -1,66 +1,66 @@
 # Variables
-variable "aws_region" { 
-  type = string 
+variable "aws_region" {
+  type    = string
   default = "us-east-1"
   validation {
-    condition = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
     error_message = "AWS region must be in format like us-east-1."
   }
 }
-variable "project_name" { 
-  type = string 
+variable "project_name" {
+  type = string
   validation {
-    condition = can(regex("^[a-zA-Z][a-zA-Z0-9-]*$", var.project_name))
+    condition     = can(regex("^[a-zA-Z][a-zA-Z0-9-]*$", var.project_name))
     error_message = "Project name must start with letter and contain only alphanumeric characters and hyphens."
   }
 }
-variable "environment_name" { 
-  type = string 
+variable "environment_name" {
+  type = string
   validation {
-    condition = contains(["dev", "staging", "prod"], var.environment_name)
+    condition     = contains(["dev", "staging", "prod"], var.environment_name)
     error_message = "Environment must be dev, staging, or prod."
   }
 }
-variable "environment_suffix" { 
-  type = string 
-  default = "dev"
+variable "environment_suffix" {
+  type        = string
+  default     = "dev"
   description = "Unique suffix to avoid resource naming conflicts between deployments"
 }
-variable "notification_email" { 
-  type = string 
+variable "notification_email" {
+  type = string
   validation {
-    condition = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
+    condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
     error_message = "Must be a valid email address."
   }
 }
-variable "allowed_ssh_cidrs" { 
-  type = list(string)
-  default = [] 
+variable "allowed_ssh_cidrs" {
+  type    = list(string)
+  default = []
 }
-variable "instance_type" { 
-  type = string 
+variable "instance_type" {
+  type    = string
   default = "t3.micro"
   validation {
-    condition = contains(["t3.micro", "t3.small", "t3.medium", "t3.large"], var.instance_type)
+    condition     = contains(["t3.micro", "t3.small", "t3.medium", "t3.large"], var.instance_type)
     error_message = "Instance type must be one of: t3.micro, t3.small, t3.medium, t3.large."
   }
 }
-variable "enable_vpc_flow_logs" { 
-  type = bool
-  default = true 
+variable "enable_vpc_flow_logs" {
+  type    = bool
+  default = true
 }
-variable "tags" { 
-  type = map(string)
-  default = {} 
+variable "tags" {
+  type    = map(string)
+  default = {}
 }
 
 # Data Sources
-data "aws_availability_zones" "available" { 
-  state = "available" 
+data "aws_availability_zones" "available" {
+  state = "available"
 }
 data "aws_caller_identity" "current" {}
-data "aws_ssm_parameter" "al2023_ami" { 
-  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64" 
+data "aws_ssm_parameter" "al2023_ami" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
 }
 
 # Locals
@@ -70,16 +70,16 @@ locals {
     Environment = var.environment_name
     ManagedBy   = "Terraform"
   }, var.tags)
-  
+
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
-  
+
   public_subnets = {
     for i, az in local.azs : az => {
       cidr = cidrsubnet("10.0.0.0/16", 8, i)
       az   = az
     }
   }
-  
+
   private_subnets = {
     for i, az in local.azs : az => {
       cidr = cidrsubnet("10.0.0.0/16", 8, i + 10)
@@ -148,7 +148,7 @@ resource "aws_route_table" "private" {
   for_each = local.private_subnets
   vpc_id   = aws_vpc.main.id
   route {
-    cidr_block = "0.0.0.0/0"
+    cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[each.key].id
   }
   tags = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-private-rt-${each.key}" })
@@ -179,21 +179,21 @@ resource "aws_s3_bucket" "data" {
   tags          = local.common_tags
 }
 
-resource "random_id" "bucket_suffix" { 
-  byte_length = 4 
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
 }
 
 resource "aws_s3_bucket_versioning" "logging" {
   bucket = aws_s3_bucket.logging.id
-  versioning_configuration { 
-    status = "Enabled" 
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
 resource "aws_s3_bucket_versioning" "data" {
   bucket = aws_s3_bucket.data.id
-  versioning_configuration { 
-    status = "Enabled" 
+  versioning_configuration {
+    status = "Enabled"
   }
 }
 
@@ -239,18 +239,18 @@ resource "aws_s3_bucket_logging" "data" {
 
 data "aws_iam_policy_document" "s3_tls_only" {
   statement {
-    sid       = "DenyInsecureConnections"
-    effect    = "Deny"
+    sid    = "DenyInsecureConnections"
+    effect = "Deny"
     principals {
-      type = "*"
+      type        = "*"
       identifiers = ["*"]
     }
     actions   = ["s3:*"]
     resources = [aws_s3_bucket.data.arn, "${aws_s3_bucket.data.arn}/*"]
     condition {
-      test = "Bool"
+      test     = "Bool"
       variable = "aws:SecureTransport"
-      values = ["false"]
+      values   = ["false"]
     }
   }
 }
@@ -279,7 +279,7 @@ data "aws_iam_policy_document" "cloudtrail_assume" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
   }
@@ -296,7 +296,7 @@ data "aws_iam_policy_document" "vpc_flow_assume" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["vpc-flow-logs.amazonaws.com"]
     }
   }
@@ -313,7 +313,7 @@ data "aws_iam_policy_document" "ec2_assume" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["ec2.amazonaws.com"]
     }
   }
@@ -330,7 +330,7 @@ data "aws_iam_policy_document" "lambda_assume" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["lambda.amazonaws.com"]
     }
   }
@@ -406,16 +406,16 @@ resource "aws_iam_role_policy" "lambda" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name                         = "${var.project_name}-${var.environment_suffix}-trail"
-  s3_bucket_name               = aws_s3_bucket.logging.bucket
-  s3_key_prefix                = "cloudtrail/"
+  name                          = "${var.project_name}-${var.environment_suffix}-trail"
+  s3_bucket_name                = aws_s3_bucket.logging.bucket
+  s3_key_prefix                 = "cloudtrail/"
   include_global_service_events = true
-  is_multi_region_trail        = true
-  enable_logging               = true
-  cloud_watch_logs_group_arn   = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
-  cloud_watch_logs_role_arn    = aws_iam_role.cloudtrail.arn
-  tags                         = local.common_tags
-  depends_on                   = [aws_s3_bucket_policy.cloudtrail_bucket]
+  is_multi_region_trail         = true
+  enable_logging                = true
+  cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail.arn
+  tags                          = local.common_tags
+  depends_on                    = [aws_s3_bucket_policy.cloudtrail_bucket]
 }
 
 data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
@@ -424,13 +424,13 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
     actions   = ["s3:GetBucketAcl"]
     resources = [aws_s3_bucket.logging.arn]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_suffix}-trail"]
+      values   = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_suffix}-trail"]
     }
   }
   statement {
@@ -438,18 +438,18 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
     actions   = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.logging.arn}/cloudtrail/*"]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "s3:x-amz-acl"
-      values = ["bucket-owner-full-control"]
+      values   = ["bucket-owner-full-control"]
     }
     condition {
-      test = "StringEquals"
+      test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_suffix}-trail"]
+      values   = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_suffix}-trail"]
     }
   }
 }
@@ -471,10 +471,10 @@ resource "aws_flow_log" "vpc" {
 
 # Security Groups
 resource "aws_security_group" "ec2" {
-  name        = "${var.project_name}-${var.environment_suffix}-ec2-sg"
-  vpc_id      = aws_vpc.main.id
-  tags        = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-ec2-sg" })
-  
+  name   = "${var.project_name}-${var.environment_suffix}-ec2-sg"
+  vpc_id = aws_vpc.main.id
+  tags   = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-ec2-sg" })
+
   dynamic "ingress" {
     for_each = length(var.allowed_ssh_cidrs) > 0 ? [1] : []
     content {
@@ -484,7 +484,7 @@ resource "aws_security_group" "ec2" {
       cidr_blocks = var.allowed_ssh_cidrs
     }
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -498,13 +498,13 @@ resource "aws_launch_template" "main" {
   name          = "${var.project_name}-${var.environment_suffix}-lt"
   image_id      = data.aws_ssm_parameter.al2023_ami.value
   instance_type = var.instance_type
-  
+
   vpc_security_group_ids = [aws_security_group.ec2.id]
-  
-  iam_instance_profile { 
-    name = aws_iam_instance_profile.ec2.name 
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2.name
   }
-  
+
   user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
@@ -513,38 +513,38 @@ resource "aws_launch_template" "main" {
     systemctl start amazon-ssm-agent
   EOF
   )
-  
+
   tag_specifications {
     resource_type = "instance"
     tags          = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-instance" })
   }
-  
+
   tags = local.common_tags
 }
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.project_name}-${var.environment_suffix}-asg"
-  vpc_zone_identifier = [for subnet in aws_subnet.private : subnet.id]
-  target_group_arns   = []
-  health_check_type   = "EC2"
+  name                      = "${var.project_name}-${var.environment_suffix}-asg"
+  vpc_zone_identifier       = [for subnet in aws_subnet.private : subnet.id]
+  target_group_arns         = []
+  health_check_type         = "EC2"
   health_check_grace_period = 300
-  
+
   min_size         = 1
   max_size         = 2
   desired_capacity = 1
-  
+
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
-  
+
   tag {
     key                 = "Name"
     value               = "${var.project_name}-${var.environment_suffix}-asg"
     propagate_at_launch = false
   }
-  
+
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -568,11 +568,11 @@ resource "aws_sns_topic_subscription" "email" {
 }
 
 # CloudWatch Metric Filter
-resource "aws_cloudwatch_metric_filter" "unauthorized_calls" {
+resource "aws_cloudwatch_log_metric_filter" "unauthorized_calls" {
   name           = "${var.project_name}-${var.environment_suffix}-unauthorized-calls"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
   pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
-  
+
   metric_transformation {
     name      = "UnauthorizedAPICalls"
     namespace = "${var.project_name}/${var.environment_name}/Security"
@@ -599,19 +599,19 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_calls" {
 resource "aws_lambda_function" "sg_remediation" {
   filename         = "sg_remediation.zip"
   function_name    = "${var.project_name}-${var.environment_suffix}-sg-remediation"
-  role            = aws_iam_role.lambda.arn
-  handler         = "index.handler"
+  role             = aws_iam_role.lambda.arn
+  handler          = "index.handler"
   source_code_hash = data.archive_file.sg_remediation.output_base64sha256
-  runtime         = "python3.12"
-  timeout         = 60
-  tags            = local.common_tags
+  runtime          = "python3.12"
+  timeout          = 60
+  tags             = local.common_tags
 }
 
 data "archive_file" "sg_remediation" {
   type        = "zip"
   output_path = "sg_remediation.zip"
   source {
-    content = <<EOF
+    content  = <<EOF
 import boto3
 import json
 import logging
