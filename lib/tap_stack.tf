@@ -112,7 +112,7 @@ locals {
   bastion_key_name_final = var.bastion_key_name != "" ? var.bastion_key_name : "${local.name_prefix}-bastion-key-${random_id.key_suffix.hex}"
 
   # S3 bucket name (globally unique with account & region baked in)
-  app_bucket_name = lower("${local.name_prefix}-app-${data.aws_caller_identity.current.account_id}-${var.aws_region}-test1")
+  app_bucket_name = lower("${local.name_prefix}-app-${data.aws_caller_identity.current.account_id}-${var.aws_region}-testing1")
 
   # App object prefix
   app_prefix = "app/"
@@ -364,7 +364,7 @@ resource "aws_iam_role" "app_role" {
 
 # Least-privilege S3 access to bucket + restricted prefix
 resource "aws_iam_policy" "app_s3_policy" {
-  name        = "${local.name_prefix}-apps-s3-policy-0001"
+  name        = "${local.name_prefix}-apps-s3-policy-00001"
   description = "Least-privilege S3 access to application bucket prefix"
 
   policy = jsonencode({
