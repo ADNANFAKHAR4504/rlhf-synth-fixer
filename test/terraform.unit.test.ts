@@ -2,6 +2,7 @@
 // Simple presence + sanity checks for ../lib/tap_stack.tf
 // No Terraform or CDKTF commands are executed.
 
+import { describe, expect, test } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';
 
@@ -25,7 +26,10 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
   });
 
   test('declares aws_region variable in vars.tf', () => {
-    const content = fs.readFileSync(path.resolve(__dirname, '../lib/vars.tf'), 'utf8');
+    const content = fs.readFileSync(
+      path.resolve(__dirname, '../lib/vars.tf'),
+      'utf8'
+    );
     expect(content).toMatch(/variable\s+"aws_region"\s*{/);
   });
 });
