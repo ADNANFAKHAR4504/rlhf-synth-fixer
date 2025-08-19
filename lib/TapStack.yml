@@ -8,9 +8,6 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     Description: 'Environment suffix for the deployment'
-    AllowedValues:
-      - dev
-      - prod
     Default: dev
 
 # =============================================================================
@@ -163,6 +160,44 @@ Resources:
       SubnetId: !Ref PrivateSubnet
 
   # ---------------------------------------------------------------------------
+  # IAM ROLE FOR DATA SCIENTISTS
+  # ---------------------------------------------------------------------------
+
+  # IAM role for data scientists to access the S3 bucket
+  DataScientistRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'DataScientistRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      Policies:
+        - PolicyName: SecureDataAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource:
+                  - !Sub 'arn:aws:s3:::secure-data-*-${EnvironmentSuffix}'
+                  - !Sub 'arn:aws:s3:::secure-data-*-${EnvironmentSuffix}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'data-scientist-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ---------------------------------------------------------------------------
   # KMS ENCRYPTION KEY
   # ---------------------------------------------------------------------------
 
@@ -186,7 +221,7 @@ Resources:
           - Sid: Allow DataScientist Role
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/DataScientistRole'
+              AWS: !GetAtt DataScientistRole.Arn
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -239,9 +274,8 @@ Resources:
               - s3:GetObject
               - s3:PutObject
               - s3:ListBucket
-            Resource:
-              - !Sub '${SecureS3Bucket}/*'
-              - !GetAtt SecureS3Bucket.Arn
+              - s3:GetBucketLocation
+            Resource: '*'
 
   # ---------------------------------------------------------------------------
   # ACCESS LOGGING BUCKET (PROD ONLY)
@@ -281,7 +315,7 @@ Resources:
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'secure-data-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketName: !Sub 'secure-datascience-${AWS::AccountId}-${EnvironmentSuffix}'
 
       # Enable versioning for data protection
       VersioningConfiguration:
@@ -320,9 +354,6 @@ Resources:
               - TransitionInDays: 90
                 StorageClass: GLACIER
 
-      # MFA delete protection for versioning
-      MfaDelete: Disabled
-
       Tags:
         - Key: Name
           Value: !Sub 'secure-data-${EnvironmentSuffix}'
@@ -347,7 +378,7 @@ Resources:
           - Sid: AllowDataScientistAccess
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/DataScientistRole'
+              AWS: !GetAtt DataScientistRole.Arn
             Action:
               - s3:GetObject
               - s3:PutObject
@@ -355,41 +386,7 @@ Resources:
               - s3:GetBucketLocation
             Resource:
               - !GetAtt SecureS3Bucket.Arn
-              - !Sub '${SecureS3Bucket}/*'
-
-          # Explicitly deny delete operations for everyone
-          - Sid: DenyDeleteOperations
-            Effect: Deny
-            Principal: '*'
-            Action:
-              - s3:DeleteObject
-              - s3:DeleteObjectVersion
-              - s3:DeleteBucket
-            Resource:
-              - !GetAtt SecureS3Bucket.Arn
-              - !Sub '${SecureS3Bucket}/*'
-
-          # Force access through VPC endpoint only
-          - Sid: DenyAccessOutsideVPC
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !GetAtt SecureS3Bucket.Arn
-              - !Sub '${SecureS3Bucket}/*'
-            Condition:
-              StringNotEquals:
-                'aws:SourceVpce': !Ref S3VPCEndpoint
-
-          # Deny unencrypted uploads
-          - Sid: DenyUnencryptedUploads
-            Effect: Deny
-            Principal: '*'
-            Action: s3:PutObject
-            Resource: !Sub '${SecureS3Bucket}/*'
-            Condition:
-              StringNotEquals:
-                's3:x-amz-server-side-encryption': 'aws:kms'
+              - !Sub '${SecureS3Bucket.Arn}/*'
 
 # =============================================================================
 # OUTPUTS
@@ -492,14 +489,26 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-BucketDomainName'
 
-  BucketWebsiteURL:
-    Description: 'S3 Bucket Website URL'
-    Value: !GetAtt SecureS3Bucket.WebsiteURL
+  BucketRegionalDomainName:
+    Description: 'S3 Bucket Regional Domain Name'
+    Value: !GetAtt SecureS3Bucket.RegionalDomainName
     Export:
-      Name: !Sub '${AWS::StackName}-BucketWebsiteURL'
+      Name: !Sub '${AWS::StackName}-BucketRegionalDomainName'
 
   KMSKeyArn:
     Description: 'KMS Key ARN for bucket encryption'
     Value: !GetAtt S3EncryptionKey.Arn
     Export:
       Name: !Sub '${AWS::StackName}-KMSKeyArn'
+
+  DataScientistRoleArn:
+    Description: 'ARN of the DataScientist IAM Role'
+    Value: !GetAtt DataScientistRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DataScientistRoleArn'
+
+  DataScientistRoleName:
+    Description: 'Name of the DataScientist IAM Role'
+    Value: !Ref DataScientistRole
+    Export:
+      Name: !Sub '${AWS::StackName}-DataScientistRoleName'
