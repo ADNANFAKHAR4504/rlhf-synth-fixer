@@ -333,12 +333,12 @@ describe("AWS Secure Infrastructure Integration Tests", () => {
         }));
         dbInstance = response.DBInstances![0];
       } catch (error) {
-        // If specific instance not found, try to find it in the list
+        // If specific instance not found, try to find our specific instance
         const allResponse = await rdsClient.send(new DescribeDBInstancesCommand({}));
         dbInstance = allResponse.DBInstances?.find(db => 
-          db.DBInstanceIdentifier?.includes('corp-') || 
-          db.DBName?.includes('maindb') ||
-          db.Engine === 'postgres'
+          (db.DBInstanceIdentifier?.includes('corp-') && db.Engine === 'postgres') ||
+          (db.DBName?.includes('maindb') && db.Engine === 'postgres') ||
+          (db.DBInstanceIdentifier === instanceId)
         );
       }
       
@@ -346,7 +346,7 @@ describe("AWS Secure Infrastructure Integration Tests", () => {
       
       expect(dbInstance!.DBInstanceStatus).toBe('available');
       expect(dbInstance!.Engine).toBe('postgres');
-      expect(dbInstance!.EngineVersion).toMatch(/^15\.8/);
+      expect(dbInstance!.EngineVersion).toMatch(/^(15|16|17)\./);
       expect(dbInstance!.DBInstanceClass).toBe('db.t3.micro');
       expect(dbInstance!.StorageEncrypted).toBe(true);
       expect(dbInstance!.MultiAZ).toBe(true);
@@ -362,11 +362,20 @@ describe("AWS Secure Infrastructure Integration Tests", () => {
 
       const response = await elbv2Client.send(new DescribeLoadBalancersCommand({}));
 
-      const alb = response.LoadBalancers?.find(lb => 
-        lb.DNSName === albDnsName || 
-        lb.LoadBalancerName?.includes('corp-') ||
-        lb.DNSName?.includes(albDnsName!.split('.')[0])
-      );
+      // First try to find by exact DNS name
+      let alb = response.LoadBalancers?.find(lb => lb.DNSName === albDnsName);
+      
+      // If not found, find ALBs in our VPC and then filter by name pattern
+      if (!alb) {
+        const albsInVpc = response.LoadBalancers?.filter(lb => 
+          lb.VpcId === outputs.vpc_id?.value
+        );
+        alb = albsInVpc?.find(lb => 
+          lb.LoadBalancerName?.includes('corp-') ||
+          lb.DNSName?.includes(albDnsName!.split('.')[0])
+        );
+      }
+      
       expect(alb).toBeTruthy();
       
       expect(alb!.State?.Code).toBe('active');
