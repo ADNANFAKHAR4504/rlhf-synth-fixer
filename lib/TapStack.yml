@@ -573,7 +573,7 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       LoggingConfiguration:
-        DestinationBucketName: !Ref ApplicationLogsBucket
+        DestinationBucketName: !Sub 'app-logs-${AWS::AccountId}-${AWS::Region}-tapstack'
         LogFilePrefix: 's3-access-logs/'
       LifecycleConfiguration:
         Rules:
@@ -585,8 +585,7 @@ Resources:
             Status: Enabled
             ExpirationInDays: 90
             NoncurrentVersionExpirationInDays: 30
-            Filter:
-              Prefix: 's3-access-logs/'
+            Prefix: 's3-access-logs/'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-app-logs-bucket'

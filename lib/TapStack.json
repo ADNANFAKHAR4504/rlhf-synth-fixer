@@ -1083,7 +1083,7 @@
                 },
                 "LoggingConfiguration": {
                     "DestinationBucketName": {
-                        "Ref": "ApplicationLogsBucket"
+                        "Fn::Sub": "app-logs-${AWS::AccountId}-${AWS::Region}-tapstack"
                     },
                     "LogFilePrefix": "s3-access-logs/"
                 },
@@ -1100,9 +1100,7 @@
                             "Status": "Enabled",
                             "ExpirationInDays": 90,
                             "NoncurrentVersionExpirationInDays": 30,
-                            "Filter": {
-                                "Prefix": "s3-access-logs/"
-                            }
+                            "Prefix": "s3-access-logs/"
                         }
                     ]
                 },

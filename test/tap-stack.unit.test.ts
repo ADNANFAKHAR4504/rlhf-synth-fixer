@@ -482,8 +482,8 @@ describe('TapStack CloudFormation Template', () => {
         expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
         expect(bucket.Properties.LoggingConfiguration).toBeDefined();
         expect(
-          bucket.Properties.LoggingConfiguration.DestinationBucketName['Ref']
-        ).toBe('ApplicationLogsBucket');
+          bucket.Properties.LoggingConfiguration.DestinationBucketName['Fn::Sub']
+        ).toBeDefined();
         expect(bucket.Properties.LoggingConfiguration.LogFilePrefix).toBe(
           's3-access-logs/'
         );
@@ -512,9 +512,7 @@ describe('TapStack CloudFormation Template', () => {
       test('ApplicationLogsBucket should have logging configuration', () => {
         const bucket = template.Resources.ApplicationLogsBucket;
         const logging = bucket.Properties.LoggingConfiguration;
-        expect(logging.DestinationBucketName['Ref']).toBe(
-          'ApplicationLogsBucket'
-        );
+        expect(logging.DestinationBucketName['Fn::Sub']).toBeDefined();
         expect(logging.LogFilePrefix).toBe('s3-access-logs/');
       });
 
@@ -532,7 +530,7 @@ describe('TapStack CloudFormation Template', () => {
 
         expect(deleteOldLogsRule).toBeDefined();
         expect(deleteOldAccessLogsRule).toBeDefined();
-        expect(deleteOldAccessLogsRule.Filter.Prefix).toBe('s3-access-logs/');
+        expect(deleteOldAccessLogsRule.Prefix).toBe('s3-access-logs/');
         expect(deleteOldAccessLogsRule.ExpirationInDays).toBe(90);
       });
     });
