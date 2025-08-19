@@ -290,13 +290,14 @@ def lambda_handler(event, context):
 
   private createWafWebAcl(tags: { [key: string]: string }): aws.wafv2.WebAcl {
     return new aws.wafv2.WebAcl('owasp-web-acl', {
+      name: `nova-model-web-acl-${pulumi.getStack()}`,
       scope: 'REGIONAL',
       defaultAction: {
         allow: {},
       },
       rules: [
         {
-          name: 'AWSManagedRulesCommonRuleSet',
+          name: 'AWS-AWSManagedRulesCommonRuleSet',
           priority: 1,
           overrideAction: {
             none: {},
@@ -314,21 +315,21 @@ def lambda_handler(event, context):
           },
         },
         {
-          name: 'AWSManagedRulesOWASPTop10',
+          name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
           priority: 2,
           overrideAction: {
             none: {},
           },
           statement: {
             managedRuleGroupStatement: {
-              name: 'AWSManagedRulesOWASPTop10',
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
               vendorName: 'AWS',
             },
           },
           visibilityConfig: {
             sampledRequestsEnabled: true,
             cloudwatchMetricsEnabled: true,
-            metricName: 'OWASPTop10Metric',
+            metricName: 'KnownBadInputsMetric',
           },
         },
       ],
@@ -340,6 +341,7 @@ def lambda_handler(event, context):
       tags,
     }, { parent: this });
   }
+  
 
   private deployRegionalInfrastructure(region: string, tags: { [key: string]: string }): void {
     const provider = new aws.Provider(`provider-${region}`, {
