@@ -462,50 +462,7 @@ resource "aws_iam_instance_profile" "ec2" {
   role = aws_iam_role.ec2.name
 }
 
-# S3 bucket for CloudTrail logs
-resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = "${lower(var.project_name)}-cloudtrail-logs-${random_string.bucket_suffix.result}"
-  force_destroy = true
-}
 
-resource "aws_s3_bucket_policy" "cloudtrail_policy" {
-  bucket = aws_s3_bucket.cloudtrail_logs.id
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid = "AWSCloudTrailAclCheck",
-        Effect = "Allow",
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        },
-        Action = "s3:GetBucketAcl",
-        Resource = aws_s3_bucket.cloudtrail_logs.arn
-      },
-      {
-        Sid = "AWSCloudTrailWrite",
-        Effect = "Allow",
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        },
-        Action = "s3:PutObject",
-        Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/AWSLogs/${var.account_id}/*",
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_cloudtrail" "main" {
-  name                          = "${var.project_name}-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.id
-  s3_key_prefix                 = "cloudtrail"
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
-  kms_key_id                    = aws_kms_key.main.arn
+data "aws_cloudtrail" "main" {
+  name = "${var.project_name}-trail"
 }
