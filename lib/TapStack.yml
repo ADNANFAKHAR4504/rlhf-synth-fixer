@@ -161,7 +161,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/tap/${EnvironmentSuffix}/audit-logs'
       RetentionInDays: 90
-      KmsKeyId: !If [KMSEnabled, !GetAtt TapStackKMSKey.Arn, !Ref 'AWS::NoValue']
+      KmsKeyId: !If [KMSEnabled, !Ref TapStackKMSKey, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub 'TAP-${EnvironmentSuffix}-Logs'
