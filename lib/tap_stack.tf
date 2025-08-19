@@ -68,7 +68,6 @@ module "monitoring" {
   source = "./modules/monitoring"
 
   project_name             = var.project_name
-  cloudtrail_bucket_name   = module.storage.s3_data_bucket_name
   flow_log_role_arn        = module.iam.flow_log_role_arn
   flow_log_destination_arn = module.monitoring.flow_log_destination_arn
   vpc_id                   = module.networking.vpc_id
@@ -152,9 +151,4 @@ output "alb_dns_name" {
 output "rds_endpoint" {
   description = "The endpoint of the RDS instance"
   value       = module.database.rds_endpoint
-}
-
-output "cloudtrail_arn" {
-  description = "The ARN of the CloudTrail"
-  value       = module.monitoring.cloudtrail_arn
 }
