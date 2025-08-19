@@ -418,3 +418,9 @@ export class TapStack extends cdk.Stack {
   }
 }
 ```
+
+### Key Implementation Differences comments:
+
+ACTUAL uses DESTROY vs IDEAL's RETAIN: This is to allow for the test stack to be delete
+ACTUAL has false vs IDEAL's true: Setting this to true will prevent Database clean up after the PR is merged
+ACTUAL uses DESTROY vs IDEAL's RETAIN: This is to allow for the test stack to be deleted after the PR is merged
