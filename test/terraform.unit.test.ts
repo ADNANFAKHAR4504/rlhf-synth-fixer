@@ -250,7 +250,7 @@ describe("Terraform HCL Configuration Tests", () => {
       expect(eksCluster.length).toBe(1);
       
       const cluster = eksCluster[0];
-      expect(cluster).toMatch(/version\s*=\s*"1\.30"/);
+      expect(cluster).toMatch(/version\s*=\s*"1\.29"/);
       expect(cluster).toMatch(/endpoint_private_access\s*=\s*true/);
       expect(cluster).toMatch(/endpoint_public_access\s*=\s*true/);
       expect(cluster).toMatch(/enabled_cluster_log_types/);

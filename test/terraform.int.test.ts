@@ -289,7 +289,7 @@ describe("AWS Secure Infrastructure Integration Tests", () => {
       const cluster = response.cluster!;
       
       expect(cluster.status).toBe('ACTIVE');
-      expect(cluster.version).toBe(outputs.eks_cluster_version?.value || '1.30');
+      expect(cluster.version).toBe(outputs.eks_cluster_version?.value || '1.29');
       expect(cluster.endpoint).toBe(outputs.eks_cluster_endpoint?.value);
       expect(cluster.resourcesVpcConfig?.vpcId).toBe(outputs.vpc_id?.value);
       expect(cluster.resourcesVpcConfig?.endpointPrivateAccess).toBe(true);

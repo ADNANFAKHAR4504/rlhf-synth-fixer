@@ -532,7 +532,7 @@ resource "aws_cloudwatch_log_group" "eks_cluster" {
 resource "aws_eks_cluster" "main" {
   name     = "${local.name_prefix}-cluster"
   role_arn = aws_iam_role.eks_cluster.arn
-  version  = "1.30"
+  version  = "1.29"
 
   vpc_config {
     subnet_ids              = concat(aws_subnet.public[*].id, aws_subnet.private[*].id)
@@ -781,6 +781,9 @@ resource "aws_s3_bucket_public_access_block" "alb_logs" {
   restrict_public_buckets = true
 }
 
+# ELB Service Account Data Source
+data "aws_elb_service_account" "main" {}
+
 # S3 Bucket Policy for ALB Access Logs
 resource "aws_s3_bucket_policy" "alb_logs" {
   bucket = aws_s3_bucket.alb_logs.id
@@ -791,7 +794,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::797873946194:root" # ELB service account for us-west-2
+          AWS = data.aws_elb_service_account.main.arn
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
@@ -799,20 +802,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      },
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
+          AWS = data.aws_elb_service_account.main.arn
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.alb_logs.arn
@@ -1085,7 +1075,7 @@ resource "aws_iam_role_policy" "codepipeline" {
 
 # CodeStar Connection for GitHub
 resource "aws_codestarconnections_connection" "github" {
-  name          = "${local.name_prefix}-github-connection"
+  name          = "${local.name_prefix}-github"
   provider_type = "GitHub"
 
   tags = merge(local.common_tags, {
