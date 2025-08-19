@@ -15,7 +15,8 @@ import {
 } from '@aws-sdk/client-s3';
 import {
   KMSClient,
-  DescribeKeyCommand
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand
 } from '@aws-sdk/client-kms';
 import {
   CloudTrailClient,
@@ -124,7 +125,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         
         expect(response.Table).toBeDefined();
         expect(response.Table?.TableStatus).toBe('ACTIVE');
-        expect(response.Table?.BillingMode).toBe('PAY_PER_REQUEST');
+        expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
       } catch (error: any) {
         if (error.name === 'ResourceNotFoundException') {
           console.log('Table not found - this is expected in test environment');
@@ -296,7 +297,12 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         expect(response.KeyMetadata).toBeDefined();
         expect(response.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
         expect(response.KeyMetadata?.Origin).toBe('AWS_KMS');
-        expect(response.KeyMetadata?.KeyRotationStatus).toBe(true);
+        // Check key rotation status with separate API call
+        const rotationCommand = new GetKeyRotationStatusCommand({
+          KeyId: outputs.KMSKeyId
+        });
+        const rotationResponse = await clients.kms.send(rotationCommand);
+        expect(rotationResponse.KeyRotationEnabled).toBe(true);
       } catch (error: any) {
         if (error.name !== 'NotFoundException') {
           throw error;
