@@ -806,4 +806,4 @@ echo "OK" > /var/www/html/health`,
 - **Clean Separation**: Stack composition in `tap-stack.ts`, modules in `modules.ts`
 - **Type Safety**: Full TypeScript interfaces for configuration
 
-This infrastructure follows AWS Well-Architected Framework principles and implements defense-in-depth security strategies. All resources are properly tagged and configured for production use.
+This infrastructure follows AWS Well-Architected Framework principles and implements defense-in-depth security strategies. All resources are properly tagged and configured for production use. 
