@@ -829,6 +829,43 @@
                 }
             }
         },
+        "S3LoggingBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "S3LoggingBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AWSLoadBalancerAccessLogs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "arn:aws:iam::127311923021:root"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${S3LoggingBucket.Arn}/alb-logs/*"
+                            }
+                        },
+                        {
+                            "Sid": "AWSLoadBalancerAccessLogsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "arn:aws:iam::127311923021:root"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "S3LoggingBucket",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
