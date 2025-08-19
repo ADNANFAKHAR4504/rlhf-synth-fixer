@@ -110,7 +110,7 @@ resource "aws_iam_policy" "mfa_enforcement" {
           "iam:DeactivateMFADevice",
           "iam:DeleteVirtualMFADevice",
         ]
-        Resource = "arn:aws:iam::*:user/${aws:username}"
+        Resource = "arn:aws:iam::*:user/$${aws:username}"
       },
       {
         Sid      = "BlockMostAccessUnlessSignedInWithMFA"
