@@ -1,31 +1,47 @@
-# Backend configuration for local state (prevents backend warnings)
+# Backend configuration for S3 state management
 terraform {
-  backend "local" {}
+  backend "s3" {
+    # These values will be provided via backend-config during init
+    # bucket = "iac-rlhf-tf-states"
+    # key    = "prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
+    # region = "us-east-1"
+    # encrypt = true
+  }
 }
 
 # Variables for flexible role configuration
 variable "env" {
   description = "Environment (dev, staging, prod)"
   type        = string
+  default     = "dev"
   validation {
     condition     = contains(["dev", "staging", "prod"], var.env)
     error_message = "Environment must be dev, staging, or prod."
   }
 }
 
+variable "environment_suffix" {
+  description = "Suffix to append to resource names for uniqueness (e.g., pr123)"
+  type        = string
+  default     = "dev"
+}
+
 variable "owner" {
   description = "Team or individual responsible for these resources"
   type        = string
+  default     = "terraform-automation"
 }
 
 variable "purpose" {
   description = "Business purpose of these IAM resources"
   type        = string
+  default     = "iam-governance"
 }
 
 variable "target_account_id" {
   description = "AWS account ID where resources will be deployed"
   type        = string
+  default     = "123456789012" # Will be overridden during deployment
 }
 
 variable "external_id" {
@@ -37,12 +53,12 @@ variable "external_id" {
 variable "roles" {
   description = "Map of IAM roles to create with their configurations"
   type = map(object({
-    description         = string
+    description          = string
     max_session_duration = number
-    trusted_principals  = list(string)
-    require_external_id = bool
-    require_mfa        = bool
-    inline_policies    = map(object({
+    trusted_principals   = list(string)
+    require_external_id  = bool
+    require_mfa          = bool
+    inline_policies = map(object({
       actions   = list(string)
       resources = list(string)
       conditions = map(object({
@@ -53,17 +69,17 @@ variable "roles" {
     }))
     managed_policy_arns = list(string)
   }))
-  
+
   # Example role configurations
   # NOTE: Do NOT use variables in default values. Replace with static placeholders.
   # Users should override these in their own tfvars or via input.
   default = {
     security-auditor = {
-      description         = "Read-only access for SOC 2 compliance auditing"
+      description          = "Read-only access for SOC 2 compliance auditing"
       max_session_duration = 3600
-      trusted_principals  = ["arn:aws:iam::111122223333:root"] # Replace with real account
-      require_external_id = true
-      require_mfa        = true
+      trusted_principals   = ["arn:aws:iam::111122223333:root"] # Replace with real account
+      require_external_id  = true
+      require_mfa          = true
       inline_policies = {
         audit-read-access = {
           actions = [
@@ -95,11 +111,11 @@ variable "roles" {
     }
 
     ci-deployer = {
-      description         = "Limited deployment access for CI/CD pipeline"
+      description          = "Limited deployment access for CI/CD pipeline"
       max_session_duration = 1800
-      trusted_principals  = ["arn:aws:iam::444455556666:root"] # Replace with real account
-      require_external_id = true
-      require_mfa        = false
+      trusted_principals   = ["arn:aws:iam::444455556666:root"] # Replace with real account
+      require_external_id  = true
+      require_mfa          = false
       inline_policies = {
         deployment-access = {
           actions = [
@@ -128,11 +144,11 @@ variable "roles" {
     }
 
     breakglass = {
-      description         = "Emergency access role with strict controls"
-      max_session_duration = 900  # 15 minutes only
-      trusted_principals  = ["arn:aws:iam::123456789012:root"] # Replace with your account id
-      require_external_id = false
-      require_mfa        = true
+      description          = "Emergency access role with strict controls"
+      max_session_duration = 900                                # 15 minutes only
+      trusted_principals   = ["arn:aws:iam::123456789012:root"] # Replace with your account id
+      require_external_id  = false
+      require_mfa          = true
       inline_policies = {
         emergency-access = {
           actions = [
@@ -148,11 +164,8 @@ variable "roles" {
               variable = "aws:MultiFactorAuthPresent"
               values   = ["true"]
             }
-            session-duration = {
-              test     = "NumericLessThan"
-              variable = "aws:TokenIssueTime"
-              values   = ["900"]
-            }
+            # Session duration is enforced via max_session_duration on the role
+            # TokenIssueTime condition removed as it's not reliable
           }
         }
       }
@@ -164,7 +177,7 @@ variable "roles" {
 # Local values for consistent naming and tagging
 locals {
   name_prefix = "corp-"
-  
+
   common_tags = merge(
     {
       owner   = var.owner
@@ -174,7 +187,7 @@ locals {
     {
       terraform_managed = "true"
       compliance_scope  = "soc2-gdpr"
-      last_updated     = formatdate("YYYY-MM-DD", timestamp())
+      last_updated      = formatdate("YYYY-MM-DD", timestamp())
     }
   )
 }
@@ -182,11 +195,18 @@ locals {
 # Permission boundary policy - critical preventive control for SOC 2
 # Denies dangerous patterns and enforces organizational guardrails
 data "aws_iam_policy_document" "permission_boundary" {
-  # Deny wildcard admin access - prevents privilege escalation
+  # Block attaching the AdminAccess policy - prevents privilege escalation
   statement {
-    sid    = "DenyWildcardAdmin"
+    sid    = "DenyAttachAdministratorAccess"
     effect = "Deny"
-    actions = ["*"]
+    actions = [
+      "iam:AttachRolePolicy",
+      "iam:AttachUserPolicy",
+      "iam:AttachGroupPolicy",
+      "iam:PutRolePolicy",
+      "iam:PutUserPolicy",
+      "iam:PutGroupPolicy"
+    ]
     resources = ["*"]
     condition {
       test     = "StringEquals"
@@ -194,20 +214,21 @@ data "aws_iam_policy_document" "permission_boundary" {
       values   = ["arn:aws:iam::aws:policy/AdministratorAccess"]
     }
   }
-  
+
   # Enforce regional restrictions - data residency for GDPR
+  # Use StringNotEqualsIfExists to allow global services
   statement {
-    sid    = "EnforceRegionRestriction"
-    effect = "Deny"
-    actions = ["*"]
+    sid       = "EnforceRegionRestriction"
+    effect    = "Deny"
+    actions   = ["*"]
     resources = ["*"]
     condition {
-      test     = "StringNotEquals"
+      test     = "StringNotEqualsIfExists"
       variable = "aws:RequestedRegion"
       values   = ["us-east-1", "eu-west-1"]
     }
   }
-  
+
   # Require MFA for sensitive console actions - access control requirement
   statement {
     sid    = "RequireMFAForConsole"
@@ -227,7 +248,7 @@ data "aws_iam_policy_document" "permission_boundary" {
       values   = ["false"]
     }
   }
-  
+
   # Prevent modification of security-critical resources
   statement {
     sid    = "ProtectSecurityResources"
@@ -245,12 +266,12 @@ data "aws_iam_policy_document" "permission_boundary" {
 
 # Create the permission boundary policy
 resource "aws_iam_policy" "permission_boundary" {
-  name        = "${local.name_prefix}permission-boundary-${var.env}"
+  name        = "${local.name_prefix}permission-boundary-${var.environment_suffix}"
   description = "Permission boundary enforcing organizational security controls"
   policy      = data.aws_iam_policy_document.permission_boundary.json
-  
+
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}permission-boundary-${var.env}"
+    Name = "${local.name_prefix}permission-boundary-${var.environment_suffix}"
     Type = "PermissionBoundary"
   })
 }
@@ -258,16 +279,16 @@ resource "aws_iam_policy" "permission_boundary" {
 # Create IAM roles based on the roles variable
 resource "aws_iam_role" "roles" {
   for_each = var.roles
-  
-  name                 = "${local.name_prefix}${each.key}-${var.env}"
+
+  name                 = "${local.name_prefix}${each.key}-${var.environment_suffix}"
   description          = each.value.description
   max_session_duration = each.value.max_session_duration
   permissions_boundary = aws_iam_policy.permission_boundary.arn
-  
+
   assume_role_policy = data.aws_iam_policy_document.trust_policy[each.key].json
-  
+
   tags = merge(local.common_tags, {
-    Name     = "${local.name_prefix}${each.key}-${var.env}"
+    Name     = "${local.name_prefix}${each.key}-${var.environment_suffix}"
     RoleType = each.key
   })
 }
@@ -275,17 +296,17 @@ resource "aws_iam_role" "roles" {
 # Trust policies for each role
 data "aws_iam_policy_document" "trust_policy" {
   for_each = var.roles
-  
+
   statement {
     effect = "Allow"
-    
+
     principals {
       type        = "AWS"
       identifiers = each.value.trusted_principals
     }
-    
+
     actions = ["sts:AssumeRole"]
-    
+
     # Add external ID condition if required
     dynamic "condition" {
       for_each = each.value.require_external_id && var.external_id != "" ? [1] : []
@@ -295,7 +316,7 @@ data "aws_iam_policy_document" "trust_policy" {
         values   = [var.external_id]
       }
     }
-    
+
     # Add MFA condition if required
     dynamic "condition" {
       for_each = each.value.require_mfa ? [1] : []
@@ -314,17 +335,17 @@ resource "aws_iam_role_policy" "inline_policies" {
     for combo in flatten([
       for role_key, role_config in var.roles : [
         for policy_key, policy_config in role_config.inline_policies : {
-          role_key    = role_key
-          policy_key  = policy_key
+          role_key      = role_key
+          policy_key    = policy_key
           policy_config = policy_config
         }
       ]
     ]) : "${combo.role_key}-${combo.policy_key}" => combo
   }
-  
+
   name = each.value.policy_key
   role = aws_iam_role.roles[each.value.role_key].id
-  
+
   policy = data.aws_iam_policy_document.inline_policies[each.key].json
 }
 
@@ -334,19 +355,19 @@ data "aws_iam_policy_document" "inline_policies" {
     for combo in flatten([
       for role_key, role_config in var.roles : [
         for policy_key, policy_config in role_config.inline_policies : {
-          role_key    = role_key
-          policy_key  = policy_key
+          role_key      = role_key
+          policy_key    = policy_key
           policy_config = policy_config
         }
       ]
     ]) : "${combo.role_key}-${combo.policy_key}" => combo
   }
-  
+
   statement {
     effect    = "Allow"
     actions   = each.value.policy_config.actions
     resources = each.value.policy_config.resources
-    
+
     # Add conditions if specified
     dynamic "condition" {
       for_each = each.value.policy_config.conditions
@@ -371,7 +392,7 @@ resource "aws_iam_role_policy_attachment" "managed_policies" {
       ]
     ]) : "${combo.role_key}-${replace(combo.policy_arn, "/[^a-zA-Z0-9]/", "-")}" => combo
   }
-  
+
   role       = aws_iam_role.roles[each.value.role_key].name
   policy_arn = each.value.policy_arn
 }
@@ -399,9 +420,9 @@ output "compliance_summary" {
   value = {
     permission_boundaries_enabled = true
     mfa_required_for_sensitive    = true
-    regional_restrictions        = ["us-east-1", "eu-west-1"]
-    resource_tagging_enforced    = true
-    least_privilege_applied      = true
+    regional_restrictions         = ["us-east-1", "eu-west-1"]
+    resource_tagging_enforced     = true
+    least_privilege_applied       = true
   }
 }
 
