@@ -31,7 +31,7 @@ export class TapStack extends cdk.Stack {
     super(scope, id, {
       ...props,
       env: {
-        region: 'us-east-2',
+        region: 'us-west-2',
         account: props.env?.account,
       },
     });
@@ -398,7 +398,7 @@ new TapStack(app, 'TapStack', {
   dbUsername: 'admin',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-2',
+    region: 'us-west-2',
   },
 });
 ```
@@ -440,7 +440,7 @@ new TapStack(app, 'TapStack', {
 npm install
 
 # Bootstrap CDK (first time only)
-cdk bootstrap --region us-east-2
+cdk bootstrap --region us-west-2
 
 # Deploy the stack
 cdk deploy TapStack

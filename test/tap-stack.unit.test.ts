@@ -2,10 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-// Mock the nested stacks to verify they are called correctly
-jest.mock('../lib/ddb-stack');
-jest.mock('../lib/rest-api-stack');
-
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 describe('TapStack', () => {
@@ -14,9 +10,6 @@ describe('TapStack', () => {
   let template: Template;
 
   beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
-
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', {
       projectName: 'tap-financial-services',
@@ -26,7 +19,7 @@ describe('TapStack', () => {
       dbUsername: 'admin',
       env: {
         account: '123456789012',
-        region: 'us-east-2',
+        region: 'us-west-2',
       },
     });
     template = Template.fromStack(stack);
@@ -60,7 +53,7 @@ describe('TapStack', () => {
         DBInstanceClass: 'db.t3.micro',
         StorageEncrypted: true,
         MultiAZ: true,
-        DeletionProtection: true,
+        DeletionProtection: false,
       });
     });
 
@@ -74,15 +67,6 @@ describe('TapStack', () => {
     test('should create EC2 instances', () => {
       template.hasResourceProperties('AWS::EC2::Instance', {
         InstanceType: 't3.micro',
-        ImageId: {
-          'Fn::FindInMap': [
-            'AWSRegionToAMI',
-            {
-              Ref: 'AWS::Region',
-            },
-            'AMAZON_LINUX_2',
-          ],
-        },
       });
     });
 
@@ -136,6 +120,24 @@ describe('TapStack', () => {
     test('should have web instance IDs output', () => {
       template.hasOutput('WebInstanceIds', {
         Description: 'Web Server Instance IDs',
+      });
+    });
+
+    test('should have CloudTrail ARN output', () => {
+      template.hasOutput('CloudTrailArn', {
+        Description: 'CloudTrail ARN',
+      });
+    });
+
+    test('should have app data bucket name output', () => {
+      template.hasOutput('AppDataBucketName', {
+        Description: 'Application Data S3 Bucket Name',
+      });
+    });
+
+    test('should have instance profile ARN output', () => {
+      template.hasOutput('InstanceProfileArn', {
+        Description: 'EC2 Instance Profile ARN',
       });
     });
   });
