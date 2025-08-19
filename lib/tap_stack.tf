@@ -490,7 +490,7 @@ resource "aws_kms_key" "app" {
 }
 
 resource "aws_kms_alias" "app_alias" {
-  name          = "alias/${local.name_prefix}-apps-kms"
+  name          = "alias/${local.name_prefix}-apps-kms-001"
   target_key_id = aws_kms_key.app.key_id
 }
 
