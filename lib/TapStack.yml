@@ -105,7 +105,7 @@ Resources:
             Resource: '*'
 
           # Allow CloudWatch Logs in THIS REGION to use the key for any log group in this account
-          - Sid: AllowCloudWatchLogsUseOfKey
+          - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:
               Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
@@ -206,7 +206,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/ec2/tapstack${EnvironmentSuffix}-${GenerateRandomSuffix.RandomSuffix}'
       RetentionInDays: 7
-      KmsKeyId: !Ref KMSKey
+      KmsKeyId: !GetAtt KMSKey.Arn
       Tags:
         - Key: Environment
           Value: Production
@@ -219,7 +219,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/s3/tapstack${EnvironmentSuffix}-${GenerateRandomSuffix.RandomSuffix}'
       RetentionInDays: 7
-      KmsKeyId: !Ref KMSKey
+      KmsKeyId: !GetAtt KMSKey.Arn
       Tags:
         - Key: Environment
           Value: Production
@@ -232,7 +232,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/vpc/tapstack${EnvironmentSuffix}-${GenerateRandomSuffix.RandomSuffix}'
       RetentionInDays: 7
-      KmsKeyId: !Ref KMSKey
+      KmsKeyId: !GetAtt KMSKey.Arn
       Tags:
         - Key: Environment
           Value: Production
