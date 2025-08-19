@@ -507,7 +507,7 @@ describe("Terraform single-file stack: main.tf", () => {
     });
 
     test("ALB response time alarm monitors performance", () => {
-      expect(content).toMatch(/metric_name\s*=\s*"TargetResponseTime"/);
+      expect(content).toMatch(/metric_name\s*=\s*"ResponseTime"/);
       expect(content).toMatch(/threshold\s*=\s*"1\.0"/);
     });
 
@@ -701,7 +701,7 @@ describe("Terraform single-file stack: main.tf", () => {
 
     test("ALB response time alarm has proper configuration", () => {
       expect(content).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"alb_response_time"/);
-      expect(content).toMatch(/metric_name\s*=\s*"TargetResponseTime"/);
+      expect(content).toMatch(/metric_name\s*=\s*"ResponseTime"/);
       expect(content).toMatch(/namespace\s*=\s*"AWS\/ApplicationELB"/);
       expect(content).toMatch(/threshold\s*=\s*"1\.0"/);
     });

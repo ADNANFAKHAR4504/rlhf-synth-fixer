@@ -593,7 +593,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
         a.AlarmName?.includes("response-time") ||
         a.AlarmName?.includes("response_time") ||
         (a.AlarmName?.toLowerCase().includes("target") && a.AlarmName?.toLowerCase().includes("response")) ||
-        a.MetricName === "TargetResponseTime"
+        a.MetricName === "ResponseTime"
       );
       const healthyHostsAlarm = alarms.find(a => 
         a.AlarmName?.includes("alb-unhealthy-hosts") || 
