@@ -57,9 +57,3 @@ variable "availability_zones" {
   type        = list(string)
    default     = []
 }
-
-variable "s3_bucket_name_to_clean" {
-  description = "The name of the S3 bucket to empty before deletion."
-  type        = string
-  default     = "tap-app-dev-064031-qcf7m9d3-logs-bucket"
-}
