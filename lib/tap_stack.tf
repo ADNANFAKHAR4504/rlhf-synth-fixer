@@ -11,6 +11,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "project_code" {
+  description = "Short code for this project to help make names unique (e.g., 'tap')."
+  type        = string
+  default     = "tap"
+}
+
 variable "vpc_cidr" {
   description = "CIDR for the VPC."
   type        = string
@@ -94,11 +100,26 @@ data "aws_ami" "amazon_linux2" {
 }
 
 #################
+# Random suffixes to guarantee uniqueness
+#################
+# Global suffix for most named resources (IAM, S3, SGs, KMS alias, etc.)
+resource "random_id" "namer" {
+  byte_length = 3
+}
+
+# Separate small suffix so the generated bastion keypair name still differs if needed
+resource "random_id" "key_suffix" {
+  byte_length = 2
+}
+
+#################
 # Locals
 #################
 locals {
-  env         = "prod"
-  name_prefix = local.env
+  env          = "prod"
+  name_prefix  = local.env
+  name_suffix  = random_id.namer.hex
+  unique_prefix = "${local.name_prefix}-${var.project_code}-${local.name_suffix}"
 
   common_tags = {
     Environment = "Prod"
@@ -108,21 +129,14 @@ locals {
   az_a = data.aws_availability_zones.available.names[0]
   az_b = data.aws_availability_zones.available.names[1]
 
-  # Compute the final key name: use provided one or create a named one
-  bastion_key_name_final = var.bastion_key_name != "" ? var.bastion_key_name : "${local.name_prefix}-bastion-key-${random_id.key_suffix.hex}"
+  # Final key name: use provided or create our own unique one
+  bastion_key_name_final = var.bastion_key_name != "" ? var.bastion_key_name : "${local.unique_prefix}-bastion-key-${random_id.key_suffix.hex}"
 
-  # S3 bucket name (globally unique with account & region baked in)
-  app_bucket_name = lower("${local.name_prefix}-app-${data.aws_caller_identity.current.account_id}-${var.aws_region}-testing01")
+  # Globally-unique S3 bucket name
+  app_bucket_name = lower("${local.unique_prefix}-app-${data.aws_caller_identity.current.account_id}-${var.aws_region}")
 
   # App object prefix
   app_prefix = "app/"
-}
-
-#################
-# Random Suffix for Uniqueness
-#################
-resource "random_id" "key_suffix" {
-  byte_length = 2
 }
 
 #################
@@ -238,10 +252,10 @@ resource "aws_route_table_association" "private_assoc_b" {
 }
 
 #################
-# Security Groups
+# Security Groups (names include unique suffix)
 #################
 resource "aws_security_group" "bastion_sg" {
-  name        = "${local.name_prefix}-bastion-sg-0001"
+  name        = "${local.unique_prefix}-bastion-sg"
   description = "Allow SSH from allowed CIDR"
   vpc_id      = aws_vpc.main.id
 
@@ -267,7 +281,7 @@ resource "aws_security_group" "bastion_sg" {
 }
 
 resource "aws_security_group" "app_sg" {
-  name        = "${local.name_prefix}-app-sg-0001"
+  name        = "${local.unique_prefix}-app-sg"
   description = "Allow SSH from bastion only"
   vpc_id      = aws_vpc.main.id
 
@@ -295,7 +309,6 @@ resource "aws_security_group" "app_sg" {
 #################
 # EC2 Key Pair (Create by default; supports existing if provided)
 #################
-# Generate a key if the user did not provide one
 resource "tls_private_key" "bastion" {
   count     = var.bastion_ssh_public_key == "" && var.bastion_key_name == "" ? 1 : 0
   algorithm = "RSA"
@@ -343,15 +356,15 @@ resource "aws_instance" "bastion" {
 }
 
 #################
-# IAM for Private EC2 -> S3 + KMS
+# IAM for Private EC2 -> S3 + KMS (all names include unique suffix)
 #################
 resource "aws_iam_role" "app_role" {
-  name               = "${local.name_prefix}-app-role-0001"
+  name               = "${local.unique_prefix}-app-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Sid    = "EC2Trust"
-      Effect = "Allow",
+      Sid      = "EC2Trust",
+      Effect   = "Allow",
       Principal = { Service = "ec2.amazonaws.com" },
       Action   = "sts:AssumeRole"
     }]
@@ -362,18 +375,17 @@ resource "aws_iam_role" "app_role" {
   })
 }
 
-# Least-privilege S3 access to bucket + restricted prefix
 resource "aws_iam_policy" "app_s3_policy" {
-  name        = "${local.name_prefix}-apps-s3-policy-000001"
+  name        = "${local.unique_prefix}-s3-policy"
   description = "Least-privilege S3 access to application bucket prefix"
 
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid    = "ListBucketRestrictedToPrefix"
-        Effect = "Allow",
-        Action = ["s3:ListBucket"],
+        Sid      = "ListBucketRestrictedToPrefix",
+        Effect   = "Allow",
+        Action   = ["s3:ListBucket"],
         Resource = "arn:aws:s3:::${local.app_bucket_name}",
         Condition = {
           StringLike = {
@@ -382,7 +394,7 @@ resource "aws_iam_policy" "app_s3_policy" {
         }
       },
       {
-        Sid      = "RWOnAppPrefix"
+        Sid      = "RWOnAppPrefix",
         Effect   = "Allow",
         Action   = [
           "s3:GetObject",
@@ -395,33 +407,32 @@ resource "aws_iam_policy" "app_s3_policy" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-apps-s3-policy"
+    Name = "${local.name_prefix}-app-s3-policy"
   })
 }
 
-# KMS usage for encrypt/decrypt with the CMK
 resource "aws_iam_policy" "app_kms_policy" {
-  name        = "${local.name_prefix}-apps-kms-policy-0001"
+  name        = "${local.unique_prefix}-kms-policy"
   description = "Allow app instance to use CMK for S3 encryption/decryption"
 
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Sid    = "KMSUse"
-      Effect = "Allow"
+      Sid    = "KMSUse",
+      Effect = "Allow",
       Action = [
         "kms:Encrypt",
         "kms:Decrypt",
         "kms:ReEncrypt*",
         "kms:GenerateDataKey*",
         "kms:DescribeKey"
-      ]
+      ],
       Resource = aws_kms_key.app.arn
     }]
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-apps-kms-policy"
+    Name = "${local.name_prefix}-app-kms-policy"
   })
 }
 
@@ -436,16 +447,16 @@ resource "aws_iam_role_policy_attachment" "attach_app_kms" {
 }
 
 resource "aws_iam_instance_profile" "app_profile" {
-  name = "${local.name_prefix}-app-instance-profile-00001"
+  name = "${local.unique_prefix}-app-instance-profile"
   role = aws_iam_role.app_role.name
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-apps-instance-profile"
+    Name = "${local.name_prefix}-app-instance-profile"
   })
 }
 
 #################
-# KMS CMK for S3
+# KMS CMK for S3 (alias includes unique suffix)
 #################
 resource "aws_kms_key" "app" {
   description             = "CMK for ${local.name_prefix} application data"
@@ -455,7 +466,6 @@ resource "aws_kms_key" "app" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      # Root/admin permissions
       {
         Sid      = "EnableRootPermissions",
         Effect   = "Allow",
@@ -465,10 +475,9 @@ resource "aws_kms_key" "app" {
         Action   = "kms:*",
         Resource = "*"
       },
-      # Allow the app role to use the key
       {
-        Sid    = "AllowAppRoleUseOfKey",
-        Effect = "Allow",
+        Sid      = "AllowAppRoleUseOfKey",
+        Effect   = "Allow",
         Principal = {
           AWS = aws_iam_role.app_role.arn
         },
@@ -485,12 +494,12 @@ resource "aws_kms_key" "app" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-apps-kms-key"
+    Name = "${local.name_prefix}-app-kms-key"
   })
 }
 
 resource "aws_kms_alias" "app_alias" {
-  name          = "alias/${local.name_prefix}-apps-kms-00001"
+  name          = "alias/${local.unique_prefix}-app-kms"
   target_key_id = aws_kms_key.app.key_id
 }
 
@@ -501,7 +510,7 @@ resource "aws_s3_bucket" "app" {
   bucket = local.app_bucket_name
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-apps-bucket"
+    Name = "${local.name_prefix}-app-bucket"
   })
 }
 
@@ -537,7 +546,6 @@ resource "aws_s3_bucket_policy" "app" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      # Enforce TLS
       {
         Sid      = "DenyInsecureTransport",
         Effect   = "Deny",
@@ -551,7 +559,6 @@ resource "aws_s3_bucket_policy" "app" {
           Bool = { "aws:SecureTransport" = "false" }
         }
       },
-      # Enforce KMS usage with our CMK on object PUT
       {
         Sid      = "DenyIncorrectEncryptionHeader",
         Effect   = "Deny",
@@ -678,7 +685,6 @@ output "kms_app_key_arn" {
   value       = aws_kms_key.app.arn
 }
 
-# Sensitive output with generated private key (only when generated)
 output "bastion_private_key_pem" {
   description = "Generated private key PEM for bastion (if Terraform generated it)."
   value       = try(tls_private_key.bastion[0].private_key_pem, null)
