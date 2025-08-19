@@ -10,7 +10,7 @@ import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets'; // Ch
 import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { LbTargetGroupAttachment } from '@cdktf/provider-aws/lib/lb-target-group-attachment';
-
+import { Fn } from 'cdktf';
 import {
   KmsModule,
   SecurityGroupModule,
@@ -243,24 +243,38 @@ export class TapStack extends TerraformStack {
     );
 
     // 8. Create EC2 instances in private subnets (no public IP)
-    const ec2Modules = privateSubnets.ids
-      .slice(0, 2)
-      .map((subnetId: string, index: number) => {
-        return new Ec2Module(this, `ec2-module-${index}`, {
-          name: `secure-app-instance-${index + 1}`,
-          instanceType: 't3.micro',
-          subnetId: subnetId,
-          securityGroupIds: [ec2SecurityGroupModule.securityGroup.id],
-          userData: `#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Secure App Instance ${index + 1}</h1>" > /var/www/html/index.html
-echo "OK" > /var/www/html/health`,
-          keyName: 'my-key-pair', // Replace with your actual key pair name
-        });
-      });
+    // Create exactly 2 EC2 instances using Fn.element to access subnet IDs
+    const ec2Module1 = new Ec2Module(this, 'ec2-module-0', {
+      name: 'secure-app-instance-1',
+      instanceType: 't3.micro',
+      subnetId: Fn.element(privateSubnets.ids, 0),
+      securityGroupIds: [ec2SecurityGroupModule.securityGroup.id],
+      userData: `#!/bin/bash
+    yum update -y
+    yum install -y httpd
+    systemctl start httpd
+    systemctl enable httpd
+    echo "<h1>Secure App Instance 1</h1>" > /var/www/html/index.html
+    echo "OK" > /var/www/html/health`,
+      keyName: 'my-dev-keypair', // Replace with your actual key pair name
+    });
+
+    const ec2Module2 = new Ec2Module(this, 'ec2-module-1', {
+      name: 'secure-app-instance-2',
+      instanceType: 't3.micro',
+      subnetId: Fn.element(privateSubnets.ids, 1),
+      securityGroupIds: [ec2SecurityGroupModule.securityGroup.id],
+      userData: `#!/bin/bash
+    yum update -y
+    yum install -y httpd
+    systemctl start httpd
+    systemctl enable httpd
+    echo "<h1>Secure App Instance 2</h1>" > /var/www/html/index.html
+    echo "OK" > /var/www/html/health`,
+      keyName: 'my-dev-keypair', // Replace with your actual key pair name
+    });
+
+    const ec2Modules = [ec2Module1, ec2Module2];
 
     // 9. Create Application Load Balancer
     const albModule = new AlbModule(this, 'alb-module', {
@@ -273,12 +287,16 @@ echo "OK" > /var/www/html/health`,
     });
 
     // 10. Attach EC2 instances to ALB target group
-    ec2Modules.forEach((ec2Module: any, index: number) => {
-      new LbTargetGroupAttachment(this, `ec2-target-attachment-${index}`, {
-        targetGroupArn: albModule.targetGroup.arn,
-        targetId: ec2Module.instance.id,
-        port: 80,
-      });
+    new LbTargetGroupAttachment(this, 'ec2-target-attachment-0', {
+      targetGroupArn: albModule.targetGroup.arn,
+      targetId: ec2Module1.instance.id,
+      port: 80,
+    });
+
+    new LbTargetGroupAttachment(this, 'ec2-target-attachment-1', {
+      targetGroupArn: albModule.targetGroup.arn,
+      targetId: ec2Module2.instance.id,
+      port: 80,
     });
 
     // 11. Create CloudTrail for audit logging
