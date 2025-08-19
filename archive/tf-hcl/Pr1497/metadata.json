@@ -18,7 +18,7 @@
   "training_quality": 8,
   "aws_services": [
     "AWS CodePipeline",
-    "AWS CodeBuild", 
+    "AWS CodeBuild",
     "AWS Lambda",
     "AWS S3",
     "AWS IAM",
@@ -27,5 +27,11 @@
     "AWS EventBridge",
     "AWS Secrets Manager",
     "AWS Config"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
