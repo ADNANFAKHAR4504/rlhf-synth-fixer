@@ -143,6 +143,7 @@ resource "random_password" "secondary_db_password" {
 
 # Primary VPC
 resource "aws_vpc" "primary" {
+  provider             = aws.us_east_2
   cidr_block           = var.primary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -268,7 +269,7 @@ resource "aws_route_table_association" "primary_private" {
 
 # Secondary VPC
 resource "aws_vpc" "secondary" {
-  provider = aws.secondary
+  provider = aws.us_west_1
 
   cidr_block           = var.secondary_vpc_cidr
   enable_dns_hostnames = true
