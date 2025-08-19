@@ -749,19 +749,20 @@ EOF
     tags: { [key: string]: string },
     provider: aws.Provider
   ): void {
-    // Add unique timestamp to target group name to avoid conflicts
-    const timestamp = Date.now();
+    // Create shorter, unique names that fit within AWS limits
+    const stackSuffix = pulumi.getStack().slice(-6); // Use last 6 chars of stack name
+    const timestamp = Date.now().toString().slice(-8); // Use last 8 digits of timestamp
     
     const alb = new aws.lb.LoadBalancer(`alb-${region}`, {
-      name: `nova-model-alb-${region}`,
+      name: `nova-alb-${region}`, // Shortened name
       loadBalancerType: 'application',
       subnets: vpc.publicSubnetIds,
       securityGroups: [securityGroup.id],
       tags,
     }, { parent: this, provider });
-
+  
     const targetGroup = new aws.lb.TargetGroup(`tg-${region}`, {
-      name: `nova-model-tg-${region}-${timestamp}`, // Added timestamp to make unique
+      name: `nova-tg-${region}-${stackSuffix}`, // Shortened to fit 32-char limit
       port: 80,
       protocol: 'HTTP',
       vpcId: vpc.id,
@@ -778,7 +779,7 @@ EOF
       },
       tags,
     }, { parent: this, provider });
-
+  
     new aws.lb.Listener(`listener-${region}`, {
       loadBalancerArn: alb.arn,
       port: 80,
@@ -790,15 +791,15 @@ EOF
         },
       ],
     }, { parent: this, provider });
-
+  
     new aws.autoscaling.Attachment(`asg-attachment-${region}`, {
       autoscalingGroupName: asg.id,
       lbTargetGroupArn: targetGroup.arn,
     }, { parent: this, provider });
-
+  
     new aws.wafv2.WebAclAssociation(`waf-association-${region}`, {
       resourceArn: alb.arn,
       webAclArn: this.wafWebAcl.arn,
     }, { parent: this, provider });
   }
-}
+  
