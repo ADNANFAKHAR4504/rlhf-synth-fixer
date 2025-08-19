@@ -10,7 +10,7 @@ terraform {
     }
   }
 
-  # S3 backend configuration (ensure bucket/table exist beforehand)
+  /*# S3 backend configuration (ensure bucket/table exist beforehand)
   backend "s3" {
     bucket         = "iac-rlhf-tf-states"
     key            = "iac-test-automations/lib/terraform.tfstate"
@@ -18,7 +18,8 @@ terraform {
     use_lockfile   = true
     encrypt        = true
     # dynamodb_table = "terraform-locks"  # Optional but recommended for state locking
-  }
+  }*/
+  backend local{}
 }
 
 # Primary AWS provider for general resources
