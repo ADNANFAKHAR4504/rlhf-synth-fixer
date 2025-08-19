@@ -211,12 +211,16 @@ export class TapStack extends TerraformStack {
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         dbName: 'secureappdb',
-        username: Fn.jsondecode(
-          Fn.rawString(dbCredentials.secretString)
-        ).lookup('username'),
-        password: Fn.jsondecode(
-          Fn.rawString(dbCredentials.secretString)
-        ).lookup('password'),
+        username: Fn.lookup(
+          Fn.jsondecode(Fn.rawString(dbCredentials.secretString)),
+          'username',
+          ''
+        ),
+        password: Fn.lookup(
+          Fn.jsondecode(Fn.rawString(dbCredentials.secretString)),
+          'password',
+          ''
+        ),
         vpcSecurityGroupIds: [rdsSecurityGroupModule.securityGroup.id],
         dbSubnetGroupName: `secure-app-db-subnet-group-${environmentSuffix}`,
         kmsKeyId: kmsModule.kmsKey.arn,
