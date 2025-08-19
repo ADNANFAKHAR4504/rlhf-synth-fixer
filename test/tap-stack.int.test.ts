@@ -50,12 +50,12 @@ function loadOutputs() {
   // Return mock outputs for testing without deployment
   return {
     TurnAroundPromptTableName: `TAP-${environmentSuffix}-TurnAroundPrompts-123456789012`,
-    TurnAroundPromptTableArn: `arn:aws:dynamodb:us-east-1:123456789012:table/TAP-${environmentSuffix}-TurnAroundPrompts-123456789012`,
+    TurnAroundPromptTableArn: `arn:aws:dynamodb:us-west-2:123456789012:table/TAP-${environmentSuffix}-TurnAroundPrompts-123456789012`,
     KMSKeyId: '12345678-1234-1234-1234-123456789012',
-    KMSKeyArn: 'arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012',
-    DataBucketName: `tap-${environmentSuffix}-data-123456789012-us-east-1`,
+    KMSKeyArn: 'arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012',
+    DataBucketName: `tap-${environmentSuffix}-data-123456789012-us-west-2`,
     SecurityGroupId: 'sg-123456789012',
-    CloudTrailArn: `arn:aws:cloudtrail:us-east-1:123456789012:trail/TAP-${environmentSuffix}-audit-trail-123456789012`,
+    CloudTrailArn: `arn:aws:cloudtrail:us-west-2:123456789012:trail/TAP-${environmentSuffix}-audit-trail-123456789012`,
     LogGroupName: `/aws/tap/${environmentSuffix}/audit-logs`
   };
 }
@@ -64,7 +64,7 @@ const outputs = loadOutputs();
 
 // Helper function to create AWS clients with error handling
 function createClients() {
-  const region = process.env.AWS_REGION || 'us-east-1';
+  const region = process.env.AWS_REGION || 'us-west-2';
   const config = { region };
   
   return {

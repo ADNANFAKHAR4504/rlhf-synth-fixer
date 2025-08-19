@@ -161,7 +161,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/tap/${EnvironmentSuffix}/audit-logs'
       RetentionInDays: 90
-      KmsKeyId: !If [KMSEnabled, !GetAtt TapStackKMSKey.Arn, !Ref 'AWS::NoValue']
+      KmsKeyId: !If [KMSEnabled, !Ref TapStackKMSKey, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub 'TAP-${EnvironmentSuffix}-Logs'
@@ -227,12 +227,12 @@ Resources:
                     StringEquals:
                       's3:prefix': !Sub '${EnvironmentSuffix}/*'
           - !Ref 'AWS::NoValue'
-        - !If
-          - KMSEnabled
-          - PolicyName: 'KMSAccessPolicy'
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
+        - PolicyName: 'KMSAccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - !If
+                - KMSEnabled
                 - Effect: Allow
                   Action:
                     - 'kms:Decrypt'
@@ -241,7 +241,7 @@ Resources:
                     - 'kms:GenerateDataKey*'
                     - 'kms:ReEncrypt*'
                   Resource: !GetAtt TapStackKMSKey.Arn
-          - !Ref 'AWS::NoValue'
+                - !Ref 'AWS::NoValue'
       Tags:
         - Key: Name
           Value: !Sub 'TAP-${EnvironmentSuffix}-ServiceRole'
