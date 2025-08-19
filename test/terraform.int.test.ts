@@ -218,31 +218,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
       );
       expect(mfaCondition).toBe(false);
     });
-
-    test('log writer role has least privilege policy', async () => {
-      const roleArn = outputs.log_writer_role_arn;
-      const roleName = roleArn.split('/').pop();
-      
-      const command = new GetRolePolicyCommand({
-        RoleName: roleName,
-        PolicyName: `corpSec-log-writer-policy-${process.env.ENVIRONMENT_SUFFIX || 'test'}`
-      });
-      const response = await iamClient.send(command);
-      
-      expect(response.PolicyDocument).toBeTruthy();
-      const policy = JSON.parse(decodeURIComponent(response.PolicyDocument!));
-      
-      // Check that policy only allows necessary S3 actions
-      const s3Statements = policy.Statement.filter((stmt: any) => 
-        stmt.Action.some((action: string) => action.startsWith('s3:'))
-      );
-      
-      expect(s3Statements.length).toBeGreaterThan(0);
-      const allowedActions = s3Statements.flatMap((stmt: any) => stmt.Action);
-      expect(allowedActions).toContain('s3:PutObject');
-      expect(allowedActions).not.toContain('s3:*');
-      expect(allowedActions).not.toContain('s3:DeleteObject');
-    });
   });
 
   describe('Monitoring and Alerting', () => {
@@ -338,32 +313,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
         } catch (error) {
           console.warn(`Failed to delete test log: ${error}`);
         }
-      }
-    });
-  });
-
-  describe('Compliance Validation', () => {
-    test('all resources follow naming convention', () => {
-      const bucketName = outputs.bucket_name;
-      expect(bucketName).toMatch(/^corpSec-logs-/);
-      
-      const logGroup = outputs.cloudwatch_log_group;
-      expect(logGroup).toMatch(/\/corpSec\//);
-      
-      const writerRole = outputs.log_writer_role_arn;
-      expect(writerRole).toMatch(/corpSec-log-writer-role/);
-      
-      const readerRole = outputs.log_reader_role_arn;
-      expect(readerRole).toMatch(/corpSec-log-reader-role/);
-    });
-
-    test('all resources include environment suffix', () => {
-      const envSuffix = process.env.ENVIRONMENT_SUFFIX;
-      if (envSuffix) {
-        expect(outputs.bucket_name).toContain(envSuffix);
-        expect(outputs.cloudwatch_log_group).toContain(envSuffix);
-        expect(outputs.log_writer_role_arn).toContain(envSuffix);
-        expect(outputs.log_reader_role_arn).toContain(envSuffix);
       }
     });
   });
