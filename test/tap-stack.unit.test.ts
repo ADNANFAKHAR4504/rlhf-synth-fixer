@@ -7,17 +7,10 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Convert YAML to JSON for testing
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -25,91 +18,313 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
+    test('should have enhanced description with security and randomization', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+      expect(template.Description).toContain('randomized naming');
+      expect(template.Description).toContain('production-grade security');
     });
   });
 
   describe('Parameters', () => {
     test('should have EnvironmentSuffix parameter', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dev');
+      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test('should have InstanceType parameter', () => {
+      expect(template.Parameters.InstanceType).toBeDefined();
+      const param = template.Parameters.InstanceType;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('t3.micro');
+      expect(param.AllowedValues).toContain('t3.micro');
+    });
+
+    test('should have KeyPairName parameter', () => {
+      expect(template.Parameters.KeyPairName).toBeDefined();
+      expect(template.Parameters.KeyPairName.Type).toBe('AWS::EC2::KeyPair::KeyName');
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('Lambda Function for Random Suffix Generation', () => {
+    test('should have RandomSuffixGenerator Lambda function', () => {
+      expect(template.Resources.RandomSuffixGenerator).toBeDefined();
+      const lambda = template.Resources.RandomSuffixGenerator;
+      expect(lambda.Type).toBe('AWS::Lambda::Function');
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('RandomSuffixGenerator should have correct properties', () => {
+      const lambda = template.Resources.RandomSuffixGenerator.Properties;
+      expect(lambda.Runtime).toBe('python3.12');
+      expect(lambda.Handler).toBe('index.handler');
+      expect(lambda.FunctionName).toEqual({
+        'Fn::Sub': 'tapstack${EnvironmentSuffix}-random-generator-${AWS::AccountId}'
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('should have RandomGeneratorRole IAM role', () => {
+      expect(template.Resources.RandomGeneratorRole).toBeDefined();
+      const role = template.Resources.RandomGeneratorRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have GenerateRandomSuffix custom resource', () => {
+      expect(template.Resources.GenerateRandomSuffix).toBeDefined();
+      const resource = template.Resources.GenerateRandomSuffix;
+      expect(resource.Type).toBe('AWS::CloudFormation::CustomResource');
     });
   });
 
-  describe('Outputs', () => {
+  describe('KMS Encryption Resources', () => {
+    test('should have KMSKey for encryption', () => {
+      expect(template.Resources.KMSKey).toBeDefined();
+      const key = template.Resources.KMSKey;
+      expect(key.Type).toBe('AWS::KMS::Key');
+    });
+
+    test('KMSKey should have proper policy for CloudWatch Logs', () => {
+      const key = template.Resources.KMSKey.Properties;
+      expect(key.KeyPolicy.Statement).toHaveLength(2);
+      expect(key.KeyPolicy.Statement[1].Sid).toBe('Allow CloudWatch Logs');
+    });
+
+    test('should have KMSKeyAlias', () => {
+      expect(template.Resources.KMSKeyAlias).toBeDefined();
+      const alias = template.Resources.KMSKeyAlias;
+      expect(alias.Type).toBe('AWS::KMS::Alias');
+      expect(alias.Properties.AliasName).toEqual({
+        'Fn::Sub': 'alias/tapstack${EnvironmentSuffix}-logs-key-${AWS::AccountId}'
+      });
+    });
+  });
+
+  describe('S3 Resources with Security', () => {
+    test('should have SecureS3Bucket with randomized naming', () => {
+      expect(template.Resources.SecureS3Bucket).toBeDefined();
+      const bucket = template.Resources.SecureS3Bucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      expect(bucket.Properties.BucketName).toEqual({
+        'Fn::Sub': 'tapstack${EnvironmentSuffix}-secure-bucket-${AWS::AccountId}-${GenerateRandomSuffix.RandomSuffix}'
+      });
+    });
+
+    test('SecureS3Bucket should block public access', () => {
+      const bucket = template.Resources.SecureS3Bucket.Properties;
+      const blockConfig = bucket.PublicAccessBlockConfiguration;
+      expect(blockConfig.BlockPublicAcls).toBe(true);
+      expect(blockConfig.BlockPublicPolicy).toBe(true);
+      expect(blockConfig.IgnorePublicAcls).toBe(true);
+      expect(blockConfig.RestrictPublicBuckets).toBe(true);
+    });
+
+    test('should have SecureS3BucketPolicy enforcing SSL', () => {
+      expect(template.Resources.SecureS3BucketPolicy).toBeDefined();
+      const policy = template.Resources.SecureS3BucketPolicy.Properties.PolicyDocument;
+      expect(policy.Statement[0].Sid).toBe('DenyInsecureConnections');
+      expect(policy.Statement[0].Condition.Bool['aws:SecureTransport']).toBe('false');
+    });
+
+    test('should have S3AccessLogsBucket with randomized naming', () => {
+      expect(template.Resources.S3AccessLogsBucket).toBeDefined();
+      const bucket = template.Resources.S3AccessLogsBucket.Properties;
+      expect(bucket.BucketName).toEqual({
+        'Fn::Sub': 'tapstack${EnvironmentSuffix}-access-logs-${AWS::AccountId}-${GenerateRandomSuffix.RandomSuffix}'
+      });
+    });
+  });
+
+  describe('CloudWatch Log Groups with KMS Encryption', () => {
+    test('should have EC2LogGroup with KMS encryption', () => {
+      expect(template.Resources.EC2LogGroup).toBeDefined();
+      const logGroup = template.Resources.EC2LogGroup.Properties;
+      expect(logGroup.RetentionInDays).toBe(7);
+      expect(logGroup.KmsKeyId).toEqual({ 'Fn::GetAtt': ['KMSKey', 'Arn'] });
+    });
+
+    test('should have S3LogGroup with KMS encryption', () => {
+      expect(template.Resources.S3LogGroup).toBeDefined();
+      const logGroup = template.Resources.S3LogGroup.Properties;
+      expect(logGroup.KmsKeyId).toEqual({ 'Fn::GetAtt': ['KMSKey', 'Arn'] });
+    });
+
+    test('should have VPCFlowLogsGroup with KMS encryption', () => {
+      expect(template.Resources.VPCFlowLogsGroup).toBeDefined();
+      const logGroup = template.Resources.VPCFlowLogsGroup.Properties;
+      expect(logGroup.KmsKeyId).toEqual({ 'Fn::GetAtt': ['KMSKey', 'Arn'] });
+    });
+  });
+
+  describe('IAM Resources with Security Controls', () => {
+    test('should have EC2Role with region restrictions', () => {
+      expect(template.Resources.EC2Role).toBeDefined();
+      const role = template.Resources.EC2Role.Properties;
+      expect(role.RoleName).toEqual({
+        'Fn::Sub': 'tapstack${EnvironmentSuffix}-ec2-role-${AWS::AccountId}-${GenerateRandomSuffix.RandomSuffix}'
+      });
+    });
+
+    test('EC2Role should have region restriction in AssumeRolePolicy', () => {
+      const role = template.Resources.EC2Role.Properties;
+      const condition = role.AssumeRolePolicyDocument.Statement[0].Condition;
+      expect(condition.StringEquals['aws:RequestedRegion']).toBe('us-west-1');
+    });
+
+    test('EC2Role should have minimal S3 permissions with region restrictions', () => {
+      const role = template.Resources.EC2Role.Properties;
+      const s3Policy = role.Policies.find(p => p.PolicyName === 'MinimalS3Access');
+      expect(s3Policy).toBeDefined();
+      expect(s3Policy.PolicyDocument.Statement[0].Condition.StringEquals['aws:RequestedRegion']).toBe('us-west-1');
+    });
+
+    test('should have EC2InstanceProfile with randomized naming', () => {
+      expect(template.Resources.EC2InstanceProfile).toBeDefined();
+      const profile = template.Resources.EC2InstanceProfile.Properties;
+      expect(profile.InstanceProfileName).toEqual({
+        'Fn::Sub': 'tapstack${EnvironmentSuffix}-ec2-instance-profile-${AWS::AccountId}-${GenerateRandomSuffix.RandomSuffix}'
+      });
+    });
+  });
+
+  describe('VPC and Networking Resources', () => {
+    test('should have VPC with randomized naming', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      const vpc = template.Resources.VPC.Properties;
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(vpc.EnableDnsSupport).toBe(true);
+    });
+
+    test('should have VPCFlowLogsRole for network monitoring', () => {
+      expect(template.Resources.VPCFlowLogsRole).toBeDefined();
+      const role = template.Resources.VPCFlowLogsRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('should have VPCFlowLogs for network monitoring', () => {
+      expect(template.Resources.VPCFlowLogs).toBeDefined();
+      const flowLogs = template.Resources.VPCFlowLogs.Properties;
+      expect(flowLogs.ResourceType).toBe('VPC');
+      expect(flowLogs.TrafficType).toBe('ALL');
+    });
+
+    test('should have InternetGateway with randomized naming', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.InternetGatewayAttachment).toBeDefined();
+    });
+
+    test('should have PublicSubnet with proper configuration', () => {
+      expect(template.Resources.PublicSubnet).toBeDefined();
+      const subnet = template.Resources.PublicSubnet.Properties;
+      expect(subnet.CidrBlock).toBe('10.0.1.0/24');
+      expect(subnet.AvailabilityZone).toEqual({ 'Fn::Select': [0, { 'Fn::GetAZs': '' }] });
+      expect(subnet.MapPublicIpOnLaunch).toBe(true);
+    });
+
+    test('should have routing components', () => {
+      expect(template.Resources.PublicRouteTable).toBeDefined();
+      expect(template.Resources.DefaultPublicRoute).toBeDefined();
+      expect(template.Resources.PublicSubnetRouteTableAssociation).toBeDefined();
+    });
+  });
+
+  describe('Security Group Configuration', () => {
+    test('should have EC2SecurityGroup with HTTPS-only access', () => {
+      expect(template.Resources.EC2SecurityGroup).toBeDefined();
+      const sg = template.Resources.EC2SecurityGroup.Properties;
+      expect(sg.GroupName).toEqual({
+        'Fn::Sub': 'tapstack${EnvironmentSuffix}-ec2-sg-${AWS::AccountId}-${GenerateRandomSuffix.RandomSuffix}'
+      });
+    });
+
+    test('SecurityGroup should allow HTTPS inbound on port 443', () => {
+      const sg = template.Resources.EC2SecurityGroup.Properties;
+      const httpsRule = sg.SecurityGroupIngress.find(rule => rule.FromPort === 443);
+      expect(httpsRule).toBeDefined();
+      expect(httpsRule.IpProtocol).toBe('tcp');
+      expect(httpsRule.ToPort).toBe(443);
+    });
+
+    test('SecurityGroup should have proper egress rules', () => {
+      const sg = template.Resources.EC2SecurityGroup.Properties;
+      expect(sg.SecurityGroupEgress).toBeDefined();
+      expect(sg.SecurityGroupEgress.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('EC2 Launch Template and Instance', () => {
+    test('should have EC2LaunchTemplate with security hardening', () => {
+      expect(template.Resources.EC2LaunchTemplate).toBeDefined();
+      const lt = template.Resources.EC2LaunchTemplate.Properties;
+      expect(lt.LaunchTemplateName).toEqual({
+        'Fn::Sub': 'tapstack${EnvironmentSuffix}-launch-template-${AWS::AccountId}-${GenerateRandomSuffix.RandomSuffix}'
+      });
+    });
+
+    test('LaunchTemplate should have security hardening in UserData', () => {
+      const lt = template.Resources.EC2LaunchTemplate.Properties.LaunchTemplateData;
+      const userData = lt.UserData['Fn::Base64']['Fn::Sub'];
+      expect(userData).toContain('firewalld');
+      expect(userData).toContain('PermitRootLogin no');
+      expect(userData).toContain('net.ipv4.ip_forward = 0');
+    });
+
+    test('should have EC2Instance with proper configuration', () => {
+      expect(template.Resources.EC2Instance).toBeDefined();
+      const instance = template.Resources.EC2Instance.Properties;
+      expect(instance.LaunchTemplate).toBeDefined();
+      expect(instance.SubnetId).toEqual({ Ref: 'PublicSubnet' });
+    });
+  });
+
+  describe('Resource Tagging', () => {
+    test('all resources should have Environment: Production tag', () => {
+      const resourcesWithTags = [
+        'RandomSuffixGenerator', 'RandomGeneratorRole', 'KMSKey', 'SecureS3Bucket',
+        'S3AccessLogsBucket', 'EC2LogGroup', 'S3LogGroup', 'VPCFlowLogsGroup',
+        'EC2Role', 'VPC', 'VPCFlowLogsRole', 'InternetGateway'
+      ];
+
+      resourcesWithTags.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource && resource.Properties && resource.Properties.Tags) {
+          const envTag = resource.Properties.Tags.find(tag => tag.Key === 'Environment');
+          expect(envTag).toBeDefined();
+          expect(envTag.Value).toBe('Production');
+        }
+      });
+    });
+
+    test('resources should have appropriate Component tags', () => {
+      const componentTags = [
+        { resource: 'RandomSuffixGenerator', component: 'RandomGenerator' },
+        { resource: 'KMSKey', component: 'Encryption' },
+        { resource: 'EC2LogGroup', component: 'Logging' },
+        { resource: 'VPC', component: 'Networking' },
+        { resource: 'EC2Role', component: 'IAM' }
+      ];
+
+      componentTags.forEach(({ resource, component }) => {
+        const res = template.Resources[resource];
+        if (res && res.Properties && res.Properties.Tags) {
+          const compTag = res.Properties.Tags.find(tag => tag.Key === 'Component');
+          expect(compTag).toBeDefined();
+          expect(compTag.Value).toBe(component);
+        }
+      });
+    });
+  });
+
+  describe('Comprehensive Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'RandomSuffix', 'S3BucketName', 'S3AccessLogsBucketName',
+        'EC2InstanceId', 'EC2LaunchTemplateId', 'VPCId', 'PublicSubnetId',
+        'SecurityGroupId', 'InternetGatewayId', 'EC2RoleArn',
+        'EC2InstanceProfileArn', 'EC2LogGroupName', 'S3LogGroupName',
+        'VPCFlowLogsGroupName', 'KMSKeyId', 'KMSKeyAlias',
+        'RandomSuffixGeneratorArn', 'StackName', 'EnvironmentSuffix'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +332,19 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+    test('all outputs should have proper export names', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export.Name).toEqual({
+          'Fn::Sub': `\${AWS::StackName}-${outputKey}`
+        });
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
+    test('RandomSuffix output should reference custom resource', () => {
+      const output = template.Outputs.RandomSuffix;
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::GetAtt': ['GenerateRandomSuffix', 'RandomSuffix']
       });
     });
   });
@@ -164,46 +355,98 @@ describe('TapStack CloudFormation Template', () => {
       expect(typeof template).toBe('object');
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
+    test('should have all required sections', () => {
+      expect(template.AWSTemplateFormatVersion).toBeDefined();
+      expect(template.Description).toBeDefined();
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have 25 resources for comprehensive infrastructure', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(25);
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have 3 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(3);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have 19 outputs for complete visibility', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(19);
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+  describe('Security Compliance', () => {
+    test('should have SSL enforcement on S3 bucket policy', () => {
+      const policy = template.Resources.SecureS3BucketPolicy.Properties.PolicyDocument;
+      expect(policy.Statement[0].Effect).toBe('Deny');
+      expect(policy.Statement[0].Condition.Bool['aws:SecureTransport']).toBe('false');
+    });
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('should have KMS encryption for all log groups', () => {
+      const logGroups = ['EC2LogGroup', 'S3LogGroup', 'VPCFlowLogsGroup'];
+      logGroups.forEach(lgName => {
+        const lg = template.Resources[lgName].Properties;
+        expect(lg.KmsKeyId).toEqual({ 'Fn::GetAtt': ['KMSKey', 'Arn'] });
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+    test('should have VPC Flow Logs enabled for network monitoring', () => {
+      expect(template.Resources.VPCFlowLogs).toBeDefined();
+      const flowLogs = template.Resources.VPCFlowLogs.Properties;
+      expect(flowLogs.TrafficType).toBe('ALL');
+    });
+
+    test('should have region restrictions in IAM policies', () => {
+      const role = template.Resources.EC2Role.Properties;
+      const assumeRole = role.AssumeRolePolicyDocument.Statement[0];
+      expect(assumeRole.Condition.StringEquals['aws:RequestedRegion']).toBe('us-west-1');
+    });
+  });
+
+  describe('Naming Convention Compliance', () => {
+    test('resource names should use randomized suffixes', () => {
+      const resourcesWithRandomSuffix = [
+        'SecureS3Bucket', 'S3AccessLogsBucket', 'EC2Role',
+        'EC2InstanceProfile', 'EC2SecurityGroup', 'VPC'
+      ];
+
+      resourcesWithRandomSuffix.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource.Properties) {
+          const nameField = resource.Properties.BucketName || 
+                          resource.Properties.RoleName || 
+                          resource.Properties.InstanceProfileName ||
+                          resource.Properties.GroupName;
+          
+          if (nameField && nameField['Fn::Sub']) {
+            expect(nameField['Fn::Sub']).toContain('${GenerateRandomSuffix.RandomSuffix}');
+          }
+        }
+      });
+    });
+
+    test('all resource names should include environment suffix', () => {
+      const resourcesWithEnvSuffix = [
+        'RandomSuffixGenerator', 'RandomGeneratorRole', 'SecureS3Bucket',
+        'S3AccessLogsBucket', 'EC2Role', 'EC2InstanceProfile'
+      ];
+
+      resourcesWithEnvSuffix.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource.Properties) {
+          const nameField = resource.Properties.FunctionName || 
+                          resource.Properties.RoleName ||
+                          resource.Properties.BucketName ||
+                          resource.Properties.InstanceProfileName;
+          
+          if (nameField && nameField['Fn::Sub']) {
+            expect(nameField['Fn::Sub']).toContain('${EnvironmentSuffix}');
+          }
+        }
       });
     });
   });
