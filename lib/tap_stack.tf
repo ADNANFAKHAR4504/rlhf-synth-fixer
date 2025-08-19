@@ -130,13 +130,13 @@ data "aws_region" "current" {}
 resource "random_password" "primary_db_password" {
   length  = 16
   special = true
-  override_characters = "!#$%&()*+-=:?@^_"
+  override_special = "!#$%&()*+-=:?@^_"
 }
 
 resource "random_password" "secondary_db_password" {
   length  = 16
   special = true
-  override_characters = "!#$%&()*+-=:?@^_"
+  override_special = "!#$%&()*+-=:?@^_"
 }
 
 #==============================================================================
