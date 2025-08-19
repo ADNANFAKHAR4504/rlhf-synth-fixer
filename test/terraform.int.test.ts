@@ -331,7 +331,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
       const dbInstances = response.DBInstances || [];
       const webappDb = dbInstances.find(db => 
         db.DBInstanceIdentifier?.includes("webapp-db") || 
-        db.DBInstanceIdentifier?.includes("database")
+        db.DBInstanceIdentifier?.includes("database") ||
+        db.DBInstanceIdentifier?.includes("-db-")
       );
       
       expect(webappDb).toBeDefined();
@@ -349,7 +350,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
       const dbInstances = response.DBInstances || [];
       const webappDb = dbInstances.find(db => 
         db.DBInstanceIdentifier?.includes("webapp-db") || 
-        db.DBInstanceIdentifier?.includes("database")
+        db.DBInstanceIdentifier?.includes("database") ||
+        db.DBInstanceIdentifier?.includes("-db-")
       );
       
       expect(webappDb).toBeDefined();
