@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 export interface NetworkStackArgs {
@@ -50,51 +50,71 @@ export class NetworkStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Get availability zones
-    const azs = aws.getAvailabilityZones({ state: 'available' });
-
-    // Public subnets
-    const publicSubnets: aws.ec2.Subnet[] = [];
-    const privateSubnets: aws.ec2.Subnet[] = [];
-
-    for (let i = 0; i < 2; i++) {
-      // Public subnet
-      const publicSubnet = new aws.ec2.Subnet(
-        `tap-public-subnet-${i}-${region}-${environmentSuffix}`,
-        {
-          vpcId: vpc.id,
-          cidrBlock: `10.0.${i + 1}.0/24`,
-          availabilityZone: azs.then(azs => azs.names[i]),
-          mapPublicIpOnLaunch: true,
-          tags: {
-            ...tags,
-            Name: `tap-public-subnet-${i}-${region}-${environmentSuffix}`,
-            Type: 'Public',
-          },
+    // Create subnets with hardcoded availability zones for now
+    const publicSubnet1 = new aws.ec2.Subnet(
+      `tap-public-subnet-0-${region}-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.1.0/24',
+        availabilityZone: `${region}a`,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          ...tags,
+          Name: `tap-public-subnet-0-${region}-${environmentSuffix}`,
+          Type: 'Public',
         },
-        { parent: this }
-      );
+      },
+      { parent: this }
+    );
 
-      publicSubnets.push(publicSubnet);
-
-      // Private subnet
-      const privateSubnet = new aws.ec2.Subnet(
-        `tap-private-subnet-${i}-${region}-${environmentSuffix}`,
-        {
-          vpcId: vpc.id,
-          cidrBlock: `10.0.${i + 11}.0/24`,
-          availabilityZone: azs.then(azs => azs.names[i]),
-          tags: {
-            ...tags,
-            Name: `tap-private-subnet-${i}-${region}-${environmentSuffix}`,
-            Type: 'Private',
-          },
+    const publicSubnet2 = new aws.ec2.Subnet(
+      `tap-public-subnet-1-${region}-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.2.0/24',
+        availabilityZone: `${region}b`,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          ...tags,
+          Name: `tap-public-subnet-1-${region}-${environmentSuffix}`,
+          Type: 'Public',
         },
-        { parent: this }
-      );
+      },
+      { parent: this }
+    );
 
-      privateSubnets.push(privateSubnet);
-    }
+    const privateSubnet1 = new aws.ec2.Subnet(
+      `tap-private-subnet-0-${region}-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.11.0/24',
+        availabilityZone: `${region}a`,
+        tags: {
+          ...tags,
+          Name: `tap-private-subnet-0-${region}-${environmentSuffix}`,
+          Type: 'Private',
+        },
+      },
+      { parent: this }
+    );
+
+    const privateSubnet2 = new aws.ec2.Subnet(
+      `tap-private-subnet-1-${region}-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        cidrBlock: '10.0.12.0/24',
+        availabilityZone: `${region}b`,
+        tags: {
+          ...tags,
+          Name: `tap-private-subnet-1-${region}-${environmentSuffix}`,
+          Type: 'Private',
+        },
+      },
+      { parent: this }
+    );
+
+    const publicSubnets = [publicSubnet1, publicSubnet2];
+    const privateSubnets = [privateSubnet1, privateSubnet2];
 
     // NAT Gateway (in first public subnet)
     const eip = new aws.ec2.Eip(
@@ -270,9 +290,9 @@ export class NetworkStack extends pulumi.ComponentResource {
     );
 
     const rdsSecurityGroup = new aws.ec2.SecurityGroup(
-      `tap-rds-sg-${region}-${environmentSuffix}-${Math.random().toString(36).substr(2, 6)}`,
+      `tap-rds-sg-${region}-${environmentSuffix}-primary`,
       {
-        name: `tap-rds-sg-${region}-${environmentSuffix}-${Math.random().toString(36).substr(2, 6)}`,
+        name: `tap-rds-sg-${region}-${environmentSuffix}-primary`,
         description: 'Security group for RDS database',
         vpcId: vpc.id,
         ingress: [
@@ -286,7 +306,7 @@ export class NetworkStack extends pulumi.ComponentResource {
         ],
         tags: {
           ...tags,
-          Name: `tap-rds-sg-${region}-${environmentSuffix}`,
+          Name: `tap-rds-sg-${region}-${environmentSuffix}-primary`,
         },
       },
       { parent: this }

@@ -139,9 +139,9 @@ export class ComputeStack extends pulumi.ComponentResource {
 
     // Target Group
     const targetGroup = new aws.lb.TargetGroup(
-      `tap-tg-${region}-${environmentSuffix}`,
+      `tap-tg-${region}-${environmentSuffix}-primary`,
       {
-        name: `tap-tg-${region}-${environmentSuffix}`,
+        name: `tap-tg-${region}-${environmentSuffix}-primary`,
         port: 80,
         protocol: 'HTTP',
         vpcId: vpcId,
@@ -156,7 +156,7 @@ export class ComputeStack extends pulumi.ComponentResource {
         },
         tags: {
           ...tags,
-          Name: `tap-tg-${region}-${environmentSuffix}`,
+          Name: `tap-tg-${region}-${environmentSuffix}-primary`,
         },
       },
       { parent: this }
