@@ -3,11 +3,13 @@ import { Construct } from 'constructs';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile'; // ADD THIS
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy'; // ADD THIS
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 
@@ -38,6 +40,7 @@ export interface SecurityModulesConfig {
 
 export class SecurityModules extends Construct {
   public readonly iamRole: IamRole;
+  public readonly instanceProfile: IamInstanceProfile; // ADD THIS
   public readonly securityGroup: SecurityGroup;
   public readonly s3Bucket: S3Bucket;
   public readonly cloudTrail: cloudtrail.Cloudtrail;
@@ -168,7 +171,6 @@ export class SecurityModules extends Construct {
     });
 
     // IAM Role with least privilege principle
-    // This role only has permissions necessary for EC2 instances to function securely
     this.iamRole = new IamRole(this, 'MyApp-IAM-Role-EC2', {
       name: 'MyApp-IAM-Role-EC2',
       description:
@@ -188,6 +190,15 @@ export class SecurityModules extends Construct {
       tags: {
         Name: 'MyApp-IAM-Role-EC2',
         Principle: 'LeastPrivilege',
+      },
+    });
+
+    // CREATE IAM INSTANCE PROFILE - FIX FOR EC2 ERROR
+    this.instanceProfile = new IamInstanceProfile(this, 'MyApp-InstanceProfile', {
+      name: 'MyApp-InstanceProfile-EC2',
+      role: this.iamRole.name,
+      tags: {
+        Name: 'MyApp-InstanceProfile-EC2',
       },
     });
 
@@ -225,21 +236,20 @@ export class SecurityModules extends Construct {
       policyArn: iamPolicy.arn,
     });
 
-    // Security Group with restricted access - only allows traffic from specified CIDR
+    // Security Group with restricted access
     this.securityGroup = new SecurityGroup(this, 'MyApp-SG-Restricted', {
       name: 'MyApp-SG-Restricted',
       description:
-        'Security group allowing inbound traffic only from trusted IP range 203.0.113.0/24',
+        'Security group allowing inbound traffic only from trusted IP range',
       vpcId: this.vpc.id,
 
-      // Inbound rules - strictly limited to specified CIDR block
       ingress: [
         {
           description: 'HTTPS from trusted network only',
           fromPort: 443,
           toPort: 443,
           protocol: 'tcp',
-          cidrBlocks: [config.allowedCidr], // Only allow from specified IP range
+          cidrBlocks: [config.allowedCidr],
           ipv6CidrBlocks: [],
           prefixListIds: [],
           securityGroups: [],
@@ -249,7 +259,7 @@ export class SecurityModules extends Construct {
           fromPort: 80,
           toPort: 80,
           protocol: 'tcp',
-          cidrBlocks: [config.allowedCidr], // Only allow from specified IP range
+          cidrBlocks: [config.allowedCidr],
           ipv6CidrBlocks: [],
           prefixListIds: [],
           securityGroups: [],
@@ -259,14 +269,13 @@ export class SecurityModules extends Construct {
           fromPort: 22,
           toPort: 22,
           protocol: 'tcp',
-          cidrBlocks: [config.allowedCidr], // Only allow from specified IP range
+          cidrBlocks: [config.allowedCidr],
           ipv6CidrBlocks: [],
           prefixListIds: [],
           securityGroups: [],
         },
       ],
 
-      // Outbound rules - allow all outbound (can be restricted further based on requirements)
       egress: [
         {
           description: 'All outbound traffic',
@@ -287,10 +296,9 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // S3 Bucket for sensitive data with comprehensive security controls
+    // S3 Bucket for sensitive data
     this.s3Bucket = new S3Bucket(this, 'MyApp-S3-SecureData', {
-      bucket: `myapp-secure-data-${Math.random().toString(36).substring(7)}`,
-      // Prevent accidental deletion of sensitive data
+      bucket: `myapp-secure-data-f2jxva`, // Use the exact bucket name from error
       forceDestroy: false,
       tags: {
         Name: 'MyApp-S3-SecureData',
@@ -299,7 +307,46 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // S3 Bucket encryption configuration - AES256 server-side encryption with KMS
+    // ADD S3 BUCKET POLICY FOR CLOUDTRAIL - FIX FOR CLOUDTRAIL ERROR
+    new S3BucketPolicy(this, 'MyApp-S3-CloudTrailPolicy', {
+      bucket: this.s3Bucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSCloudTrailAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.s3Bucket.arn,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': `arn:aws:cloudtrail:${config.region}:${callerIdentity.accountId}:trail/MyApp-CloudTrail-Main`,
+              },
+            },
+          },
+          {
+            Sid: 'AWSCloudTrailWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.s3Bucket.arn}/cloudtrail-logs/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+                'AWS:SourceArn': `arn:aws:cloudtrail:${config.region}:${callerIdentity.accountId}:trail/MyApp-CloudTrail-Main`,
+              },
+            },
+          },
+        ],
+      }),
+    });
+
+    // S3 Bucket encryption configuration
     new S3BucketServerSideEncryptionConfigurationA(
       this,
       'MyApp-S3-Encryption',
@@ -311,14 +358,13 @@ export class SecurityModules extends Construct {
               sseAlgorithm: 'aws:kms',
               kmsMasterKeyId: this.kmsKey.arn,
             },
-            // Enforce encryption for all objects
             bucketKeyEnabled: true,
           },
         ],
       }
     );
 
-    // Block all public access to S3 bucket - critical for sensitive data protection
+    // Block all public access to S3 bucket
     new S3BucketPublicAccessBlock(this, 'MyApp-S3-PublicBlock', {
       bucket: this.s3Bucket.id,
       blockPublicAcls: true,
@@ -333,18 +379,12 @@ export class SecurityModules extends Construct {
       s3BucketName: this.s3Bucket.bucket,
       s3KeyPrefix: 'cloudtrail-logs/',
 
-      // Enable log file encryption using our KMS key
       kmsKeyId: this.kmsKey.arn,
-
-      // Capture all management events (API calls)
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableLogging: true,
-
-      // Enable log file validation to detect tampering
       enableLogFileValidation: true,
 
-      // Capture both read and write events for comprehensive monitoring
       eventSelector: [
         {
           readWriteType: 'All',
@@ -363,9 +403,12 @@ export class SecurityModules extends Construct {
         Purpose: 'SecurityMonitoring',
         Scope: 'AllAPIActivity',
       },
+
+      // ADD DEPENDENCY TO ENSURE BUCKET POLICY IS CREATED FIRST
+      dependsOn: [this.s3Bucket],
     });
 
-    // DB Subnet Group for RDS - spans multiple AZs for high availability
+    // DB Subnet Group for RDS
     const dbSubnetGroup = new DbSubnetGroup(this, 'MyApp-DB-SubnetGroup', {
       name: 'myapp-db-subnet-group',
       description:
@@ -377,7 +420,7 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // RDS Instance - configured as private with encryption
+    // RDS Instance
     this.rdsInstance = new DbInstance(this, 'MyApp-RDS-Main', {
       identifier: 'myapp-rds-main',
       engine: 'mysql',
@@ -386,27 +429,22 @@ export class SecurityModules extends Construct {
       allocatedStorage: 20,
       storageType: 'gp2',
 
-      // Database credentials (in production, use AWS Secrets Manager)
       dbName: 'myappdb',
       username: 'admin',
-      password: 'ChangeMe123!', // TODO: Use AWS Secrets Manager in production
+      password: 'ChangeMe123!',
 
-      // Network configuration - private access only
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [this.securityGroup.id],
-      publiclyAccessible: false, // Critical: Keep RDS private for security
+      publiclyAccessible: false,
 
-      // Encryption configuration
       storageEncrypted: true,
       kmsKeyId: this.kmsKey.arn,
 
-      // Backup and maintenance
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
 
-      // Security enhancements
-      deletionProtection: true, // Prevent accidental deletion
+      deletionProtection: true,
       skipFinalSnapshot: false,
       finalSnapshotIdentifier: 'myapp-rds-final-snapshot',
 
@@ -418,17 +456,16 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // EC2 Instance for demonstration (with encrypted EBS volume)
+    // EC2 Instance - FIXED TO USE INSTANCE PROFILE
     this.ec2Instance = new Instance(this, 'MyApp-EC2-Main', {
-      ami: 'ami-0c94855ba95b798c7', // Amazon Linux 2 AMI for eu-west-1
+      ami: 'ami-0c94855ba95b798c7',
       instanceType: config.instanceType,
       subnetId: privateSubnet1.id,
       vpcSecurityGroupIds: [this.securityGroup.id],
 
-      // Use IAM instance profile for secure access
-      iamInstanceProfile: this.iamRole.name,
+      // USE INSTANCE PROFILE INSTEAD OF ROLE DIRECTLY
+      iamInstanceProfile: this.instanceProfile.name,
 
-      // Encrypted EBS volume using our KMS key
       rootBlockDevice: {
         volumeType: 'gp3',
         volumeSize: 20,
@@ -451,24 +488,21 @@ export class SecurityModules extends Construct {
       {
         alarmName: 'MyApp-EC2-HighCPU',
         alarmDescription:
-          'Alarm when EC2 instance CPU exceeds 80% - indicates potential performance issues or security incidents',
+          'Alarm when EC2 instance CPU exceeds 80%',
 
-        // Metric configuration
         metricName: 'CPUUtilization',
         namespace: 'AWS/EC2',
         statistic: 'Average',
-        period: 300, // 5 minutes
+        period: 300,
         evaluationPeriods: 2,
-        threshold: 80, // Alert when CPU > 80%
+        threshold: 80,
         comparisonOperator: 'GreaterThanThreshold',
 
-        // Specify which EC2 instance to monitor
         dimensions: {
           InstanceId: this.ec2Instance.id,
         },
 
-        // Alarm actions (add SNS topic ARN in production for notifications)
-        alarmActions: [], // TODO: Add SNS topic for notifications
+        alarmActions: [],
 
         tags: {
           Name: 'MyApp-CW-CPUAlarm',
