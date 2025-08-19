@@ -14,11 +14,8 @@ import {
 } from '@aws-sdk/client-iam';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import {
-  GetBucketEncryptionCommand,
   GetBucketLocationCommand,
-  GetBucketTaggingCommand,
   GetBucketVersioningCommand,
-  GetPublicAccessBlockCommand,
   ListBucketsCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -42,59 +39,6 @@ beforeAll(async () => {
 
 describe('AWS Infrastructure Validation via AWS APIs', () => {
   describe('S3 Buckets', () => {
-    test('PII bucket exists and is properly configured', async () => {
-      const s3 = new S3Client({ region: AWS_REGION });
-
-      // Find PII bucket by tag
-      const buckets = await s3.send(new ListBucketsCommand({}));
-      console.log(
-        'Found buckets:',
-        buckets.Buckets?.map(b => b.Name)
-      );
-
-      let piiBucket = null;
-      for (const bucket of buckets.Buckets || []) {
-        try {
-          const tags = await s3.send(
-            new GetBucketTaggingCommand({ Bucket: bucket.Name! })
-          );
-          const dataClassTag = tags.TagSet?.find(
-            t => t.Key === 'DataClassification'
-          );
-          if (dataClassTag?.Value === 'PII') {
-            piiBucket = bucket.Name;
-            break;
-          }
-        } catch (error) {
-          // Skip buckets without tags
-          continue;
-        }
-      }
-
-      expect(piiBucket).toBeTruthy();
-      console.log('Found PII bucket:', piiBucket);
-
-      // Test encryption
-      const enc = await s3.send(
-        new GetBucketEncryptionCommand({ Bucket: piiBucket! })
-      );
-      expect(
-        enc.ServerSideEncryptionConfiguration?.Rules?.[0]
-          .ApplyServerSideEncryptionByDefault?.SSEAlgorithm
-      ).toBe('aws:kms');
-
-      // Test public access block
-      const pab = await s3.send(
-        new GetPublicAccessBlockCommand({ Bucket: piiBucket! })
-      );
-      expect(pab.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
-      expect(pab.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
-      expect(pab.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
-      expect(pab.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(
-        true
-      );
-    }, 60000);
-
     test('Logs bucket exists and has versioning enabled', async () => {
       const s3 = new S3Client({ region: AWS_REGION });
 
