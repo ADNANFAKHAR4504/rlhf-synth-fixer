@@ -5,7 +5,7 @@ describe('High Availability Web App CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/high-availability-webapp.json'); // JSON version of the template
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
