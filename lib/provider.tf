@@ -11,6 +11,7 @@ terraform {
       version = ">= 5.0"
     }
   }
+}
 
 # Primary AWS provider (use for main region resources)
 provider "aws" {
