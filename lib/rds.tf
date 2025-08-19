@@ -18,7 +18,8 @@ resource "random_password" "db_password" {
 
 # Store password in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "db_password" {
-  name = "${var.project_name}-${var.environment_suffix}-db-password"
+  name                    = "${var.project_name}-${var.environment_suffix}-db-password-${formatdate("YYYYMMDD-hhmm", timestamp())}"
+  recovery_window_in_days = 0
 
   tags = {
     Name        = "${var.project_name}-${var.environment_suffix}-db-password"
