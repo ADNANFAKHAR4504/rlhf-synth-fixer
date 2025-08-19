@@ -530,6 +530,6 @@ data "aws_iam_user" "app_user" {
 resource "null_resource" "delete_backup_vault" {
   provisioner "local-exec" {
     when    = destroy
-    command = "aws backup delete-backup-vault --backup-vault-name ${var.project_name}-${var.environment}-070301-qcf7m9d3-backup-vault --region us-east-1"
+    command = "aws backup list-recovery-points-by-backup-vault --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --region us-east-1 --output json | jq -r '.RecoveryPoints[].RecoveryPointArn' | xargs -I {} aws backup delete-recovery-point --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --recovery-point-arn {} --region us-east-1"
   }
 }
