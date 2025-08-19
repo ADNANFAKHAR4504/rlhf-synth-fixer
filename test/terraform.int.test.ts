@@ -140,7 +140,7 @@ describe("Terraform VPC Infrastructure Integration Tests", () => {
       const publicSubnetIds = JSON.parse(deploymentOutputs.public_subnet_ids || "[]");
       
       const command = new DescribeNatGatewaysCommand({
-        Filters: [
+        Filter: [
           { Name: "subnet-id", Values: publicSubnetIds }
         ]
       });
