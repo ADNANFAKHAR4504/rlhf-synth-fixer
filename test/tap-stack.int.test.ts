@@ -10,7 +10,7 @@
  */
 
 import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
+import * as AWS from 'aws-sdk';
 import { TapStack } from '../lib/tap-stack';
 
 // Integration test configuration
@@ -22,14 +22,8 @@ const testConfig = {
 
 describe('TapStack Integration Tests', () => {
   let stack: TapStack;
-  let awsProvider: aws.Provider;
 
   beforeAll(async () => {
-    // Initialize AWS provider for testing
-    awsProvider = new aws.Provider('test-provider', {
-      region: testConfig.regions[0],
-    });
-
     // Create stack with test configuration
     stack = new TapStack('integration-test-stack', {
       tags: {
@@ -50,12 +44,15 @@ describe('TapStack Integration Tests', () => {
 
   describe('S3 Bucket Integration', () => {
     it('should create S3 bucket with correct configuration', async () => {
-      const bucketName = await stack.logsBucket.bucket;
+      const bucketName = await new Promise<string>((resolve) => {
+        stack.logsBucket.bucket.apply((name) => resolve(name));
+      });
+      
       expect(bucketName).toBeDefined();
       expect(typeof bucketName).toBe('string');
 
       // Verify bucket exists and is accessible
-      const s3Client = new aws.sdk.S3({ region: testConfig.regions[0] });
+      const s3Client = new AWS.S3({ region: testConfig.regions[0] });
       
       try {
         const bucketLocation = await s3Client.getBucketLocation({ Bucket: bucketName }).promise();
@@ -67,8 +64,11 @@ describe('TapStack Integration Tests', () => {
     }, testConfig.testTimeout);
 
     it('should have correct bucket policies', async () => {
-      const bucketName = await stack.logsBucket.bucket;
-      const s3Client = new aws.sdk.S3({ region: testConfig.regions[0] });
+      const bucketName = await new Promise<string>((resolve) => {
+        stack.logsBucket.bucket.apply((name) => resolve(name));
+      });
+      
+      const s3Client = new AWS.S3({ region: testConfig.regions[0] });
 
       try {
         const bucketPolicy = await s3Client.getBucketPolicy({ Bucket: bucketName }).promise();
@@ -84,8 +84,11 @@ describe('TapStack Integration Tests', () => {
     }, testConfig.testTimeout);
 
     it('should have encryption enabled', async () => {
-      const bucketName = await stack.logsBucket.bucket;
-      const s3Client = new aws.sdk.S3({ region: testConfig.regions[0] });
+      const bucketName = await new Promise<string>((resolve) => {
+        stack.logsBucket.bucket.apply((name) => resolve(name));
+      });
+      
+      const s3Client = new AWS.S3({ region: testConfig.regions[0] });
 
       try {
         const encryption = await s3Client.getBucketEncryption({ Bucket: bucketName }).promise();
@@ -99,15 +102,18 @@ describe('TapStack Integration Tests', () => {
     }, testConfig.testTimeout);
 
     it('should have lifecycle policy configured', async () => {
-      const bucketName = await stack.logsBucket.bucket;
-      const s3Client = new aws.sdk.S3({ region: testConfig.regions[0] });
+      const bucketName = await new Promise<string>((resolve) => {
+        stack.logsBucket.bucket.apply((name) => resolve(name));
+      });
+      
+      const s3Client = new AWS.S3({ region: testConfig.regions[0] });
 
       try {
         const lifecycle = await s3Client.getBucketLifecycleConfiguration({ Bucket: bucketName }).promise();
         expect(lifecycle.Rules).toBeDefined();
         expect(lifecycle.Rules.length).toBeGreaterThan(0);
         
-        const glacierRule = lifecycle.Rules.find(rule => rule.ID === 'transition-to-glacier');
+        const glacierRule = lifecycle.Rules.find((rule: any) => rule.ID === 'transition-to-glacier');
         expect(glacierRule).toBeDefined();
         expect(glacierRule.Status).toBe('Enabled');
         expect(glacierRule.Transitions).toBeDefined();
@@ -122,16 +128,19 @@ describe('TapStack Integration Tests', () => {
 
   describe('KMS Key Integration', () => {
     it('should create KMS key with correct permissions', async () => {
-      const keyId = await stack.kmsKey.keyId;
+      const keyId = await new Promise<string>((resolve) => {
+        stack.kmsKey.keyId.apply((id) => resolve(id));
+      });
+      
       expect(keyId).toBeDefined();
 
-      const kmsClient = new aws.sdk.KMS({ region: testConfig.regions[0] });
+      const kmsClient = new AWS.KMS({ region: testConfig.regions[0] });
 
       try {
         const keyDescription = await kmsClient.describeKey({ KeyId: keyId }).promise();
         expect(keyDescription.KeyMetadata).toBeDefined();
         expect(keyDescription.KeyMetadata.KeyUsage).toBe('ENCRYPT_DECRYPT');
-        expect(keyDescription.KeyMetadata.KeySpec).toBe('SYMMETRIC_DEFAULT');
+        expect(keyDescription.KeyMetadata.CustomerMasterKeySpec).toBe('SYMMETRIC_DEFAULT');
         expect(keyDescription.KeyMetadata.Enabled).toBe(true);
       } catch (error) {
         console.error('KMS key verification failed:', error);
@@ -140,8 +149,11 @@ describe('TapStack Integration Tests', () => {
     }, testConfig.testTimeout);
 
     it('should allow encryption and decryption operations', async () => {
-      const keyId = await stack.kmsKey.keyId;
-      const kmsClient = new aws.sdk.KMS({ region: testConfig.regions[0] });
+      const keyId = await new Promise<string>((resolve) => {
+        stack.kmsKey.keyId.apply((id) => resolve(id));
+      });
+      
+      const kmsClient = new AWS.KMS({ region: testConfig.regions[0] });
 
       try {
         const testData = 'Integration test encryption data';
@@ -159,7 +171,7 @@ describe('TapStack Integration Tests', () => {
           CiphertextBlob: encryptResult.CiphertextBlob,
         }).promise();
         
-        expect(decryptResult.Plaintext.toString()).toBe(testData);
+        expect(decryptResult.Plaintext?.toString()).toBe(testData);
       } catch (error) {
         console.error('KMS encryption/decryption test failed:', error);
         throw error;
@@ -169,10 +181,13 @@ describe('TapStack Integration Tests', () => {
 
   describe('Lambda Function Integration', () => {
     it('should create Lambda function with correct configuration', async () => {
-      const functionName = await stack.logProcessingLambda.functionName;
+      const functionName = await new Promise<string>((resolve) => {
+        stack.logProcessingLambda.name.apply((name) => resolve(name));
+      });
+      
       expect(functionName).toBeDefined();
 
-      const lambdaClient = new aws.sdk.Lambda({ region: testConfig.regions[0] });
+      const lambdaClient = new AWS.Lambda({ region: testConfig.regions[0] });
 
       try {
         const functionConfig = await lambdaClient.getFunctionConfiguration({ FunctionName: functionName }).promise();
@@ -180,7 +195,7 @@ describe('TapStack Integration Tests', () => {
         expect(functionConfig.Handler).toBe('lambda_function.lambda_handler');
         expect(functionConfig.Timeout).toBe(300);
         expect(functionConfig.Environment).toBeDefined();
-        expect(functionConfig.Environment.Variables.LOGS_BUCKET).toBeDefined();
+        expect(functionConfig.Environment.Variables?.LOGS_BUCKET).toBeDefined();
       } catch (error) {
         console.error('Lambda function verification failed:', error);
         throw error;
@@ -188,8 +203,11 @@ describe('TapStack Integration Tests', () => {
     }, testConfig.testTimeout);
 
     it('should be able to invoke Lambda function', async () => {
-      const functionName = await stack.logProcessingLambda.functionName;
-      const lambdaClient = new aws.sdk.Lambda({ region: testConfig.regions[0] });
+      const functionName = await new Promise<string>((resolve) => {
+        stack.logProcessingLambda.name.apply((name) => resolve(name));
+      });
+      
+      const lambdaClient = new AWS.Lambda({ region: testConfig.regions[0] });
 
       try {
         const testEvent = {
@@ -227,27 +245,31 @@ describe('TapStack Integration Tests', () => {
 
   describe('WAF WebACL Integration', () => {
     it('should create WAF WebACL with OWASP rules', async () => {
-      const webAclArn = await stack.wafWebAcl.arn;
+      const webAclArn = await new Promise<string>((resolve) => {
+        stack.wafWebAcl.arn.apply((arn) => resolve(arn));
+      });
+      
       expect(webAclArn).toBeDefined();
 
-      const wafClient = new aws.sdk.WAFV2({ region: testConfig.regions[0] });
+      const wafClient = new AWS.WAFV2({ region: testConfig.regions[0] });
 
       try {
-        const webAclId = webAclArn.split('/').pop();
+        const webAclId = webAclArn.split('/').pop()!;
+        const webAclName = webAclId.split('/')[0];
         const webAcl = await wafClient.getWebACL({
           Scope: 'REGIONAL',
           Id: webAclId,
-          Name: webAclId.split('/'),
+          Name: webAclName,
         }).promise();
 
         expect(webAcl.WebACL).toBeDefined();
         expect(webAcl.WebACL.Rules).toBeDefined();
         expect(webAcl.WebACL.Rules.length).toBeGreaterThanOrEqual(2);
 
-        const owaspRule = webAcl.WebACL.Rules.find(rule => rule.Name === 'AWSManagedRulesOWASPTop10');
+        const owaspRule = webAcl.WebACL.Rules.find((rule: any) => rule.Name === 'AWSManagedRulesOWASPTop10');
         expect(owaspRule).toBeDefined();
 
-        const commonRule = webAcl.WebACL.Rules.find(rule => rule.Name === 'AWSManagedRulesCommonRuleSet');
+        const commonRule = webAcl.WebACL.Rules.find((rule: any) => rule.Name === 'AWSManagedRulesCommonRuleSet');
         expect(commonRule).toBeDefined();
       } catch (error) {
         console.error('WAF WebACL verification failed:', error);
@@ -262,10 +284,13 @@ describe('TapStack Integration Tests', () => {
       const vpc = stack.vpcs[region];
       expect(vpc).toBeDefined();
 
-      const ec2Client = new aws.sdk.EC2({ region });
+      const ec2Client = new AWS.EC2({ region });
 
       try {
-        const vpcId = await vpc.vpcId;
+        const vpcId = await new Promise<string>((resolve) => {
+          vpc.id.apply((id) => resolve(id));
+        });
+        
         const vpcDescription = await ec2Client.describeVpcs({ VpcIds: [vpcId] }).promise();
         
         expect(vpcDescription.Vpcs).toHaveLength(1);
@@ -280,10 +305,13 @@ describe('TapStack Integration Tests', () => {
     it('should create subnets in multiple AZs', async () => {
       const region = testConfig.regions[0];
       const vpc = stack.vpcs[region];
-      const ec2Client = new aws.sdk.EC2({ region });
+      const ec2Client = new AWS.EC2({ region });
 
       try {
-        const vpcId = await vpc.vpcId;
+        const vpcId = await new Promise<string>((resolve) => {
+          vpc.id.apply((id) => resolve(id));
+        });
+        
         const subnets = await ec2Client.describeSubnets({
           Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
         }).promise();
@@ -291,7 +319,7 @@ describe('TapStack Integration Tests', () => {
         expect(subnets.Subnets).toBeDefined();
         expect(subnets.Subnets.length).toBeGreaterThanOrEqual(4); // 2 public + 2 private
 
-        const availabilityZones = new Set(subnets.Subnets.map(subnet => subnet.AvailabilityZone));
+        const availabilityZones = new Set(subnets.Subnets.map((subnet: any) => subnet.AvailabilityZone));
         expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
       } catch (error) {
         console.error('Subnet verification failed:', error);
@@ -306,10 +334,13 @@ describe('TapStack Integration Tests', () => {
       const asg = stack.autoScalingGroups[region];
       expect(asg).toBeDefined();
 
-      const autoscalingClient = new aws.sdk.AutoScaling({ region });
+      const autoscalingClient = new AWS.AutoScaling({ region });
 
       try {
-        const asgName = await asg.name;
+        const asgName = await new Promise<string>((resolve) => {
+          asg.name.apply((name) => resolve(name));
+        });
+        
         const asgDescription = await autoscalingClient.describeAutoScalingGroups({
           AutoScalingGroupNames: [asgName],
         }).promise();
@@ -334,10 +365,13 @@ describe('TapStack Integration Tests', () => {
       const rds = stack.rdsInstances[region];
       expect(rds).toBeDefined();
 
-      const rdsClient = new aws.sdk.RDS({ region });
+      const rdsClient = new AWS.RDS({ region });
 
       try {
-        const rdsId = await rds.id;
+        const rdsId = await new Promise<string>((resolve) => {
+          rds.id.apply((id) => resolve(id));
+        });
+        
         const rdsDescription = await rdsClient.describeDBInstances({
           DBInstanceIdentifier: rdsId,
         }).promise();
@@ -360,21 +394,24 @@ describe('TapStack Integration Tests', () => {
     it('should create security groups with correct rules', async () => {
       const region = testConfig.regions[0];
       const vpc = stack.vpcs[region];
-      const ec2Client = new aws.sdk.EC2({ region });
+      const ec2Client = new AWS.EC2({ region });
 
       try {
-        const vpcId = await vpc.vpcId;
+        const vpcId = await new Promise<string>((resolve) => {
+          vpc.id.apply((id) => resolve(id));
+        });
+        
         const securityGroups = await ec2Client.describeSecurityGroups({
           Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
         }).promise();
 
-        const webSg = securityGroups.SecurityGroups.find(sg => sg.GroupName.includes('web'));
+        const webSg = securityGroups.SecurityGroups.find((sg: any) => sg.GroupName.includes('web'));
         expect(webSg).toBeDefined();
 
         // Verify HTTP/HTTPS ingress rules
-        const httpRule = webSg.IpPermissions.find(rule => rule.FromPort === 80);
-        const httpsRule = webSg.IpPermissions.find(rule => rule.FromPort === 443);
-        const sshRule = webSg.IpPermissions.find(rule => rule.FromPort === 22);
+        const httpRule = webSg.IpPermissions.find((rule: any) => rule.FromPort === 80);
+        const httpsRule = webSg.IpPermissions.find((rule: any) => rule.FromPort === 443);
+        const sshRule = webSg.IpPermissions.find((rule: any) => rule.FromPort === 22);
 
         expect(httpRule).toBeDefined();
         expect(httpsRule).toBeDefined();
@@ -388,7 +425,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('IAM Roles Integration', () => {
     it('should create IAM roles with least privilege policies', async () => {
-      const iamClient = new aws.sdk.IAM();
+      const iamClient = new AWS.IAM();
 
       try {
         // Test EC2 role
@@ -396,21 +433,21 @@ describe('TapStack Integration Tests', () => {
           PathPrefix: '/',
         }).promise();
 
-        const ec2Role = ec2Roles.Roles.find(role => role.RoleName.includes('ec2-role'));
+        const ec2Role = ec2Roles.Roles.find((role: any) => role.RoleName.includes('ec2-role'));
         expect(ec2Role).toBeDefined();
 
         const ec2RolePolicies = await iamClient.listAttachedRolePolicies({
-          RoleName: ec2Role.RoleName,
+          RoleName: ec2Role!.RoleName,
         }).promise();
 
         expect(ec2RolePolicies.AttachedPolicies.length).toBeGreaterThan(0);
 
         // Test Lambda role
-        const lambdaRole = ec2Roles.Roles.find(role => role.RoleName.includes('log-processing-lambda-role'));
+        const lambdaRole = ec2Roles.Roles.find((role: any) => role.RoleName.includes('log-processing-lambda-role'));
         expect(lambdaRole).toBeDefined();
 
         const lambdaRolePolicies = await iamClient.listAttachedRolePolicies({
-          RoleName: lambdaRole.RoleName,
+          RoleName: lambdaRole!.RoleName,
         }).promise();
 
         expect(lambdaRolePolicies.AttachedPolicies.length).toBeGreaterThan(0);
@@ -424,11 +461,11 @@ describe('TapStack Integration Tests', () => {
   describe('Load Balancer Integration', () => {
     it('should create ALB with correct configuration', async () => {
       const region = testConfig.regions[0];
-      const elbClient = new aws.sdk.ELBv2({ region });
+      const elbClient = new AWS.ELBv2({ region });
 
       try {
         const loadBalancers = await elbClient.describeLoadBalancers().promise();
-        const alb = loadBalancers.LoadBalancers.find(lb => lb.LoadBalancerName.includes('nova-model-alb'));
+        const alb = loadBalancers.LoadBalancers.find((lb: any) => lb.LoadBalancerName.includes('nova-model-alb'));
         
         expect(alb).toBeDefined();
         expect(alb.Type).toBe('application');
@@ -453,11 +490,11 @@ describe('TapStack Integration Tests', () => {
   describe('Monitoring and Logging Integration', () => {
     it('should create CloudWatch log groups', async () => {
       const region = testConfig.regions[0];
-      const cloudWatchClient = new aws.sdk.CloudWatchLogs({ region });
+      const cloudWatchClient = new AWS.CloudWatchLogs({ region });
 
       try {
         const logGroups = await cloudWatchClient.describeLogGroups().promise();
-        const ec2LogGroup = logGroups.logGroups.find(lg => lg.logGroupName.includes('/aws/ec2/httpd'));
+        const ec2LogGroup = logGroups.logGroups.find((lg: any) => lg.logGroupName.includes('/aws/ec2/httpd'));
         
         expect(ec2LogGroup).toBeDefined();
       } catch (error) {
@@ -476,8 +513,11 @@ describe('TapStack Integration Tests', () => {
       // 4. CloudWatch logs are flowing
 
       // For brevity, we'll test S3 write capability
-      const bucketName = await stack.logsBucket.bucket;
-      const s3Client = new aws.sdk.S3({ region: testConfig.regions[0] });
+      const bucketName = await new Promise<string>((resolve) => {
+        stack.logsBucket.bucket.apply((name) => resolve(name));
+      });
+      
+      const s3Client = new AWS.S3({ region: testConfig.regions[0] });
 
       try {
         const testKey = `integration-test/${Date.now()}/test.json`;
@@ -495,7 +535,7 @@ describe('TapStack Integration Tests', () => {
           Key: testKey,
         }).promise();
 
-        expect(getResult.Body.toString()).toBe(testData);
+        expect(getResult.Body?.toString()).toBe(testData);
 
         // Cleanup test object
         await s3Client.deleteObject({
@@ -512,11 +552,11 @@ describe('TapStack Integration Tests', () => {
   describe('Cost Optimization', () => {
     it('should use cost-effective instance types', async () => {
       const region = testConfig.regions[0];
-      const ec2Client = new aws.sdk.EC2({ region });
+      const ec2Client = new AWS.EC2({ region });
 
       try {
         const launchTemplates = await ec2Client.describeLaunchTemplates().promise();
-        const template = launchTemplates.LaunchTemplates.find(lt => lt.LaunchTemplateName.includes('nova-model'));
+        const template = launchTemplates.LaunchTemplates.find((lt: any) => lt.LaunchTemplateName.includes('nova-model'));
         
         if (template) {
           const templateVersion = await ec2Client.describeLaunchTemplateVersions({

@@ -18,7 +18,6 @@
 
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import * as awsx from '@pulumi/awsx';
 
 export interface TapStackArgs {
   tags?: { [key: string]: string };
@@ -26,10 +25,11 @@ export interface TapStackArgs {
 
 export class TapStack extends pulumi.ComponentResource {
   public readonly regions = ['us-east-1', 'us-west-2', 'eu-central-1'];
-  public readonly vpcs: { [region: string]: awsx.ec2.Vpc } = {};
+  public readonly vpcs: { [region: string]: aws.ec2.Vpc } = {};
   public readonly autoScalingGroups: { [region: string]: aws.autoscaling.Group } = {};
   public readonly rdsInstances: { [region: string]: aws.rds.Instance } = {};
   public readonly logsBucket: aws.s3.Bucket;
+  public readonly logsBucketPublicAccessBlock: aws.s3.BucketPublicAccessBlock;
   public readonly kmsKey: aws.kms.Key;
   public readonly wafWebAcl: aws.wafv2.WebAcl;
   public readonly logProcessingLambda: aws.lambda.Function;
@@ -49,7 +49,9 @@ export class TapStack extends pulumi.ComponentResource {
     this.kmsKey = this.createKmsKey(defaultTags);
 
     // Create centralized S3 bucket for logs
-    this.logsBucket = this.createLogsBucket(defaultTags);
+    const bucketResult = this.createLogsBucket(defaultTags);
+    this.logsBucket = bucketResult.bucket;
+    this.logsBucketPublicAccessBlock = bucketResult.publicAccessBlock;
 
     // Create Lambda function for log processing
     this.logProcessingLambda = this.createLogProcessingLambda(defaultTags);
@@ -71,29 +73,31 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createKmsKey(tags: { [key: string]: string }): aws.kms.Key {
+    const callerIdentity = aws.getCallerIdentity();
+    
     return new aws.kms.Key('infrastructure-kms-key', {
       description: 'KMS key for encrypting infrastructure data at rest',
       keyUsage: 'ENCRYPT_DECRYPT',
-      keySpec: 'SYMMETRIC_DEFAULT',
-      policy: JSON.stringify({
+      customerMasterKeySpec: 'SYMMETRIC_DEFAULT',
+      policy: callerIdentity.then(identity => JSON.stringify({
         Version: '2012-10-17',
         Statement: [
           {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${aws.getCallerIdentity().accountId}:root`,
+              AWS: `arn:aws:iam::${identity.accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
           },
         ],
-      }),
+      })),
       tags,
     }, { parent: this });
   }
 
-  private createLogsBucket(tags: { [key: string]: string }): aws.s3.Bucket {
+  private createLogsBucket(tags: { [key: string]: string }): { bucket: aws.s3.Bucket, publicAccessBlock: aws.s3.BucketPublicAccessBlock } {
     const bucket = new aws.s3.Bucket('centralized-logs-bucket', {
       bucket: `nova-model-logs-${pulumi.getStack()}-${Date.now()}`,
       versioning: {
@@ -119,13 +123,15 @@ export class TapStack extends pulumi.ComponentResource {
           ],
         },
       ],
-      publicAccessBlock: {
-        blockPublicAcls: true,
-        blockPublicPolicy: true,
-        ignorePublicAcls: true,
-        restrictPublicBuckets: true,
-      },
       tags,
+    }, { parent: this });
+
+    const publicAccessBlock = new aws.s3.BucketPublicAccessBlock('logs-bucket-public-access-block', {
+      bucket: bucket.id,
+      blockPublicAcls: true,
+      blockPublicPolicy: true,
+      ignorePublicAcls: true,
+      restrictPublicBuckets: true,
     }, { parent: this });
 
     // Create bucket policy for VPC endpoint access
@@ -155,7 +161,7 @@ export class TapStack extends pulumi.ComponentResource {
       }),
     }, { parent: this });
 
-    return bucket;
+    return { bucket, publicAccessBlock };
   }
 
   private createLogProcessingLambda(tags: { [key: string]: string }): aws.lambda.Function {
@@ -210,7 +216,7 @@ export class TapStack extends pulumi.ComponentResource {
     }, { parent: this });
 
     return new aws.lambda.Function('log-processing-function', {
-      runtime: 'python3.9',
+      runtime: aws.lambda.Runtime.Python3d9,
       code: new pulumi.asset.AssetArchive({
         'lambda_function.py': new pulumi.asset.StringAsset(`
 import json
@@ -335,17 +341,7 @@ def lambda_handler(event, context):
     }, { parent: this });
 
     // Create VPC
-    const vpc = new awsx.ec2.Vpc(`vpc-${region}`, {
-      cidrBlock: this.getCidrBlockForRegion(region),
-      numberOfAvailabilityZones: 2,
-      numberOfNatGateways: 2,
-      subnets: [
-        { type: 'public', name: 'public', cidrMask: 24 },
-        { type: 'private', name: 'private', cidrMask: 24 },
-      ],
-      tags,
-    }, { parent: this, provider });
-
+    const vpc = this.createVpc(region, tags, provider);
     this.vpcs[region] = vpc;
 
     // Create security groups
@@ -369,7 +365,7 @@ def lambda_handler(event, context):
       minSize: 2,
       maxSize: 6,
       desiredCapacity: 2,
-      vpcZoneIdentifiers: vpc.privateSubnetIds,
+      vpcZoneIdentifiers: [vpc.privateSubnetIds[0], vpc.privateSubnetIds[1]],
       launchTemplate: {
         id: launchTemplate.id,
         version: '$Latest',
@@ -387,7 +383,7 @@ def lambda_handler(event, context):
 
     // Create RDS subnet group
     const dbSubnetGroup = new aws.rds.SubnetGroup(`db-subnet-group-${region}`, {
-      subnetIds: vpc.privateSubnetIds,
+      subnetIds: [vpc.privateSubnetIds[0], vpc.privateSubnetIds[1]],
       tags,
     }, { parent: this, provider });
 
@@ -421,7 +417,7 @@ def lambda_handler(event, context):
   }
 
   private getCidrBlockForRegion(region: string): string {
-    const cidrBlocks = {
+    const cidrBlocks: { [key: string]: string } = {
       'us-east-1': '10.0.0.0/16',
       'us-west-2': '10.1.0.0/16',
       'eu-central-1': '10.2.0.0/16',
@@ -429,15 +425,168 @@ def lambda_handler(event, context):
     return cidrBlocks[region] || '10.0.0.0/16';
   }
 
+  private createVpc(region: string, tags: { [key: string]: string }, provider: aws.Provider): aws.ec2.Vpc {
+    const vpc = new aws.ec2.Vpc(`vpc-${region}`, {
+      cidrBlock: this.getCidrBlockForRegion(region),
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      tags: {
+        ...tags,
+        Name: `nova-model-vpc-${region}`,
+      },
+    }, { parent: this, provider });
+
+    // Create Internet Gateway
+    const internetGateway = new aws.ec2.InternetGateway(`igw-${region}`, {
+      vpcId: vpc.id,
+      tags: {
+        ...tags,
+        Name: `nova-model-igw-${region}`,
+      },
+    }, { parent: this, provider });
+
+    // Create public subnets
+    const publicSubnet1 = new aws.ec2.Subnet(`public-subnet-1-${region}`, {
+      vpcId: vpc.id,
+      cidrBlock: this.getSubnetCidr(region, 'public', 0),
+      availabilityZone: `${region}a`,
+      mapPublicIpOnLaunch: true,
+      tags: {
+        ...tags,
+        Name: `nova-model-public-subnet-1-${region}`,
+      },
+    }, { parent: this, provider });
+
+    const publicSubnet2 = new aws.ec2.Subnet(`public-subnet-2-${region}`, {
+      vpcId: vpc.id,
+      cidrBlock: this.getSubnetCidr(region, 'public', 1),
+      availabilityZone: `${region}b`,
+      mapPublicIpOnLaunch: true,
+      tags: {
+        ...tags,
+        Name: `nova-model-public-subnet-2-${region}`,
+      },
+    }, { parent: this, provider });
+
+    // Create private subnets
+    const privateSubnet1 = new aws.ec2.Subnet(`private-subnet-1-${region}`, {
+      vpcId: vpc.id,
+      cidrBlock: this.getSubnetCidr(region, 'private', 0),
+      availabilityZone: `${region}a`,
+      tags: {
+        ...tags,
+        Name: `nova-model-private-subnet-1-${region}`,
+      },
+    }, { parent: this, provider });
+
+    const privateSubnet2 = new aws.ec2.Subnet(`private-subnet-2-${region}`, {
+      vpcId: vpc.id,
+      cidrBlock: this.getSubnetCidr(region, 'private', 1),
+      availabilityZone: `${region}b`,
+      tags: {
+        ...tags,
+        Name: `nova-model-private-subnet-2-${region}`,
+      },
+    }, { parent: this, provider });
+
+    // Create NAT Gateways
+    const eip1 = new aws.ec2.Eip(`eip-1-${region}`, {
+      domain: 'vpc',
+      tags: {
+        ...tags,
+        Name: `nova-model-eip-1-${region}`,
+      },
+    }, { parent: this, provider });
+
+    const natGateway1 = new aws.ec2.NatGateway(`nat-1-${region}`, {
+      allocationId: eip1.id,
+      subnetId: publicSubnet1.id,
+      tags: {
+        ...tags,
+        Name: `nova-model-nat-1-${region}`,
+      },
+    }, { parent: this, provider });
+
+    // Route tables
+    const publicRouteTable = new aws.ec2.RouteTable(`public-rt-${region}`, {
+      vpcId: vpc.id,
+      routes: [
+        {
+          cidrBlock: '0.0.0.0/0',
+          gatewayId: internetGateway.id,
+        },
+      ],
+      tags: {
+        ...tags,
+        Name: `nova-model-public-rt-${region}`,
+      },
+    }, { parent: this, provider });
+
+    const privateRouteTable = new aws.ec2.RouteTable(`private-rt-${region}`, {
+      vpcId: vpc.id,
+      routes: [
+        {
+          cidrBlock: '0.0.0.0/0',
+          natGatewayId: natGateway1.id,
+        },
+      ],
+      tags: {
+        ...tags,
+        Name: `nova-model-private-rt-${region}`,
+      },
+    }, { parent: this, provider });
+
+    // Route table associations
+    new aws.ec2.RouteTableAssociation(`public-rta-1-${region}`, {
+      subnetId: publicSubnet1.id,
+      routeTableId: publicRouteTable.id,
+    }, { parent: this, provider });
+
+    new aws.ec2.RouteTableAssociation(`public-rta-2-${region}`, {
+      subnetId: publicSubnet2.id,
+      routeTableId: publicRouteTable.id,
+    }, { parent: this, provider });
+
+    new aws.ec2.RouteTableAssociation(`private-rta-1-${region}`, {
+      subnetId: privateSubnet1.id,
+      routeTableId: privateRouteTable.id,
+    }, { parent: this, provider });
+
+    new aws.ec2.RouteTableAssociation(`private-rta-2-${region}`, {
+      subnetId: privateSubnet2.id,
+      routeTableId: privateRouteTable.id,
+    }, { parent: this, provider });
+
+    // Add properties to VPC for compatibility
+    (vpc as any).publicSubnetIds = [publicSubnet1.id, publicSubnet2.id];
+    (vpc as any).privateSubnetIds = [privateSubnet1.id, privateSubnet2.id];
+
+    return vpc;
+  }
+
+  private getSubnetCidr(region: string, type: 'public' | 'private', index: number): string {
+    const baseOctets: { [key: string]: string } = {
+      'us-east-1': '10.0',
+      'us-west-2': '10.1',
+      'eu-central-1': '10.2',
+    };
+    
+    const base = baseOctets[region] || '10.0';
+    const typeOffset = type === 'public' ? 0 : 10;
+    const subnet = typeOffset + index;
+    
+    return `${base}.${subnet}.0/24`;
+  }
+
   private createWebSecurityGroup(
     region: string,
-    vpc: awsx.ec2.Vpc,
+    vpc: aws.ec2.Vpc,
     tags: { [key: string]: string },
     provider: aws.Provider
   ): aws.ec2.SecurityGroup {
     return new aws.ec2.SecurityGroup(`web-sg-${region}`, {
       namePrefix: `nova-model-web-${region}-`,
-      vpcId: vpc.vpcId,
+      vpcId: vpc.id,
       description: 'Security group for web servers',
       ingress: [
         {
@@ -477,14 +626,14 @@ def lambda_handler(event, context):
 
   private createDbSecurityGroup(
     region: string,
-    vpc: awsx.ec2.Vpc,
+    vpc: aws.ec2.Vpc,
     webSecurityGroup: aws.ec2.SecurityGroup,
     tags: { [key: string]: string },
     provider: aws.Provider
   ): aws.ec2.SecurityGroup {
     return new aws.ec2.SecurityGroup(`db-sg-${region}`, {
       namePrefix: `nova-model-db-${region}-`,
-      vpcId: vpc.vpcId,
+      vpcId: vpc.id,
       description: 'Security group for database servers',
       ingress: [
         {
@@ -608,7 +757,7 @@ EOF
           ebs: {
             volumeSize: 20,
             volumeType: 'gp3',
-            encrypted: true,
+            encrypted: pulumi.interpolate`${this.kmsKey.arn}`,
             kmsKeyId: this.kmsKey.arn,
           },
         },
@@ -623,12 +772,12 @@ EOF
           tags,
         },
       ],
-    }, { parent: this, provider });
+    }, { parent: this, provider }); 
   }
 
   private createApplicationLoadBalancer(
     region: string,
-    vpc: awsx.ec2.Vpc,
+    vpc: aws.ec2.Vpc,
     securityGroup: aws.ec2.SecurityGroup,
     asg: aws.autoscaling.Group,
     tags: { [key: string]: string },
@@ -637,7 +786,7 @@ EOF
     const alb = new aws.lb.LoadBalancer(`alb-${region}`, {
       name: `nova-model-alb-${region}`,
       loadBalancerType: 'application',
-      subnets: vpc.publicSubnetIds,
+      subnets: (vpc as any).publicSubnetIds,
       securityGroups: [securityGroup.id],
       tags,
     }, { parent: this, provider });
@@ -646,7 +795,7 @@ EOF
       name: `nova-model-tg-${region}`,
       port: 80,
       protocol: 'HTTP',
-      vpcId: vpc.vpcId,
+      vpcId: vpc.id,
       healthCheck: {
         enabled: true,
         healthyThreshold: 2,
@@ -663,7 +812,7 @@ EOF
 
     new aws.lb.Listener(`listener-${region}`, {
       loadBalancerArn: alb.arn,
-      port: '80',
+      port: 80,
       protocol: 'HTTP',
       defaultActions: [
         {
