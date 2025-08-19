@@ -1,10 +1,4 @@
 # main.tf - Secure AWS Infrastructure Configuration
-#
-# SECURITY REVIEW WAIVERS:
-# - Hardcoded password: Used only for CI/CD test environments; production deployments
-#   use AWS Secrets Manager or GitHub Actions secrets injection
-# - AWS Region us-west-2: Required due to service quotas and team location preferences
-#   See metadata.json for formal waiver documentation
 
 # Variables
 variable "environment" {
@@ -28,7 +22,7 @@ variable "owner" {
 variable "aws_region" {
   description = "AWS region"
   type        = string
-  default     = "us-west-2" # REVIEW-WAIVER: Required region due to service quotas and latency requirements
+  default     = "us-west-2"
 }
 
 variable "vpc_cidr" {
@@ -62,11 +56,10 @@ variable "db_username" {
   sensitive   = true
 }
 
-variable "db_password" {
-  description = "Database master password"
-  type        = string
-  default     = "ChangeMe123!" # REVIEW-WAIVER: Placeholder for CI/CD test environments only; production uses secrets injection
-  sensitive   = true
+resource "random_password" "db" {
+  length  = 20
+  special = true
+  override_special = "!@#$%&*()-_=+[]{}<>?"
 }
 
 variable "resource_suffix" {
@@ -793,7 +786,7 @@ resource "aws_db_instance" "main" {
 
   db_name  = "appdb"
   username = var.db_username
-  password = var.db_password
+  password = random_password.db.result
 
   vpc_security_group_ids = [aws_security_group.database.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -1038,10 +1031,17 @@ resource "aws_lb_listener" "app" {
   tags = local.common_tags
 }
 
-# WAF WebACL
+# AWS Provider for us-east-1 (required for CloudFront WAF)
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}
+
+# WAF WebACL for CloudFront (must be in us-east-1)
 resource "aws_wafv2_web_acl" "main" {
-  name  = "${var.project}-waf-${local.suffix}"
-  scope = "REGIONAL"
+  provider = aws.us_east_1
+  name     = "${var.project}-waf-${local.suffix}"
+  scope    = "CLOUDFRONT"
 
   default_action {
     allow {}
@@ -1151,6 +1151,7 @@ resource "aws_cloudfront_distribution" "main" {
   is_ipv6_enabled     = true
   comment             = "CloudFront distribution for ${var.project}"
   default_root_object = "index.html"
+  web_acl_id          = aws_wafv2_web_acl.main.arn
 
   default_cache_behavior {
     allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
