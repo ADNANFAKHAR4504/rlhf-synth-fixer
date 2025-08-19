@@ -41,40 +41,58 @@ describe('Terraform Configuration Unit Tests', () => {
         'aws_region',
         'secondary_aws_region',
         'db_password',
-        'allowed_cidr_blocks'
+        'allowed_cidr_blocks',
       ];
 
       requiredVariables.forEach(variable => {
-        expect(stackContent).toMatch(new RegExp(`variable\\s+"${variable}"\\s*{`));
+        expect(stackContent).toMatch(
+          new RegExp(`variable\\s+"${variable}"\\s*{`)
+        );
       });
     });
 
     test('db_password variable is marked as sensitive', () => {
-      expect(stackContent).toMatch(/variable\s+"db_password"\s*{[^}]*sensitive\s*=\s*true/);
+      expect(stackContent).toMatch(
+        /variable\s+"db_password"\s*{[^}]*sensitive\s*=\s*true/
+      );
     });
 
     test('allowed_cidr_blocks is defined as list of strings', () => {
-      expect(stackContent).toMatch(/variable\s+"allowed_cidr_blocks"\s*{[^}]*type\s*=\s*list\(string\)/);
+      expect(stackContent).toMatch(
+        /variable\s+"allowed_cidr_blocks"\s*{[^}]*type\s*=\s*list\(string\)/
+      );
     });
 
     test('create_vpcs variable is defined as boolean', () => {
-      expect(stackContent).toMatch(/variable\s+"create_vpcs"\s*{[^}]*type\s*=\s*bool/);
+      expect(stackContent).toMatch(
+        /variable\s+"create_vpcs"\s*{[^}]*type\s*=\s*bool/
+      );
     });
   });
 
   describe('Data Sources', () => {
     test('defines AMI data sources for both regions', () => {
-      expect(stackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux_us_east_1"/);
-      expect(stackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux_eu_west_1"/);
+      expect(stackContent).toMatch(
+        /data\s+"aws_ami"\s+"amazon_linux_ap_south_1"/
+      );
+      expect(stackContent).toMatch(
+        /data\s+"aws_ami"\s+"amazon_linux_ap_southeast_2"/
+      );
     });
 
     test('AMI data sources use correct filters', () => {
-      expect(stackContent).toMatch(/filter\s*{\s*name\s*=\s*"name"\s*values\s*=\s*\["amzn2-ami-hvm-\*-x86_64-gp2"\]/);
-      expect(stackContent).toMatch(/filter\s*{\s*name\s*=\s*"virtualization-type"\s*values\s*=\s*\["hvm"\]/);
+      expect(stackContent).toMatch(
+        /filter\s*{\s*name\s*=\s*"name"\s*values\s*=\s*\["amzn2-ami-hvm-\*-x86_64-gp2"\]/
+      );
+      expect(stackContent).toMatch(
+        /filter\s*{\s*name\s*=\s*"virtualization-type"\s*values\s*=\s*\["hvm"\]/
+      );
     });
 
     test('secondary AMI data source uses correct provider', () => {
-      expect(stackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux_eu_west_1"\s*{[^}]*provider\s*=\s*aws\.eu_west_1/);
+      expect(stackContent).toMatch(
+        /data\s+"aws_ami"\s+"amazon_linux_ap_southeast_2"\s*{[^}]*provider\s*=\s*aws\.ap_southeast_2/
+      );
     });
   });
 
@@ -94,15 +112,23 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('secondary KMS resources use correct provider', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_kms_key"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.eu_west_1/);
-      expect(stackContent).toMatch(/resource\s+"aws_kms_alias"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.eu_west_1/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_kms_key"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.ap_southeast_2/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_kms_alias"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.ap_southeast_2/
+      );
     });
   });
 
   describe('VPC Configuration', () => {
     test('defines VPCs for both regions with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_vpc"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_vpc"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
 
     test('VPCs have correct CIDR blocks', () => {
@@ -116,21 +142,35 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('secondary VPC uses correct provider', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.eu_west_1/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_vpc"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.ap_southeast_2/
+      );
     });
   });
 
   describe('Networking Components', () => {
     test('defines internet gateways with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_internet_gateway"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_internet_gateway"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
 
     test('defines subnets for both regions with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"primary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"primary_private"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"secondary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"secondary_private"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_subnet"\s+"primary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_subnet"\s+"primary_private"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_subnet"\s+"secondary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_subnet"\s+"secondary_private"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
 
     test('public subnets have auto-assign public IP enabled', () => {
@@ -138,38 +178,58 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('defines route tables with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"primary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"secondary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_route_table"\s+"primary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_route_table"\s+"secondary_public"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
   });
 
   describe('VPC Peering', () => {
     test('defines VPC peering connection with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_vpc_peering_connection"\s+"primary_to_secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_vpc_peering_connection"\s+"primary_to_secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
 
     test('defines VPC peering accepter with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_vpc_peering_connection_accepter"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_vpc_peering_connection_accepter"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
 
     test('defines routes for peering with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_route"\s+"primary_to_secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_route"\s+"secondary_to_primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_route"\s+"primary_to_secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_route"\s+"secondary_to_primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
   });
 
   describe('Security Groups', () => {
     test('defines security groups for both regions with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_security_group"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_security_group"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
 
     test('SSH access is restricted to allowed CIDR blocks', () => {
-      expect(stackContent).toMatch(/cidr_blocks\s*=\s*var\.allowed_cidr_blocks/);
+      expect(stackContent).toMatch(
+        /cidr_blocks\s*=\s*var\.allowed_cidr_blocks/
+      );
     });
 
     test('security groups have proper egress rules', () => {
-      expect(stackContent).toMatch(/egress\s*{[^}]*from_port\s*=\s*0[^}]*to_port\s*=\s*0[^}]*protocol\s*=\s*"-1"/);
+      expect(stackContent).toMatch(
+        /egress\s*{[^}]*from_port\s*=\s*0[^}]*to_port\s*=\s*0[^}]*protocol\s*=\s*"-1"/
+      );
     });
   });
 
@@ -184,51 +244,85 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('S3 buckets have encryption enabled', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"secondary"/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"primary"/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"secondary"/
+      );
     });
 
     test('S3 buckets use KMS encryption', () => {
-      expect(stackContent).toMatch(/kms_master_key_id\s*=\s*aws_kms_key\.primary\.arn/);
-      expect(stackContent).toMatch(/kms_master_key_id\s*=\s*aws_kms_key\.secondary\.arn/);
+      expect(stackContent).toMatch(
+        /kms_master_key_id\s*=\s*aws_kms_key\.primary\.arn/
+      );
+      expect(stackContent).toMatch(
+        /kms_master_key_id\s*=\s*aws_kms_key\.secondary\.arn/
+      );
     });
 
     test('S3 buckets have versioning enabled', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"secondary"/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_s3_bucket_versioning"\s+"primary"/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_s3_bucket_versioning"\s+"secondary"/
+      );
     });
 
     test('defines S3 replication configuration with source selection criteria', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_replication_configuration"\s+"primary"/);
-      expect(stackContent).toMatch(/source_selection_criteria\s*{[^}]*sse_kms_encrypted_objects/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_s3_bucket_replication_configuration"\s+"primary"/
+      );
+      expect(stackContent).toMatch(
+        /source_selection_criteria\s*{[^}]*sse_kms_encrypted_objects/
+      );
     });
   });
 
   describe('DynamoDB Configuration', () => {
     test('defines DynamoDB tables for both regions', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_dynamodb_table"\s+"secondary"/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_dynamodb_table"\s+"primary"/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_dynamodb_table"\s+"secondary"/
+      );
     });
 
     test('DynamoDB tables have encryption enabled', () => {
-      expect(stackContent).toMatch(/server_side_encryption\s*{[^}]*enabled\s*=\s*true/);
+      expect(stackContent).toMatch(
+        /server_side_encryption\s*{[^}]*enabled\s*=\s*true/
+      );
     });
 
     test('DynamoDB tables use AWS-managed encryption', () => {
-      expect(stackContent).toMatch(/server_side_encryption\s*{[^}]*enabled\s*=\s*true[^}]*}/);
-      expect(stackContent).not.toMatch(/kms_key_arn\s*=\s*aws_kms_key\.primary\.arn/);
-      expect(stackContent).not.toMatch(/kms_key_arn\s*=\s*aws_kms_key\.secondary\.arn/);
+      expect(stackContent).toMatch(
+        /server_side_encryption\s*{[^}]*enabled\s*=\s*true[^}]*}/
+      );
+      expect(stackContent).not.toMatch(
+        /kms_key_arn\s*=\s*aws_kms_key\.primary\.arn/
+      );
+      expect(stackContent).not.toMatch(
+        /kms_key_arn\s*=\s*aws_kms_key\.secondary\.arn/
+      );
     });
 
     test('does not use deprecated Global Table v2017 resource', () => {
-      expect(stackContent).not.toMatch(/resource\s+"aws_dynamodb_global_table"\s+"main"/);
+      expect(stackContent).not.toMatch(
+        /resource\s+"aws_dynamodb_global_table"\s+"main"/
+      );
     });
   });
 
   describe('RDS Configuration', () => {
     test('defines RDS instances for both regions with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_db_instance"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_db_instance"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
 
     test('RDS instances have encryption enabled', () => {
@@ -236,8 +330,12 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('RDS instances use KMS encryption', () => {
-      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.primary\.arn/);
-      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.secondary\.arn/);
+      expect(stackContent).toMatch(
+        /kms_key_id\s*=\s*aws_kms_key\.primary\.arn/
+      );
+      expect(stackContent).toMatch(
+        /kms_key_id\s*=\s*aws_kms_key\.secondary\.arn/
+      );
     });
 
     test('RDS instances are Multi-AZ', () => {
@@ -249,34 +347,56 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('defines DB subnet groups with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_db_subnet_group"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_db_subnet_group"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
   });
 
   describe('EC2 Configuration', () => {
     test('defines EC2 instances for both regions with conditional creation', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_instance"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
-      expect(stackContent).toMatch(/resource\s+"aws_instance"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_instance"\s+"primary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
+      expect(stackContent).toMatch(
+        /resource\s+"aws_instance"\s+"secondary"\s*{[^}]*count\s*=\s*var\.create_vpcs/
+      );
     });
 
     test('EC2 instances use correct AMI data sources', () => {
-      expect(stackContent).toMatch(/ami\s*=\s*data\.aws_ami\.amazon_linux_us_east_1\.id/);
-      expect(stackContent).toMatch(/ami\s*=\s*data\.aws_ami\.amazon_linux_eu_west_1\.id/);
+      expect(stackContent).toMatch(
+        /ami\s*=\s*data\.aws_ami\.amazon_linux_ap_south_1\.id/
+      );
+      expect(stackContent).toMatch(
+        /ami\s*=\s*data\.aws_ami\.amazon_linux_ap_southeast_2\.id/
+      );
     });
 
     test('EC2 instances use variables for instance type and optional key pair', () => {
-      expect(stackContent).toMatch(/instance_type\s*=\s*var\.ec2_instance_type/);
-      expect(stackContent).toMatch(/key_name\s*=\s*var\.ec2_key_pair_name\s*!=\s*""\s*\?\s*var\.ec2_key_pair_name\s*:\s*null/);
+      expect(stackContent).toMatch(
+        /instance_type\s*=\s*var\.ec2_instance_type/
+      );
+      expect(stackContent).toMatch(
+        /key_name\s*=\s*var\.ec2_key_pair_name\s*!=\s*""\s*\?\s*var\.ec2_key_pair_name\s*:\s*null/
+      );
     });
 
     test('EC2 root block devices are encrypted', () => {
-      expect(stackContent).toMatch(/root_block_device\s*{[^}]*encrypted\s*=\s*true/);
+      expect(stackContent).toMatch(
+        /root_block_device\s*{[^}]*encrypted\s*=\s*true/
+      );
     });
 
     test('EC2 root block devices use KMS encryption', () => {
-      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.primary\.arn/);
-      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.secondary\.arn/);
+      expect(stackContent).toMatch(
+        /kms_key_id\s*=\s*aws_kms_key\.primary\.arn/
+      );
+      expect(stackContent).toMatch(
+        /kms_key_id\s*=\s*aws_kms_key\.secondary\.arn/
+      );
     });
   });
 
@@ -286,7 +406,9 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('defines IAM policy for global access', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_iam_policy"\s+"global_policy"/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_iam_policy"\s+"global_policy"/
+      );
     });
 
     test('IAM role has proper assume role policy', () => {
@@ -308,32 +430,46 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('CloudTrail uses S3 logging bucket', () => {
-      expect(stackContent).toMatch(/s3_bucket_name\s*=\s*aws_s3_bucket\.logging\.bucket/);
+      expect(stackContent).toMatch(
+        /s3_bucket_name\s*=\s*aws_s3_bucket\.logging\.bucket/
+      );
     });
 
     test('CloudTrail uses KMS encryption', () => {
-      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.primary\.arn/);
-      expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.secondary\.arn/);
+      expect(stackContent).toMatch(
+        /kms_key_id\s*=\s*aws_kms_key\.primary\.arn/
+      );
+      expect(stackContent).toMatch(
+        /kms_key_id\s*=\s*aws_kms_key\.secondary\.arn/
+      );
     });
 
     test('CloudTrail has event selectors configured', () => {
-      expect(stackContent).toMatch(/event_selector\s*{[^}]*read_write_type\s*=\s*"All"/);
+      expect(stackContent).toMatch(
+        /event_selector\s*{[^}]*read_write_type\s*=\s*"All"/
+      );
     });
   });
 
   describe('S3 Bucket Policies', () => {
     test('defines S3 bucket policy for CloudTrail', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"logging"/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_s3_bucket_policy"\s+"logging"/
+      );
     });
 
     test('S3 bucket policy allows CloudTrail access', () => {
-      expect(stackContent).toMatch(/Service\s*=\s*"cloudtrail\.amazonaws\.com"/);
+      expect(stackContent).toMatch(
+        /Service\s*=\s*"cloudtrail\.amazonaws\.com"/
+      );
     });
   });
 
   describe('Lifecycle Configuration', () => {
     test('defines S3 lifecycle configuration for logging', () => {
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"logging"/);
+      expect(stackContent).toMatch(
+        /resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"logging"/
+      );
     });
 
     test('lifecycle configuration has expiration rules', () => {
@@ -356,7 +492,7 @@ describe('Terraform Configuration Unit Tests', () => {
         'primary_kms_key_id',
         'secondary_kms_key_id',
         'dynamodb_table_name',
-        'vpc_peering_connection_id'
+        'vpc_peering_connection_id',
       ];
 
       requiredOutputs.forEach(output => {
@@ -364,27 +500,41 @@ describe('Terraform Configuration Unit Tests', () => {
       });
 
       // Check that VPC-dependent outputs use conditional logic
-      expect(stackContent).toMatch(/output\s+"primary_vpc_id"\s*{[^}]*var\.create_vpcs\s*\?\s*aws_vpc\.primary\[0\]\.id\s*:\s*null/);
-      expect(stackContent).toMatch(/output\s+"secondary_vpc_id"\s*{[^}]*var\.create_vpcs\s*\?\s*aws_vpc\.secondary\[0\]\.id\s*:\s*null/);
+      expect(stackContent).toMatch(
+        /output\s+"primary_vpc_id"\s*{[^}]*var\.create_vpcs\s*\?\s*aws_vpc\.primary\[0\]\.id\s*:\s*null/
+      );
+      expect(stackContent).toMatch(
+        /output\s+"secondary_vpc_id"\s*{[^}]*var\.create_vpcs\s*\?\s*aws_vpc\.secondary\[0\]\.id\s*:\s*null/
+      );
     });
 
     test('sensitive outputs are marked as sensitive', () => {
-      expect(stackContent).toMatch(/output\s+"primary_rds_endpoint"\s*{[^}]*sensitive\s*=\s*true/);
-      expect(stackContent).toMatch(/output\s+"secondary_rds_endpoint"\s*{[^}]*sensitive\s*=\s*true/);
+      expect(stackContent).toMatch(
+        /output\s+"primary_rds_endpoint"\s*{[^}]*sensitive\s*=\s*true/
+      );
+      expect(stackContent).toMatch(
+        /output\s+"secondary_rds_endpoint"\s*{[^}]*sensitive\s*=\s*true/
+      );
     });
   });
 
   describe('Provider Configuration', () => {
     test('provider.tf defines required providers', () => {
-      expect(providerContent).toMatch(/required_providers\s*{[^}]*aws\s*=\s*{[^}]*source\s*=\s*"hashicorp\/aws"/);
+      expect(providerContent).toMatch(
+        /required_providers\s*{[^}]*aws\s*=\s*{[^}]*source\s*=\s*"hashicorp\/aws"/
+      );
     });
 
     test('provider.tf defines primary AWS provider', () => {
-      expect(providerContent).toMatch(/provider\s+"aws"\s*{[^}]*region\s*=\s*"us-east-1"/);
+      expect(providerContent).toMatch(
+        /provider\s+"aws"\s*{[^}]*region\s*=\s*"ap-south-1"/
+      );
     });
 
     test('provider.tf defines secondary AWS provider with alias', () => {
-      expect(providerContent).toMatch(/provider\s+"aws"\s*{[^}]*alias\s*=\s*"eu_west_1"[^}]*region\s*=\s*"eu-west-1"/);
+      expect(providerContent).toMatch(
+        /provider\s+"aws"\s*{[^}]*alias\s*=\s*"ap_southeast_2"[^}]*region\s*=\s*"ap-southeast-2"/
+      );
     });
   });
 
@@ -414,11 +564,15 @@ describe('Terraform Configuration Unit Tests', () => {
     });
 
     test('S3 replication has proper dependencies', () => {
-      expect(stackContent).toMatch(/depends_on\s*=\s*\[aws_s3_bucket_versioning\.primary\]/);
+      expect(stackContent).toMatch(
+        /depends_on\s*=\s*\[aws_s3_bucket_versioning\.primary\]/
+      );
     });
-    
+
     test('does not define deprecated DynamoDB global table resource', () => {
-      expect(stackContent).not.toMatch(/resource\s+"aws_dynamodb_global_table"\s+"main"/);
+      expect(stackContent).not.toMatch(
+        /resource\s+"aws_dynamodb_global_table"\s+"main"/
+      );
     });
   });
 });
