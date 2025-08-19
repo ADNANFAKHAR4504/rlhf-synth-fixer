@@ -22,7 +22,6 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import { GetCallerIdentityCommand, STSClient } from '@aws-sdk/client-sts';
-import * as fs from 'fs';
 import * as path from 'path';
 
 const region = 'us-east-1';
@@ -33,8 +32,13 @@ const kmsClient = new KMSClient({ region });
 const cloudTrailClient = new CloudTrailClient({ region });
 const iamClient = new IAMClient({ region });
 
-const outputsPath = path.join(__dirname, '../lib/outputs.json');
-const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+import { execSync } from 'child_process';
+
+const outputs = JSON.parse(
+  execSync('terraform output -json', {
+    cwd: path.join(__dirname, '../lib'),
+  }).toString()
+);
 
 const validateS3BucketLocation = (
   locationConstraint: string | undefined,

@@ -64,7 +64,8 @@ module "compute" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  project_name = var.project_name
+  project_name         = var.project_name
+  cloudtrail_bucket_name = module.storage.s3_data_bucket_name
 }
 
 output "vpc_id" {
