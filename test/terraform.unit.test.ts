@@ -1,73 +1,99 @@
-import { describe, expect, test } from '@jest/globals';
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const STACK_REL = '../lib/tap_stack.tf';
-const stackPath = path.resolve(__dirname, STACK_REL);
+const TF_PATH = path.resolve(__dirname, '../lib/tap_stack.tf');
 
-describe('Terraform Infrastructure Unit Tests', () => {
-  test('tap_stack.tf exists', () => {
-    const exists = fs.existsSync(stackPath);
-    if (!exists) {
-      console.error(`[unit] Expected stack at: ${stackPath}`);
-    }
-    expect(exists).toBe(true);
-  });
-
-  test('does NOT declare provider in tap_stack.tf (provider.tf owns providers)', () => {
-    const content = fs.readFileSync(stackPath, 'utf8');
-    expect(content).not.toMatch(/\bprovider\s+"aws"\s*{/);
-  });
-
-  test('declares aws_region variable in vars.tf', () => {
-    const varsPath = path.resolve(__dirname, '../lib/vars.tf');
-    const content = fs.readFileSync(varsPath, 'utf8');
-    expect(content).toMatch(/variable\s+"aws_region"\s*{/);
-  });
-});
-
-describe('Module Structure Validation', () => {
-  const modulesDir = path.resolve(__dirname, '../lib/modules');
-  const modules = fs
-    .readdirSync(modulesDir)
-    .filter(file => fs.statSync(path.join(modulesDir, file)).isDirectory());
-
-  modules.forEach(module => {
-    test(`${module} module exists and has required files`, () => {
-      const moduleDir = path.resolve(modulesDir, module);
-      expect(fs.existsSync(path.join(moduleDir, 'main.tf'))).toBe(true);
-      expect(fs.existsSync(path.join(moduleDir, 'vars.tf'))).toBe(true);
-      expect(fs.existsSync(path.join(moduleDir, 'outputs.tf'))).toBe(true);
-    });
-  });
-});
-
-describe('Module Integration Tests', () => {
-  let stackContent: string;
-
+describe('Terraform Core Infrastructure (static checks)', () => {
+  let hcl: string;
   beforeAll(() => {
-    stackContent = fs.readFileSync(stackPath, 'utf8');
+    const exists = fs.existsSync(TF_PATH);
+    if (!exists) {
+      throw new Error(`Terraform file not found at ${TF_PATH}`);
+    }
+    hcl = fs.readFileSync(TF_PATH, 'utf8');
   });
 
-  const modules = fs
-    .readdirSync(path.resolve(__dirname, '../lib/modules'))
-    .filter(file =>
-      fs
-        .statSync(path.join(path.resolve(__dirname, '../lib/modules'), file))
-        .isDirectory()
-    );
-
-  modules.forEach(module => {
-    test(`main stack includes ${module} module`, () => {
-      expect(stackContent).toMatch(new RegExp(`module\\s+"${module}"\\s*{`));
-      expect(stackContent).toMatch(
-        new RegExp(`source\\s*=\\s*"\\.\\/modules\\/${module}"`)
-      );
+  test('defines all required modules', () => {
+    const modules = [
+      'networking',
+      'security',
+      'compute',
+      'database',
+      'storage',
+      'iam',
+      'monitoring',
+    ];
+    modules.forEach(module => {
+      expect(hcl).toMatch(new RegExp(`module\\s+"${module}"\\s*{`, 'm'));
     });
   });
 
-  test('modules receive required variables', () => {
-    expect(stackContent).toMatch(/project_name\s*=\s*var\.project_name/);
-    expect(stackContent).toMatch(/environment\s*=\s*var\.environment/);
+  test('networking module is configured correctly', () => {
+    const networkingBlock = hcl.match(
+      /module\s+"networking"\s*{([\s\S]*?)}/m
+    )?.[0];
+    expect(networkingBlock).toBeTruthy();
+    expect(networkingBlock).toMatch(/source\s*=\s*"\.\/modules\/networking"/);
+    expect(networkingBlock).toMatch(/vpc_cidr\s*=\s*var\.vpc_cidr/);
+  });
+
+  test('security module is configured correctly', () => {
+    const securityBlock = hcl.match(/module\s+"security"\s*{([\s\S]*?)}/m)?.[0];
+    expect(securityBlock).toBeTruthy();
+    expect(securityBlock).toMatch(/source\s*=\s*"\.\/modules\/security"/);
+    expect(securityBlock).toMatch(/vpc_id\s*=\s*module\.networking\.vpc_id/);
+  });
+
+  test('compute module is configured correctly', () => {
+    const computeBlock = hcl.match(/module\s+"compute"\s*{([\s\S]*?)}/m)?.[0];
+    expect(computeBlock).toBeTruthy();
+    expect(computeBlock).toMatch(/source\s*=\s*"\.\/modules\/compute"/);
+    expect(computeBlock).toMatch(/vpc_id\s*=\s*module\.networking\.vpc_id/);
+    expect(computeBlock).toMatch(/ec2_sg_id\s*=\s*module\.security\.ec2_sg_id/);
+  });
+
+  test('database module is configured correctly', () => {
+    const databaseBlock = hcl.match(/module\s+"database"\s*{([\s\S]*?)}/m)?.[0];
+    expect(databaseBlock).toBeTruthy();
+    expect(databaseBlock).toMatch(/source\s*=\s*"\.\/modules\/database"/);
+    expect(databaseBlock).toMatch(
+      /private_subnet_ids\s*=\s*module\.networking\.private_subnet_ids/
+    );
+    expect(databaseBlock).toMatch(
+      /rds_sg_id\s*=\s*module\.security\.rds_sg_id/
+    );
+  });
+
+  test('storage module is configured correctly', () => {
+    const storageBlock = hcl.match(/module\s+"storage"\s*{([\s\S]*?)}/m)?.[0];
+    expect(storageBlock).toBeTruthy();
+    expect(storageBlock).toMatch(/source\s*=\s*"\.\/modules\/storage"/);
+    expect(storageBlock).toMatch(/vpc_id\s*=\s*module\.networking\.vpc_id/);
+  });
+
+  test('iam module is configured correctly', () => {
+    const iamBlock = hcl.match(/module\s+"iam"\s*{([\s\S]*?)}/m)?.[0];
+    expect(iamBlock).toBeTruthy();
+    expect(iamBlock).toMatch(/source\s*=\s*"\.\/modules\/iam"/);
+  });
+
+  test('monitoring module is configured correctly', () => {
+    const monitoringBlock = hcl.match(
+      /module\s+"monitoring"\s*{([\s\S]*?)}/m
+    )?.[0];
+    expect(monitoringBlock).toBeTruthy();
+    expect(monitoringBlock).toMatch(/source\s*=\s*"\.\/modules\/monitoring"/);
+  });
+
+  test('outputs are wired correctly', () => {
+    expect(hcl).toMatch(/output\s+"vpc_id"/);
+    expect(hcl).toMatch(/output\s+"public_subnet_ids"/);
+    expect(hcl).toMatch(/output\s+"private_subnet_ids"/);
+    expect(hcl).toMatch(/output\s+"ec2_sg_id"/);
+    expect(hcl).toMatch(/output\s+"rds_sg_id"/);
+    expect(hcl).toMatch(/output\s+"alb_dns_name"/);
+    expect(hcl).toMatch(/output\s+"rds_endpoint"/);
+    expect(hcl).toMatch(/output\s+"s3_data_bucket_name"/);
+    expect(hcl).toMatch(/output\s+"cloudtrail_arn"/);
   });
 });

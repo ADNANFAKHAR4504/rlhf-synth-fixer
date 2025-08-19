@@ -1,32 +1,55 @@
-resource "aws_launch_configuration" "main" {
-  name_prefix          = "${var.project_name}-"
-  image_id             = var.ami_id
-  instance_type        = var.instance_type
-  security_groups      = [var.ec2_sg_id]
-  iam_instance_profile = var.instance_profile_name
-}
+resource "aws_launch_template" "main" {
+  name_prefix   = "${var.project_name}-"
+  image_id      = var.ami_id
+  instance_type = var.instance_type
 
-resource "aws_autoscaling_group" "main" {
-  name                 = "${var.project_name}-asg"
-  launch_configuration = aws_launch_configuration.main.id
-  min_size             = 1
-  max_size             = 3
-  desired_capacity     = 2
-  vpc_zone_identifier  = var.private_subnet_ids
+  iam_instance_profile {
+    name = var.instance_profile_name
+  }
 
-  tag {
-    key                 = "Name"
-    value               = "${var.project_name}-instance"
-    propagate_at_launch = true
+  vpc_security_group_ids = [var.ec2_sg_id]
+
+  tags = {
+    Name        = "${var.project_name}-launch-template"
+    Project     = var.project_name
+    Environment = var.environment
   }
 }
 
+resource "aws_autoscaling_group" "main" {
+  name_prefix = "${var.project_name}-asg"
+  desired_capacity   = 2
+  max_size           = 3
+  min_size           = 1
+
+  launch_template {
+    id      = aws_launch_template.main.id
+    version = "$Latest"
+  }
+
+  vpc_zone_identifier = var.private_subnet_ids
+
+  target_group_arns = [aws_lb_target_group.main.arn]
+
+  tags = [{
+    key                 = "Name"
+    value               = "${var.project_name}-ec2-instance"
+    propagate_at_launch = true
+  }]
+}
+
 resource "aws_lb" "main" {
-  name               = "${var.project_name}-lb"
+  name               = "${var.project_name}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [var.alb_sg_id]
   subnets            = var.public_subnet_ids
+
+  tags = {
+    Name        = "${var.project_name}-alb"
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
 resource "aws_lb_target_group" "main" {
@@ -34,11 +57,27 @@ resource "aws_lb_target_group" "main" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = var.vpc_id
+
+  health_check {
+    path                = "/"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name        = "${var.project_name}-tg"
+    Project     = var.project_name
+    Environment = var.environment
+  }
 }
 
-resource "aws_lb_listener" "main" {
+resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
-  port              = "80"
+  port              = 80
   protocol          = "HTTP"
 
   default_action {
