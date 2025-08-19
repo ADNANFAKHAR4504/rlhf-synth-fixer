@@ -5,6 +5,7 @@
 resource "aws_s3_bucket" "secure_prod" {
   bucket = "${var.bucket_name}-${var.environment}"
   tags   = merge(var.bucket_tags, { Environment = var.environment })
+}
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "secure_prod_encryption" {
   bucket = aws_s3_bucket.secure_prod.id
@@ -143,12 +144,13 @@ variable "aws_region" {
   type        = string
   default     = "us-east-1"
 }
-variable "bucket_region" {
+
 variable "bucket_region" {
   description = "Region for the S3 bucket (e.g., us-west-2)"
   type        = string
   default     = "us-west-2"
 }
+
 variable "bucket_name" {
   default     = "devs3-bucket"
 }
@@ -270,6 +272,8 @@ resource "aws_secretsmanager_secret_version" "rds_password_version" {
 
 ########################
 # CloudWatch Dashboard with EC2, RDS, and Auto Scaling Widgets
+########################
+
 resource "aws_cloudwatch_dashboard" "secure_prod" {
   dashboard_name = "secure-dashboard-${var.environment}"
   dashboard_body = jsonencode({
