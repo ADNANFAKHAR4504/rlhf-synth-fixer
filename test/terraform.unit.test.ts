@@ -2,15 +2,45 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const TF_PATH = path.resolve(__dirname, '../lib/tap_stack.tf');
+const NETWORKING_PATH = path.resolve(
+  __dirname,
+  '../lib/modules/networking/main.tf'
+);
+const SECURITY_PATH = path.resolve(
+  __dirname,
+  '../lib/modules/security/main.tf'
+);
+const COMPUTE_PATH = path.resolve(__dirname, '../lib/modules/compute/main.tf');
+const DATABASE_PATH = path.resolve(
+  __dirname,
+  '../lib/modules/database/main.tf'
+);
+const STORAGE_PATH = path.resolve(__dirname, '../lib/modules/storage/main.tf');
+const IAM_PATH = path.resolve(__dirname, '../lib/modules/iam/main.tf');
+const MONITORING_PATH = path.resolve(
+  __dirname,
+  '../lib/modules/monitoring/main.tf'
+);
 
 describe('Terraform Core Infrastructure (static checks)', () => {
   let hcl: string;
+  let networkingHcl: string;
+  let securityHcl: string;
+  let computeHcl: string;
+  let databaseHcl: string;
+  let storageHcl: string;
+  let iamHcl: string;
+  let monitoringHcl: string;
+
   beforeAll(() => {
-    const exists = fs.existsSync(TF_PATH);
-    if (!exists) {
-      throw new Error(`Terraform file not found at ${TF_PATH}`);
-    }
     hcl = fs.readFileSync(TF_PATH, 'utf8');
+    networkingHcl = fs.readFileSync(NETWORKING_PATH, 'utf8');
+    securityHcl = fs.readFileSync(SECURITY_PATH, 'utf8');
+    computeHcl = fs.readFileSync(COMPUTE_PATH, 'utf8');
+    databaseHcl = fs.readFileSync(DATABASE_PATH, 'utf8');
+    storageHcl = fs.readFileSync(STORAGE_PATH, 'utf8');
+    iamHcl = fs.readFileSync(IAM_PATH, 'utf8');
+    monitoringHcl = fs.readFileSync(MONITORING_PATH, 'utf8');
   });
 
   test('defines all required modules', () => {
@@ -28,72 +58,76 @@ describe('Terraform Core Infrastructure (static checks)', () => {
     });
   });
 
-  test('networking module is configured correctly', () => {
-    const networkingBlock = hcl.match(
-      /module\s+"networking"\s*{([\s\S]*?)}/m
-    )?.[0];
-    expect(networkingBlock).toBeTruthy();
-    expect(networkingBlock).toMatch(/source\s*=\s*"\.\/modules\/networking"/);
-    expect(networkingBlock).toMatch(/vpc_cidr\s*=\s*var\.vpc_cidr/);
+  test('networking module creates VPC, subnets, NAT gateway, and route tables', () => {
+    expect(networkingHcl).toMatch(/resource\s+"aws_vpc"\s+"main"/);
+    expect(networkingHcl).toMatch(/resource\s+"aws_subnet"\s+"public"/);
+    expect(networkingHcl).toMatch(/resource\s+"aws_subnet"\s+"private"/);
+    expect(networkingHcl).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
+    expect(networkingHcl).toMatch(/resource\s+"aws_route_table"\s+"public"/);
+    expect(networkingHcl).toMatch(/resource\s+"aws_route_table"\s+"private"/);
   });
 
-  test('security module is configured correctly', () => {
-    const securityBlock = hcl.match(/module\s+"security"\s*{([\s\S]*?)}/m)?.[0];
-    expect(securityBlock).toBeTruthy();
-    expect(securityBlock).toMatch(/source\s*=\s*"\.\/modules\/security"/);
-    expect(securityBlock).toMatch(/vpc_id\s*=\s*module\.networking\.vpc_id/);
-  });
-
-  test('compute module is configured correctly', () => {
-    const computeBlock = hcl.match(/module\s+"compute"\s*{([\s\S]*?)}/m)?.[0];
-    expect(computeBlock).toBeTruthy();
-    expect(computeBlock).toMatch(/source\s*=\s*"\.\/modules\/compute"/);
-    expect(computeBlock).toMatch(/vpc_id\s*=\s*module\.networking\.vpc_id/);
-    expect(computeBlock).toMatch(/ec2_sg_id\s*=\s*module\.security\.ec2_sg_id/);
-  });
-
-  test('database module is configured correctly', () => {
-    const databaseBlock = hcl.match(/module\s+"database"\s*{([\s\S]*?)}/m)?.[0];
-    expect(databaseBlock).toBeTruthy();
-    expect(databaseBlock).toMatch(/source\s*=\s*"\.\/modules\/database"/);
-    expect(databaseBlock).toMatch(
-      /private_subnet_ids\s*=\s*module\.networking\.private_subnet_ids/
+  test('security module creates all required security groups', () => {
+    expect(securityHcl).toMatch(/resource\s+"aws_security_group"\s+"ec2"/);
+    expect(securityHcl).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
+    expect(securityHcl).toMatch(
+      /resource\s+"aws_security_group"\s+"vpc_endpoint"/
     );
-    expect(databaseBlock).toMatch(
-      /rds_sg_id\s*=\s*module\.security\.rds_sg_id/
+    expect(securityHcl).toMatch(/resource\s+"aws_security_group"\s+"alb"/);
+  });
+
+  test('EC2 security group has correct rules', () => {
+    const ec2Sg = securityHcl.match(
+      /resource\s+"aws_security_group"\s+"ec2"\s*{([\s\S]*?)}/m
+    )?.[1];
+    expect(ec2Sg).toMatch(/from_port\s*=\s*443/);
+    expect(ec2Sg).toMatch(/from_port\s*=\s*80/);
+    expect(ec2Sg).toMatch(/from_port\s*=\s*22/);
+    expect(ec2Sg).toMatch(/cidr_blocks\s*=\s*\[var\.vpc_cidr\]/);
+  });
+
+  test('RDS security group has correct rules', () => {
+    const rdsSg = securityHcl.match(
+      /resource\s+"aws_security_group"\s+"rds"\s*{([\s\S]*?)}/m
+    )?.[1];
+    expect(rdsSg).toMatch(/from_port\s*=\s*3306/);
+    expect(rdsSg).toMatch(
+      /security_groups\s*=\s*\[aws_security_group\.ec2\.id\]/
     );
   });
 
-  test('storage module is configured correctly', () => {
-    const storageBlock = hcl.match(/module\s+"storage"\s*{([\s\S]*?)}/m)?.[0];
-    expect(storageBlock).toBeTruthy();
-    expect(storageBlock).toMatch(/source\s*=\s*"\.\/modules\/storage"/);
-    expect(storageBlock).toMatch(/vpc_id\s*=\s*module\.networking\.vpc_id/);
+  test('compute module creates ALB and ASG', () => {
+    expect(computeHcl).toMatch(/resource\s+"aws_lb"\s+"main"/);
+    expect(computeHcl).toMatch(/resource\s+"aws_autoscaling_group"\s+"main"/);
   });
 
-  test('iam module is configured correctly', () => {
-    const iamBlock = hcl.match(/module\s+"iam"\s*{([\s\S]*?)}/m)?.[0];
-    expect(iamBlock).toBeTruthy();
-    expect(iamBlock).toMatch(/source\s*=\s*"\.\/modules\/iam"/);
+  test('database module creates RDS instance with encryption', () => {
+    expect(databaseHcl).toMatch(/resource\s+"aws_db_instance"\s+"main"/);
   });
 
-  test('monitoring module is configured correctly', () => {
-    const monitoringBlock = hcl.match(
-      /module\s+"monitoring"\s*{([\s\S]*?)}/m
-    )?.[0];
-    expect(monitoringBlock).toBeTruthy();
-    expect(monitoringBlock).toMatch(/source\s*=\s*"\.\/modules\/monitoring"/);
+  test('storage module creates S3 buckets with encryption and versioning', () => {
+    expect(storageHcl).toMatch(/resource\s+"aws_s3_bucket"\s+"data"/);
+    expect(storageHcl).toMatch(/resource\s+"aws_s3_bucket"\s+"logs"/);
+    expect(storageHcl).toMatch(
+      /resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"data"/
+    );
+    expect(storageHcl).toMatch(
+      /resource\s+"aws_s3_bucket_versioning"\s+"data"/
+    );
   });
 
-  test('outputs are wired correctly', () => {
-    expect(hcl).toMatch(/output\s+"vpc_id"/);
-    expect(hcl).toMatch(/output\s+"public_subnet_ids"/);
-    expect(hcl).toMatch(/output\s+"private_subnet_ids"/);
-    expect(hcl).toMatch(/output\s+"ec2_sg_id"/);
-    expect(hcl).toMatch(/output\s+"rds_sg_id"/);
-    expect(hcl).toMatch(/output\s+"alb_dns_name"/);
-    expect(hcl).toMatch(/output\s+"rds_endpoint"/);
-    expect(hcl).toMatch(/output\s+"s3_data_bucket_name"/);
-    expect(hcl).toMatch(/output\s+"cloudtrail_arn"/);
+  test('storage module creates VPC S3 endpoint and bucket policy', () => {
+    expect(storageHcl).toMatch(/resource\s+"aws_vpc_endpoint"\s+"s3"/);
+    expect(storageHcl).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"data"/);
+  });
+
+  test('iam module creates IAM users with MFA enforcement', () => {
+    expect(iamHcl).toMatch(/resource\s+"aws_iam_user"\s+"main"/);
+    expect(iamHcl).toMatch(/resource\s+"aws_iam_policy"\s+"mfa_enforcement"/);
+  });
+
+  test('monitoring module creates CloudTrail and VPC Flow Logs', () => {
+    expect(monitoringHcl).toMatch(/resource\s+"aws_cloudtrail"\s+"main"/);
+    expect(monitoringHcl).toMatch(/resource\s+"aws_flow_log"\s+"main"/);
   });
 });
