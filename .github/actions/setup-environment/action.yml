@@ -58,7 +58,7 @@ runs:
       if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
       uses: actions/setup-java@v4
       with:
-        distribution: 'eclipse-temurin'
+        distribution: 'temurin'
         java-version: '17'
 
     - name: Setup Gradle
