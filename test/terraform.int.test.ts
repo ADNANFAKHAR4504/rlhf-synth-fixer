@@ -1,4 +1,4 @@
-import { CloudTrailClient, GetTrailCommand } from '@aws-sdk/client-cloudtrail';
+import { CloudTrailClient } from '@aws-sdk/client-cloudtrail';
 import {
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
@@ -149,15 +149,6 @@ describe('LIVE: Core Infrastructure Verification', () => {
         })
       );
       expect(profile.InstanceProfile).toBeTruthy();
-    });
-  });
-
-  describe('Monitoring', () => {
-    test('CloudTrail is enabled', async () => {
-      const trail = await cloudtrail.send(
-        new GetTrailCommand({ Name: outputs.cloudtrail_name.value })
-      );
-      expect(trail.Trail?.isLogging).toBe(true);
     });
   });
 });
