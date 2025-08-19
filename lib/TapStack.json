@@ -967,7 +967,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${Environment}-app-artifacts-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${Environment}-app-artifacts-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -1017,7 +1017,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${Environment}-logs-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "${Environment}-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
