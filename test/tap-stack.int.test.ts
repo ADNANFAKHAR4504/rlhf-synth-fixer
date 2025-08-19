@@ -97,6 +97,7 @@ import {
   IpRange,
   Route,
 } from '@aws-sdk/client-ec2';
+import { ListHostedZonesByNameCommand } from '@aws-sdk/client-route-53';
 
 
 
@@ -693,9 +694,25 @@ describe('High Availability Web Application Integration Tests', () => {
     });
 
     test('A records exist with failover configuration', async () => {
-  const hostedZoneId = outputs.HostedZoneId!;
+  // Resolve HostedZoneId either from outputs or by lookup
+  let zoneId = outputs.HostedZoneId as string | undefined;
+
+  if (!zoneId) {
+    const list = await route53Client.send(
+      new ListHostedZonesByNameCommand({ DNSName: outputs.ZoneName })
+    );
+    const hz = (list.HostedZones ?? []).find(
+      (z) => (z.Name ?? '').replace(/\.$/, '').toLowerCase() === outputs.ZoneName.toLowerCase()
+    );
+    expect(hz).toBeDefined(); // ensure we found the zone
+    zoneId = hz!.Id!; // often like "/hostedzone/Z123..."
+  }
+
+  // API expects the raw ID (no "/hostedzone/" prefix)
+  const normalizedZoneId = zoneId.replace(/^\/hostedzone\//, '');
+
   const recordsResp = await route53Client.send(
-    new ListResourceRecordSetsCommand({ HostedZoneId: hostedZoneId })
+    new ListResourceRecordSetsCommand({ HostedZoneId: normalizedZoneId })
   );
 
   const wantedName = `${outputs.AppFQDN}.`.toLowerCase();
@@ -703,17 +720,18 @@ describe('High Availability Web Application Integration Tests', () => {
     (r) => r.Type === 'A' && (r.Name ?? '').toLowerCase() === wantedName
   );
 
+  // We expect two A records for failover
   expect(appRecords.length).toBeGreaterThanOrEqual(2);
 
-  const primary = appRecords.find((r) => r.Failover === 'PRIMARY');
-  const secondary = appRecords.find((r) => r.Failover === 'SECONDARY');
+  const primary = appRecords.find((r) => (r.Failover ?? '').toUpperCase() === 'PRIMARY');
+  const secondary = appRecords.find((r) => (r.Failover ?? '').toUpperCase() === 'SECONDARY');
 
-  // Primary: make sure it’s an alias pointing at the expected ALB DNS
+  // Primary: alias to the ALB DNS
   expect(primary).toBeDefined();
   expect((primary!.AliasTarget?.DNSName ?? '').toLowerCase())
     .toContain(outputs.AlbDNS.toLowerCase());
 
-  // Only assert EvaluateTargetHealth if the API returned it
+  // Only assert EvaluateTargetHealth if present (AWS sometimes omits it)
   if (typeof primary!.AliasTarget?.EvaluateTargetHealth !== 'undefined') {
     expect(primary!.AliasTarget!.EvaluateTargetHealth).toBe(true);
   }
@@ -722,6 +740,7 @@ describe('High Availability Web Application Integration Tests', () => {
   expect(secondary).toBeDefined();
   expect((secondary?.ResourceRecords ?? [])[0]?.Value).toBe('198.51.100.10');
 });
+
 
   });
 
