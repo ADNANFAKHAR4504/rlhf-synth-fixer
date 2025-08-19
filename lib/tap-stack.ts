@@ -715,6 +715,10 @@ export class TapStack extends cdk.Stack {
       description: 'API Gateway endpoint URL',
       value: this.apiGateway.url,
     });
+    new cdk.CfnOutput(this, 'KmsKeyArn', {
+      description: 'KMS Key ARN for encryption',
+      value: this.kmsKey.keyArn,
+    });
 
     // You can still keep HealthCheckEndpoint
     new cdk.CfnOutput(this, 'HealthCheckEndpoint', {
