@@ -1,4 +1,3 @@
-// Integration tests for secure Terraform stack with IAM least privilege for sensitive S3 buckets
 import {
   DescribeTableCommand,
   DynamoDBClient
