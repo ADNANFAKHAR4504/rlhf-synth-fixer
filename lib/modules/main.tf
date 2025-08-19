@@ -362,52 +362,58 @@ resource "aws_vpc_endpoint" "s3" {
 # IAM
 ######################
 
+# S3 Data Bucket
+resource "aws_s3_bucket" "data" {
+  bucket = "${lower(var.project_name)}-data-${random_string.bucket_suffix.result}"
+  force_destroy = true
+
+  tags = {
+    Name = "${var.project_name}-data-bucket"
+    Type = "Data"
+  }
+}
+
+# S3 Logs Bucket
+resource "aws_s3_bucket" "logs" {
+  bucket = "${lower(var.project_name)}-logs-${random_string.bucket_suffix.result}"
+  force_destroy = true
+
+  tags = {
+    Name = "${var.project_name}-logs-bucket"
+    Type = "Logs"
+  }
+}
+
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
 # IAM User with MFA requirement
 data "aws_iam_user" "app_user" {
   user_name = "${var.project_name}-app-user"
 }
 
-output "vpc_cidr" {
-  value = aws_vpc.main.cidr_block
+# IAM Role for EC2
+resource "aws_iam_role" "ec2" {
+  name = "${var.project_name}-ec2-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
 }
 
-output "public_subnet_ids" {
-  value = aws_subnet.public[*].id
-}
-
-output "private_subnet_ids" {
-  value = aws_subnet.private[*].id
-}
-
-output "private_route_table_ids" {
-  value = aws_route_table.private[*].id
-}
-
-output "internet_gateway_id" {
-  value = aws_internet_gateway.main.id
-}
-
-output "ec2_sg_id" {
-  value = aws_security_group.ec2.id
-}
-
-output "alb_sg_id" {
-  value = aws_security_group.alb.id
-}
-
-output "rds_sg_id" {
-  value = aws_security_group.rds.id
-}
-
-output "vpc_endpoint_sg_id" {
-  value = aws_security_group.vpc_endpoint.id
-}
-
-
-output "kms_key_id" {
-  value = data.aws_kms_key.main.key_id
-}
-
-output "vpc_endpoint_s3_id" {
-  value = aws_vpc_endpoint.s3.id
+# IAM Instance Profile for EC2
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${var.project_name}-ec2-instance-profile"
+  role = aws_iam_role.ec2.name
 }
