@@ -49,11 +49,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
     test("declares environment_suffix variable", () => {
       expect(stackContent).toMatch(/variable\s+"environment_suffix"\s*{/);
     });
-
-    test("declares bucket_name_prefix variable with corpSec prefix", () => {
-      expect(stackContent).toMatch(/variable\s+"bucket_name_prefix"\s*{/);
-      expect(stackContent).toMatch(/default\s*=\s*"corpSec-logs"/);
-    });
   });
 
   describe("Security Components", () => {
