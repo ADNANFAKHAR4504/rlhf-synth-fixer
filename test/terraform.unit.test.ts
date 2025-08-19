@@ -304,7 +304,7 @@ describe('Terraform Unit Tests', () => {
         /resource\s+"aws_cloudwatch_metric_alarm"\s+"unauthorized_calls"/
       );
       expect(stackContent).toMatch(
-        /resource\s+"aws_cloudwatch_metric_filter"\s+"unauthorized_calls"/
+        /resource\s+"aws_cloudwatch_log_metric_filter"\s+"unauthorized_calls"/
       );
       expect(stackContent).toMatch(/UnauthorizedOperation/);
     });

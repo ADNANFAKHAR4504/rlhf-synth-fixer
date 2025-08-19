@@ -37,6 +37,7 @@ notification_email = "test@example.com"
 allowed_ssh_cidrs = ["10.0.0.0/8"]
 instance_type = "t3.micro"
 enable_vpc_flow_logs = true
+enable_cloudtrail = false
 tags = {
   TestRun = "integration"
   Owner = "terraform-test"
@@ -165,7 +166,6 @@ tags = {
           'aws_nat_gateway.main',
           'aws_s3_bucket.logging',
           'aws_s3_bucket.data',
-          'aws_cloudtrail.main',
           'aws_autoscaling_group.main',
           'aws_lambda_function.sg_remediation',
           'aws_sns_topic.alerts',

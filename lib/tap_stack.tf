@@ -26,6 +26,11 @@ variable "environment_suffix" {
   default     = "dev"
   description = "Unique suffix to avoid resource naming conflicts between deployments"
 }
+variable "enable_cloudtrail" {
+  type        = bool
+  default     = true
+  description = "Create a dedicated CloudTrail for this stack"
+}
 variable "notification_email" {
   type = string
   validation {
@@ -362,7 +367,7 @@ resource "aws_iam_role_policy" "cloudtrail" {
 
 resource "aws_iam_role" "vpc_flow" {
   count              = var.enable_vpc_flow_logs ? 1 : 0
-  name               = "${var.project_name}-${var.environment_suffix}-vpc-flow-role"
+  name_prefix        = "${var.project_name}-${var.environment_suffix}-vpc-flow-"
   assume_role_policy = data.aws_iam_policy_document.vpc_flow_assume.json
   tags               = local.common_tags
 }
@@ -375,7 +380,7 @@ resource "aws_iam_role_policy" "vpc_flow" {
 }
 
 resource "aws_iam_role" "ec2" {
-  name               = "${var.project_name}-${var.environment_suffix}-ec2-role"
+  name_prefix        = "${var.project_name}-${var.environment_suffix}-ec2-"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume.json
   tags               = local.common_tags
 }
@@ -387,13 +392,13 @@ resource "aws_iam_role_policy" "ec2" {
 }
 
 resource "aws_iam_instance_profile" "ec2" {
-  name = "${var.project_name}-${var.environment_suffix}-ec2-profile"
+  name_prefix = "${var.project_name}-${var.environment_suffix}-ec2-"
   role = aws_iam_role.ec2.name
   tags = local.common_tags
 }
 
 resource "aws_iam_role" "lambda" {
-  name               = "${var.project_name}-${var.environment_suffix}-lambda-role"
+  name_prefix        = "${var.project_name}-${var.environment_suffix}-lambda-"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
   tags               = local.common_tags
 }
@@ -406,6 +411,7 @@ resource "aws_iam_role_policy" "lambda" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
+  count                         = var.enable_cloudtrail ? 1 : 0
   name                          = "${var.project_name}-${var.environment_suffix}-trail"
   s3_bucket_name                = aws_s3_bucket.logging.bucket
   s3_key_prefix                 = "cloudtrail/"
@@ -682,7 +688,7 @@ output "nat_gateway_ids" { value = [for nat in aws_nat_gateway.main : nat.id] }
 output "asg_name" { value = aws_autoscaling_group.main.name }
 output "data_bucket_name" { value = aws_s3_bucket.data.bucket }
 output "logging_bucket_name" { value = aws_s3_bucket.logging.bucket }
-output "cloudtrail_name" { value = aws_cloudtrail.main.name }
+output "cloudtrail_name" { value = var.enable_cloudtrail ? aws_cloudtrail.main[0].name : null }
 output "cloudtrail_log_group_arn" { value = aws_cloudwatch_log_group.cloudtrail.arn }
 output "vpc_flow_log_group_arn" { value = var.enable_vpc_flow_logs ? aws_cloudwatch_log_group.vpc_flow[0].arn : null }
 output "sns_topic_arn" { value = aws_sns_topic.alerts.arn }
