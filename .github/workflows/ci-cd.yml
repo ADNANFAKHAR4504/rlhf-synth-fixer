@@ -535,6 +535,7 @@ jobs:
             "gradle"
             "gradlew"
             "gradlew.bat"
+            "config"
             )
 
           # Move paths to archive

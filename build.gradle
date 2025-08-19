@@ -36,17 +36,17 @@ dependencies {
     
 }
 
-// Configure source directories to point to lib/
+// Configure source directories
 sourceSets {
     main.java {
         srcDirs = ['lib/src/main/java']
     }
     test.java {
-        srcDirs = ['lib/src/test/java']
+        srcDirs = ['tests/unit/java']
     }
     integrationTest {
-        java.srcDirs = ['lib/src/integration-test/java']
-        resources.srcDirs = ['lib/src/integration-test/resources']
+        java.srcDirs = ['tests/integration/java']
+        resources.srcDirs = ['tests/integration/resources']
         compileClasspath += sourceSets.main.output + sourceSets.test.output
         runtimeClasspath += sourceSets.main.output + sourceSets.test.output
     }

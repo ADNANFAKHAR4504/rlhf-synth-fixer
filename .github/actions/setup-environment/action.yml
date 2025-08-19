@@ -107,6 +107,7 @@ runs:
         path: |
           bin/
           lib/
+          tests/
           package*.json
           Pipfile
           Pipfile.lock
@@ -118,6 +119,7 @@ runs:
           gradle/
           gradlew
           gradlew.bat
+          config/
           .gradle/
           build/
 

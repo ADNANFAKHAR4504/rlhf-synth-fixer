@@ -104,3 +104,24 @@ build
 tasks.csv
 .sherlock/data
 .sherlock/reports
+
+# Java/Gradle
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+.gradletasknamecache
+
+# Java compiled files
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# Java test reports
+build/reports/
+build/test-results/
