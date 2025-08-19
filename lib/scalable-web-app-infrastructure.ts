@@ -709,16 +709,6 @@ EOF
       { provider, parent: this }
     );
 
-    // S3 Bucket ACL
-    new aws.s3.BucketAcl(
-      `${environmentSuffix}-alb-logs-bucket-acl`,
-      {
-        bucket: albLogsBucket.id,
-        acl: 'private',
-      },
-      { provider, parent: this }
-    );
-
     // Application Load Balancer
     const alb = new aws.lb.LoadBalancer(
       `app-alb-${environmentSuffix}`,
