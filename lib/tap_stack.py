@@ -764,3 +764,4 @@ def lambda_handler(event, context):
     for i, instance in enumerate(self.ec2_instances):
       pulumi.export(f"ec2_instance_{i+1}_id", instance.id)
       pulumi.export(f"ec2_instance_{i+1}_public_ip", instance.public_ip)
+
