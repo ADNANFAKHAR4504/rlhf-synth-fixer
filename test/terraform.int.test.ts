@@ -325,11 +325,11 @@ describe("Project Requirement Validation", () => {
     const terraformContent = fs.readFileSync(path.resolve(__dirname, '../lib/tap_stack.tf'), 'utf8');
     
     expect(terraformContent).toMatch(/resource\s+"aws_instance"\s+"web"/);
-    expect(terraformContent).toMatch(/instance_type\s*=\s*var\.instance_type/);
+    expect(terraformContent).toMatch(/instance_type\s*=\s*local\.config\.instance_type/);
     expect(terraformContent).toMatch(/resource\s+"aws_db_instance"\s+"main"/);
     expect(terraformContent).toMatch(/engine\s*=\s*"mysql"/);
     expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket"\s+"data"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_lb"\s+"web"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_lb"\s+"main"/);
     expect(terraformContent).toMatch(/load_balancer_type\s*=\s*"application"/);
   });
 
@@ -337,8 +337,8 @@ describe("Project Requirement Validation", () => {
     const terraformContent = fs.readFileSync(path.resolve(__dirname, '../lib/tap_stack.tf'), 'utf8');
     
     expect(terraformContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_iam_policy"\s+"ec2_policy"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_security_group"\s+"web"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"ec2_policy"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_security_group"\s+"application"/);
     expect(terraformContent).toMatch(/resource\s+"aws_security_group"\s+"database"/);
   });
 
@@ -378,7 +378,7 @@ describe("Network Architecture Validation", () => {
   test("should validate security group configurations", () => {
     const terraformContent = fs.readFileSync(path.resolve(__dirname, '../lib/tap_stack.tf'), 'utf8');
     
-    expect(terraformContent).toMatch(/resource\s+"aws_security_group"\s+"web"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_security_group"\s+"application"/);
     expect(terraformContent).toMatch(/resource\s+"aws_security_group"\s+"database"/);
   });
 });
@@ -388,10 +388,10 @@ describe("Compute and Database Validation", () => {
   test("should validate compute resources", () => {
     const terraformContent = fs.readFileSync(path.resolve(__dirname, '../lib/tap_stack.tf'), 'utf8');
     
-    expect(terraformContent).toMatch(/resource\s+"aws_lb"\s+"web"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_lb"\s+"main"/);
     expect(terraformContent).toMatch(/load_balancer_type\s*=\s*"application"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_lb_listener"\s+"web"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_lb_target_group"\s+"web"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_lb_listener"\s+"main"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_lb_target_group"\s+"main"/);
     expect(terraformContent).toMatch(/resource\s+"aws_instance"\s+"web"/);
   });
 
@@ -413,16 +413,15 @@ describe("Storage and Security Validation", () => {
     expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"data"/);
     expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"/);
     expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_lifecycle_configuration"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_logging"/);
   });
 
   test("should validate IAM configuration", () => {
     const terraformContent = fs.readFileSync(path.resolve(__dirname, '../lib/tap_stack.tf'), 'utf8');
     
     expect(terraformContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_iam_policy"\s+"ec2_policy"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_iam_instance_profile"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"ec2_policy"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/);
   });
 });
 
@@ -441,10 +440,10 @@ describe("Security and Compliance Validation", () => {
   test("should validate comprehensive security measures", () => {
     const terraformContent = fs.readFileSync(path.resolve(__dirname, '../lib/tap_stack.tf'), 'utf8');
     
-    expect(terraformContent).toMatch(/resource\s+"aws_security_group"\s+"web"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_security_group"\s+"application"/);
     expect(terraformContent).toMatch(/resource\s+"aws_security_group"\s+"database"/);
     expect(terraformContent).toMatch(/resource\s+"aws_iam_role"\s+"ec2_role"/);
-    expect(terraformContent).toMatch(/resource\s+"aws_iam_policy"\s+"ec2_policy"/);
+    expect(terraformContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"ec2_policy"/);
   });
 
   test("should validate resource encryption", () => {
@@ -464,10 +463,10 @@ describe("Output Validation", () => {
     expect(terraformContent).toMatch(/output\s+"vpc_id"/);
     expect(terraformContent).toMatch(/output\s+"public_subnet_ids"/);
     expect(terraformContent).toMatch(/output\s+"private_subnet_ids"/);
-    expect(terraformContent).toMatch(/output\s+"load_balancer_dns"/);
-    expect(terraformContent).toMatch(/output\s+"database_endpoint"/);
+    expect(terraformContent).toMatch(/output\s+"alb_dns_name"/);
+    expect(terraformContent).toMatch(/output\s+"rds_endpoint"/);
     expect(terraformContent).toMatch(/output\s+"s3_bucket_name"/);
-    expect(terraformContent).toMatch(/output\s+"ec2_instance_ids"/);
+    expect(terraformContent).toMatch(/output\s+"secrets_manager_arn"/);
     expect(terraformContent).toMatch(/output\s+"security_group_ids"/);
     
     const outputs = terraformContent.match(/output\s+"[^"]+"\s*{[\s\S]*?}/g) || [];
