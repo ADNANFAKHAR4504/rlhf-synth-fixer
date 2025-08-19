@@ -8,7 +8,7 @@ Build a CloudFormation YAML template with these components:
 
 **Parameters**
 
-- Environment parameter (String) - only accepts "dev" or "prod"
+- Environment parameter (String) - - only accepts "dev" or "prod"
 
 **Resources to create**
 

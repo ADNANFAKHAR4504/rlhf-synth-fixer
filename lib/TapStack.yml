@@ -321,7 +321,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  # CloudTrail trail for S3 and KMS activity  
+  # CloudTrail trail for S3 and KMS activity
   CloudTrailTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
