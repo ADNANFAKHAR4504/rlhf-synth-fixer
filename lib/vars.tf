@@ -64,3 +64,8 @@ variable "backup_vault_name_to_clean" {
   default     = "default-backup-vault"
 }
 
+variable "s3_bucket_name_to_clean" {
+  description = "The name of the S3 bucket to empty before deletion."
+  type        = string
+}
+
