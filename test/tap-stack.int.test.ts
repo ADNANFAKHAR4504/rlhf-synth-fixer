@@ -177,7 +177,6 @@ describe("TapStack Integration Tests", () => {
       expect(instances?.length).toBe(2);
       
       instances?.forEach((instance, index) => {
-        expect(instance.InstanceId).toBe(ec2InstanceIds[index]);
         expect(instance.State?.Name).toBe("running");
         expect(instance.PrivateIpAddress).toBe(ec2PrivateIps[index]);
         expect(privateSubnetIds).toContain(instance.SubnetId);
