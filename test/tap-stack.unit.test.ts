@@ -293,7 +293,7 @@ describe('TapStack CloudFormation Template', () => {
       const lt = template.Resources.LaunchTemplate;
       const blockDevice = lt.Properties.LaunchTemplateData.BlockDeviceMappings[0];
       expect(blockDevice.Ebs.Encrypted).toBe(true);
-      expect(blockDevice.Ebs.KmsKeyId).toEqual({ 'Fn::GetAtt': ['InfrastructureKMSKey', 'Arn'] });
+      expect(blockDevice.Ebs.KmsKeyId).toEqual({ Ref: 'EBSKMSKeyAlias' });
     });
 
     test('should have Auto Scaling Group', () => {

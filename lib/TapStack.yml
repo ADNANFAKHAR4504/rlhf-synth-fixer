@@ -61,6 +61,47 @@ Resources:
       AliasName: !Sub 'alias/infrastructure-${EnvironmentSuffix}'
       TargetKeyId: !Ref InfrastructureKMSKey
 
+  # EBS KMS Key for EC2 instances
+  EBSKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS Key for EBS encryption - ${EnvironmentSuffix}'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key for EBS encryption
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: 'SecureInfrastructure'
+        - Key: Owner
+          Value: 'DevOpsTeam'
+
+  # EBS KMS Key Alias
+  EBSKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/ebs-${EnvironmentSuffix}'
+      TargetKeyId: !Ref EBSKMSKey
+
   # VPC
   SecureVPC:
     Type: AWS::EC2::VPC
@@ -608,7 +649,7 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !GetAtt InfrastructureKMSKey.Arn
+              KmsKeyId: !Ref EBSKMSKeyAlias
         TagSpecifications:
           - ResourceType: instance
             Tags:
