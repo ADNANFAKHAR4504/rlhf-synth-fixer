@@ -7,7 +7,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_access_primary" {
   provider         = aws.primary
   name             = "${var.name_prefix}-${var.environment}-unauthorized-access-primary"
   log_group_name   = aws_cloudwatch_log_group.lambda_logs_primary.name
-  pattern          = "Unauthorized|AccessDenied|UserNotAuthorized"
+  pattern          = "\"Unauthorized\" \"AccessDenied\" \"UserNotAuthorized\""
   metric_transformation {
     name      = "UnauthorizedAccessCount"
     namespace = "${var.name_prefix}/${var.environment}/Security"
@@ -35,7 +35,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_access_secondary" {
   provider         = aws.secondary
   name             = "${var.name_prefix}-${var.environment}-unauthorized-access-secondary"
   log_group_name   = aws_cloudwatch_log_group.lambda_logs_secondary.name
-  pattern          = "Unauthorized|AccessDenied|UserNotAuthorized"
+  pattern          = "\"Unauthorized\" \"AccessDenied\" \"UserNotAuthorized\""
   metric_transformation {
     name      = "UnauthorizedAccessCount"
     namespace = "${var.name_prefix}/${var.environment}/Security"
