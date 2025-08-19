@@ -313,8 +313,9 @@ describe("AWS Secure Infrastructure Integration Tests", () => {
       expect(nodeGroup.status).toBe('ACTIVE');
       expect(nodeGroup.capacityType).toBe('ON_DEMAND');
       expect(nodeGroup.instanceTypes).toContain('t3.medium');
-      expect(nodeGroup.scalingConfig?.minSize).toBeGreaterThanOrEqual(1);
-      expect(nodeGroup.scalingConfig?.maxSize).toBeGreaterThanOrEqual(2);
+      expect(nodeGroup.scalingConfig?.minSize).toBe(1);
+      expect(nodeGroup.scalingConfig?.maxSize).toBe(2);
+      expect(nodeGroup.scalingConfig?.desiredSize).toBe(1);
       expect(nodeGroup.subnets).toEqual(expect.arrayContaining(outputs.private_subnet_ids?.value || []));
     });
   });

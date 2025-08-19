@@ -136,15 +136,17 @@ resource "aws_kms_key" "main" {
         Resource = "*"
       },
       {
-        Sid    = "Allow use of the key"
+        Sid    = "Allow use of the key by AWS services"
         Effect = "Allow"
         Principal = {
           Service = [
+            "ec2.amazonaws.com",
             "s3.amazonaws.com",
             "rds.amazonaws.com",
             "eks.amazonaws.com",
             "logs.amazonaws.com",
-            "cloudtrail.amazonaws.com"
+            "cloudtrail.amazonaws.com",
+            "autoscaling.amazonaws.com"
           ]
         }
         Action = [
@@ -156,6 +158,27 @@ resource "aws_kms_key" "main" {
           "kms:DescribeKey"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "Allow EKS nodes to use the key"
+        Effect = "Allow"
+        Principal = {
+          AWS = "*"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:CreateGrant"
+        ]
+        Resource = "*"
+        Condition = {
+          StringLike = {
+            "aws:PrincipalArn" = [
+              "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/*eks-nodes*",
+              "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/*"
+            ]
+          }
+        }
       }
     ]
   })
@@ -570,8 +593,8 @@ resource "aws_eks_node_group" "main" {
   capacity_type   = "ON_DEMAND"
 
   scaling_config {
-    desired_size = 2
-    max_size     = 4
+    desired_size = 1
+    max_size     = 2
     min_size     = 1
   }
 
@@ -786,7 +809,8 @@ data "aws_elb_service_account" "main" {}
 
 # S3 Bucket Policy for ALB Access Logs
 resource "aws_s3_bucket_policy" "alb_logs" {
-  bucket = aws_s3_bucket.alb_logs.id
+  bucket     = aws_s3_bucket.alb_logs.id
+  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -797,7 +821,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
           AWS = data.aws_elb_service_account.main.arn
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.alb_logs.arn}/alb-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
       },
       {
         Effect = "Allow"
@@ -806,6 +830,14 @@ resource "aws_s3_bucket_policy" "alb_logs" {
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.alb_logs.arn
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
       }
     ]
   })

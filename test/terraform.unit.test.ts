@@ -265,6 +265,9 @@ describe("Terraform HCL Configuration Tests", () => {
       expect(nodeGroup).toMatch(/instance_types\s*=\s*\["t3\.medium"\]/);
       expect(nodeGroup).toMatch(/capacity_type\s*=\s*"ON_DEMAND"/);
       expect(nodeGroup).toMatch(/scaling_config/);
+      expect(nodeGroup).toMatch(/desired_size\s*=\s*1/);
+      expect(nodeGroup).toMatch(/max_size\s*=\s*2/);
+      expect(nodeGroup).toMatch(/min_size\s*=\s*1/);
     });
 
     test("EKS IAM roles have proper policies attached", () => {
