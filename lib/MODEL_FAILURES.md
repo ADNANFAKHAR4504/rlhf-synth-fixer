@@ -1,1 +1,1 @@
-Insert here the model's failures
+The model response includes extra Markdown documentation, deployment instructions, and feature explanations that are not required in the ideal response. The ideal response expects only the Terraform code, without additional commentary or instructions.
