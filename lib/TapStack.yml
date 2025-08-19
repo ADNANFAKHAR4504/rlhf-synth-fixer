@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
+Description: 'TAP Stack - Secure Task Assignment Platform with comprehensive security controls'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -8,6 +8,9 @@ Metadata:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentSuffix
+          - EnableSecurity
+          - EnableCloudTrail
+          - EnableKMSEncryption
 
 Parameters:
   EnvironmentSuffix:
@@ -16,25 +19,454 @@ Parameters:
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
+  
+  EnableSecurity:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable comprehensive security features (KMS, IAM, Security Groups)'
+  
+  EnableCloudTrail:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable CloudTrail audit logging'
+  
+  EnableKMSEncryption:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable KMS encryption for all resources'
+
+# Removed unused mappings section for cleaner template
+
+Conditions:
+  SecurityEnabled: !Equals [!Ref EnableSecurity, 'true']
+  CloudTrailEnabled: !And [!Condition SecurityEnabled, !Equals [!Ref EnableCloudTrail, 'true']]
+  KMSEnabled: !And [!Condition SecurityEnabled, !Equals [!Ref EnableKMSEncryption, 'true']]
 
 Resources:
+  # KMS Key for comprehensive encryption
+  TapStackKMSKey:
+    Type: AWS::KMS::Key
+    Condition: KMSEnabled
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Description: !Sub 'TAP-${EnvironmentSuffix}-${AWS::AccountId} - Master encryption key'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableIAMUserPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudTrailEncryption
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:EncryptionContext:aws:cloudtrail:arn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TAP-${EnvironmentSuffix}-audit-trail-${AWS::AccountId}'
+          - Sid: AllowS3ServiceAccess
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: AllowDynamoDBAccess
+            Effect: Allow
+            Principal:
+              Service: dynamodb.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+              - 'kms:Encrypt'
+              - 'kms:GenerateDataKey*'
+              - 'kms:ReEncrypt*'
+            Resource: '*'
+      EnableKeyRotation: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'TAP-${EnvironmentSuffix}-KMS-${AWS::AccountId}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: 'Data encryption for TAP stack'
+        - Key: Security
+          Value: 'High'
+
+  # KMS Key Alias with unique naming
+  TapStackKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Condition: KMSEnabled
+    Properties:
+      AliasName: !Sub 'alias/tap-${EnvironmentSuffix}-key-${AWS::AccountId}'
+      TargetKeyId: !Ref TapStackKMSKey
+
+  # Secure S3 bucket for application data
+  TapStackDataBucket:
+    Type: AWS::S3::Bucket
+    Condition: SecurityEnabled
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'tap-${EnvironmentSuffix}-data-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: !If [KMSEnabled, 'aws:kms', 'AES256']
+              KMSMasterKeyID: !If [KMSEnabled, !Ref TapStackKMSKey, !Ref 'AWS::NoValue']
+            BucketKeyEnabled: !If [KMSEnabled, true, false]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'DataRetentionPolicy'
+            Status: Enabled
+            ExpirationInDays: 365
+            NoncurrentVersionExpirationInDays: 30
+# NotificationConfiguration removed due to CloudFormation limitations
+      Tags:
+        - Key: Name
+          Value: !Sub 'TAP-${EnvironmentSuffix}-Data-${AWS::AccountId}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Security
+          Value: 'High'
+        - Key: Encrypted
+          Value: !If [KMSEnabled, 'KMS', 'AES256']
+
+  # CloudWatch Log Group for comprehensive logging
+  TapStackLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: CloudTrailEnabled
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub '/aws/tap/${EnvironmentSuffix}/audit-logs'
+      RetentionInDays: 90
+      KmsKeyId: !If [KMSEnabled, !GetAtt TapStackKMSKey.Arn, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Name
+          Value: !Sub 'TAP-${EnvironmentSuffix}-Logs'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Security
+          Value: 'High'
+
+  # IAM Role for application services with least privilege
+  TapStackServiceRole:
+    Type: AWS::IAM::Role
+    Condition: SecurityEnabled
+    Properties:
+      RoleName: !Sub 'TAP-${EnvironmentSuffix}-ServiceRole-${AWS::AccountId}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - ec2.amazonaws.com
+                - lambda.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      Policies:
+        - PolicyName: 'DynamoDBAccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource: !GetAtt TurnAroundPromptTable.Arn
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:DescribeTable'
+                  - 'dynamodb:DescribeStream'
+                Resource: !GetAtt TurnAroundPromptTable.Arn
+        - PolicyName: 'S3AccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                Resource: !If [SecurityEnabled, !Sub '${TapStackDataBucket}/*', !Ref 'AWS::NoValue']
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                Resource: !If [SecurityEnabled, !Ref TapStackDataBucket, !Ref 'AWS::NoValue']
+                Condition:
+                  StringEquals:
+                    's3:prefix': !Sub '${EnvironmentSuffix}/*'
+        - PolicyName: 'KMSAccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:ReEncrypt*'
+                Resource: !If [KMSEnabled, !GetAtt TapStackKMSKey.Arn, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Name
+          Value: !Sub 'TAP-${EnvironmentSuffix}-ServiceRole'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Security
+          Value: 'High'
+
+  # VPC for Security Group (using default VPC)
+  TapStackVPC:
+    Type: AWS::EC2::VPC
+    Condition: SecurityEnabled
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'TAP-${EnvironmentSuffix}-VPC-${AWS::AccountId}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Security Group for HTTPS-only access
+  TapStackSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: SecurityEnabled
+    Properties:
+      GroupName: !Sub 'TAP-${EnvironmentSuffix}-HTTPS-SG-${AWS::AccountId}'
+      GroupDescription: 'Security group allowing HTTPS traffic only for TAP stack'
+      VpcId: !Ref TapStackVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS inbound traffic'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS outbound traffic'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP outbound for updates'
+      Tags:
+        - Key: Name
+          Value: !Sub 'TAP-${EnvironmentSuffix}-HTTPS-SG'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Security
+          Value: 'High'
+
+  # S3 Bucket for CloudTrail logs
+  TapStackCloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Condition: CloudTrailEnabled
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Sub 'tap-${EnvironmentSuffix}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: !If [KMSEnabled, 'aws:kms', 'AES256']
+              KMSMasterKeyID: !If [KMSEnabled, !Ref TapStackKMSKey, !Ref 'AWS::NoValue']
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'CloudTrailLogRetention'
+            Status: Enabled
+            ExpirationInDays: 365
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub 'TAP-${EnvironmentSuffix}-CloudTrail'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Security
+          Value: 'High'
+
+  # CloudTrail Bucket Policy
+  TapStackCloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CloudTrailEnabled
+    Properties:
+      Bucket: !Ref TapStackCloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub '${TapStackCloudTrailBucket}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${TapStackCloudTrailBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  # IAM Role for CloudTrail
+  TapStackCloudTrailRole:
+    Type: AWS::IAM::Role
+    Condition: CloudTrailEnabled
+    Properties:
+      RoleName: !Sub 'TAP-${EnvironmentSuffix}-CloudTrailRole-${AWS::AccountId}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'CloudTrailLogsPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !GetAtt TapStackLogGroup.Arn
+
+  # CloudTrail for comprehensive audit logging
+  TapStackCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Condition: CloudTrailEnabled
+    DependsOn: TapStackCloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub 'TAP-${EnvironmentSuffix}-audit-trail-${AWS::AccountId}'
+      S3BucketName: !Ref TapStackCloudTrailBucket
+      S3KeyPrefix: 'cloudtrail-logs/'
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      IsLogging: true
+      EnableLogFileValidation: true
+      KMSKeyId: !If [KMSEnabled, !Ref TapStackKMSKey, !Ref 'AWS::NoValue']
+      CloudWatchLogsLogGroupArn: !GetAtt TapStackLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt TapStackCloudTrailRole.Arn
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::DynamoDB::Table'
+              Values: 
+                - !GetAtt TurnAroundPromptTable.Arn
+            - Type: 'AWS::S3::Object'
+              Values:
+                - !If [SecurityEnabled, !Sub '${TapStackDataBucket}/*', !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Name
+          Value: !Sub 'TAP-${EnvironmentSuffix}-audit-trail'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Security
+          Value: 'Critical'
+
+  # Enhanced DynamoDB table with security features
   TurnAroundPromptTable:
     Type: AWS::DynamoDB::Table
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      TableName: !Sub 'TAP-${EnvironmentSuffix}-TurnAroundPrompts-${AWS::AccountId}'
       AttributeDefinitions:
         - AttributeName: 'id'
           AttributeType: 'S'
+        - AttributeName: 'userId'
+          AttributeType: 'S'
+        - AttributeName: 'timestamp'
+          AttributeType: 'N'
       KeySchema:
         - AttributeName: 'id'
           KeyType: 'HASH'
+      GlobalSecondaryIndexes:
+        - IndexName: 'UserIndex'
+          KeySchema:
+            - AttributeName: 'userId'
+              KeyType: 'HASH'
+            - AttributeName: 'timestamp'
+              KeyType: 'RANGE'
+          Projection:
+            ProjectionType: 'ALL'
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: false
-      # Tags will be applied at stack level during deployment
+      StreamSpecification:
+        StreamViewType: 'NEW_AND_OLD_IMAGES'
+      SSESpecification:
+        SSEEnabled: !If [KMSEnabled, true, false]
+        SSEType: !If [KMSEnabled, 'KMS', !Ref 'AWS::NoValue']
+        KMSMasterKeyId: !If [KMSEnabled, !Ref TapStackKMSKey, !Ref 'AWS::NoValue']
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'TAP-${EnvironmentSuffix}-TurnAroundPrompts'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Security
+          Value: 'High'
+        - Key: Encrypted
+          Value: !If [KMSEnabled, 'KMS', 'Default']
 
 Outputs:
+  # Core Infrastructure Outputs
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  # DynamoDB Outputs
   TurnAroundPromptTableName:
     Description: 'Name of the DynamoDB table'
     Value: !Ref TurnAroundPromptTable
@@ -47,14 +479,114 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
 
-  StackName:
-    Description: 'Name of this CloudFormation stack'
-    Value: !Ref AWS::StackName
+  TurnAroundPromptTableStreamArn:
+    Description: 'Stream ARN of the DynamoDB table'
+    Value: !GetAtt TurnAroundPromptTable.StreamArn
     Export:
-      Name: !Sub '${AWS::StackName}-StackName'
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableStreamArn'
 
-  EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
-    Value: !Ref EnvironmentSuffix
+  # Security Outputs
+  KMSKeyId:
+    Condition: KMSEnabled
+    Description: 'KMS Key ID for encryption'
+    Value: !Ref TapStackKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+  KMSKeyArn:
+    Condition: KMSEnabled
+    Description: 'KMS Key ARN for encryption'
+    Value: !GetAtt TapStackKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyArn'
+
+  KMSKeyAlias:
+    Condition: KMSEnabled
+    Description: 'KMS Key Alias'
+    Value: !Ref TapStackKMSKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyAlias'
+
+  ServiceRoleArn:
+    Condition: SecurityEnabled
+    Description: 'IAM Service Role ARN for applications'
+    Value: !GetAtt TapStackServiceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ServiceRoleArn'
+
+  SecurityGroupId:
+    Condition: SecurityEnabled
+    Description: 'Security Group ID for HTTPS access'
+    Value: !Ref TapStackSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
+  VPCId:
+    Condition: SecurityEnabled
+    Description: 'VPC ID for secure networking'
+    Value: !Ref TapStackVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  # Storage Outputs
+  DataBucketName:
+    Condition: SecurityEnabled
+    Description: 'Name of the secure S3 data bucket'
+    Value: !Ref TapStackDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-DataBucketName'
+
+  DataBucketArn:
+    Condition: SecurityEnabled
+    Description: 'ARN of the secure S3 data bucket'
+    Value: !Sub '${TapStackDataBucket}'
+    Export:
+      Name: !Sub '${AWS::StackName}-DataBucketArn'
+
+  # CloudTrail Outputs
+  CloudTrailArn:
+    Condition: CloudTrailEnabled
+    Description: 'CloudTrail ARN for audit logging'
+    Value: !GetAtt TapStackCloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailArn'
+
+  CloudTrailBucketName:
+    Condition: CloudTrailEnabled
+    Description: 'CloudTrail S3 bucket name'
+    Value: !Ref TapStackCloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucketName'
+
+  LogGroupName:
+    Condition: CloudTrailEnabled
+    Description: 'CloudWatch Log Group name for audit logs'
+    Value: !Ref TapStackLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LogGroupName'
+
+  LogGroupArn:
+    Condition: CloudTrailEnabled
+    Description: 'CloudWatch Log Group ARN for audit logs'
+    Value: !GetAtt TapStackLogGroup.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LogGroupArn'
+
+  # Security Status Outputs
+  SecurityEnabled:
+    Description: 'Whether security features are enabled'
+    Value: !Ref EnableSecurity
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityEnabled'
+
+  EncryptionEnabled:
+    Description: 'Whether KMS encryption is enabled'
+    Value: !Ref EnableKMSEncryption
+    Export:
+      Name: !Sub '${AWS::StackName}-EncryptionEnabled'
+
+  AuditingEnabled:
+    Description: 'Whether CloudTrail auditing is enabled'
+    Value: !Ref EnableCloudTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-AuditingEnabled'
