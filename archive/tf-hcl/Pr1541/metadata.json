@@ -29,5 +29,11 @@
     "S3",
     "VPC Flow Logs",
     "Network Monitor"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
