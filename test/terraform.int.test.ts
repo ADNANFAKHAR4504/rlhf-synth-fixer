@@ -16,7 +16,7 @@ if (fs.existsSync(outputsPath)) {
 }
 
 // Initialize AWS clients
-const region = process.env.AWS_REGION || "us-west-2";
+const region = "us-west-2";
 const ec2Client = new EC2Client({ region });
 const latticeClient = new VPCLatticeClient({ region });
 
