@@ -60,30 +60,12 @@ let rdsClient: RDSClient;
 let elbClient: ElasticLoadBalancingV2Client;
 let secretsClient: SecretsManagerClient;
 let region: string;
-let isLiveTestingEnabled = true;
 
 function loadOutputs() {
   const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
   
   if (!fs.existsSync(p)) {
-    console.log("Outputs file not found, using mock data for testing");
-    return {
-      vpcId: "vpc-mock123",
-      publicSubnets: ["subnet-mock1", "subnet-mock2"],
-      privateSubnets: ["subnet-mock3", "subnet-mock4"],
-      loadBalancerDns: "mock-alb.us-east-1.elb.amazonaws.com",
-      databaseEndpoint: "mock-db.cluster.us-east-1.rds.amazonaws.com",
-      s3BucketName: "mock-bucket-123",
-      bastionPublicIp: "192.168.1.1",
-      secretsManagerArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:mock-secret",
-      costEstimation: {
-        ec2_instances: 16.94,
-        rds_instance: 12.41,
-        alb: 16.20,
-        nat_gateway: 45.00,
-        total_estimated: 90.55
-      }
-    };
+    throw new Error("Outputs file not found at cfn-outputs/all-outputs.json. Please run terraform apply first.");
   }
   
   try {
@@ -115,89 +97,32 @@ function loadOutputs() {
     };
 
     if (missing.length) {
-      console.log(`Missing required outputs in cfn-outputs/all-outputs.json: ${missing.join(", ")}`);
-      console.log("Falling back to mock data for testing");
-      return {
-        vpcId: "vpc-mock123",
-        publicSubnets: ["subnet-mock1", "subnet-mock2"],
-        privateSubnets: ["subnet-mock3", "subnet-mock4"],
-        loadBalancerDns: "mock-alb.us-east-1.elb.amazonaws.com",
-        databaseEndpoint: "mock-db.cluster.us-east-1.rds.amazonaws.com",
-        s3BucketName: "mock-bucket-123",
-        bastionPublicIp: "192.168.1.1",
-        secretsManagerArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:mock-secret",
-        costEstimation: {
-          ec2_instances: 16.94,
-          rds_instance: 12.41,
-          alb: 16.20,
-          nat_gateway: 45.00,
-          total_estimated: 90.55
-        }
-      };
+      throw new Error(`Missing required outputs in cfn-outputs/all-outputs.json: ${missing.join(", ")}`);
     }
     return o;
   } catch (error) {
-    console.log("Error reading outputs file, using mock data for testing:", error);
-    return {
-      vpcId: "vpc-mock123",
-      publicSubnets: ["subnet-mock1", "subnet-mock2"],
-      privateSubnets: ["subnet-mock3", "subnet-mock4"],
-      loadBalancerDns: "mock-alb.us-east-1.elb.amazonaws.com",
-      databaseEndpoint: "mock-db.cluster.us-east-1.rds.amazonaws.com",
-      s3BucketName: "mock-bucket-123",
-      bastionPublicIp: "192.168.1.1",
-      secretsManagerArn: "arn:aws:secretsmanager:us-east-1:123456789012:secret:mock-secret",
-      costEstimation: {
-        ec2_instances: 16.94,
-        rds_instance: 12.41,
-        alb: 16.20,
-        nat_gateway: 45.00,
-        total_estimated: 90.55
-      }
-    };
+    if (error instanceof Error) {
+      throw new Error(`Error reading outputs file: ${error.message}`);
+    }
+    throw new Error("Error reading outputs file");
   }
 }
 
 async function initializeLiveTesting() {
-  // Check if we should enable live testing
-  const hasValidOutputs = OUT.vpcId && OUT.vpcId !== "vpc-mock123";
-  const hasAwsCredentials = process.env.AWS_ACCESS_KEY_ID || process.env.AWS_PROFILE;
-  const isLiveTestRequested = process.env.RUN_LIVE_TESTS === 'true' || process.env.CI;
+  // Auto-discover region from VPC ID if not set
+  region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
   
-  if (!hasValidOutputs || !hasAwsCredentials) {
-    console.log("Live testing disabled - missing valid outputs or AWS credentials");
-    return false;
-  }
+  // Initialize AWS clients
+  ec2Client = new EC2Client({ region });
+  s3Client = new S3Client({ region });
+  rdsClient = new RDSClient({ region });
+  elbClient = new ElasticLoadBalancingV2Client({ region });
+  secretsClient = new SecretsManagerClient({ region });
 
-  try {
-    // Auto-discover region from VPC ID if not set
-    region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
-    
-    // Initialize AWS clients
-    ec2Client = new EC2Client({ region });
-    s3Client = new S3Client({ region });
-    rdsClient = new RDSClient({ region });
-    elbClient = new ElasticLoadBalancingV2Client({ region });
-    secretsClient = new SecretsManagerClient({ region });
-
-    // Test connectivity with a simple API call
-    await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] }));
-    
-    console.log(`Live testing enabled - using region: ${region}`);
-    return true;
-  } catch (error: any) {
-    if (error.name === 'CredentialsProviderError' || 
-        error.name === 'UnrecognizedClientException' ||
-        error.name === 'InvalidClientTokenId' ||
-        error.name === 'AuthFailure' ||
-        error.name === 'UnknownEndpoint') {
-      console.log("Live testing disabled - AWS credentials not available or service not accessible");
-      return false;
-    } else {
-      console.log("Live testing disabled - error initializing AWS clients:", error.message);
-      return false;
-    }
-  }
+  // Test connectivity with a simple API call
+  await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] }));
+  
+  console.log(`Live testing enabled - using region: ${region}`);
 }
 
 async function retry<T>(fn: () => Promise<T>, attempts = 3, baseMs = 1000): Promise<T> {
@@ -222,7 +147,7 @@ jest.setTimeout(60_000);
 /** ===================== Test Setup ===================== */
 beforeAll(async () => {
   OUT = loadOutputs();
-  isLiveTestingEnabled = await initializeLiveTesting();
+  await initializeLiveTesting();
 });
 
 afterAll(async () => {
@@ -479,210 +404,122 @@ describe("Output Validation", () => {
 /** ===================== Live AWS Resource Validation ===================== */
 describe("Live AWS Resource Validation", () => {
   test("VPC exists and is properly configured", async () => {
-    if (!isLiveTestingEnabled) {
-      console.log("Skipping live VPC test - live testing not enabled");
-      expect(true).toBe(true);
-      return;
-    }
-
-    try {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [OUT.vpcId]
-      });
-      const response = await retry(() => ec2Client.send(command));
-      
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs!.length).toBeGreaterThan(0);
-      
-      const vpc = response.Vpcs![0];
-      expect(vpc.State).toBe('available');
-      expect(vpc.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
-      
-      // Check for required tags
-      const envTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
-      expect(envTag?.Value).toBeDefined();
-    } catch (error: any) {
-      console.log("VPC test failed:", error.message);
-      throw error;
-    }
+    const command = new DescribeVpcsCommand({
+      VpcIds: [OUT.vpcId]
+    });
+    const response = await retry(() => ec2Client.send(command));
+    
+    expect(response.Vpcs).toBeDefined();
+    expect(response.Vpcs!.length).toBeGreaterThan(0);
+    
+    const vpc = response.Vpcs![0];
+    expect(vpc.State).toBe('available');
+    expect(vpc.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
+    
+    // Check for required tags
+    const envTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
+    expect(envTag?.Value).toBeDefined();
   }, 30000);
 
   test("Public subnets exist and are properly configured", async () => {
-    if (!isLiveTestingEnabled) {
-      console.log("Skipping live public subnet test - live testing not enabled");
-      expect(true).toBe(true);
-      return;
-    }
-
-    try {
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: OUT.publicSubnets
-      });
-      const response = await retry(() => ec2Client.send(command));
-      
-      expect(response.Subnets).toBeDefined();
-      expect(response.Subnets!.length).toBe(OUT.publicSubnets.length);
-      
-      response.Subnets!.forEach(subnet => {
-        expect(subnet.State).toBe('available');
-        expect(subnet.MapPublicIpOnLaunch).toBe(true);
-        expect(subnet.VpcId).toBe(OUT.vpcId);
-      });
-    } catch (error: any) {
-      console.log("Public subnet test failed:", error.message);
-      throw error;
-    }
+    const command = new DescribeSubnetsCommand({
+      SubnetIds: OUT.publicSubnets
+    });
+    const response = await retry(() => ec2Client.send(command));
+    
+    expect(response.Subnets).toBeDefined();
+    expect(response.Subnets!.length).toBe(OUT.publicSubnets.length);
+    
+    response.Subnets!.forEach(subnet => {
+      expect(subnet.State).toBe('available');
+      expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      expect(subnet.VpcId).toBe(OUT.vpcId);
+    });
   }, 30000);
 
   test("Private subnets exist and are properly configured", async () => {
-    if (!isLiveTestingEnabled) {
-      console.log("Skipping live private subnet test - live testing not enabled");
-      expect(true).toBe(true);
-      return;
-    }
-
-    try {
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: OUT.privateSubnets
-      });
-      const response = await retry(() => ec2Client.send(command));
-      
-      expect(response.Subnets).toBeDefined();
-      expect(response.Subnets!.length).toBe(OUT.privateSubnets.length);
-      
-      response.Subnets!.forEach(subnet => {
-        expect(subnet.State).toBe('available');
-        expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.VpcId).toBe(OUT.vpcId);
-      });
-    } catch (error: any) {
-      console.log("Private subnet test failed:", error.message);
-      throw error;
-    }
+    const command = new DescribeSubnetsCommand({
+      SubnetIds: OUT.privateSubnets
+    });
+    const response = await retry(() => ec2Client.send(command));
+    
+    expect(response.Subnets).toBeDefined();
+    expect(response.Subnets!.length).toBe(OUT.privateSubnets.length);
+    
+    response.Subnets!.forEach(subnet => {
+      expect(subnet.State).toBe('available');
+      expect(subnet.MapPublicIpOnLaunch).toBe(false);
+      expect(subnet.VpcId).toBe(OUT.vpcId);
+    });
   }, 30000);
 
   test("Security groups exist and have proper rules", async () => {
-    if (!isLiveTestingEnabled) {
-      console.log("Skipping live security group test - live testing not enabled");
-      expect(true).toBe(true);
-      return;
-    }
-
-    try {
-      // Get security groups for the VPC
-      const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [OUT.vpcId]
-          }
-        ]
-      });
-      const response = await retry(() => ec2Client.send(command));
-      
-      expect(response.SecurityGroups).toBeDefined();
-      expect(response.SecurityGroups!.length).toBeGreaterThan(0);
-      
-      // Check that no security group allows all traffic from 0.0.0.0/0
-      response.SecurityGroups!.forEach(sg => {
-        const dangerousRules = sg.IpPermissions?.filter(rule => 
-          rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0' && range.Description !== 'SSH access')
-        );
-        expect(dangerousRules?.length || 0).toBe(0);
-      });
-    } catch (error: any) {
-      console.log("Security group test failed:", error.message);
-      throw error;
-    }
+    // Get security groups for the VPC
+    const command = new DescribeSecurityGroupsCommand({
+      Filters: [
+        {
+          Name: 'vpc-id',
+          Values: [OUT.vpcId]
+        }
+      ]
+    });
+    const response = await retry(() => ec2Client.send(command));
+    
+    expect(response.SecurityGroups).toBeDefined();
+    expect(response.SecurityGroups!.length).toBeGreaterThan(0);
+    
+    // Check that no security group allows all traffic from 0.0.0.0/0
+    response.SecurityGroups!.forEach(sg => {
+      const dangerousRules = sg.IpPermissions?.filter(rule => 
+        rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0' && range.Description !== 'SSH access')
+      );
+      expect(dangerousRules?.length || 0).toBe(0);
+    });
   }, 30000);
 
   test("S3 bucket exists and has proper encryption", async () => {
-    if (!isLiveTestingEnabled) {
-      console.log("Skipping live S3 bucket test - live testing not enabled");
-      expect(true).toBe(true);
-      return;
-    }
-
-    try {
-      const encryptionCommand = new GetBucketEncryptionCommand({
-        Bucket: OUT.s3BucketName
-      });
-      const encryptionResponse = await retry(() => s3Client.send(encryptionCommand));
-      
-      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules!.length).toBeGreaterThan(0);
-    } catch (error: any) {
-      console.log("S3 bucket encryption test failed:", error.message);
-      throw error;
-    }
+    const encryptionCommand = new GetBucketEncryptionCommand({
+      Bucket: OUT.s3BucketName
+    });
+    const encryptionResponse = await retry(() => s3Client.send(encryptionCommand));
+    
+    expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+    expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules!.length).toBeGreaterThan(0);
   }, 30000);
 
   test("Load balancer exists and is accessible", async () => {
-    if (!isLiveTestingEnabled) {
-      console.log("Skipping live load balancer test - live testing not enabled");
-      expect(true).toBe(true);
-      return;
-    }
-
-    try {
-      const command = new DescribeLoadBalancersCommand({});
-      const response = await retry(() => elbClient.send(command));
-      
-      const alb = response.LoadBalancers?.find(lb => 
-        lb.DNSName === OUT.loadBalancerDns
-      );
-      
-      expect(alb).toBeDefined();
-      expect(alb!.State!.Code).toBe('active');
-    } catch (error: any) {
-      console.log("Load balancer test failed:", error.message);
-      throw error;
-    }
+    const command = new DescribeLoadBalancersCommand({});
+    const response = await retry(() => elbClient.send(command));
+    
+    const alb = response.LoadBalancers?.find(lb => 
+      lb.DNSName === OUT.loadBalancerDns
+    );
+    
+    expect(alb).toBeDefined();
+    expect(alb!.State!.Code).toBe('active');
   }, 30000);
 
   test("RDS instance exists and is properly configured", async () => {
-    if (!isLiveTestingEnabled) {
-      console.log("Skipping live RDS test - live testing not enabled");
-      expect(true).toBe(true);
-      return;
-    }
-
-    try {
-      const command = new DescribeDBInstancesCommand({});
-      const response = await retry(() => rdsClient.send(command));
-      
-      const dbInstance = response.DBInstances?.find(db => 
-        db.Endpoint?.Address === OUT.databaseEndpoint.split(':')[0]
-      );
-      
-      expect(dbInstance).toBeDefined();
-      expect(dbInstance!.DBInstanceStatus).toBe('available');
-      expect(dbInstance!.StorageEncrypted).toBe(true);
-    } catch (error: any) {
-      console.log("RDS instance test failed:", error.message);
-      throw error;
-    }
+    const command = new DescribeDBInstancesCommand({});
+    const response = await retry(() => rdsClient.send(command));
+    
+    const dbInstance = response.DBInstances?.find(db => 
+      db.Endpoint?.Address === OUT.databaseEndpoint.split(':')[0]
+    );
+    
+    expect(dbInstance).toBeDefined();
+    expect(dbInstance!.DBInstanceStatus).toBe('available');
+    expect(dbInstance!.StorageEncrypted).toBe(true);
   }, 30000);
 
   test("Secrets Manager secret exists", async () => {
-    if (!isLiveTestingEnabled) {
-      console.log("Skipping live Secrets Manager test - live testing not enabled");
-      expect(true).toBe(true);
-      return;
-    }
-
-    try {
-      const command = new DescribeSecretCommand({
-        SecretId: OUT.secretsManagerArn
-      });
-      const response = await retry(() => secretsClient.send(command));
-      
-      expect(response.Name).toBeDefined();
-      expect(response.ARN).toBe(OUT.secretsManagerArn);
-    } catch (error: any) {
-      console.log("Secrets Manager test failed:", error.message);
-      throw error;
-    }
+    const command = new DescribeSecretCommand({
+      SecretId: OUT.secretsManagerArn
+    });
+    const response = await retry(() => secretsClient.send(command));
+    
+    expect(response.Name).toBeDefined();
+    expect(response.ARN).toBe(OUT.secretsManagerArn);
   }, 30000);
 });
 
