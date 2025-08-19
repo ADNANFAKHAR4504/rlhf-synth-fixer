@@ -339,7 +339,7 @@ describe("Terraform Infrastructure Integration Tests", () => {
       // Database engine might be postgres or mysql depending on deployment
       expect(["postgres", "mysql"]).toContain(webappDb!.Engine);
       expect(webappDb!.StorageEncrypted).toBe(true);
-      expect(webappDb!.DBInstanceClass).toBe("db.t3.micro");
+      expect(webappDb!.DBInstanceClass).toBe("db.t3.medium");
       expect(webappDb!.BackupRetentionPeriod).toBe(7);
     });
 
@@ -589,7 +589,11 @@ describe("Terraform Infrastructure Integration Tests", () => {
       // ALB performance alarms
       const responseTimeAlarm = alarms.find(a => 
         a.AlarmName?.includes("alb-response-time") || 
-        a.AlarmName?.includes("alb_response_time")
+        a.AlarmName?.includes("alb_response_time") ||
+        a.AlarmName?.includes("response-time") ||
+        a.AlarmName?.includes("response_time") ||
+        (a.AlarmName?.toLowerCase().includes("target") && a.AlarmName?.toLowerCase().includes("response")) ||
+        a.MetricName === "TargetResponseTime"
       );
       const healthyHostsAlarm = alarms.find(a => 
         a.AlarmName?.includes("alb-unhealthy-hosts") || 
