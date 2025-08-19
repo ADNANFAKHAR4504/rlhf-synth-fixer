@@ -45,7 +45,7 @@ roles = {
 
   ci-deployer = {
     description          = "CI/CD deployment role with resource-scoped permissions"
-    max_session_duration = 1800
+    max_session_duration = 3600
     trusted_principals   = ["arn:aws:iam::718240086340:role/iac-rlhf-trainer-instances-role"]
     require_external_id  = true
     require_mfa          = false
@@ -78,7 +78,7 @@ roles = {
 
   breakglass = {
     description          = "Emergency access with MFA and short session"
-    max_session_duration = 900
+    max_session_duration = 3600
     trusted_principals   = ["arn:aws:iam::718240086340:role/iac-rlhf-trainer-instances-role"]
     require_external_id  = false
     require_mfa          = true
