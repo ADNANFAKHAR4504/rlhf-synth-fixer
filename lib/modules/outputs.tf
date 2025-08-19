@@ -89,7 +89,7 @@ output "vpc_endpoint_sg_id" {
 
 output "kms_key_id" {
   description = "ID of the KMS key"
-  value       = data.aws_kms_key.main.key_id
+  value       = data.aws_kms_key.main.id
 }
 
 output "vpc_endpoint_s3_id" {
