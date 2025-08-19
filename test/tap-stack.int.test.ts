@@ -801,7 +801,6 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
       // Report all security checks
       console.log('Security Compliance Report:');
       securityChecks.forEach((check: any) => {
-        console.log(`  ${check.passed ? '✅' : '❌'} ${check.check}`);
         expect(check.passed).toBe(true);
       });
 
@@ -955,7 +954,7 @@ describe('TapStack Integration Tests - Secure Web Application Infrastructure', (
         expect(allDbSubnetsArePrivate).toBe(true);
       }
 
-      console.log('✅ Application and database layers are properly segregated');
+      console.log('Application and database layers are properly segregated');
     }, 45000);
   });
 });
