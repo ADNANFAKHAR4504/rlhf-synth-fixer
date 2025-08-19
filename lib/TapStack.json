@@ -212,6 +212,9 @@
         "RegionMap": {
             "us-west-2": {
                 "AMI": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}"
+            },
+            "us-east-1": {
+                "AMI": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}"
             }
         }
     },

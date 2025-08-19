@@ -161,9 +161,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Mappings?.RegionMap).toBeDefined();
     });
 
-    test('RegionMap should have us-west-2 region', () => {
+    test('RegionMap should have us-west-2 and us-east-1 regions', () => {
       expect(template.Mappings?.RegionMap['us-west-2']).toBeDefined();
       expect(template.Mappings?.RegionMap['us-west-2'].AMI).toBeDefined();
+      expect(template.Mappings?.RegionMap['us-east-1']).toBeDefined();
+      expect(template.Mappings?.RegionMap['us-east-1'].AMI).toBeDefined();
     });
 
     test('AMI mapping should use SSM parameter', () => {
@@ -172,6 +174,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(amiMapping).toContain(
         'resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1'
       );
+    });
+
+    test('Both regions should have same AMI mapping', () => {
+      const usWest2AMI = template.Mappings?.RegionMap['us-west-2'].AMI;
+      const usEast1AMI = template.Mappings?.RegionMap['us-east-1'].AMI;
+      expect(usWest2AMI).toBe(usEast1AMI);
     });
   });
 
