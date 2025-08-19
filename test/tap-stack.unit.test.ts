@@ -322,7 +322,7 @@ describe('TapStack CloudFormation Template - Unit', () => {
     test('S3 bucket has versioning enabled', () => {
       const s3 = template.Resources.S3Bucket;
       expect(s3.Type).toBe('AWS::S3::Bucket');
-      expect(s3.Properties.BucketName['Fn::Sub']).toContain('static-content');
+      expect(s3.Properties.BucketName['Fn::Sub']).toContain('tapstack-logs');
       expect(s3.Properties.VersioningConfiguration.Status).toBe('Enabled');
       expect(s3.Properties.BucketEncryption).toBeDefined();
       expect(s3.Properties.PublicAccessBlockConfiguration).toBeDefined();

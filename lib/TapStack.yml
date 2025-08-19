@@ -700,19 +700,11 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:PutObject",
-                                        "s3:GetObject",
-                                        "s3:DeleteObject",
-                                        "s3:PutObjectAcl"
+                                        "s3:PutObject"
                                     ],
-                                    "Resource": [
-                                        {
-                                            "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"
-                                        },
-                                        {
-                                            "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
-                                        }
-                                    ]
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
+                                    }
                                 }
                             ]
                         }
@@ -1282,7 +1274,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "static-content-tapstackpr1697-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "tapstack-logs-tapstackpr1697-${AWS::AccountId}-${AWS::Region}"
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -1346,31 +1338,7 @@
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": [
-                                "s3:PutObject",
-                                "s3:GetObject",
-                                "s3:DeleteObject"
-                            ],
-                            "Resource": {
-                                "Fn::Join": [
-                                    "",
-                                    [
-                                        "arn:aws:s3:::",
-                                        {
-                                            "Ref": "S3Bucket"
-                                        },
-                                        "/*"
-                                    ]
-                                ]
-                            }
-                        },
+
                         {
                             "Effect": "Allow",
                             "Principal": {
@@ -1380,21 +1348,7 @@
                                 "s3:PutObject"
                             ],
                             "Resource": {
-                                "Fn::Join": [
-                                    "",
-                                    [
-                                        "arn:aws:s3:::",
-                                        {
-                                            "Ref": "S3Bucket"
-                                        },
-                                        "/*"
-                                    ]
-                                ]
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
                             }
                         },
                         {
@@ -1403,19 +1357,11 @@
                                 "Service": "elasticloadbalancing.amazonaws.com"
                             },
                             "Action": [
-                                "s3:PutObject",
-                                "s3:GetObject",
-                                "s3:DeleteObject",
-                                "s3:PutObjectAcl"
+                                "s3:PutObject"
                             ],
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"
-                                },
-                                {
-                                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
-                                }
-                            ]
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
+                            }
                         },
                         {
                             "Effect": "Allow",
@@ -1428,19 +1374,11 @@
                                 }
                             },
                             "Action": [
-                                "s3:PutObject",
-                                "s3:GetObject",
-                                "s3:DeleteObject",
-                                "s3:PutObjectAcl"
+                                "s3:PutObject"
                             ],
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}"
-                                },
-                                {
-                                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
-                                }
-                            ]
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${S3Bucket}/*"
+                            }
                         }
                     ]
                 }
