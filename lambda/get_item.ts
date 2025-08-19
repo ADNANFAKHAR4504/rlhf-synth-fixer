@@ -71,8 +71,8 @@ function unmarshall(
   return unmarshalled;
 }
 
-const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
-const secretsClient = new SecretsManagerClient({ region: 'us-east-1' });
+const dynamoClient = new DynamoDBClient({ region: 'us-west-2' });
+const secretsClient = new SecretsManagerClient({ region: 'us-west-2' });
 
 export const handler = async (
   event: APIGatewayProxyEvent

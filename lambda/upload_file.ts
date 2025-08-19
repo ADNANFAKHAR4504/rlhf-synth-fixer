@@ -38,8 +38,8 @@ interface UploadRequest {
   contentType?: string;
 }
 
-const s3Client = new S3Client({ region: 'us-east-2' });
-const secretsClient = new SecretsManagerClient({ region: 'us-east-2' });
+const s3Client = new S3Client({ region: 'us-west-2' });
+const secretsClient = new SecretsManagerClient({ region: 'us-west-2' });
 
 // Custom implementation of getSignedUrl for S3
 async function getSignedUrl(
@@ -53,7 +53,7 @@ async function getSignedUrl(
 
   // For demo purposes, return a placeholder URL
   // In real implementation, this would generate proper AWS signed URLs
-  return `https://${process.env.BUCKET_NAME}.s3.us-east-1.amazonaws.com/${(command as { input: { Key: string } }).input.Key}?expires=${expires}`;
+  return `https://${process.env.BUCKET_NAME}.s3.us-west-2.amazonaws.com/${(command as { input: { Key: string } }).input.Key}?expires=${expires}`;
 }
 
 export const handler = async (

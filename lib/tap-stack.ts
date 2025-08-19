@@ -30,9 +30,23 @@ export class TapStack extends cdk.Stack {
             actions: ['kms:*'],
             resources: ['*'],
           }),
+          new iam.PolicyStatement({
+            sid: 'Allow Secrets Manager Service',
+            effect: iam.Effect.ALLOW,
+            principals: [
+              new iam.ServicePrincipal('secretsmanager.amazonaws.com'),
+            ],
+            actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
+            resources: ['*'],
+          }),
         ],
       }),
     });
+
+    // Add tags to KMS key
+    cdk.Tags.of(kmsKey).add('Environment', props?.environmentSuffix || 'dev');
+    cdk.Tags.of(kmsKey).add('Purpose', 'encryption');
+    cdk.Tags.of(kmsKey).add('Compliance', 'encryption-at-rest');
 
     // KMS Key Alias for easier reference
     new kms.Alias(this, 'TapAppKMSKeyAlias', {
@@ -44,7 +58,7 @@ export class TapStack extends cdk.Stack {
     const appSecrets = new secretsmanager.Secret(this, 'TapAppSecrets', {
       secretName: 'tap-app/secrets',
       description: 'Application secrets for TAP serverless app',
-      // Removed KMS encryption to avoid CDK policy injection issues
+      encryptionKey: kmsKey, // Enable KMS encryption for compliance
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'admin' }),
         generateStringKey: 'password',
@@ -70,6 +84,36 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
     });
 
+    // Add tags to DynamoDB table
+    cdk.Tags.of(itemsTable).add(
+      'Environment',
+      props?.environmentSuffix || 'dev'
+    );
+    cdk.Tags.of(itemsTable).add('Purpose', 'data-storage');
+    cdk.Tags.of(itemsTable).add('Compliance', 'encryption-at-rest');
+
+    // Separate S3 bucket for access logs (to avoid circular logging)
+    const logsBucket = new s3.Bucket(this, 'LogsBucket', {
+      bucketName: `tap-logs-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: kmsKey,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      versioned: false,
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      lifecycleRules: [
+        {
+          expiration: cdk.Duration.days(90), // Logs expire after 90 days
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
+            },
+          ],
+        },
+      ],
+    });
+
     // S3 Bucket for file uploads with encryption
     const filesBucket = new s3.Bucket(this, 'FilesBucket', {
       bucketName: `tap-files-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
@@ -77,11 +121,20 @@ export class TapStack extends cdk.Stack {
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
+      serverAccessLogsBucket: logsBucket, // Use separate bucket for logs
       serverAccessLogsPrefix: 'access-logs/',
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
       autoDeleteObjects: false, // Disabled for testing compatibility
     });
+
+    // Add tags to S3 bucket
+    cdk.Tags.of(filesBucket).add(
+      'Environment',
+      props?.environmentSuffix || 'dev'
+    );
+    cdk.Tags.of(filesBucket).add('Purpose', 'file-storage');
+    cdk.Tags.of(filesBucket).add('Compliance', 'encryption-at-rest');
 
     // CloudWatch Log Groups for Lambda functions
     // Using AWS default encryption to avoid circular dependency with KMS key
@@ -120,11 +173,32 @@ export class TapStack extends cdk.Stack {
                 'dynamodb:GetItem',
                 'dynamodb:PutItem',
                 'dynamodb:Query',
-                'dynamodb:Scan',
                 'dynamodb:UpdateItem',
                 'dynamodb:DeleteItem',
               ],
               resources: [itemsTable.tableArn],
+              conditions: {
+                StringEquals: {
+                  'aws:RequestTag/Environment':
+                    props?.environmentSuffix || 'dev',
+                },
+              },
+            }),
+            // Item-level access for multi-tenant scenarios
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'dynamodb:GetItem',
+                'dynamodb:UpdateItem',
+                'dynamodb:DeleteItem',
+              ],
+              resources: [`${itemsTable.tableArn}/index/*`],
+              conditions: {
+                StringEquals: {
+                  'aws:RequestTag/Environment':
+                    props?.environmentSuffix || 'dev',
+                },
+              },
             }),
           ],
         }),
@@ -134,11 +208,26 @@ export class TapStack extends cdk.Stack {
               effect: iam.Effect.ALLOW,
               actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
               resources: [`${filesBucket.bucketArn}/*`],
+              conditions: {
+                StringEquals: {
+                  'aws:RequestTag/Environment':
+                    props?.environmentSuffix || 'dev',
+                },
+                Bool: {
+                  'aws:SecureTransport': 'true',
+                },
+              },
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['s3:ListBucket'],
               resources: [filesBucket.bucketArn],
+              conditions: {
+                StringEquals: {
+                  'aws:RequestTag/Environment':
+                    props?.environmentSuffix || 'dev',
+                },
+              },
             }),
           ],
         }),
@@ -148,11 +237,35 @@ export class TapStack extends cdk.Stack {
               effect: iam.Effect.ALLOW,
               actions: [
                 'kms:Decrypt',
-                'kms:Encrypt',
                 'kms:GenerateDataKey',
                 'kms:DescribeKey',
               ],
               resources: [kmsKey.keyArn],
+              conditions: {
+                StringEquals: {
+                  'aws:RequestTag/Environment':
+                    props?.environmentSuffix || 'dev',
+                },
+                Bool: {
+                  'aws:SecureTransport': 'true',
+                },
+              },
+            }),
+            // Separate policy for encryption operations (only when needed)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['kms:Encrypt'],
+              resources: [kmsKey.keyArn],
+              conditions: {
+                StringEquals: {
+                  'aws:RequestTag/Environment':
+                    props?.environmentSuffix || 'dev',
+                  'aws:RequestTag/Operation': 'encryption',
+                },
+                Bool: {
+                  'aws:SecureTransport': 'true',
+                },
+              },
             }),
           ],
         }),
@@ -232,13 +345,22 @@ export class TapStack extends cdk.Stack {
       logGroup: uploadFileLogGroup,
     });
 
-    // API Gateway with CORS enabled
+    // API Gateway with restricted CORS for production security
     const api = new apigateway.RestApi(this, 'TapApi', {
       restApiName: 'TAP Serverless API',
       description: 'Secure serverless web application API',
+      apiKeySourceType: apigateway.ApiKeySourceType.HEADER,
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowOrigins: [
+          // Restrict to specific domains in production
+          'https://yourdomain.com',
+          'https://www.yourdomain.com',
+          // Allow localhost for development only
+          ...(props?.environmentSuffix === 'dev'
+            ? ['http://localhost:3000', 'http://localhost:8080']
+            : []),
+        ],
+        allowMethods: ['GET', 'POST', 'OPTIONS'], // Restrict to only needed methods
         allowHeaders: [
           'Content-Type',
           'X-Amz-Date',
@@ -246,6 +368,7 @@ export class TapStack extends cdk.Stack {
           'X-Api-Key',
           'X-Amz-Security-Token',
         ],
+        maxAge: cdk.Duration.seconds(3600), // Cache preflight for 1 hour
       },
       cloudWatchRole: true,
       deployOptions: {
@@ -302,13 +425,24 @@ export class TapStack extends cdk.Stack {
         requestModels: {
           'application/json': createItemModel,
         },
+        apiKeyRequired: props?.environmentSuffix !== 'dev', // Require API key in production
       }
     );
 
-    // GET /items - Get all items
+    // GET /items - Get all items with request validation
     itemsResource.addMethod(
       'GET',
-      new apigateway.LambdaIntegration(getItemsFunction)
+      new apigateway.LambdaIntegration(getItemsFunction),
+      {
+        requestValidator: actualRequestValidator,
+        // Add query parameter validation for GET requests
+        requestParameters: {
+          'method.request.querystring.limit': false, // Optional
+          'method.request.querystring.offset': false, // Optional
+          'method.request.querystring.environment': false, // Optional filter
+        },
+        apiKeyRequired: props?.environmentSuffix !== 'dev', // Require API key in production
+      }
     );
 
     // Files resource for uploads
@@ -320,6 +454,7 @@ export class TapStack extends cdk.Stack {
       new apigateway.LambdaIntegration(uploadFileFunction),
       {
         requestValidator: actualRequestValidator,
+        apiKeyRequired: props?.environmentSuffix !== 'dev', // Require API key in production
       }
     );
 
@@ -337,6 +472,11 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: filesBucket.bucketName,
       description: 'S3 bucket name for file uploads',
+    });
+
+    new cdk.CfnOutput(this, 'LogsBucketName', {
+      value: logsBucket.bucketName,
+      description: 'S3 bucket name for access logs',
     });
 
     new cdk.CfnOutput(this, 'KMSKeyId', {

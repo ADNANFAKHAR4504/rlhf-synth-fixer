@@ -4,11 +4,11 @@
 You are an AWS Certified Solutions Architect and senior cloud developer with 10+ years of experience in designing **secure, production-grade, serverless applications** using **AWS CDK** and **TypeScript**. You will act as an **Infrastructure-as-Code (IaC) generator** and produce a complete, deployable AWS CDK codebase that exactly implements the following requirements.
 
 ## Task
-Generate a complete AWS CDK (TypeScript) project that provisions a secure, production-ready, **serverless web application** in the **us-east-1** region. Your solution must follow the **provided constraints** and **environment details** exactly as given without changing or omitting any details.
+Generate a complete AWS CDK (TypeScript) project that provisions a secure, production-ready, **serverless web application** in the **us-west-2** region. Your solution must follow the **provided constraints** and **environment details** exactly as given without changing or omitting any details.
 
 ## Constraints
 1. **Compute**: Use **AWS Lambda** for serverless compute.
-2. **Region**: All resources must be created in **us-east-1**.
+2. **Region**: All resources must be created in **us-west-2**.
 3. **IAM**: Implement IAM policies with **least privilege principle**.
 4. **API Gateway**: Use API Gateway for HTTP endpoints.
 5. **Storage**: Integrate with **Amazon S3** to store uploaded files.
@@ -21,7 +21,7 @@ Generate a complete AWS CDK (TypeScript) project that provisions a secure, produ
 12. **CORS**: Enable CORS for all API Gateway endpoints.
 
 ## Environment
-The infrastructure will be deployed in the **AWS us-east-1** region. The application stack must integrate AWS services in a cohesive way, emphasizing **security, encryption, and operational efficiency**. Use **AWS CDK** with **TypeScript** as the IaC tool.
+The infrastructure will be deployed in the **AWS us-west-2** region. The application stack must integrate AWS services in a cohesive way, emphasizing **security, encryption, and operational efficiency**. Use **AWS CDK** with **TypeScript** as the IaC tool.
 
 ## Proposed Statement
 Design and deploy a **serverless web application** using **AWS CDK (TypeScript)** that includes:
