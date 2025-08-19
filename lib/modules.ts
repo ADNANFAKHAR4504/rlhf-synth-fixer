@@ -3,6 +3,7 @@ import { Construct } from 'constructs';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 
@@ -121,14 +122,14 @@ export class SecurityModules extends Construct {
       routeTableId: publicRouteTable.id,
     });
 
+    // Get current AWS account ID
+    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
+
     // KMS Key for encryption - Created early as other resources depend on it
     this.kmsKey = new KmsKey(this, 'MyApp-KMS-Main', {
       description:
         'KMS key for MyApp encryption - encrypts EBS volumes, S3 buckets, and RDS instances',
       keyUsage: 'ENCRYPT_DECRYPT',
-      // Remove this line - keySpec doesn't exist
-      // keySpec: "SYMMETRIC_DEFAULT",
-      // Rotation enabled for enhanced security
       enableKeyRotation: true,
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -137,7 +138,7 @@ export class SecurityModules extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::*:root',
+              AWS: `arn:aws:iam::${callerIdentity.accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
