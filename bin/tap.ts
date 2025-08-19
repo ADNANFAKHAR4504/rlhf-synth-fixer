@@ -36,7 +36,7 @@ const defaultTags = {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('pulumi-infra', {
+new TapStack('TapStack', {
   tags: defaultTags,
 });
 
