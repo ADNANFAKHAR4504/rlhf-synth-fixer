@@ -61,7 +61,7 @@ export class TapStack extends cdk.Stack {
 
     // Create secure S3 bucket for application data
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
-      bucketName: `app-data-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `app-data-${environmentSuffix}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
