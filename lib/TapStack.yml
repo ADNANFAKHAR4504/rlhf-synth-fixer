@@ -477,6 +477,11 @@ Resources:
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudTrailLogGroup}:*'
 
   # Note: ConfigRole removed since Config resources are not being created
+  # Alternative Compliance Monitoring Options:
+  # 1. Use AWS Security Hub for centralized compliance monitoring
+  # 2. Integrate with existing AWS Config setup in production accounts
+  # 3. Use CloudWatch Events + Lambda for custom compliance checks
+  # 4. Implement AWS Systems Manager Compliance scanning
 
   # CloudWatch Log Groups
   CloudTrailLogGroup:
@@ -518,8 +523,19 @@ Resources:
   # Most AWS accounts already have a Config setup, and only 1 delivery channel is allowed per region
   # For production use, integrate with existing Config setup or use separate account
 
-  # Note: AWS Config Rules removed since Config service setup conflicts with existing account configuration
-  # In production environments, integrate with existing AWS Config setup or use AWS Security Hub for compliance monitoring
+  # Alternative Compliance Solutions (instead of AWS Config):
+  # 1. AWS Security Hub - Centralized compliance dashboard with security findings
+  # 2. AWS Well-Architected Tool - Framework-based assessments
+  # 3. AWS Systems Manager Compliance - Patch and configuration compliance
+  # 4. CloudTrail + EventBridge + Lambda - Custom compliance automation
+  # 5. Third-party tools like Prowler, Scout Suite for continuous compliance
+  
+  # The current template provides core security through:
+  # - CloudTrail for comprehensive API logging and audit trail
+  # - KMS encryption for data at rest and in transit
+  # - S3 versioning and encryption for data protection
+  # - Security Groups for network-level access control
+  # - IAM roles with least privilege principles
 
 Outputs:
   VPC:

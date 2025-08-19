@@ -848,7 +848,7 @@
                 ]
             }
         },
-        "_ConfigRoleRemoved": "ConfigRole removed due to AWS Config account limits",
+        "_ConfigRoleRemoved": "ConfigRole removed due to AWS Config account limits. Alternatives: AWS Security Hub, Systems Manager Compliance, CloudTrail + EventBridge automation",
         "CloudTrailLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
