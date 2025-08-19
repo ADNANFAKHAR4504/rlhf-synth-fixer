@@ -150,7 +150,7 @@ Parameters:
     Default: ''
   CreateDatabase:
     Type: String
-    Default: 'yes'
+    Default: 'no'
     AllowedValues: ['yes', 'no']
     Description: 'Select "yes" to create a new RDS database. Select "no" to skip database creation.'
   CreateNATGateway:

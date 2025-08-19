@@ -212,7 +212,7 @@
         },
         "CreateDatabase": {
             "Type": "String",
-            "Default": "yes",
+            "Default": "no",
             "AllowedValues": [
                 "yes",
                 "no"
