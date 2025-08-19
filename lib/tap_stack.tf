@@ -48,9 +48,8 @@ terraform {
     bucket         = "prod-tap-tfstate-us-east-1"
     key            = "prod/terraform.tfstate"
     region         = "us-east-1"
-    dynamodb_table = "prod-tap-tf-locks"
+    use_lockfile   = true
     encrypt        = true
-    kms_key_id     = "alias/prod-tap-terraform" # Can be alias or full ARN
   }
 }
 
