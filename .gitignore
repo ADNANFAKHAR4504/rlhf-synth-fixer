@@ -109,18 +109,25 @@ tasks.csv
 .gradle/
 build/
 gradle-app.setting
-!gradle-wrapper.jar
-!gradle-wrapper.properties
 .gradletasknamecache
+
+# Keep Gradle wrapper files (these should be committed)
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+!gradlew
+!gradlew.bat
 
 # Java compiled files
 *.class
-*.jar
 *.war
 *.ear
 *.nar
 hs_err_pid*
 replay_pid*
+
+# Java JAR files (but keep Gradle wrapper)
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
 
 # Java test reports
 build/reports/

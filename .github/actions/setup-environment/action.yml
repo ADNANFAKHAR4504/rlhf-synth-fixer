@@ -116,6 +116,7 @@ runs:
           metadata.json
           lambda/
           build.gradle
+          gradle.properties
           gradle/
           gradlew
           gradlew.bat

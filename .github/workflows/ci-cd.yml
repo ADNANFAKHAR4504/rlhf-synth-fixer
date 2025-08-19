@@ -532,6 +532,7 @@ jobs:
             "cdktf.json"
             "Pulumi.yaml"
             "build.gradle"
+            "gradle.properties"
             "gradle"
             "gradlew"
             "gradlew.bat"
