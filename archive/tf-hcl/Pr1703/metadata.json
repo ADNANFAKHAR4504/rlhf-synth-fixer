@@ -10,7 +10,7 @@
   "subject_labels": [
     "Security Configuration",
     "General Infrastructure Tooling QA",
-    "Access Control", 
+    "Access Control",
     "Performance Optimization",
     "Resource Scaling",
     "Monitoring Setup"
@@ -18,9 +18,15 @@
   "training_quality": 9,
   "aws_services": [
     "S3",
-    "KMS", 
+    "KMS",
     "IAM",
     "GuardDuty",
     "Macie"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
