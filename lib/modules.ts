@@ -207,7 +207,10 @@ export class SecurityModules extends Construct {
       }
     );
 
-    // IAM Policy with minimal required permissions
+    // Generate unique bucket name to avoid conflicts
+    const uniqueSuffix = Math.random().toString(36).substring(2, 8);
+
+    // IAM Policy with minimal required permissions - Updated with bucket name
     const iamPolicy = new IamPolicy(this, 'MyApp-IAM-Policy-EC2', {
       name: 'MyApp-IAM-Policy-EC2',
       description:
@@ -229,7 +232,7 @@ export class SecurityModules extends Construct {
             // Allow access only to our specific S3 bucket
             Effect: 'Allow',
             Action: ['s3:GetObject', 's3:PutObject'],
-            Resource: 'arn:aws:s3:::myapp-secure-data-*/*',
+            Resource: `arn:aws:s3:::myapp-secure-data-${uniqueSuffix}/*`,
           },
         ],
       }),
@@ -241,47 +244,7 @@ export class SecurityModules extends Construct {
       policyArn: iamPolicy.arn,
     });
 
-    // FIX 1: Create RDS Security Group FIRST (before EC2 security group)
-    this.dbSecurityGroup = new SecurityGroup(this, 'MyApp-SG-RDS', {
-      name: 'MyApp-SG-RDS',
-      description:
-        'Security group for RDS instances - only allows MySQL access from private subnets',
-      vpcId: this.vpc.id,
-
-      ingress: [
-        {
-          description: 'MySQL from private subnets only',
-          fromPort: 3306,
-          toPort: 3306,
-          protocol: 'tcp',
-          cidrBlocks: ['10.0.2.0/24', '10.0.3.0/24'], // Use CIDR blocks instead of security group reference
-          ipv6CidrBlocks: [],
-          prefixListIds: [],
-          securityGroups: [],
-        },
-      ],
-
-      egress: [
-        {
-          description: 'All outbound traffic',
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-          ipv6CidrBlocks: [],
-          prefixListIds: [],
-          securityGroups: [],
-        },
-      ],
-
-      tags: {
-        Name: 'MyApp-SG-RDS',
-        Security: 'DatabaseOnly',
-        Purpose: 'RDS',
-      },
-    });
-
-    // Security Group for EC2 instances - Created AFTER RDS security group
+    // Security Group for EC2 instances - Created FIRST
     this.securityGroup = new SecurityGroup(this, 'MyApp-SG-EC2', {
       name: 'MyApp-SG-EC2',
       description:
@@ -341,10 +304,53 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // S3 Bucket for sensitive data
+    // RDS Security Group - Created SECOND, references EC2 security group
+    this.dbSecurityGroup = new SecurityGroup(this, 'MyApp-SG-RDS', {
+      name: 'MyApp-SG-RDS',
+      description:
+        'Security group for RDS instances - only allows MySQL access from EC2 security group',
+      vpcId: this.vpc.id,
+
+      ingress: [
+        {
+          description: 'MySQL from EC2 instances only',
+          fromPort: 3306,
+          toPort: 3306,
+          protocol: 'tcp',
+          cidrBlocks: [],
+          ipv6CidrBlocks: [],
+          prefixListIds: [],
+          securityGroups: [this.securityGroup.id], // Reference EC2 security group
+        },
+      ],
+
+      egress: [
+        {
+          description: 'All outbound traffic',
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+          ipv6CidrBlocks: [],
+          prefixListIds: [],
+          securityGroups: [],
+        },
+      ],
+
+      tags: {
+        Name: 'MyApp-SG-RDS',
+        Security: 'DatabaseOnly',
+        Purpose: 'RDS',
+      },
+
+      // Explicit dependency on EC2 security group
+      dependsOn: [this.securityGroup],
+    });
+
+    // S3 Bucket for sensitive data with unique name
     this.s3Bucket = new S3Bucket(this, 'MyApp-S3-SecureData', {
-      bucket: `myapp-secure-data-${Math.random().toString(36).substring(2, 8)}`, // FIX 2: Make bucket name unique
-      forceDestroy: true, // FIX 3: Allow destruction for development
+      bucket: `myapp-secure-data-${uniqueSuffix}`,
+      forceDestroy: true, // Allow destruction for development
       tags: {
         Name: 'MyApp-S3-SecureData',
         DataClassification: 'Sensitive',
@@ -448,7 +454,7 @@ export class SecurityModules extends Construct {
       },
     });
 
-    // FIX 4: EC2 Instance created BEFORE RDS to establish proper dependencies
+    // EC2 Instance - Created BEFORE RDS to establish proper dependencies
     this.ec2Instance = new Instance(this, 'MyApp-EC2-Main', {
       ami: 'ami-0c94855ba95b798c7',
       instanceType: config.instanceType,
@@ -471,7 +477,7 @@ export class SecurityModules extends Construct {
         Monitoring: 'Enabled',
       },
 
-      // FIX 5: Add explicit dependencies
+      // Explicit dependencies
       dependsOn: [this.instanceProfile, this.securityGroup],
     });
 
@@ -499,8 +505,8 @@ export class SecurityModules extends Construct {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
 
-      deletionProtection: false, // FIX 6: Disable for development
-      skipFinalSnapshot: true, // FIX 7: Skip snapshot for development
+      deletionProtection: false, // Disable for development
+      skipFinalSnapshot: true, // Skip snapshot for development
 
       tags: {
         Name: 'MyApp-RDS-Main',
@@ -509,8 +515,14 @@ export class SecurityModules extends Construct {
         Environment: 'Production',
       },
 
-      // FIX 8: Add explicit dependencies
-      dependsOn: [dbSubnetGroup, this.dbSecurityGroup],
+      // Explicit dependencies
+      dependsOn: [dbSubnetGroup, this.dbSecurityGroup, this.ec2Instance],
+    });
+
+    // CRITICAL FIX: Add lifecycle management to security groups
+    // This prevents the security group from being destroyed before RDS is fully cleaned up
+    this.dbSecurityGroup.addOverride('lifecycle', {
+      create_before_destroy: true,
     });
 
     // CloudTrail for comprehensive API activity monitoring
@@ -575,7 +587,7 @@ export class SecurityModules extends Construct {
           Threshold: '80%',
         },
 
-        // FIX 9: Add explicit dependency
+        // Explicit dependency
         dependsOn: [this.ec2Instance],
       }
     );
