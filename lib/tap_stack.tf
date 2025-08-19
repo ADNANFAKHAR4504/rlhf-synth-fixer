@@ -21,7 +21,7 @@ data "aws_availability_zones" "secondary" {
 
 # VPC Module - Primary Region
 module "vpc_primary" {
-  source = "./modules/vpc"
+  source = "./modules/vpc_module"
   
   providers = {
     aws = aws.primary
@@ -35,7 +35,7 @@ module "vpc_primary" {
 
 # VPC Module - Secondary Region
 module "vpc_secondary" {
-  source = "./modules/vpc"
+  source = "./modules/vpc_module"
   
   providers = {
     aws = aws.secondary
@@ -49,7 +49,7 @@ module "vpc_secondary" {
 
 # Load Balancer Module - Primary Region
 module "load_balancer_primary" {
-  source = "./modules/load-balancer"
+  source = "./modules/loadbalancer_module"
   
   providers = {
     aws = aws.primary
@@ -63,7 +63,7 @@ module "load_balancer_primary" {
 
 # Load Balancer Module - Secondary Region
 module "load_balancer_secondary" {
-  source = "./modules/load-balancer"
+  source = "./modules/loadbalancer_module"
   
   providers = {
     aws = aws.secondary
@@ -77,7 +77,7 @@ module "load_balancer_secondary" {
 
 # Compute Module - Primary Region
 module "compute_primary" {
-  source = "./modules/compute"
+  source = "./modules/compute_module"
   
   providers = {
     aws = aws.primary
@@ -97,7 +97,7 @@ module "compute_primary" {
 
 # Compute Module - Secondary Region
 module "compute_secondary" {
-  source = "./modules/compute"
+  source = "./modules/compute_module"
   
   providers = {
     aws = aws.secondary
@@ -118,7 +118,7 @@ module "compute_secondary" {
 # DNS Module for Route 53 failover routing
 # This module sets up health checks and failover routing between regions
 # module "dns" {
-#   source = "./modules/dns"
+#   source = "./modules/route53_module"
   
 #   # DNS is a global service, so we use the primary provider
 #   providers = {
