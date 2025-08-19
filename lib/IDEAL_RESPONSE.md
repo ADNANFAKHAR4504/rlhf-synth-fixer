@@ -20,7 +20,7 @@ terraform {
 }
 provider "aws" {
   alias  = "primary"
-  region = var.aws_region
+
   default_tags {
     tags = {
       Environment = var.environment
@@ -41,7 +41,6 @@ provider "aws" {
 ```
 
 ---
-
 ## tap_stack.tf
 ```hcl
 variable "aws_region" {
@@ -52,7 +51,6 @@ variable "aws_region" {
 variable "secondary_region" {
   description = "Secondary AWS provider region"
   type        = string
-  default     = "us-west-2"
 }
 variable "environment" {
   description = "Environment suffix for resource names (must start with a letter, use only letters and numbers)"
@@ -73,6 +71,7 @@ variable "bucket_name" {
   type        = string
   default     = "secure-env-devs3-bucket"
 }
+
 ########################
 # S3 Bucket
 ########################
@@ -122,11 +121,9 @@ variable "vpc_cidr_secondary" {
   type        = string
   default     = "10.1.0.0/16"
 }
-resource "aws_vpc" "primary" {
   provider              = aws.primary
   cidr_block            = var.vpc_cidr_primary
   enable_dns_hostnames  = true
-  enable_dns_support    = true
   tags = {
     Name = "${var.name_prefix}-${var.environment}-vpc-primary"
   }
@@ -161,7 +158,6 @@ resource "aws_subnet" "private_primary_2" {
 resource "aws_subnet" "private_secondary_1" {
   provider            = aws.secondary
   vpc_id              = aws_vpc.secondary.id
-  cidr_block          = cidrsubnet(var.vpc_cidr_secondary, 4, 1)
   availability_zone   = "us-west-2a"
   tags = {
     Name = "${var.name_prefix}-${var.environment}-private-subnet-secondary-1"
@@ -187,7 +183,6 @@ output "vpc_id_secondary" {
 ---
 
 ## kms.tf
-```hcl
 resource "aws_kms_key" "primary" {
   provider                = aws.primary
   description             = "${var.name_prefix}-${var.environment}-kms-key-primary"
@@ -207,6 +202,13 @@ resource "aws_kms_key" "primary" {
       },
       {
         Sid: "Allow CloudWatch Logs to use the key",
+
+  ---
+
+  ## ec2.tf
+  ```hcl
+  # Use data source to lookup latest Amazon Linux 2 AMI in each region
+
         Effect: "Allow",
         Principal: {
           Service: "logs.us-east-1.amazonaws.com"
@@ -277,8 +279,6 @@ resource "aws_kms_alias" "secondary" {
 data "aws_caller_identity" "current" {}
 ```
 
----
-
 ## iam.tf
 ```hcl
 resource "aws_iam_role" "vpc_flow_log" {
@@ -317,10 +317,52 @@ resource "aws_iam_role_policy" "vpc_flow_log" {
     ]
   })
 }
+
+  ---
+
+  ## monitoring.tf
+  ```hcl
+  resource "aws_cloudwatch_metric_alarm" "bastion_primary_cpu_high" {
+    provider = aws.primary
+    alarm_name          = "${var.name_prefix}-${var.environment}-bastion-primary-cpu-high"
+    comparison_operator = "GreaterThanThreshold"
+    evaluation_periods  = 2
+    metric_name         = "CPUUtilization"
+    namespace           = "AWS/EC2"
+    period              = 300
+    statistic           = "Average"
+    threshold           = 80
+    alarm_description   = "Alarm if CPU > 80% for 10 minutes"
+    dimensions = {
+      InstanceId = aws_instance.bastion_primary.id
+    }
+    tags = {
+      Project = "secure-env"
+    }
+  }
+
+  resource "aws_cloudwatch_metric_alarm" "bastion_secondary_cpu_high" {
+    provider = aws.secondary
+    alarm_name          = "${var.name_prefix}-${var.environment}-bastion-secondary-cpu-high"
+    comparison_operator = "GreaterThanThreshold"
+    evaluation_periods  = 2
+    metric_name         = "CPUUtilization"
+    namespace           = "AWS/EC2"
+    period              = 300
+    statistic           = "Average"
+    threshold           = 80
+    alarm_description   = "Alarm if CPU > 80% for 10 minutes"
+    dimensions = {
+      InstanceId = aws_instance.bastion_secondary.id
+    }
+    tags = {
+      Project = "secure-env"
+    }
+  }
+  ```
 resource "aws_iam_role" "lambda_role" {
   name = "${var.name_prefix}-${var.environment}-lambda-role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
     Statement = [
       {
         Effect = "Allow"
@@ -396,7 +438,6 @@ resource "aws_iam_role_policy" "ec2_policy" {
         Resource = "*"
       },
       {
-        Effect = "Allow"
         Action = [
           "kms:Encrypt",
           "kms:Decrypt",
@@ -414,7 +455,6 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 ```
 
 ---
-
 ## security_groups.tf
 ```hcl
 variable "allowed_ssh_cidr" {

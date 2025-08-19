@@ -36,27 +36,6 @@ resource "aws_vpc" "secondary" {
   }
 }
 
-resource "aws_subnet" "private_primary" {
-  provider    = aws.primary
-  vpc_id      = aws_vpc.primary.id
-  cidr_block  = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-private-subnet-primary"
-  }
-}
-
-resource "aws_subnet" "private_secondary" {
-  provider    = aws.secondary
-  vpc_id      = aws_vpc.secondary.id
-  cidr_block  = "10.1.1.0/24"
-  availability_zone = "us-west-2a"
-  tags = {
-    Name = "${var.name_prefix}-${var.environment}-private-subnet-secondary"
-  }
-}
-
-
 # Private Subnets for Primary Region
 resource "aws_subnet" "private_primary_1" {
   provider            = aws.primary
@@ -370,45 +349,4 @@ resource "aws_subnet" "public_secondary_2" {
   tags = {
     Name = "${var.name_prefix}-${var.environment}-public-subnet-secondary-2"
   }
-}
-
-resource "aws_iam_role" "vpc_flow_logs_role" {
-  name = "${var.name_prefix}-${var.environment}-vpc-flowlogs-role"
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "vpc-flow-logs.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
-}
-
-resource "aws_iam_role_policy" "vpc_flow_logs_role_policy" {
-  name = "${var.name_prefix}-${var.environment}-vpc-flowlogs-policy"
-  role = aws_iam_role.vpc_flow_logs_role.id
-  policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-EOF
 }
