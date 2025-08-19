@@ -287,9 +287,9 @@ export class StorageStack extends pulumi.ComponentResource {
 
     // RDS Instance
     const rdsInstance = new aws.rds.Instance(
-      `tap-rds-${region}-${environmentSuffix}`,
+      `tap-rds-${region}-${environmentSuffix}-primary-2`,
       {
-        identifier: `tap-rds-${region}-${environmentSuffix}`,
+        identifier: `tap-rds-${region}-${environmentSuffix}-primary-2`,
         engine: 'mysql',
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
