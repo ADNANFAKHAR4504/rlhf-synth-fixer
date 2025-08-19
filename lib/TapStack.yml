@@ -28,14 +28,22 @@ Parameters:
     ConstraintDescription: 'Must be a valid EC2 instance type'
   
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'Name of an existing EC2 KeyPair for SSH access'
-    ConstraintDescription: 'Must be the name of an existing EC2 KeyPair'
+    Type: String
+    Description: 'Name of an existing EC2 KeyPair for SSH access (optional)'
+    Default: ''
+    ConstraintDescription: 'Must be the name of an existing EC2 KeyPair or empty for no SSH access'
 
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     Description: Latest Amazon Linux 2 AMI ID
+
+Conditions:
+  HasKeyPair:
+    Fn::Not:
+      - Fn::Equals:
+          - !Ref KeyPairName
+          - ''
 
 Resources:
   # VPC and Networking
@@ -242,6 +250,8 @@ Resources:
 
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}'
       RetentionInDays: 30
@@ -299,6 +309,8 @@ Resources:
   # Secrets Manager
   ApplicationSecret:
     Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description: 'Application secrets for the web server'
       GenerateSecretString:
@@ -318,8 +330,8 @@ Resources:
     Properties:
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnet1
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -407,6 +419,8 @@ Resources:
   # CloudWatch Log Groups
   SystemLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/ec2/${AWS::StackName}/system'
       RetentionInDays: 30
@@ -463,3 +477,40 @@ Outputs:
     Value: !Ref WebServerSecurityGroup
     Export:
       Name: !Sub '${AWS::StackName}-WebServer-SG-ID'
+
+  # Additional outputs for integration tests
+  VpcCidrBlock:
+    Description: 'VPC CIDR Block'
+    Value: !GetAtt VPC.CidrBlock
+
+  InternetGatewayId:
+    Description: 'Internet Gateway ID'
+    Value: !Ref InternetGateway
+
+  NatGateway1Id:
+    Description: 'NAT Gateway ID'
+    Value: !Ref NatGateway
+
+  PublicRouteTableId:
+    Description: 'Public Route Table ID'
+    Value: !Ref PublicRouteTable
+
+  PrivateRouteTable1Id:
+    Description: 'Private Route Table ID'
+    Value: !Ref PrivateRouteTable
+
+  EC2RoleArn:
+    Description: 'EC2 Instance Role ARN'
+    Value: !GetAtt EC2InstanceRole.Arn
+
+  AllowedSSHCIDR:
+    Description: 'Allowed SSH CIDR Block'
+    Value: !Ref AllowedSSHCIDR
+
+  StackName:
+    Description: 'Stack Name'
+    Value: !Ref AWS::StackName
+
+  Environment:
+    Description: 'Environment'
+    Value: production

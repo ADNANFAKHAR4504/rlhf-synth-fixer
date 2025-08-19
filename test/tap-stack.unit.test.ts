@@ -49,6 +49,24 @@ describe('TapStack CloudFormation Template', () => {
         construct: function (data) {
           return { 'Fn::GetAZs': data };
         }
+      }),
+      new yaml.Type('!If', {
+        kind: 'sequence',
+        construct: function (data) {
+          return { 'Fn::If': data };
+        }
+      }),
+      new yaml.Type('!Equals', {
+        kind: 'sequence',
+        construct: function (data) {
+          return { 'Fn::Equals': data };
+        }
+      }),
+      new yaml.Type('!Not', {
+        kind: 'sequence',
+        construct: function (data) {
+          return { 'Fn::Not': data };
+        }
       })
     ]);
 
@@ -68,6 +86,11 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Description).toBe(
         'Secure multi-AZ infrastructure with EC2, VPC, and security best practices'
       );
+    });
+
+    test('should have conditions section', () => {
+      expect(template.Conditions).toBeDefined();
+      expect(template.Conditions.HasKeyPair).toBeDefined();
     });
   });
 
@@ -110,8 +133,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('KeyPairName parameter should have correct properties', () => {
       const param = template.Parameters.KeyPairName;
-      expect(param.Type).toBe('AWS::EC2::KeyPair::KeyName');
-      expect(param.Description).toBe('Name of an existing EC2 KeyPair for SSH access');
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('');
+      expect(param.Description).toBe('Name of an existing EC2 KeyPair for SSH access (optional)');
     });
 
     test('LatestAmiId parameter should have correct properties', () => {
@@ -266,7 +290,7 @@ describe('TapStack CloudFormation Template', () => {
       const instance = template.Resources.WebServerInstance;
       expect(instance.Properties.ImageId).toEqual({ Ref: 'LatestAmiId' });
       expect(instance.Properties.InstanceType).toEqual({ Ref: 'InstanceType' });
-      expect(instance.Properties.KeyName).toEqual({ Ref: 'KeyPairName' });
+      expect(instance.Properties.KeyName).toEqual({ 'Fn::If': ['HasKeyPair', { Ref: 'KeyPairName' }, { Ref: 'AWS::NoValue' }] });
       expect(instance.Properties.SubnetId).toEqual({ Ref: 'PublicSubnet1' });
       expect(instance.Properties.IamInstanceProfile).toEqual({ Ref: 'EC2InstanceProfile' });
     });
@@ -400,7 +424,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(10);
+      expect(outputCount).toBe(19);
     });
   });
 });

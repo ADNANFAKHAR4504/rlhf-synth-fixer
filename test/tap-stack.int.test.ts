@@ -340,7 +340,7 @@ describe('TapStack Integration Tests', () => {
     test('should have IAM roles with minimal permissions', () => {
       expect(outputs.EC2RoleArn).toBeDefined();
       expect(outputs.EC2RoleArn).toContain('role/');
-      expect(outputs.EC2RoleArn).toContain('EC2Role');
+      expect(outputs.EC2RoleArn).toContain('EC2InstanceRole');
     });
 
     test('should have secrets stored in AWS Secrets Manager', () => {
