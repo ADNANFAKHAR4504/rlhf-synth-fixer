@@ -9,13 +9,12 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import {
-  AlbModule,
   CloudwatchModule,
   Ec2Module,
   IamModule,
   RdsModule,
-  Route53Module,
   S3Module,
   VpcModule,
 } from './module';
@@ -84,9 +83,9 @@ export class TapStack extends TerraformStack {
       ],
       egress: [
         {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
+          fromPort: 443,
+          toPort: 443,
+          protocol: 'tcp',
           cidrBlocks: ['0.0.0.0/0'],
         },
       ],
@@ -158,10 +157,18 @@ export class TapStack extends TerraformStack {
       subnetId: vpc.privateSubnetIdsOutput[0],
       instanceType: 't3.micro',
       ami: ami.id,
-      keyName: 'aws-key',
+      keyName: 'turing-key',
       instanceProfileName: iam.instanceProfileName,
       ec2SecurityGroupId: ec2SecurityGroup.id,
     });
+    // Configuration parameters
+    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
+      this,
+      'db-password-secret',
+      {
+        secretId: 'my-db-password',
+      }
+    );
 
     const rds = new RdsModule(this, 'db-instance', {
       name: `mysql-db-${environmentSuffix}`,
@@ -170,24 +177,10 @@ export class TapStack extends TerraformStack {
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       username: 'admin',
+      password: dbPasswordSecret.secretString,
       vpcId: vpc.vpcIdOutput,
       privateSubnetIds: vpc.privateSubnetIdsOutput,
       dbSecurityGroupId: dbSecurityGroup.id,
-    });
-
-    const alb = new AlbModule(this, 'alb', {
-      name: `fullstack-app-alb-${environmentSuffix}`,
-      vpcId: vpc.vpcIdOutput,
-      publicSubnetIds: vpc.publicSubnetIdsOutput,
-      targetGroupArn: ec2.targetGroupArnOutput,
-      albSecurityGroupId: albSecurityGroup.id,
-    });
-
-    new Route53Module(this, 'dns-record', {
-      zoneName: 'example.com',
-      recordName: `fullstack-app-${environmentSuffix}`,
-      albDnsName: alb.albDnsNameOutput,
-      albZoneId: alb.albZoneIdOutput,
     });
 
     new CloudwatchModule(this, 'alarms', {
