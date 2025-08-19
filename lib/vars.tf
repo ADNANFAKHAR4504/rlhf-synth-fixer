@@ -74,7 +74,7 @@ variable "db_password" {
 variable "ami_id" {
   description = "The ID of the AMI to use for the EC2 instances."
   type        = string
-  default     = "ami-0c55b159cbfafe1f0"
+  default     = "ami-0c520850203c586f6"
 }
 
 variable "instance_type" {

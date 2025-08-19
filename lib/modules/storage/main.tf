@@ -5,7 +5,8 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_s3_bucket" "data" {
-  bucket = "${var.project_name}-data-bucket"
+  provider = aws.us-west-2
+  bucket   = "${var.project_name}-data-bucket"
 
   tags = {
     Name        = "${var.project_name}-data-bucket"
@@ -42,7 +43,8 @@ resource "aws_s3_bucket_public_access_block" "data" {
 }
 
 resource "aws_s3_bucket" "logs" {
-  bucket = "${var.project_name}-logs-bucket"
+  provider = aws.ap-northeast-1
+  bucket   = "${var.project_name}-logs-bucket"
 
   tags = {
     Name        = "${var.project_name}-logs-bucket"
