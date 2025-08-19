@@ -1,4 +1,3 @@
-```
 Please write IAC code in cloudformation yaml using the data given below:
 
 Contraints:
@@ -12,25 +11,22 @@ Design and implement a CloudFormation template in YAML to set up a secure AWS in
 Expected output: A validated YAML CloudFormation template incorporating all security features and constraints. Ensure that the template passes an AWS CloudFormation linter without errors and adheres to all constraints listed above. Submit the YAML file named 'secure_infra_setup.yaml'.
 It should include this metadata:
 Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-      - Label:
-          default: 'Environment Configuration'
-        Parameters:
-          - EnvironmentSuffix
+AWS::CloudFormation::Interface:
+ParameterGroups: - Label:
+default: 'Environment Configuration'
+Parameters: - EnvironmentSuffix
 
 and this Parameter:
 Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+EnvironmentSuffix:
+Type: String
+Default: 'dev'
+Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+AllowedPattern: '^[a-zA-Z0-9]+$'
+ConstraintDescription: 'Must contain only alphanumeric characters'
 
 and include them in the code as well
 
 Proposed Statement:
 
 You are tasked with setting up a secure infrastructure environment using AWS CloudFormation for a web application. The infrastructure includes resources spanning VPCs, subnets, EC2 instances, RDS databases, and S3 buckets, all hosted within a specified AWS region. Follow organizational security standards and best practices as outlined in the constraints.
-```
