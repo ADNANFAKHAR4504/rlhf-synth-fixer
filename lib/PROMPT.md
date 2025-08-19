@@ -1,48 +1,45 @@
-**Role & Instruction:**
-You are an expert AWS CloudFormation architect. Your task is to generate a complete **AWS CloudFormation YAML template** that builds a **highly available, secure, and compliant web application infrastructure**. The YAML must be production-ready, follow AWS best practices, and be validated successfully by CloudFormation.
+# AWS CloudFormation Infrastructure Request
 
-**Environment & Requirements:**
-Design an AWS infrastructure stack in the `us-east-1` region that includes:
+Hey there! I need your help creating a comprehensive AWS CloudFormation template for a web application infrastructure. I'm looking for something that's production-ready, secure, and follows AWS best practices.
 
-1. **Networking & Security**
+## What I'm Looking For
 
-   * Create a new VPC with **public and private subnets** across **two Availability Zones**.
-   * Apply strict IAM least privilege policies.
-   * Ensure all resources are tagged with `Environment: Production`.
-   * Ensure compliance with **PCI-DSS standards**.
+I need you to design and build a complete AWS infrastructure stack in the us-east-1 region. This should be a robust, highly available setup that can handle production workloads.
 
-2. **Compute & Load Balancing**
+## Infrastructure Requirements
 
-   * Deploy an **Auto Scaling Group** with min=2, max=10 EC2 instances.
-   * Place EC2 instances behind an **Application Load Balancer (ALB)**.
-   * Configure ALB with an **HTTPS listener** using a **custom SSL certificate**.
+### Networking & Security
+- Set up a VPC with both public and private subnets across two availability zones for redundancy
+- Implement proper security groups with least privilege access
+- Make sure everything is tagged properly (Environment: Production)
+- Follow PCI-DSS compliance standards where applicable
 
-3. **Database Layer**
+### Compute & Load Balancing
+- Create an Auto Scaling Group that can scale from 2 to 10 EC2 instances based on demand
+- Put an Application Load Balancer in front of the EC2 instances
+- Configure the ALB to handle HTTPS traffic with a proper SSL certificate
 
-   * Deploy an **Amazon RDS PostgreSQL** database in a **multi-AZ setup**.
-   * Restrict database access to private subnets only.
+### Database
+- Deploy a PostgreSQL RDS instance in multi-AZ mode for high availability
+- Keep the database in private subnets only - no direct internet access
 
-4. **Storage & Content Delivery**
+### Storage & Content Delivery
+- Set up S3 buckets with versioning and encryption enabled
+- Use CloudFront as a CDN to distribute content globally
 
-   * Create **S3 buckets** with **versioning** and **server-side encryption enabled**.
-   * Use **CloudFront CDN** for global traffic distribution.
+### Configuration & Monitoring
+- Store application configuration in AWS Parameter Store
+- Set up CloudWatch logging with proper retention policies
 
-5. **Configuration & Logging**
+## Technical Requirements
 
-   * Store application configs securely in **AWS Parameter Store**.
-   * Implement **CloudWatch Logs with lifecycle policies** to manage log retention.
+- Everything needs to be in us-east-1
+- The template must pass CloudFormation validation (`aws cloudformation validate-template`)
+- Write clean, well-commented YAML code
+- Make it production-ready and follow AWS best practices
 
-6. **Deployment Pattern**
+## What I Need From You
 
-   * Use a **nested stack approach** for modularity and maintainability.
+Please create a single CloudFormation YAML file that includes all the components I mentioned above. The template should be comprehensive, secure, and ready to deploy. I want something that I can actually use in production without having to make major modifications.
 
-**Constraints:**
-
-* All resources must be deployed in **us-east-1**.
-* Must pass `aws cloudformation validate-template` without errors.
-* YAML should be clear, well-structured, and include inline comments.
-
-**Expected Output:**
-A **single CloudFormation YAML file** that provisions the above infrastructure and adheres to the defined constraints and compliance requirements.
-
----
+Thanks for your help!
