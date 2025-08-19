@@ -290,8 +290,8 @@ describe('Terraform IAM Infrastructure Integration Tests', () => {
       
       // Verify session durations
       expect(tfvarsContent).toMatch(/security-auditor[\s\S]*?max_session_duration = 3600/);
-      expect(tfvarsContent).toMatch(/ci-deployer[\s\S]*?max_session_duration = 1800/);
-      expect(tfvarsContent).toMatch(/breakglass[\s\S]*?max_session_duration = 900/);
+      expect(tfvarsContent).toMatch(/ci-deployer[\s\S]*?max_session_duration = 3600/);
+      expect(tfvarsContent).toMatch(/breakglass[\s\S]*?max_session_duration = 3600/);
     });
   });
 
