@@ -60,8 +60,6 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-
-
     // Create secure S3 bucket for application data
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
       bucketName: `app-data-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
@@ -76,7 +74,9 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'EC2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
       inlinePolicies: {
         S3Access: new iam.PolicyDocument({
@@ -91,7 +91,8 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
+    // Instance profile for EC2 role
+    new iam.InstanceProfile(this, 'EC2InstanceProfile', {
       role: ec2Role,
     });
 
@@ -144,7 +145,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [rdsSecurityGroup],
@@ -197,17 +201,25 @@ export class TapStack extends cdk.Stack {
       autoDeleteObjects: true, // Automatically delete objects on bucket deletion
     });
 
-    const configDeliveryChannel = new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
-      s3BucketName: configBucket.bucketName,
-    });
+    const configDeliveryChannel = new config.CfnDeliveryChannel(
+      this,
+      'ConfigDeliveryChannel',
+      {
+        s3BucketName: configBucket.bucketName,
+      }
+    );
 
-    const configRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
-      roleArn: configRole.roleArn,
-      recordingGroup: {
-        allSupported: true,
-        includeGlobalResourceTypes: true,
-      },
-    });
+    const configRecorder = new config.CfnConfigurationRecorder(
+      this,
+      'ConfigRecorder',
+      {
+        roleArn: configRole.roleArn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+        },
+      }
+    );
 
     // Ensure proper dependency order for cleanup
     configDeliveryChannel.addDependency(configRecorder);
@@ -215,7 +227,8 @@ export class TapStack extends cdk.Stack {
     // Config rule to check for open SSH access
     new config.ManagedRule(this, 'SSHRestrictedRule', {
       identifier: 'INCOMING_SSH_DISABLED',
-      description: 'Checks whether security groups disallow unrestricted incoming SSH traffic',
+      description:
+        'Checks whether security groups disallow unrestricted incoming SSH traffic',
     });
 
     // Output important resource information
@@ -233,7 +246,5 @@ export class TapStack extends cdk.Stack {
       value: dataBucket.bucketName,
       description: 'S3 Data Bucket Name',
     });
-
-
   }
 }
