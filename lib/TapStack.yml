@@ -19,8 +19,12 @@ Parameters:
       - t3.medium
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access (if needed for emergency access)
+    Type: String
+    Default: ''
+    Description: EC2 Key Pair for SSH access (if needed for emergency access). Leave empty if no SSH access needed.
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Resources:
   # Lambda function for generating random suffixes
@@ -105,7 +109,7 @@ Resources:
           - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:
-              Service: !Sub 'logs.us-west-1.amazonaws.com'
+              Service: 'logs.us-west-1.amazonaws.com'
             Action:
               - 'kms:Encrypt'
               - 'kms:Decrypt'
@@ -462,7 +466,7 @@ Resources:
       LaunchTemplateData:
         ImageId: ami-0d70546e43a941d70 # Amazon Linux 2023 AMI in us-west-1
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Name: !Ref EC2InstanceProfile
         SecurityGroupIds:
