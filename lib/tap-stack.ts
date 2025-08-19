@@ -1,40 +1,39 @@
-import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
-import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
-import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
-import { CloudfrontOriginAccessIdentity } from '@cdktf/provider-aws/lib/cloudfront-origin-access-identity';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { Construct } from 'constructs';
+import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { DataAwsRoute53Zone } from '@cdktf/provider-aws/lib/data-aws-route53-zone';
-import { DataAwsS3Bucket } from '@cdktf/provider-aws/lib/data-aws-s3-bucket';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import {
   DbInstance,
   DbInstanceConfig,
 } from '@cdktf/provider-aws/lib/db-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
+import { DataAwsS3Bucket } from '@cdktf/provider-aws/lib/data-aws-s3-bucket';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { VpcPeeringConnection } from '@cdktf/provider-aws/lib/vpc-peering-connection';
+import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
+import { CloudfrontOriginAccessIdentity } from '@cdktf/provider-aws/lib/cloudfront-origin-access-identity';
 import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
-import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
-// FIX: Corrected the import name as suggested by the compiler
+import { DataAwsRoute53Zone } from '@cdktf/provider-aws/lib/data-aws-route53-zone';
+import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
+import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
+import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
+import { VpcPeeringConnection } from '@cdktf/provider-aws/lib/vpc-peering-connection';
+// FIX: Corrected the import name from VpcPeeringConnectionAccepter to VpcPeeringConnectionAccepterA
+import { VpcPeeringConnectionAccepterA } from '@cdktf/provider-aws/lib/vpc-peering-connection-accepter';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
-import { ShieldProtection } from '@cdktf/provider-aws/lib/shield-protection';
-import { VpcPeeringConnectionAccepterA } from '@cdktf/provider-aws/lib/vpc-peering-connection-accepter';
 
 // --- Reusable Regional Construct ---
 interface RegionalInfraProps {
@@ -268,7 +267,7 @@ export class TapStack extends TerraformStack {
       tags: { ...tags, Name: `peering-${primaryRegion}-to-${secondaryRegion}` },
     });
 
-    // FIX: Corrected the resource class name
+    // FIX: Corrected the class name from VpcPeeringConnectionAccepter to VpcPeeringConnectionAccepterA
     new VpcPeeringConnectionAccepterA(this, 'VpcPeeringAccepter', {
       provider: secondaryProvider,
       vpcPeeringConnectionId: peeringConnection.id,
@@ -514,13 +513,6 @@ export class TapStack extends TerraformStack {
         },
       },
       webAclId: webAcl.arn,
-      tags,
-    });
-
-    new ShieldProtection(this, 'ShieldProtection', {
-      provider: primaryProvider,
-      name: `shield-protection-cloudfront-${uniqueSuffix}`,
-      resourceArn: cfDistribution.arn,
       tags,
     });
 
