@@ -346,7 +346,7 @@ resource "aws_instance" "bastion" {
 # IAM for Private EC2 -> S3 + KMS
 #################
 resource "aws_iam_role" "app_role" {
-  name               = "${local.name_prefix}-app-role001"
+  name               = "${local.name_prefix}-app-role0001"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -490,7 +490,7 @@ resource "aws_kms_key" "app" {
 }
 
 resource "aws_kms_alias" "app_alias" {
-  name          = "alias/${local.name_prefix}-apps-kms-001"
+  name          = "alias/${local.name_prefix}-apps-kms-0001"
   target_key_id = aws_kms_key.app.key_id
 }
 
