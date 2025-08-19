@@ -252,7 +252,7 @@ Resources:
       FunctionName: !Ref ProcessorLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${ServerlessApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ServerlessApi}/*/*'
 
   # API Gateway REST API
   ServerlessApi:
