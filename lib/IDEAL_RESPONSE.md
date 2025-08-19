@@ -22,6 +22,12 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
+
+# Secondary AWS provider for replication
+provider "aws" {
+  alias  = "replica"
+  region = "us-east-1"
+}
 ```
 
 ## tap_stack.tf
@@ -363,6 +369,230 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
 }
 
 ########################
+# Cross-Region Replication
+########################
+
+# IAM role for S3 replication
+resource "aws_iam_role" "replication_role" {
+  name = "${local.project_name_with_suffix}-s3-replication-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name              = "${local.project_name_with_suffix}-s3-replication-role"
+    Environment       = var.environment
+    EnvironmentSuffix = local.environment_suffix
+    Project           = var.project_name
+    ManagedBy         = "terraform"
+  }
+}
+
+# IAM policy for S3 replication
+resource "aws_iam_role_policy" "replication_policy" {
+  name = "${local.project_name_with_suffix}-s3-replication-policy"
+  role = aws_iam_role.replication_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetReplicationConfiguration",
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.secure_bucket.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectVersionTagging"
+        ]
+        Resource = "${aws_s3_bucket.secure_bucket.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags"
+        ]
+        Resource = "${aws_s3_bucket.replica_bucket.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = [
+          aws_kms_key.s3_encryption_key.arn,
+          aws_kms_key.replica_encryption_key.arn
+        ]
+      }
+    ]
+  })
+}
+
+# Replica bucket in us-east-1
+resource "aws_s3_bucket" "replica_bucket" {
+  provider      = aws.replica
+  bucket        = "${local.bucket_name}-replica"
+  force_destroy = true
+
+  tags = {
+    Name              = "${local.bucket_name}-replica"
+    Environment       = var.environment
+    EnvironmentSuffix = local.environment_suffix
+    Project           = var.project_name
+    Purpose           = "Cross-Region-Replica"
+    ManagedBy         = "terraform"
+  }
+}
+
+# Block public access for replica bucket
+resource "aws_s3_bucket_public_access_block" "replica_bucket_pab" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.replica_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enable versioning on replica bucket
+resource "aws_s3_bucket_versioning" "replica_bucket_versioning" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.replica_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# KMS key for replica bucket encryption
+resource "aws_kms_key" "replica_encryption_key" {
+  provider                = aws.replica
+  description             = "KMS key for S3 replica bucket encryption - ${local.environment_suffix}"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow S3 Service"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey*",
+          "kms:ReEncrypt*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "s3.us-east-1.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name              = "${local.project_name_with_suffix}-replica-encryption-key"
+    Environment       = var.environment
+    EnvironmentSuffix = local.environment_suffix
+    Purpose           = "S3-Replica-Encryption"
+    ManagedBy         = "terraform"
+  }
+}
+
+resource "aws_kms_alias" "replica_encryption_key_alias" {
+  provider      = aws.replica
+  name          = "alias/${local.project_name_with_suffix}-replica-key"
+  target_key_id = aws_kms_key.replica_encryption_key.key_id
+}
+
+# Server-side encryption for replica bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "replica_bucket_encryption" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.replica_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.replica_encryption_key.arn
+      sse_algorithm     = "aws:kms:dsse"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# S3 bucket replication configuration
+resource "aws_s3_bucket_replication_configuration" "replication" {
+  role   = aws_iam_role.replication_role.arn
+  bucket = aws_s3_bucket.secure_bucket.id
+
+  rule {
+    id     = "replicate-all-objects"
+    status = "Enabled"
+
+    delete_marker_replication {
+      status = "Enabled"
+    }
+
+    filter {}
+
+    destination {
+      bucket        = aws_s3_bucket.replica_bucket.arn
+      storage_class = "STANDARD"
+
+      encryption_configuration {
+        replica_kms_key_id = aws_kms_key.replica_encryption_key.arn
+      }
+    }
+
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        status = "Enabled"
+      }
+    }
+  }
+
+  depends_on = [
+    aws_s3_bucket_versioning.secure_bucket_versioning,
+    aws_s3_bucket_versioning.replica_bucket_versioning
+  ]
+}
+
+########################
 # CloudWatch Monitoring
 ########################
 resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
@@ -579,22 +809,62 @@ output "sns_topic_arn" {
   description = "ARN of the SNS topic for security alerts"
   value       = aws_sns_topic.security_alerts.arn
 }
+
+output "replica_bucket_name" {
+  description = "Name of the replica S3 bucket"
+  value       = aws_s3_bucket.replica_bucket.bucket
+}
+
+output "replica_bucket_arn" {
+  description = "ARN of the replica S3 bucket"
+  value       = aws_s3_bucket.replica_bucket.arn
+}
+
+output "replica_kms_key_id" {
+  description = "ID of the KMS key used for replica bucket encryption"
+  value       = aws_kms_key.replica_encryption_key.key_id
+}
+
+output "cloudtrail_logs_bucket" {
+  description = "Name of the CloudTrail logs S3 bucket"
+  value       = aws_s3_bucket.cloudtrail_logs.bucket
+}
+
+# output "cloudtrail_arn" {
+#   description = "ARN of the CloudTrail"
+#   value       = aws_cloudtrail.s3_audit_trail.arn
+# }
 ```
 
 ## Key Features
 
 1. **DSSE-KMS Encryption**: Implements dual-layer server-side encryption using AWS KMS for maximum security
-2. **Complete Access Control**: All public access is blocked, TLS is enforced, and unencrypted uploads are denied
-3. **Versioning**: Enabled to protect against accidental deletions and maintain object history
-4. **Lifecycle Management**: Comprehensive rules for cost optimization with transitions to cold storage
-5. **Monitoring & Alerting**: CloudWatch alarms and SNS notifications for security events
-6. **Environment Isolation**: Uses environment suffix for unique resource naming across deployments
-7. **Infrastructure as Code Best Practices**: Modular, reusable, and maintainable code structure
-8. **Force Destroy**: Enabled for easy cleanup in development/testing environments
+2. **Cross-Region Replication**: Automatic replication to us-east-1 for disaster recovery and compliance
+3. **Complete Access Control**: All public access is blocked, TLS is enforced, and unencrypted uploads are denied
+4. **Versioning with MFA Delete Support**: Enabled to protect against accidental deletions (MFA Delete requires manual configuration)
+5. **Comprehensive Lifecycle Management**: 
+   - Intelligent Tiering after 30 days
+   - Glacier after 90 days
+   - Deep Archive after 180 days
+   - Expiration after 7 years
+   - Multipart upload cleanup after 7 days
+6. **Advanced Monitoring & Alerting**: 
+   - CloudWatch log groups for audit trails
+   - Metric filters for security events
+   - CloudWatch alarms for unauthorized access
+   - SNS notifications with KMS encryption
+7. **Environment Isolation**: Uses environment suffix for unique resource naming across deployments
+8. **Infrastructure as Code Best Practices**: 
+   - Modular design with separated provider configuration
+   - Comprehensive tagging strategy
+   - Proper dependency management
+   - Force destroy for clean teardown
 
 ## Deployment Notes
 
-- CloudTrail is prepared but commented out due to AWS account limits
+- CloudTrail is prepared but commented out due to AWS account limits (5 CloudTrails max per region)
 - All resources are tagged appropriately for cost tracking and management
-- KMS key includes policies for all necessary AWS services
+- KMS keys include policies for all necessary AWS services (S3, CloudTrail, CloudWatch Logs)
 - Bucket policies enforce both TLS and encryption requirements
+- Cross-region replication requires versioning on both source and destination buckets
+- MFA Delete must be enabled manually after deployment using AWS CLI with MFA authentication

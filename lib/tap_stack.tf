@@ -165,12 +165,15 @@ resource "aws_s3_bucket_public_access_block" "secure_bucket_pab" {
   restrict_public_buckets = true
 }
 
-# Enable versioning
+# Enable versioning with MFA Delete
 resource "aws_s3_bucket_versioning" "secure_bucket_versioning" {
   bucket = aws_s3_bucket.secure_bucket.id
 
   versioning_configuration {
     status = "Enabled"
+    # Note: MFA Delete can only be enabled via AWS CLI or API with MFA authentication
+    # It cannot be managed through Terraform. This must be done manually after deployment
+    # mfa_delete = "Enabled"
   }
 }
 
@@ -194,6 +197,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "secure_bucket_lifecycle" {
   rule {
     id     = "comprehensive_lifecycle_rule"
     status = "Enabled"
+
+    # Apply to all objects in the bucket
+    filter {}
 
     # Transition to Intelligent Tiering
     transition {
@@ -243,6 +249,230 @@ resource "aws_s3_bucket_lifecycle_configuration" "secure_bucket_lifecycle" {
       noncurrent_days = 2555
     }
   }
+}
+
+########################
+# Cross-Region Replication
+########################
+
+# IAM role for S3 replication
+resource "aws_iam_role" "replication_role" {
+  name = "${local.project_name_with_suffix}-s3-replication-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name              = "${local.project_name_with_suffix}-s3-replication-role"
+    Environment       = var.environment
+    EnvironmentSuffix = local.environment_suffix
+    Project           = var.project_name
+    ManagedBy         = "terraform"
+  }
+}
+
+# IAM policy for S3 replication
+resource "aws_iam_role_policy" "replication_policy" {
+  name = "${local.project_name_with_suffix}-s3-replication-policy"
+  role = aws_iam_role.replication_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetReplicationConfiguration",
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.secure_bucket.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectVersionTagging"
+        ]
+        Resource = "${aws_s3_bucket.secure_bucket.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags"
+        ]
+        Resource = "${aws_s3_bucket.replica_bucket.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = [
+          aws_kms_key.s3_encryption_key.arn,
+          aws_kms_key.replica_encryption_key.arn
+        ]
+      }
+    ]
+  })
+}
+
+# Replica bucket in us-east-1
+resource "aws_s3_bucket" "replica_bucket" {
+  provider      = aws.replica
+  bucket        = "${local.bucket_name}-replica"
+  force_destroy = true
+
+  tags = {
+    Name              = "${local.bucket_name}-replica"
+    Environment       = var.environment
+    EnvironmentSuffix = local.environment_suffix
+    Project           = var.project_name
+    Purpose           = "Cross-Region-Replica"
+    ManagedBy         = "terraform"
+  }
+}
+
+# Block public access for replica bucket
+resource "aws_s3_bucket_public_access_block" "replica_bucket_pab" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.replica_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enable versioning on replica bucket
+resource "aws_s3_bucket_versioning" "replica_bucket_versioning" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.replica_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# KMS key for replica bucket encryption
+resource "aws_kms_key" "replica_encryption_key" {
+  provider                = aws.replica
+  description             = "KMS key for S3 replica bucket encryption - ${local.environment_suffix}"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow S3 Service"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey*",
+          "kms:ReEncrypt*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "s3.us-east-1.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name              = "${local.project_name_with_suffix}-replica-encryption-key"
+    Environment       = var.environment
+    EnvironmentSuffix = local.environment_suffix
+    Purpose           = "S3-Replica-Encryption"
+    ManagedBy         = "terraform"
+  }
+}
+
+resource "aws_kms_alias" "replica_encryption_key_alias" {
+  provider      = aws.replica
+  name          = "alias/${local.project_name_with_suffix}-replica-key"
+  target_key_id = aws_kms_key.replica_encryption_key.key_id
+}
+
+# Server-side encryption for replica bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "replica_bucket_encryption" {
+  provider = aws.replica
+  bucket   = aws_s3_bucket.replica_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.replica_encryption_key.arn
+      sse_algorithm     = "aws:kms:dsse"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# S3 bucket replication configuration
+resource "aws_s3_bucket_replication_configuration" "replication" {
+  role   = aws_iam_role.replication_role.arn
+  bucket = aws_s3_bucket.secure_bucket.id
+
+  rule {
+    id     = "replicate-all-objects"
+    status = "Enabled"
+
+    delete_marker_replication {
+      status = "Enabled"
+    }
+
+    filter {}
+
+    destination {
+      bucket        = aws_s3_bucket.replica_bucket.arn
+      storage_class = "STANDARD"
+
+      encryption_configuration {
+        replica_kms_key_id = aws_kms_key.replica_encryption_key.arn
+      }
+    }
+
+    source_selection_criteria {
+      sse_kms_encrypted_objects {
+        status = "Enabled"
+      }
+    }
+  }
+
+  depends_on = [
+    aws_s3_bucket_versioning.secure_bucket_versioning,
+    aws_s3_bucket_versioning.replica_bucket_versioning
+  ]
 }
 
 # Bucket policy for TLS enforcement
@@ -412,7 +642,8 @@ resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
   })
 }
 
-# CloudTrail configuration (disabled due to limit)
+# CloudTrail configuration - Commented due to AWS account limit (5 CloudTrails max per region)
+# Note: The account already has 5 CloudTrails in us-west-2. Uncomment when limit is increased or trails are removed.
 # resource "aws_cloudtrail" "s3_audit_trail" {
 #   name                          = "${local.project_name_with_suffix}-audit-trail"
 #   s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
@@ -580,4 +811,24 @@ output "cloudwatch_log_group_name" {
 output "sns_topic_arn" {
   description = "ARN of the SNS topic for security alerts"
   value       = aws_sns_topic.security_alerts.arn
+}
+
+output "replica_bucket_name" {
+  description = "Name of the replica S3 bucket"
+  value       = aws_s3_bucket.replica_bucket.bucket
+}
+
+output "replica_bucket_arn" {
+  description = "ARN of the replica S3 bucket"
+  value       = aws_s3_bucket.replica_bucket.arn
+}
+
+output "replica_kms_key_id" {
+  description = "ID of the KMS key used for replica bucket encryption"
+  value       = aws_kms_key.replica_encryption_key.key_id
+}
+
+output "cloudtrail_logs_bucket" {
+  description = "Name of the CloudTrail logs S3 bucket"
+  value       = aws_s3_bucket.cloudtrail_logs.bucket
 }

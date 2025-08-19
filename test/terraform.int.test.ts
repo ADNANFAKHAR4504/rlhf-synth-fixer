@@ -1,5 +1,5 @@
 // Integration tests for Terraform S3 secure bucket infrastructure
-import { S3Client, GetBucketVersioningCommand, GetBucketEncryptionCommand, GetBucketPolicyCommand, GetPublicAccessBlockCommand, GetBucketLifecycleConfigurationCommand, HeadBucketCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetBucketVersioningCommand, GetBucketEncryptionCommand, GetBucketPolicyCommand, GetPublicAccessBlockCommand, GetBucketLifecycleConfigurationCommand, HeadBucketCommand, GetBucketReplicationCommand } from "@aws-sdk/client-s3";
 import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
 import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
@@ -9,10 +9,13 @@ import * as path from "path";
 
 const OUTPUTS_FILE = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
 const REGION = process.env.AWS_REGION || "us-west-2";
+const REPLICA_REGION = "us-east-1";
 
 // AWS Clients
 const s3Client = new S3Client({ region: REGION });
+const s3ReplicaClient = new S3Client({ region: REPLICA_REGION });
 const kmsClient = new KMSClient({ region: REGION });
+const kmsReplicaClient = new KMSClient({ region: REPLICA_REGION });
 const cloudWatchClient = new CloudWatchClient({ region: REGION });
 const cloudWatchLogsClient = new CloudWatchLogsClient({ region: REGION });
 const snsClient = new SNSClient({ region: REGION });
@@ -224,6 +227,93 @@ describe("Terraform Infrastructure Integration Tests", () => {
       // The key ID in the encryption config might be just the ID or the full ARN
       expect(configuredKeyId).toBeDefined();
       expect(kmsKeyArn).toContain(outputs.kms_key_id);
+    });
+  });
+
+  describe("Cross-Region Replication", () => {
+    test("S3 bucket has replication configured", async () => {
+      const bucketName = outputs.s3_bucket_name;
+      const command = new GetBucketReplicationCommand({ Bucket: bucketName });
+      const response = await s3Client.send(command);
+      
+      expect(response.ReplicationConfiguration).toBeDefined();
+      expect(response.ReplicationConfiguration?.Rules).toBeDefined();
+      expect(response.ReplicationConfiguration?.Rules?.length).toBeGreaterThan(0);
+      
+      const rule = response.ReplicationConfiguration?.Rules?.[0];
+      expect(rule?.Status).toBe("Enabled");
+      expect(rule?.Destination?.Bucket).toContain(outputs.replica_bucket_name);
+    });
+
+    test("Replica bucket exists in us-east-1", async () => {
+      const replicaBucketName = outputs.replica_bucket_name;
+      expect(replicaBucketName).toBeDefined();
+      
+      const command = new HeadBucketCommand({ Bucket: replicaBucketName });
+      const response = await s3ReplicaClient.send(command);
+      expect(response.$metadata.httpStatusCode).toBe(200);
+    });
+
+    test("Replica bucket has versioning enabled", async () => {
+      const replicaBucketName = outputs.replica_bucket_name;
+      const command = new GetBucketVersioningCommand({ Bucket: replicaBucketName });
+      const response = await s3ReplicaClient.send(command);
+      expect(response.Status).toBe("Enabled");
+    });
+
+    test("Replica bucket has encryption configured", async () => {
+      const replicaBucketName = outputs.replica_bucket_name;
+      const command = new GetBucketEncryptionCommand({ Bucket: replicaBucketName });
+      const response = await s3ReplicaClient.send(command);
+      
+      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+      const rule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
+      expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms:dsse");
+    });
+
+    test("Replica bucket has public access blocked", async () => {
+      const replicaBucketName = outputs.replica_bucket_name;
+      const command = new GetPublicAccessBlockCommand({ Bucket: replicaBucketName });
+      const response = await s3ReplicaClient.send(command);
+      
+      expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(response.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+    });
+
+    test("Replica KMS key exists and is enabled", async () => {
+      const replicaKmsKeyId = outputs.replica_kms_key_id;
+      expect(replicaKmsKeyId).toBeDefined();
+      
+      const command = new DescribeKeyCommand({ KeyId: replicaKmsKeyId });
+      const response = await kmsReplicaClient.send(command);
+      
+      expect(response.KeyMetadata).toBeDefined();
+      expect(response.KeyMetadata?.Enabled).toBe(true);
+      expect(response.KeyMetadata?.KeyUsage).toBe("ENCRYPT_DECRYPT");
+    });
+  });
+
+  describe("CloudTrail Logs Bucket", () => {
+    test("CloudTrail logs bucket exists", async () => {
+      const cloudtrailBucketName = outputs.cloudtrail_logs_bucket;
+      expect(cloudtrailBucketName).toBeDefined();
+      
+      const command = new HeadBucketCommand({ Bucket: cloudtrailBucketName });
+      const response = await s3Client.send(command);
+      expect(response.$metadata.httpStatusCode).toBe(200);
+    });
+
+    test("CloudTrail logs bucket has public access blocked", async () => {
+      const cloudtrailBucketName = outputs.cloudtrail_logs_bucket;
+      const command = new GetPublicAccessBlockCommand({ Bucket: cloudtrailBucketName });
+      const response = await s3Client.send(command);
+      
+      expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(response.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
     });
   });
 

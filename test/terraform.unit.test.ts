@@ -39,6 +39,10 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(providerContent).toMatch(/provider\s+"aws"\s*{/);
     });
 
+    test("provider.tf declares AWS provider for replica region", () => {
+      expect(providerContent).toMatch(/provider\s+"aws"\s*{[\s\S]*?alias\s*=\s*"replica"/);
+    });
+
     test("provider.tf has S3 backend configuration", () => {
       expect(providerContent).toMatch(/backend\s+"s3"\s*{/);
     });
@@ -79,6 +83,10 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"cloudtrail_logs"\s*{/);
     });
 
+    test("declares replica S3 bucket for cross-region replication", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket"\s+"replica_bucket"\s*{/);
+    });
+
     test("main bucket has force_destroy = true for cleanup", () => {
       const bucketMatch = stackContent.match(/resource\s+"aws_s3_bucket"\s+"secure_bucket"\s*{[\s\S]*?force_destroy\s*=\s*true/);
       expect(bucketMatch).toBeTruthy();
@@ -104,11 +112,19 @@ describe("Terraform Infrastructure Unit Tests", () => {
     test("declares bucket policy for TLS enforcement", () => {
       expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"secure_bucket_policy"\s*{/);
     });
+
+    test("declares S3 bucket replication configuration", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_replication_configuration"\s+"replication"\s*{/);
+    });
   });
 
   describe("KMS Configuration", () => {
     test("declares KMS key resource", () => {
       expect(stackContent).toMatch(/resource\s+"aws_kms_key"\s+"s3_encryption_key"\s*{/);
+    });
+
+    test("declares replica KMS key resource", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_kms_key"\s+"replica_encryption_key"\s*{/);
     });
 
     test("KMS key has deletion window configured", () => {
@@ -121,6 +137,10 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("declares KMS key alias", () => {
       expect(stackContent).toMatch(/resource\s+"aws_kms_alias"\s+"s3_encryption_key_alias"\s*{/);
+    });
+
+    test("declares replica KMS key alias", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_kms_alias"\s+"replica_encryption_key_alias"\s*{/);
     });
   });
 
@@ -151,6 +171,40 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("declares IAM role policy for CloudTrail logs", () => {
       expect(stackContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"cloudtrail_logs_policy"\s*{/);
+    });
+
+    test("declares IAM role for S3 replication", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"replication_role"\s*{/);
+    });
+
+    test("declares IAM role policy for S3 replication", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_iam_role_policy"\s+"replication_policy"\s*{/);
+    });
+  });
+
+  describe("Cross-Region Replication", () => {
+    test("declares S3 bucket replication configuration", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_replication_configuration"\s+"replication"\s*{/);
+    });
+
+    test("replication configuration has SSE KMS encrypted objects enabled", () => {
+      expect(stackContent).toMatch(/sse_kms_encrypted_objects\s*{[\s\S]*?status\s*=\s*"Enabled"/);
+    });
+
+    test("replication configuration has delete marker replication enabled", () => {
+      expect(stackContent).toMatch(/delete_marker_replication\s*{[\s\S]*?status\s*=\s*"Enabled"/);
+    });
+
+    test("replica bucket has versioning enabled", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"replica_bucket_versioning"\s*{/);
+    });
+
+    test("replica bucket has encryption configured", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"replica_bucket_encryption"\s*{/);
+    });
+
+    test("replica bucket has public access block", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"replica_bucket_pab"\s*{/);
     });
   });
 
@@ -202,6 +256,19 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("declares SNS topic ARN output", () => {
       expect(stackContent).toMatch(/output\s+"sns_topic_arn"\s*{/);
+    });
+
+    test("declares replica bucket outputs", () => {
+      expect(stackContent).toMatch(/output\s+"replica_bucket_name"\s*{/);
+      expect(stackContent).toMatch(/output\s+"replica_bucket_arn"\s*{/);
+    });
+
+    test("declares replica KMS key output", () => {
+      expect(stackContent).toMatch(/output\s+"replica_kms_key_id"\s*{/);
+    });
+
+    test("declares CloudTrail logs bucket output", () => {
+      expect(stackContent).toMatch(/output\s+"cloudtrail_logs_bucket"\s*{/);
     });
   });
 

@@ -1,4 +1,9 @@
 {
+  "cloudtrail_logs_bucket": {
+    "sensitive": false,
+    "type": "string",
+    "value": "secure-audit-bucket-trainr902-synthtrainr902-cloudtrail-logs"
+  },
   "cloudwatch_log_group_name": {
     "sensitive": false,
     "type": "string",
@@ -7,12 +12,27 @@
   "kms_key_arn": {
     "sensitive": false,
     "type": "string",
-    "value": "arn:aws:kms:us-west-2:718240086340:key/a33ddd66-5fe4-42f3-9ff9-5fbd8d0cf769"
+    "value": "arn:aws:kms:us-west-2:718240086340:key/5a03de17-df05-4330-b6ad-f492a69d18c2"
   },
   "kms_key_id": {
     "sensitive": false,
     "type": "string",
-    "value": "a33ddd66-5fe4-42f3-9ff9-5fbd8d0cf769"
+    "value": "5a03de17-df05-4330-b6ad-f492a69d18c2"
+  },
+  "replica_bucket_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:s3:::secure-audit-bucket-trainr902-synthtrainr902-replica"
+  },
+  "replica_bucket_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "secure-audit-bucket-trainr902-synthtrainr902-replica"
+  },
+  "replica_kms_key_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "05dd9143-6a68-4a23-8613-cede1974eeca"
   },
   "s3_bucket_arn": {
     "sensitive": false,
