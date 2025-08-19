@@ -308,75 +308,83 @@ def lambda_handler(event, context):
   private deployRegionalInfrastructure(region: string, tags: { [key: string]: string }): void {
     // Use the existing provider instead of creating a new one
     const provider = this.providers[region];
-
+  
     const vpc = this.createVpc(region, tags, provider);
     this.vpcs[region] = vpc;
-
+  
     const webSecurityGroup = this.createWebSecurityGroup(region, vpc, tags, provider);
     const dbSecurityGroup = this.createDbSecurityGroup(region, vpc, webSecurityGroup, tags, provider);
-
+  
     const ec2Role = this.createEc2Role(region, tags, provider);
-
+  
     const instanceProfile = new aws.iam.InstanceProfile(`ec2-instance-profile-${region}`, {
       role: ec2Role.name,
     }, { parent: this, provider });
-
+  
     const launchTemplate = this.createLaunchTemplate(region, webSecurityGroup, instanceProfile, tags, provider);
-
-    // Reduced ASG capacity for faster deployment
+  
+    // Fixed ASG with better configuration
     const asg = new aws.autoscaling.Group(`asg-${region}`, {
-      name: `nova-model-asg-${region}-${Date.now()}`, // Add timestamp for uniqueness
-      minSize: 1, // Reduced from 2
-      maxSize: 4, // Reduced from 6
-      desiredCapacity: 1, // Reduced from 2
+      name: `nova-model-asg-${region}-${Date.now()}`,
+      minSize: 1,
+      maxSize: 3,
+      desiredCapacity: 1,
       vpcZoneIdentifiers: vpc.privateSubnetIds,
       launchTemplate: {
         id: launchTemplate.id,
         version: '$Latest',
       },
-      healthCheckType: 'EC2', // Changed from ELB to EC2 for faster startup
-      healthCheckGracePeriod: 300, // Reduced timeout
+      healthCheckType: 'EC2', // Use EC2 health checks instead of ELB
+      healthCheckGracePeriod: 300,
+      defaultCooldown: 300,
+      // Add wait for capacity timeout configuration
+      waitForCapacityTimeout: '15m', // Increase timeout
+      forceDelete: true, // Allow force delete if needed
       tags: Object.entries(tags).map(([key, value]) => ({
         key,
         value,
         propagateAtLaunch: true,
       })),
-    }, { parent: this, provider });
-
+    }, { 
+      parent: this, 
+      provider,
+      dependsOn: [launchTemplate, instanceProfile, webSecurityGroup]
+    });
+  
     this.autoScalingGroups[region] = asg;
-
+  
     const dbSubnetGroup = new aws.rds.SubnetGroup(`db-subnet-group-${region}`, {
       subnetIds: vpc.privateSubnetIds,
       tags,
     }, { parent: this, provider });
-
-    // Fixed RDS to use regional KMS key and unique identifier
+  
     const rdsInstance = new aws.rds.Instance(`rds-${region}`, {
-      identifier: `nova-model-db-${region}-${Date.now()}`, // Add timestamp for uniqueness
+      identifier: `nova-model-db-${region}-${Date.now()}`,
       engine: 'mysql',
       engineVersion: '8.0',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageType: 'gp2',
       storageEncrypted: true,
-      kmsKeyId: this.kmsKeys[region].arn, // Use regional KMS key
+      kmsKeyId: this.kmsKeys[region].arn,
       dbName: 'novamodel',
       username: 'admin',
       password: 'temporarypassword123!',
       vpcSecurityGroupIds: [dbSecurityGroup.id],
       dbSubnetGroupName: dbSubnetGroup.name,
-      multiAz: false, // Disabled for cost savings
+      multiAz: false,
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
       skipFinalSnapshot: true,
       tags,
     }, { parent: this, provider });
-
+  
     this.rdsInstances[region] = rdsInstance;
-
+  
     this.createApplicationLoadBalancer(region, vpc, webSecurityGroup, asg, tags, provider);
   }
+  
 
   private getCidrBlockForRegion(region: string): string {
     const cidrBlocks: { [key: string]: string } = {
@@ -618,12 +626,20 @@ def lambda_handler(event, context):
       }),
       tags,
     }, { parent: this, provider });
-
+  
+    // Add CloudWatch agent permissions
     new aws.iam.RolePolicyAttachment(`ec2-cloudwatch-agent-${region}`, {
       role: role.name,
       policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
     }, { parent: this, provider });
-
+  
+    // Add SSM permissions for EC2 management
+    new aws.iam.RolePolicyAttachment(`ec2-ssm-${region}`, {
+      role: role.name,
+      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+    }, { parent: this, provider });
+  
+    // Add S3 logging permissions
     new aws.iam.RolePolicy(`ec2-s3-logs-policy-${region}`, {
       role: role.id,
       policy: pulumi.jsonStringify({
@@ -637,12 +653,23 @@ def lambda_handler(event, context):
             ],
             Resource: pulumi.interpolate`${this.logsBucket.arn}/ec2-logs/*`,
           },
+          // Add permissions for CloudFormation signaling
+          {
+            Effect: 'Allow',
+            Action: [
+              'cloudformation:SignalResource',
+              'autoscaling:*',
+              'ec2:Describe*',
+            ],
+            Resource: '*',
+          },
         ],
       }),
     }, { parent: this, provider });
-
+  
     return role;
   }
+  
 
   private createLaunchTemplate(
     region: string,
@@ -651,14 +678,19 @@ def lambda_handler(event, context):
     tags: { [key: string]: string },
     provider: aws.Provider
   ): aws.ec2.LaunchTemplate {
+    // Fixed user data script with proper bash formatting
     const userData = Buffer.from(`#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
-`).toString('base64');
-
+  set -e
+  yum update -y
+  yum install -y httpd
+  systemctl start httpd
+  systemctl enable httpd
+  echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
+  
+  # Signal success to CloudFormation/Auto Scaling
+  /opt/aws/bin/cfn-signal -e $? --stack ${pulumi.getStack()} --resource asg-${region} --region ${region} || true
+  `).toString('base64');
+  
     return new aws.ec2.LaunchTemplate(`launch-template-${region}`, {
       namePrefix: `nova-model-${region}-`,
       imageId: aws.ec2.getAmi({
@@ -668,6 +700,10 @@ echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
           {
             name: 'name',
             values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+          },
+          {
+            name: 'state',
+            values: ['available'],
           },
         ],
       }, { provider }).then(ami => ami.id),
@@ -684,22 +720,27 @@ echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
             volumeSize: 20,
             volumeType: 'gp3',
             encrypted: 'true',
-            kmsKeyId: this.kmsKeys[region].arn, // Use regional KMS key
+            kmsKeyId: this.kmsKeys[region].arn,
+            deleteOnTermination: 'true',
           },
         },
       ],
       tagSpecifications: [
         {
           resourceType: 'instance',
-          tags,
+          tags: {
+            ...tags,
+            Name: `nova-model-instance-${region}`,
+          },
         },
         {
           resourceType: 'volume',
           tags,
         },
       ],
-    }, { parent: this, provider });
+    }, { parent: this, provider, dependsOn: [instanceProfile] });
   }
+  
 
   private createApplicationLoadBalancer(
     region: string,
