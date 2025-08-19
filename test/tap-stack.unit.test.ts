@@ -183,9 +183,9 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create RDS instance with performance insights enabled', () => {
+    test('should create RDS instance with auto minor version upgrade enabled', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        EnablePerformanceInsights: true,
+        AutoMinorVersionUpgrade: true,
       });
     });
   });

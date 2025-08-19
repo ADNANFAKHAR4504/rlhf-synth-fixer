@@ -294,8 +294,6 @@ export class TapStack extends cdk.Stack {
         deletionProtection: environment === 'prod',
         multiAz: environment === 'prod',
         autoMinorVersionUpgrade: true,
-        enablePerformanceInsights: true,
-        performanceInsightEncryptionKey: kmsKey,
       }
     );
 
