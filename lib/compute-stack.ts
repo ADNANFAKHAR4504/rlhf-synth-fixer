@@ -96,7 +96,7 @@ export class ComputeStack extends pulumi.ComponentResource {
               protocol: 'tcp',
               fromPort: 22,
               toPort: 22,
-              cidrBlocks: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'],
+              cidrBlocks: [allowedCidr],
               description: 'SSH from allowed CIDR only',
             },
           ],
