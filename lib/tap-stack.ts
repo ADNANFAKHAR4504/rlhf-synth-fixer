@@ -53,6 +53,11 @@ export class TapStack extends pulumi.ComponentResource {
         ],
         // Enable warm throughput for better performance during traffic spikes
         tableClass: 'STANDARD',
+        // Configure warm throughput for predictable performance
+        onDemandThroughput: {
+          maxReadRequestUnits: 4000,
+          maxWriteRequestUnits: 4000,
+        },
         tags: {
           ...tags,
           Name: `tap-items-${environmentSuffix}`,
@@ -103,7 +108,7 @@ export class TapStack extends pulumi.ComponentResource {
                   'logs:CreateLogStream',
                   'logs:PutLogEvents',
                 ],
-                Resource: 'arn:aws:logs:*:*:*',
+                Resource: `arn:aws:logs:*:*:log-group:/aws/lambda/tap-api-handler-${environmentSuffix}*`,
               },
               {
                 Effect: 'Allow',
