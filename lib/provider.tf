@@ -77,10 +77,27 @@ resource "null_resource" "s3_bucket_cleanup" {
     command    = <<EOT
       set -e
       echo "Starting S3 bucket cleanup for: ${self.triggers.s3_bucket_name}"
-      echo "Attempting to force delete S3 bucket: ${self.triggers.s3_bucket_name}"
-      aws s3 rb s3://${self.triggers.s3_bucket_name} --force
-      echo "Finished force deleting S3 bucket: ${self.triggers.s3_bucket_name}."
+      
+      # Check if the bucket exists before attempting to clean it
+      if aws s3 ls "s3://${self.triggers.s3_bucket_name}" 2>&1 | grep -q 'NoSuchBucket'; then
+        echo "Bucket ${self.triggers.s3_bucket_name} does not exist. Skipping cleanup."
+      else
+        echo "Attempting to empty and delete S3 bucket: ${self.triggers.s3_bucket_name}"
+        # Delete all object versions
+        aws s3api list-object-versions --bucket "${self.triggers.s3_bucket_name}" --query 'Versions[].{Key:Key,VersionId:VersionId}' --output json | \
+        jq -r '.[] | "--key \(.Key) --version-id \(.VersionId)"' | \
+        xargs -L 10 -r aws s3api delete-object --bucket "${self.triggers.s3_bucket_name}"
+
+        # Delete all delete markers
+        aws s3api list-object-versions --bucket "${self.triggers.s3_bucket_name}" --query 'DeleteMarkers[].{Key:Key,VersionId:VersionId}' --output json | \
+        jq -r '.[] | "--key \(.Key) --version-id \(.VersionId)"' | \
+        xargs -L 10 -r aws s3api delete-object --bucket "${self.triggers.s3_bucket_name}"
+
+        # Finally, remove the bucket
+        aws s3 rb s3://${self.triggers.s3_bucket_name} --force
+        echo "Finished emptying and deleting S3 bucket: ${self.triggers.s3_bucket_name}".
+      fi
     EOT
-    interpreter = ["bash", "-c"]
+    interpreter = ["bash", " -c"]
   }
 }
