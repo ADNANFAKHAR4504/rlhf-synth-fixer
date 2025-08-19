@@ -93,7 +93,7 @@ describe("TapStack CloudFormation Template", () => {
       expect(recorder).toBeDefined();
 
       const deliveryChannel = Object.values(template.Resources).find((r: any) => r.Type === "AWS::Config::DeliveryChannel");
-      expect(deliveryChannel).toBeDefined();
+      expect(deliveryChannel).not.toBeNull();
 
       const lambda = Object.values(template.Resources).find((r: any) => r.Type === "AWS::Lambda::Function");
       expect(lambda).toBeDefined();
