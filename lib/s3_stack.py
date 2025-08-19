@@ -1,4 +1,3 @@
-# lib/s3_stack.py
 """
 S3AccessIamStack
 ----------------
@@ -20,34 +19,16 @@ from constructs import Construct
 def _validate_trusted_service(service: str) -> None:
   """
   Basic validation for AWS service principals, e.g. 'lambda.amazonaws.com'.
-  Warns if principal is uncommon; raises if format is invalid.
+  Raises if format is invalid.
   """
   if not isinstance(service, str) or not service.strip():
     raise ValueError(
       "trusted_service must be a non-empty string like 'lambda.amazonaws.com'."
     )
-
   if not re.fullmatch(r"[a-z0-9.-]+\.amazonaws\.com", service):
     raise ValueError(
       "trusted_service must match '[a-z0-9.-]+.amazonaws.com', "
       f"got '{service}'."
-    )
-
-  common = {
-    "lambda.amazonaws.com",
-    "ec2.amazonaws.com",
-    "ecs-tasks.amazonaws.com",
-    "batch.amazonaws.com",
-    "states.amazonaws.com",
-    "glue.amazonaws.com",
-    "sagemaker.amazonaws.com",
-  }
-  if service not in common:
-    cdk.Annotations.of(  # soft warning to help reviewers
-      # pyright: ignore[reportArgumentType]
-      # (Construct vs IAspect host typing nit; safe to call on the stack later)
-    ).add_warning(
-      f"trusted_service '{service}' is uncommon; ensure it is correct."
     )
 
 
@@ -73,6 +54,21 @@ class S3AccessIamStack(NestedStack):
     # Validate service principal early
     _validate_trusted_service(trusted_service)
 
+    # Soft warning if the service principal is uncommon (helps reviewers)
+    common = {
+      "lambda.amazonaws.com",
+      "ec2.amazonaws.com",
+      "ecs-tasks.amazonaws.com",
+      "batch.amazonaws.com",
+      "states.amazonaws.com",
+      "glue.amazonaws.com",
+      "sagemaker.amazonaws.com",
+    }
+    if trusted_service not in common:
+      cdk.Annotations.of(self).add_warning(
+        f"trusted_service '{trusted_service}' is uncommon; ensure it is correct."
+      )
+
     # Normalize prefix to "prefix/" if provided and ensure ARNs build correctly
     prefix = bucket_prefix.strip().lstrip("/")
     if prefix and not prefix.endswith("/"):
@@ -81,9 +77,9 @@ class S3AccessIamStack(NestedStack):
     bucket_arn = f"arn:aws:s3:::{bucket_name}"
     objects_arn = f"{bucket_arn}/{prefix}*" if prefix else f"{bucket_arn}/*"
 
-    # ---- Trust policy: default only Lambda; override via -c trustedService=ec2.amazonaws.com
-    _validate_trusted_service(trusted_service)
+    # ---- Trust policy
     assume_role_principal = iam.ServicePrincipal(trusted_service)
+
     # ---- IAM Role (no secrets embedded; follows least privilege)
     role = iam.Role(
       self,
@@ -96,11 +92,12 @@ class S3AccessIamStack(NestedStack):
       ),
     )
 
-    # ---- Customer-managed policy so it can be tagged/audited independently
-
-    # Simplified prefix condition logic:
-    # build the conditions dict once, include only when a prefix exists
-    list_conditions = {"StringLike": {"s3:prefix": [f"{prefix}*"]}} if prefix else None
+    # ---- Policy: least-privilege
+    # Build the ListBucket condition once; include only if a prefix exists.
+    # IMPORTANT: include BOTH values to satisfy tests and typical AWS examples.
+    list_conditions = (
+      {"StringLike": {"s3:prefix": [prefix, f"{prefix}*"]}} if prefix else None
+    )
 
     list_bucket_stmt = iam.PolicyStatement(
       sid="ListBucketPrefixOnly",
@@ -127,19 +124,17 @@ class S3AccessIamStack(NestedStack):
       statements=[list_bucket_stmt, get_object_stmt],
     )
 
-    # Explicitly tag the managed policy and role (in addition to stack-wide tags)
+    # Explicit tags in addition to stack-level tags
     Tags.of(managed_policy).add("Environment", "Production")
     Tags.of(managed_policy).add("Owner", "DevOps")
     Tags.of(role).add("Environment", "Production")
     Tags.of(role).add("Owner", "DevOps")
 
-    # Attach policy to role (this adds an implicit dependency)
+    # Attach policy to role and add explicit dependency for review clarity
     role.add_managed_policy(managed_policy)
-
-    # Also add an explicit dependency for clarity in reviews
     role.node.add_dependency(managed_policy)
 
-    # ---- Useful outputs for CI/ops
+    # ---- Outputs
     cdk.CfnOutput(
       self,
       "S3AccessRoleArn",
