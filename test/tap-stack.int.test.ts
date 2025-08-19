@@ -313,9 +313,9 @@ describe('TapStack Integration Tests', () => {
       
       expect(asg).toBeDefined();
       expect(asg?.AutoScalingGroupName).toBe(stackOutputs.AutoScalingGroupName);
-      expect(asg?.MinSize).toBe(stackOutputs.MinSize);
-      expect(asg?.MaxSize).toBe(stackOutputs.MaxSize);
-      expect(asg?.DesiredCapacity).toBe(stackOutputs.DesiredCapacity);
+      expect(asg?.MinSize).toBe(Number(stackOutputs.MinSize));
+      expect(asg?.MaxSize).toBe(Number(stackOutputs.MaxSize));
+      expect(asg?.DesiredCapacity).toBe(Number(stackOutputs.DesiredCapacity));
       expect(asg?.HealthCheckType).toBe('EC2');
     });
 

@@ -701,7 +701,7 @@ Outputs:
 
   MaxSize:
     Description: 'Auto Scaling Group maximum size for testing'
-    Value: 4
+    Value: 6
 
   DesiredCapacity:
     Description: 'Auto Scaling Group desired capacity for testing'
