@@ -503,7 +503,7 @@ Resources:
   ApplicationS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-app-artifacts-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
+      BucketName: !Sub '${Environment}-app-artifacts-${AWS::AccountId}-${AWS::Region}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -531,7 +531,7 @@ Resources:
   LoggingS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
+      BucketName: !Sub '${Environment}-logs-${AWS::AccountId}-${AWS::Region}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
