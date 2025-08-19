@@ -24,6 +24,7 @@
     "Internet Gateway",
     "Elastic IP",
     "Security Groups",
-    "VPC Peering"
+    "VPC Peering",
+    "RDS", "KMS", "Secrets Manager", "CloudWatch Logs", "SNS", "DB Subnet Groups", "DB Parameter Groups", "Enhanced Monitoring Roles", "Random Password", "CloudWatch Alarms"
   ]
 }
