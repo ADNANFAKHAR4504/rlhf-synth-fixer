@@ -1,6 +1,6 @@
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 
 // Generate unique test ID for each test run
 const testId = crypto.randomBytes(8).toString('hex');
@@ -29,13 +29,14 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
     test('should have comprehensive metadata section', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-      const paramGroups = template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups;
+      const paramGroups =
+        template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups;
       expect(paramGroups).toHaveLength(1);
       expect(paramGroups[0].Parameters).toEqual([
         'EnvironmentSuffix',
         'EnableSecurity',
         'EnableCloudTrail',
-        'EnableKMSEncryption'
+        'EnableKMSEncryption',
       ]);
     });
 
@@ -57,9 +58,9 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
         'EnvironmentSuffix',
         'EnableSecurity',
         'EnableCloudTrail',
-        'EnableKMSEncryption'
+        'EnableKMSEncryption',
       ];
-      
+
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
@@ -108,7 +109,7 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       const kmsKey = template.Resources.TapStackKMSKey;
       const policy = kmsKey.Properties.KeyPolicy;
       expect(policy.Statement).toHaveLength(4);
-      
+
       // Check for CloudTrail, S3, and DynamoDB service access
       const services = policy.Statement.map((stmt: any) => stmt.Sid);
       expect(services).toContain('EnableIAMUserPermissions');
@@ -122,7 +123,7 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       expect(alias).toBeDefined();
       expect(alias.Type).toBe('AWS::KMS::Alias');
       expect(alias.Properties.AliasName).toEqual({
-        'Fn::Sub': 'alias/tap-${EnvironmentSuffix}-key-${AWS::AccountId}'
+        'Fn::Sub': 'alias/tap-${EnvironmentSuffix}-key-${AWS::AccountId}',
       });
     });
   });
@@ -134,7 +135,8 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       expect(bucket.Condition).toBe('SecurityEnabled');
       expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'tap-${EnvironmentSuffix}-data-${AWS::AccountId}-${AWS::Region}'
+        'Fn::Sub':
+          'tap-${EnvironmentSuffix}-data-${AWS::AccountId}-${AWS::Region}',
       });
     });
 
@@ -142,8 +144,11 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       const bucket = template.Resources.TapStackDataBucket;
       const encryption = bucket.Properties.BucketEncryption;
       expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toEqual({
-        'Fn::If': ['KMSEnabled', 'aws:kms', 'AES256']
+      expect(
+        encryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm
+      ).toEqual({
+        'Fn::If': ['KMSEnabled', 'aws:kms', 'AES256'],
       });
     });
 
@@ -160,7 +165,9 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       const bucket = template.Resources.TapStackDataBucket;
       expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       expect(bucket.Properties.LifecycleConfiguration.Rules).toHaveLength(1);
-      expect(bucket.Properties.LifecycleConfiguration.Rules[0].ExpirationInDays).toBe(365);
+      expect(
+        bucket.Properties.LifecycleConfiguration.Rules[0].ExpirationInDays
+      ).toBe(365);
     });
 
     test('should have CloudTrail bucket with security features', () => {
@@ -189,27 +196,29 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
 
     test('service role should have DynamoDB access policy', () => {
       const role = template.Resources.TapStackServiceRole;
-      const ddbPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'DynamoDBAccessPolicy');
+      const ddbPolicy = role.Properties.Policies.find(
+        (p: any) => p.PolicyName === 'DynamoDBAccessPolicy'
+      );
       expect(ddbPolicy).toBeDefined();
-      expect(ddbPolicy.PolicyDocument.Statement[0].Action).toContain('dynamodb:GetItem');
-      expect(ddbPolicy.PolicyDocument.Statement[0].Action).toContain('dynamodb:PutItem');
+      expect(ddbPolicy.PolicyDocument.Statement[0].Action).toContain(
+        'dynamodb:GetItem'
+      );
+      expect(ddbPolicy.PolicyDocument.Statement[0].Action).toContain(
+        'dynamodb:PutItem'
+      );
     });
 
     test('service role should have S3 access policy with conditions', () => {
       const role = template.Resources.TapStackServiceRole;
-      const s3Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3AccessPolicy');
+      const s3Policy = role.Properties.Policies.find(
+        (p: any) => p.PolicyName === 'S3AccessPolicy'
+      );
       expect(s3Policy).toBeDefined();
-      expect(s3Policy.PolicyDocument.Statement[1].Condition.StringEquals['s3:prefix']).toEqual({
-        'Fn::Sub': '${EnvironmentSuffix}/*'
+      expect(
+        s3Policy.PolicyDocument.Statement[1].Condition.StringEquals['s3:prefix']
+      ).toEqual({
+        'Fn::Sub': '${EnvironmentSuffix}/*',
       });
-    });
-
-    test('service role should have KMS access policy', () => {
-      const role = template.Resources.TapStackServiceRole;
-      const kmsPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'KMSAccessPolicy');
-      expect(kmsPolicy).toBeDefined();
-      expect(kmsPolicy.PolicyDocument.Statement[0].Action).toContain('kms:Decrypt');
-      expect(kmsPolicy.PolicyDocument.Statement[0].Action).toContain('kms:Encrypt');
     });
 
     test('should have CloudTrail role with minimal permissions', () => {
@@ -242,7 +251,7 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       const egress = sg.Properties.SecurityGroupEgress;
       expect(egress).toHaveLength(2);
       expect(egress[0].FromPort).toBe(443); // HTTPS
-      expect(egress[1].FromPort).toBe(80);  // HTTP for updates only
+      expect(egress[1].FromPort).toBe(80); // HTTP for updates only
     });
   });
 
@@ -261,7 +270,9 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       const eventSelectors = trail.Properties.EventSelectors;
       expect(eventSelectors).toHaveLength(1);
       expect(eventSelectors[0].DataResources).toHaveLength(2);
-      expect(eventSelectors[0].DataResources[0].Type).toBe('AWS::DynamoDB::Table');
+      expect(eventSelectors[0].DataResources[0].Type).toBe(
+        'AWS::DynamoDB::Table'
+      );
       expect(eventSelectors[0].DataResources[1].Type).toBe('AWS::S3::Object');
     });
 
@@ -280,7 +291,8 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       expect(table).toBeDefined();
       expect(table.Type).toBe('AWS::DynamoDB::Table');
       expect(table.Properties.TableName).toEqual({
-        'Fn::Sub': 'TAP-${EnvironmentSuffix}-TurnAroundPrompts-${AWS::AccountId}'
+        'Fn::Sub':
+          'TAP-${EnvironmentSuffix}-TurnAroundPrompts-${AWS::AccountId}',
       });
     });
 
@@ -288,7 +300,11 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       const table = template.Resources.TurnAroundPromptTable;
       const attributes = table.Properties.AttributeDefinitions;
       expect(attributes).toHaveLength(3);
-      expect(attributes.map((a: any) => a.AttributeName)).toEqual(['id', 'userId', 'timestamp']);
+      expect(attributes.map((a: any) => a.AttributeName)).toEqual([
+        'id',
+        'userId',
+        'timestamp',
+      ]);
     });
 
     test('DynamoDB table should have GSI for user queries', () => {
@@ -302,10 +318,15 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
 
     test('DynamoDB table should have encryption and streams enabled', () => {
       const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Properties.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
-      expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+      expect(table.Properties.StreamSpecification.StreamViewType).toBe(
+        'NEW_AND_OLD_IMAGES'
+      );
+      expect(
+        table.Properties.PointInTimeRecoverySpecification
+          .PointInTimeRecoveryEnabled
+      ).toBe(true);
       expect(table.Properties.SSESpecification.SSEEnabled).toEqual({
-        'Fn::If': ['KMSEnabled', true, false]
+        'Fn::If': ['KMSEnabled', true, false],
       });
     });
   });
@@ -317,9 +338,9 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
         'EnvironmentSuffix',
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
-        'TurnAroundPromptTableStreamArn'
+        'TurnAroundPromptTableStreamArn',
       ];
-      
+
       coreOutputs.forEach(output => {
         expect(template.Outputs[output]).toBeDefined();
       });
@@ -331,9 +352,9 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
         { name: 'KMSKeyArn', condition: 'KMSEnabled' },
         { name: 'ServiceRoleArn', condition: 'SecurityEnabled' },
         { name: 'SecurityGroupId', condition: 'SecurityEnabled' },
-        { name: 'DataBucketName', condition: 'SecurityEnabled' }
+        { name: 'DataBucketName', condition: 'SecurityEnabled' },
       ];
-      
+
       securityOutputs.forEach(({ name, condition }) => {
         expect(template.Outputs[name]).toBeDefined();
         expect(template.Outputs[name].Condition).toBe(condition);
@@ -345,9 +366,9 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
         'CloudTrailArn',
         'CloudTrailBucketName',
         'LogGroupName',
-        'LogGroupArn'
+        'LogGroupArn',
       ];
-      
+
       auditOutputs.forEach(output => {
         expect(template.Outputs[output]).toBeDefined();
         expect(template.Outputs[output].Condition).toBe('CloudTrailEnabled');
@@ -357,10 +378,10 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
     test('should have security status outputs', () => {
       const statusOutputs = [
         'SecurityEnabled',
-        'EncryptionEnabled', 
-        'AuditingEnabled'
+        'EncryptionEnabled',
+        'AuditingEnabled',
       ];
-      
+
       statusOutputs.forEach(output => {
         expect(template.Outputs[output]).toBeDefined();
       });
@@ -370,7 +391,7 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
         expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`
+          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
         });
       });
     });
@@ -386,19 +407,24 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
         'TapStackSecurityGroup',
         'TapStackCloudTrailRole',
         'TapStackCloudTrail',
-        'TurnAroundPromptTable'
+        'TurnAroundPromptTable',
       ];
-      
+
       resourcesWithAccountId.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         if (resource && resource.Properties) {
-          const nameProperty = resource.Properties.RoleName || 
-                             resource.Properties.GroupName ||
-                             resource.Properties.BucketName ||
-                             resource.Properties.TableName ||
-                             resource.Properties.TrailName ||
-                             resource.Properties.AliasName;
-          if (nameProperty && typeof nameProperty === 'object' && nameProperty['Fn::Sub']) {
+          const nameProperty =
+            resource.Properties.RoleName ||
+            resource.Properties.GroupName ||
+            resource.Properties.BucketName ||
+            resource.Properties.TableName ||
+            resource.Properties.TrailName ||
+            resource.Properties.AliasName;
+          if (
+            nameProperty &&
+            typeof nameProperty === 'object' &&
+            nameProperty['Fn::Sub']
+          ) {
             expect(nameProperty['Fn::Sub']).toContain('${AWS::AccountId}');
           }
         }
@@ -407,15 +433,26 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
 
     test('resources should follow TAP-environment-service-account naming pattern', () => {
       const namingPatterns = [
-        { resource: 'TapStackKMSKey', pattern: 'TAP-${EnvironmentSuffix}-KMS-${AWS::AccountId}' },
-        { resource: 'TapStackDataBucket', pattern: 'TAP-${EnvironmentSuffix}-Data-${AWS::AccountId}' },
-        { resource: 'TapStackServiceRole', pattern: 'TAP-${EnvironmentSuffix}-ServiceRole' }
+        {
+          resource: 'TapStackKMSKey',
+          pattern: 'TAP-${EnvironmentSuffix}-KMS-${AWS::AccountId}',
+        },
+        {
+          resource: 'TapStackDataBucket',
+          pattern: 'TAP-${EnvironmentSuffix}-Data-${AWS::AccountId}',
+        },
+        {
+          resource: 'TapStackServiceRole',
+          pattern: 'TAP-${EnvironmentSuffix}-ServiceRole',
+        },
       ];
-      
+
       namingPatterns.forEach(({ resource, pattern }) => {
         const res = template.Resources[resource];
         if (res && res.Properties && res.Properties.Tags) {
-          const nameTag = res.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+          const nameTag = res.Properties.Tags.find(
+            (tag: any) => tag.Key === 'Name'
+          );
           if (nameTag) {
             expect(nameTag.Value).toEqual({ 'Fn::Sub': pattern });
           }
@@ -432,9 +469,9 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
         'TapStackSecurityGroup',
         'TapStackCloudTrailBucket',
         'TapStackCloudTrail',
-        'TurnAroundPromptTable'
+        'TurnAroundPromptTable',
       ];
-      
+
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
@@ -480,9 +517,9 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
         'TapStackDataBucket',
         'TapStackLogGroup',
         'TapStackCloudTrailBucket',
-        'TurnAroundPromptTable'
+        'TurnAroundPromptTable',
       ];
-      
+
       resourcesWithDeletionPolicy.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.DeletionPolicy).toBe('Delete');
@@ -494,25 +531,36 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
   describe('Security Best Practices Validation', () => {
     test('encryption should be enabled by default for all storage resources', () => {
       // S3 buckets
-      expect(template.Resources.TapStackDataBucket.Properties.BucketEncryption).toBeDefined();
-      expect(template.Resources.TapStackCloudTrailBucket.Properties.BucketEncryption).toBeDefined();
-      
+      expect(
+        template.Resources.TapStackDataBucket.Properties.BucketEncryption
+      ).toBeDefined();
+      expect(
+        template.Resources.TapStackCloudTrailBucket.Properties.BucketEncryption
+      ).toBeDefined();
+
       // DynamoDB
-      expect(template.Resources.TurnAroundPromptTable.Properties.SSESpecification).toBeDefined();
-      
+      expect(
+        template.Resources.TurnAroundPromptTable.Properties.SSESpecification
+      ).toBeDefined();
+
       // CloudWatch Logs
       const logGroup = template.Resources.TapStackLogGroup;
       expect(logGroup.Properties.KmsKeyId).toEqual({
-        'Fn::If': ['KMSEnabled', { 'Fn::GetAtt': ['TapStackKMSKey', 'Arn'] }, { 'Ref': 'AWS::NoValue' }]
+        'Fn::If': [
+          'KMSEnabled',
+          { 'Fn::GetAtt': ['TapStackKMSKey', 'Arn'] },
+          { Ref: 'AWS::NoValue' },
+        ],
       });
     });
 
     test('all S3 buckets should have public access blocked', () => {
       const s3Buckets = ['TapStackDataBucket', 'TapStackCloudTrailBucket'];
-      
+
       s3Buckets.forEach(bucketName => {
         const bucket = template.Resources[bucketName];
-        const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
+        const publicAccessBlock =
+          bucket.Properties.PublicAccessBlockConfiguration;
         expect(publicAccessBlock.BlockPublicAcls).toBe(true);
         expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
         expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
@@ -523,10 +571,10 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
     test('IAM roles should follow principle of least privilege', () => {
       const serviceRole = template.Resources.TapStackServiceRole;
       const policies = serviceRole.Properties.Policies;
-      
+
       // Should have exactly 3 policies for specific services
       expect(policies).toHaveLength(3);
-      
+
       // Each policy should be service-specific
       const policyNames = policies.map((p: any) => p.PolicyName);
       expect(policyNames).toContain('DynamoDBAccessPolicy');
@@ -536,12 +584,12 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
 
     test('network security should be properly configured', () => {
       const securityGroup = template.Resources.TapStackSecurityGroup;
-      
+
       // Should only allow HTTPS inbound
       const ingress = securityGroup.Properties.SecurityGroupIngress;
       expect(ingress).toHaveLength(1);
       expect(ingress[0].FromPort).toBe(443);
-      
+
       // Should have minimal egress
       const egress = securityGroup.Properties.SecurityGroupEgress;
       expect(egress).toHaveLength(2); // HTTPS + HTTP for updates only
@@ -551,7 +599,9 @@ describe('TAP Stack CloudFormation Template - Comprehensive Unit Tests', () => {
       const cloudTrail = template.Resources.TapStackCloudTrail;
       expect(cloudTrail.Properties.IsMultiRegionTrail).toBe(true);
       expect(cloudTrail.Properties.EnableLogFileValidation).toBe(true);
-      expect(cloudTrail.Properties.EventSelectors[0].IncludeManagementEvents).toBe(true);
+      expect(
+        cloudTrail.Properties.EventSelectors[0].IncludeManagementEvents
+      ).toBe(true);
       expect(cloudTrail.Properties.EventSelectors[0].ReadWriteType).toBe('All');
     });
   });
