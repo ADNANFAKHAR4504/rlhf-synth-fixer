@@ -33,10 +33,12 @@ describe('Terraform Unit Tests', () => {
         'aws_region',
         'project_name',
         'environment_name',
+        'environment_suffix',
         'notification_email',
         'allowed_ssh_cidrs',
         'instance_type',
         'enable_vpc_flow_logs',
+        'enable_cloudtrail',
         'tags',
       ];
 

@@ -8,19 +8,49 @@ const TEST_VARS_FILE = path.join(LIB_DIR, 'terraform.tfvars.test');
 const TEST_TIMEOUT = 120000; // 2 minutes per test
 
 /**
- * Helper function to skip tests if Terraform backend is not properly initialized
- * This prevents CI/CD failures when infrastructure isn't deployed
+ * Helper function to set up test environment with local backend
+ * Copies terraform files to test directory and initializes with local backend
  */
-function skipIfBackendMissing(): boolean {
+function setupTestEnvironment(): void {
+  // Copy terraform files to test directory
+  const filesToCopy = ['tap_stack.tf', 'terraform.tfvars.test'];
+  filesToCopy.forEach(file => {
+    if (fs.existsSync(path.join(LIB_DIR, file))) {
+      fs.copyFileSync(
+        path.join(LIB_DIR, file),
+        path.join(TEST_DIR, file)
+      );
+    }
+  });
+
+  // Initialize with local backend and format files
   try {
-    execSync('terraform init -backend=false', {
-      cwd: LIB_DIR,
+    execSync('terraform init', {
+      cwd: TEST_DIR,
       stdio: 'pipe',
       timeout: 30000,
     });
+    // Format the copied files
+    execSync('terraform fmt', {
+      cwd: TEST_DIR,
+      stdio: 'pipe',
+      timeout: 10000,
+    });
+  } catch (error) {
+    console.warn('⚠️  Could not initialize test terraform environment');
+    throw error;
+  }
+}
+
+/**
+ * Helper function to skip tests if test environment setup fails
+ */
+function skipIfBackendMissing(): boolean {
+  try {
+    setupTestEnvironment();
     return false; // Continue with test
   } catch (error) {
-    console.warn('⚠️  Terraform backend not available - skipping test');
+    console.warn('⚠️  Terraform test environment not available - skipping test');
     return true; // Skip test
   }
 }
@@ -60,7 +90,7 @@ tags = {
       'tfplan.test',
     ];
     filesToClean.forEach(file => {
-      const filePath = path.join(LIB_DIR, file);
+      const filePath = path.join(TEST_DIR, file);
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
@@ -75,7 +105,7 @@ tags = {
 
         expect(() => {
           execSync('terraform init -backend=false -reconfigure', {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             stdio: 'pipe',
             timeout: 60000,
           });
@@ -91,7 +121,7 @@ tags = {
 
         expect(() => {
           execSync('terraform validate', {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             stdio: 'pipe',
             timeout: 30000,
           });
@@ -107,7 +137,7 @@ tags = {
 
         expect(() => {
           execSync('terraform fmt -check -recursive', {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             stdio: 'pipe',
             timeout: 30000,
           });
@@ -123,9 +153,9 @@ tags = {
 
         expect(() => {
           execSync(
-            `terraform plan -var-file=${TEST_VARS_FILE} -out=tfplan.test`,
+            `terraform plan -var-file=terraform.tfvars.test -out=tfplan.test`,
             {
-              cwd: LIB_DIR,
+              cwd: TEST_DIR,
               stdio: 'pipe',
               timeout: 120000,
             }
@@ -133,7 +163,7 @@ tags = {
         }).not.toThrow();
 
         // Clean up plan file
-        const planFile = path.join(LIB_DIR, 'tfplan.test');
+        const planFile = path.join(TEST_DIR, 'tfplan.test');
         if (fs.existsSync(planFile)) {
           fs.unlinkSync(planFile);
         }
@@ -149,9 +179,9 @@ tags = {
         if (skipIfBackendMissing()) return;
 
         const planOutput = execSync(
-          `terraform plan -var-file=${TEST_VARS_FILE}`,
+          `terraform plan -var-file=terraform.tfvars.test`,
           {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             encoding: 'utf8',
             timeout: 120000,
           }
@@ -185,9 +215,9 @@ tags = {
         if (skipIfBackendMissing()) return;
 
         const planOutput = execSync(
-          `terraform plan -var-file=${TEST_VARS_FILE}`,
+          `terraform plan -var-file=terraform.tfvars.test`,
           {
-            cwd: LIB_DIR,
+            cwd: TEST_DIR,
             encoding: 'utf8',
             timeout: 120000,
           }
