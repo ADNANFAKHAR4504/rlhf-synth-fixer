@@ -345,16 +345,6 @@ data "aws_kms_key" "main" {
   key_id = "alias/${var.project_name}-key"
 }
 
-resource "aws_s3_bucket" "logs" {
-  bucket = "tap-app-dev-064031-qcf7m9d3-logs-bucket"
-  force_destroy = true
-}
-
-resource "aws_s3_object" "test_object" {
-  bucket = aws_s3_bucket.logs.id
-  key    = "test-object.txt"
-  content = "This is a test object."
-}
 
 # VPC S3 Endpoint
 resource "aws_vpc_endpoint" "s3" {
@@ -420,12 +410,4 @@ output "kms_key_id" {
 
 output "vpc_endpoint_s3_id" {
   value = aws_vpc_endpoint.s3.id
-}
-
-output "s3_logs_bucket_name" {
-  value = aws_s3_bucket.logs.bucket
-}
-
-output "s3_logs_bucket_arn" {
-  value = aws_s3_bucket.logs.arn
 }
