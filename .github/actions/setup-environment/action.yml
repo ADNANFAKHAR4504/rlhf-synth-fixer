@@ -123,6 +123,7 @@ runs:
           gradle/
           gradlew
           gradlew.bat
+          pulumi-java-runner.sh
           config/
           .gradle/
           build/

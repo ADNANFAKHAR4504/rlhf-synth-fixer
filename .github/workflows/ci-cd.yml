@@ -538,6 +538,7 @@ jobs:
             "gradle"
             "gradlew"
             "gradlew.bat"
+            "pulumi-java-runner.sh"
             "config"
             )
 

@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'application'
     id 'checkstyle'
 }
 
@@ -35,6 +36,18 @@ dependencies {
     testImplementation 'org.mockito:mockito-core:5.11.0'
     testImplementation 'org.mockito:mockito-junit-jupiter:5.11.0'
     
+}
+
+application {
+    mainClass = 'app.Main'
+}
+
+// Override run task to handle path issues
+tasks.named('run') {
+    standardInput = System.in
+    workingDir = projectDir
+    systemProperties = System.getProperties()
+    environment = System.getenv()
 }
 
 // Configure source directories  
