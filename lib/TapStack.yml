@@ -996,12 +996,6 @@
                     {
                         "Key": "access_logs.s3.prefix",
                         "Value": "alb-logs"
-                    },
-                    {
-                        "Key": "access_logs.s3.bucket_owner",
-                        "Value": {
-                            "Ref": "AWS::AccountId"
-                        }
                     }
                 ],
                 "Tags": [
