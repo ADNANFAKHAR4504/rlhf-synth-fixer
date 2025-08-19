@@ -102,3 +102,11 @@ resource "aws_cloudwatch_log_group" "bastion_secondary_subnet" {
     Name = "${var.name_prefix}-${var.environment}-flowlogs-bastion-secondary-subnet"
   }
 }
+
+output "bastion_primary_id" {
+  value = aws_instance.bastion_primary.id
+}
+
+output "bastion_secondary_id" {
+  value = aws_instance.bastion_secondary.id
+}
