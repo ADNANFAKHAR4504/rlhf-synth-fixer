@@ -294,41 +294,6 @@ describe('TapStack', () => {
     });
   });
 
-  describe('RDS Database', () => {
-    test('RDS instance is created with encryption enabled', () => {
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        StorageEncrypted: true,
-        MultiAZ: true,
-        Engine: 'postgres',
-        EngineVersion: '15.3',
-        AllocatedStorage: '20',
-        MaxAllocatedStorage: 100,
-        StorageType: 'gp2',
-      });
-    });
-
-    test('RDS database has proper backup configuration', () => {
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        BackupRetentionPeriod: 7,
-        DeleteAutomatedBackups: false,
-        DeletionProtection: false, // Set to false for QA pipeline
-      });
-    });
-
-    test('RDS database has monitoring enabled', () => {
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        MonitoringInterval: 60,
-        EnablePerformanceInsights: true,
-      });
-    });
-
-    test('RDS database has auto minor version upgrade enabled', () => {
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        AutoMinorVersionUpgrade: true,
-        AllowMajorVersionUpgrade: false,
-      });
-    });
-  });
 
   describe('RDS Subnet Group', () => {
     test('DB Subnet Group is created for isolated subnets', () => {

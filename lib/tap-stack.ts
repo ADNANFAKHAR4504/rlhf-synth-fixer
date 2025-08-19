@@ -254,7 +254,7 @@ export class TapStack extends cdk.Stack {
 
     // Use a supported PostgreSQL version - check what's available in your region
     // Common supported versions: VER_15_2, VER_14_7, VER_13_10, etc.
-    const postgresVersion = rds.PostgresEngineVersion.VER_15_2; // Fallback to 15.2
+    const postgresVersion = rds.PostgresEngineVersion.VER_15_7;
 
     // RDS Parameter Group for enhanced security
     const parameterGroup = new rds.ParameterGroup(
