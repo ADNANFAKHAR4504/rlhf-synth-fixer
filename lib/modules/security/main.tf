@@ -35,24 +35,24 @@ resource "aws_security_group" "ec2" {
 
 # Allow HTTP from ALB to EC2
 resource "aws_security_group_rule" "ec2_ingress_http_from_alb" {
-  type              = "ingress"
-  from_port         = 80
-  to_port           = 80
-  protocol          = "tcp"
-  security_group_id = aws_security_group.ec2.id
+  type                     = "ingress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.ec2.id
   source_security_group_id = aws_security_group.alb.id
-  description       = "Allow HTTP from ALB"
+  description              = "Allow HTTP from ALB"
 }
 
 # Allow HTTPS from ALB to EC2
 resource "aws_security_group_rule" "ec2_ingress_https_from_alb" {
-  type              = "ingress"
-  from_port         = 443
-  to_port           = 443
-  protocol          = "tcp"
-  security_group_id = aws_security_group.ec2.id
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.ec2.id
   source_security_group_id = aws_security_group.alb.id
-  description       = "Allow HTTPS from ALB"
+  description              = "Allow HTTPS from ALB"
 }
 
 # ALB Security Group
@@ -92,24 +92,24 @@ resource "aws_security_group" "alb" {
 
 # Allow HTTP from ALB to EC2
 resource "aws_security_group_rule" "alb_egress_http_to_ec2" {
-  type              = "egress"
-  from_port         = 80
-  to_port           = 80
-  protocol          = "tcp"
-  security_group_id = aws_security_group.alb.id
+  type                     = "egress"
+  from_port                = 80
+  to_port                  = 80
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.alb.id
   source_security_group_id = aws_security_group.ec2.id
-  description       = "Allow HTTP to EC2"
+  description              = "Allow HTTP to EC2"
 }
 
 # Allow HTTPS from ALB to EC2
 resource "aws_security_group_rule" "alb_egress_https_to_ec2" {
-  type              = "egress"
-  from_port         = 443
-  to_port           = 443
-  protocol          = "tcp"
-  security_group_id = aws_security_group.alb.id
+  type                     = "egress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.alb.id
   source_security_group_id = aws_security_group.ec2.id
-  description       = "Allow HTTPS to EC2"
+  description              = "Allow HTTPS to EC2"
 }
 
 # RDS Security Group

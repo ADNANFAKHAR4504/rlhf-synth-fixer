@@ -1,55 +1,70 @@
-variable "project_name" {
+variable "aws_region" {
+  description = "The AWS region to deploy the infrastructure to."
   type        = string
-  description = "The name of the project"
-  default     = "tap-app"
+}
+
+variable "author" {
+  description = "The author of the infrastructure."
+  type        = string
+}
+
+variable "created_date" {
+  description = "The date the infrastructure was created."
+  type        = string
+}
+
+variable "availability_zones" {
+  description = "The availability zones to deploy the infrastructure to."
+  type        = list(string)
+}
+
+variable "account_id" {
+  description = "The AWS account ID."
+  type        = string
+}
+
+variable "project_name" {
+  description = "The name of the project."
+  type        = string
 }
 
 variable "environment" {
+  description = "The environment to deploy the infrastructure to."
   type        = string
-  description = "The environment name"
-  default     = "dev"
 }
 
 variable "vpc_cidr" {
+  description = "The CIDR block for the VPC."
   type        = string
-  description = "The CIDR block for the VPC"
-  default     = "10.0.0.0/16"
 }
 
 variable "public_subnet_cidrs" {
+  description = "The CIDR blocks for the public subnets."
   type        = list(string)
-  description = "The CIDR blocks for the public subnets"
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
 }
 
 variable "private_subnet_cidrs" {
+  description = "The CIDR blocks for the private subnets."
   type        = list(string)
-  description = "The CIDR blocks for the private subnets"
-  default     = ["10.0.3.0/24", "10.0.4.0/24"]
 }
 
 variable "db_username" {
+  description = "The username for the database."
   type        = string
-  description = "The username for the RDS instance"
-  sensitive   = true
-  default     = "admin"
 }
 
 variable "db_password" {
+  description = "The password for the database."
   type        = string
-  description = "The password for the RDS instance"
   sensitive   = true
-  default     = "password"
 }
 
 variable "ami_id" {
+  description = "The ID of the AMI to use for the EC2 instances."
   type        = string
-  description = "The ID of the AMI to use for the EC2 instances"
-  default     = "ami-0c55b159cbfafe1f0"
 }
 
 variable "instance_type" {
+  description = "The type of EC2 instance to use."
   type        = string
-  description = "The instance type to use for the EC2 instances"
-  default     = "t2.micro"
 }

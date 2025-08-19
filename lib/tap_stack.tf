@@ -28,11 +28,11 @@ module "iam" {
 module "storage" {
   source = "./modules/storage"
 
-  project_name          = var.project_name
-  environment           = var.environment
-  vpc_id                = module.networking.vpc_id
+  project_name            = var.project_name
+  environment             = var.environment
+  vpc_id                  = module.networking.vpc_id
   private_route_table_ids = module.networking.private_route_table_ids
-  account_id            = var.account_id
+  account_id              = var.account_id
 }
 
 module "database" {

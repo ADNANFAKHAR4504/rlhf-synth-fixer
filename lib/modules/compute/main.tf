@@ -1,8 +1,8 @@
 resource "aws_launch_configuration" "main" {
-  name_prefix   = "${var.project_name}-"
-  image_id      = var.ami_id
-  instance_type = var.instance_type
-  security_groups = [var.ec2_sg_id]
+  name_prefix          = "${var.project_name}-"
+  image_id             = var.ami_id
+  instance_type        = var.instance_type
+  security_groups      = [var.ec2_sg_id]
   iam_instance_profile = var.instance_profile_name
 }
 

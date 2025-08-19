@@ -7,21 +7,21 @@ resource "aws_kms_key" "main" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid = "Enable IAM User Permissions",
+        Sid    = "Enable IAM User Permissions",
         Effect = "Allow",
         Principal = {
           AWS = "arn:aws:iam::${var.account_id}:root"
         },
-        Action = "kms:*",
+        Action   = "kms:*",
         Resource = "*"
       },
       {
-        Sid = "Allow CloudTrail to encrypt logs",
+        Sid    = "Allow CloudTrail to encrypt logs",
         Effect = "Allow",
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         },
-        Action = "kms:GenerateDataKey*",
+        Action   = "kms:GenerateDataKey*",
         Resource = "*",
         Condition = {
           StringLike = {
@@ -54,7 +54,7 @@ resource "aws_vpc_endpoint" "s3" {
 
 # S3 Data Bucket
 resource "aws_s3_bucket" "data" {
-  bucket = "${lower(var.project_name)}-data-${random_string.bucket_suffix.result}"
+  bucket        = "${lower(var.project_name)}-data-${random_string.bucket_suffix.result}"
   force_destroy = true
 
   tags = {
