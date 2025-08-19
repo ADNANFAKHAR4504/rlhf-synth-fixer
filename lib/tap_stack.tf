@@ -346,7 +346,7 @@ resource "aws_instance" "bastion" {
 # IAM for Private EC2 -> S3 + KMS
 #################
 resource "aws_iam_role" "app_role" {
-  name               = "${local.name_prefix}-apps-role"
+  name               = "${local.name_prefix}-app-role001"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -364,7 +364,7 @@ resource "aws_iam_role" "app_role" {
 
 # Least-privilege S3 access to bucket + restricted prefix
 resource "aws_iam_policy" "app_s3_policy" {
-  name        = "${local.name_prefix}-apps-s3-policy"
+  name        = "${local.name_prefix}-apps-s3-policy-0001"
   description = "Least-privilege S3 access to application bucket prefix"
 
   policy = jsonencode({
