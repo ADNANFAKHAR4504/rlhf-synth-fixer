@@ -1,7 +1,7 @@
 {
   "platform": "pulumi",
   "language": "ts",
-  "complexity": "hard",
+  "complexity": "expert",
   "turn_type": "single",
   "po_id": "291495",
   "team": "1",
