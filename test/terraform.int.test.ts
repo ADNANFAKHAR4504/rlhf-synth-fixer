@@ -1,42 +1,44 @@
 // Integration tests for Terraform CI/CD Pipeline Infrastructure
 // Tests against real deployed AWS resources using outputs from cfn-outputs/flat-outputs.json
 
-import fs from "fs";
-import path from "path";
-import {
-  S3Client,
-  HeadBucketCommand,
-  ListObjectsV2Command
-} from "@aws-sdk/client-s3";
-import {
-  CodePipelineClient,
-  GetPipelineCommand,
-  GetPipelineStateCommand
-} from "@aws-sdk/client-codepipeline";
-import {
-  CodeBuildClient,
-  BatchGetProjectsCommand
-} from "@aws-sdk/client-codebuild";
-import {
-  SNSClient,
-  GetTopicAttributesCommand
-} from "@aws-sdk/client-sns";
-import {
-  LambdaClient,
-  GetFunctionCommand
-} from "@aws-sdk/client-lambda";
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand
-} from "@aws-sdk/client-cloudwatch-logs";
 import {
   CloudWatchClient,
   DescribeAlarmsCommand
 } from "@aws-sdk/client-cloudwatch";
 import {
-  EventBridgeClient,
-  DescribeRuleCommand
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand
+} from "@aws-sdk/client-cloudwatch-logs";
+import {
+  BatchGetProjectsCommand,
+  CodeBuildClient
+} from "@aws-sdk/client-codebuild";
+import {
+  CodePipelineClient,
+  GetPipelineCommand,
+  GetPipelineStateCommand,
+  ListTagsForResourceCommand,
+  Tag
+} from "@aws-sdk/client-codepipeline";
+import {
+  DescribeRuleCommand,
+  EventBridgeClient
 } from "@aws-sdk/client-eventbridge";
+import {
+  GetFunctionCommand,
+  LambdaClient
+} from "@aws-sdk/client-lambda";
+import {
+  HeadBucketCommand,
+  ListObjectsV2Command,
+  S3Client
+} from "@aws-sdk/client-s3";
+import {
+  GetTopicAttributesCommand,
+  SNSClient
+} from "@aws-sdk/client-sns";
+import fs from "fs";
+import path from "path";
 
 // Load deployment outputs
 const outputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
@@ -443,15 +445,25 @@ describe("Integration Tests - Deployed Infrastructure", () => {
       });
 
       try {
-        const response = await codePipelineClient.send(command);
-        const tags = response.pipeline?.tags;
+        const pipelineResponse = await codePipelineClient.send(command);
+        const pipelineArn = pipelineResponse.pipeline?.name ? 
+          `arn:aws:codepipeline:${process.env.AWS_REGION || 'us-east-1'}:${process.env.AWS_ACCOUNT_ID || '123456789012'}:pipeline/${pipelineResponse.pipeline.name}` :
+          undefined;
         
-        expect(tags).toBeDefined();
-        if (tags) {
-          expect(tags.some(t => t.key === "Project")).toBe(true);
-          expect(tags.some(t => t.key === "ManagedBy")).toBe(true);
-          expect(tags.some(t => t.key === "CostCenter")).toBe(true);
-          expect(tags.some(t => t.key === "Environment")).toBe(true);
+        if (pipelineArn) {
+          const tagsCommand = new ListTagsForResourceCommand({
+            resourceArn: pipelineArn
+          });
+          const tagsResponse = await codePipelineClient.send(tagsCommand);
+          const tags = tagsResponse.tags;
+          
+          expect(tags).toBeDefined();
+          if (tags) {
+            expect(tags.some((t: Tag) => t.key === "Project")).toBe(true);
+            expect(tags.some((t: Tag) => t.key === "ManagedBy")).toBe(true);
+            expect(tags.some((t: Tag) => t.key === "CostCenter")).toBe(true);
+            expect(tags.some((t: Tag) => t.key === "Environment")).toBe(true);
+          }
         }
       } catch (error: any) {
         console.warn(`Could not verify resource tags: ${error.message}`);
