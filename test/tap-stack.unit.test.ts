@@ -44,9 +44,9 @@ describe('FinanceApp CloudFormation Template', () => {
     test('Environment parameter should have correct properties', () => {
       const envParam = template.Parameters.Environment;
       expect(envParam.Type).toBe('String');
-      expect(envParam.Default).toBe('Dev');
-      expect(envParam.AllowedValues).toEqual(['Dev', 'Prod']);
-      expect(envParam.Description).toBe('Environment name for resource naming');
+      expect(envParam.Default).toBe('dev');
+      expect(envParam.AllowedValues).toEqual(['dev', 'prod']);
+      expect(envParam.Description).toBe('Environment name for resource naming (lowercase for S3 compatibility)');
     });
 
     test('should have KeyPairName parameter with optional configuration', () => {
@@ -214,7 +214,8 @@ describe('FinanceApp CloudFormation Template', () => {
       
       // Check encryption
       const encryption = s3Bucket.Properties.BucketEncryption;
-      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
       
       // Check public access block
       const publicAccessBlock = s3Bucket.Properties.PublicAccessBlockConfiguration;
@@ -246,8 +247,8 @@ describe('FinanceApp CloudFormation Template', () => {
       expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
       
       expect(asg.Properties.MinSize).toBe(1);
-      expect(asg.Properties.MaxSize).toBe(4);
-      expect(asg.Properties.DesiredCapacity).toBe(2);
+      expect(asg.Properties.MaxSize).toBe(2);
+      expect(asg.Properties.DesiredCapacity).toBe(1);
       expect(asg.Properties.HealthCheckType).toBe('ELB');
       expect(asg.Properties.HealthCheckGracePeriod).toBe(300);
     });
@@ -290,7 +291,7 @@ describe('FinanceApp CloudFormation Template', () => {
       expect(properties.Engine).toBe('mysql');
       expect(properties.MultiAZ).toBe(true);
       expect(properties.StorageEncrypted).toBe(true);
-      expect(properties.ManageMasterUserPassword).toBe(true);
+      expect(properties.MasterUserPassword).toBeDefined(); // Uses Secrets Manager
       expect(properties.BackupRetentionPeriod).toBe(7);
       expect(properties.DeletionProtection).toBe(false);
     });

@@ -108,7 +108,7 @@ describe('FinanceApp Integration Tests', () => {
       );
       
       expect(objectStatement.Resource).toEqual({
-        'Fn::Sub': '${FinanceAppS3Bucket}/*'
+        'Fn::Sub': '${FinanceAppS3Bucket.Arn}/*'
       });
       expect(bucketStatement.Resource).toEqual({ Ref: 'FinanceAppS3Bucket' });
     });
@@ -372,8 +372,8 @@ describe('FinanceApp Integration Tests', () => {
   describe('Environment Configuration', () => {
     test('template should support both Dev and Prod environments', () => {
       const envParam = template.Parameters.Environment;
-      expect(envParam.AllowedValues).toContain('Dev');
-      expect(envParam.AllowedValues).toContain('Prod');
+      expect(envParam.AllowedValues).toContain('dev');
+      expect(envParam.AllowedValues).toContain('prod');
     });
 
     test('resource names should include environment suffix', () => {

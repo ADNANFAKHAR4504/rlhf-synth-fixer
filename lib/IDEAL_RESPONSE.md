@@ -28,11 +28,11 @@ Metadata:
 Parameters:
   Environment:
     Type: String
-    Default: 'Dev'
+    Default: 'dev'
     AllowedValues:
-      - 'Dev'
-      - 'Prod'
-    Description: 'Environment name for resource naming'
+      - 'dev'
+      - 'prod'
+    Description: 'Environment name for resource naming (lowercase for S3 compatibility)'
 
   KeyPairName:
     Type: String
@@ -95,6 +95,80 @@ Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
 Resources:
+  # KMS Key for encryption
+  FinanceAppKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for FinanceApp encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow Auto Scaling Service
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+          - Sid: Allow EC2 Service
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'FinanceApp-KMSKey-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Department
+          Value: 'Finance'
+        - Key: Owner
+          Value: 'FinanceTeam'
+
+  FinanceAppKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/financeapp-${Environment}-key'
+      TargetKeyId: !Ref FinanceAppKMSKey
+
+  # Database Secret
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: 'Database credentials for FinanceApp'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      KmsKeyId: !Ref FinanceAppKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub 'FinanceApp-DBSecret-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Department
+          Value: 'Finance'
+        - Key: Owner
+          Value: 'FinanceTeam'
   # VPC and Networking
   FinanceAppVPC:
     Type: AWS::EC2::VPC
@@ -412,11 +486,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${FinanceAppS3Bucket}/*'
+                Resource: !Sub '${FinanceAppS3Bucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref FinanceAppS3Bucket
+                Resource: !GetAtt FinanceAppS3Bucket.Arn
       Tags:
         - Key: Name
           Value: !Sub 'FinanceApp-EC2Role-${Environment}'
@@ -440,7 +514,9 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref FinanceAppKMSKey
+            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -471,6 +547,14 @@ Resources:
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         SecurityGroupIds:
           - !Ref WebSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 8
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId: !Ref FinanceAppKMSKey
+              DeleteOnTermination: true
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -506,8 +590,8 @@ Resources:
         LaunchTemplateId: !Ref WebLaunchTemplate
         Version: !GetAtt WebLaunchTemplate.LatestVersionNumber
       MinSize: 1
-      MaxSize: 4
-      DesiredCapacity: 2
+      MaxSize: 2
+      DesiredCapacity: 1
       TargetGroupARNs:
         - !Ref WebTargetGroup
       HealthCheckType: ELB
@@ -614,8 +698,9 @@ Resources:
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp2
       StorageEncrypted: true
+      KmsKeyId: !Ref FinanceAppKMSKey
       MasterUsername: admin
-      ManageMasterUserPassword: true
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DBSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -694,4 +779,16 @@ Outputs:
     Value: !Ref DBSecurityGroup
     Export:
       Name: !Sub '${AWS::StackName}-DBSecurityGroupId'
+
+  DatabaseSecretArn:
+    Description: 'ARN of the database secret in Secrets Manager'
+    Value: !Ref DatabaseSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseSecretArn'
+
+  KMSKeyId:
+    Description: 'KMS Key ID for encryption'
+    Value: !Ref FinanceAppKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
 ```

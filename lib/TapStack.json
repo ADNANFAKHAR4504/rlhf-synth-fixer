@@ -41,12 +41,12 @@
     "Parameters": {
         "Environment": {
             "Type": "String",
-            "Default": "Dev",
+            "Default": "dev",
             "AllowedValues": [
-                "Dev",
-                "Prod"
+                "dev",
+                "prod"
             ],
-            "Description": "Environment name for resource naming"
+            "Description": "Environment name for resource naming (lowercase for S3 compatibility)"
         },
         "KeyPairName": {
             "Type": "String",
@@ -122,6 +122,130 @@
         }
     },
     "Resources": {
+        "FinanceAppKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for FinanceApp encryption",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Auto Scaling Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "autoscaling.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey",
+                                "kms:CreateGrant"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow EC2 Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey",
+                                "kms:CreateGrant"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "FinanceApp-KMSKey-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "FinanceTeam"
+                    }
+                ]
+            }
+        },
+        "FinanceAppKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/financeapp-${Environment}-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "FinanceAppKMSKey"
+                }
+            }
+        },
+        "DatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Description": "Database credentials for FinanceApp",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{\"username\": \"admin\"}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 16,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "KmsKeyId": {
+                    "Ref": "FinanceAppKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "FinanceApp-DBSecret-${Environment}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "FinanceTeam"
+                    }
+                ]
+            }
+        },
         "FinanceAppVPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -753,7 +877,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${FinanceAppS3Bucket}/*"
+                                        "Fn::Sub": "${FinanceAppS3Bucket.Arn}/*"
                                     }
                                 },
                                 {
@@ -762,7 +886,10 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "FinanceAppS3Bucket"
+                                        "Fn::GetAtt": [
+                                            "FinanceAppS3Bucket",
+                                            "Arn"
+                                        ]
                                     }
                                 }
                             ]
@@ -810,8 +937,12 @@
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "FinanceAppKMSKey"
+                                }
+                            },
+                            "BucketKeyEnabled": true
                         }
                     ]
                 },
@@ -883,6 +1014,20 @@
                             "Ref": "WebSecurityGroup"
                         }
                     ],
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/xvda",
+                            "Ebs": {
+                                "VolumeSize": 8,
+                                "VolumeType": "gp3",
+                                "Encrypted": true,
+                                "KmsKeyId": {
+                                    "Ref": "FinanceAppKMSKey"
+                                },
+                                "DeleteOnTermination": true
+                            }
+                        }
+                    ],
                     "UserData": {
                         "Fn::Base64": {
                             "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>FinanceApp ${Environment} Environment</h1>\" > /var/www/html/index.html\n# Install CloudWatch agent\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n"
@@ -944,8 +1089,8 @@
                     }
                 },
                 "MinSize": 1,
-                "MaxSize": 4,
-                "DesiredCapacity": 2,
+                "MaxSize": 2,
+                "DesiredCapacity": 1,
                 "TargetGroupARNs": [
                     {
                         "Ref": "WebTargetGroup"
@@ -1143,8 +1288,13 @@
                 },
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "FinanceAppKMSKey"
+                },
                 "MasterUsername": "admin",
-                "ManageMasterUserPassword": true,
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}"
+                },
                 "VPCSecurityGroups": [
                     {
                         "Ref": "DBSecurityGroup"
@@ -1294,6 +1444,28 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-DBSecurityGroupId"
+                }
+            }
+        },
+        "DatabaseSecretArn": {
+            "Description": "ARN of the database secret in Secrets Manager",
+            "Value": {
+                "Ref": "DatabaseSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DatabaseSecretArn"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS Key ID for encryption",
+            "Value": {
+                "Ref": "FinanceAppKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyId"
                 }
             }
         }
