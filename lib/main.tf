@@ -49,6 +49,12 @@ variable "allowed_ssh_cidr" {
   default     = "0.0.0.0/0"  # Change this to your IP range in production
 }
 
+variable "enable_cloudtrail" {
+  description = "Enable CloudTrail (set to true only if org-wide trail does not already exist)"
+  type        = bool
+  default     = false
+}
+
 # Data sources
 data "aws_availability_zones" "available" {
   state = "available"
@@ -788,8 +794,10 @@ resource "aws_s3_bucket_versioning" "app" {
   }
 }
 
-# CloudTrail for all regions with encrypted logs
+# CloudTrail for all regions with encrypted logs (optional)
 resource "aws_cloudtrail" "main" {
+  count = var.enable_cloudtrail ? 1 : 0
+
   name           = "${var.project}-${var.environment}-cloudtrail-${random_string.bucket_suffix.result}"
   s3_bucket_name = aws_s3_bucket.logging.bucket
   s3_key_prefix  = "cloudtrail"
@@ -998,6 +1006,11 @@ output "s3_bucket_app" {
 output "cloudtrail_bucket_arn" {
   description = "ARN of the CloudTrail bucket"
   value       = aws_s3_bucket.logging.arn
+}
+
+output "cloudtrail_arn" {
+  description = "CloudTrail ARN (if enabled)"
+  value       = var.enable_cloudtrail ? aws_cloudtrail.main[0].arn : null
 }
 
 output "aws_region" {
