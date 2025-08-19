@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Fully serverless application with Lambda, API Gateway, DynamoDB, SQS DLQ, and KMS encryption'
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming'
+
   LambdaFunctionName:
     Type: String
     Default: 'ServerlessProcessor'
@@ -49,7 +54,7 @@ Resources:
   DynamoDBKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${DynamoDBTableName}-key'
+      AliasName: !Sub 'alias/${DynamoDBTableName}-${EnvironmentSuffix}-key'
       TargetKeyId: !Ref DynamoDBKMSKey
 
   # KMS Key for SQS encryption
@@ -83,14 +88,14 @@ Resources:
   SQSKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${SQSQueueName}-key'
+      AliasName: !Sub 'alias/${SQSQueueName}-${EnvironmentSuffix}-key'
       TargetKeyId: !Ref SQSKMSKey
 
   # Dead Letter Queue (SQS) with KMS encryption
   DeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Ref SQSQueueName
+      QueueName: !Sub '${SQSQueueName}-${EnvironmentSuffix}'
       KmsMasterKeyId: !Ref SQSKMSKey
       KmsDataKeyReusePeriodSeconds: 300
       MessageRetentionPeriod: 1209600 # 14 days
@@ -99,7 +104,7 @@ Resources:
   ProcessedDataTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Ref DynamoDBTableName
+      TableName: !Sub '${DynamoDBTableName}-${EnvironmentSuffix}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: id
@@ -169,8 +174,8 @@ Resources:
   ProcessorLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Ref LambdaFunctionName
-      Runtime: python3.9
+      FunctionName: !Sub '${LambdaFunctionName}-${EnvironmentSuffix}'
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 60
@@ -253,7 +258,7 @@ Resources:
   ServerlessApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: ServerlessProcessorAPI
+      Name: !Sub 'ServerlessProcessorAPI-${EnvironmentSuffix}'
       Description: 'API Gateway for serverless processor application'
       EndpointConfiguration:
         Types:
