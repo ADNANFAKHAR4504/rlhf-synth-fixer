@@ -25,6 +25,21 @@
     "Elastic IP",
     "Security Groups",
     "VPC Peering",
-    "RDS", "KMS", "Secrets Manager", "CloudWatch Logs", "SNS", "DB Subnet Groups", "DB Parameter Groups", "Enhanced Monitoring Roles", "Random Password", "CloudWatch Alarms"
-  ]
+    "RDS",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch Logs",
+    "SNS",
+    "DB Subnet Groups",
+    "DB Parameter Groups",
+    "Enhanced Monitoring Roles",
+    "Random Password",
+    "CloudWatch Alarms"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
 }
