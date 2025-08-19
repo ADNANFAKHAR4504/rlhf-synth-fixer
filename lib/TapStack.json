@@ -83,12 +83,7 @@
                             "Principal": {
                                 "Service": "lambda.amazonaws.com"
                             },
-                            "Action": "sts:AssumeRole",
-                            "Condition": {
-                                "StringEquals": {
-                                    "aws:RequestedRegion": "us-west-1"
-                                }
-                            }
+                            "Action": "sts:AssumeRole"
                         }
                     ]
                 },
