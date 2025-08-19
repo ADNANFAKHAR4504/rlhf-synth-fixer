@@ -653,12 +653,9 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
-                ],
                 "Policies": [
                     {
-                        "PolicyName": "ConfigDeliveryPermissions",
+                        "PolicyName": "ConfigServicePermissions",
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -681,6 +678,15 @@
                                             "Fn::Sub": "${ConfigBucket.Arn}/*"
                                         }
                                     ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:Put*",
+                                        "config:Get*",
+                                        "config:Describe*"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }

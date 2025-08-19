@@ -388,7 +388,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: ConfigDeliveryPermissions
+        - PolicyName: ConfigServicePermissions
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -401,6 +401,12 @@ Resources:
                 Resource:
                   - !GetAtt ConfigBucket.Arn
                   - !Sub '${ConfigBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - config:Put* 
+                  - config:Get* 
+                  - config:Describe*
+                Resource: "*"
 
   DeliveryChannel:
     Type: AWS::Config::DeliveryChannel
