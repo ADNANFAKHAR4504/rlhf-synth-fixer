@@ -77,7 +77,7 @@ variable "roles" {
     security-auditor = {
       description          = "Read-only access for SOC 2 compliance auditing"
       max_session_duration = 3600
-      trusted_principals   = ["arn:aws:iam::111122223333:root"] # Replace with real account
+      trusted_principals   = ["111122223333"] # Use just the account ID for same-account trust
       require_external_id  = true
       require_mfa          = true
       inline_policies = {
@@ -113,7 +113,7 @@ variable "roles" {
     ci-deployer = {
       description          = "Limited deployment access for CI/CD pipeline"
       max_session_duration = 3600
-      trusted_principals   = ["arn:aws:iam::444455556666:root"] # Replace with real account
+      trusted_principals   = ["444455556666"] # Use just the account ID for same-account trust
       require_external_id  = true
       require_mfa          = false
       inline_policies = {
@@ -146,7 +146,7 @@ variable "roles" {
     breakglass = {
       description          = "Emergency access role with strict controls"
       max_session_duration = 3600                               # Minimum allowed by AWS (1 hour)
-      trusted_principals   = ["arn:aws:iam::123456789012:root"] # Replace with your account id
+      trusted_principals   = ["123456789012"] # Use just the account ID for same-account trust
       require_external_id  = false
       require_mfa          = true
       inline_policies = {
