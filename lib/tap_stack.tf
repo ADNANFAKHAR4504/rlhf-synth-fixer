@@ -336,7 +336,7 @@ resource "aws_autoscaling_group" "primary_app" {
   }
   target_group_arns         = [aws_lb_target_group.primary_app.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 600  # Increased to allow more time for httpd to start
+  health_check_grace_period = 600 # Increased to allow more time for httpd to start
   tag {
     key                 = "Name"
     value               = "asg-primary-${local.deployment_suffix}"
@@ -404,14 +404,14 @@ resource "aws_db_instance" "primary_db_new" {
   storage_type            = "gp3"
   storage_encrypted       = true
   engine                  = "postgres"
-  engine_version          = "14.9"
+  engine_version          = "17.6"
   instance_class          = "db.t3.micro"
   db_name                 = "novadb"
   username                = var.db_username
   password                = random_password.db_password.result
   db_subnet_group_name    = aws_db_subnet_group.primary_rds.name
   vpc_security_group_ids  = [aws_security_group.primary_rds.id]
-  multi_az                = true  # Create new RDS with Multi-AZ directly in new subnet group
+  multi_az                = true # Create new RDS with Multi-AZ directly in new subnet group
   backup_retention_period = 7
   skip_final_snapshot     = true
   deletion_protection     = false
