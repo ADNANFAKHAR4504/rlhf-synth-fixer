@@ -714,7 +714,7 @@ EOF
       `${environmentSuffix}-alb-logs-bucket-policy`,
       {
         bucket: albLogsBucket.id,
-        policy: pulumi.all([aws.getCallerIdentity().then(i => i.accountId)]).apply(([accountId]) => JSON.stringify({
+        policy: albLogsBucket.bucket.apply(bucketName => JSON.stringify({
           Version: '2012-10-17',
           Statement: [
             {
@@ -723,7 +723,7 @@ EOF
                 AWS: 'arn:aws:iam::718504428378:root', // ALB service account for ap-south-1
               },
               Action: 's3:PutObject',
-              Resource: `arn:aws:s3:::${environmentSuffix}-alb-logs-bucket-*/*`,
+              Resource: `arn:aws:s3:::${bucketName}/*`,
             },
           ],
         })),
