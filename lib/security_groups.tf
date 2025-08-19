@@ -15,6 +15,7 @@ resource "aws_security_group" "public_ec2_primary" {
   description = "Security group for public EC2 instances in primary region"
   vpc_id      = aws_vpc.primary.id
 
+  # Allow SSH access from specified CIDR blocks (update for production security)
   ingress {
     description = "SSH from allowed CIDRs"
     from_port   = 22
@@ -22,6 +23,7 @@ resource "aws_security_group" "public_ec2_primary" {
     protocol    = "tcp"
     cidr_blocks = var.allowed_ssh_cidr
   }
+  # Allow all outbound traffic
 
   egress {
     description = "All outbound traffic"
@@ -37,6 +39,7 @@ resource "aws_security_group" "public_ec2_primary" {
 }
 
 # Security Group for Public EC2 (bastion hosts) - Secondary
+  # Allow SSH access from specified CIDR blocks (update for production security)
 resource "aws_security_group" "public_ec2_secondary" {
   provider    = aws.secondary
   name        = "${var.name_prefix}-${var.environment}-public-ec2-sg-secondary"
@@ -45,6 +48,7 @@ resource "aws_security_group" "public_ec2_secondary" {
 
   ingress {
     description = "SSH from allowed CIDRs"
+  # Allow all outbound traffic
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -60,6 +64,7 @@ resource "aws_security_group" "public_ec2_secondary" {
   }
 
   tags = {
+  # Allow SSH only from bastion/public EC2 hosts in the same VPC
     Name = "${var.name_prefix}-${var.environment}-public-ec2-sg-secondary"
   }
 }
@@ -68,6 +73,7 @@ resource "aws_security_group" "public_ec2_secondary" {
 resource "aws_security_group" "private_ec2_primary" {
   provider    = aws.primary
   name        = "${var.name_prefix}-${var.environment}-private-ec2-sg-primary"
+  # Allow all outbound traffic
   description = "Security group for private EC2 instances in primary region"
   vpc_id      = aws_vpc.primary.id
 
@@ -83,6 +89,7 @@ resource "aws_security_group" "private_ec2_primary" {
     description = "All outbound traffic"
     from_port   = 0
     to_port     = 0
+  # Allow SSH only from bastion/public EC2 hosts in the same VPC
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -91,6 +98,7 @@ resource "aws_security_group" "private_ec2_primary" {
     Name = "${var.name_prefix}-${var.environment}-private-ec2-sg-primary"
   }
 }
+  # Allow all outbound traffic
 
 # Security Group for Private EC2 - Secondary
 resource "aws_security_group" "private_ec2_secondary" {
@@ -106,6 +114,7 @@ resource "aws_security_group" "private_ec2_secondary" {
     protocol        = "tcp"
     security_groups = [aws_security_group.public_ec2_secondary.id]
   }
+  # Allow Lambda functions to access HTTPS endpoints
 
   egress {
     description = "All outbound traffic"
@@ -121,6 +130,7 @@ resource "aws_security_group" "private_ec2_secondary" {
 }
 
 # Security Group for Lambda - Primary
+  # Allow Lambda functions to access HTTPS endpoints
 resource "aws_security_group" "lambda_primary" {
   provider    = aws.primary
   name        = "${var.name_prefix}-${var.environment}-lambda-sg-primary"
@@ -136,6 +146,7 @@ resource "aws_security_group" "lambda_primary" {
   }
 
   tags = {
+  # Allow SSH access from specified CIDR blocks (update for production security)
     Name = "${var.name_prefix}-${var.environment}-lambda-sg-primary"
   }
 }
@@ -144,6 +155,7 @@ resource "aws_security_group" "lambda_primary" {
 resource "aws_security_group" "lambda_secondary" {
   provider    = aws.secondary
   name        = "${var.name_prefix}-${var.environment}-lambda-sg-secondary"
+  # Allow all outbound traffic
   description = "Security group for Lambda functions in secondary region"
   vpc_id      = aws_vpc.secondary.id
 
@@ -159,6 +171,7 @@ resource "aws_security_group" "lambda_secondary" {
     Name = "${var.name_prefix}-${var.environment}-lambda-sg-secondary"
   }
 }
+  # Allow SSH access from specified CIDR blocks (update for production security)
 
 output "sg_lambda_primary_id" {
   value = aws_security_group.lambda_primary.id
@@ -167,6 +180,7 @@ output "sg_lambda_secondary_id" {
   value = aws_security_group.lambda_secondary.id
 }
 ########################
+  # Allow all outbound traffic
 # Bastion Host Security Groups (Primary and Secondary Regions)
 ########################
 

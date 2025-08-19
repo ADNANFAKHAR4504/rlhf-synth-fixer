@@ -155,6 +155,14 @@ terraform {
     expect(alarmPrimary).toMatch(/secure-env-dev-unauthorized-access-alarm-primary/);
     expect(alarmSecondary).toBeDefined();
     expect(alarmSecondary).toMatch(/secure-env-dev-unauthorized-access-alarm-secondary/);
+
+    // EC2 Bastion Hosts
+    const bastionPrimaryId = getOutputValue(deploymentOutputs, 'bastion_primary_id');
+    const bastionSecondaryId = getOutputValue(deploymentOutputs, 'bastion_secondary_id');
+    expect(bastionPrimaryId).toBeDefined();
+    expect(bastionPrimaryId).toMatch(/^i-[a-z0-9]+$/);
+    expect(bastionSecondaryId).toBeDefined();
+    expect(bastionSecondaryId).toMatch(/^i-[a-z0-9]+$/);
   });
 
   afterAll(() => {

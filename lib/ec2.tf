@@ -59,3 +59,46 @@ variable "bastion_instance_type" {
   type        = string
   default     = "t3.micro"
 }
+
+# VPC Flow Log for Bastion Host Subnets (Primary & Secondary)
+resource "aws_flow_log" "bastion_primary_subnet" {
+  provider             = aws.primary
+  subnet_id            = aws_subnet.public_primary_1.id
+  log_destination_type = "cloud-watch-logs"
+  log_destination      = aws_cloudwatch_log_group.bastion_primary_subnet.arn
+  iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
+  traffic_type         = "ALL"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-flowlog-bastion-primary-subnet"
+  }
+}
+
+resource "aws_flow_log" "bastion_secondary_subnet" {
+  provider             = aws.secondary
+  subnet_id            = aws_subnet.public_secondary_1.id
+  log_destination_type = "cloud-watch-logs"
+  log_destination      = aws_cloudwatch_log_group.bastion_secondary_subnet.arn
+  iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
+  traffic_type         = "ALL"
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-flowlog-bastion-secondary-subnet"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "bastion_primary_subnet" {
+  provider = aws.primary
+  name     = "/aws/vpc/flowlogs/bastion-primary-subnet"
+  retention_in_days = 30
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-flowlogs-bastion-primary-subnet"
+  }
+}
+
+resource "aws_cloudwatch_log_group" "bastion_secondary_subnet" {
+  provider = aws.secondary
+  name     = "/aws/vpc/flowlogs/bastion-secondary-subnet"
+  retention_in_days = 30
+  tags = {
+    Name = "${var.name_prefix}-${var.environment}-flowlogs-bastion-secondary-subnet"
+  }
+}
