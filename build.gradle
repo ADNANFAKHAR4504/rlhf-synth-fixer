@@ -37,7 +37,7 @@ dependencies {
     
 }
 
-// Configure source directories
+// Configure source directories  
 sourceSets {
     main.java {
         srcDirs = ['lib/src/main/java']
@@ -58,6 +58,7 @@ application {
             ? project.getProperty("mainClass")
             : 'app.Main'
 }
+
 
 // Configure integration test dependencies
 configurations {

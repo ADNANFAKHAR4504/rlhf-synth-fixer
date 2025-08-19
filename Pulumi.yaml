@@ -1,4 +1,3 @@
 name: TapStack
-runtime:
-  name: java
+runtime: java
 description: Java-based infrastructure as code for TAP using Pulumi
