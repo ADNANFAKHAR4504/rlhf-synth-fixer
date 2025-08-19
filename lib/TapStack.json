@@ -18,8 +18,23 @@
             "Description": "Environment name"
         },
         "ExistingVpcId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "Existing VPC ID where security groups will be created"
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing VPC ID where security groups will be created (leave empty to use default VPC)"
+        }
+    },
+    "Conditions": {
+        "HasExistingVpc": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingVpcId"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -439,6 +454,7 @@
         },
         "WebServerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
+            "Condition": "HasExistingVpc",
             "Properties": {
                 "GroupName": {
                     "Fn::Sub": "${ProjectName}-web-${Environment}-sg"
@@ -496,7 +512,10 @@
                 },
                 "RetentionInDays": 30,
                 "KmsKeyId": {
-                    "Ref": "DataEncryptionKey"
+                    "Fn::GetAtt": [
+                        "DataEncryptionKey",
+                        "Arn"
+                    ]
                 }
             }
         },
@@ -508,7 +527,10 @@
                 },
                 "RetentionInDays": 90,
                 "KmsKeyId": {
-                    "Ref": "DataEncryptionKey"
+                    "Fn::GetAtt": [
+                        "DataEncryptionKey",
+                        "Arn"
+                    ]
                 }
             }
         },
@@ -656,6 +678,7 @@
             }
         },
         "WebServerSecurityGroupId": {
+            "Condition": "HasExistingVpc",
             "Description": "Security Group ID for web servers",
             "Value": {
                 "Ref": "WebServerSecurityGroup"
