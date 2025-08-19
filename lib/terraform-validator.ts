@@ -2,7 +2,6 @@
 // This module provides validation functions for Terraform infrastructure
 
 import fs from 'fs';
-import path from 'path';
 
 interface SecurityGroupRule {
   from_port: number;
@@ -15,12 +14,6 @@ interface SecurityGroupConfig {
   name: string;
   ingress_rules: SecurityGroupRule[];
   egress_rules: SecurityGroupRule[];
-}
-
-interface TerraformConfig {
-  variables: Record<string, any>;
-  resources: Record<string, any>;
-  outputs: Record<string, any>;
 }
 
 export class TerraformValidator {
