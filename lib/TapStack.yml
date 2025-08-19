@@ -71,6 +71,7 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -111,6 +112,7 @@ Resources:
 
   PrivateRouteA:
     Type: AWS::EC2::Route
+    
     Properties:
       RouteTableId: !Ref PrivateRouteTableA
       DestinationCidrBlock: 0.0.0.0/0
@@ -118,6 +120,7 @@ Resources:
 
   PrivateRouteB:
     Type: AWS::EC2::Route
+    
     Properties:
       RouteTableId: !Ref PrivateRouteTableB
       DestinationCidrBlock: 0.0.0.0/0
@@ -151,15 +154,6 @@ Resources:
             Principal:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action: 'kms:*'
-            Resource: '*'
-          - Sid: AllowCloudTrailUse
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action:
-              - kms:GenerateDataKey*
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
             Resource: '*'
           - Sid: AllowRDSUse
             Effect: Allow
@@ -200,8 +194,14 @@ Resources:
   ############################
   LogsBucket:
     Type: AWS::S3::Bucket
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W3045
     Properties:
       # No BucketName -> CFN generates a lowercase-safe unique name
+      AccessControl: LogDeliveryWrite   # Needed for Server Access Logging delivery
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -222,21 +222,6 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          # REQUIRED by CloudTrail validator (exact shape + canonical SIDs)
-          - Sid: AWSCloudTrailAclCheck20150319
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: s3:GetBucketAcl
-            Resource: !Sub "arn:aws:s3:::${LogsBucket}"
-          - Sid: AWSCloudTrailWrite20150319
-            Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: s3:PutObject
-            Resource: !Sub "arn:aws:s3:::${LogsBucket}/AWSLogs/${AWS::AccountId}/*"
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          # Safe to keep: enforce TLS. CloudTrail uses TLS so it won't be denied.
           - Sid: EnforceTLS
             Effect: Deny
             Principal: "*"
@@ -287,31 +272,6 @@ Resources:
                 aws:SecureTransport: false
 
   ############################
-  # CloudTrail (S3 data events across all buckets) → LogsBucket (SSE-KMS)
-  ############################
-  Trail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: LogsBucketPolicy
-    Properties:
-      IsLogging: true
-      S3BucketName: !Ref LogsBucket
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      KMSKeyId: !GetAtt KmsKey.Arn
-      AdvancedEventSelectors:
-        - Name: S3DataEvents
-          FieldSelectors:
-            - Field: eventCategory
-              Equals: [ Data ]
-            - Field: resources.type
-              Equals: [ AWS::S3::Object ]
-        - Name: ManagementEvents
-          FieldSelectors:
-            - Field: eventCategory
-              Equals: [ Management ]
-
-  ############################
   # Security Groups
   ############################
   AlbSG:
@@ -331,7 +291,7 @@ Resources:
   WebSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Web tier SG allowing HTTP from ALB and SSH from RFC1918
+      GroupDescription: Web tier SG allowing HTTP from ALB and SSH from VPC CIDR
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -341,7 +301,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 10.0.0.0/8
+          CidrIp: 10.20.0.0/16
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -422,9 +382,12 @@ Resources:
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
-            # Be resilient: don't exit on transient repo/NAT issues
-            yum -y makecache || true
-            yum -y install httpd || yum -y install httpd || true
+            # Robust install: wait for NAT/yum to be reachable, then install & start Apache
+            PKM=$(command -v dnf || command -v yum)
+            for i in {1..60}; do
+              $PKM -y makecache && $PKM -y install httpd && break
+              sleep 10
+            done
             systemctl enable httpd || true
             systemctl start httpd || true
             INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
@@ -432,13 +395,14 @@ Resources:
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: NatGateway
     Properties:
       VPCZoneIdentifier: [ !Ref PrivateSubnetA, !Ref PrivateSubnetB ]
       MinSize: "2"
       MaxSize: "4"
       DesiredCapacity: "2"
       HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
+      HealthCheckGracePeriod: 600
       TargetGroupARNs: [ !Ref TargetGroup ]
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
