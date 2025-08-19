@@ -1,5 +1,16 @@
 /**
  * LIVE integration tests for lib/tap_stack.tf
+ *
+ * Global flaky-test hardening: higher timeouts + retries
+ */
+
+// Increase per-test timeout for slow AWS eventual consistency
+jest.setTimeout(180000);
+// Automatically retry failed tests a couple of times
+jest.retryTimes(2, { logErrorsBeforeRetry: true });
+
+/**
+ * LIVE integration tests for lib/tap_stack.tf
  * - Explicit TypeScript types to avoid TS7022/TS7006
  * - Comprehensive testing of all AWS infrastructure components
  */
@@ -7,41 +18,73 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 
+import { jest } from '@jest/globals';
+
 import {
   DescribeKeyCommand,
+  DescribeKeyCommandOutput,
+  GetKeyPolicyCommand,
+  GetKeyPolicyCommandOutput,
+  GetKeyRotationStatusCommand,
+  GetKeyRotationStatusCommandOutput,
   KMSClient,
   ListAliasesCommand,
   ListAliasesCommandOutput,
-  GetKeyPolicyCommand,
-  ListKeysCommand,
-  GetKeyRotationStatusCommand,
   ListResourceTagsCommand,
+  ListResourceTagsCommandOutput
 } from "@aws-sdk/client-kms";
 
 import {
   CloudWatchLogsClient,
+  CreateLogStreamCommand,
   DescribeLogGroupsCommand,
   DescribeLogGroupsCommandOutput,
+  DescribeLogStreamsCommand,
   LogGroup,
   PutLogEventsCommand,
-  CreateLogStreamCommand,
-  DescribeLogStreamsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 
 import {
-  IAMClient,
-  GetRoleCommand,
-  ListRolesCommand,
-  GetRolePolicyCommand,
-  ListRolePoliciesCommand,
-  ListAttachedRolePoliciesCommand,
+  IAMClient
 } from "@aws-sdk/client-iam";
 
 import {
-  STSClient,
-  GetCallerIdentityCommand,
+  STSClient
 } from "@aws-sdk/client-sts";
 
+
+// Simple sleep helper
+const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));
+
+/** Retry an async operation with exponential backoff.
+ *  - attempts: how many tries in total
+ *  - baseMs: initial delay that doubles each retry
+ */
+async function withBackoff<T>(fn: () => Promise<T>, attempts = 5, baseMs = 800): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      // eslint-disable-next-line no-console
+      console.warn(`withBackoff: attempt ${i + 1}/${attempts} failed: ${err?.name || err}. Retrying...`);
+      await sleep(baseMs * Math.pow(2, i));
+    }
+  }
+  throw lastErr;
+}
+
+/** Wrapper for AWS SDK v3 client.send with backoff */
+async function sendWithBackoff<C extends { send: Function }, R>(
+  client: C,
+  command: any,
+  label?: string,
+  attempts = 5,
+  baseMs = 800
+): Promise<R> {
+  return withBackoff<R>(() => (client as any).send(command), attempts, baseMs);
+}
 const discoverOutputsPath = (): string | undefined => {
   const candidates = [
     join(process.cwd(), "cfn-outputs", "flat-outputs.json"),
@@ -76,7 +119,7 @@ const arnRegion = (arn: string): string | undefined => {
 };
 
 const unique = <T,>(arr: T[]) => Array.from(new Set(arr));
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Regions from KMS key ARNs */
 const kmsKeyArnsRec: Record<string, string> | undefined =
@@ -116,8 +159,7 @@ const findLogGroup = async (
 ): Promise<LogGroup | undefined> => {
   let nextToken: string | undefined = undefined;
   for (let i = 0; i < 20; i++) {
-    const page: DescribeLogGroupsCommandOutput = await client.send(
-      new DescribeLogGroupsCommand({
+    const page: DescribeLogGroupsCommandOutput = await sendWithBackoff(client, new DescribeLogGroupsCommand({
         logGroupNamePrefix: name,
         nextToken,
       })
@@ -166,7 +208,7 @@ const hasOutputs = !!outputs;
       const region = arnRegion(arn);
       expect(region).toBeTruthy();
       const kms = kmsClients[String(region)];
-      const resp = await kms.send(new DescribeKeyCommand({ KeyId: arn }));
+      const resp: DescribeKeyCommandOutput = await sendWithBackoff(kms, new DescribeKeyCommand({ KeyId: arn }));
       expect(resp.KeyMetadata?.Arn).toBe(arn);
       expect(resp.KeyMetadata?.KeyState).not.toBe("PendingDeletion");
       // eslint-disable-next-line no-console
@@ -208,8 +250,7 @@ const hasOutputs = !!outputs;
       let nextToken: string | undefined = undefined;
       const seen: Record<string, { name: string; targetKeyId?: string }> = {};
       for (let i = 0; i < 50; i++) {
-        const page: ListAliasesCommandOutput = await kms.send(
-          new ListAliasesCommand({ Marker: nextToken })
+        const page: ListAliasesCommandOutput = await sendWithBackoff(kms, new ListAliasesCommand({ Marker: nextToken })
         );
         for (const a of page.Aliases || []) {
           if (a.AliasName) {
@@ -293,7 +334,7 @@ const hasOutputs = !!outputs;
       const kms = kmsClients[String(region)];
       
       // Get the key policy
-      const policyResp = await kms.send(new GetKeyPolicyCommand({ 
+      const policyResp: GetKeyPolicyCommandOutput = await sendWithBackoff(kms, new GetKeyPolicyCommand({ 
         KeyId: arn, 
         PolicyName: 'default' 
       }));
@@ -329,7 +370,7 @@ const hasOutputs = !!outputs;
       expect(region).toBeTruthy();
       const kms = kmsClients[String(region)];
       
-      const resp = await kms.send(new GetKeyRotationStatusCommand({ KeyId: arn }));
+      const resp: GetKeyRotationStatusCommandOutput = await sendWithBackoff(kms, new GetKeyRotationStatusCommand({ KeyId: arn }));
       expect(resp.KeyRotationEnabled).toBe(true);
       
       // eslint-disable-next-line no-console
@@ -561,7 +602,7 @@ const hasOutputs = !!outputs;
       expect(region).toBeTruthy();
       const kms = kmsClients[String(region)];
       
-      const resp = await kms.send(new ListResourceTagsCommand({ KeyId: arn }));
+      const resp: ListResourceTagsCommandOutput = await sendWithBackoff(kms, new ListResourceTagsCommand({ KeyId: arn }));
       const tags = resp.Tags || [];
       
       // Verify required tags exist
