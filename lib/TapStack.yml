@@ -113,6 +113,7 @@ Parameters:
   DBPassword:
     Type: String
     NoEcho: true
+    Default: 'dummyPassword123!'
     Description: 'Database administrator password (required only if CreateDatabase is "yes").'
     MinLength: 8
     MaxLength: 41
