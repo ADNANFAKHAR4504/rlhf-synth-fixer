@@ -1,27 +1,24 @@
-We want Terraform code for a single file (./lib/main.tf). The idea is to spin up a secure, highly available web app infra in AWS, but keep everything in one place (no external modules).
+Need to get terraform working for this webapp thing. Everything goes in one file - ./lib/main.tf. Don't want to deal with modules right now, too much hassle.
 
-Some key points we need to hit:
+So basically we're trying to build a secure web app infrastructure on AWS. The usual stuff but done right this time.
 
-Backend / providers: The backend is S3 + DynamoDB for locking (already set up in provider.tf so don’t add provider blocks again). Should only work in us-west-2 or us-east-1. Let’s have an aws_region variable that ties into the provider.
+The backend is already setup (S3 + DynamoDB in provider.tf) so don't add that again. Only works in us-west-2 or us-east-1 btw. Should probably make aws_region a variable.
 
-IAM & security: Follow least privilege. All compute (EC2, etc.) should have IAM instance profiles with only what they need. Security groups and NACLs should block by default, then explicitly allow the necessary traffic.
+For security - yeah, least privilege and all that. Each EC2 needs its own IAM role, nothing too permissive. Security groups should block everything by default then we'll open what we need.
 
-Storage: S3 buckets for logs, app data, etc. need KMS encryption, no unencrypted uploads, and block public access. Everything should be tagged consistently: Environment, Project, Owner, and ManagedBy=terraform.
+S3 buckets need encryption (KMS), no public access obviously. And block any unencrypted uploads or we'll get in trouble. Tag everything consistently - Environment, Project, Owner, ManagedBy=terraform.
 
-Networking: One VPC with public + private subnets across multiple AZs. EC2 and RDS stay in private subnets. NAT gateway for internet egress. Bastion host goes in public subnet for SSH access.
+Network setup: one VPC, split into public/private subnets across multiple AZs. EC2s and database stuff goes in private subnets. Need a NAT gateway for internet access and a bastion host in public subnet for SSH access (only way in).
 
-Compute: EC2s in private subnets, correct IAM roles, no wide-open SG rules (SSH must go only via bastion).
+EC2 instances stay in private subnets, proper IAM roles, SSH only from bastion - no exceptions.
 
-Monitoring/logging: CloudTrail enabled (make it conditional so we don’t break if account already has max trails). Logs go to encrypted S3. CloudWatch log groups need KMS and keep data 90 days.
+CloudTrail should be enabled but make it conditional since some accounts already have the max number of trails. Logs go to S3 (encrypted). CloudWatch logs also encrypted with KMS, keep for 90 days then delete.
 
-Outputs: We need to output safe stuff for CI/CD pipelines: VPC ID, subnet IDs, bastion IP, bucket names, CloudTrail bucket ARN. Don’t expose secrets.
+Output the stuff CI/CD pipelines need: VPC ID, subnet IDs, bastion IP, bucket names, CloudTrail bucket ARN. Don't output any secrets or keys.
 
-Constraints:
-
-Must be a single file (main.tf).
-
-Works with Terraform >= 0.15.
-
-No external modules.
-
-Must pass terraform validate and follow AWS security best practices.
+Requirements:
+- Terraform >= 0.15 
+- single main.tf file under ./lib/
+- no external modules
+- passes terraform validate 
+- follows AWS security best practices
