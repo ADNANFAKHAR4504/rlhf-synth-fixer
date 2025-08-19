@@ -37,10 +37,10 @@ resource "aws_launch_template" "main" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.environment}-asg-${var.region}"
-  vpc_zone_identifier = var.subnet_ids
-  target_group_arns   = var.target_group_arns
-  health_check_type   = "ELB"
+  name                      = "${var.environment}-asg-${var.region}"
+  vpc_zone_identifier       = var.subnet_ids
+  target_group_arns         = var.target_group_arns
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = var.min_size
@@ -51,7 +51,7 @@ resource "aws_autoscaling_group" "main" {
     launch_template {
       launch_template_specification {
         launch_template_id = aws_launch_template.main.id
-        version           = "$Latest"
+        version            = "$Latest"
       }
 
       override {
@@ -63,7 +63,7 @@ resource "aws_autoscaling_group" "main" {
     instances_distribution {
       on_demand_base_capacity                  = 0
       on_demand_percentage_above_base_capacity = 0
-      spot_allocation_strategy                 = "diversified"
+      spot_allocation_strategy                 = "lowest-price"
     }
   }
 

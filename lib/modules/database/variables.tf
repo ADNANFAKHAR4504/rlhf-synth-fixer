@@ -60,11 +60,7 @@ variable "database_username" {
   default     = "dbadmin"
 }
 
-variable "database_password" {
-  description = "Database password"
-  type        = string
-  sensitive   = true
-}
+
 
 variable "common_tags" {
   description = "Common tags"

@@ -1,67 +1,101 @@
-########################
-# Variables
-########################
-variable "aws_region" {
-  description = "AWS provider region"
-  type        = string
-  default     = "us-east-1"
-}
-variable "bucket_region" {
-  description = "Region for the S3 bucket"
-  type        = string
-  default     = "us-west-2"
+# Primary AWS provider for general resources
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = local.common_tags
+  }
 }
 
-variable "bucket_name" {
-  description = "Name of the S3 bucket"
-  type        = string
-  default     = "devs3-bucket"
+provider "aws" {
+  alias  = "eu_west_1"
+  region = "eu-west-1"
+
+  default_tags {
+    tags = local.common_tags
+  }
 }
 
-variable "bucket_tags" {
-  description = "Tags to apply to the S3 bucket"
-  type        = map(string)
-  default = {
-    Project     = "ExampleProject"
-    Environment = "dev"
+provider "aws" {
+  alias  = "ap_southeast_1"
+  region = "ap-southeast-1"
+
+  default_tags {
+    tags = local.common_tags
+  }
+}
+
+locals {
+  environment = "dev"
+  owner       = "platform-team"
+
+  common_tags = {
+    Environment = local.environment
+    Owner       = local.owner
+    Project     = "multi-region-infrastructure"
     ManagedBy   = "terraform"
   }
-}
 
-########################
-# S3 Bucket
-########################
-
-/* resource "aws_s3_bucket" "this" {
-  bucket = var.bucket_name
-  tags   = var.bucket_tags
-}
-
-resource "aws_s3_bucket_public_access_block" "this" {
-  bucket                  = aws_s3_bucket.this.id
-  block_public_acls       = true
-  ignore_public_acls      = true
-  block_public_policy     = true
-  restrict_public_buckets = true
-}
-
-resource "aws_s3_bucket_versioning" "this" {
-  bucket = aws_s3_bucket.this.id
-
-  versioning_configuration {
-    status = "Enabled"
+  regions = {
+    us_east_1      = { name = "us-east-1", cidr = "10.0.0.0/16" }
+    eu_west_1      = { name = "eu-west-1", cidr = "10.1.0.0/16" }
+    ap_southeast_1 = { name = "ap-southeast-1", cidr = "10.2.0.0/16" }
   }
 }
 
-########################
-# Outputs
-########################
+# US East 1 Infrastructure
+module "vpc_us_east_1" {
+  source = "./modules/vpc"
+  providers = {
+    aws = aws.us_east_1
+  }
 
-output "bucket_name" {
-  value = aws_s3_bucket.this.bucket
+  vpc_cidr    = local.regions.us_east_1.cidr
+  region      = local.regions.us_east_1.name
+  environment = local.environment
+  common_tags = local.common_tags
 }
 
-output "bucket_tags" {
-  value = aws_s3_bucket.this.tags
+module "iam_us_east_1" {
+  source = "./modules/iam"
+  providers = {
+    aws = aws.us_east_1
+  }
+
+  region      = local.regions.us_east_1.name
+  environment = local.environment
+  common_tags = local.common_tags
 }
-*/
+
+module "compute_us_east_1" {
+  source = "./modules/compute"
+  providers = {
+    aws = aws.us_east_1
+  }
+
+  environment           = local.environment
+  region                = local.regions.us_east_1.name
+  vpc_id                = module.vpc_us_east_1.vpc_id
+  subnet_ids            = module.vpc_us_east_1.private_subnet_ids
+  public_subnet_ids     = module.vpc_us_east_1.public_subnet_ids
+  security_group_id     = module.vpc_us_east_1.web_security_group_id
+  instance_profile_name = module.iam_us_east_1.ec2_instance_profile_name
+  common_tags           = local.common_tags
+}
+
+module "database_us_east_1" {
+  source = "./modules/database"
+  providers = {
+    aws = aws.us_east_1
+  }
+
+  region      = local.regions.us_east_1.name
+  environment = local.environment
+  common_tags = local.common_tags
+
+  # Database configuration
+  is_primary                 = true
+  private_subnet_ids         = module.vpc_us_east_1.private_subnet_ids
+  database_security_group_id = module.vpc_us_east_1.database_security_group_id
+}

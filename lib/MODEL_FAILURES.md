@@ -92,3 +92,27 @@ Upgrading modules...
 
 *** Flaw 3 ***
 Required attribute "database_security_group_id" not specified: An attribute named "database_security_group_id" is required here
+
+*** Flaw 4 ***
+│ There is no explicit declaration for local provider name "aws" in module.vpc_us_east_1, so Terraform is assuming you mean to pass a
+│ configuration for "hashicorp/aws".
+│ 
+│ If you also control the child module, add a required_providers entry named "aws" with the source address "hashicorp/aws".
+│ 
+│ (and 3 more similar warnings elsewhere)
+╵
+╷
+│ Error: creating Auto Scaling Group (dev-asg-us-east-1): operation error Auto Scaling: CreateAutoScalingGroup, https response error StatusCode: 400, RequestID: 024a3ec8-c7f5-4742-bbc5-850b46511890, api error ValidationError: SpotAllocationStrategy is not valid. Valid options are: [lowest-price, capacity-optimized, capacity-optimized-prioritized, price-capacity-optimized].
+│ 
+│   with module.compute_us_east_1.aws_autoscaling_group.main,
+│   on modules/compute/main.tf line 39, in resource "aws_autoscaling_group" "main":
+│   39: resource "aws_autoscaling_group" "main" {
+│ 
+╵
+╷
+│ Error: creating RDS DB Instance (dev-postgres-us-east-1): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: a603830a-8306-423f-952f-d25074f0ef14, api error InvalidParameterCombination: Cannot find version 14.9 for postgres
+│ 
+│   with module.database_us_east_1.aws_db_instance.main[0],
+│   on modules/database/main.tf line 45, in resource "aws_db_instance" "main":
+│   45: resource "aws_db_instance" "main" {
+│ 
