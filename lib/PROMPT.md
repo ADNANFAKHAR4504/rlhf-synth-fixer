@@ -1,4 +1,4 @@
-We’re moving this security configuration exercise into CDK (TypeScript). The project should live in us-east-1 and be structured with three files:
+We’re moving this security configuration exercise into CDK (TypeScript). The project should live in us-east-2 and be structured with three files:
 
 bin/tap.ts – entry point that wires up the app and region.
 

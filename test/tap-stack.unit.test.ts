@@ -13,7 +13,7 @@ describe('TapStack Security Unit Tests', () => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', { 
       environmentSuffix,
-      env: { account: '123456789012', region: 'us-east-1' }
+      env: { account: '123456789012', region: 'us-east-2' }
     });
     template = Template.fromStack(stack);
   });

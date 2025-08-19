@@ -23,7 +23,7 @@ const app = new cdk.App();
 new TapStack(app, 'TapSecurityStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
+    region: 'us-east-2',
   },
   description: 'Security-hardened infrastructure stack with best practices',
 });
@@ -523,7 +523,7 @@ npm install -D aws-cdk typescript ts-node @types/node
 
 3. **Bootstrap CDK (first time only):**
 ```bash
-npx cdk bootstrap aws://ACCOUNT-NUMBER/us-east-1
+npx cdk bootstrap aws://ACCOUNT-NUMBER/us-east-2
 ```
 
 4. **Deploy the stack:**
