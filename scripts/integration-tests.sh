@@ -25,6 +25,9 @@ echo "CI mode: $CI"
 if [ "$LANGUAGE" = "py" ]; then
   echo "✅ Python project detected, running integration tests..."
   pipenv run test-py-integration
+elif [ "$LANGUAGE" = "js" ]; then
+  echo "✅ JavaScript project detected, running integration tests..."
+  npm run test:integration-js
 else
   echo "✅ Running default integration tests..."
   npm run test:integration
