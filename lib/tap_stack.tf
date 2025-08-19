@@ -112,7 +112,7 @@ variable "roles" {
 
     ci-deployer = {
       description          = "Limited deployment access for CI/CD pipeline"
-      max_session_duration = 1800
+      max_session_duration = 3600
       trusted_principals   = ["arn:aws:iam::444455556666:root"] # Replace with real account
       require_external_id  = true
       require_mfa          = false
@@ -145,7 +145,7 @@ variable "roles" {
 
     breakglass = {
       description          = "Emergency access role with strict controls"
-      max_session_duration = 900                                # 15 minutes only
+      max_session_duration = 3600                               # Minimum allowed by AWS (1 hour)
       trusted_principals   = ["arn:aws:iam::123456789012:root"] # Replace with your account id
       require_external_id  = false
       require_mfa          = true
