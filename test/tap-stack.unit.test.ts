@@ -1,23 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
-describe('TapStack CloudFormation Template', () => {
+describe('High Availability Web App CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    const templatePath = path.join(__dirname, '../lib/high-availability-webapp.json'); // JSON version of the template
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
-  });
-
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
   });
 
   describe('Template Structure', () => {
@@ -26,185 +16,118 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
+      expect(template.Description).toMatch(/Highly Available Web Application Infrastructure/);
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should define parameters', () => {
+      expect(template.Parameters).toBeDefined();
+    });
+
+    test('should define resources', () => {
+      expect(template.Resources).toBeDefined();
+    });
+
+    test('should define outputs', () => {
+      expect(template.Outputs).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
-    });
+    const requiredParams = ['VpcCIDR', 'PublicSubnet1CIDR', 'PublicSubnet2CIDR', 'InstanceType', 'Environment'];
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    test.each(requiredParams)('should define %s parameter', param => {
+      expect(template.Parameters[param]).toBeDefined();
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+    const expectedResources = [
+      'VPC',
+      'InternetGateway',
+      'AttachGateway',
+      'PublicSubnet1',
+      'PublicSubnet2',
+      'PublicRouteTable',
+      'PublicRoute',
+      'PublicSubnet1RouteTableAssociation',
+      'PublicSubnet2RouteTableAssociation',
+      'AppLogBucket',
+      'InstanceSecurityGroup',
+      'LaunchTemplate',
+      'ALBSecurityGroup',
+      'LoadBalancer',
+      'TargetGroup',
+      'Listener',
+      'AutoScalingGroup',
+      'CPUScalingPolicy'
+    ];
+
+    test.each(expectedResources)('should include resource: %s', resourceName => {
+      expect(template.Resources[resourceName]).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('AppLogBucket should have a valid lifecycle rule for Glacier transition', () => {
+      const bucket = template.Resources.AppLogBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      const rules = bucket.Properties.LifecycleConfiguration?.Rules;
+      expect(Array.isArray(rules)).toBe(true);
+      expect(rules[0].Transitions[0].StorageClass).toBe('GLACIER');
+      expect(rules[0].Transitions[0].TransitionInDays).toBe(30);
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('AutoScalingGroup should be spread across multiple subnets', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.VPCZoneIdentifier.length).toBeGreaterThan(1);
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+    test('LaunchTemplate should install and start httpd server', () => {
+      const userData = template.Resources.LaunchTemplate.Properties.LaunchTemplateData.UserData['Fn::Base64'];
+      expect(userData).toContain('yum install -y httpd');
+      expect(userData).toContain('systemctl start httpd');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('LoadBalancer should be of type Application', () => {
+      const lb = template.Resources.LoadBalancer;
+      expect(lb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      expect(lb.Properties.Subnets.length).toBe(2);
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
-
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('TargetGroup should use HTTP and health check path "/"', () => {
+      const tg = template.Resources.TargetGroup;
+      expect(tg.Properties.Protocol).toBe('HTTP');
+      expect(tg.Properties.HealthCheckPath).toBe('/');
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
+    test('should output LoadBalancerDNS', () => {
+      const output = template.Outputs.LoadBalancerDNS;
+      expect(output).toBeDefined();
+      expect(output.Description).toContain('DNS Name of the Load Balancer');
+      expect(output.Value['Fn::GetAtt']).toEqual(['LoadBalancer', 'DNSName']);
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
+    test('should output LogBucketName', () => {
+      const output = template.Outputs.LogBucketName;
+      expect(output).toBeDefined();
+      expect(output.Value).toEqual({ Ref: 'AppLogBucket' });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
-      });
+    test('should output AutoScalingGroupName', () => {
+      const output = template.Outputs.AutoScalingGroupName;
+      expect(output).toBeDefined();
+      expect(output.Value).toEqual({ Ref: 'AutoScalingGroup' });
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
+  describe('General Template Validation', () => {
+    test('should not contain undefined resources', () => {
+      expect(Object.keys(template.Resources).length).toBeGreaterThan(0);
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+    test('should use allowed instance types', () => {
+      const instanceParam = template.Parameters.InstanceType;
+      expect(instanceParam.AllowedValues).toEqual(expect.arrayContaining(['t2.micro', 't3.micro', 't3.small', 't3.medium']));
     });
   });
 });

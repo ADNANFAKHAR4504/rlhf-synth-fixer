@@ -3,6 +3,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Highly Available Web Application Infrastructure on AWS
 
 Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
   VpcCIDR:
     Type: String
     Default: 10.0.0.0/16
@@ -113,7 +117,7 @@ Resources:
   AppLogBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-logs-${AWS::Region}-${AWS::AccountId}'
+      BucketName: !Sub 'app-logs-${AWS::Region}-${AWS::AccountId}'
       LifecycleConfiguration:
         Rules:
           - Id: TransitionLogsToGlacier
@@ -146,7 +150,7 @@ Resources:
     Properties:
       LaunchTemplateData:
         InstanceType: !Ref InstanceType
-        ImageId: ami-0c55b159cbfafe1f0 # Amazon Linux 2 (replace with latest)
+        ImageId: !Ref LatestAmiId
         SecurityGroupIds:
           - !Ref InstanceSecurityGroup
         UserData:
