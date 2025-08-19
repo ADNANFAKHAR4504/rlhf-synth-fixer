@@ -14,7 +14,7 @@ resource "aws_flow_log" "main" {
 }
 
 resource "aws_cloudwatch_log_group" "main" {
-  name = "${var.project_name}-log-group"
+  name_prefix = "${var.project_name}-log-group"
 }
 
 resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
