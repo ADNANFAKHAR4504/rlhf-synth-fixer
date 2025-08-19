@@ -1,0 +1,9 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291622",
+  "team": "2",
+  "startedAt": "2025-08-19T17:33:35.297Z"
+}

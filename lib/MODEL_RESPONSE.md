@@ -1,0 +1,500 @@
+# Complete Serverless Application Infrastructure
+
+I'll create a comprehensive CloudFormation template that provisions a complete serverless application infrastructure. This template creates all resources from scratch, making it fully portable and production-ready.
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Complete serverless file processing application with custom domain, DNS, and monitoring'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: 'Environment suffix to distinguish environments (e.g., dev, stg, prod)'
+    AllowedPattern: '^[a-z0-9]+$'
+    ConstraintDescription: 'Must contain only lowercase letters and numbers'
+    Default: 'dev'
+
+  RootDomainName:
+    Type: String
+    Description: 'Root domain name for the application (e.g., example.com)'
+    AllowedPattern: '^[a-z0-9.-]+\.[a-z]{2,}$'
+    ConstraintDescription: 'Must be a valid domain name'
+
+Resources:
+  # ===== DNS AND CERTIFICATE MANAGEMENT =====
+
+  # Route 53 Hosted Zone for the root domain
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref RootDomainName
+      HostedZoneConfig:
+        Comment: !Sub 'Hosted zone for ${RootDomainName} - ${EnvironmentSuffix} environment'
+      HostedZoneTags:
+        - Key: Name
+          Value: !Sub 'ServerlessApp-${EnvironmentSuffix}-HostedZone'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ACM Certificate for the API subdomain
+  # Note: Stack deployment may pause here until DNS validation is complete
+  ApiCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub 'api-${EnvironmentSuffix}.${RootDomainName}'
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Sub 'api-${EnvironmentSuffix}.${RootDomainName}'
+          HostedZoneId: !Ref HostedZone
+      Tags:
+        - Key: Name
+          Value: !Sub 'ServerlessApp-${EnvironmentSuffix}-Certificate'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== S3 BUCKET =====
+
+  # S3 Bucket for file storage with versioning
+  FileProcessingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'serverless-files-${EnvironmentSuffix}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt FileProcessorFunction.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'ServerlessApp-${EnvironmentSuffix}-Bucket'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== IAM ROLES AND POLICIES =====
+
+  # IAM Role for Lambda function with least-privilege permissions
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ServerlessApp-${EnvironmentSuffix}-LambdaRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3ReadOnlyAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub '${FileProcessingBucket}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'ServerlessApp-${EnvironmentSuffix}-LambdaRole'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== LAMBDA FUNCTION =====
+
+  # Lambda function for file processing
+  FileProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ServerlessApp-${EnvironmentSuffix}-FileProcessor'
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      ReservedConcurrentExecutions: 10
+      Timeout: 30
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref FileProcessingBucket
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from urllib.parse import unquote_plus
+
+          def lambda_handler(event, context):
+              print(f"Received event: {json.dumps(event)}")
+              
+              # Handle API Gateway requests
+              if 'httpMethod' in event:
+                  return handle_api_request(event, context)
+              
+              # Handle S3 events
+              if 'Records' in event:
+                  return handle_s3_event(event, context)
+              
+              return {
+                  'statusCode': 400,
+                  'headers': {
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Headers': 'Content-Type',
+                      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+                  },
+                  'body': json.dumps({'error': 'Unknown event type'})
+              }
+
+          def handle_api_request(event, context):
+              """Handle API Gateway requests"""
+              method = event['httpMethod']
+              
+              if method == 'OPTIONS':
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Access-Control-Allow-Headers': 'Content-Type',
+                          'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+                      },
+                      'body': ''
+                  }
+              
+              response_body = {
+                  'message': 'File processor API is running',
+                  'environment': os.environ.get('ENVIRONMENT', 'unknown'),
+                  'method': method,
+                  'timestamp': context.aws_request_id
+              }
+              
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Access-Control-Allow-Origin': '*',
+                      'Access-Control-Allow-Headers': 'Content-Type',
+                      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+                      'Content-Type': 'application/json'
+                  },
+                  'body': json.dumps(response_body)
+              }
+
+          def handle_s3_event(event, context):
+              """Handle S3 object creation events"""
+              s3_client = boto3.client('s3')
+              
+              for record in event['Records']:
+                  bucket = record['s3']['bucket']['name']
+                  key = unquote_plus(record['s3']['object']['key'])
+                  
+                  print(f"Processing file: {key} from bucket: {bucket}")
+                  
+                  try:
+                      # Get object metadata
+                      response = s3_client.head_object(Bucket=bucket, Key=key)
+                      file_size = response['ContentLength']
+                      
+                      print(f"File {key} processed successfully. Size: {file_size} bytes")
+                      
+                  except Exception as e:
+                      print(f"Error processing file {key}: {str(e)}")
+                      raise e
+              
+              return {'statusCode': 200, 'body': 'Files processed successfully'}
+      Tags:
+        - Key: Name
+          Value: !Sub 'ServerlessApp-${EnvironmentSuffix}-Function'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ===== LAMBDA PERMISSIONS =====
+
+  # Permission for S3 to invoke Lambda
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FileProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub '${FileProcessingBucket}/*'
+
+  # Permission for API Gateway to invoke Lambda
+  ApiGatewayInvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FileProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub '${ApiGateway}/*/*'
+
+  # ===== API GATEWAY =====
+
+  # REST API Gateway
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'ServerlessApp-${EnvironmentSuffix}-API'
+      Description: 'Serverless file processing API'
+      EndpointConfiguration:
+        Types:
+          - EDGE
+      Tags:
+        - Key: Name
+          Value: !Sub 'ServerlessApp-${EnvironmentSuffix}-API'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # API Gateway Resource (proxy resource)
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: '{proxy+}'
+
+  # API Gateway Method with CORS
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FileProcessorFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseHeaders:
+            Access-Control-Allow-Origin: true
+            Access-Control-Allow-Headers: true
+            Access-Control-Allow-Methods: true
+
+  # OPTIONS method for CORS preflight
+  ApiGatewayOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiGatewayResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FileProcessorFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseHeaders:
+            Access-Control-Allow-Origin: true
+            Access-Control-Allow-Headers: true
+            Access-Control-Allow-Methods: true
+
+  # Root resource method
+  ApiGatewayRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !GetAtt ApiGateway.RootResourceId
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FileProcessorFunction.Arn}/invocations'
+
+  # API Gateway Deployment
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiGatewayMethod
+      - ApiGatewayOptionsMethod
+      - ApiGatewayRootMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: !Ref EnvironmentSuffix
+
+  # Custom Domain Name for API Gateway
+  ApiGatewayDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Sub 'api-${EnvironmentSuffix}.${RootDomainName}'
+      CertificateArn: !Ref ApiCertificate
+      EndpointConfiguration:
+        Types:
+          - EDGE
+      Tags:
+        - Key: Name
+          Value: !Sub 'ServerlessApp-${EnvironmentSuffix}-Domain'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Base Path Mapping
+  ApiGatewayBasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName: !Ref ApiGatewayDomainName
+      RestApiId: !Ref ApiGateway
+      Stage: !Ref EnvironmentSuffix
+
+  # Route 53 A Record for API custom domain
+  ApiDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub 'api-${EnvironmentSuffix}.${RootDomainName}'
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiGatewayDomainName.DistributionDomainName
+        HostedZoneId: !GetAtt ApiGatewayDomainName.DistributionHostedZoneId
+        EvaluateTargetHealth: false
+
+  # ===== MONITORING AND ALERTING =====
+
+  # SNS Topic for alerts
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'ServerlessApp-${EnvironmentSuffix}-Alerts'
+      DisplayName: !Sub 'Serverless App Alerts - ${EnvironmentSuffix}'
+      Tags:
+        - Key: Name
+          Value: !Sub 'ServerlessApp-${EnvironmentSuffix}-AlertsTopic'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Alarm for Lambda error rate
+  LambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'ServerlessApp-${EnvironmentSuffix}-LambdaErrorRate'
+      AlarmDescription: 'Lambda function error rate exceeds 5%'
+      MetricName: ErrorRate
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FileProcessorFunction
+      AlarmActions:
+        - !Ref AlertsTopic
+      TreatMissingData: notBreaching
+      Tags:
+        - Key: Name
+          Value: !Sub 'ServerlessApp-${EnvironmentSuffix}-ErrorAlarm'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+# ===== OUTPUTS =====
+
+Outputs:
+  HostedZoneId:
+    Description: 'Route 53 Hosted Zone ID'
+    Value: !Ref HostedZone
+    Export:
+      Name: !Sub '${AWS::StackName}-HostedZoneId'
+
+  HostedZoneNameServers:
+    Description: 'Name servers for the hosted zone'
+    Value: !Join [', ', !GetAtt HostedZone.NameServers]
+    Export:
+      Name: !Sub '${AWS::StackName}-NameServers'
+
+  ApiUrl:
+    Description: 'Custom API Gateway URL'
+    Value: !Sub 'https://api-${EnvironmentSuffix}.${RootDomainName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+
+  S3BucketName:
+    Description: 'S3 Bucket for file processing'
+    Value: !Ref FileProcessingBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+
+  LambdaFunctionName:
+    Description: 'Lambda function name'
+    Value: !Ref FileProcessorFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunction'
+
+  SNSTopicArn:
+    Description: 'SNS Topic ARN for alerts'
+    Value: !Ref AlertsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-AlertsTopicArn'
+
+  CertificateArn:
+    Description: 'ACM Certificate ARN'
+    Value: !Ref ApiCertificate
+    Export:
+      Name: !Sub '${AWS::StackName}-CertificateArn'
+```
+
+## Key Features and Implementation Details
+
+### 🏗️ **Complete Infrastructure**
+
+- **Self-contained**: Creates all resources from scratch including DNS zone
+- **Portable**: Uses parameters for environment-specific deployment
+- **Production-ready**: Includes monitoring, alerting, and security best practices
+
+### 🔐 **Security & Access Control**
+
+- **Least-privilege IAM**: Lambda role only has necessary S3 and CloudWatch permissions
+- **S3 Security**: Public access blocked, versioning enabled
+- **CORS Configuration**: Properly configured for web applications
+
+### 🌐 **DNS & SSL Certificate Management**
+
+- **Automated DNS Validation**: Certificate validation records automatically created
+- **Custom Domain**: API accessible via `api-{environment}.{domain}.com`
+- **Edge-optimized**: CloudFront distribution for global performance
+
+### ⚡ **Event-Driven Architecture**
+
+- **S3 Triggers**: Automatic processing when files are uploaded
+- **API Gateway Integration**: Direct API access for manual operations
+- **Dual Event Handling**: Lambda handles both S3 events and HTTP requests
+
+### 📊 **Monitoring & Alerting**
+
+- **Error Rate Monitoring**: CloudWatch alarm triggers at >5% error rate
+- **SNS Integration**: Alerts sent to SNS topic for notification
+- **Cost Control**: Reserved concurrency limit of 10
+
+### 🏷️ **Resource Organization**
+
+- **Consistent Tagging**: All resources tagged with Name and Environment
+- **Dynamic Naming**: Environment suffix ensures resource uniqueness
+- **Export Values**: Key outputs exported for cross-stack references
+
+## Deployment Instructions
+
+1. **Deploy the stack**:
+
+   ```bash
+   aws cloudformation create-stack \
+     --stack-name serverless-app-prod \
+     --template-body file://template.yaml \
+     --parameters ParameterKey=EnvironmentSuffix,ParameterValue=prod \
+                  ParameterKey=RootDomainName,ParameterValue=example.com \
+     --capabilities CAPABILITY_NAMED_IAM
+   ```
+
+2. **Update DNS**: Point your domain's nameservers to the Route 53 hosted zone nameservers (available in stack outputs).
+
+3. **Test the deployment**:
+   - Upload a file to the S3 bucket to trigger Lambda
+   - Access the API at `https://api-prod.example.com`
+
+The stack deployment may pause during certificate validation while AWS verifies domain ownership through the automatically created DNS records.
