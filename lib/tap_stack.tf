@@ -838,6 +838,13 @@ resource "aws_cloudwatch_log_group" "app_logs" {
   tags              = merge(local.common_tags, { Name = "cw-log-group-app-${local.deployment_suffix}" })
 }
 
+resource "aws_cloudwatch_log_group" "app_logs_secondary" {
+  provider          = aws.secondary
+  name_prefix       = "/app/nova-project-logs-secondary-"
+  retention_in_days = 14
+  tags              = merge(local.common_tags, { Name = "cw-log-group-app-secondary-${local.deployment_suffix}" })
+}
+
 resource "aws_cloudwatch_metric_alarm" "primary_cpu_high" {
   provider            = aws.primary
   alarm_name          = "alarm-primary-cpu-high-${local.deployment_suffix}"
