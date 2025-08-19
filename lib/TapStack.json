@@ -105,7 +105,9 @@
         "ApplicationKMSKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
-                "Description": "KMS Key for application data encryption",
+                "Description": {
+                    "Fn::Sub": "KMS Key for application data encryption - ${AWS::StackName}"
+                },
                 "KeyPolicy": {
                     "Statement": [
                         {
@@ -165,7 +167,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/${Environment}-application-key"
+                    "Fn::Sub": "alias/${Environment}-application-key-${AWS::StackName}"
                 },
                 "TargetKeyId": {
                     "Ref": "ApplicationKMSKey"
@@ -184,7 +186,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-vpc"
+                            "Fn::Sub": "${Environment}-vpc-${AWS::StackName}"
                         }
                     },
                     {
@@ -203,7 +205,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-igw"
+                            "Fn::Sub": "${Environment}-igw-${AWS::StackName}"
                         }
                     },
                     {
@@ -259,7 +261,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-public-subnet-1"
+                            "Fn::Sub": "${Environment}-public-subnet-1-${AWS::StackName}"
                         }
                     },
                     {
@@ -304,7 +306,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-public-subnet-2"
+                            "Fn::Sub": "${Environment}-public-subnet-2-${AWS::StackName}"
                         }
                     },
                     {
@@ -348,7 +350,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-subnet-1"
+                            "Fn::Sub": "${Environment}-private-subnet-1-${AWS::StackName}"
                         }
                     },
                     {
@@ -392,7 +394,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-subnet-2"
+                            "Fn::Sub": "${Environment}-private-subnet-2-${AWS::StackName}"
                         }
                     },
                     {
@@ -413,7 +415,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-nat-eip-1"
+                            "Fn::Sub": "${Environment}-nat-eip-1-${AWS::StackName}"
                         }
                     },
                     {
@@ -434,7 +436,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-nat-eip-2"
+                            "Fn::Sub": "${Environment}-nat-eip-2-${AWS::StackName}"
                         }
                     },
                     {
@@ -462,7 +464,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-nat-gateway-1"
+                            "Fn::Sub": "${Environment}-nat-gateway-1-${AWS::StackName}"
                         }
                     },
                     {
@@ -490,7 +492,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-nat-gateway-2"
+                            "Fn::Sub": "${Environment}-nat-gateway-2-${AWS::StackName}"
                         }
                     },
                     {
@@ -512,7 +514,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-public-routes"
+                            "Fn::Sub": "${Environment}-public-routes-${AWS::StackName}"
                         }
                     },
                     {
@@ -569,7 +571,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-routes-1"
+                            "Fn::Sub": "${Environment}-private-routes-1-${AWS::StackName}"
                         }
                     },
                     {
@@ -614,7 +616,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-routes-2"
+                            "Fn::Sub": "${Environment}-private-routes-2-${AWS::StackName}"
                         }
                     },
                     {
@@ -659,7 +661,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-private-nacl"
+                            "Fn::Sub": "${Environment}-private-nacl-${AWS::StackName}"
                         }
                     },
                     {
@@ -724,7 +726,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "${Environment}-alb-sg"
+                    "Fn::Sub": "${Environment}-alb-sg-${AWS::StackName}"
                 },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
@@ -766,7 +768,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-alb-sg"
+                            "Fn::Sub": "${Environment}-alb-sg-${AWS::StackName}"
                         }
                     },
                     {
@@ -782,7 +784,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "${Environment}-app-sg"
+                    "Fn::Sub": "${Environment}-app-sg-${AWS::StackName}"
                 },
                 "GroupDescription": "Security group for application servers",
                 "VpcId": {
@@ -819,7 +821,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-app-sg"
+                            "Fn::Sub": "${Environment}-app-sg-${AWS::StackName}"
                         }
                     },
                     {
@@ -835,7 +837,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "${Environment}-bastion-sg"
+                    "Fn::Sub": "${Environment}-bastion-sg-${AWS::StackName}"
                 },
                 "GroupDescription": "Security group for bastion host",
                 "VpcId": {
@@ -865,7 +867,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-bastion-sg"
+                            "Fn::Sub": "${Environment}-bastion-sg-${AWS::StackName}"
                         }
                     },
                     {
@@ -881,7 +883,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${Environment}-ec2-instance-role"
+                    "Fn::Sub": "${Environment}-ec2-instance-role-${AWS::StackName}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -954,7 +956,7 @@
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "InstanceProfileName": {
-                    "Fn::Sub": "${Environment}-ec2-instance-profile"
+                    "Fn::Sub": "${Environment}-ec2-instance-profile-${AWS::StackName}"
                 },
                 "Roles": [
                     {
@@ -1007,7 +1009,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-app-artifacts"
+                            "Fn::Sub": "${Environment}-app-artifacts-${AWS::StackName}"
                         }
                     }
                 ]
@@ -1067,7 +1069,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-logs"
+                            "Fn::Sub": "${Environment}-logs-${AWS::StackName}"
                         }
                     }
                 ]
@@ -1159,7 +1161,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${Environment}-cloudtrail-role"
+                    "Fn::Sub": "${Environment}-cloudtrail-role-${AWS::StackName}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -1208,7 +1210,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/cloudtrail/${Environment}"
+                    "Fn::Sub": "/aws/cloudtrail/${Environment}-${AWS::StackName}"
                 },
                 "RetentionInDays": 90
             }
@@ -1218,7 +1220,7 @@
             "Condition": "IsProdOrStaging",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "${Environment}-cloudtrail"
+                    "Fn::Sub": "${Environment}-cloudtrail-${AWS::StackName}"
                 },
                 "S3BucketName": {
                     "Ref": "LoggingS3Bucket"
@@ -1269,7 +1271,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-cloudtrail"
+                            "Fn::Sub": "${Environment}-cloudtrail-${AWS::StackName}"
                         }
                     }
                 ]
@@ -1279,7 +1281,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "${Environment}-vpc-flow-log-role"
+                    "Fn::Sub": "${Environment}-vpc-flow-log-role-${AWS::StackName}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -1328,7 +1330,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
                 },
                 "RetentionInDays": 30
             }
@@ -1343,7 +1345,7 @@
                 "TrafficType": "ALL",
                 "LogDestinationType": "cloud-watch-logs",
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}"
+                    "Fn::Sub": "/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}"
                 },
                 "DeliverLogsPermissionArn": {
                     "Fn::GetAtt": [
@@ -1361,7 +1363,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-vpc-flow-log"
+                            "Fn::Sub": "${Environment}-vpc-flow-log-${AWS::StackName}"
                         }
                     }
                 ]
@@ -1371,7 +1373,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/ec2/${Environment}/application"
+                    "Fn::Sub": "/aws/ec2/${Environment}-${AWS::StackName}/application"
                 },
                 "RetentionInDays": 30
             }
@@ -1380,7 +1382,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/s3/${Environment}/access"
+                    "Fn::Sub": "/aws/s3/${Environment}-${AWS::StackName}/access"
                 },
                 "RetentionInDays": 90
             }
@@ -1389,7 +1391,7 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": {
-                    "Fn::Sub": "${Environment}-app-launch-template"
+                    "Fn::Sub": "${Environment}-app-launch-template-${AWS::StackName}"
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
@@ -1459,7 +1461,7 @@
                                 {
                                     "Key": "Name",
                                     "Value": {
-                                        "Fn::Sub": "${Environment}-app-server"
+                                        "Fn::Sub": "${Environment}-app-server-${AWS::StackName}"
                                     }
                                 },
                                 {
@@ -1478,7 +1480,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-app-alb"
+                    "Fn::Sub": "${Environment}-app-alb-${AWS::StackName}"
                 },
                 "Scheme": "internet-facing",
                 "Type": "application",
@@ -1525,7 +1527,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-app-alb"
+                            "Fn::Sub": "${Environment}-app-alb-${AWS::StackName}"
                         }
                     }
                 ]
@@ -1535,7 +1537,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-app-tg"
+                    "Fn::Sub": "${Environment}-app-tg-${AWS::StackName}"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -1559,7 +1561,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-app-tg"
+                            "Fn::Sub": "${Environment}-app-tg-${AWS::StackName}"
                         }
                     }
                 ]
@@ -1587,7 +1589,7 @@
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
                 "AutoScalingGroupName": {
-                    "Fn::Sub": "${Environment}-app-asg"
+                    "Fn::Sub": "${Environment}-app-asg-${AWS::StackName}"
                 },
                 "VPCZoneIdentifier": [
                     {
@@ -1628,7 +1630,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-app-server"
+                            "Fn::Sub": "${Environment}-app-server-${AWS::StackName}"
                         },
                         "PropagateAtLaunch": true
                     },
@@ -1698,7 +1700,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-bastion-host"
+                            "Fn::Sub": "${Environment}-bastion-host-${AWS::StackName}"
                         }
                     },
                     {
