@@ -1,7 +1,3 @@
-// tests/unit/unit-tests.ts
-// Simple presence + sanity checks for ../lib/tap_stack.tf
-// No Terraform or CDKTF commands are executed.
-
 import fs from "fs";
 import path from "path";
 
