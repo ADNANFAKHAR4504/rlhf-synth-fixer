@@ -1093,3 +1093,130 @@ output "secondary_rds_kms_key_arn" {
   value       = aws_kms_key.secondary_rds.arn
   description = "Secondary RDS KMS key ARN"
 }
+# Output Public and Private Subnets CIDR blocks as lists (for each region)
+output "primary_public_subnet_cidrs" {
+  value       = aws_subnet.primary_public[*].cidr_block
+  description = "CIDR blocks for primary region public subnets"
+}
+
+output "primary_private_subnet_cidrs" {
+  value       = aws_subnet.primary_private[*].cidr_block
+  description = "CIDR blocks for primary region private subnets"
+}
+
+output "secondary_public_subnet_cidrs" {
+  value       = aws_subnet.secondary_public[*].cidr_block
+  description = "CIDR blocks for secondary region public subnets"
+}
+
+output "secondary_private_subnet_cidrs" {
+  value       = aws_subnet.secondary_private[*].cidr_block
+  description = "CIDR blocks for secondary region private subnets"
+}
+
+# Output Security Group IDs (e.g. for RDS and NAT gateways)
+output "primary_rds_security_group_id" {
+  value       = aws_security_group.primary_rds.id
+  description = "Security Group ID of RDS instance in primary region"
+}
+
+output "secondary_rds_security_group_id" {
+  value       = aws_security_group.secondary_rds.id
+  description = "Security Group ID of RDS instance in secondary region"
+}
+
+# Output NAT Gateway IDs for both regions
+output "primary_nat_gateway_ids" {
+  value       = aws_nat_gateway.primary[*].id
+  description = "NAT Gateway IDs in primary region"
+}
+
+output "secondary_nat_gateway_ids" {
+  value       = aws_nat_gateway.secondary[*].id
+  description = "NAT Gateway IDs in secondary region"
+}
+
+# Output Internet Gateway IDs for both regions
+output "primary_internet_gateway_id" {
+  value       = aws_internet_gateway.primary.id
+  description = "Internet Gateway ID for primary region VPC"
+}
+
+output "secondary_internet_gateway_id" {
+  value       = aws_internet_gateway.secondary.id
+  description = "Internet Gateway ID for secondary region VPC"
+}
+
+# Output DB Subnet Group names
+output "primary_db_subnet_group_name" {
+  value       = aws_db_subnet_group.primary.name
+  description = "DB subnet group name for primary region"
+}
+
+output "secondary_db_subnet_group_name" {
+  value       = aws_db_subnet_group.secondary.name
+  description = "DB subnet group name for secondary region"
+}
+
+# Output IAM group ARN for TAP users
+output "tap_users_group_arn" {
+  value       = aws_iam_group.tap_users.arn
+  description = "IAM Group ARN managing TAP users"
+}
+
+# Output RDS Parameter Group names
+output "primary_db_parameter_group_name" {
+  value       = aws_db_parameter_group.primary.name
+  description = "DB parameter group name for primary region"
+}
+
+output "secondary_db_parameter_group_name" {
+  value       = aws_db_parameter_group.secondary.name
+  description = "DB parameter group name for secondary region"
+}
+
+# Performance Insights role ARNs for RDS monitoring
+output "primary_rds_monitoring_role_arn" {
+  value       = aws_iam_role.rds_enhanced_monitoring.arn
+  description = "IAM role ARN for Primary RDS Enhanced Monitoring"
+}
+
+output "secondary_rds_monitoring_role_arn" {
+  value       = aws_iam_role.secondary_rds_enhanced_monitoring.arn
+  description = "IAM role ARN for Secondary RDS Enhanced Monitoring"
+}
+
+# Outputs for CloudWatch log groups (names)
+output "primary_rds_log_group_names" {
+  value = [
+    aws_cloudwatch_log_group.primary_rds_error.name,
+    aws_cloudwatch_log_group.primary_rds_general.name,
+    aws_cloudwatch_log_group.primary_rds_slow_query.name
+  ]
+  description = "CloudWatch Log Group names for Primary RDS logs"
+}
+
+output "secondary_rds_log_group_names" {
+  value = [
+    aws_cloudwatch_log_group.secondary_rds_error.name,
+    aws_cloudwatch_log_group.secondary_rds_general.name,
+    aws_cloudwatch_log_group.secondary_rds_slow_query.name
+  ]
+  description = "CloudWatch Log Group names for Secondary RDS logs"
+}
+
+# Miscellaneous useful outputs
+output "tap_project_environment" {
+  value       = var.environment
+  description = "Deployment environment name"
+}
+
+output "all_primary_subnets" {
+  value = concat(aws_subnet.primary_public[*].id, aws_subnet.primary_private[*].id)
+  description = "All subnet IDs in primary region"
+}
+
+output "all_secondary_subnets" {
+  value = concat(aws_subnet.secondary_public[*].id, aws_subnet.secondary_private[*].id)
+  description = "All subnet IDs in secondary region"
+}
