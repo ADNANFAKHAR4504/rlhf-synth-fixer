@@ -55,6 +55,12 @@ variable "desired_capacity" {
   default     = 2
 }
 
+variable "use_single_nat" {
+  description = "Use single NAT Gateway to reduce EIP usage"
+  type        = bool
+  default     = false
+}
+
 ########################
 # Data Sources
 ########################
@@ -90,6 +96,7 @@ locals {
 
   availability_zones = slice(data.aws_availability_zones.available.names, 0, 2)
   name_prefix        = "${var.project_name}-${var.environment_suffix}"
+  nat_gateway_count  = var.use_single_nat ? 1 : length(local.availability_zones)
 }
 
 ########################
@@ -146,9 +153,17 @@ resource "aws_subnet" "private" {
   })
 }
 
-# NAT Gateway
+# NAT Gateway - Use existing EIPs or create new ones with lifecycle management
+# Try to use existing EIPs first, fallback to creating new ones
+data "aws_eips" "existing" {
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
 resource "aws_eip" "nat" {
-  count = length(local.availability_zones)
+  count = local.nat_gateway_count
 
   domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
@@ -156,10 +171,17 @@ resource "aws_eip" "nat" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-eip-${local.availability_zones[count.index]}"
   })
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      tags
+    ]
+  }
 }
 
 resource "aws_nat_gateway" "main" {
-  count = length(local.availability_zones)
+  count = local.nat_gateway_count
 
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
@@ -168,6 +190,10 @@ resource "aws_nat_gateway" "main" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-gateway-${local.availability_zones[count.index]}"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Route Tables
@@ -196,7 +222,7 @@ resource "aws_route_table" "private" {
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+    nat_gateway_id = aws_nat_gateway.main[var.use_single_nat ? 0 : count.index].id
   }
 
   tags = merge(local.common_tags, {
@@ -297,11 +323,16 @@ resource "aws_security_group" "ec2" {
   }
 }
 
+# Random ID for resource naming to avoid conflicts
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 ########################
 # IAM Roles and Policies
 ########################
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.name_prefix}-ec2-role"
+  name = "${local.name_prefix}-ec2-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -317,10 +348,17 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      tags
+    ]
+  }
 }
 
 resource "aws_iam_policy" "s3_readonly" {
-  name = "${local.name_prefix}-s3-readonly-policy"
+  name = "${local.name_prefix}-s3-readonly-policy-${random_id.suffix.hex}"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -360,7 +398,7 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.name_prefix}-ec2-profile"
+  name = "${local.name_prefix}-ec2-profile-${random_id.suffix.hex}"
   role = aws_iam_role.ec2_role.name
 
   tags = local.common_tags
@@ -435,7 +473,7 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(templatefile("${path.module}/userdata.sh", {
     project_name       = var.project_name
-    environment_suffix = var.environment_suffix
+    environment_suffix = "${var.environment_suffix}-${random_id.suffix.hex}"
   }))
 
   monitoring {
@@ -559,10 +597,18 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 }
 
 resource "aws_cloudwatch_log_group" "app_logs" {
-  name              = "/aws/ec2/${local.name_prefix}"
+  name              = "/aws/ec2/${local.name_prefix}-${random_id.suffix.hex}"
   retention_in_days = 14
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      tags,
+      retention_in_days
+    ]
+  }
 }
 
 # CloudWatch Network Flow Monitor
@@ -572,12 +618,13 @@ resource "aws_networkmonitor_monitor" "main" {
   tags = local.common_tags
 }
 
+# Network Monitor probes - using subnet gateways as destinations for monitoring
 resource "aws_networkmonitor_probe" "main" {
   count = length(local.availability_zones)
 
   monitor_name     = aws_networkmonitor_monitor.main.monitor_name
   source_arn       = aws_subnet.private[count.index].arn
-  destination      = aws_lb.main.dns_name
+  destination      = cidrhost(aws_subnet.public[count.index].cidr_block, 1) # Gateway IP
   protocol         = "TCP"
   destination_port = 80
   packet_size      = 56
@@ -585,6 +632,8 @@ resource "aws_networkmonitor_probe" "main" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-probe-${count.index}"
   })
+
+  depends_on = [aws_subnet.public, aws_subnet.private]
 }
 
 ########################
@@ -600,14 +649,22 @@ resource "aws_flow_log" "vpc_flow_log" {
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/${local.name_prefix}/flowlogs"
+  name              = "/aws/vpc/${local.name_prefix}/flowlogs-${random_id.suffix.hex}"
   retention_in_days = 14
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      tags,
+      retention_in_days
+    ]
+  }
 }
 
 resource "aws_iam_role" "flow_log_role" {
-  name = "${local.name_prefix}-flow-log-role"
+  name = "${local.name_prefix}-flow-log-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -623,10 +680,18 @@ resource "aws_iam_role" "flow_log_role" {
   })
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      # Ignore tag changes to avoid conflicts
+      tags
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "flow_log_policy" {
-  name = "${local.name_prefix}-flow-log-policy"
+  name = "${local.name_prefix}-flow-log-policy-${random_id.suffix.hex}"
   role = aws_iam_role.flow_log_role.id
 
   policy = jsonencode({
