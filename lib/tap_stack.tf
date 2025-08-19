@@ -107,12 +107,12 @@ output "vpc_endpoint_s3_id" {
   value       = module.infra.vpc_endpoint_s3_id
 }
 
-output "s3_new_bucket_name" {
-  description = "Name of the new S3 bucket"
-  value       = module.infra.s3_new_bucket_name
+output "s3_logs_bucket_name" {
+  description = "Name of the S3 logs bucket"
+  value       = module.infra.s3_logs_bucket_name
 }
 
-output "s3_new_bucket_arn" {
-  description = "ARN of the new S3 bucket"
-  value       = module.infra.s3_new_bucket_arn
+output "s3_logs_bucket_arn" {
+  description = "ARN of the S3 logs bucket"
+  value       = module.infra.s3_logs_bucket_arn
 }

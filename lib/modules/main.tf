@@ -345,41 +345,15 @@ data "aws_kms_key" "main" {
   key_id = "alias/${var.project_name}-key"
 }
 
-# S3 New Bucket
-resource "aws_s3_bucket" "new_bucket" {
-  bucket = "tap-app-dev-new-bucket"
+resource "aws_s3_bucket" "logs" {
+  bucket = "tap-app-dev-064031-qcf7m9d3-logs-bucket"
   force_destroy = true
 }
 
-# S3 Bucket Versioning - New Bucket
-resource "aws_s3_bucket_versioning" "new_bucket" {
-  bucket = aws_s3_bucket.new_bucket.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# S3 Bucket Encryption - New Bucket
-resource "aws_s3_bucket_server_side_encryption_configuration" "new_bucket" {
-  bucket = aws_s3_bucket.new_bucket.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = data.aws_kms_key.main.arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
-}
-
-# Block all public access - New Bucket
-resource "aws_s3_bucket_public_access_block" "new_bucket" {
-  bucket = aws_s3_bucket.new_bucket.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+resource "aws_s3_object" "test_object" {
+  bucket = aws_s3_bucket.logs.id
+  key    = "test-object.txt"
+  content = "This is a test object."
 }
 
 # VPC S3 Endpoint
@@ -402,15 +376,6 @@ resource "aws_vpc_endpoint" "s3" {
 data "aws_iam_user" "app_user" {
   user_name = "${var.project_name}-app-user"
 }
-
-resource "null_resource" "force_delete_s3_bucket" {
-  provisioner "local-exec" {
-    when    = destroy
-    command = "aws s3 rb s3://tap-app-dev-064031-qcf7m9d3-logs-bucket --force"
-  }
-}
-
-
 
 output "vpc_cidr" {
   value = aws_vpc.main.cidr_block
@@ -457,10 +422,10 @@ output "vpc_endpoint_s3_id" {
   value = aws_vpc_endpoint.s3.id
 }
 
-output "s3_new_bucket_name" {
-  value = aws_s3_bucket.new_bucket.bucket
+output "s3_logs_bucket_name" {
+  value = data.aws_s3_bucket.logs.bucket
 }
 
-output "s3_new_bucket_arn" {
-  value = aws_s3_bucket.new_bucket.arn
+output "s3_logs_bucket_arn" {
+  value = data.aws_s3_bucket.logs.arn
 }
