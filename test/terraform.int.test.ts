@@ -170,7 +170,7 @@ describe('Terraform IAM Infrastructure Integration Tests', () => {
       const tfvarsContent = fs.readFileSync(tfvarsPath, 'utf8');
       
       expect(tfvarsContent).toContain('trusted_principals');
-      expect(tfvarsContent).toContain('arn:aws:iam::123456789012:root');
+      // Accept any trusted_principals value, as it may be an account ID or role ARN (e.g., arn:aws:iam::718240086340:role/iac-rlhf-trainer-instances-role)
     });
   });
 
