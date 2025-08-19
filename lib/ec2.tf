@@ -29,6 +29,7 @@ resource "aws_instance" "bastion_primary" {
   subnet_id     = aws_subnet.public_primary_1.id
   vpc_security_group_ids = [aws_security_group.bastion_primary.id]
   associate_public_ip_address = true
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
   tags = {
     Name        = "${var.name_prefix}-${var.environment}-bastion-primary"
     Role        = "bastion"
@@ -45,6 +46,7 @@ resource "aws_instance" "bastion_secondary" {
   subnet_id     = aws_subnet.public_secondary_1.id
   vpc_security_group_ids = [aws_security_group.bastion_secondary.id]
   associate_public_ip_address = true
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
   tags = {
     Name        = "${var.name_prefix}-${var.environment}-bastion-secondary"
     Role        = "bastion"
