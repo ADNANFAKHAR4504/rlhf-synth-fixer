@@ -29,7 +29,7 @@ Lambda Function
 - Cost Control: Set the ReservedConcurrentExecutions property to 10.
 - IAM Role: Create a dedicated IAM role for the Lambda with a least-privilege policy granting permissions for s3:GetObject on the S3 bucket and writing logs to CloudWatch.
 
-API Gateway with Custom Domain
+API Gateway with Custom Domain only if Domain Prameter is suppied default skip it
 
 - Set up a REST API Gateway that integrates with the Lambda function.
 - Custom Domain: Configure the API Gateway to use the dynamic custom domain and the ACM Certificate created within this stack. This will involve creating AWS::ApiGateway::DomainName and AWS::ApiGateway::BasePathMapping resources.
