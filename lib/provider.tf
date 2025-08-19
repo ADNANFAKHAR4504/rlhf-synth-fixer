@@ -24,62 +24,6 @@ provider "aws" {
   }
 }
 
-resource "null_resource" "backup_recovery_point_cleanup" {
-  triggers = {
-    always_run        = timestamp()
-    backup_vault_name = var.backup_vault_name_to_clean
-  }
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  # This provisioner requires the following IAM permissions:
-  # - backup:DescribeBackupVault
-  # - backup:ListRecoveryPointsByBackupVault
-  # - backup:DeleteRecoveryPoint
-  provisioner "local-exec" {
-    when    = destroy
-    command = <<EOT
-      set -e
-      echo "Starting backup vault cleanup for: ${self.triggers.backup_vault_name}"
-
-      # Check if the backup vault exists before attempting to clean it
-      if aws backup describe-backup-vault --backup-vault-name "${self.triggers.backup_vault_name}" >/dev/null 2>&1; then
-        echo "Backup vault ${self.triggers.backup_vault_name} exists. Proceeding with cleanup."
-        
-        while true; do
-          echo "Listing recovery points in ${self.triggers.backup_vault_name}..."
-          RECOVERY_POINT_ARNS=$(aws backup list-recovery-points-by-backup-vault \
-            --backup-vault-name "${self.triggers.backup_vault_name}" \
-            --query 'RecoveryPoints[].RecoveryPointArn' \
-            --output text)
-
-          if [ -z "$RECOVERY_POINT_ARNS" ]; then
-            echo "No recovery points found in ${self.triggers.backup_vault_name}. Exiting loop."
-            break
-          else
-            echo "Found recovery points: $RECOVERY_POINT_ARNS"
-            for arn in $RECOVERY_POINT_ARNS; do
-              echo "Attempting to delete recovery point: $arn"
-              aws backup delete-recovery-point --recovery-point-arn "$arn"
-              echo "Successfully deleted recovery point: $arn"
-              sleep 1 # Small delay to avoid hitting API rate limits
-            done
-            echo "Finished a pass of deleting recovery points from ${self.triggers.backup_vault_name}. Checking for more..."
-            sleep 5 # Wait a bit before checking for more recovery points
-          fi
-        done
-        echo "Finished backup vault cleanup for: ${self.triggers.backup_vault_name}."
-      else
-        echo "Backup vault ${self.triggers.backup_vault_name} does not exist. Skipping cleanup."
-      fi
-    EOT
-    interpreter = ["bash", "-c"]
-  }
-}
-
-
 resource "null_resource" "s3_bucket_cleanup" {
   depends_on = [module.infra]
   lifecycle {
