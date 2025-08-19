@@ -38,5 +38,4 @@ locals {
     development = "rlhfhcl"
     production = "rlhfhcl"
   }
-
 }

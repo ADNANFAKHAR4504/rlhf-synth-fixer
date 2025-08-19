@@ -262,12 +262,18 @@ describe("Terraform Modular Infrastructure (static checks)", () => {
   });
 
   test("validates all modules use relative path sources", () => {
-    const moduleBlocks = hcl.match(/module\s+"[^"]+"\s*{[^}]+}/g) || [];
+    // Match module blocks that are not commented out
+    const moduleBlocks = hcl.match(/(?<!#.*?)module\s+"[^"]+"\s*{[^}]+}/g) || [];
     
-    // expect(moduleBlocks).toHaveLength(6); // kms, s3, iam, cloudfront, monitoring, logging
-    expect(moduleBlocks).toHaveLength(5); // kms, s3, iam, cloudfront, monitoring
+    // Filter out any module blocks that start with # or contain only commented lines
+    const activeModuleBlocks = moduleBlocks.filter(block => {
+      const lines = block.split('\n');
+      return lines.some(line => line.trim() && !line.trim().startsWith('#'));
+    });
     
-    moduleBlocks.forEach(moduleBlock => {
+    expect(activeModuleBlocks).toHaveLength(5); // kms, s3, iam, cloudfront, monitoring
+    
+    activeModuleBlocks.forEach(moduleBlock => {
       expect(moduleBlock).toMatch(/source\s*=\s*"\.\/modules\/[^"]+"/);
       // Ensure no absolute paths or external sources
       expect(moduleBlock).not.toMatch(/source\s*=\s*"(?!\.\/)/);
