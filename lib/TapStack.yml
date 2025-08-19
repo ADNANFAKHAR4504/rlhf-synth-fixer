@@ -398,6 +398,18 @@ Resources:
                 Action:
                   - s3:ListBucket
                 Resource: !Sub "arn:aws:s3:::${ProjectName}-*"
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:GenerateDataKey
+                  - kms:DescribeKey
+                Resource:
+                  - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/rds"
+                  - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/secretsmanager"
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -443,6 +455,7 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
+      KmsKeyId: alias/aws/rds
       MultiAZ: true
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
@@ -465,6 +478,7 @@ Resources:
     Properties:
       Name: !Sub "${ResourceNamePrefix}DBCredentials"
       Description: "Database credentials for the web application"
+      KmsKeyId: alias/aws/secretsmanager
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: "password"

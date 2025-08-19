@@ -804,6 +804,30 @@
                                 }
                             ]
                         }
+                    },
+                    {
+                        "PolicyName": "KMSAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey",
+                                        "kms:DescribeKey"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/rds"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/secretsmanager"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
                     }
                 ],
                 "Tags": [
@@ -892,6 +916,7 @@
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
+                "KmsKeyId": "alias/aws/rds",
                 "MultiAZ": true,
                 "VPCSecurityGroups": [
                     {
@@ -934,6 +959,7 @@
                     "Fn::Sub": "${ResourceNamePrefix}DBCredentials"
                 },
                 "Description": "Database credentials for the web application",
+                "KmsKeyId": "alias/aws/secretsmanager",
                 "GenerateSecretString": {
                     "SecretStringTemplate": "{\"username\": \"admin\"}",
                     "GenerateStringKey": "password",
