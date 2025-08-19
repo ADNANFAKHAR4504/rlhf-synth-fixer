@@ -2,10 +2,6 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Highly Available Web Application Infrastructure on AWS",
     "Parameters": {
-        "LatestAmiId": {
-            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
-            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
-        },
         "VpcCIDR": {
             "Type": "String",
             "Default": "10.0.0.0/16",
@@ -249,7 +245,7 @@
                         "Ref": "InstanceType"
                     },
                     "ImageId": {
-                        "Ref": "LatestAmiId"
+                        "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
                     },
                     "SecurityGroupIds": [
                         {

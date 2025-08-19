@@ -2,9 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Highly Available Web Application Infrastructure on AWS
 
 Parameters:
-  LatestAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
   VpcCIDR:
     Type: String
@@ -149,7 +146,7 @@ Resources:
     Properties:
       LaunchTemplateData:
         InstanceType: !Ref InstanceType
-        ImageId: !Ref LatestAmiId
+        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         SecurityGroupIds:
           - !Ref InstanceSecurityGroup
         UserData:
