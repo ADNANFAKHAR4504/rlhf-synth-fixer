@@ -182,9 +182,93 @@ resource "aws_cloudwatch_log_group" "application_logs_usw2" {
 }
 
 ########################
-# Notes:
-# 1) Remove or comment out your previous aws_cloudwatch_log_group "application_logs"
-#    and aws_kms_key "main" blocks to avoid duplicate resources.
-# 2) No other technical changes should be required. The resources are equivalent,
-#    but now bound to the correct regions and KMS policies.
+# Outputs compatible with for_each resources
+# Returns maps keyed by each.key for every region/env instance
 ########################
+
+# --- KMS keys (use1 / usw2) ---
+
+output "kms_logs_use1_arn_by_key" {
+  description = "ARNs of KMS keys created by aws_kms_key.logs_use1, keyed by each.key"
+  value       = { for k, v in aws_kms_key.logs_use1 : k => v.arn }
+}
+
+output "kms_logs_use1_key_id_by_key" {
+  description = "Key IDs of KMS keys created by aws_kms_key.logs_use1, keyed by each.key"
+  value       = { for k, v in aws_kms_key.logs_use1 : k => v.key_id }
+}
+
+output "kms_logs_usw2_arn_by_key" {
+  description = "ARNs of KMS keys created by aws_kms_key.logs_usw2, keyed by each.key"
+  value       = { for k, v in aws_kms_key.logs_usw2 : k => v.arn }
+}
+
+output "kms_logs_usw2_key_id_by_key" {
+  description = "Key IDs of KMS keys created by aws_kms_key.logs_usw2, keyed by each.key"
+  value       = { for k, v in aws_kms_key.logs_usw2 : k => v.key_id }
+}
+
+# --- KMS aliases ---
+
+output "kms_alias_logs_use1_name_by_key" {
+  description = "Alias names for aws_kms_alias.logs_use1, keyed by each.key"
+  value       = { for k, v in aws_kms_alias.logs_use1 : k => v.name }
+}
+
+output "kms_alias_logs_use1_arn_by_key" {
+  description = "Alias ARNs for aws_kms_alias.logs_use1, keyed by each.key"
+  value       = { for k, v in aws_kms_alias.logs_use1 : k => v.arn }
+}
+
+output "kms_alias_logs_use1_target_key_id_by_key" {
+  description = "Target key IDs for aws_kms_alias.logs_use1, keyed by each.key"
+  value       = { for k, v in aws_kms_alias.logs_use1 : k => v.target_key_id }
+}
+
+output "kms_alias_logs_usw2_name_by_key" {
+  description = "Alias names for aws_kms_alias.logs_usw2, keyed by each.key"
+  value       = { for k, v in aws_kms_alias.logs_usw2 : k => v.name }
+}
+
+output "kms_alias_logs_usw2_arn_by_key" {
+  description = "Alias ARNs for aws_kms_alias.logs_usw2, keyed by each.key"
+  value       = { for k, v in aws_kms_alias.logs_usw2 : k => v.arn }
+}
+
+output "kms_alias_logs_usw2_target_key_id_by_key" {
+  description = "Target key IDs for aws_kms_alias.logs_usw2, keyed by each.key"
+  value       = { for k, v in aws_kms_alias.logs_usw2 : k => v.target_key_id }
+}
+
+# --- CloudWatch Log Groups ---
+
+output "log_group_use1_name_by_key" {
+  description = "Log group names for aws_cloudwatch_log_group.application_logs_use1, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.application_logs_use1 : k => v.name }
+}
+
+output "log_group_use1_arn_by_key" {
+  description = "Log group ARNs for aws_cloudwatch_log_group.application_logs_use1, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.application_logs_use1 : k => v.arn }
+}
+
+output "log_group_use1_kms_key_id_by_key" {
+  description = "KMS key IDs used by the use1 log groups, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.application_logs_use1 : k => v.kms_key_id }
+}
+
+output "log_group_usw2_name_by_key" {
+  description = "Log group names for aws_cloudwatch_log_group.application_logs_usw2, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.application_logs_usw2 : k => v.name }
+}
+
+output "log_group_usw2_arn_by_key" {
+  description = "Log group ARNs for aws_cloudwatch_log_group.application_logs_usw2, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.application_logs_usw2 : k => v.arn }
+}
+
+output "log_group_usw2_kms_key_id_by_key" {
+  description = "KMS key IDs used by the usw2 log groups, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.application_logs_usw2 : k => v.kms_key_id }
+}
+
