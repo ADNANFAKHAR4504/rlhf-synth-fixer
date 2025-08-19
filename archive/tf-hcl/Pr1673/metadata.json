@@ -18,10 +18,16 @@
   "aws_services": [
     "EC2",
     "VPC",
-    "Internet Gateway", 
+    "Internet Gateway",
     "Subnet",
     "Route Table",
     "Security Group",
     "EBS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
