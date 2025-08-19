@@ -57,3 +57,4 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_access_alarm_secondary" {
   alarm_description   = "Alert for unauthorized access attempts detected in Lambda logs (secondary region)"
   actions_enabled     = false # Set to true and add SNS topic ARN for notifications
 }
+
