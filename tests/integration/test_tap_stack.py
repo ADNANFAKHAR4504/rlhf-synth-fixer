@@ -61,17 +61,19 @@ def test_state_bucket_exists(s3_client):
   env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
   region = os.environ.get('PRIMARY_REGION', 'us-west-2').replace('-', '')
   unique_id = os.environ.get('PULUMI_ORG', 'unique')
-  
+
   # The bucket name now includes timestamp and random suffix, so we'll use a pattern match
   bucket_pattern = f"nova-pulumi-state-{env}-{region}-{unique_id}-"
-  
+
   try:
     # List buckets and find the one that matches our pattern
     response = s3_client.list_buckets()
-    matching_buckets = [bucket['Name'] for bucket in response['Buckets'] if bucket['Name'].startswith(bucket_pattern)]
-    
-    assert len(matching_buckets) > 0, f"No bucket found matching pattern: {bucket_pattern}"
-    
+    matching_buckets = [bucket['Name'] for bucket in response['Buckets']
+                        if bucket['Name'].startswith(bucket_pattern)]
+
+    assert len(
+        matching_buckets) > 0, f"No bucket found matching pattern: {bucket_pattern}"
+
     # Test the first matching bucket
     bucket_name = matching_buckets[0]
     response = s3_client.head_bucket(Bucket=bucket_name)
@@ -86,17 +88,19 @@ def test_artifacts_bucket_exists(s3_client):
   env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
   region = os.environ.get('PRIMARY_REGION', 'us-west-2').replace('-', '')
   unique_id = os.environ.get('PULUMI_ORG', 'unique')
-  
+
   # The bucket name now includes timestamp and random suffix, so we'll use a pattern match
   bucket_pattern = f"nova-cicd-artifacts-{env}-{region}-{unique_id}-"
-  
+
   try:
     # List buckets and find the one that matches our pattern
     response = s3_client.list_buckets()
-    matching_buckets = [bucket['Name'] for bucket in response['Buckets'] if bucket['Name'].startswith(bucket_pattern)]
-    
-    assert len(matching_buckets) > 0, f"No bucket found matching pattern: {bucket_pattern}"
-    
+    matching_buckets = [bucket['Name'] for bucket in response['Buckets']
+                        if bucket['Name'].startswith(bucket_pattern)]
+
+    assert len(
+        matching_buckets) > 0, f"No bucket found matching pattern: {bucket_pattern}"
+
     # Test the first matching bucket
     bucket_name = matching_buckets[0]
     response = s3_client.head_bucket(Bucket=bucket_name)
@@ -112,14 +116,25 @@ def test_primary_lambda_function_exists(lambda_client):
   # Use dynamic function name based on environment and region
   # This should match the naming pattern from tap_stack.py
   env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
-  function_name = f"nova-api-primary-{env}"
+  function_pattern = f"nova-api-primary-{env}"
 
   try:
+    # List functions and find the one that matches our pattern
+    response = lambda_client.list_functions()
+    matching_functions = [func['FunctionName'] for func in response['Functions']
+                          if func['FunctionName'].startswith(function_pattern)]
+
+    assert len(
+        matching_functions) > 0, f"No Lambda function found matching pattern: {function_pattern}"
+
+    # Test the first matching function
+    function_name = matching_functions[0]
     response = lambda_client.get_function(FunctionName=function_name)
     function = response.get("Configuration", {})
     assert function.get("FunctionName") == function_name
   except (ClientError, BotoCoreError) as e:
-    pytest.fail(f"Lambda function test failed for {function_name}: {e}")
+    pytest.fail(
+        f"Lambda function test failed for pattern {function_pattern}: {e}")
 
 
 # ---- Budget Tests ---------------------------------------------------------
@@ -150,8 +165,9 @@ def test_budget_exists(budgets_client):
 def test_primary_api_endpoint_accessible():
   """Test that primary API endpoint is accessible."""
   # Use dynamic API endpoint based on environment
-  api_endpoint = os.environ.get('API_ENDPOINT', 'u5at5aipx6.execute-api.us-west-2.amazonaws.com')
-  
+  api_endpoint = os.environ.get(
+      'API_ENDPOINT', 'u5at5aipx6.execute-api.us-west-2.amazonaws.com')
+
   try:
     socket.gethostbyname(api_endpoint)
   except Exception as e:
@@ -166,7 +182,7 @@ def test_s3_buckets_are_encrypted(s3_client):
   env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
   region = os.environ.get('PRIMARY_REGION', 'us-west-2').replace('-', '')
   unique_id = os.environ.get('PULUMI_ORG', 'unique')
-  
+
   # The bucket names now include timestamp and random suffix, so we'll use pattern matches
   bucket_patterns = [
       f"nova-pulumi-state-{env}-{region}-{unique_id}-",
@@ -178,8 +194,9 @@ def test_s3_buckets_are_encrypted(s3_client):
     try:
       # List buckets and find the one that matches our pattern
       response = s3_client.list_buckets()
-      matching_buckets = [bucket['Name'] for bucket in response['Buckets'] if bucket['Name'].startswith(bucket_pattern)]
-      
+      matching_buckets = [bucket['Name'] for bucket in response['Buckets']
+                          if bucket['Name'].startswith(bucket_pattern)]
+
       if matching_buckets:
         bucket_name = matching_buckets[0]
         encryption = s3_client.get_bucket_encryption(Bucket=bucket_name)
@@ -201,7 +218,7 @@ def test_deployment_outputs_are_valid():
   # Use dynamic values based on environment
   env = os.environ.get('ENVIRONMENT_SUFFIX', 'dev')
   region = os.environ.get('PRIMARY_REGION', 'us-west-2')
-  
+
   # This test verifies the deployment output structure
   expected_outputs = {
       "environment": env,
