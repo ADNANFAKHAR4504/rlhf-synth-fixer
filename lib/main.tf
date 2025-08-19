@@ -59,7 +59,7 @@ variable "db_username" {
 resource "random_password" "db" {
   length  = 20
   special = true
-  override_special = "!@#$%&*()-_=+[]{}<>?"
+  override_special = "!#$%&*()-_=+[]{}?"
 }
 
 variable "resource_suffix" {
@@ -408,6 +408,29 @@ resource "aws_s3_bucket_policy" "vpc_flow_logs_ssl_only" {
             "aws:SecureTransport" = "false"
           }
         }
+      },
+      {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.vpc_flow_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.vpc_flow_logs.arn
       }
     ]
   })
