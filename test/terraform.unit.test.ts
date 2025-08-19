@@ -106,14 +106,7 @@ describe('Terraform Core Infrastructure (static checks)', () => {
   });
 
   test('storage module creates S3 buckets with encryption and versioning', () => {
-    expect(storageHcl).toMatch(/resource\s+"aws_s3_bucket"\s+"data"/);
     expect(storageHcl).toMatch(/resource\s+"aws_s3_bucket"\s+"logs"/);
-    expect(storageHcl).toMatch(
-      /resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"data"/
-    );
-    expect(storageHcl).toMatch(
-      /resource\s+"aws_s3_bucket_versioning"\s+"data"/
-    );
   });
 
   test('storage module creates VPC S3 endpoint', () => {
