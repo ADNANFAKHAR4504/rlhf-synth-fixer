@@ -152,6 +152,11 @@ describe("TapStack Integration Tests", () => {
         method: "OPTIONS",
       });
 
+      if (response.status !== 200) {
+        const errorBody = await response.text();
+        console.log(`OPTIONS request failed with status ${response.status}:`, errorBody);
+      }
+
       expect(response.status).toBe(200);
       expect(response.headers.get("access-control-allow-origin")).toBe("*");
       expect(response.headers.get("access-control-allow-methods")).toContain("GET");

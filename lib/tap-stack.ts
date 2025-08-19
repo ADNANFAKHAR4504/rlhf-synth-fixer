@@ -132,8 +132,11 @@ export class TapStack extends pulumi.ComponentResource {
         runtime: aws.lambda.Runtime.NodeJS20dX,
         code: new pulumi.asset.AssetArchive({
           'index.js': new pulumi.asset.StringAsset(`
-const AWS = require('aws-sdk');
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, DeleteCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+
+const client = new DynamoDBClient({});
+const dynamodb = DynamoDBDocumentClient.from(client);
 
 const TABLE_NAME = process.env.TABLE_NAME;
 
@@ -148,7 +151,9 @@ exports.handler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
 
   try {
-    const { httpMethod, pathParameters, body } = event;
+    // API Gateway v2 (HTTP API) event structure
+    const httpMethod = event.requestContext?.http?.method || event.httpMethod;
+    const { pathParameters, body } = event;
     const id = pathParameters?.id;
 
     switch (httpMethod) {
@@ -162,10 +167,10 @@ exports.handler = async (event) => {
       case 'GET':
         if (id) {
           // Get single item
-          const result = await dynamodb.get({
+          const result = await dynamodb.send(new GetCommand({
             TableName: TABLE_NAME,
             Key: { id },
-          }).promise();
+          }));
           
           if (!result.Item) {
             return {
@@ -182,9 +187,9 @@ exports.handler = async (event) => {
           };
         } else {
           // Scan all items
-          const result = await dynamodb.scan({
+          const result = await dynamodb.send(new ScanCommand({
             TableName: TABLE_NAME,
-          }).promise();
+          }));
           
           return {
             statusCode: 200,
@@ -202,14 +207,14 @@ exports.handler = async (event) => {
           createData.id = Date.now().toString();
         }
         
-        await dynamodb.put({
+        await dynamodb.send(new PutCommand({
           TableName: TABLE_NAME,
           Item: {
             ...createData,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
-        }).promise();
+        }));
         
         return {
           statusCode: 201,
@@ -232,7 +237,7 @@ exports.handler = async (event) => {
         const updateData = JSON.parse(body);
         delete updateData.id; // Prevent ID modification
         
-        await dynamodb.update({
+        await dynamodb.send(new UpdateCommand({
           TableName: TABLE_NAME,
           Key: { id },
           UpdateExpression: 'SET updatedAt = :updatedAt' + 
@@ -244,7 +249,7 @@ exports.handler = async (event) => {
               return acc;
             }, {}),
           },
-        }).promise();
+        }));
         
         return {
           statusCode: 200,
@@ -261,10 +266,10 @@ exports.handler = async (event) => {
           };
         }
         
-        await dynamodb.delete({
+        await dynamodb.send(new DeleteCommand({
           TableName: TABLE_NAME,
           Key: { id },
-        }).promise();
+        }));
         
         return {
           statusCode: 200,
