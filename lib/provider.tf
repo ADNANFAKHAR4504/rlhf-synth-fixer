@@ -81,6 +81,7 @@ resource "null_resource" "backup_recovery_point_cleanup" {
 
 
 resource "null_resource" "s3_bucket_cleanup" {
+  depends_on = [module.infra]
   lifecycle {
     create_before_destroy = true
   }
