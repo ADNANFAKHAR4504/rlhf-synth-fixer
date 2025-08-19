@@ -1,9 +1,10 @@
-// tests/terraform.unit.test.ts
+// test/terraform.unit.test.ts
 // Offline unit tests for ../lib/tap_stack.tf without running `terraform`.
 // These tests read and analyze the HCL file text, extracting blocks and
 // asserting required resources, variables, policies, and outputs exist
 // and contain expected attributes/patterns.
 
+import { describe, expect, test } from "@jest/globals";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -253,7 +254,6 @@ describe("IAM - Role, Policies, Attachments, Instance Profile", () => {
     expect(role).toBeDefined();
     expect(/"ec2\.amazonaws\.com"/.test(role!.body)).toBe(true);
   });
-
 
 
   test("App KMS policy allows Encrypt/Decrypt etc against aws_kms_key.app", () => {
