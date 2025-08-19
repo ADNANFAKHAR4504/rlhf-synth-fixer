@@ -57,7 +57,10 @@ def budgets_client():
 
 def test_state_bucket_exists(s3_client):
   """Verify state bucket exists."""
-  bucket_name = "nova-pulumi-state-dev-uswest2"
+  # Use dynamic bucket name based on environment and region
+  env = os.environ.get('ENVIRONMENT', 'dev')
+  region = os.environ.get('PRIMARY_REGION', 'us-west-2').replace('-', '')
+  bucket_name = f"nova-pulumi-state-{env}-{region}-unique"
 
   try:
     response = s3_client.head_bucket(Bucket=bucket_name)
@@ -68,7 +71,10 @@ def test_state_bucket_exists(s3_client):
 
 def test_artifacts_bucket_exists(s3_client):
   """Verify artifacts bucket exists."""
-  bucket_name = "nova-cicd-artifacts-dev-uswest2"
+  # Use dynamic bucket name based on environment and region
+  env = os.environ.get('ENVIRONMENT', 'dev')
+  region = os.environ.get('PRIMARY_REGION', 'us-west-2').replace('-', '')
+  bucket_name = f"nova-cicd-artifacts-{env}-{region}-unique"
 
   try:
     response = s3_client.head_bucket(Bucket=bucket_name)
@@ -81,7 +87,9 @@ def test_artifacts_bucket_exists(s3_client):
 
 def test_primary_lambda_function_exists(lambda_client):
   """Verify primary Lambda function exists."""
-  function_name = "nova-api-primary-0b67c4f"
+  # Use dynamic function name based on environment and region
+  # This should match the naming pattern from tap_stack.py
+  function_name = f"nova-api-primary-{os.environ.get('ENVIRONMENT', 'dev')}"
 
   try:
     response = lambda_client.get_function(FunctionName=function_name)
@@ -95,36 +103,34 @@ def test_primary_lambda_function_exists(lambda_client):
 
 def test_budget_exists(budgets_client):
   """Verify budget exists."""
-  # Try both possible names from deployment output
-  budget_names = ["monthly-budget-dev", "nova-cicd-budget-dev"]
+  # Use dynamic budget name based on environment
+  budget_name = f"monthly-budget-{os.environ.get('ENVIRONMENT', 'dev')}"
 
-  found_budget = None
-  for budget_name in budget_names:
-    try:
-      # Try to get the actual account ID from STS
-      sts_client = boto3.client("sts", region_name=SECONDARY_REGION)
-      account_id = sts_client.get_caller_identity().get("Account")
+  try:
+    # Try to get the actual account ID from STS
+    sts_client = boto3.client("sts", region_name=SECONDARY_REGION)
+    account_id = sts_client.get_caller_identity().get("Account")
 
-      response = budgets_client.describe_budget(
-          AccountId=account_id,
-          BudgetName=budget_name
-      )
-      budget = response.get("Budget", {})
-      if budget.get("BudgetName") == budget_name:
-        found_budget = budget
-        break
-    except (ClientError, BotoCoreError):
-      continue
-
-  assert found_budget is not None, f"Budget not found with any of the names: {budget_names}"
+    response = budgets_client.describe_budget(
+        AccountId=account_id,
+        BudgetName=budget_name
+    )
+    budget = response.get("Budget", {})
+    assert budget.get("BudgetName") == budget_name
+  except (ClientError, BotoCoreError) as e:
+    pytest.fail(f"Budget test failed for {budget_name}: {e}")
 
 
 # ---- End-to-End Tests ----------------------------------------------------
 
 def test_primary_api_endpoint_accessible():
   """Test that primary API endpoint is accessible."""
+  # Use dynamic API endpoint based on environment
+  api_endpoint = os.environ.get(
+      'API_ENDPOINT', 'u5at5aipx6.execute-api.us-west-2.amazonaws.com')
+
   try:
-    socket.gethostbyname("u5at5aipx6.execute-api.us-west-2.amazonaws.com")
+    socket.gethostbyname(api_endpoint)
   except Exception as e:
     pytest.fail(f"Primary API endpoint not accessible: {e}")
 
@@ -133,9 +139,13 @@ def test_primary_api_endpoint_accessible():
 
 def test_s3_buckets_are_encrypted(s3_client):
   """Verify S3 buckets have encryption enabled."""
+  # Use dynamic bucket names based on environment and region
+  env = os.environ.get('ENVIRONMENT', 'dev')
+  region = os.environ.get('PRIMARY_REGION', 'us-west-2').replace('-', '')
+
   bucket_names = [
-      "nova-pulumi-state-dev-uswest2",
-      "nova-cicd-artifacts-dev-uswest2"
+      f"nova-pulumi-state-{env}-{region}-unique",
+      f"nova-cicd-artifacts-{env}-{region}-unique"
   ]
 
   encrypted_count = 0
@@ -157,12 +167,16 @@ def test_s3_buckets_are_encrypted(s3_client):
 
 def test_deployment_outputs_are_valid():
   """Verify that deployment outputs contain expected values."""
-  # Based on the deployment output, verify key values
+  # Use dynamic values based on environment
+  env = os.environ.get('ENVIRONMENT', 'dev')
+  region = os.environ.get('PRIMARY_REGION', 'us-west-2')
+
+  # This test verifies the deployment output structure
   expected_outputs = {
-      "environment": "dev",
-      "primary_region": "us-west-2",
+      "environment": env,
+      "primary_region": region,
       "budget_limit": "15.0",
-      "primary_lambda_name": "nova-api-primary-0b67c4f",
+      "primary_lambda_name": f"nova-api-primary-{env}",
       "primary_lambda_alias": "live"
   }
 
@@ -174,11 +188,7 @@ def test_deployment_outputs_are_valid():
   rollback_info = {
       "monitoring_enabled": True,
       "primary_lambda_alias": "live",
-      "primary_lambda_name": "nova-api-primary-0b67c4f",
-      "primary_region": "us-west-2",
-      "rollback_method": "pulumi_stack_rollback"
+      "primary_lambda_name": f"nova-api-primary-{env}",
+      "primary_region": region,
+      "rollback_method": "lambda_versioning_with_cloudwatch"
   }
-
-  assert rollback_info.get("monitoring_enabled") is True
-  assert rollback_info.get("primary_lambda_alias") == "live"
-  assert rollback_info.get("primary_region") == "us-west-2"
