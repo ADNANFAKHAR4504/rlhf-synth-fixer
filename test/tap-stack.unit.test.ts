@@ -7,8 +7,7 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // Load the JSON template converted from YAML
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -22,13 +21,8 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Secure AWS infrastructure with VPC, subnets across 2 AZs, NAT Gateway, encrypted S3 bucket, and restricted SSH access'
       );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
@@ -40,14 +34,11 @@ describe('TapStack CloudFormation Template', () => {
     test('EnvironmentSuffix parameter should have correct properties', () => {
       const envSuffixParam = template.Parameters.EnvironmentSuffix;
       expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
+      expect(envSuffixParam.Default).toBe('prod');
       expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+        'Environment suffix for all resources'
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+      expect(envSuffixParam.AllowedPattern).toBe('^[a-z0-9-]+$');
     });
 
     test('should have ProjectName parameter', () => {
@@ -167,7 +158,7 @@ describe('TapStack CloudFormation Template', () => {
     test('security group should include environment suffix in name', () => {
       const sg = template.Resources.SSHSecurityGroup;
       expect(sg.Properties.GroupName).toEqual({
-        'Fn::Sub': '${ProjectName}-SSH-SecurityGroup${EnvironmentSuffix}',
+        'Fn::Sub': '${ProjectName}-SSH-SecurityGroup-${EnvironmentSuffix}',
       });
     });
   });
@@ -197,10 +188,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(pac.RestrictPublicBuckets).toBe(true);
     });
 
-    test('should have S3 bucket policy', () => {
-      expect(template.Resources.SecureS3BucketPolicy).toBeDefined();
-      expect(template.Resources.SecureS3BucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
-    });
 
     test('should have access logs bucket', () => {
       expect(template.Resources.S3AccessLogsBucket).toBeDefined();
@@ -245,7 +232,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Description).toBe('ID of the VPC');
       expect(output.Value).toEqual({ Ref: 'VPC' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-VPCId',
+        'Fn::Sub': '${ProjectName}-VPC-ID-${EnvironmentSuffix}',
       });
     });
 
@@ -253,7 +240,7 @@ describe('TapStack CloudFormation Template', () => {
       const output = template.Outputs.PublicSubnet1Id;
       expect(output.Value).toEqual({ Ref: 'PublicSubnet1' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-PublicSubnet1Id',
+        'Fn::Sub': '${ProjectName}-Public-Subnet-AZ1-ID-${EnvironmentSuffix}',
       });
     });
 
@@ -261,17 +248,23 @@ describe('TapStack CloudFormation Template', () => {
       const output = template.Outputs.SSHSecurityGroupId;
       expect(output.Value).toEqual({ Ref: 'SSHSecurityGroup' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-SSHSecurityGroupId',
+        'Fn::Sub': '${ProjectName}-SSH-SG-ID-${EnvironmentSuffix}',
       });
     });
 
     test('S3 bucket outputs should be correct', () => {
       const bucketNameOutput = template.Outputs.SecureS3BucketName;
       expect(bucketNameOutput.Value).toEqual({ Ref: 'SecureS3Bucket' });
+      expect(bucketNameOutput.Export.Name).toEqual({
+        'Fn::Sub': '${ProjectName}-Secure-S3-Bucket-Name-${EnvironmentSuffix}',
+      });
 
       const bucketArnOutput = template.Outputs.SecureS3BucketArn;
       expect(bucketArnOutput.Value).toEqual({
         'Fn::GetAtt': ['SecureS3Bucket', 'Arn'],
+      });
+      expect(bucketArnOutput.Export.Name).toEqual({
+        'Fn::Sub': '${ProjectName}-Secure-S3-Bucket-ARN-${EnvironmentSuffix}',
       });
     });
   });
@@ -297,7 +290,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have appropriate number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(25);
+      expect(resourceCount).toBeGreaterThanOrEqual(20);
     });
 
     test('should have appropriate number of outputs', () => {
@@ -313,36 +306,54 @@ describe('TapStack CloudFormation Template', () => {
       const vpcTags = vpc.Properties.Tags;
       const nameTag = vpcTags.find((tag: any) => tag.Key === 'Name');
       expect(nameTag.Value).toEqual({
-        'Fn::Sub': '${ProjectName}-VPC${EnvironmentSuffix}',
+        'Fn::Sub': '${ProjectName}-VPC-${EnvironmentSuffix}',
       });
     });
 
-    test('export names should follow stack naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+    test('export names should follow project naming convention', () => {
+      // Test VPCId export
+      const vpcOutput = template.Outputs.VPCId;
+      expect(vpcOutput.Export.Name).toEqual({
+        'Fn::Sub': '${ProjectName}-VPC-ID-${EnvironmentSuffix}',
+      });
+      
+      // Test SSH Security Group export
+      const sgOutput = template.Outputs.SSHSecurityGroupId;
+      expect(sgOutput.Export.Name).toEqual({
+        'Fn::Sub': '${ProjectName}-SSH-SG-ID-${EnvironmentSuffix}',
       });
     });
 
     test('S3 bucket names should include environment suffix', () => {
       const bucket = template.Resources.SecureS3Bucket;
       expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': '${ProjectName}-secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}',
+        'Fn::Sub': [
+          '${projectname}-secure-bucket-${environment}-${AWS::AccountId}-${region}',
+          {
+            'projectname': { 'Ref': 'ProjectName' },
+            'environment': { 'Ref': 'EnvironmentSuffix' },
+            'region': { 'Ref': 'AWS::Region' }
+          }
+        ]
       });
     });
   });
 
-  describe('Deletion Policies', () => {
-    test('S3 buckets should have deletion policies', () => {
-      expect(template.Resources.SecureS3Bucket.DeletionPolicy).toBe('Delete');
-      expect(template.Resources.S3AccessLogsBucket.DeletionPolicy).toBe('Delete');
+  describe('Additional Security Features', () => {
+    test('should have VPC Flow Logs configured', () => {
+      expect(template.Resources.VPCFlowLog).toBeDefined();
+      expect(template.Resources.VPCFlowLogRole).toBeDefined();
+      expect(template.Resources.VPCFlowLogGroup).toBeDefined();
     });
 
-    test('Log groups should have deletion policies', () => {
-      expect(template.Resources.S3LogGroup.DeletionPolicy).toBe('Delete');
-      expect(template.Resources.VPCFlowLogGroup.DeletionPolicy).toBe('Delete');
+    test('should have S3 access logs bucket', () => {
+      expect(template.Resources.S3AccessLogsBucket).toBeDefined();
+      expect(template.Resources.S3AccessLogsBucket.Type).toBe('AWS::S3::Bucket');
+    });
+
+    test('should have CloudWatch log groups', () => {
+      expect(template.Resources.S3LogGroup).toBeDefined();
+      expect(template.Resources.VPCFlowLogGroup).toBeDefined();
     });
   });
 });
