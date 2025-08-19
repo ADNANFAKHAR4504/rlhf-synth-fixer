@@ -215,13 +215,22 @@ resource "aws_subnet" "database" {
   })
 }
 
-# NAT Gateways - One per AZ
+# NAT Gateways - One per AZ (requires Elastic IP allocation IDs)
+resource "aws_eip" "nat" {
+  count  = 3
+  domain = "vpc"
+
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-${var.environment}-nat-eip-${count.index + 1}"
+  })
+}
+
 resource "aws_nat_gateway" "main" {
   count = 3
-  
-  # No explicit allocation_id - AWS will automatically assign a public IP
-  subnet_id = aws_subnet.public[count.index].id
-  
+
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-${var.environment}-nat-${count.index + 1}"
   })
@@ -1384,7 +1393,8 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config_attach" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+  # Correct AWS managed policy name for AWS Config service role
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 # Additional policy for Config to access S3 bucket
