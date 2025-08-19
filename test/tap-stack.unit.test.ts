@@ -42,6 +42,7 @@ describe('TapStack CloudFormation Template', () => {
         'DBInstanceClass',
         'KeyPairName',
         'AllowedCIDR',
+        'ResourceNamePrefix',
       ];
 
       expectedParams.forEach(paramName => {
@@ -216,12 +217,12 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(7);
     });
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(10);
+      expect(outputCount).toBe(11);
     });
 
     test('should have substantial number of resources for HA architecture', () => {

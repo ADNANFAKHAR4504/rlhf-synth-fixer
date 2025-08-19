@@ -26,13 +26,19 @@ Parameters:
     Description: "RDS instance class"
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: "EC2 Key Pair for SSH access"
+    Type: String
+    Default: "default-key-pair"
+    Description: "EC2 Key Pair name for SSH access (will be created if doesn't exist)"
 
   AllowedCIDR:
     Type: String
     Default: "0.0.0.0/0"
     Description: "CIDR block allowed to access the application"
+
+  ResourceNamePrefix:
+    Type: String
+    Default: "IaCAWSNovaModelBreaking"
+    Description: "Sanitized resource name prefix for AWS resources"
 
 Mappings:
   RegionMap:
@@ -44,6 +50,19 @@ Mappings:
       AMI: ami-0a8e758f5e873d1c1
 
 Resources:
+  # EC2 Key Pair
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Ref KeyPairName
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-EC2-KeyPair"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
   # VPC and Networking
   VPC:
     Type: AWS::EC2::VPC
@@ -413,11 +432,12 @@ Resources:
   Database:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub "${ProjectName}-database"
+      DBInstanceIdentifier: !Sub "${ResourceNamePrefix}Database"
       DBInstanceClass: !Ref DBInstanceClass
       Engine: mysql
-      EngineVersion: "8.0.35"
+      EngineVersion: "8.0.42"
       MasterUsername: admin
       MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
       AllocatedStorage: 20
@@ -520,13 +540,13 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+        KeyName: !Ref EC2KeyPair
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd mysql
@@ -710,7 +730,7 @@ Resources:
   SNSTopicAlarms:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "${ProjectName}-Alarms"
+      TopicName: !Sub "${ResourceNamePrefix}Alarms"
       DisplayName: !Sub "${ProjectName} System Alarms"
       Tags:
         - Key: Project
@@ -722,7 +742,7 @@ Resources:
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/ec2/${ProjectName}"
+      LogGroupName: !Sub "/aws/ec2/${ResourceNamePrefix}Logs"
       RetentionInDays: 30
       Tags:
         - Key: Project
@@ -790,3 +810,9 @@ Outputs:
     Value: !Ref "AWS::Region"
     Export:
       Name: !Sub "${AWS::StackName}-Region"
+
+  KeyPairName:
+    Description: "EC2 Key Pair Name"
+    Value: !Ref EC2KeyPair
+    Export:
+      Name: !Sub "${AWS::StackName}-KeyPair-Name"
