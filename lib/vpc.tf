@@ -113,7 +113,7 @@ resource "aws_flow_log" "primary" {
   vpc_id               = aws_vpc.primary.id
   log_destination_type = "cloud-watch-logs"
   log_destination      = aws_cloudwatch_log_group.vpc_flow_logs_primary.arn
-  iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
+  iam_role_arn         = aws_iam_role.vpc_flow_log.arn
   traffic_type         = "ALL"
   tags = {
     Name = "${var.name_prefix}-${var.environment}-vpc-flowlog-primary"
@@ -125,7 +125,7 @@ resource "aws_flow_log" "secondary" {
   vpc_id               = aws_vpc.secondary.id
   log_destination_type = "cloud-watch-logs"
   log_destination      = aws_cloudwatch_log_group.vpc_flow_logs_secondary.arn
-  iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
+  iam_role_arn         = aws_iam_role.vpc_flow_log.arn
   traffic_type         = "ALL"
   tags = {
     Name = "${var.name_prefix}-${var.environment}-vpc-flowlog-secondary"

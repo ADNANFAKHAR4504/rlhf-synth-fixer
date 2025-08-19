@@ -66,7 +66,7 @@ resource "aws_flow_log" "bastion_primary_subnet" {
   subnet_id            = aws_subnet.public_primary_1.id
   log_destination_type = "cloud-watch-logs"
   log_destination      = aws_cloudwatch_log_group.bastion_primary_subnet.arn
-  iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
+  iam_role_arn         = aws_iam_role.vpc_flow_log.arn
   traffic_type         = "ALL"
   tags = {
     Name = "${var.name_prefix}-${var.environment}-flowlog-bastion-primary-subnet"
@@ -78,7 +78,7 @@ resource "aws_flow_log" "bastion_secondary_subnet" {
   subnet_id            = aws_subnet.public_secondary_1.id
   log_destination_type = "cloud-watch-logs"
   log_destination      = aws_cloudwatch_log_group.bastion_secondary_subnet.arn
-  iam_role_arn         = aws_iam_role.vpc_flow_logs_role.arn
+  iam_role_arn         = aws_iam_role.vpc_flow_log.arn
   traffic_type         = "ALL"
   tags = {
     Name = "${var.name_prefix}-${var.environment}-flowlog-bastion-secondary-subnet"
