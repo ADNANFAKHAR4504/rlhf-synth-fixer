@@ -6,11 +6,9 @@ terraform {
       version = "~> 5.0"
     }
   }
-  # backend "s3" {
-  #   bucket = "your-terraform-state-bucket"
-  #   key    = "tap-stack/terraform.tfstate"
-  #   region = "us-east-1"
-  # }
+  backend "s3" {
+    # Configuration will be provided via -backend-config during init
+  }
 }
 
 provider "aws" {

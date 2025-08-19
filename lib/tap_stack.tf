@@ -21,6 +21,11 @@ variable "environment_name" {
     error_message = "Environment must be dev, staging, or prod."
   }
 }
+variable "environment_suffix" { 
+  type = string 
+  default = "dev"
+  description = "Unique suffix to avoid resource naming conflicts between deployments"
+}
 variable "notification_email" { 
   type = string 
   validation {
@@ -88,12 +93,12 @@ resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags                 = merge(local.common_tags, { Name = "${var.project_name}-vpc" })
+  tags                 = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-vpc" })
 }
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  tags   = merge(local.common_tags, { Name = "${var.project_name}-igw" })
+  tags   = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-igw" })
 }
 
 # Subnets
@@ -103,7 +108,7 @@ resource "aws_subnet" "public" {
   cidr_block              = each.value.cidr
   availability_zone       = each.value.az
   map_public_ip_on_launch = true
-  tags                    = merge(local.common_tags, { Name = "${var.project_name}-public-${each.key}" })
+  tags                    = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-public-${each.key}" })
 }
 
 resource "aws_subnet" "private" {
@@ -111,21 +116,21 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = each.value.cidr
   availability_zone = each.value.az
-  tags              = merge(local.common_tags, { Name = "${var.project_name}-private-${each.key}" })
+  tags              = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-private-${each.key}" })
 }
 
 # NAT Gateways
 resource "aws_eip" "nat" {
   for_each = local.public_subnets
   domain   = "vpc"
-  tags     = merge(local.common_tags, { Name = "${var.project_name}-nat-eip-${each.key}" })
+  tags     = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-nat-eip-${each.key}" })
 }
 
 resource "aws_nat_gateway" "main" {
   for_each      = local.public_subnets
   allocation_id = aws_eip.nat[each.key].id
   subnet_id     = aws_subnet.public[each.key].id
-  tags          = merge(local.common_tags, { Name = "${var.project_name}-nat-${each.key}" })
+  tags          = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-nat-${each.key}" })
   depends_on    = [aws_internet_gateway.main]
 }
 
@@ -136,7 +141,7 @@ resource "aws_route_table" "public" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  tags = merge(local.common_tags, { Name = "${var.project_name}-public-rt" })
+  tags = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-public-rt" })
 }
 
 resource "aws_route_table" "private" {
@@ -146,7 +151,7 @@ resource "aws_route_table" "private" {
     cidr_block = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[each.key].id
   }
-  tags = merge(local.common_tags, { Name = "${var.project_name}-private-rt-${each.key}" })
+  tags = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-private-rt-${each.key}" })
 }
 
 resource "aws_route_table_association" "public" {
@@ -163,17 +168,14 @@ resource "aws_route_table_association" "private" {
 
 # S3 Buckets
 resource "aws_s3_bucket" "logging" {
-  bucket        = "${var.project_name}-${var.environment_name}-logging-${random_id.bucket_suffix.hex}"
-  force_destroy = false
+  bucket        = "${var.project_name}-${var.environment_suffix}-logging-${random_id.bucket_suffix.hex}"
+  force_destroy = true
   tags          = local.common_tags
-  lifecycle { 
-    prevent_destroy = true 
-  }
 }
 
 resource "aws_s3_bucket" "data" {
-  bucket        = "${var.project_name}-${var.environment_name}-data-${random_id.bucket_suffix.hex}"
-  force_destroy = false
+  bucket        = "${var.project_name}-${var.environment_suffix}-data-${random_id.bucket_suffix.hex}"
+  force_destroy = true
   tags          = local.common_tags
 }
 
@@ -260,14 +262,14 @@ resource "aws_s3_bucket_policy" "data_tls_only" {
 
 # CloudWatch Log Groups
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/${var.project_name}-${var.environment_name}"
+  name              = "/aws/cloudtrail/${var.project_name}-${var.environment_suffix}"
   retention_in_days = 90
   tags              = local.common_tags
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow" {
   count             = var.enable_vpc_flow_logs ? 1 : 0
-  name              = "/aws/vpc/flowlogs/${var.project_name}-${var.environment_name}"
+  name              = "/aws/vpc/flowlogs/${var.project_name}-${var.environment_suffix}"
   retention_in_days = 90
   tags              = local.common_tags
 }
@@ -347,64 +349,64 @@ data "aws_iam_policy_document" "lambda_policy" {
 
 # IAM Roles
 resource "aws_iam_role" "cloudtrail" {
-  name               = "${var.project_name}-${var.environment_name}-cloudtrail-role"
+  name               = "${var.project_name}-${var.environment_suffix}-cloudtrail-role"
   assume_role_policy = data.aws_iam_policy_document.cloudtrail_assume.json
   tags               = local.common_tags
 }
 
 resource "aws_iam_role_policy" "cloudtrail" {
-  name   = "${var.project_name}-${var.environment_name}-cloudtrail-policy"
+  name   = "${var.project_name}-${var.environment_suffix}-cloudtrail-policy"
   role   = aws_iam_role.cloudtrail.id
   policy = data.aws_iam_policy_document.cloudtrail_policy.json
 }
 
 resource "aws_iam_role" "vpc_flow" {
   count              = var.enable_vpc_flow_logs ? 1 : 0
-  name               = "${var.project_name}-${var.environment_name}-vpc-flow-role"
+  name               = "${var.project_name}-${var.environment_suffix}-vpc-flow-role"
   assume_role_policy = data.aws_iam_policy_document.vpc_flow_assume.json
   tags               = local.common_tags
 }
 
 resource "aws_iam_role_policy" "vpc_flow" {
   count  = var.enable_vpc_flow_logs ? 1 : 0
-  name   = "${var.project_name}-${var.environment_name}-vpc-flow-policy"
+  name   = "${var.project_name}-${var.environment_suffix}-vpc-flow-policy"
   role   = aws_iam_role.vpc_flow[0].id
   policy = data.aws_iam_policy_document.vpc_flow_policy.json
 }
 
 resource "aws_iam_role" "ec2" {
-  name               = "${var.project_name}-${var.environment_name}-ec2-role"
+  name               = "${var.project_name}-${var.environment_suffix}-ec2-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume.json
   tags               = local.common_tags
 }
 
 resource "aws_iam_role_policy" "ec2" {
-  name   = "${var.project_name}-${var.environment_name}-ec2-policy"
+  name   = "${var.project_name}-${var.environment_suffix}-ec2-policy"
   role   = aws_iam_role.ec2.id
   policy = data.aws_iam_policy_document.ec2_policy.json
 }
 
 resource "aws_iam_instance_profile" "ec2" {
-  name = "${var.project_name}-${var.environment_name}-ec2-profile"
+  name = "${var.project_name}-${var.environment_suffix}-ec2-profile"
   role = aws_iam_role.ec2.name
   tags = local.common_tags
 }
 
 resource "aws_iam_role" "lambda" {
-  name               = "${var.project_name}-${var.environment_name}-lambda-role"
+  name               = "${var.project_name}-${var.environment_suffix}-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
   tags               = local.common_tags
 }
 
 resource "aws_iam_role_policy" "lambda" {
-  name   = "${var.project_name}-${var.environment_name}-lambda-policy"
+  name   = "${var.project_name}-${var.environment_suffix}-lambda-policy"
   role   = aws_iam_role.lambda.id
   policy = data.aws_iam_policy_document.lambda_policy.json
 }
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name                         = "${var.project_name}-${var.environment_name}-trail"
+  name                         = "${var.project_name}-${var.environment_suffix}-trail"
   s3_bucket_name               = aws_s3_bucket.logging.bucket
   s3_key_prefix                = "cloudtrail/"
   include_global_service_events = true
@@ -428,7 +430,7 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
     condition {
       test = "StringEquals"
       variable = "AWS:SourceArn"
-      values = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_name}-trail"]
+      values = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_suffix}-trail"]
     }
   }
   statement {
@@ -447,7 +449,7 @@ data "aws_iam_policy_document" "cloudtrail_bucket_policy" {
     condition {
       test = "StringEquals"
       variable = "AWS:SourceArn"
-      values = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_name}-trail"]
+      values = ["arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment_suffix}-trail"]
     }
   }
 }
@@ -469,9 +471,9 @@ resource "aws_flow_log" "vpc" {
 
 # Security Groups
 resource "aws_security_group" "ec2" {
-  name        = "${var.project_name}-${var.environment_name}-ec2-sg"
+  name        = "${var.project_name}-${var.environment_suffix}-ec2-sg"
   vpc_id      = aws_vpc.main.id
-  tags        = merge(local.common_tags, { Name = "${var.project_name}-ec2-sg" })
+  tags        = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-ec2-sg" })
   
   dynamic "ingress" {
     for_each = length(var.allowed_ssh_cidrs) > 0 ? [1] : []
@@ -493,7 +495,7 @@ resource "aws_security_group" "ec2" {
 
 # EC2 Launch Template
 resource "aws_launch_template" "main" {
-  name          = "${var.project_name}-${var.environment_name}-lt"
+  name          = "${var.project_name}-${var.environment_suffix}-lt"
   image_id      = data.aws_ssm_parameter.al2023_ami.value
   instance_type = var.instance_type
   
@@ -514,7 +516,7 @@ resource "aws_launch_template" "main" {
   
   tag_specifications {
     resource_type = "instance"
-    tags          = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_name}-instance" })
+    tags          = merge(local.common_tags, { Name = "${var.project_name}-${var.environment_suffix}-instance" })
   }
   
   tags = local.common_tags
@@ -522,7 +524,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.project_name}-${var.environment_name}-asg"
+  name                = "${var.project_name}-${var.environment_suffix}-asg"
   vpc_zone_identifier = [for subnet in aws_subnet.private : subnet.id]
   target_group_arns   = []
   health_check_type   = "EC2"
@@ -539,7 +541,7 @@ resource "aws_autoscaling_group" "main" {
   
   tag {
     key                 = "Name"
-    value               = "${var.project_name}-${var.environment_name}-asg"
+    value               = "${var.project_name}-${var.environment_suffix}-asg"
     propagate_at_launch = false
   }
   
@@ -555,7 +557,7 @@ resource "aws_autoscaling_group" "main" {
 
 # SNS Topic
 resource "aws_sns_topic" "alerts" {
-  name = "${var.project_name}-${var.environment_name}-security-alerts"
+  name = "${var.project_name}-${var.environment_suffix}-security-alerts"
   tags = local.common_tags
 }
 
@@ -567,7 +569,7 @@ resource "aws_sns_topic_subscription" "email" {
 
 # CloudWatch Metric Filter
 resource "aws_cloudwatch_metric_filter" "unauthorized_calls" {
-  name           = "${var.project_name}-${var.environment_name}-unauthorized-calls"
+  name           = "${var.project_name}-${var.environment_suffix}-unauthorized-calls"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
   pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
   
@@ -580,7 +582,7 @@ resource "aws_cloudwatch_metric_filter" "unauthorized_calls" {
 
 # CloudWatch Alarm
 resource "aws_cloudwatch_metric_alarm" "unauthorized_calls" {
-  alarm_name          = "${var.project_name}-${var.environment_name}-unauthorized-calls"
+  alarm_name          = "${var.project_name}-${var.environment_suffix}-unauthorized-calls"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "1"
   metric_name         = "UnauthorizedAPICalls"
@@ -596,7 +598,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_calls" {
 # Lambda Function
 resource "aws_lambda_function" "sg_remediation" {
   filename         = "sg_remediation.zip"
-  function_name    = "${var.project_name}-${var.environment_name}-sg-remediation"
+  function_name    = "${var.project_name}-${var.environment_suffix}-sg-remediation"
   role            = aws_iam_role.lambda.arn
   handler         = "index.handler"
   source_code_hash = data.archive_file.sg_remediation.output_base64sha256
@@ -646,7 +648,7 @@ EOF
 
 # EventBridge Rule
 resource "aws_cloudwatch_event_rule" "sg_changes" {
-  name = "${var.project_name}-${var.environment_name}-sg-changes"
+  name = "${var.project_name}-${var.environment_suffix}-sg-changes"
   event_pattern = jsonencode({
     source      = ["aws.ec2"]
     detail-type = ["AWS API Call via CloudTrail"]
