@@ -18,14 +18,14 @@ terraform {
   # STEP 2 (after first apply): Uncomment and `terraform init -migrate-state`
   # to enable remote state using the bucket/key created below.
   # Ensure the bucket name is globally unique by replacing <your-unique-suffix>.
-  # backend "s3" {
-  #   bucket         = "prod-tfstate-<your-unique-suffix>"
-  #   key            = "global/terraform.tfstate"
-  #   region         = var.aws_region
-  #   dynamodb_table = "prod-tf-locks"
-  #   encrypt        = true
-  #   kms_key_id     = "alias/prod-tfstate-kms"
-  # }
+   backend "s3" {
+     bucket         = "prod-tfstate-<your-unique-suffix>"
+     key            = "global/terraform.tfstate"
+     region         = var.aws_region
+     dynamodb_table = "prod-tf-locks"
+     encrypt        = true
+     kms_key_id     = "alias/prod-tfstate-kms"
+   }
 }
 
 ############################
