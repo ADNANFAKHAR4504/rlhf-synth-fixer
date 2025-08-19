@@ -8,6 +8,7 @@ import {
   DescribeFlowLogsCommand,
   DescribeAvailabilityZonesCommand,
   GetEbsEncryptionByDefaultCommand,
+  DescribeVpcAttributeCommand,
 } from '@aws-sdk/client-ec2';
 import {
   S3Client,
@@ -88,8 +89,18 @@ describe('Terraform Multi-Region AWS Security Baseline Integration Tests', () =>
       expect(primaryVpcs.Vpcs).toHaveLength(1);
       expect(primaryVpcs.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
       expect(primaryVpcs.Vpcs![0].State).toBe('available');
-      expect(primaryVpcs.Vpcs![0].EnableDnsHostnames).toBe(true);
-      expect(primaryVpcs.Vpcs![0].EnableDnsSupport).toBe(true);
+      // Verify DNS attributes via DescribeVpcAttribute
+      const primaryVpcId = primaryVpcs.Vpcs![0].VpcId!;
+      const primaryDnsHostnames = await ec2Primary.send(new DescribeVpcAttributeCommand({
+        VpcId: primaryVpcId,
+        Attribute: 'enableDnsHostnames',
+      }));
+      const primaryDnsSupport = await ec2Primary.send(new DescribeVpcAttributeCommand({
+        VpcId: primaryVpcId,
+        Attribute: 'enableDnsSupport',
+      }));
+      expect(primaryDnsHostnames.EnableDnsHostnames?.Value).toBe(true);
+      expect(primaryDnsSupport.EnableDnsSupport?.Value).toBe(true);
 
       // Test secondary region VPC
       const secondaryVpcs = await ec2Secondary.send(new DescribeVpcsCommand({
@@ -98,8 +109,18 @@ describe('Terraform Multi-Region AWS Security Baseline Integration Tests', () =>
       expect(secondaryVpcs.Vpcs).toHaveLength(1);
       expect(secondaryVpcs.Vpcs![0].CidrBlock).toBe('10.1.0.0/16');
       expect(secondaryVpcs.Vpcs![0].State).toBe('available');
-      expect(secondaryVpcs.Vpcs![0].EnableDnsHostnames).toBe(true);
-      expect(secondaryVpcs.Vpcs![0].EnableDnsSupport).toBe(true);
+      // Verify DNS attributes via DescribeVpcAttribute
+      const secondaryVpcId = secondaryVpcs.Vpcs![0].VpcId!;
+      const secondaryDnsHostnames = await ec2Secondary.send(new DescribeVpcAttributeCommand({
+        VpcId: secondaryVpcId,
+        Attribute: 'enableDnsHostnames',
+      }));
+      const secondaryDnsSupport = await ec2Secondary.send(new DescribeVpcAttributeCommand({
+        VpcId: secondaryVpcId,
+        Attribute: 'enableDnsSupport',
+      }));
+      expect(secondaryDnsHostnames.EnableDnsHostnames?.Value).toBe(true);
+      expect(secondaryDnsSupport.EnableDnsSupport?.Value).toBe(true);
     }, testTimeout);
 
     test('should have public and private subnets in both regions', async () => {
@@ -163,9 +184,9 @@ describe('Terraform Multi-Region AWS Security Baseline Integration Tests', () =>
       
       const primarySg = primarySgs.SecurityGroups![0];
       // Verify no 0.0.0.0/0 ingress rules
-      const openIngressRules = primarySg.IpRules?.filter(rule => 
-        rule.CidrIp === '0.0.0.0/0' && rule.IpProtocol !== '-1'
-      );
+      const openIngressRules = (primarySg.IpPermissions || [])
+        .flatMap(perm => (perm.IpRanges || []).map(r => ({ protocol: perm.IpProtocol, cidr: r.CidrIp })))
+        .filter(r => r.cidr === '0.0.0.0/0' && r.protocol !== '-1');
       expect(openIngressRules).toHaveLength(0);
 
       // Test secondary region security group
@@ -175,9 +196,9 @@ describe('Terraform Multi-Region AWS Security Baseline Integration Tests', () =>
       expect(secondarySgs.SecurityGroups).toHaveLength(1);
       
       const secondarySg = secondarySgs.SecurityGroups![0];
-      const openIngressRulesSecondary = secondarySg.IpRules?.filter(rule => 
-        rule.CidrIp === '0.0.0.0/0' && rule.IpProtocol !== '-1'
-      );
+      const openIngressRulesSecondary = (secondarySg.IpPermissions || [])
+        .flatMap(perm => (perm.IpRanges || []).map(r => ({ protocol: perm.IpProtocol, cidr: r.CidrIp })))
+        .filter(r => r.cidr === '0.0.0.0/0' && r.protocol !== '-1');
       expect(openIngressRulesSecondary).toHaveLength(0);
     }, testTimeout);
   });
@@ -189,7 +210,7 @@ describe('Terraform Multi-Region AWS Security Baseline Integration Tests', () =>
 
       // Test primary region flow logs
       const primaryFlowLogs = await ec2Primary.send(new DescribeFlowLogsCommand({
-        Filters: [{ Name: 'tag:Name', Values: [createResourceName('vpc-flow-log-primary')] }]
+        Filter: [{ Name: 'tag:Name', Values: [createResourceName('vpc-flow-log-primary')] }]
       }));
       expect(primaryFlowLogs.FlowLogs).toHaveLength(1);
       expect(primaryFlowLogs.FlowLogs![0].TrafficType).toBe('ALL');
@@ -205,7 +226,7 @@ describe('Terraform Multi-Region AWS Security Baseline Integration Tests', () =>
 
       // Test secondary region flow logs
       const secondaryFlowLogs = await ec2Secondary.send(new DescribeFlowLogsCommand({
-        Filters: [{ Name: 'tag:Name', Values: [createResourceName('vpc-flow-log-secondary')] }]
+        Filter: [{ Name: 'tag:Name', Values: [createResourceName('vpc-flow-log-secondary')] }]
       }));
       expect(secondaryFlowLogs.FlowLogs).toHaveLength(1);
       expect(secondaryFlowLogs.FlowLogs![0].TrafficType).toBe('ALL');
@@ -358,8 +379,12 @@ describe('Terraform Multi-Region AWS Security Baseline Integration Tests', () =>
   describe('Availability Zone Distribution', () => {
     test('should use different AZs for public and private subnets', async () => {
       // Get availability zones for both regions
-      const primaryAzs = await ec2Primary.send(new DescribeAvailabilityZonesCommand({ State: 'available' }));
-      const secondaryAzs = await ec2Secondary.send(new DescribeAvailabilityZonesCommand({ State: 'available' }));
+      const primaryAzs = await ec2Primary.send(new DescribeAvailabilityZonesCommand({
+        Filters: [{ Name: 'state', Values: ['available'] }]
+      }));
+      const secondaryAzs = await ec2Secondary.send(new DescribeAvailabilityZonesCommand({
+        Filters: [{ Name: 'state', Values: ['available'] }]
+      }));
 
       expect(primaryAzs.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
       expect(secondaryAzs.AvailabilityZones!.length).toBeGreaterThanOrEqual(2);
