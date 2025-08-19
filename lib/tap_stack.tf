@@ -58,12 +58,6 @@ variable "allowed_ssh_cidr" {
   }
 }
 
-variable "ssh_public_key" {
-  description = "Your SSH public key (dummy default used for CI validation)."
-  type        = string
-  default     = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdummykeyfortests"
-}
-
 variable "instance_type_bastion" {
   description = "Instance type for bastion."
   type        = string
@@ -320,14 +314,14 @@ resource "aws_security_group" "private_ec2_sg" {
 # Key Pair for SSH
 ############################
 
-# Use data source to reference existing key pair instead of creating new one
-data "aws_key_pair" "existing" {
-  key_name = "prod-key"
+resource "tls_private_key" "ssh" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
 }
 
 resource "aws_key_pair" "main" {
   key_name   = "${var.name_prefix}-key-${var.unique_suffix}" # Unique name
-  public_key = var.ssh_public_key
+  public_key = tls_private_key.ssh.public_key_openssh
   tags       = merge(local.tags, { Name = "${var.name_prefix}-key" })
 }
 
@@ -635,4 +629,10 @@ output "kms_app_key_arn" {
 output "kms_tfstate_key_arn" {
   value       = aws_kms_key.tfstate.arn
   description = "KMS key for Terraform state"
+}
+
+output "ssh_private_key" {
+  value       = tls_private_key.ssh.private_key_pem
+  description = "Private key for SSH access (save this securely)"
+  sensitive   = true
 }
