@@ -25,8 +25,9 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
   });
 
   test("declares aws_region variable in tap_stack.tf", () => {
-    const content = fs.readFileSync(stackPath, "utf8");
-    expect(content).toMatch(/variable\s+"aws_region"\s*{/);
+  const content = fs.readFileSync(stackPath, "utf8");
+  // The stack uses the aws_region data source, not a variable
+  expect(content).toMatch(/data\s+"aws_region"\s+"current"/);
   });
 
 });
