@@ -1,4 +1,4 @@
-// module
+import { Construct } from 'constructs';
 import { Alb } from '@cdktf/provider-aws/lib/alb';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
@@ -28,7 +28,6 @@ import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versionin
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Fn } from 'cdktf';
-import { Construct } from 'constructs';
 
 // VPC Module (No Changes)
 export interface VpcModuleProps {
