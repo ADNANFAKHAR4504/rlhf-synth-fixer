@@ -946,14 +946,10 @@ Outputs:
     Description: VPC ID
     Value: !Ref ApplicationVPC
     Export:
-      Name: !Sub '${Environment}-vpc-id'
+      Name: !Sub '${Environment}-vpc-id-${AWS::StackName}'
 
   PublicSubnets:
     Description: Public subnet IDs
     Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
     Export:
-      Name: 
-        Fn::Join:
-          - '-'
-          - - Ref: Environment
-            - 'public-subnets'
+      Name: !Sub '${Environment}-public-subnets-${AWS::StackName}'
