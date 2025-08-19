@@ -289,7 +289,7 @@ describe("AWS Secure Infrastructure Integration Tests", () => {
       const cluster = response.cluster!;
       
       expect(cluster.status).toBe('ACTIVE');
-      expect(cluster.version).toBe(outputs.eks_cluster_version?.value || '1.27');
+      expect(cluster.version).toBe(outputs.eks_cluster_version?.value || '1.30');
       expect(cluster.endpoint).toBe(outputs.eks_cluster_endpoint?.value);
       expect(cluster.resourcesVpcConfig?.vpcId).toBe(outputs.vpc_id?.value);
       expect(cluster.resourcesVpcConfig?.endpointPrivateAccess).toBe(true);
@@ -333,7 +333,7 @@ describe("AWS Secure Infrastructure Integration Tests", () => {
       
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('postgres');
-      expect(dbInstance.EngineVersion).toMatch(/^15\./);
+      expect(dbInstance.EngineVersion).toMatch(/^15\.8/);
       expect(dbInstance.DBInstanceClass).toBe('db.t3.micro');
       expect(dbInstance.StorageEncrypted).toBe(true);
       expect(dbInstance.MultiAZ).toBe(true);

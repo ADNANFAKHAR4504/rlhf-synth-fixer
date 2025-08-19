@@ -88,7 +88,7 @@ variable "github_branch" {
 
 locals {
   name_prefix = "corp-${var.project}"
-  
+
   common_tags = {
     Environment = var.environment
     Project     = var.project
@@ -96,7 +96,7 @@ locals {
     Region      = var.aws_region
     Owner       = "DevOps"
   }
-  
+
   # Get first 2 AZs in the region
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 }
@@ -118,9 +118,9 @@ data "aws_region" "current" {}
 # =============================================================================
 
 resource "aws_kms_key" "main" {
-  description              = "KMS key for ${local.name_prefix} encryption"
-  deletion_window_in_days  = 7
-  enable_key_rotation      = true
+  description             = "KMS key for ${local.name_prefix} encryption"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
   multi_region            = false
 
   policy = jsonencode({
@@ -203,8 +203,8 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-public-${count.index + 1}"
-    Type = "Public"
+    Name                     = "${local.name_prefix}-public-${count.index + 1}"
+    Type                     = "Public"
     "kubernetes.io/role/elb" = "1"
   })
 }
@@ -218,8 +218,8 @@ resource "aws_subnet" "private" {
   availability_zone = local.azs[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-${count.index + 1}"
-    Type = "Private"
+    Name                              = "${local.name_prefix}-private-${count.index + 1}"
+    Type                              = "Private"
     "kubernetes.io/role/internal-elb" = "1"
   })
 }
@@ -229,7 +229,7 @@ resource "aws_eip" "nat" {
   count = length(local.azs)
 
   domain = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
   })
@@ -532,7 +532,7 @@ resource "aws_cloudwatch_log_group" "eks_cluster" {
 resource "aws_eks_cluster" "main" {
   name     = "${local.name_prefix}-cluster"
   role_arn = aws_iam_role.eks_cluster.arn
-  version  = "1.27"
+  version  = "1.30"
 
   vpc_config {
     subnet_ids              = concat(aws_subnet.public[*].id, aws_subnet.private[*].id)
@@ -606,9 +606,9 @@ resource "aws_db_subnet_group" "main" {
 
 # SSM Parameter for RDS Password
 resource "aws_ssm_parameter" "db_password" {
-  name  = "/${local.name_prefix}/database/password"
-  type  = "SecureString"
-  value = "TempPassword123!" # Should be replaced with random password in production
+  name   = "/${local.name_prefix}/database/password"
+  type   = "SecureString"
+  value  = "TempPassword123!" # Should be replaced with random password in production
   key_id = aws_kms_key.main.arn
 
   tags = merge(local.common_tags, {
@@ -619,37 +619,37 @@ resource "aws_ssm_parameter" "db_password" {
 # RDS Instance
 resource "aws_db_instance" "main" {
   identifier = "${local.name_prefix}-postgres"
-  
+
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "15.8"
   instance_class = "db.t3.micro"
-  
+
   allocated_storage     = 20
   max_allocated_storage = 100
   storage_type          = "gp2"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
-  
+  kms_key_id            = aws_kms_key.main.arn
+
   db_name  = "maindb"
   username = "dbadmin"
   password = aws_ssm_parameter.db_password.value
-  
+
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  
+
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
   skip_final_snapshot = true
   deletion_protection = false
-  
+
   performance_insights_enabled = true
-  monitoring_interval         = 60
-  monitoring_role_arn        = aws_iam_role.rds_enhanced_monitoring.arn
-  
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_enhanced_monitoring.arn
+
   enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-postgres"
   })
@@ -700,6 +700,10 @@ resource "aws_lb" "main" {
   }
 
   tags = local.common_tags
+
+  depends_on = [
+    aws_s3_bucket_policy.alb_logs
+  ]
 }
 
 resource "aws_lb_target_group" "nginx" {
@@ -925,8 +929,8 @@ resource "aws_cloudtrail" "main" {
   kms_key_id     = aws_kms_key.main.arn
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = ["kms.amazonaws.com", "rdsdata.amazonaws.com"]
   }
 
@@ -1000,13 +1004,13 @@ resource "aws_codebuild_project" "main" {
 
   environment {
     compute_type                = "BUILD_GENERAL1_SMALL"
-    image                      = "aws/codebuild/standard:5.0"
-    type                       = "LINUX_CONTAINER"
+    image                       = "aws/codebuild/standard:5.0"
+    type                        = "LINUX_CONTAINER"
     image_pull_credentials_type = "CODEBUILD"
   }
 
   source {
-    type = "CODEPIPELINE"
+    type      = "CODEPIPELINE"
     buildspec = "buildspec.yml"
   }
 
@@ -1067,20 +1071,25 @@ resource "aws_iam_role_policy" "codepipeline" {
           "kms:GenerateDataKey"
         ]
         Resource = aws_kms_key.main.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "codestar-connections:UseConnection"
+        ]
+        Resource = aws_codestarconnections_connection.github.arn
       }
     ]
   })
 }
 
-# SSM Parameter for GitHub OAuth Token
-resource "aws_ssm_parameter" "github_token" {
-  name  = "/${local.name_prefix}/github/oauth-token"
-  type  = "SecureString"
-  value = "placeholder-github-token-update-me"
-  key_id = aws_kms_key.main.arn
+# CodeStar Connection for GitHub
+resource "aws_codestarconnections_connection" "github" {
+  name          = "${local.name_prefix}-github-connection"
+  provider_type = "GitHub"
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-github-token"
+    Name = "${local.name_prefix}-github-connection"
   })
 }
 
@@ -1105,16 +1114,15 @@ resource "aws_codepipeline" "main" {
     action {
       name             = "Source"
       category         = "Source"
-      owner            = "ThirdParty"
-      provider         = "GitHub"
+      owner            = "AWS"
+      provider         = "CodeStarSourceConnection"
       version          = "1"
       output_artifacts = ["source_output"]
 
       configuration = {
-        Owner      = split("/", var.github_repo)[0]
-        Repo       = split("/", var.github_repo)[1]
-        Branch     = var.github_branch
-        OAuthToken = aws_ssm_parameter.github_token.value
+        ConnectionArn    = aws_codestarconnections_connection.github.arn
+        FullRepositoryId = var.github_repo
+        BranchName       = var.github_branch
       }
     }
   }
