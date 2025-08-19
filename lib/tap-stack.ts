@@ -111,7 +111,6 @@ export class TapStack extends pulumi.ComponentResource {
     
     // Ensure bucket name is within S3 63-character limit
     if (bucketName.length > 63) {
-      // Truncate the stack name portion to fit within limit
       const prefix = 'nova-model-logs-';
       const suffix = `-${timestamp}`;
       const maxStackNameLen = 63 - prefix.length - suffix.length;
@@ -155,35 +154,47 @@ export class TapStack extends pulumi.ComponentResource {
       restrictPublicBuckets: true,
     }, { parent: this });
   
-    // Create bucket policy for VPC endpoint access
+    // Create a more permissive bucket policy that allows legitimate access
+    const callerIdentity = aws.getCallerIdentity();
+    
     new aws.s3.BucketPolicy('logs-bucket-policy', {
       bucket: bucket.id,
-      policy: pulumi.jsonStringify({
+      policy: callerIdentity.then(identity => JSON.stringify({
         Version: '2012-10-17',
         Statement: [
           {
-            Effect: 'Deny',
-            Principal: '*',
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::${identity.accountId}:root`
+            },
             Action: 's3:*',
             Resource: [
               pulumi.interpolate`${bucket.arn}`,
               pulumi.interpolate`${bucket.arn}/*`,
             ],
-            Condition: {
-              StringNotEquals: {
-                'aws:PrincipalServiceName': [
-                  'ec2.amazonaws.com',
-                  'lambda.amazonaws.com',
-                ],
-              },
+          },
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: [
+                'ec2.amazonaws.com',
+                'lambda.amazonaws.com',
+              ],
             },
+            Action: [
+              's3:GetObject',
+              's3:PutObject',
+              's3:DeleteObject',
+            ],
+            Resource: pulumi.interpolate`${bucket.arn}/*`,
           },
         ],
-      }),
+      })),
     }, { parent: this });
   
     return { bucket, publicAccessBlock };
   }
+  
   
 
   private createLogProcessingLambda(tags: { [key: string]: string }): aws.lambda.Function {
