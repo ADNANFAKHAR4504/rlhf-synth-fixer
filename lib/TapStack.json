@@ -35,6 +35,7 @@
         ],
         "SSESpecification": {
           "SSEEnabled": true,
+          "SSEType": "KMS",
           "KMSMasterKeyId": {
             "Ref": "DynamoDBKMSKey"
           }

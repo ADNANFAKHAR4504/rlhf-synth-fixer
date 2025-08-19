@@ -27,6 +27,7 @@ Resources:
           KeyType: 'HASH'
       SSESpecification:
         SSEEnabled: true
+        SSEType: KMS
         KMSMasterKeyId: !Ref DynamoDBKMSKey
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
