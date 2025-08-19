@@ -95,7 +95,7 @@ describe('Secure Env Terraform Stack', () => {
         expect(config).toMatch(/resource\s+"aws_lambda_function"\s+"primary"/);
         expect(config).toMatch(/resource\s+"aws_lambda_function"\s+"secondary"/);
         expect(config).toMatch(/handler\s*=\s*"lambda_function.lambda_handler"/);
-        expect(config).toMatch(/runtime\s*=\s*"python3.9"/);
+        expect(config).toMatch(/runtime\s*=\s*"python3.12"/);
         expect(config).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"lambda_logs_primary"/);
       });
     }
