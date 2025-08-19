@@ -23,6 +23,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   npm run cdktf:synth
 else
   echo "ℹ️ Not a CDK project, skipping CDK synth"
+  echo "This is expected for non-CDK projects like CloudFormation templates"
   # Create empty cdk.out directory to satisfy artifact upload
   mkdir -p cdk.out
   echo "# No CDK artifacts generated for non-CDK projects" > cdk.out/README.md
