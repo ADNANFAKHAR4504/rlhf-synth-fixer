@@ -531,7 +531,7 @@ Resources:
   LoggingS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${Environment}-log-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
