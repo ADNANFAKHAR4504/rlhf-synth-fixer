@@ -60,6 +60,27 @@ resource "aws_s3_bucket" "this" {
     ManagedBy   = "terraform"
   }
 }
+  resource "aws_s3_bucket" "primary" {
+    provider = aws.primary
+    bucket   = "${var.name_prefix}-${var.environment}-primary-s3-bucket"
+    tags = {
+      Project     = "secure-env"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Region      = var.aws_region
+    }
+  }
+
+  resource "aws_s3_bucket" "secondary" {
+    provider = aws.secondary
+    bucket   = "${var.name_prefix}-${var.environment}-secondary-s3-bucket"
+    tags = {
+      Project     = "secure-env"
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Region      = var.secondary_region
+    }
+  }
 
 resource "aws_s3_bucket_public_access_block" "this" {
   provider                = aws.primary
