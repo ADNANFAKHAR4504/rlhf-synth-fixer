@@ -152,59 +152,7 @@ jobs:
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       - name: Deploy
-        run: |
-          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
-          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
-
-          echo "AWS_REGION is set to: $AWS_REGION"
-          echo "AWS_DEFAULT_REGION is set to: $AWS_DEFAULT_REGION"
-
-          if [ "$PLATFORM" = "cdk" ]; then
-            echo "✅ CDK project detected, running CDK deploy..."
-            npm run cdk:deploy
-          elif [ "$PLATFORM" = "cdktf" ]; then
-            echo "✅ CDKTF project detected, running CDKTF deploy..."
-            npm run cdktf:deploy
-          elif [ "$PLATFORM" = "tf" ]; then
-            echo "✅ Terraform HCL project detected, running Terraform deploy..."
-            
-            # Set up PR-specific state management
-            STATE_KEY="prs/${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
-            echo "Using state key: $STATE_KEY"
-            
-            # Change to bin directory where Terraform files are located
-            cd lib
-            
-            # Check if plan file exists
-            if [ -f "tfplan" ]; then
-              echo "✅ Terraform plan file found, proceeding with deployment..."
-              npm run tf:deploy
-            else
-              echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
-              # Create a new plan and deploy
-              terraform plan -out=tfplan || echo "Plan creation failed, attempting direct apply..."
-              terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan || terraform apply -auto-approve -lock=true -lock-timeout=300s || echo "Deployment failed"
-            fi
-            
-            cd ..
-          elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
-            echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-            npm run cfn:deploy-yaml
-          elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
-            echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-            npm run cfn:deploy-json
-          elif [ "$PLATFORM" = "pulumi" ]; then
-            echo "✅ Pulumi project detected, running Pulumi deploy..."
-            echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
-            echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
-            export PYTHONPATH=.:bin
-            pipenv run pulumi-create-stack
-            echo "Deploying infrastructure ..."
-            pipenv run pulumi-deploy
-          else
-            echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-            echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
-          fi
+        run: ./scripts/deploy.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
@@ -217,6 +165,14 @@ jobs:
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       # Note: Deployment outputs are now collected by the deploy.sh script
+
+      - name: Upload Deployment Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cfn-outputs
+          path: |
+            cfn-outputs/
+            cdk-stacks.json
 
       - name: Upload Deployment Outputs
         uses: actions/upload-artifact@v4
