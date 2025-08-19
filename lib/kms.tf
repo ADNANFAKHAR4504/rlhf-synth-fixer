@@ -93,3 +93,14 @@ resource "aws_kms_alias" "secondary" {
 }
 
 data "aws_caller_identity" "current" {}
+
+
+output "primary_kms_key_arn" {
+  description = "ARN of the primary KMS key"
+  value       = aws_kms_key.primary.arn
+}
+
+output "secondary_kms_key_arn" {
+  description = "ARN of the secondary KMS key"
+  value       = aws_kms_key.secondary.arn
+}

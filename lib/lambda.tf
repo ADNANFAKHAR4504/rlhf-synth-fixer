@@ -7,10 +7,11 @@ resource "aws_cloudwatch_log_group" "lambda_logs_primary" {
   provider          = aws.primary
   name              = "/aws/lambda/${var.name_prefix}-${var.environment}-function-primary"
   retention_in_days = 14
-  kms_key_id        = "arn:aws:kms:us-east-1:718240086340:key/006fc5d4-5f6f-45d6-ba15-702af8aed88c"
+  kms_key_id        = aws_kms_key.primary.arn
   tags = {
     Name = "${var.name_prefix}-${var.environment}-lambda-logs-primary"
   }
+  depends_on        = [aws_kms_key.primary] # Ensures KMS key exists first
 }
 
 # CloudWatch Log Group for Lambda - Secondary
@@ -18,10 +19,11 @@ resource "aws_cloudwatch_log_group" "lambda_logs_secondary" {
   provider          = aws.secondary
   name              = "/aws/lambda/${var.name_prefix}-${var.environment}-function-secondary"
   retention_in_days = 14
-  kms_key_id        = "arn:aws:kms:us-west-2:718240086340:key/00478f6b-4ff3-4416-8a56-fc267acd2d9c"
+  kms_key_id        = aws_kms_key.secondary.arn
   tags = {
     Name = "${var.name_prefix}-${var.environment}-lambda-logs-secondary"
   }
+  depends_on        = [aws_kms_key.secondary]
 }
 
 
