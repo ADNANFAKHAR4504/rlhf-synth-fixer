@@ -189,8 +189,8 @@ Resources:
                   - s3:ListBucket
                   - s3:GetBucketLocation
                 Resource:
-                  - !Sub 'arn:aws:s3:::secure-datascience-*-${EnvironmentSuffix}'
-                  - !Sub 'arn:aws:s3:::secure-datascience-*-${EnvironmentSuffix}/*'
+                  - !GetAtt SecureS3Bucket.Arn
+                  - !Sub '${SecureS3Bucket.Arn}/*'
       Tags:
         - Key: Name
           Value: !Sub 'data-scientist-role-${EnvironmentSuffix}'
@@ -221,7 +221,7 @@ Resources:
           - Sid: Allow DataScientist Role
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/DataScientistRole-${EnvironmentSuffix}'
+              AWS: !GetAtt DataScientistRole.Arn
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -534,6 +534,18 @@ Resources:
               - !Sub '${SecureS3Bucket.Arn}/*'
             Condition:
               StringEquals:
+                'aws:SourceVpce': !Ref S3VPCEndpoint
+          
+          # Deny access from outside VPC endpoint
+          - Sid: DenyAccessOutsideVPCEndpoint
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt SecureS3Bucket.Arn
+              - !Sub '${SecureS3Bucket.Arn}/*'
+            Condition:
+              StringNotEquals:
                 'aws:SourceVpce': !Ref S3VPCEndpoint
 
           # Note: CloudTrail service access is allowed above
