@@ -394,8 +394,8 @@ describe('ServerlessApp Integration Tests', () => {
       
       if (logGroupNames.length > 0) {
         // If log groups exist, verify they match expected patterns
-        const hasCreateUserLog = logGroupNames.some(name => name.includes('create-user-function'));
-        const hasGetUserLog = logGroupNames.some(name => name.includes('get-user-function'));
+        const hasCreateUserLog = logGroupNames.some(name => name?.includes('create-user-function'));
+        const hasGetUserLog = logGroupNames.some(name => name?.includes('get-user-function'));
         expect(hasCreateUserLog || hasGetUserLog).toBe(true);
       } else {
         // No log groups found - likely not deployed in test environment
@@ -416,7 +416,7 @@ describe('ServerlessApp Integration Tests', () => {
       
       if (logGroupNames.length > 0) {
         // If log groups exist, verify they match expected patterns
-        const hasApiLog = logGroupNames.some(name => name.includes('serverless-api') || name.includes('api'));
+        const hasApiLog = logGroupNames.some(name => name?.includes('serverless-api') || name?.includes('api'));
         expect(hasApiLog).toBe(true);
       } else {
         // No API Gateway log groups found - likely not deployed in test environment
