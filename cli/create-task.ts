@@ -83,6 +83,7 @@ function getLanguageChoices(platform: string) {
     return [
       { name: 'TypeScript', value: 'ts' },
       { name: 'Python', value: 'py' },
+      { name: 'Java', value: 'java' },
     ];
   }
   if (platform === 'tf') {
