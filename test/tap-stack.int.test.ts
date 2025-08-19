@@ -68,7 +68,7 @@ terraform {
 
   test('terraform validate passes with no errors', () => {
     expect(() =>
-      execSync('terraform validate -input=false -no-color', { cwd: tfDir, stdio: 'pipe' })
+      execSync('terraform validate -no-color', { cwd: tfDir, stdio: 'pipe' })
     ).not.toThrow();
   });
 
