@@ -389,8 +389,9 @@ class TapStack(pulumi.ComponentResource):
     import time
     unique_id = os.environ.get('PULUMI_ORG', 'unique')
     timestamp = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
-    random_suffix = str(python_random.randint(1000, 9999))  # Random 4-digit number
-    
+    random_suffix = str(python_random.randint(
+        1000, 9999))  # Random 4-digit number
+
     state_bucket = aws.s3.BucketV2(
         f"pulumi-state-{actual_env}",
         bucket=f"nova-pulumi-state-{actual_env}-{(primary_region or 'uswest2').replace('-', '')}-{unique_id}-{timestamp}-{random_suffix}",
@@ -854,13 +855,13 @@ def lambda_handler(event, context):
     # This provides automatic rollback capabilities without cross-account permissions
     if enable_rollback:
         # Create a rollback Lambda function that can revert to previous versions
-        rollback_function = aws.lambda_.Function(
-            f"rollback-function-{region_suffix}-{actual_env}",
-            runtime="python3.12",
-            handler="rollback.handler",
-            role=lambda_role.arn,
-            code=pulumi.AssetArchive({
-                "rollback.py": pulumi.StringAsset("""
+      rollback_function = aws.lambda_.Function(
+          f"rollback-function-{region_suffix}-{actual_env}",
+          runtime="python3.12",
+          handler="rollback.handler",
+          role=lambda_role.arn,
+          code=pulumi.AssetArchive({
+              "rollback.py": pulumi.StringAsset("""
 import boto3
 import json
 import os
@@ -911,35 +912,35 @@ def handler(event, context):
             })
         }
 """)
-            }),
-            environment=aws.lambda_.FunctionEnvironmentArgs(
-                variables={
-                    "FUNCTION_TO_ROLLBACK": lambda_function.name,
-                    "ARTIFACTS_BUCKET": self.artifacts_bucket.bucket,
-                }
-            ),
-            timeout=60,
-            memory_size=128,
-            tags=tags,
-            opts=ResourceOptions(parent=lambda_function, provider=provider),
-        )
+          }),
+          environment=aws.lambda_.FunctionEnvironmentArgs(
+              variables={
+                  "FUNCTION_TO_ROLLBACK": lambda_function.name,
+                  "ARTIFACTS_BUCKET": self.artifacts_bucket.bucket,
+              }
+          ),
+          timeout=60,
+          memory_size=128,
+          tags=tags,
+          opts=ResourceOptions(parent=lambda_function, provider=provider),
+      )
 
-        # Create rollback alarm that triggers the rollback function
-        rollback_alarm = aws.cloudwatch.MetricAlarm(
-            f"rollback-alarm-{region_suffix}-{actual_env}",
-            name=f"nova-rollback-alarm-{actual_env}-{region}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=1,
-            metric_name="Errors",
-            namespace="AWS/Lambda",
-            period=60,
-            statistic="Sum",
-            threshold=5,  # Trigger rollback after 5 errors in 1 minute
-            alarm_description=f"Trigger rollback for {region}",
-            alarm_actions=[rollback_function.arn],
-            tags=tags,
-            opts=ResourceOptions(parent=rollback_function, provider=provider),
-        )
+      # Create rollback alarm that triggers the rollback function
+      rollback_alarm = aws.cloudwatch.MetricAlarm(
+          f"rollback-alarm-{region_suffix}-{actual_env}",
+          name=f"nova-rollback-alarm-{actual_env}-{region}",
+          comparison_operator="GreaterThanThreshold",
+          evaluation_periods=1,
+          metric_name="Errors",
+          namespace="AWS/Lambda",
+          period=60,
+          statistic="Sum",
+          threshold=5,  # Trigger rollback after 5 errors in 1 minute
+          alarm_description=f"Trigger rollback for {region}",
+          alarm_actions=[rollback_function.arn],
+          tags=tags,
+          opts=ResourceOptions(parent=rollback_function, provider=provider),
+      )
 
     # Return only Pulumi resources, not primitive values
     result: Dict[str, pulumi.Resource] = {
