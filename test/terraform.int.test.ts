@@ -70,6 +70,12 @@ import axios from 'axios';
 type TfOutputValue = { sensitive: boolean; type: string; value: any };
 
 type StructuredOutputs = {
+  primary_alb_name: TfOutputValue;
+  secondary_alb_name: TfOutputValue;
+  primary_alb_arn: TfOutputValue;
+  secondary_alb_arn: TfOutputValue;
+  primary_health_check_id: TfOutputValue;
+  secondary_health_check_id: TfOutputValue;
   primary_alb_dns: TfOutputValue;
   secondary_alb_dns: TfOutputValue;
   rds_endpoint: TfOutputValue;
@@ -1064,7 +1070,7 @@ describe('AWS Infrastructure Integration Tests', () => {
       try {
         const primaryAlb = await elbClientPrimary.send(
           new DescribeLoadBalancersCommand({
-            Names: [outputs.primary_alb_dns.split('.')[0]],
+            LoadBalancerArns: [outputs.primary_alb_arn],
           })
         );
         infrastructureChecks.primaryAlb =
@@ -1072,12 +1078,15 @@ describe('AWS Infrastructure Integration Tests', () => {
 
         const secondaryAlb = await elbClientSecondary.send(
           new DescribeLoadBalancersCommand({
-            Names: [outputs.secondary_alb_dns.split('.')[0]],
+            LoadBalancerArns: [outputs.secondary_alb_arn],
           })
         );
         infrastructureChecks.secondaryAlb =
           secondaryAlb.LoadBalancers![0].State?.Code === 'active';
-      } catch (e) {}
+      } catch (e) {
+        // Best Practice: Log the error for easier debugging
+        console.error('Failed to describe ALBs in end-to-end test:', e);
+      }
 
       // Check ASGs
       try {
