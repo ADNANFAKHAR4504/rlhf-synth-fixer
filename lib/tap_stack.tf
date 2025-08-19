@@ -64,7 +64,6 @@ variable "ssh_public_key" {
   default     = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdummykeyfortests"
 }
 
-
 variable "instance_type_bastion" {
   description = "Instance type for bastion."
   type        = string
@@ -87,6 +86,12 @@ variable "availability_zone_count" {
   }
 }
 
+variable "unique_suffix" {
+  description = "Unique suffix for globally unique resource names"
+  type        = string
+  default     = "12345" # Change this to something unique
+}
+
 ############################
 # Locals
 ############################
@@ -104,8 +109,8 @@ locals {
   private2_cidr   = "10.0.3.0/24"
 
   # Bucket names must be globally unique. Add a suffix if desired.
-  data_bucket_name    = "${var.name_prefix}-data-bucket"
-  tfstate_bucket_name = "prod-tfstate-<your-unique-suffix>" # <-- change this
+  data_bucket_name    = "${var.name_prefix}-data-bucket-${var.unique_suffix}"
+  tfstate_bucket_name = "prod-tfstate-${var.unique_suffix}"
 }
 
 ############################
@@ -133,7 +138,7 @@ resource "aws_kms_key" "app" {
 }
 
 resource "aws_kms_alias" "app" {
-  name          = "alias/${var.name_prefix}-app-kms"
+  name          = "alias/${var.name_prefix}-app-kms-${var.unique_suffix}"
   target_key_id = aws_kms_key.app.key_id
 }
 
@@ -146,7 +151,7 @@ resource "aws_kms_key" "tfstate" {
 }
 
 resource "aws_kms_alias" "tfstate" {
-  name          = "alias/prod-tfstate-kms"
+  name          = "alias/prod-tfstate-kms-${var.unique_suffix}"
   target_key_id = aws_kms_key.tfstate.key_id
 }
 
@@ -265,7 +270,7 @@ resource "aws_route_table_association" "private_b_assoc" {
 
 # Bastion SG: SSH from a specific IP
 resource "aws_security_group" "bastion_sg" {
-  name        = "${var.name_prefix}-bastion-sg"
+  name        = "${var.name_prefix}-bastion-sg-${var.unique_suffix}"
   description = "Allow SSH from allowed CIDR"
   vpc_id      = aws_vpc.main.id
 
@@ -289,7 +294,7 @@ resource "aws_security_group" "bastion_sg" {
 
 # Private EC2 SG: SSH only from bastion SG
 resource "aws_security_group" "private_ec2_sg" {
-  name        = "${var.name_prefix}-private-ec2-sg"
+  name        = "${var.name_prefix}-private-ec2-sg-${var.unique_suffix}"
   description = "Restrict SSH to bastion; allow egress"
   vpc_id      = aws_vpc.main.id
 
@@ -315,8 +320,13 @@ resource "aws_security_group" "private_ec2_sg" {
 # Key Pair for SSH
 ############################
 
+# Use data source to reference existing key pair instead of creating new one
+data "aws_key_pair" "existing" {
+  key_name = "prod-key"
+}
+
 resource "aws_key_pair" "main" {
-  key_name   = "${var.name_prefix}-key"
+  key_name   = "${var.name_prefix}-key-${var.unique_suffix}" # Unique name
   public_key = var.ssh_public_key
   tags       = merge(local.tags, { Name = "${var.name_prefix}-key" })
 }
@@ -326,7 +336,7 @@ resource "aws_key_pair" "main" {
 ############################
 
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.name_prefix}-ec2-role"
+  name = "${var.name_prefix}-ec2-role-${var.unique_suffix}" # Unique name
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -339,7 +349,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_policy" "s3_access" {
-  name = "${var.name_prefix}-s3-access"
+  name = "${var.name_prefix}-s3-access-${var.unique_suffix}" # Unique name
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -363,7 +373,7 @@ resource "aws_iam_role_policy_attachment" "attach_s3" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.name_prefix}-ec2-profile"
+  name = "${var.name_prefix}-ec2-profile-${var.unique_suffix}" # Unique name
   role = aws_iam_role.ec2_role.name
   tags = local.tags
 }
@@ -490,7 +500,7 @@ resource "aws_s3_bucket_policy" "tfstate" {
 
 # DynamoDB table for state locking (best practice)
 resource "aws_dynamodb_table" "tf_locks" {
-  name         = "prod-tf-locks"
+  name         = "prod-tf-locks-${var.unique_suffix}" # Unique name
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -521,7 +531,7 @@ resource "aws_instance" "bastion" {
   instance_type               = var.instance_type_bastion
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.bastion_sg.id]
-  key_name                    = aws_key_pair.main.key_name
+  key_name                    = aws_key_pair.main.key_name # Use the new unique key
   associate_public_ip_address = true
   monitoring                  = true # Detailed monitoring
 
@@ -543,7 +553,7 @@ resource "aws_instance" "private_ec2" {
   instance_type          = var.instance_type_private
   subnet_id              = aws_subnet.private_a.id
   vpc_security_group_ids = [aws_security_group.private_ec2_sg.id]
-  key_name               = aws_key_pair.main.key_name
+  key_name               = aws_key_pair.main.key_name # Use the new unique key
   iam_instance_profile   = aws_iam_instance_profile.ec2_profile.name
   associate_public_ip_address = false
   monitoring                  = true # Detailed monitoring
