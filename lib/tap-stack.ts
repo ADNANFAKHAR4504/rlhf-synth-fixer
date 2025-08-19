@@ -425,7 +425,7 @@ export class TapStack extends cdk.Stack {
 
     snsTopic.addToResourcePolicy(
       new iam.PolicyStatement({
-        sid: 'AllowAWSServicesOnly',
+        sid: 'AllowCloudWatchPublish',
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal('cloudwatch.amazonaws.com')],
         actions: ['sns:Publish'],
@@ -435,20 +435,21 @@ export class TapStack extends cdk.Stack {
 
     snsTopic.addToResourcePolicy(
       new iam.PolicyStatement({
-        sid: 'DenyUnauthorizedAccess',
-        effect: iam.Effect.DENY,
-        principals: [new iam.AnyPrincipal()],
-        actions: ['sns:*'],
+        sid: 'AllowEventsPublish',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('events.amazonaws.com')],
+        actions: ['sns:Publish'],
         resources: [snsTopic.topicArn],
-        conditions: {
-          StringNotEquals: {
-            'aws:PrincipalServiceName': [
-              'cloudwatch.amazonaws.com',
-              'events.amazonaws.com',
-              'lambda.amazonaws.com',
-            ],
-          },
-        },
+      })
+    );
+
+    snsTopic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowLambdaPublish',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('lambda.amazonaws.com')],
+        actions: ['sns:Publish'],
+        resources: [snsTopic.topicArn],
       })
     );
 
