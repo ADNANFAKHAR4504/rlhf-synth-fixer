@@ -1,25 +1,25 @@
 // Integration tests for secure Terraform stack with IAM least privilege for sensitive S3 buckets
-import fs from 'fs';
-import { 
-  S3Client, 
-  GetBucketVersioningCommand, 
+import {
+  DescribeTableCommand,
+  DynamoDBClient
+} from '@aws-sdk/client-dynamodb';
+import {
+  GetPolicyCommand,
+  GetRoleCommand,
+  GetUserCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
+  ListAttachedUserPoliciesCommand
+} from '@aws-sdk/client-iam';
+import {
   GetBucketEncryptionCommand,
   GetBucketPolicyCommand,
+  GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
-  HeadBucketCommand
+  HeadBucketCommand,
+  S3Client
 } from '@aws-sdk/client-s3';
-import { 
-  DynamoDBClient, 
-  DescribeTableCommand 
-} from '@aws-sdk/client-dynamodb';
-import { 
-  IAMClient, 
-  GetUserCommand,
-  GetRoleCommand,
-  GetPolicyCommand,
-  ListAttachedUserPoliciesCommand,
-  ListAttachedRolePoliciesCommand
-} from '@aws-sdk/client-iam';
+import fs from 'fs';
 
 // Configuration - These outputs come from cfn-outputs after terraform apply
 const outputs = JSON.parse(
@@ -151,7 +151,7 @@ describe('Secure Terraform Stack Integration Tests', () => {
       // Verify table exists and has correct configuration
       const tableResponse = await dynamoClient.send(new DescribeTableCommand({ TableName: tableName }));
       expect(tableResponse.Table?.TableStatus).toBe('ACTIVE');
-      expect(tableResponse.Table?.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(tableResponse.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
       expect(tableResponse.Table?.KeySchema?.[0]?.AttributeName).toBe('LockID');
       expect(tableResponse.Table?.KeySchema?.[0]?.KeyType).toBe('HASH');
     });
