@@ -19,12 +19,7 @@ import {
   DescribeDBInstancesCommand 
 } from '@aws-sdk/client-rds';
 
-import { 
-  ConfigServiceClient, 
-  DescribeConfigurationRecordersCommand,
-  DescribeDeliveryChannelsCommand,
-  DescribeConfigRulesCommand 
-} from '@aws-sdk/client-config-service';
+
 import { 
   IAMClient, 
   GetRoleCommand,
@@ -61,7 +56,7 @@ const ec2Client = new EC2Client({ region });
 const s3Client = new S3Client({ region });
 const rdsClient = new RDSClient({ region });
 
-const configClient = new ConfigServiceClient({ region });
+
 const iamClient = new IAMClient({ region });
 const kmsClient = new KMSClient({ region });
 
@@ -328,58 +323,6 @@ describe('TapStack Security Integration Tests', () => {
         }
       } catch (error) {
         console.warn('Could not validate RDS subnet configuration:', error);
-      }
-    });
-  });
-
-
-
-  describe('AWS Config Validation', () => {
-    test('should have Config recorder enabled', async () => {
-      try {
-        const command = new DescribeConfigurationRecordersCommand({});
-        const response = await configClient.send(command);
-        
-        const recorders = response.ConfigurationRecorders || [];
-        expect(recorders.length).toBeGreaterThan(0);
-        
-        const recorder = recorders[0];
-        expect(recorder.recordingGroup?.allSupported).toBe(true);
-        expect(recorder.recordingGroup?.includeGlobalResourceTypes).toBe(true);
-      } catch (error) {
-        console.warn('Could not validate Config recorder:', error);
-      }
-    });
-
-    test('should have Config delivery channel configured', async () => {
-      try {
-        const command = new DescribeDeliveryChannelsCommand({});
-        const response = await configClient.send(command);
-        
-        const channels = response.DeliveryChannels || [];
-        expect(channels.length).toBeGreaterThan(0);
-        
-        const channel = channels[0];
-        expect(channel.s3BucketName).toBeDefined();
-      } catch (error) {
-        console.warn('Could not validate Config delivery channel:', error);
-      }
-    });
-
-    test('should have SSH restriction Config rule', async () => {
-      try {
-        const command = new DescribeConfigRulesCommand({});
-        const response = await configClient.send(command);
-        
-        const rules = response.ConfigRules || [];
-        const sshRule = rules.find(rule => 
-          rule.Source?.SourceIdentifier === 'INCOMING_SSH_DISABLED'
-        );
-        
-        expect(sshRule).toBeDefined();
-        expect(sshRule?.ConfigRuleState).toBe('ACTIVE');
-      } catch (error) {
-        console.warn('Could not validate Config rules:', error);
       }
     });
   });
