@@ -93,7 +93,7 @@ Resources:
           - Sid: Allow use of the key
             Effect: Allow
             Principal:
-              AWS: !GetAtt EC2InstanceRole.Arn
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:role/*"
             Action:
               - kms:DescribeKey
               - kms:Encrypt
@@ -105,7 +105,7 @@ Resources:
           - Sid: Allow attachment of persistent resources
             Effect: Allow
             Principal:
-              AWS: !GetAtt EC2InstanceRole.Arn
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:role/*"
             Action:
               - kms:CreateGrant
               - kms:ListGrants
