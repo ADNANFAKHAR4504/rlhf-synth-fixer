@@ -190,16 +190,13 @@ export class TapStack extends TerraformStack {
     );
 
     // 8. Get database credentials from AWS Secrets Manager
-    const dbCredentials = new DataAwsSecretsmanagerSecretVersion(
+    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
       this,
-      'db-credentials',
+      'db-password-secret',
       {
-        secretId: 'prod/database/credentials',
+        secretId: 'my-db-password',
       }
     );
-
-    // Parse the JSON secret to extract username and password
-    const dbCredentialsJson = `jsondecode(${dbCredentials.secretString})`;
 
     // 9. Create RDS instance in private subnets with encryption
     const rdsModule = new RdsModule(
@@ -209,11 +206,11 @@ export class TapStack extends TerraformStack {
         identifier: `secure-app-db-${environmentSuffix}`,
         engine: 'mysql',
         engineVersion: '8.0',
-        instanceClass: 'db.t3.micro',
+        instanceClass: 'db.t3.medium',
         allocatedStorage: 20,
         dbName: 'secureappdb',
-        username: `\${${dbCredentialsJson}.username}`,
-        password: `\${${dbCredentialsJson}.password}`,
+        username: 'admin',
+        password: dbPasswordSecret.secretString,
         vpcSecurityGroupIds: [rdsSecurityGroupModule.securityGroup.id],
         dbSubnetGroupName: `secure-app-db-subnet-group-${environmentSuffix}`,
         kmsKeyId: kmsModule.kmsKey.arn,
@@ -259,7 +256,7 @@ yum install -y amazon-cloudwatch-agent
         subnetId: subnet.id,
         securityGroupIds: [ec2SecurityGroupModule.securityGroup.id],
         userData: Buffer.from(userData).toString('base64'),
-        keyName: 'prod-key', // Replace with your actual key pair name
+        keyName: 'turing-key', // Replace with your actual key pair name
       });
 
       ec2Instances.push(ec2Module);
