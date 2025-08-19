@@ -400,7 +400,7 @@
                 ],
                 "SecurityGroupEgress": [
                     {
-                        "IpProtocol": -1,
+                        "IpProtocol": "-1",
                         "CidrIp": "0.0.0.0/0",
                         "Description": "All outbound traffic"
                     }
