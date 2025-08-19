@@ -18,7 +18,7 @@ output "nat_gateway_id" {
 
 output "kms_key_arn" {
   description = "ARN of the KMS key"
-  value       = data.aws_kms_key.main.arn
+  value       = aws_kms_key.main.arn
 }
 
 output "s3_data_bucket_name" {
@@ -89,10 +89,15 @@ output "vpc_endpoint_sg_id" {
 
 output "kms_key_id" {
   description = "ID of the KMS key"
-  value       = data.aws_kms_key.main.id
+  value       = aws_kms_key.main.id
 }
 
 output "vpc_endpoint_s3_id" {
   description = "ID of the S3 VPC Endpoint"
   value       = aws_vpc_endpoint.s3.id
+}
+
+output "cloudtrail_arn" {
+  description = "ARN of the CloudTrail"
+  value       = aws_cloudtrail.main.arn
 }

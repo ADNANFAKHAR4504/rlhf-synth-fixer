@@ -341,8 +341,15 @@ resource "aws_security_group" "vpc_endpoint" {
 ######################
 
 # KMS Key for encryption
-data "aws_kms_key" "main" {
-  key_id = "alias/${var.project_name}-key"
+resource "aws_kms_key" "main" {
+  description             = "KMS key for ${var.project_name}"
+  deletion_window_in_days = 10
+  enable_key_rotation     = true
+}
+
+resource "aws_kms_alias" "main" {
+  name          = "alias/${var.project_name}-key"
+  target_key_id = aws_kms_key.main.key_id
 }
 
 
@@ -373,6 +380,17 @@ resource "aws_s3_bucket" "data" {
   }
 }
 
+resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
+  bucket = aws_s3_bucket.data.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.main.arn
+    }
+  }
+}
+
 
 resource "random_string" "bucket_suffix" {
   length  = 8
@@ -381,8 +399,47 @@ resource "random_string" "bucket_suffix" {
 }
 
 # IAM User with MFA requirement
-data "aws_iam_user" "app_user" {
-  user_name = "${var.project_name}-app-user"
+resource "aws_iam_user" "app_user" {
+  name = "${var.project_name}-app-user"
+  path = "/"
+}
+
+resource "aws_iam_policy" "mfa_policy" {
+  name        = "${var.project_name}-mfa-policy"
+  description = "Enforces MFA for all IAM users"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid      = "AllowAllActionsWithMFA",
+        Effect   = "Allow",
+        Action   = "*",
+        Resource = "*",
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid      = "DenyAllActionsWithoutMFA",
+        Effect   = "Deny",
+        Action   = "*",
+        Resource = "*",
+        Condition = {
+          BoolIfExists = {
+            "aws:MultiFactorAuthPresent" = "false"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "mfa_attachment" {
+  user       = aws_iam_user.app_user.name
+  policy_arn = aws_iam_policy.mfa_policy.arn
 }
 
 # IAM Role for EC2
@@ -406,4 +463,52 @@ resource "aws_iam_role" "ec2" {
 resource "aws_iam_instance_profile" "ec2" {
   name = "${var.project_name}-ec2-instance-profile"
   role = aws_iam_role.ec2.name
+}
+
+# S3 bucket for CloudTrail logs
+resource "aws_s3_bucket" "cloudtrail_logs" {
+  bucket = "${lower(var.project_name)}-cloudtrail-logs-${random_string.bucket_suffix.result}"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail_policy" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid = "AWSCloudTrailAclCheck",
+        Effect = "Allow",
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        },
+        Action = "s3:GetBucketAcl",
+        Resource = aws_s3_bucket.cloudtrail_logs.arn
+      },
+      {
+        Sid = "AWSCloudTrailWrite",
+        Effect = "Allow",
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        },
+        Action = "s3:PutObject",
+        Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_cloudtrail" "main" {
+  name                          = "${var.project_name}-trail"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.id
+  s3_key_prefix                 = "cloudtrail"
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_logging                = true
+  kms_key_id                    = aws_kms_key.main.arn
 }
