@@ -43,7 +43,8 @@
                         "ExistingKMSKeyARN",
                         "UseExistingEC2Role",
                         "ExistingEC2RoleName",
-                        "CreateNATGateway"
+                        "CreateNATGateway",
+                        "CreateS3Bucket"
                     ]
                 }
             ],
@@ -89,6 +90,9 @@
                 },
                 "CreateNATGateway": {
                     "default": "Create NAT Gateway?"
+                },
+                "CreateS3Bucket": {
+                    "default": "Create S3 Bucket?"
                 }
             }
         },
@@ -219,6 +223,15 @@
                 "no"
             ],
             "Description": "Select \"yes\" to create a NAT Gateway (may hit service limits). Select \"no\" to use Internet Gateway only."
+        },
+        "CreateS3Bucket": {
+            "Type": "String",
+            "Default": "yes",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to create a new S3 bucket for application logs. Select \"no\" to skip bucket creation."
         }
     },
     "Mappings": {
@@ -268,6 +281,14 @@
             "Fn::Equals": [
                 {
                     "Ref": "CreateNATGateway"
+                },
+                "yes"
+            ]
+        },
+        "CreateNewS3Bucket": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateS3Bucket"
                 },
                 "yes"
             ]
@@ -504,15 +525,6 @@
         "NatGatewayEIP": {
             "Type": "AWS::EC2::EIP",
             "Condition": "CreateNATGateway",
-            "DependsOn": {
-                "Fn::If": [
-                    "CreateNewVPC",
-                    "VPCGatewayAttachment",
-                    {
-                        "Ref": "AWS::NoValue"
-                    }
-                ]
-            },
             "Properties": {
                 "Domain": "vpc",
                 "Tags": [
@@ -942,20 +954,6 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:PutObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:s3:::${ApplicationLogsBucket}/*"
-                                    },
-                                    "Condition": {
-                                        "StringEquals": {
-                                            "s3:x-amz-acl": "bucket-owner-full-control"
-                                        }
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
                                         "logs:CreateLogStream",
                                         "logs:PutLogEvents",
                                         "logs:DescribeLogStreams"
@@ -994,8 +992,50 @@
                 ]
             }
         },
+        "EC2S3Policy": {
+            "Type": "AWS::IAM::Policy",
+            "Condition": "CreateNewS3Bucket",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "${AWS::StackName}-EC2-S3-Policy"
+                },
+                "Roles": [
+                    {
+                        "Fn::If": [
+                            "CreateNewEC2Role",
+                            {
+                                "Ref": "EC2Role"
+                            },
+                            {
+                                "Ref": "ExistingEC2RoleName"
+                            }
+                        ]
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:PutObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${ApplicationLogsBucket}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "ApplicationLogsBucket": {
             "Type": "AWS::S3::Bucket",
+            "Condition": "CreateNewS3Bucket",
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
@@ -1450,7 +1490,13 @@
         "ApplicationLogsBucketName": {
             "Description": "The name of the S3 bucket for application logs.",
             "Value": {
-                "Ref": "ApplicationLogsBucket"
+                "Fn::If": [
+                    "CreateNewS3Bucket",
+                    {
+                        "Ref": "ApplicationLogsBucket"
+                    },
+                    "No bucket created"
+                ]
             },
             "Export": {
                 "Name": {

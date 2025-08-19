@@ -51,6 +51,7 @@ describe('TapStack CloudFormation Template', () => {
       'UseExistingEC2Role',
       'ExistingEC2RoleName',
       'CreateNATGateway',
+      'CreateS3Bucket',
     ];
 
     test('should have all required parameters', () => {
@@ -191,6 +192,7 @@ describe('TapStack CloudFormation Template', () => {
       'CreateNewEC2Role',
       'CreateNewDatabase',
       'CreateNATGateway',
+      'CreateNewS3Bucket',
     ];
 
     test('should have all required conditions', () => {
@@ -231,6 +233,13 @@ describe('TapStack CloudFormation Template', () => {
       const condition = template.Conditions?.CreateNATGateway;
       expect(condition['Fn::Equals']).toBeDefined();
       expect(condition['Fn::Equals'][0]['Ref']).toBe('CreateNATGateway');
+      expect(condition['Fn::Equals'][1]).toBe('yes');
+    });
+
+    test('CreateNewS3Bucket condition should check CreateS3Bucket parameter', () => {
+      const condition = template.Conditions?.CreateNewS3Bucket;
+      expect(condition['Fn::Equals']).toBeDefined();
+      expect(condition['Fn::Equals'][0]['Ref']).toBe('CreateS3Bucket');
       expect(condition['Fn::Equals'][1]).toBe('yes');
     });
   });
@@ -353,18 +362,11 @@ describe('TapStack CloudFormation Template', () => {
         );
       });
 
-      test('NAT Gateway EIP should have conditional dependency', () => {
+      test('NAT Gateway EIP should be conditional', () => {
         const natGatewayEIP = template.Resources.NatGatewayEIP;
         expect(natGatewayEIP.Type).toBe('AWS::EC2::EIP');
         expect(natGatewayEIP.Condition).toBe('CreateNATGateway');
-        expect(natGatewayEIP.DependsOn['Fn::If']).toBeDefined();
-        expect(natGatewayEIP.DependsOn['Fn::If'][0]).toBe('CreateNewVPC');
-        expect(natGatewayEIP.DependsOn['Fn::If'][1]).toBe(
-          'VPCGatewayAttachment'
-        );
-        expect(natGatewayEIP.DependsOn['Fn::If'][2]['Ref']).toBe(
-          'AWS::NoValue'
-        );
+        expect(natGatewayEIP.Properties.Domain).toBe('vpc');
       });
 
       test('Route tables should be conditional', () => {
@@ -459,9 +461,10 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     describe('Storage Resources', () => {
-      test('ApplicationLogsBucket should have correct properties', () => {
+      test('ApplicationLogsBucket should be conditional and have correct properties', () => {
         const bucket = template.Resources.ApplicationLogsBucket;
         expect(bucket.Type).toBe('AWS::S3::Bucket');
+        expect(bucket.Condition).toBe('CreateNewS3Bucket');
         expect(bucket.DeletionPolicy).toBe('Retain');
         expect(bucket.Properties.VersioningConfiguration.Status).toBe(
           'Enabled'
@@ -635,10 +638,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
 
-    test('ApplicationLogsBucketName output should reference bucket', () => {
+    test('ApplicationLogsBucketName output should be conditional', () => {
       const output = template.Outputs.ApplicationLogsBucketName;
       expect(output.Description).toBeDefined();
-      expect(output.Value['Ref']).toBe('ApplicationLogsBucket');
+      expect(output.Value['Fn::If']).toBeDefined();
+      expect(output.Value['Fn::If'][0]).toBe('CreateNewS3Bucket');
+      expect(output.Value['Fn::If'][1]['Ref']).toBe('ApplicationLogsBucket');
+      expect(output.Value['Fn::If'][2]).toBe('No bucket created');
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
 
@@ -680,7 +686,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(14);
+      expect(parameterCount).toBe(15);
     });
 
     test('should have correct number of outputs', () => {
@@ -690,7 +696,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of conditions', () => {
       const conditionCount = Object.keys(template.Conditions || {}).length;
-      expect(conditionCount).toBe(5);
+      expect(conditionCount).toBe(6);
     });
   });
 

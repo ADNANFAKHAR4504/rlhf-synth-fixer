@@ -29,6 +29,7 @@ Metadata:
           - UseExistingEC2Role
           - ExistingEC2RoleName
           - CreateNATGateway
+          - CreateS3Bucket
     ParameterLabels:
       UseExistingVPC:
         default: 'Use Existing VPC?'
@@ -58,6 +59,8 @@ Metadata:
         default: 'Existing EC2 Role Name'
       CreateNATGateway:
         default: 'Create NAT Gateway?'
+      CreateS3Bucket:
+        default: 'Create S3 Bucket?'
   cfn-lint:
     config:
       ignore_checks:
@@ -152,6 +155,11 @@ Parameters:
     Default: 'no'
     AllowedValues: ['yes', 'no']
     Description: 'Select "yes" to create a NAT Gateway (may hit service limits). Select "no" to use Internet Gateway only.'
+  CreateS3Bucket:
+    Type: String
+    Default: 'yes'
+    AllowedValues: ['yes', 'no']
+    Description: 'Select "yes" to create a new S3 bucket for application logs. Select "no" to skip bucket creation.'
 
 Mappings:
   RegionMap:
@@ -166,6 +174,7 @@ Conditions:
   CreateNewEC2Role: !Equals [!Ref UseExistingEC2Role, 'no']
   CreateNewDatabase: !Equals [!Ref CreateDatabase, 'yes']
   CreateNATGateway: !Equals [!Ref CreateNATGateway, 'yes']
+  CreateNewS3Bucket: !Equals [!Ref CreateS3Bucket, 'yes']
 
 Resources:
   ###############################################################################
@@ -258,7 +267,6 @@ Resources:
   NatGatewayEIP:
     Type: AWS::EC2::EIP
     Condition: CreateNATGateway
-    DependsOn: !If [CreateNewVPC, VPCGatewayAttachment, !Ref 'AWS::NoValue']
     Properties:
       Domain: vpc
       Tags:
@@ -498,13 +506,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
-                Condition:
-                  StringEquals:
-                    s3:x-amz-acl: bucket-owner-full-control
-              - Effect: Allow
-                Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
@@ -523,11 +524,30 @@ Resources:
       Roles:
         - !Ref EC2Role
 
+  EC2S3Policy:
+    Type: AWS::IAM::Policy
+    Condition: CreateNewS3Bucket
+    Properties:
+      PolicyName: !Sub '${AWS::StackName}-EC2-S3-Policy'
+      Roles:
+        - !If [CreateNewEC2Role, !Ref EC2Role, !Ref ExistingEC2RoleName]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
   ###############################################################################
   # S3 BUCKET FOR APPLICATION LOGS
   ###############################################################################
   ApplicationLogsBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateNewS3Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -735,7 +755,8 @@ Outputs:
       Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
   ApplicationLogsBucketName:
     Description: The name of the S3 bucket for application logs.
-    Value: !Ref ApplicationLogsBucket
+    Value:
+      !If [CreateNewS3Bucket, !Ref ApplicationLogsBucket, 'No bucket created']
     Export:
       Name: !Sub '${AWS::StackName}-ApplicationLogsBucket'
   KMSKeyArn:
