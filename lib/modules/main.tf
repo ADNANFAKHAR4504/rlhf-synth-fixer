@@ -541,3 +541,79 @@ resource "null_resource" "delete_backup_vault" {
     command = "aws backup list-recovery-points-by-backup-vault --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --region us-east-1 --output json | jq -r '.RecoveryPoints[].RecoveryPointArn' | xargs -I {} aws backup delete-recovery-point --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --recovery-point-arn {} --region us-east-1 && aws backup delete-backup-vault --backup-vault-name tap-app-dev-070301-qcf7m9d3-backup-vault --region us-east-1"
   }
 }
+
+output "vpc_id" {
+  value = aws_vpc.main.id
+}
+
+output "vpc_cidr" {
+  value = aws_vpc.main.cidr_block
+}
+
+output "public_subnet_ids" {
+  value = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  value = aws_subnet.private[*].id
+}
+
+output "private_route_table_ids" {
+  value = aws_route_table.private[*].id
+}
+
+output "internet_gateway_id" {
+  value = aws_internet_gateway.main.id
+}
+
+output "nat_gateway_id" {
+  value = aws_nat_gateway.main.id
+}
+
+output "ec2_sg_id" {
+  value = aws_security_group.ec2.id
+}
+
+output "alb_sg_id" {
+  value = aws_security_group.alb.id
+}
+
+output "rds_sg_id" {
+  value = aws_security_group.rds.id
+}
+
+output "vpc_endpoint_sg_id" {
+  value = aws_security_group.vpc_endpoint.id
+}
+
+output "s3_data_bucket_name" {
+  value = aws_s3_bucket.data.bucket
+}
+
+output "s3_data_bucket_arn" {
+  value = aws_s3_bucket.data.arn
+}
+
+output "s3_logs_bucket_name" {
+  value = aws_s3_bucket.logs.bucket
+}
+
+output "s3_logs_bucket_arn" {
+  value = aws_s3_bucket.logs.arn
+}
+
+output "kms_key_id" {
+  value = data.aws_kms_key.main.key_id
+}
+
+output "kms_key_arn" {
+  value = data.aws_kms_key.main.arn
+}
+
+output "vpc_endpoint_s3_id" {
+  value = aws_vpc_endpoint.s3.id
+}
+
+output "ec2_instance_profile_name" {
+  value = "" # This is a placeholder, as there is no instance profile defined in the module
+}
