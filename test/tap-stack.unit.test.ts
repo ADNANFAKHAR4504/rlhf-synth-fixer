@@ -87,7 +87,7 @@ describe('ServerlessApp CloudFormation Template Unit Tests', () => {
     test(isProdConditionTestName, () => {
       expect(template.Conditions.IsProd).toBeDefined();
       expect(template.Conditions.IsProd).toEqual({
-        "Fn::Equals": [{ "Ref": "Environment" }, "prod"]
+        "Equals": [{ "Ref": "Environment" }, "prod"]
       });
     });
   });
@@ -108,7 +108,7 @@ describe('ServerlessApp CloudFormation Template Unit Tests', () => {
       expect(template.Outputs.ApiEndpoint).toBeDefined();
       const output = template.Outputs.ApiEndpoint;
       expect(output.Value).toBeDefined();
-      expect(output.Value['Fn::Sub']).toContain('ServerlessRestApi');
+      expect(output.Value['Sub']).toContain('ServerlessRestApi');
     });
   });
 
@@ -118,8 +118,9 @@ describe('ServerlessApp CloudFormation Template Unit Tests', () => {
       expect(template.Resources.CreateUserFunction).toBeDefined();
       const func = template.Resources.CreateUserFunction;
       expect(func.Type).toBe('AWS::Serverless::Function');
-      expect(func.Properties.Handler).toBe('app.lambda_handler');
-      expect(func.Properties.CodeUri).toBe('src/create_user/');
+      expect(func.Properties.Handler).toBe('index.lambda_handler');
+      expect(func.Properties.InlineCode).toBeDefined();
+      expect(func.Properties.CodeUri).toBeUndefined();
       expect(func.Properties.DeadLetterQueue.Type).toBe('SQS');
     });
 
@@ -128,8 +129,9 @@ describe('ServerlessApp CloudFormation Template Unit Tests', () => {
       expect(template.Resources.GetUserFunction).toBeDefined();
       const func = template.Resources.GetUserFunction;
       expect(func.Type).toBe('AWS::Serverless::Function');
-      expect(func.Properties.Handler).toBe('app.lambda_handler');
-      expect(func.Properties.CodeUri).toBe('src/get_user/');
+      expect(func.Properties.Handler).toBe('index.lambda_handler');
+      expect(func.Properties.InlineCode).toBeDefined();
+      expect(func.Properties.CodeUri).toBeUndefined();
       expect(func.Properties.DeadLetterQueue.Type).toBe('SQS');
     });
 
@@ -332,7 +334,7 @@ describe('ServerlessApp CloudFormation Template Unit Tests', () => {
       expect(template.Outputs.CreateUserFunctionArn).toBeDefined();
       const output = template.Outputs.CreateUserFunctionArn;
       expect(output.Description).toBe('CreateUserFunction ARN');
-      expect(output.Value).toEqual({ "Fn::GetAtt": ["CreateUserFunction", "Arn"] });
+      expect(output.Value).toEqual({ "GetAtt": "CreateUserFunction.Arn" });
     });
 
     const getUserFunctionArnOutputTestName = generateUniqueTestName('get-user-function-arn-output');
@@ -340,7 +342,7 @@ describe('ServerlessApp CloudFormation Template Unit Tests', () => {
       expect(template.Outputs.GetUserFunctionArn).toBeDefined();
       const output = template.Outputs.GetUserFunctionArn;
       expect(output.Description).toBe('GetUserFunction ARN');
-      expect(output.Value).toEqual({ "Fn::GetAtt": ["GetUserFunction", "Arn"] });
+      expect(output.Value).toEqual({ "GetAtt": "GetUserFunction.Arn" });
     });
 
     const userTableNameOutputTestName = generateUniqueTestName('user-table-name-output');
@@ -356,7 +358,7 @@ describe('ServerlessApp CloudFormation Template Unit Tests', () => {
       expect(template.Outputs.UserTableArn).toBeDefined();
       const output = template.Outputs.UserTableArn;
       expect(output.Description).toBe('DynamoDB User Table ARN');
-      expect(output.Value).toEqual({ "Fn::GetAtt": ["UserTable", "Arn"] });
+      expect(output.Value).toEqual({ "GetAtt": "UserTable.Arn" });
     });
   });
 
