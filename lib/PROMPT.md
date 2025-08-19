@@ -1,6 +1,6 @@
 Here’s a more natural, human-written prompt you can paste into Claude:
 
-I’m wiring up AWS IAM with Terraform and I need production-ready HCL that’s secure, audit-friendly, and easy to extend. Please write the code so it passes SOC 2/GDPR scrutiny and follows least-privilege by default—no blanket wildcards; scope actions to specific resources and use `Condition` where it makes sense. Tag every IAM resource for auditability with `owner`, `purpose`, and `env`, and use a consistent `Name`. All roles and policy names should start with `corp-`. The estate spans multiple AWS accounts and two regions (us-east-1 and eu-west-1), and some roles will be assumed cross-account (think `assume_role` with an optional external ID).
+I’m wiring up AWS IAM with Terraform and I need production-ready HCL that’s secure, audit-friendly, and easy to extend. Please write the code so it passes SOC 2/GDPR scrutiny and follows least-privilege by default—no blanket wildcards; scope actions to specific resources and use `Condition` where it makes sense. Tag every IAM resource for auditability with `owner`, `purpose`, and `env`, and use a consistent `Name`. All roles and policy names should start with `corp-`. The estate span multiple AWS accounts and two regions (us-east-1 and eu-west-1), and some roles will be assumed cross-account (think `assume_role` with an optional external ID).
 
 Keep the repo simple: Terraform v1.0+ with the AWS provider, and put everything in exactly two files at the root—`provider.tf` and `tap_stack.tf`. No extra folders or files, no Terragrunt.
 
