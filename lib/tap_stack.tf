@@ -436,7 +436,7 @@ resource "aws_iam_role_policy_attachment" "attach_app_kms" {
 }
 
 resource "aws_iam_instance_profile" "app_profile" {
-  name = "${local.name_prefix}-apps-instance-profile"
+  name = "${local.name_prefix}-app-instance-profile-0001"
   role = aws_iam_role.app_role.name
 
   tags = merge(local.common_tags, {
