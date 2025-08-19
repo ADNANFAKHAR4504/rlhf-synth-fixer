@@ -36,6 +36,18 @@ let outputs: any = {};
 
 if (fs.existsSync(outputsPath)) {
   outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+  
+  // Parse string outputs that should be arrays
+  const arrayFields = ['public_subnet_ids', 'private_subnet_ids'];
+  arrayFields.forEach(field => {
+    if (outputs[field] && typeof outputs[field] === 'string') {
+      try {
+        outputs[field] = JSON.parse(outputs[field]);
+      } catch (e) {
+        console.warn(`Failed to parse ${field} as JSON:`, outputs[field]);
+      }
+    }
+  });
 }
 
 // AWS clients

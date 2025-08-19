@@ -66,6 +66,33 @@ terraform plan -lock=false -out=tfplan
 echo "🚀 Applying Terraform plan..."
 terraform apply -auto-approve -lock=false tfplan
 
+# Generate outputs for integration tests
+echo "📊 Generating outputs for integration tests..."
+terraform output -json > ../tf-outputs/terraform-outputs.json
+
+# Create the flat outputs format expected by tests
+echo "🔨 Converting outputs to format expected by integration tests..."
+cd ..
+mkdir -p cfn-outputs
+
+# Convert Terraform JSON outputs to flat format
+node -e "
+const fs = require('fs');
+const terraformOutputs = JSON.parse(fs.readFileSync('tf-outputs/terraform-outputs.json', 'utf8'));
+
+const flatOutputs = {};
+for (const [key, value] of Object.entries(terraformOutputs)) {
+    // Extract the actual value from Terraform output format
+    flatOutputs[key] = value.value;
+}
+
+// Write to the file the tests expect
+fs.writeFileSync('cfn-outputs/flat-outputs.json', JSON.stringify(flatOutputs, null, 2));
+console.log('✅ Generated flat-outputs.json with', Object.keys(flatOutputs).length, 'outputs');
+"
+
+cd lib
+
 echo ""
 echo "🎉 Deployment completed successfully!"
 echo ""
