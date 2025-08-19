@@ -93,6 +93,9 @@ Parameters:
     Description: 'ARN of the ACM SSL/TLS certificate for the Application Load Balancer.'
     Default: 'arn:aws:acm:us-east-2:718240086340:certificate/10a6769d-2d1b-4baf-8da1-63e0373ef582'
 
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'production']
+
 Resources:
   # ==============================================
   # KMS KEY FOR ENCRYPTION
@@ -456,7 +459,7 @@ Resources:
       BackupRetentionPeriod: 30
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      DeletionProtection: true
+      DeletionProtection: !If [IsProduction, true, false]
       EnableCloudwatchLogsExports:
         - 'error'
         - 'general'
