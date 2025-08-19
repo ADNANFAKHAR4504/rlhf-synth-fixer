@@ -158,7 +158,7 @@ describe('LIVE: Secure Web App Infrastructure Validation (tap_stack.tf)', () => 
         logs: new CloudWatchLogsClient({ region }),
         s3: new S3Client({ region }),
         lambda: new LambdaClient({ region }),
-        sqs: new SQSClient({ region }),
+        sqs: new SQSClient({ region, useQueueUrlAsEndpoint: false }),
         ssm: new SSMClient({ region }),
       };
     }
@@ -507,8 +507,12 @@ describe('LIVE: Secure Web App Infrastructure Validation (tap_stack.tf)', () => 
 
       await safeTest('Lambda DLQ exists and is encrypted', async () => {
         const primaryRegion = outputs.primary_region || 'us-east-1';
-        const queueUrl = outputs.lambda_dead_letter_queue_arn!.replace('arn:aws:sqs:', 'https://sqs.')
-          .replace(`:${outputs.aws_account_id}:`, `.${primaryRegion}.amazonaws.com/${outputs.aws_account_id}/`);
+        // Construct proper SQS queue URL from ARN: arn:aws:sqs:region:account:queue-name
+        const arnParts = outputs.lambda_dead_letter_queue_arn!.split(':');
+        const region = arnParts[3];
+        const accountId = arnParts[4];
+        const queueName = arnParts[5];
+        const queueUrl = `https://sqs.${region}.amazonaws.com/${accountId}/${queueName}`;
         
         const response = await retry(() =>
           awsClients[primaryRegion].sqs.send(new GetQueueAttributesCommand({
