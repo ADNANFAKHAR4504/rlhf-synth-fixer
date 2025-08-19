@@ -159,7 +159,6 @@ resource "aws_flow_log" "secondary" {
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat_primary" {
   provider = aws.primary
-  vpc      = true
   tags = {
     Name = "${var.name_prefix}-${var.environment}-nat-eip-primary"
   }
@@ -167,7 +166,6 @@ resource "aws_eip" "nat_primary" {
 
 resource "aws_eip" "nat_secondary" {
   provider = aws.secondary
-  vpc      = true
   tags = {
     Name = "${var.name_prefix}-${var.environment}-nat-eip-secondary"
   }
@@ -371,4 +369,45 @@ resource "aws_subnet" "public_secondary_2" {
   tags = {
     Name = "${var.name_prefix}-${var.environment}-public-subnet-secondary-2"
   }
+}
+
+resource "aws_iam_role" "vpc_flow_logs_role" {
+  name = "${var.name_prefix}-${var.environment}-vpc-flowlogs-role"
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "vpc-flow-logs.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "vpc_flow_logs_role_policy" {
+  name = "${var.name_prefix}-${var.environment}-vpc-flowlogs-policy"
+  role = aws_iam_role.vpc_flow_logs_role.id
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+EOF
 }
