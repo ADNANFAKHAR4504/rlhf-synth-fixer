@@ -348,9 +348,9 @@ data "aws_kms_key" "main" {
 # S3 Data Bucket
 resource "aws_s3_bucket" "data" {
   bucket = "${lower(var.project_name)}-data-${random_string.bucket_suffix.result}"
-  force_destroy = true
+  force_destroy = false
 
-  lifecycle { prevent_destroy = false }
+  #lifecycle { prevent_destroy = false }
 
   tags = {
     Name = "${var.project_name}-data-bucket"
@@ -361,9 +361,9 @@ resource "aws_s3_bucket" "data" {
 # S3 Logs Bucket
 resource "aws_s3_bucket" "logs" {
   bucket = "${lower(var.project_name)}-logs-${random_string.bucket_suffix.result}"
-  force_destroy = true
+  #force_destroy = true
   
-  lifecycle { prevent_destroy = false }
+  #lifecycle { prevent_destroy = false }
   tags = {
     Name = "${var.project_name}-logs-bucket"
     Type = "Logs"
