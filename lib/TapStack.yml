@@ -90,30 +90,6 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow use of the key
-            Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:role/*"
-            Action:
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey
-              - kms:GenerateDataKeyWithoutPlaintext
-            Resource: '*'
-          - Sid: Allow attachment of persistent resources
-            Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:role/*"
-            Action:
-              - kms:CreateGrant
-              - kms:ListGrants
-              - kms:RevokeGrant
-            Resource: '*'
-            Condition:
-              Bool:
-                kms:GrantIsForAWSResource: 'true'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -494,9 +470,22 @@ Resources:
                 Resource: !Sub 'arn:aws:s3:::${Environment}-app-artifacts-${AWS::AccountId}-${AWS::Region}'
               - Effect: Allow
                 Action:
+                  - kms:DescribeKey
+                  - kms:Encrypt
                   - kms:Decrypt
+                  - kms:ReEncrypt*
                   - kms:GenerateDataKey
+                  - kms:GenerateDataKeyWithoutPlaintext
                 Resource: !GetAtt ApplicationKMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - kms:CreateGrant
+                  - kms:ListGrants
+                  - kms:RevokeGrant
+                Resource: !GetAtt ApplicationKMSKey.Arn
+                Condition:
+                  Bool:
+                    kms:GrantIsForAWSResource: 'true'
       Tags:
         - Key: Environment
           Value: !Ref Environment
