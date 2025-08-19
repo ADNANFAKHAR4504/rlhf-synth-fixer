@@ -80,6 +80,15 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
   }
 
   /**
+   * Get the current valid solution stack for Docker (verified 2025-08-19)
+   */
+  private getSolutionStackName(): string {
+    // Using the latest available solution stack as of 2025-08-19
+    // Retrieved via: aws elasticbeanstalk list-available-solution-stacks
+    return '64bit Amazon Linux 2023 v4.6.3 running Docker';
+  }
+
+  /**
    * Create Configuration Template
    */
   private createConfigurationTemplate(
@@ -93,12 +102,17 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
       .all(args.privateSubnetIds)
       .apply(subnets => subnets.join(','));
 
+    const solutionStackName = this.getSolutionStackName();
+    console.log(
+      `🐳 Using Elastic Beanstalk solution stack: ${solutionStackName}`
+    );
+
     return new aws.elasticbeanstalk.ConfigurationTemplate(
       `nova-config-${this.regionSuffix}`,
       {
         name: `nova-config-${this.regionSuffix}`,
         application: this.application.name,
-        solutionStackName: '64bit Amazon Linux 2 v3.6.0 running Docker',
+        solutionStackName: solutionStackName,
         settings: [
           // VPC Configuration
           {
@@ -200,6 +214,8 @@ export class ElasticBeanstalkInfrastructure extends ComponentResource {
   private createEnvironment(): aws.elasticbeanstalk.Environment {
     const suffix = this.randomSuffix();
     const envName = `nova-env-${this.regionSuffix}-${suffix}`;
+
+    console.log(`🚀 Creating Elastic Beanstalk environment: ${envName}`);
 
     return new aws.elasticbeanstalk.Environment(
       `nova-env-${this.regionSuffix}`,
