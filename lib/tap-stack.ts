@@ -36,6 +36,11 @@ export interface TapStackArgs {
 export class TapStack extends pulumi.ComponentResource {
   public readonly bucketName: pulumi.Output<string>;
   public readonly instanceId: pulumi.Output<string>;
+  public readonly vpcId: pulumi.Output<string>;
+  public readonly subnetId: pulumi.Output<string>;
+  public readonly securityGroupId: pulumi.Output<string>;
+  public readonly instancePublicIp: pulumi.Output<string>;
+  public readonly s3BucketArn: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -271,15 +276,21 @@ export class TapStack extends pulumi.ComponentResource {
     // Set outputs
     this.bucketName = bucket.bucket;
     this.instanceId = instance.id;
+    this.vpcId = vpc.id;
+    this.subnetId = publicSubnet.id;
+    this.securityGroupId = securityGroup.id;
+    this.instancePublicIp = instance.publicIp;
+    this.s3BucketArn = bucket.arn;
 
     // Register the outputs of this component
     this.registerOutputs({
       bucketName: this.bucketName,
       instanceId: this.instanceId,
-      vpcId: vpc.id,
-      securityGroupId: securityGroup.id,
-      instancePublicIp: instance.publicIp,
-      subnetId: publicSubnet.id,
+      vpcId: this.vpcId,
+      subnetId: this.subnetId,
+      securityGroupId: this.securityGroupId,
+      instancePublicIp: this.instancePublicIp,
+      s3BucketArn: this.s3BucketArn,
     });
   }
 }

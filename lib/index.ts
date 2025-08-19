@@ -19,6 +19,11 @@ const tapStack = new TapStack('TapStack', {
   },
 });
 
-// Export stack outputs
-export const bucketName = tapStack.bucketName;
-export const instanceId = tapStack.instanceId;
+// Export stack outputs for integration tests
+export const InstanceId = tapStack.instanceId;
+export const S3BucketName = tapStack.bucketName;
+export const VPCId = tapStack.vpcId;
+export const SubnetId = tapStack.subnetId;
+export const SecurityGroupId = tapStack.securityGroupId;
+export const InstancePublicIp = tapStack.instancePublicIp;
+export const S3BucketArn = tapStack.s3BucketArn;
