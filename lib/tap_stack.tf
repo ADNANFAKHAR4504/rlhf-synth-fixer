@@ -304,31 +304,20 @@ resource "aws_route_table_association" "public_secondary" {
   route_table_id = aws_route_table.public_secondary.id
 }
 
-# CloudWatch Log Group for VPC Flow Logs - Primary Region
-resource "aws_cloudwatch_log_group" "vpc_flow_logs_primary" {
-  name              = "${local.name_prefix}-vpc-flow-logs-primary"
-  retention_in_days = var.flow_logs_retention_days
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-logs-primary"
-  })
+## Use existing CloudWatch Log Groups (lookup by name)
+data "aws_cloudwatch_log_group" "vpc_flow_logs_primary" {
+  name = "${local.name_prefix}-vpc-flow-logs-primary"
 }
 
-# CloudWatch Log Group for VPC Flow Logs - Secondary Region
-resource "aws_cloudwatch_log_group" "vpc_flow_logs_secondary" {
-  provider          = aws.eu_west_1
-  name              = "${local.name_prefix}-vpc-flow-logs-secondary"
-  retention_in_days = var.flow_logs_retention_days
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-vpc-flow-logs-secondary"
-  })
+data "aws_cloudwatch_log_group" "vpc_flow_logs_secondary" {
+  provider = aws.eu_west_1
+  name     = "${local.name_prefix}-vpc-flow-logs-secondary"
 }
 
 # VPC Flow Log - Primary Region
 resource "aws_flow_log" "vpc_flow_logs_primary" {
   iam_role_arn    = data.aws_iam_role.flow_logs_role_primary.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs_primary.arn
+  log_destination = data.aws_cloudwatch_log_group.vpc_flow_logs_primary.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.primary.id
 
@@ -341,7 +330,7 @@ resource "aws_flow_log" "vpc_flow_logs_primary" {
 resource "aws_flow_log" "vpc_flow_logs_secondary" {
   provider        = aws.eu_west_1
   iam_role_arn    = data.aws_iam_role.flow_logs_role_secondary.arn
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs_secondary.arn
+  log_destination = data.aws_cloudwatch_log_group.vpc_flow_logs_secondary.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.secondary.id
 

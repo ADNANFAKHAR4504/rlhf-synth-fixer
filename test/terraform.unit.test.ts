@@ -141,10 +141,9 @@ describe("Terraform Multi-Region Security Baseline", () => {
   });
 
   describe("VPC Flow Logs", () => {
-    test("creates CloudWatch log groups for flow logs in both regions", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"vpc_flow_logs_primary"/);
-      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"vpc_flow_logs_secondary"/);
-      expect(stackContent).toMatch(/retention_in_days\s*=\s*var\.flow_logs_retention_days/);
+    test("references existing CloudWatch log groups via data sources in both regions", () => {
+      expect(stackContent).toMatch(/data\s+"aws_cloudwatch_log_group"\s+"vpc_flow_logs_primary"/);
+      expect(stackContent).toMatch(/data\s+"aws_cloudwatch_log_group"\s+"vpc_flow_logs_secondary"/);
     });
 
     test("references existing IAM roles for flow logs via data sources", () => {
