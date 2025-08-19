@@ -218,7 +218,6 @@ module "iam" {
   project_name = var.project_name
   environment  = var.environment
   s3_data_bucket_arn = module.storage.s3_data_bucket_arn
-  s3_logs_bucket_arn = module.storage.s3_logs_bucket_arn
 }
 
 # Storage Module
@@ -265,7 +264,6 @@ module "monitoring" {
   project_name = var.project_name
   environment  = var.environment
   vpc_id      = module.networking.vpc_id
-  s3_logs_bucket_name = module.storage.s3_logs_bucket_name
 }
 ````
 
@@ -824,16 +822,6 @@ resource "aws_s3_bucket" "data" {
   }
 }
 
-# S3 Logs Bucket
-resource "aws_s3_bucket" "logs" {
-  bucket = "${lower(var.project_name)}-logs-${random_string.bucket_suffix.result}"
-  force_destroy = true
-
-  tags = {
-    Name = "${var.project_name}-logs-bucket"
-    Type = "Logs"
-  }
-}
 
 resource "random_string" "bucket_suffix" {
   length  = 8
@@ -849,13 +837,6 @@ resource "aws_s3_bucket_versioning" "data" {
   }
 }
 
-# S3 Bucket Versioning - Logs
-resource "aws_s3_bucket_versioning" "logs" {
-  bucket = aws_s3_bucket.logs.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
 
 # S3 Bucket Encryption - Data
 resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
@@ -870,18 +851,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "data" {
   }
 }
 
-# S3 Bucket Encryption - Logs
-resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
-  bucket = aws_s3_bucket.logs.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.main.arn
-      sse_algorithm     = "aws:kms"
-    }
-    bucket_key_enabled = true
-  }
-}
 
 # Block all public access - Data
 resource "aws_s3_bucket_public_access_block" "data" {
@@ -893,15 +862,6 @@ resource "aws_s3_bucket_public_access_block" "data" {
   restrict_public_buckets = true
 }
 
-# Block all public access - Logs
-resource "aws_s3_bucket_public_access_block" "logs" {
-  bucket = aws_s3_bucket.logs.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
 
 # VPC S3 Endpoint
 resource "aws_vpc_endpoint" "s3" {
@@ -943,56 +903,6 @@ resource "aws_s3_bucket_policy" "data" {
   depends_on = [aws_s3_bucket_public_access_block.data]
 }
 
-# S3 Bucket Policy - Logs (VPC Endpoint Only)
-resource "aws_s3_bucket_policy" "logs" {
-  bucket = aws_s3_bucket.logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "DenyDirectInternetAccess"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.logs.arn,
-          "${aws_s3_bucket.logs.arn}/*"
-        ]
-        Condition = {
-          StringNotEquals = {
-            "aws:sourceVpce" = aws_vpc_endpoint.s3.id
-          }
-        }
-      },
-      {
-        Sid       = "AllowCloudTrailLogs"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.logs.arn}/cloudtrail/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      },
-      {
-        Sid       = "AllowCloudTrailAclCheck"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.logs.arn
-      }
-    ]
-  })
-
-  depends_on = [aws_s3_bucket_public_access_block.logs]
-}
 ```
 
 ### modules/storage/variables.tf
@@ -1037,15 +947,6 @@ output "s3_data_bucket_arn" {
   value       = aws_s3_bucket.data.arn
 }
 
-output "s3_logs_bucket_name" {
-  description = "Name of the S3 logs bucket"
-  value       = aws_s3_bucket.logs.bucket
-}
-
-output "s3_logs_bucket_arn" {
-  description = "ARN of the S3 logs bucket"
-  value       = aws_s3_bucket.logs.arn
-}
 
 output "kms_key_id" {
   description = "ID of the KMS key"

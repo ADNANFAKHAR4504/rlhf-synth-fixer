@@ -373,16 +373,6 @@ resource "aws_s3_bucket" "data" {
   }
 }
 
-# S3 Logs Bucket
-resource "aws_s3_bucket" "logs" {
-  bucket = "${lower(var.project_name)}-logs-${random_string.bucket_suffix.result}"
-  force_destroy = true
-
-  tags = {
-    Name = "${var.project_name}-logs-bucket"
-    Type = "Logs"
-  }
-}
 
 resource "random_string" "bucket_suffix" {
   length  = 8
