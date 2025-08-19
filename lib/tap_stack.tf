@@ -636,7 +636,7 @@ resource "aws_db_instance" "primary" {
   # Monitoring configuration
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_enhanced_monitoring.arn
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Parameter group
   parameter_group_name = aws_db_parameter_group.primary.name
@@ -699,7 +699,7 @@ resource "aws_db_instance" "secondary" {
   # Monitoring configuration
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.secondary_rds_enhanced_monitoring.arn
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Parameter group
   parameter_group_name = aws_db_parameter_group.secondary.name
