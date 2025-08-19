@@ -349,9 +349,9 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    unhealthy_threshold = 2
+    unhealthy_threshold = 3
     timeout             = 5
-    interval            = 15
+    interval            = 10
     path                = "/"
     matcher             = "200-399"
     port                = "traffic-port"
@@ -430,14 +430,28 @@ resource "aws_launch_template" "main" {
     #!/bin/bash
     set -euxo pipefail
 
-    # Fallback tiny HTTP server (immediate health) — starts first
-    nohup python3 -m http.server 80 --directory /var/www/html >/var/log/pyhttp.log 2>&1 &
-
-    # Try to switch to Apache when/if internet/NAT works
-    ( yum update -y && yum install -y httpd && systemctl enable --now httpd && pkill -f "python3 -m http.server" ) || true
-
+    # Create directory first
     mkdir -p /var/www/html
     echo "<h1>Hello from ${local.name_prefix} - $(hostname -f)</h1>" > /var/www/html/index.html
+
+    # Start immediate HTTP server for health checks
+    nohup python3 -m http.server 80 --directory /var/www/html >/var/log/pyhttp.log 2>&1 &
+
+    # Wait a moment for server to start
+    sleep 3
+
+    # Test that our server is working
+    curl -f http://localhost:80/ || exit 1
+
+    # Try to install Apache in background (optional)
+    (
+      yum update -y && 
+      yum install -y httpd && 
+      systemctl enable httpd &&
+      systemctl start httpd &&
+      # Only kill Python server after Apache is confirmed running
+      systemctl is-active httpd && pkill -f "python3 -m http.server"
+    ) &
   EOF
   )
 
@@ -461,7 +475,7 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 600
+  health_check_grace_period = 180
   min_size                  = local.current_config.min_size
   max_size                  = local.current_config.max_size
   desired_capacity          = local.current_config.desired_capacity
