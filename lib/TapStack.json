@@ -408,7 +408,7 @@
                                         "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${SecureS3Bucket}/*"
+                                        "Fn::Sub": "${SecureS3Bucket.Arn}/*"
                                     },
                                     "Condition": {
                                         "StringEquals": {
@@ -422,7 +422,10 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "SecureS3Bucket"
+                                        "Fn::GetAtt": [
+                                            "SecureS3Bucket",
+                                            "Arn"
+                                        ]
                                     },
                                     "Condition": {
                                         "StringEquals": {

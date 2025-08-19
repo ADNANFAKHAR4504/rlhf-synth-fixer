@@ -265,14 +265,14 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${SecureS3Bucket}/*'
+                Resource: !Sub '${SecureS3Bucket.Arn}/*'
                 Condition:
                   StringEquals:
                     'aws:RequestedRegion': 'us-west-1'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref SecureS3Bucket
+                Resource: !GetAtt SecureS3Bucket.Arn
                 Condition:
                   StringEquals:
                     'aws:RequestedRegion': 'us-west-1'
