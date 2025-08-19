@@ -17,6 +17,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
   public readonly loadBalancerDns: pulumi.Output<string>;
   public readonly staticAssetsBucketName: pulumi.Output<string>;
+  public readonly staticAssetsUrl: pulumi.Output<string>;
   public readonly databaseEndpoint: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
@@ -514,38 +515,104 @@ yum install -y amazon-cloudwatch-agent
       { parent: this }
     );
 
-    // Configure bucket for public access
+    // Keep bucket private and secure - use CloudFront for public access
     new aws.s3.BucketPublicAccessBlock(
       `prod-static-assets-pab-${environmentSuffix}`,
       {
         bucket: staticAssetsBucket.id,
-        blockPublicAcls: false,
-        blockPublicPolicy: false,
-        ignorePublicAcls: false,
-        restrictPublicBuckets: false,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
       },
       { parent: this }
     );
 
+    // Create CloudFront Origin Access Control for secure S3 access
+    const originAccessControl = new aws.cloudfront.OriginAccessControl(
+      `prod-oac-${environmentSuffix}`,
+      {
+        name: `prod-oac-${environmentSuffix}`,
+        description: 'Origin Access Control for static assets bucket',
+        originAccessControlOriginType: 's3',
+        signingBehavior: 'always',
+        signingProtocol: 'sigv4',
+      },
+      { parent: this }
+    );
+
+    // Create CloudFront distribution
+    const distribution = new aws.cloudfront.Distribution(
+      `prod-cloudfront-${environmentSuffix}`,
+      {
+        enabled: true,
+        defaultCacheBehavior: {
+          targetOriginId: staticAssetsBucket.id,
+          viewerProtocolPolicy: 'redirect-to-https',
+          allowedMethods: ['GET', 'HEAD'],
+          cachedMethods: ['GET', 'HEAD'],
+          compress: true,
+          forwardedValues: {
+            queryString: false,
+            cookies: {
+              forward: 'none',
+            },
+          },
+        },
+        origins: [
+          {
+            domainName: staticAssetsBucket.bucketDomainName,
+            originId: staticAssetsBucket.id,
+            originAccessControlId: originAccessControl.id,
+          },
+        ],
+        restrictions: {
+          geoRestriction: {
+            restrictionType: 'none',
+          },
+        },
+        viewerCertificate: {
+          cloudfrontDefaultCertificate: true,
+        },
+        tags: {
+          Name: `prod-cloudfront-${environmentSuffix}`,
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Bucket policy for CloudFront OAC access only
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const bucketPolicy = new aws.s3.BucketPolicy(
       `prod-static-assets-policy-${environmentSuffix}`,
       {
         bucket: staticAssetsBucket.id,
-        policy: pulumi.interpolate`{
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Sid": "PublicReadGetObject",
-            "Effect": "Allow",
-            "Principal": "*",
-            "Action": "s3:GetObject",
-            "Resource": "${staticAssetsBucket.arn}/*"
-          }
-        ]
-      }`,
+        policy: pulumi
+          .all([staticAssetsBucket.arn, distribution.arn])
+          .apply(([bucketArn, distributionArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'AllowCloudFrontServicePrincipal',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudfront.amazonaws.com',
+                  },
+                  Action: 's3:GetObject',
+                  Resource: `${bucketArn}/*`,
+                  Condition: {
+                    StringEquals: {
+                      'AWS:SourceArn': distributionArn,
+                    },
+                  },
+                },
+              ],
+            })
+          ),
       },
-      { parent: this }
+      { parent: this, dependsOn: [distribution] }
     );
 
     // CloudWatch Log Group for application logs
@@ -592,12 +659,14 @@ yum install -y amazon-cloudwatch-agent
     this.vpcId = vpc.id;
     this.loadBalancerDns = alb.dnsName;
     this.staticAssetsBucketName = staticAssetsBucket.id;
+    this.staticAssetsUrl = pulumi.interpolate`https://${distribution.domainName}`;
     this.databaseEndpoint = database.endpoint;
 
     this.registerOutputs({
       vpcId: this.vpcId,
       loadBalancerDns: this.loadBalancerDns,
       staticAssetsBucketName: this.staticAssetsBucketName,
+      staticAssetsUrl: this.staticAssetsUrl,
       databaseEndpoint: this.databaseEndpoint,
     });
   }
