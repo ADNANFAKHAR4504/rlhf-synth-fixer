@@ -66,8 +66,11 @@ module "compute" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  project_name         = var.project_name
-  cloudtrail_bucket_name = module.storage.s3_data_bucket_name
+  project_name             = var.project_name
+  cloudtrail_bucket_name   = module.storage.s3_data_bucket_name
+  flow_log_role_arn        = module.iam.flow_log_role_arn
+  flow_log_destination_arn = module.monitoring.flow_log_destination_arn
+  vpc_id                   = module.networking.vpc_id
 }
 
 output "vpc_id" {
