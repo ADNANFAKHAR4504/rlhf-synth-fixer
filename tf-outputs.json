@@ -1,0 +1,32 @@
+{
+  "cloudwatch_log_group_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "/aws/cloudtrail/secure-s3-infrastructure-synthtrainr902"
+  },
+  "kms_key_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:kms:us-west-2:718240086340:key/a33ddd66-5fe4-42f3-9ff9-5fbd8d0cf769"
+  },
+  "kms_key_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "a33ddd66-5fe4-42f3-9ff9-5fbd8d0cf769"
+  },
+  "s3_bucket_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:s3:::secure-audit-bucket-trainr902-synthtrainr902"
+  },
+  "s3_bucket_name": {
+    "sensitive": false,
+    "type": "string",
+    "value": "secure-audit-bucket-trainr902-synthtrainr902"
+  },
+  "sns_topic_arn": {
+    "sensitive": false,
+    "type": "string",
+    "value": "arn:aws:sns:us-west-2:718240086340:secure-s3-infrastructure-synthtrainr902-security-alerts"
+  }
+}
