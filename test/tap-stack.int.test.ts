@@ -44,13 +44,14 @@ try {
 // Get environment suffix from environment variable (set by CI/CD pipeline)  
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// AWS Clients
-const cloudFormationClient = new CloudFormationClient({});
-const dynamoDBClient = new DynamoDBClient({});
-const lambdaClient = new LambdaClient({});
-const apiGatewayClient = new APIGatewayClient({});
-const cloudWatchLogsClient = new CloudWatchLogsClient({});
-const sqsClient = new SQSClient({});
+// AWS Clients - Configure with region
+const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+const cloudFormationClient = new CloudFormationClient({ region: awsRegion });
+const dynamoDBClient = new DynamoDBClient({ region: awsRegion });
+const lambdaClient = new LambdaClient({ region: awsRegion });
+const apiGatewayClient = new APIGatewayClient({ region: awsRegion });
+const cloudWatchLogsClient = new CloudWatchLogsClient({ region: awsRegion });
+const sqsClient = new SQSClient({ region: awsRegion });
 
 // Generate unique test data with randomness
 const generateUniqueTestData = () => {
@@ -256,7 +257,7 @@ describe('ServerlessApp Integration Tests', () => {
   });
 
   describe('API Gateway Integration', () => {
-    const apiEndpoint = outputs.ApiEndpoint || `https://api-${environmentSuffix}.execute-api.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${environmentSuffix}`;
+    const apiEndpoint = outputs.ApiEndpoint || `https://api-${environmentSuffix}.execute-api.${awsRegion}.amazonaws.com/${environmentSuffix}`;
 
     const apiGatewayExistsTestName = generateUniqueTestName('api-gateway-exists');
     test(apiGatewayExistsTestName, async () => {
@@ -302,7 +303,7 @@ describe('ServerlessApp Integration Tests', () => {
       expect(apiEndpoint).toBeDefined();
       expect(apiEndpoint).toContain('https://');
       expect(apiEndpoint).toContain('execute-api');
-      expect(apiEndpoint).toContain(process.env.AWS_REGION || 'us-east-1');
+      expect(apiEndpoint).toContain(awsRegion);
     }, 30000);
   });
 
