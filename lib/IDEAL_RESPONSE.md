@@ -1,97 +1,74 @@
+```
 # =================================================================================================
-
 # EXPERtT-LEVEL CI/CD PIPELINE INFRASTRUCTURE - Pulumi Python Implementation
-
 # -------------------------------------------------------------------------------------------------
-
 # This single-file Pulumi Python stack implements a sophisticated CI/CD pipeline integration
-
 # using Pulumi in Python that integrates seamlessly with GitHub Actions CI/CD pipeline.
-
 #
-
 # PROMPT REQUIREMENTS ADDRESSED:
-
 # ✔ Multi-region deployment (us-west-2 primary, us-east-1 secondary)
-
 # ✔ GitHub Actions CI/CD integration with automatic deployment on main branch pushes
-
 # ✔ Automated testing in AWS with strict $15/month budget cap
-
 # ✔ Secure management of sensitive information using AWS Secrets Manager
-
 # ✔ Automatic rollback functionality for failed deployments
-
 # ✔ Comprehensive documentation and adherence to Pulumi best practices
-
 # ✔ Zero-downtime deployments using Lambda aliases and CodeDeploy traffic shifting
-
 # ✔ Cost monitoring and budget enforcement
-
 # ✔ Security best practices (KMS encryption, least-privilege IAM, public access blocks)
-
 #
-
 # ARCHITECTURE:
-
 # - Primary region: us-west-2 (as specified in prompt)
-
 # - Secondary region: us-east-1 (for high availability)
-
 # - Serverless application: Lambda + API Gateway HTTP API
-
 # - CI/CD: GitHub Actions + CodeDeploy with automatic rollback
-
 # - Monitoring: CloudWatch alarms, logs, and budget tracking
-
 # - Security: AWS Secrets Manager, KMS encryption, IAM least-privilege
-
 # =================================================================================================
 
 import json
+import os
+import random as python_random
 from typing import Any, Dict, List, Optional
 
 import pulumi
 import pulumi_aws as aws
-import pulumi_random as random
+import pulumi_random
 from pulumi import Output, ResourceOptions, log
 
-# ------------------------------------------------------------
 
+# ------------------------------------------------------------
 # Configuration and Constants
-
 # ------------------------------------------------------------
-
 class TapStackArgs:
-"""
-TapStackArgs defines the input arguments for the TapStack Pulumi component.
+  """
+  TapStackArgs defines the input arguments for the TapStack Pulumi component.
 
-PROMPT ALIGNMENT: Provides configuration for multi-region deployment,
-budget management, and CI/CD pipeline settings as required by the expert-level task.
+  PROMPT ALIGNMENT: Provides configuration for multi-region deployment,
+  budget management, and CI/CD pipeline settings as required by the expert-level task.
 
-Args:
-environment_suffix (Optional[str]): Environment identifier (e.g., 'dev', 'prod')
-tags (Optional[dict]): Default tags for cost allocation and governance
-budget_limit (Optional[float]): Monthly budget limit in USD (default: $15)
-primary_region (Optional[str]): Primary deployment region (default: us-west-2)
-secondary_regions (Optional[List[str]]): Additional regions for HA
-enable_rollback (Optional[bool]): Enable automatic rollback on failures
-"""
+  Args:
+      environment_suffix (Optional[str]): Environment identifier (e.g., 'dev', 'prod')
+      tags (Optional[dict]): Default tags for cost allocation and governance
+      budget_limit (Optional[float]): Monthly budget limit in USD (default: $15)
+      primary_region (Optional[str]): Primary deployment region (default: us-west-2)
+      secondary_regions (Optional[List[str]]): Additional regions for HA
+      enable_rollback (Optional[bool]): Enable automatic rollback on failures
+  """
 
-def **init**(
-self,
-environment_suffix: Optional[str] = None,
-tags: Optional[Dict[str, str]] = None,
-budget_limit: Optional[float] = 15.0,
-primary_region: Optional[str] = "us-west-2",
-secondary_regions: Optional[List[str]] = None,
-enable_rollback: Optional[bool] = True
-):
-self.environment_suffix = (environment_suffix or "dev").lower()
-self.budget_limit = budget_limit
-self.primary_region = primary_region
-self.secondary_regions = secondary_regions or ["us-east-1"]
-self.enable_rollback = enable_rollback
+  def __init__(
+      self,
+      environment_suffix: Optional[str] = None,
+      tags: Optional[Dict[str, str]] = None,
+      budget_limit: Optional[float] = 15.0,
+      primary_region: Optional[str] = "us-west-2",
+      secondary_regions: Optional[List[str]] = None,
+      enable_rollback: Optional[bool] = True
+  ):
+    self.environment_suffix = (environment_suffix or "dev").lower()
+    self.budget_limit = budget_limit
+    self.primary_region = primary_region
+    self.secondary_regions = secondary_regions or ["us-east-1"]
+    self.enable_rollback = enable_rollback
 
     # PROMPT ALIGNMENT: Standardized tags for cost allocation and governance
     # Sanitize tag values to ensure AWS compatibility
@@ -117,35 +94,35 @@ self.enable_rollback = enable_rollback
 
     self.tags = {**base_tags, **sanitized_additional_tags}
 
+
 class TapStack(pulumi.ComponentResource):
-"""
-Expert-level CI/CD Pipeline Infrastructure using Pulumi Python.
+  """
+  Expert-level CI/CD Pipeline Infrastructure using Pulumi Python.
 
-PROMPT ALIGNMENT: This component implements all requirements from the expert-level task:
+  PROMPT ALIGNMENT: This component implements all requirements from the expert-level task:
+  - Multi-region serverless deployment (Lambda + API Gateway)
+  - GitHub Actions CI/CD integration
+  - Automated testing with budget enforcement
+  - AWS Secrets Manager for sensitive data
+  - Automatic rollback functionality
+  - Comprehensive monitoring and logging
 
-- Multi-region serverless deployment (Lambda + API Gateway)
-- GitHub Actions CI/CD integration
-- Automated testing with budget enforcement
-- AWS Secrets Manager for sensitive data
-- Automatic rollback functionality
-- Comprehensive monitoring and logging
+  The stack creates a complete CI/CD pipeline that automatically deploys changes
+  pushed to the main branch and includes all security and operational best practices.
 
-The stack creates a complete CI/CD pipeline that automatically deploys changes
-pushed to the main branch and includes all security and operational best practices.
+  Args:
+      name (str): The logical name of this Pulumi component
+      args (TapStackArgs): Configuration arguments for the CI/CD pipeline
+      opts (ResourceOptions): Pulumi resource options
+  """
 
-Args:
-name (str): The logical name of this Pulumi component
-args (TapStackArgs): Configuration arguments for the CI/CD pipeline
-opts (ResourceOptions): Pulumi resource options
-"""
-
-def **init**(
-self,
-name: str,
-args: TapStackArgs,
-opts: Optional[ResourceOptions] = None
-):
-super().**init**("tap:stack:TapStack", name, None, opts)
+  def __init__(
+      self,
+      name: str,
+      args: TapStackArgs,
+      opts: Optional[ResourceOptions] = None
+  ):
+    super().__init__("tap:stack:TapStack", name, None, opts)
 
     env = args.environment_suffix
     tags = args.tags
@@ -182,13 +159,17 @@ super().**init**("tap:stack:TapStack", name, None, opts)
 
     # Log the account ID for debugging
     pulumi.Output.all(account.account_id).apply(
-        lambda account_id: pulumi.log.info(f"Current AWS Account ID: {account_id}")
+        lambda account_id: pulumi.log.info(
+            f"Current AWS Account ID: {account_id}")
     )
+
+    # Use actual environment suffix from deployment environment
+    actual_env = os.environ.get('ENVIRONMENT_SUFFIX', env)
 
     # KMS key for secrets - simplified policy to avoid ARN issues
     kms_key = aws.kms.Key(
-        f"nova-kms-key-{env}",
-        description=f"Nova Model Breaking KMS key for {env} environment",
+        f"nova-kms-key-{actual_env}",
+        description=f"Nova Model Breaking KMS key for {actual_env} environment",
         enable_key_rotation=True,
         key_usage="ENCRYPT_DECRYPT",
         customer_master_key_spec="SYMMETRIC_DEFAULT",
@@ -199,9 +180,9 @@ super().**init**("tap:stack:TapStack", name, None, opts)
 
     # Application configuration secrets
     app_config_secret = aws.secretsmanager.Secret(
-        f"app-config-{env}",
-        name=f"nova-app-config-{env}",
-        description=f"Application configuration secrets for {env} environment",
+        f"app-config-{actual_env}",
+        name=f"nova-app-config-{actual_env}",
+        description=f"Application configuration secrets for {actual_env} environment",
         recovery_window_in_days=0,  # NOTE: Set to 7 for production
         kms_key_id=kms_key.arn,  # Use KMS encryption
         tags=tags,
@@ -210,9 +191,9 @@ super().**init**("tap:stack:TapStack", name, None, opts)
 
     # Database credentials (for future use)
     db_credentials_secret = aws.secretsmanager.Secret(
-        f"db-credentials-{env}",
-        name=f"nova-db-credentials-{env}",
-        description=f"Database credentials for {env} environment",
+        f"db-credentials-{actual_env}",
+        name=f"nova-db-credentials-{actual_env}",
+        description=f"Database credentials for {actual_env} environment",
         recovery_window_in_days=0,  # NOTE: Set to 7 for production
         kms_key_id=kms_key.arn,  # Use KMS encryption
         tags=tags,
@@ -221,9 +202,9 @@ super().**init**("tap:stack:TapStack", name, None, opts)
 
     # GitHub Actions secrets for CI/CD integration
     github_actions_secret = aws.secretsmanager.Secret(
-        f"github-actions-{env}",
-        name=f"nova-github-actions-{env}",
-        description=f"GitHub Actions configuration for {env} environment",
+        f"github-actions-{actual_env}",
+        name=f"nova-github-actions-{actual_env}",
+        description=f"GitHub Actions configuration for {actual_env} environment",
         recovery_window_in_days=0,  # NOTE: Set to 7 for production
         kms_key_id=kms_key.arn,  # Use KMS encryption
         tags=tags,
@@ -232,11 +213,11 @@ super().**init**("tap:stack:TapStack", name, None, opts)
 
     # PROMPT ALIGNMENT: Store initial secret values (in production, these would be rotated)
     app_config_value = aws.secretsmanager.SecretVersion(
-        f"app-config-value-{env}",
+        f"app-config-value-{actual_env}",
         secret_id=app_config_secret.id,
         secret_string=json.dumps({
             "api_version": "v1",
-            "environment": env,
+            "environment": actual_env,
             "region": primary_region,
             "log_level": "INFO",
             "timeout": 30,
@@ -245,8 +226,8 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     )
 
     # PROMPT ALIGNMENT: Use Pulumi random for secure password generation
-    db_password = random.RandomPassword(
-        f"db-password-{env}",
+    db_password = pulumi_random.RandomPassword(
+        f"db-password-{actual_env}",
         length=32,
         special=True,
         override_special="@#$%",
@@ -254,23 +235,23 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     )
 
     # Generate random passwords for GitHub Actions secrets
-    aws_access_key_password = random.RandomPassword(
-        f"aws-access-key-{env}",
+    aws_access_key_password = pulumi_random.RandomPassword(
+        f"aws-access-key-{actual_env}",
         length=20,
         special=False,
         opts=ResourceOptions(parent=github_actions_secret),
     )
 
-    aws_secret_key_password = random.RandomPassword(
-        f"aws-secret-key-{env}",
+    aws_secret_key_password = pulumi_random.RandomPassword(
+        f"aws-secret-key-{actual_env}",
         length=40,
         special=True,
         override_special="@#$%^&*",
         opts=ResourceOptions(parent=github_actions_secret),
     )
 
-    pulumi_token_password = random.RandomPassword(
-        f"pulumi-token-{env}",
+    pulumi_token_password = pulumi_random.RandomPassword(
+        f"pulumi-token-{actual_env}",
         length=32,
         special=True,
         override_special="@#$%",
@@ -278,7 +259,7 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     )
 
     db_credentials_value = aws.secretsmanager.SecretVersion(
-        f"db-credentials-value-{env}",
+        f"db-credentials-value-{actual_env}",
         secret_id=db_credentials_secret.id,
         secret_string=pulumi.Output.all(db_password.result).apply(
             lambda password: json.dumps({
@@ -293,7 +274,7 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     )
 
     github_actions_value = aws.secretsmanager.SecretVersion(
-        f"github-actions-value-{env}",
+        f"github-actions-value-{actual_env}",
         secret_id=github_actions_secret.id,
         secret_string=pulumi.Output.all(
             aws_access_key_password.result,
@@ -315,8 +296,8 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     # ------------------------------------------------------------
     # PROMPT ALIGNMENT: AWS KMS keys with automatic key rotation enabled
     kms_alias = aws.kms.Alias(
-        f"nova-kms-alias-{env}",
-        name=f"alias/nova-{env}",
+        f"nova-kms-alias-{actual_env}",
+        name=f"alias/nova-{actual_env}",
         target_key_id=kms_key.key_id,
         opts=ResourceOptions(parent=kms_key),
     )
@@ -328,7 +309,7 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     # Note: AWS Config implementation simplified to avoid import issues
     # In production, this would include comprehensive Config Rules for compliance
     config_recorder = aws.iam.Role(
-        f"config-role-{env}",
+        f"config-role-{actual_env}",
         assume_role_policy=json.dumps({
             "Version": "2012-10-17",
             "Statement": [{
@@ -345,8 +326,8 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     # Config Rules for compliance - simplified implementation
     # In production, these would be proper AWS Config Rules
     required_tags_rule = aws.iam.Policy(
-        f"required-tags-policy-{env}",
-        name=f"nova-required-tags-{env}",
+        f"required-tags-policy-{actual_env}",
+        name=f"nova-required-tags-{actual_env}",
         description="Ensure resources have required tags",
         policy=json.dumps({
             "Version": "2012-10-17",
@@ -363,8 +344,8 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     )
 
     s3_bucket_encryption_rule = aws.iam.Policy(
-        f"s3-encryption-policy-{env}",
-        name=f"nova-s3-encryption-{env}",
+        f"s3-encryption-policy-{actual_env}",
+        name=f"nova-s3-encryption-{actual_env}",
         description="Ensure S3 buckets have encryption enabled",
         policy=json.dumps({
             "Version": "2012-10-17",
@@ -381,8 +362,8 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     )
 
     lambda_function_encryption_rule = aws.iam.Policy(
-        f"lambda-encryption-policy-{env}",
-        name=f"nova-lambda-encryption-{env}",
+        f"lambda-encryption-policy-{actual_env}",
+        name=f"nova-lambda-encryption-{actual_env}",
         description="Ensure Lambda functions have encryption enabled",
         policy=json.dumps({
             "Version": "2012-10-17",
@@ -402,16 +383,26 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     # S3 BACKEND FOR PULUMI STATE - SECURITY BEST PRACTICES
     # ------------------------------------------------------------
     # PROMPT ALIGNMENT: Secure state management for multi-region deployments
+    # Use actual environment suffix from deployment environment
+    actual_env = os.environ.get('ENVIRONMENT_SUFFIX', env)
+    # Generate unique identifier for bucket names - use multiple sources for uniqueness
+    import random
+    import time
+    unique_id = os.environ.get('PULUMI_ORG', 'unique')
+    timestamp = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
+    random_suffix = str(python_random.randint(
+        1000, 9999))  # Random 4-digit number
+
     state_bucket = aws.s3.BucketV2(
-        f"pulumi-state-{env}",
-        bucket=f"nova-pulumi-state-{env}-{(primary_region or 'uswest2').replace('-', '')}-unique",
+        f"pulumi-state-{actual_env}",
+        bucket=f"nova-pulumi-state-{actual_env}-{(primary_region or 'uswest2').replace('-', '')}-{unique_id}-{timestamp}-{random_suffix}",
         tags=tags,
         opts=ResourceOptions(parent=self, provider=primary_provider),
     )
 
     # Enable versioning for state recovery
     aws.s3.BucketVersioningV2(
-        f"state-versioning-{env}",
+        f"state-versioning-{actual_env}",
         bucket=state_bucket.id,
         versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
             status="Enabled"
@@ -421,7 +412,7 @@ super().**init**("tap:stack:TapStack", name, None, opts)
 
     # Block public access
     aws.s3.BucketPublicAccessBlock(
-        f"state-pab-{env}",
+        f"state-pab-{actual_env}",
         bucket=state_bucket.id,
         block_public_acls=True,
         block_public_policy=True,
@@ -432,7 +423,7 @@ super().**init**("tap:stack:TapStack", name, None, opts)
 
     # Server-side encryption with KMS
     aws.s3.BucketServerSideEncryptionConfigurationV2(
-        f"state-sse-{env}",
+        f"state-sse-{actual_env}",
         bucket=state_bucket.id,
         rules=[
             aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
@@ -450,14 +441,14 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     # ------------------------------------------------------------
     # PROMPT ALIGNMENT: Artifacts storage for GitHub Actions CI/CD pipeline
     artifacts_bucket = aws.s3.BucketV2(
-        f"artifacts-{env}",
-        bucket=f"nova-cicd-artifacts-{env}-{(primary_region or 'uswest2').replace('-', '')}-unique",
+        f"artifacts-{actual_env}",
+        bucket=f"nova-cicd-artifacts-{actual_env}-{(primary_region or 'uswest2').replace('-', '')}-{unique_id}-{timestamp}-{random_suffix}",
         tags=tags,
         opts=ResourceOptions(parent=self, provider=primary_provider),
     )
 
     aws.s3.BucketVersioningV2(
-        f"artifacts-versioning-{env}",
+        f"artifacts-versioning-{actual_env}",
         bucket=artifacts_bucket.id,
         versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
             status="Enabled"
@@ -467,7 +458,7 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     )
 
     aws.s3.BucketPublicAccessBlock(
-        f"artifacts-pab-{env}",
+        f"artifacts-pab-{actual_env}",
         bucket=artifacts_bucket.id,
         block_public_acls=True,
         block_public_policy=True,
@@ -479,7 +470,7 @@ super().**init**("tap:stack:TapStack", name, None, opts)
 
     # Server-side encryption with KMS for artifacts bucket
     aws.s3.BucketServerSideEncryptionConfigurationV2(
-        f"artifacts-sse-{env}",
+        f"artifacts-sse-{actual_env}",
         bucket=artifacts_bucket.id,
         rules=[
             aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
@@ -489,7 +480,8 @@ super().**init**("tap:stack:TapStack", name, None, opts)
                 )
             )
         ],
-        opts=ResourceOptions(parent=artifacts_bucket, provider=primary_provider),
+        opts=ResourceOptions(parent=artifacts_bucket,
+                             provider=primary_provider),
     )
 
     # ------------------------------------------------------------
@@ -497,8 +489,8 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     # ------------------------------------------------------------
     # PROMPT ALIGNMENT: Automated testing in AWS with strict monthly budget cap
     budget = aws.budgets.Budget(
-        f"monthly-budget-{env}",
-        name=f"nova-cicd-budget-{env}",
+        f"monthly-budget-{actual_env}",
+        name=f"nova-cicd-budget-{actual_env}",
         budget_type="COST",
         time_unit="MONTHLY",
         cost_filters=[
@@ -555,7 +547,7 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     self.kms_key = kms_key
     self.kms_alias = kms_alias
     self.config_recorder = config_recorder
-    self.env = env
+    self.env = actual_env
     self.tags = tags
     self.primary_region = primary_region
     self.secondary_regions = secondary_regions
@@ -565,17 +557,22 @@ super().**init**("tap:stack:TapStack", name, None, opts)
     # Continue with infrastructure creation
     self._create_infrastructure()
 
-def \_create_infrastructure(self):
-"""Create the complete infrastructure across all regions.""" # ------------------------------------------------------------ # PRIMARY REGION INFRASTRUCTURE (us-west-2) # ------------------------------------------------------------ # PROMPT ALIGNMENT: Multi-region deployment with us-west-2 as primary
-primary_infra = self.\_create_region_infrastructure(
-region=self.primary_region or "us-west-2",
-env=self.env,
-tags=self.tags,
-provider=self.primary_provider,
-is_primary=True,
-enable_rollback=self.enable_rollback or True,
-parent=self,
-)
+  def _create_infrastructure(self):
+    """Create the complete infrastructure across all regions."""
+    # ------------------------------------------------------------
+    # PRIMARY REGION INFRASTRUCTURE (us-west-2)
+    # ------------------------------------------------------------
+    # PROMPT ALIGNMENT: Multi-region deployment with us-west-2 as primary
+    primary_infra = self._create_region_infrastructure(
+        region=self.primary_region or "us-west-2",
+        env=self.env,
+        actual_env=self.env,
+        tags=self.tags,
+        provider=self.primary_provider,
+        is_primary=True,
+        enable_rollback=self.enable_rollback or True,
+        parent=self,
+    )
 
     # ------------------------------------------------------------
     # SECONDARY REGIONS INFRASTRUCTURE
@@ -586,6 +583,7 @@ parent=self,
       secondary_infras[region] = self._create_region_infrastructure(
           region=region,
           env=self.env,
+          actual_env=self.env,
           tags=self.tags,
           provider=self.secondary_providers[region],
           is_primary=False,
@@ -628,25 +626,27 @@ parent=self,
 
     self.register_outputs({})
 
-def \_create_region_infrastructure(
-self,
-region: str,
-env: str,
-tags: Dict[str, str],
-provider: aws.Provider,
-is_primary: bool,
-enable_rollback: bool,
-parent: pulumi.ComponentResource,
-) -> Dict[str, pulumi.Resource]:
-"""
-Create infrastructure for a single region.
+  def _create_region_infrastructure(
+      self,
+      region: str,
+      env: str,
+      actual_env: str,
+      tags: Dict[str, str],
+      provider: aws.Provider,
+      is_primary: bool,
+      enable_rollback: bool,
+      parent: pulumi.ComponentResource,
+  ) -> Dict[str, pulumi.Resource]:
+    """
+    Create infrastructure for a single region.
 
     PROMPT ALIGNMENT: Implements serverless application (Lambda + API Gateway)
     with automatic rollback functionality and comprehensive monitoring.
 
     Args:
         region: AWS region name
-        env: Environment suffix
+        env: Environment suffix (original)
+        actual_env: Actual environment suffix from deployment
         tags: Resource tags
         provider: AWS provider for this region
         is_primary: Whether this is the primary region
@@ -683,17 +683,17 @@ Create infrastructure for a single region.
 
     # PROMPT ALIGNMENT: Lambda function with Secrets Manager integration
     lambda_code = """
-
 import json
 import os
 import boto3
 from botocore.exceptions import ClientError
 
 def lambda_handler(event, context):
-try: # Get configuration from Secrets Manager
-secrets_client = boto3.client('secretsmanager', region_name=os.environ.get('AWS_REGION'))
-config_secret = secrets_client.get_secret_value(SecretId=os.environ.get('APP_CONFIG_SECRET_ARN'))
-config = json.loads(config_secret['SecretString'])
+    try:
+        # Get configuration from Secrets Manager
+        secrets_client = boto3.client('secretsmanager', region_name=os.environ.get('AWS_REGION'))
+        config_secret = secrets_client.get_secret_value(SecretId=os.environ.get('APP_CONFIG_SECRET_ARN'))
+        config = json.loads(config_secret['SecretString'])
 
         return {
             'statusCode': 200,
@@ -721,12 +721,11 @@ config = json.loads(config_secret['SecretString'])
                 'message': str(e)
             })
         }
-
 """
 
     # Lambda function
     lambda_function = aws.lambda_.Function(
-        f"nova-api-{region_suffix}",
+        f"nova-api-{region_suffix}-{actual_env}",
         runtime="python3.12",
         handler="index.lambda_handler",
         role=lambda_role.arn,
@@ -735,9 +734,9 @@ config = json.loads(config_secret['SecretString'])
         }),
         environment=aws.lambda_.FunctionEnvironmentArgs(
             variables={
-                "ENVIRONMENT": env,
+                "ENVIRONMENT": actual_env,
                 "REGION": region,
-                "APP_CONFIG_SECRET_ARN": f"arn:aws:secretsmanager:{region}:*:secret:nova-app-config-{env}*",
+                "APP_CONFIG_SECRET_ARN": f"arn:aws:secretsmanager:{region}:*:secret:nova-app-config-{actual_env}*",
             }
         ),
         timeout=30,
@@ -748,7 +747,7 @@ config = json.loads(config_secret['SecretString'])
 
     # PROMPT ALIGNMENT: Lambda alias for zero-downtime deployments
     lambda_alias = aws.lambda_.Alias(
-        f"nova-api-alias-{region_suffix}",
+        f"nova-api-alias-{region_suffix}-{actual_env}",
         function_name=lambda_function.name,
         function_version="$LATEST",
         name="live",
@@ -757,10 +756,10 @@ config = json.loads(config_secret['SecretString'])
 
     # PROMPT ALIGNMENT: API Gateway HTTP API for serverless application
     api = aws.apigatewayv2.Api(
-        f"nova-api-gateway-{region_suffix}",
+        f"nova-api-gateway-{region_suffix}-{actual_env}",
         protocol_type="HTTP",
-        name=f"nova-api-{env}-{region}",
-        description=f"Nova Model Breaking API - {env} environment in {region}",
+        name=f"nova-api-{actual_env}-{region}",
+        description=f"Nova Model Breaking API - {actual_env} environment in {region}",
         cors_configuration=aws.apigatewayv2.ApiCorsConfigurationArgs(
             allow_origins=["*"],
             allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -772,7 +771,7 @@ config = json.loads(config_secret['SecretString'])
 
     # API Gateway stage
     api_stage = aws.apigatewayv2.Stage(
-        f"nova-api-stage-{region_suffix}",
+        f"nova-api-stage-{region_suffix}-{actual_env}",
         api_id=api.id,
         name="live",
         auto_deploy=True,
@@ -782,7 +781,7 @@ config = json.loads(config_secret['SecretString'])
 
     # API Gateway integration
     api_integration = aws.apigatewayv2.Integration(
-        f"nova-api-integration-{region_suffix}",
+        f"nova-api-integration-{region_suffix}-{actual_env}",
         api_id=api.id,
         integration_type="AWS_PROXY",
         integration_uri=lambda_alias.invoke_arn,
@@ -793,7 +792,7 @@ config = json.loads(config_secret['SecretString'])
 
     # API Gateway route
     api_route = aws.apigatewayv2.Route(
-        f"nova-api-route-{region_suffix}",
+        f"nova-api-route-{region_suffix}-{actual_env}",
         api_id=api.id,
         route_key="GET /",
         target=pulumi.Output.concat("integrations/", api_integration.id),
@@ -802,7 +801,7 @@ config = json.loads(config_secret['SecretString'])
 
     # Lambda permission for API Gateway
     lambda_permission = aws.lambda_.Permission(
-        f"lambda-permission-{region_suffix}",
+        f"lambda-permission-{region_suffix}-{actual_env}",
         action="lambda:InvokeFunction",
         function=lambda_function.name,
         principal="apigateway.amazonaws.com",
@@ -812,7 +811,7 @@ config = json.loads(config_secret['SecretString'])
 
     # PROMPT ALIGNMENT: CloudWatch Log Group for Lambda with retention
     log_group = aws.cloudwatch.LogGroup(
-        f"lambda-logs-{region_suffix}",
+        f"lambda-logs-{region_suffix}-{actual_env}",
         name=pulumi.Output.concat("/aws/lambda/", lambda_function.name),
         retention_in_days=14,
         tags=tags,
@@ -821,8 +820,8 @@ config = json.loads(config_secret['SecretString'])
 
     # PROMPT ALIGNMENT: CloudWatch Alarms for monitoring and rollback triggers
     error_alarm = aws.cloudwatch.MetricAlarm(
-        f"lambda-errors-{region_suffix}",
-        name=f"nova-lambda-errors-{env}-{region}",
+        f"lambda-errors-{region_suffix}-{actual_env}",
+        name=f"nova-lambda-errors-{actual_env}-{region}",
         comparison_operator="GreaterThanThreshold",
         evaluation_periods=2,
         metric_name="Errors",
@@ -837,8 +836,8 @@ config = json.loads(config_secret['SecretString'])
     )
 
     duration_alarm = aws.cloudwatch.MetricAlarm(
-        f"lambda-duration-{region_suffix}",
-        name=f"nova-lambda-duration-{env}-{region}",
+        f"lambda-duration-{region_suffix}-{actual_env}",
+        name=f"nova-lambda-duration-{actual_env}-{region}",
         comparison_operator="GreaterThanThreshold",
         evaluation_periods=2,
         metric_name="Duration",
@@ -857,22 +856,21 @@ config = json.loads(config_secret['SecretString'])
     # This provides automatic rollback capabilities without cross-account permissions
     if enable_rollback:
         # Create a rollback Lambda function that can revert to previous versions
-        rollback_function = aws.lambda_.Function(
-            f"rollback-function-{region_suffix}",
-            runtime="python3.12",
-            handler="rollback.handler",
-            role=lambda_role.arn,
-            code=pulumi.AssetArchive({
-                "rollback.py": pulumi.StringAsset("""
-
+      rollback_function = aws.lambda_.Function(
+          f"rollback-function-{region_suffix}-{actual_env}",
+          runtime="python3.12",
+          handler="rollback.handler",
+          role=lambda_role.arn,
+          code=pulumi.AssetArchive({
+              "rollback.py": pulumi.StringAsset("""
 import boto3
 import json
 import os
 
 def handler(event, context):
-try:
-lambda_client = boto3.client('lambda')
-function_name = os.environ.get('FUNCTION_TO_ROLLBACK')
+    try:
+        lambda_client = boto3.client('lambda')
+        function_name = os.environ.get('FUNCTION_TO_ROLLBACK')
 
         # Get current version
         response = lambda_client.get_function(FunctionName=function_name)
@@ -914,37 +912,36 @@ function_name = os.environ.get('FUNCTION_TO_ROLLBACK')
                 'message': str(e)
             })
         }
-
 """)
-}),
-environment=aws.lambda\_.FunctionEnvironmentArgs(
-variables={
-"FUNCTION_TO_ROLLBACK": lambda_function.name,
-"ARTIFACTS_BUCKET": self.artifacts_bucket.bucket,
-}
-),
-timeout=60,
-memory_size=128,
-tags=tags,
-opts=ResourceOptions(parent=lambda_function, provider=provider),
-)
+          }),
+          environment=aws.lambda_.FunctionEnvironmentArgs(
+              variables={
+                  "FUNCTION_TO_ROLLBACK": lambda_function.name,
+                  "ARTIFACTS_BUCKET": self.artifacts_bucket.bucket,
+              }
+          ),
+          timeout=60,
+          memory_size=128,
+          tags=tags,
+          opts=ResourceOptions(parent=lambda_function, provider=provider),
+      )
 
-        # Create rollback alarm that triggers the rollback function
-        rollback_alarm = aws.cloudwatch.MetricAlarm(
-            f"rollback-alarm-{region_suffix}",
-            name=f"nova-rollback-alarm-{env}-{region}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=1,
-            metric_name="Errors",
-            namespace="AWS/Lambda",
-            period=60,
-            statistic="Sum",
-            threshold=5,  # Trigger rollback after 5 errors in 1 minute
-            alarm_description=f"Trigger rollback for {region}",
-            alarm_actions=[rollback_function.arn],
-            tags=tags,
-            opts=ResourceOptions(parent=rollback_function, provider=provider),
-        )
+      # Create rollback alarm that triggers the rollback function
+      rollback_alarm = aws.cloudwatch.MetricAlarm(
+          f"rollback-alarm-{region_suffix}-{actual_env}",
+          name=f"nova-rollback-alarm-{actual_env}-{region}",
+          comparison_operator="GreaterThanThreshold",
+          evaluation_periods=1,
+          metric_name="Errors",
+          namespace="AWS/Lambda",
+          period=60,
+          statistic="Sum",
+          threshold=5,  # Trigger rollback after 5 errors in 1 minute
+          alarm_description=f"Trigger rollback for {region}",
+          alarm_actions=[rollback_function.arn],
+          tags=tags,
+          opts=ResourceOptions(parent=rollback_function, provider=provider),
+      )
 
     # Return only Pulumi resources, not primitive values
     result: Dict[str, pulumi.Resource] = {
@@ -959,22 +956,22 @@ opts=ResourceOptions(parent=lambda_function, provider=provider),
 
     # Add rollback resources if enabled
     if enable_rollback:
-        result["rollback_function"] = rollback_function
-        result["rollback_alarm"] = rollback_alarm
+      result["rollback_function"] = rollback_function
+      result["rollback_alarm"] = rollback_alarm
 
     return result
 
-def \_create_cross_region_monitoring(
-self,
-primary_infra: Dict[str, pulumi.Resource],
-secondary_infras: Dict[str, Dict[str, pulumi.Resource]],
-env: str,
-tags: Dict[str, str],
-enable_rollback: bool,
-parent: pulumi.ComponentResource,
-):
-"""
-Create cross-region monitoring and rollback mechanisms.
+  def _create_cross_region_monitoring(
+      self,
+      primary_infra: Dict[str, pulumi.Resource],
+      secondary_infras: Dict[str, Dict[str, pulumi.Resource]],
+      env: str,
+      tags: Dict[str, str],
+      enable_rollback: bool,
+      parent: pulumi.ComponentResource,
+  ):
+    """
+    Create cross-region monitoring and rollback mechanisms.
 
     PROMPT ALIGNMENT: Implements automatic rollback functionality and
     comprehensive monitoring across all regions.
@@ -1005,20 +1002,20 @@ Create cross-region monitoring and rollback mechanisms.
         opts=ResourceOptions(parent=sns_topic),
     )
 
-def \_export_outputs(
-self,
-primary_infra: Dict[str, pulumi.Resource],
-secondary_infras: Dict[str, Dict[str, pulumi.Resource]],
-secrets: Dict[str, aws.secretsmanager.Secret],
-budget: aws.budgets.Budget,
-state_bucket: aws.s3.BucketV2,
-artifacts_bucket: aws.s3.BucketV2,
-env: str,
-primary_region: str,
-secondary_regions: List[str],
-) -> None:
-"""
-Export outputs for CI/CD integration and testing.
+  def _export_outputs(
+      self,
+      primary_infra: Dict[str, pulumi.Resource],
+      secondary_infras: Dict[str, Dict[str, pulumi.Resource]],
+      secrets: Dict[str, aws.secretsmanager.Secret],
+      budget: aws.budgets.Budget,
+      state_bucket: aws.s3.BucketV2,
+      artifacts_bucket: aws.s3.BucketV2,
+      env: str,
+      primary_region: str,
+      secondary_regions: List[str],
+  ) -> None:
+    """
+    Export outputs for CI/CD integration and testing.
 
     PROMPT ALIGNMENT: Provides outputs for GitHub Actions integration,
     testing, and monitoring purposes.
@@ -1105,33 +1102,22 @@ Export outputs for CI/CD integration and testing.
 
     pulumi.export("rollback_info", rollback_info)
 
-# =================================================================================================
-
-# GITHUB ACTIONS CI/CD PIPELINE CONFIGURATION
-
-# =================================================================================================
-
-# PROMPT ALIGNMENT: GitHub Actions workflow configuration embedded in code
-
-# This section provides the GitHub Actions workflow configuration that should be
-
-# placed in .github/workflows/ci-cd-pipeline.yml when integrating with GitHub.
-
-# The workflow implements all expert-level requirements:
-
-# - Automated testing in AWS with strict $15/month budget cap
-
-# - Automatic deployment on pushes to main branch
-
-# - Secure management of sensitive information using AWS Secrets Manager
-
-# - Automatic rollback functionality for failed deployments
-
-# - Multi-region deployment (us-west-2 primary, us-east-1 secondary)
-
-# - Comprehensive testing and validation
-
-""" # GITHUB ACTIONS WORKFLOW CONFIGURATION # File: .github/workflows/ci-cd-pipeline.yml
+  # =================================================================================================
+  # GITHUB ACTIONS CI/CD PIPELINE CONFIGURATION
+  # =================================================================================================
+  # PROMPT ALIGNMENT: GitHub Actions workflow configuration embedded in code
+  # This section provides the GitHub Actions workflow configuration that should be
+  # placed in .github/workflows/ci-cd-pipeline.yml when integrating with GitHub.
+  # The workflow implements all expert-level requirements:
+  # - Automated testing in AWS with strict $15/month budget cap
+  # - Automatic deployment on pushes to main branch
+  # - Secure management of sensitive information using AWS Secrets Manager
+  # - Automatic rollback functionality for failed deployments
+  # - Multi-region deployment (us-west-2 primary, us-east-1 secondary)
+  # - Comprehensive testing and validation
+  """
+    # GITHUB ACTIONS WORKFLOW CONFIGURATION
+    # File: .github/workflows/ci-cd-pipeline.yml
 
     name: 'Nova Model Breaking CI/CD Pipeline'
 
@@ -1525,6 +1511,8 @@ Export outputs for CI/CD integration and testing.
 
     # END GITHUB ACTIONS WORKFLOW CONFIGURATION
     """
+
+```
 
 # =================================================================================================
 
