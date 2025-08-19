@@ -366,7 +366,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-alb-sg-${AWS::StackName}'
+      GroupName: !Sub '${Environment}-albsg-${AWS::StackName}'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
@@ -394,7 +394,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${Environment}-alb-sg-${AWS::StackName}'
+            Fn::Sub: '${Environment}-albsg-${AWS::StackName}'
         - Key: Environment
           Value:
             Ref: Environment
@@ -403,7 +403,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName:
-        Fn::Sub: '${Environment}-app-sg-${AWS::StackName}'
+        Fn::Sub: '${Environment}-appsg-${AWS::StackName}'
       GroupDescription: Security group for application servers
       VpcId:
         Ref: ApplicationVPC
@@ -427,14 +427,14 @@ Resources:
           Description: HTTP for updates
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-app-sg-${AWS::StackName}'
+          Value: !Sub '${Environment}-appsg-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-bastion-sg-${AWS::StackName}'
+      GroupName: !Sub '${Environment}-bsg-${AWS::StackName}'
       GroupDescription: Security group for bastion host
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
@@ -451,7 +451,7 @@ Resources:
           Description: SSH to application servers
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-bastion-sg-${AWS::StackName}'
+          Value: !Sub '${Environment}-bsg-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -459,7 +459,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-ec2-instance-role-${AWS::StackName}'
+      RoleName: !Sub '${Environment}-ec2role-${AWS::StackName}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -495,7 +495,7 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Environment}-ec2-instance-profile-${AWS::StackName}'
+      InstanceProfileName: !Sub '${Environment}-ec2prof-${AWS::StackName}'
       Roles:
         - !Ref EC2InstanceRole
 
@@ -503,7 +503,7 @@ Resources:
   ApplicationS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-app-artifacts-${AWS::AccountId}-${AWS::Region}-${Environment}'
+      BucketName: !Sub '${Environment}-app-artifacts-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -531,7 +531,7 @@ Resources:
   LoggingS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-logs-${AWS::AccountId}-${AWS::Region}-${Environment}'
+      BucketName: !Sub '${Environment}-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -739,7 +739,7 @@ Resources:
   ApplicationLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${Environment}-app-launch-template-${AWS::StackName}'
+      LaunchTemplateName: !Sub '${Environment}-tmpl-${AWS::StackName}'
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
