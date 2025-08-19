@@ -10,6 +10,10 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
+import { NetworkStack } from './network-stack';
+import { IamStack } from './iam-stack';
+import { StorageStack } from './storage-stack';
+import { ComputeStack } from './compute-stack';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -53,236 +57,105 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
+    const region = 'us-east-1';
     const tags = {
       Environment: 'Development',
       ...(args.tags || {}),
     };
 
-    // Get the latest Amazon Linux 2 AMI
+    // Create IAM Stack
+    const iamStack = new IamStack(
+      `iam-${environmentSuffix}`,
+      {
+        environmentSuffix,
+        tags,
+      },
+      { parent: this }
+    );
+
+    // Create Network Stack
+    const networkStack = new NetworkStack(
+      `network-${environmentSuffix}`,
+      {
+        environmentSuffix,
+        region,
+        allowedCidr: '0.0.0.0/0',
+        tags,
+      },
+      { parent: this }
+    );
+
+    // Create Storage Stack
+    const storageStack = new StorageStack(
+      `storage-${environmentSuffix}`,
+      {
+        environmentSuffix,
+        region,
+        isPrimary: true,
+        tags,
+        vpcId: networkStack.vpcId,
+        privateSubnetIds: networkStack.privateSubnetIds,
+      },
+      { parent: this }
+    );
+
+    // Create Compute Stack
+    new ComputeStack(
+      `compute-${environmentSuffix}`,
+      {
+        environmentSuffix,
+        region,
+        vpcId: networkStack.vpcId,
+        publicSubnetIds: networkStack.publicSubnetIds,
+        privateSubnetIds: networkStack.privateSubnetIds,
+        instanceRole: iamStack.instanceRole,
+        s3BucketArn: storageStack.s3BucketArn,
+        allowedCidr: '0.0.0.0/0',
+        tags,
+        albSecurityGroupId: networkStack.albSecurityGroupId,
+        ec2SecurityGroupId: networkStack.ec2SecurityGroupId,
+      },
+      { parent: this }
+    );
+
+    // For integration tests, we need to expose a single EC2 instance
+    // Let's create one directly in the public subnet
     const ami = pulumi.output(
       aws.ec2.getAmi({
-        filters: [
-          {
-            name: 'name',
-            values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-          },
-        ],
-        owners: ['amazon'],
         mostRecent: true,
+        owners: ['amazon'],
+        filters: [
+          { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
+          { name: 'virtualization-type', values: ['hvm'] },
+        ],
       })
     );
 
-    // Create IAM role for EC2 to use Systems Manager Session Manager
-    const ec2Role = new aws.iam.Role(
-      `tap-ec2-role-${environmentSuffix}`,
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ec2.amazonaws.com',
-              },
-            },
-          ],
-        }),
-        tags: tags,
-      },
-      { parent: this }
-    );
-
-    // Attach the Systems Manager managed policy for Session Manager
-    new aws.iam.RolePolicyAttachment(
-      `tap-ssm-policy-${environmentSuffix}`,
-      {
-        role: ec2Role.name,
-        policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
-      },
-      { parent: this }
-    );
-
-    // Create instance profile for the EC2 role
-    const instanceProfile = new aws.iam.InstanceProfile(
-      `tap-instance-profile-${environmentSuffix}`,
-      {
-        role: ec2Role.name,
-        tags: tags,
-      },
-      { parent: this }
-    );
-
-    // Create VPC and security group for EC2 instance
-    const vpc = new aws.ec2.Vpc(
-      `tap-vpc-${environmentSuffix}`,
-      {
-        cidrBlock: '10.0.0.0/16',
-        enableDnsHostnames: true,
-        enableDnsSupport: true,
-        tags: {
-          ...tags,
-          Name: `tap-vpc-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
-
-    // Create internet gateway
-    const igw = new aws.ec2.InternetGateway(
-      `tap-igw-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        tags: {
-          ...tags,
-          Name: `tap-igw-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
-
-    // Create public subnet
-    const publicSubnet = new aws.ec2.Subnet(
-      `tap-public-subnet-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        cidrBlock: '10.0.1.0/24',
-        availabilityZone: 'us-east-1a',
-        mapPublicIpOnLaunch: true,
-        tags: {
-          ...tags,
-          Name: `tap-public-subnet-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
-
-    // Create route table for public subnet
-    const publicRouteTable = new aws.ec2.RouteTable(
-      `tap-public-rt-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        routes: [
-          {
-            cidrBlock: '0.0.0.0/0',
-            gatewayId: igw.id,
-          },
-        ],
-        tags: {
-          ...tags,
-          Name: `tap-public-rt-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
-
-    // Associate route table with public subnet
-    new aws.ec2.RouteTableAssociation(
-      `tap-public-rta-${environmentSuffix}`,
-      {
-        subnetId: publicSubnet.id,
-        routeTableId: publicRouteTable.id,
-      },
-      { parent: this }
-    );
-
-    // Create security group for EC2 instance
-    const securityGroup = new aws.ec2.SecurityGroup(
-      `tap-sg-${environmentSuffix}`,
-      {
-        name: `tap-sg-${environmentSuffix}`,
-        description: 'Security group for TAP EC2 instance',
-        vpcId: vpc.id,
-        ingress: [
-          {
-            protocol: 'tcp',
-            fromPort: 22,
-            toPort: 22,
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'SSH access',
-          },
-        ],
-        egress: [
-          {
-            protocol: '-1',
-            fromPort: 0,
-            toPort: 0,
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'All outbound traffic',
-          },
-        ],
-        tags: {
-          ...tags,
-          Name: `tap-sg-${environmentSuffix}`,
-        },
-      },
-      { parent: this }
-    );
-
-    // Create EC2 instance
-    const instance = new aws.ec2.Instance(
-      `tap-instance-${environmentSuffix}`,
+    const testInstance = new aws.ec2.Instance(
+      `tap-test-instance-${environmentSuffix}`,
       {
         ami: ami.id,
         instanceType: 't2.micro',
-        subnetId: publicSubnet.id,
-        vpcSecurityGroupIds: [securityGroup.id],
-        iamInstanceProfile: instanceProfile.name,
+        subnetId: networkStack.publicSubnetIds.apply(ids => ids[0]),
+        vpcSecurityGroupIds: [networkStack.ec2SecurityGroupId],
+        iamInstanceProfile: iamStack.instanceProfile,
         tags: {
           ...tags,
-          Name: `tap-instance-${environmentSuffix}`,
+          Name: `tap-test-instance-${environmentSuffix}`,
         },
       },
       { parent: this }
     );
 
-    // Create S3 bucket with versioning enabled
-    const bucket = new aws.s3.Bucket(
-      `tap-bucket-${environmentSuffix}`,
-      {
-        bucket: `tap-bucket-${environmentSuffix}-${Math.random().toString(36).substring(7)}`,
-        versioning: {
-          enabled: true,
-        },
-        serverSideEncryptionConfiguration: {
-          rule: {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
-          },
-        },
-        tags: tags,
-      },
-      { parent: this }
-    );
-
-    // Create EventBridge rule for S3 notifications
-    new aws.cloudwatch.EventRule(
-      `tap-s3-event-rule-${environmentSuffix}`,
-      {
-        description: 'Capture S3 bucket events',
-        eventPattern: JSON.stringify({
-          source: ['aws.s3'],
-          detail: {
-            bucket: {
-              name: [bucket.bucket],
-            },
-          },
-        }),
-        tags: tags,
-      },
-      { parent: this }
-    );
-
-    // Set outputs
-    this.bucketName = bucket.bucket;
-    this.instanceId = instance.id;
-    this.vpcId = vpc.id;
-    this.subnetId = publicSubnet.id;
-    this.securityGroupId = securityGroup.id;
-    this.instancePublicIp = instance.publicIp;
-    this.instancePrivateIp = instance.privateIp;
-    this.s3BucketArn = bucket.arn;
+    // Set outputs for integration tests
+    this.bucketName = storageStack.s3BucketName;
+    this.instanceId = testInstance.id;
+    this.vpcId = networkStack.vpcId;
+    this.subnetId = networkStack.publicSubnetIds.apply(ids => ids[0]);
+    this.securityGroupId = networkStack.ec2SecurityGroupId;
+    this.instancePublicIp = testInstance.publicIp;
+    this.instancePrivateIp = testInstance.privateIp;
+    this.s3BucketArn = storageStack.s3BucketArn;
 
     // Register the outputs of this component
     this.registerOutputs({
