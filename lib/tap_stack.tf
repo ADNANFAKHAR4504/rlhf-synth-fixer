@@ -346,7 +346,7 @@ resource "aws_instance" "bastion" {
 # IAM for Private EC2 -> S3 + KMS
 #################
 resource "aws_iam_role" "app_role" {
-  name               = "${local.name_prefix}-app-role"
+  name               = "${local.name_prefix}-apps-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -364,7 +364,7 @@ resource "aws_iam_role" "app_role" {
 
 # Least-privilege S3 access to bucket + restricted prefix
 resource "aws_iam_policy" "app_s3_policy" {
-  name        = "${local.name_prefix}-app-s3-policy"
+  name        = "${local.name_prefix}-apps-s3-policy"
   description = "Least-privilege S3 access to application bucket prefix"
 
   policy = jsonencode({
@@ -395,13 +395,13 @@ resource "aws_iam_policy" "app_s3_policy" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-s3-policy"
+    Name = "${local.name_prefix}-apps-s3-policy"
   })
 }
 
 # KMS usage for encrypt/decrypt with the CMK
 resource "aws_iam_policy" "app_kms_policy" {
-  name        = "${local.name_prefix}-app-kms-policy"
+  name        = "${local.name_prefix}-apps-kms-policy"
   description = "Allow app instance to use CMK for S3 encryption/decryption"
 
   policy = jsonencode({
@@ -421,7 +421,7 @@ resource "aws_iam_policy" "app_kms_policy" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-kms-policy"
+    Name = "${local.name_prefix}-apps-kms-policy"
   })
 }
 
@@ -436,11 +436,11 @@ resource "aws_iam_role_policy_attachment" "attach_app_kms" {
 }
 
 resource "aws_iam_instance_profile" "app_profile" {
-  name = "${local.name_prefix}-app-instance-profile"
+  name = "${local.name_prefix}-apps-instance-profile"
   role = aws_iam_role.app_role.name
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-instance-profile"
+    Name = "${local.name_prefix}-apps-instance-profile"
   })
 }
 
@@ -485,12 +485,12 @@ resource "aws_kms_key" "app" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-kms-key"
+    Name = "${local.name_prefix}-apps-kms-key"
   })
 }
 
 resource "aws_kms_alias" "app_alias" {
-  name          = "alias/${local.name_prefix}-app-kms"
+  name          = "alias/${local.name_prefix}-apps-kms"
   target_key_id = aws_kms_key.app.key_id
 }
 
@@ -501,7 +501,7 @@ resource "aws_s3_bucket" "app" {
   bucket = local.app_bucket_name
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-app-bucket"
+    Name = "${local.name_prefix}-apps-bucket"
   })
 }
 
