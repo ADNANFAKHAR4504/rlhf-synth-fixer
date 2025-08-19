@@ -709,39 +709,39 @@ def lambda_handler(event, context):
     provider: aws.Provider
   ): aws.ec2.LaunchTemplate {
     const userData = Buffer.from(`#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
-
-# Install CloudWatch agent
-wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-rpm -U ./amazon-cloudwatch-agent.rpm
-
-# Configure CloudWatch agent
-cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
-{
-  "logs": {
-    "logs_collected": {
-      "files": {
-        "collect_list": [
-          {
-            "file_path": "/var/log/httpd/access_log",
-            "log_group_name": "/aws/ec2/httpd/access",
-            "log_stream_name": "{instance_id}"
-          }
-        ]
+  yum update -y
+  yum install -y httpd
+  systemctl start httpd
+  systemctl enable httpd
+  echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
+  
+  # Install CloudWatch agent
+  wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+  rpm -U ./amazon-cloudwatch-agent.rpm
+  
+  # Configure CloudWatch agent
+  cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
+  {
+    "logs": {
+      "logs_collected": {
+        "files": {
+          "collect_list": [
+            {
+              "file_path": "/var/log/httpd/access_log",
+              "log_group_name": "/aws/ec2/httpd/access",
+              "log_stream_name": "{instance_id}"
+            }
+          ]
+        }
       }
     }
   }
-}
-EOF
-
-# Start CloudWatch agent
-/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-`).toString('base64');
-
+  EOF
+  
+  # Start CloudWatch agent
+  /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+  `).toString('base64');
+  
     return new aws.ec2.LaunchTemplate(`launch-template-${region}`, {
       namePrefix: `nova-model-${region}-`,
       imageId: aws.ec2.getAmi({
@@ -766,8 +766,8 @@ EOF
           ebs: {
             volumeSize: 20,
             volumeType: 'gp3',
-            encrypted: pulumi.interpolate`${this.kmsKey.arn}`,
-            kmsKeyId: this.kmsKey.arn,
+            encrypted: 'true',              // Fix: Use boolean true instead of KMS ARN
+            kmsKeyId: this.kmsKey.arn,    // Fix: Use kmsKeyId property for the KMS key
           },
         },
       ],
@@ -783,6 +783,7 @@ EOF
       ],
     }, { parent: this, provider });
   }
+  
 
   private createApplicationLoadBalancer(
     region: string,
