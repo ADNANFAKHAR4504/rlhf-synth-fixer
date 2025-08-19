@@ -44,8 +44,8 @@ describe("Terraform VPC Infrastructure Integration Tests", () => {
       expect(vpc.State).toBe("available");
       expect(vpc.CidrBlock).toBe("10.0.0.0/16");
       // DNS settings might be returned as undefined if true
-      expect(vpc.EnableDnsHostnames ?? true).toBe(true);
-      expect(vpc.EnableDnsSupport ?? true).toBe(true);
+      expect((vpc as any).EnableDnsHostnames ?? true).toBe(true);
+      expect((vpc as any).EnableDnsSupport ?? true).toBe(true);
       
       // Check tags
       const tags = vpc.Tags || [];
@@ -282,8 +282,8 @@ describe("Terraform VPC Infrastructure Integration Tests", () => {
           
           expect(response.authType).toBe("AWS_IAM");
           // Tags might not be returned in the response - check if they exist
-          if (response.tags) {
-            expect(response.tags?.Environment).toBe("Production");
+          if ((response as any).tags) {
+            expect((response as any).tags?.Environment).toBe("Production");
           }
         } catch (error: any) {
           // VPC Lattice might not be available in all regions
