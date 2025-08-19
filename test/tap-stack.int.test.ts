@@ -315,7 +315,7 @@ describe('TapStack Integration Tests', () => {
                         // Verify unique CIDR blocks per region
                         const expectedCidr = index === 0 ? '10.0.0.0/16' : '10.1.0.0/16';
                         expect(vpcDescription.Vpcs[0].CidrBlock).toBe(expectedCidr);
-                        expect(vpcDescription.Vpcs.State).toBe('available');
+                        expect(vpcDescription.Vpcs[0].State).toBe('available');
                     }
                 } catch (error) {
                     console.error(`VPC verification failed in ${region}:`, error);
