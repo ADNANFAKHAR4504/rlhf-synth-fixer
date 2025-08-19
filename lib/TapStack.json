@@ -1081,6 +1081,12 @@
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
                 },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "ApplicationLogsBucket"
+                    },
+                    "LogFilePrefix": "s3-access-logs/"
+                },
                 "LifecycleConfiguration": {
                     "Rules": [
                         {
@@ -1088,6 +1094,15 @@
                             "Status": "Enabled",
                             "ExpirationInDays": 365,
                             "NoncurrentVersionExpirationInDays": 30
+                        },
+                        {
+                            "Id": "DeleteOldAccessLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "NoncurrentVersionExpirationInDays": 30,
+                            "Filter": {
+                                "Prefix": "s3-access-logs/"
+                            }
                         }
                     ]
                 },

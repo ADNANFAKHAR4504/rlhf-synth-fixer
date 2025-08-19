@@ -26,6 +26,7 @@ import {
 import {
   GetBucketEncryptionCommand,
   GetBucketLifecycleConfigurationCommand,
+  GetBucketLoggingCommand,
   GetPublicAccessBlockCommand,
   HeadBucketCommand,
   S3Client,
@@ -305,12 +306,45 @@ describe('TapStack Integration Tests', () => {
         );
 
         expect(lifecycleResponse.Rules).toBeDefined();
+        expect(lifecycleResponse.Rules).toHaveLength(2);
+
         const deleteOldLogsRule = lifecycleResponse.Rules!.find(
           rule => rule.ID === 'DeleteOldLogs'
         );
         expect(deleteOldLogsRule).toBeDefined();
         expect(deleteOldLogsRule!.Status).toBe('Enabled');
         expect(deleteOldLogsRule!.Expiration!.Days).toBe(365);
+
+        const deleteOldAccessLogsRule = lifecycleResponse.Rules!.find(
+          rule => rule.ID === 'DeleteOldAccessLogs'
+        );
+        expect(deleteOldAccessLogsRule).toBeDefined();
+        expect(deleteOldAccessLogsRule!.Status).toBe('Enabled');
+        expect(deleteOldAccessLogsRule!.Expiration!.Days).toBe(90);
+        expect(deleteOldAccessLogsRule!.Filter!.Prefix).toBe('s3-access-logs/');
+      }
+    });
+
+    test('S3 bucket should have logging configuration', async () => {
+      if (
+        outputs.ApplicationLogsBucketName &&
+        outputs.ApplicationLogsBucketName !== 'No bucket created'
+      ) {
+        const loggingResponse = await s3Client.send(
+          new GetBucketLoggingCommand({
+            Bucket: outputs.ApplicationLogsBucketName,
+          })
+        );
+
+        expect(loggingResponse.LoggingEnabled).toBeDefined();
+        if (loggingResponse.LoggingEnabled) {
+          expect(loggingResponse.LoggingEnabled.TargetBucket).toBe(
+            outputs.ApplicationLogsBucketName
+          );
+          expect(loggingResponse.LoggingEnabled.TargetPrefix).toBe(
+            's3-access-logs/'
+          );
+        }
       }
     });
   });

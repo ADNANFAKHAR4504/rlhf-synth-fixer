@@ -480,6 +480,13 @@ describe('TapStack CloudFormation Template', () => {
         );
         expect(bucket.Properties.BucketEncryption).toBeDefined();
         expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
+        expect(bucket.Properties.LoggingConfiguration).toBeDefined();
+        expect(
+          bucket.Properties.LoggingConfiguration.DestinationBucketName['Ref']
+        ).toBe('ApplicationLogsBucket');
+        expect(bucket.Properties.LoggingConfiguration.LogFilePrefix).toBe(
+          's3-access-logs/'
+        );
         expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
       });
 
@@ -500,6 +507,33 @@ describe('TapStack CloudFormation Template', () => {
         expect(publicAccess.BlockPublicPolicy).toBe(true);
         expect(publicAccess.IgnorePublicAcls).toBe(true);
         expect(publicAccess.RestrictPublicBuckets).toBe(true);
+      });
+
+      test('ApplicationLogsBucket should have logging configuration', () => {
+        const bucket = template.Resources.ApplicationLogsBucket;
+        const logging = bucket.Properties.LoggingConfiguration;
+        expect(logging.DestinationBucketName['Ref']).toBe(
+          'ApplicationLogsBucket'
+        );
+        expect(logging.LogFilePrefix).toBe('s3-access-logs/');
+      });
+
+      test('ApplicationLogsBucket should have lifecycle rules for logs', () => {
+        const bucket = template.Resources.ApplicationLogsBucket;
+        const lifecycle = bucket.Properties.LifecycleConfiguration;
+        expect(lifecycle.Rules).toHaveLength(2);
+
+        const deleteOldLogsRule = lifecycle.Rules.find(
+          (rule: any) => rule.Id === 'DeleteOldLogs'
+        );
+        const deleteOldAccessLogsRule = lifecycle.Rules.find(
+          (rule: any) => rule.Id === 'DeleteOldAccessLogs'
+        );
+
+        expect(deleteOldLogsRule).toBeDefined();
+        expect(deleteOldAccessLogsRule).toBeDefined();
+        expect(deleteOldAccessLogsRule.Filter.Prefix).toBe('s3-access-logs/');
+        expect(deleteOldAccessLogsRule.ExpirationInDays).toBe(90);
       });
     });
 
