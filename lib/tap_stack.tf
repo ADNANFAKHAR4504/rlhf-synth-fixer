@@ -112,7 +112,7 @@ locals {
   bastion_key_name_final = var.bastion_key_name != "" ? var.bastion_key_name : "${local.name_prefix}-bastion-key-${random_id.key_suffix.hex}"
 
   # S3 bucket name (globally unique with account & region baked in)
-  app_bucket_name = lower("${local.name_prefix}-app-${data.aws_caller_identity.current.account_id}-${var.aws_region}-testing1")
+  app_bucket_name = lower("${local.name_prefix}-app-${data.aws_caller_identity.current.account_id}-${var.aws_region}-testing01")
 
   # App object prefix
   app_prefix = "app/"
@@ -241,7 +241,7 @@ resource "aws_route_table_association" "private_assoc_b" {
 # Security Groups
 #################
 resource "aws_security_group" "bastion_sg" {
-  name        = "${local.name_prefix}-bastion-sg"
+  name        = "${local.name_prefix}-bastion-sg-0001"
   description = "Allow SSH from allowed CIDR"
   vpc_id      = aws_vpc.main.id
 
@@ -267,7 +267,7 @@ resource "aws_security_group" "bastion_sg" {
 }
 
 resource "aws_security_group" "app_sg" {
-  name        = "${local.name_prefix}-app-sg"
+  name        = "${local.name_prefix}-app-sg-0001"
   description = "Allow SSH from bastion only"
   vpc_id      = aws_vpc.main.id
 
@@ -346,7 +346,7 @@ resource "aws_instance" "bastion" {
 # IAM for Private EC2 -> S3 + KMS
 #################
 resource "aws_iam_role" "app_role" {
-  name               = "${local.name_prefix}-app-role0001"
+  name               = "${local.name_prefix}-app-role-0001"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
@@ -364,7 +364,7 @@ resource "aws_iam_role" "app_role" {
 
 # Least-privilege S3 access to bucket + restricted prefix
 resource "aws_iam_policy" "app_s3_policy" {
-  name        = "${local.name_prefix}-apps-s3-policy-00001"
+  name        = "${local.name_prefix}-apps-s3-policy-000001"
   description = "Least-privilege S3 access to application bucket prefix"
 
   policy = jsonencode({
@@ -401,7 +401,7 @@ resource "aws_iam_policy" "app_s3_policy" {
 
 # KMS usage for encrypt/decrypt with the CMK
 resource "aws_iam_policy" "app_kms_policy" {
-  name        = "${local.name_prefix}-apps-kms-policy"
+  name        = "${local.name_prefix}-apps-kms-policy-0001"
   description = "Allow app instance to use CMK for S3 encryption/decryption"
 
   policy = jsonencode({
@@ -436,7 +436,7 @@ resource "aws_iam_role_policy_attachment" "attach_app_kms" {
 }
 
 resource "aws_iam_instance_profile" "app_profile" {
-  name = "${local.name_prefix}-app-instance-profile-0001"
+  name = "${local.name_prefix}-app-instance-profile-00001"
   role = aws_iam_role.app_role.name
 
   tags = merge(local.common_tags, {
@@ -490,7 +490,7 @@ resource "aws_kms_key" "app" {
 }
 
 resource "aws_kms_alias" "app_alias" {
-  name          = "alias/${local.name_prefix}-apps-kms-0001"
+  name          = "alias/${local.name_prefix}-apps-kms-00001"
   target_key_id = aws_kms_key.app.key_id
 }
 
