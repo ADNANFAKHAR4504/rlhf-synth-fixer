@@ -145,7 +145,7 @@ variable "roles" {
 
     breakglass = {
       description          = "Emergency access role with strict controls"
-      max_session_duration = 3600                               # Minimum allowed by AWS (1 hour)
+      max_session_duration = 3600             # Minimum allowed by AWS (1 hour)
       trusted_principals   = ["123456789012"] # Use just the account ID for same-account trust
       require_external_id  = false
       require_mfa          = true
