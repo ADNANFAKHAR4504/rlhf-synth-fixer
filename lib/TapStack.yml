@@ -23,8 +23,22 @@ Parameters:
     Description: 'Database master username'
     Default: 'admin'
     NoEcho: true
+
+  UseExistingCloudTrail:
+    Type: String
+    Description: 'Set to true to use an existing CloudTrail and skip creating a new trail and its bucket'
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+
+  ExistingCloudTrailArn:
+    Type: String
+    Description: 'ARN of the existing CloudTrail to use when UseExistingCloudTrail is true'
+    Default: ''
   
 # (no Mappings required)
+
+Conditions:
+  CreateCloudTrail: !Equals [ !Ref UseExistingCloudTrail, 'false' ]
 
 Resources:
   # ============================================================================
@@ -34,6 +48,7 @@ Resources:
   # CloudTrail S3 Bucket
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateCloudTrail
     Properties:
       BucketName: !Sub 's3-${ProjectName}-${Environment}-cloudtrail-${AWS::AccountId}'
       BucketEncryption:
@@ -56,6 +71,7 @@ Resources:
   # CloudTrail Bucket Policy
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: CreateCloudTrail
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
@@ -80,6 +96,7 @@ Resources:
   # CloudTrail
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: CreateCloudTrail
     DependsOn: CloudTrailBucketPolicy
     Properties:
       TrailName: !Sub 'trail-${ProjectName}-${Environment}'
@@ -678,6 +695,6 @@ Outputs:
 
   CloudTrailArn:
     Description: 'CloudTrail ARN'
-    Value: !GetAtt CloudTrail.Arn
+    Value: !If [ CreateCloudTrail, !GetAtt CloudTrail.Arn, !Ref ExistingCloudTrailArn ]
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
