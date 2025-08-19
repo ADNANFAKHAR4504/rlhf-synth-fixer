@@ -116,7 +116,7 @@ export class TapStack extends TerraformStack {
     new CloudTrailModule(this, 'cloudtrail', {
       project,
       env: environmentSuffix,
-      kmsKeyId: kmsModule.kmsKey.id,
+      kmsKeyId: kmsModule.kmsKey.arn,
       provider: awsProvider,
     });
 

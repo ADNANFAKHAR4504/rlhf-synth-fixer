@@ -273,7 +273,7 @@ describe('TapStack Unit Tests', () => {
         expect(S3Module).toHaveBeenCalledWith(expect.anything(), 'storage', expect.objectContaining({ kmsKeyArn: kms.kmsKey.arn }));
         expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'database', expect.objectContaining({ kmsKeyArn: kms.kmsKey.arn }));
         expect(Ec2Module).toHaveBeenCalledWith(expect.anything(), 'compute', expect.objectContaining({ kmsKeyId: kms.kmsKey.id }));
-        expect(CloudTrailModule).toHaveBeenCalledWith(expect.anything(), 'cloudtrail', expect.objectContaining({ kmsKeyId: kms.kmsKey.id }));
+        expect(CloudTrailModule).toHaveBeenCalledWith(expect.anything(), 'cloudtrail', expect.objectContaining({ kmsKeyId: kms.kmsKey.arn }));
       });
 
       test('should wire VPC components correctly to dependent modules', () => {
