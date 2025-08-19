@@ -104,8 +104,23 @@ export class TapStack extends pulumi.ComponentResource {
   }
 
   private createLogsBucket(tags: { [key: string]: string }): { bucket: aws.s3.Bucket, publicAccessBlock: aws.s3.BucketPublicAccessBlock } {
+    // Sanitize bucket name to comply with S3 naming rules
+    const stackName = pulumi.getStack().toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const timestamp = Date.now();
+    let bucketName = `nova-model-logs-${stackName}-${timestamp}`;
+    
+    // Ensure bucket name is within S3 63-character limit
+    if (bucketName.length > 63) {
+      // Truncate the stack name portion to fit within limit
+      const prefix = 'nova-model-logs-';
+      const suffix = `-${timestamp}`;
+      const maxStackNameLen = 63 - prefix.length - suffix.length;
+      const truncatedStackName = stackName.substring(0, maxStackNameLen);
+      bucketName = `${prefix}${truncatedStackName}${suffix}`;
+    }
+  
     const bucket = new aws.s3.Bucket('centralized-logs-bucket', {
-      bucket: `nova-model-logs-${pulumi.getStack()}-${Date.now()}`,
+      bucket: bucketName,
       versioning: {
         enabled: true,
       },
@@ -131,7 +146,7 @@ export class TapStack extends pulumi.ComponentResource {
       ],
       tags,
     }, { parent: this });
-
+  
     const publicAccessBlock = new aws.s3.BucketPublicAccessBlock('logs-bucket-public-access-block', {
       bucket: bucket.id,
       blockPublicAcls: true,
@@ -139,7 +154,7 @@ export class TapStack extends pulumi.ComponentResource {
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
     }, { parent: this });
-
+  
     // Create bucket policy for VPC endpoint access
     new aws.s3.BucketPolicy('logs-bucket-policy', {
       bucket: bucket.id,
@@ -166,9 +181,10 @@ export class TapStack extends pulumi.ComponentResource {
         ],
       }),
     }, { parent: this });
-
+  
     return { bucket, publicAccessBlock };
   }
+  
 
   private createLogProcessingLambda(tags: { [key: string]: string }): aws.lambda.Function {
     // Create IAM role for Lambda
