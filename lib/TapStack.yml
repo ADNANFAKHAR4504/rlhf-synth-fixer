@@ -4,8 +4,8 @@ Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
 Parameters:
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    # Amazon Linux 2023 (x86_64) — resolves at deploy time; no user input needed.
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    # Amazon Linux 2 (x86_64) — resolves at deploy time; no user input needed.
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Resources:
   ############################
@@ -201,7 +201,7 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-logs-${AWS::AccountId}-${AWS::Region}"
+      # No BucketName -> CFN generates a lowercase-safe unique name
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -249,7 +249,7 @@ Resources:
   MainBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-main-${AWS::AccountId}-${AWS::Region}"
+      # No BucketName -> CFN generates a lowercase-safe unique name
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
