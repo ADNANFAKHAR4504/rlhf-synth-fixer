@@ -45,7 +45,7 @@ variable "secondary_vpc_cidr" {
 variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
-  default     = "db.t3.micro"
+  default     = "db.m5.large"
 }
 
 variable "db_engine_version" {
