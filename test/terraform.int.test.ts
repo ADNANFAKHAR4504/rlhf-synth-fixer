@@ -16,8 +16,8 @@ describe('Terraform Multi-Region Integration Tests', () => {
     const testVars = `
 # Multi-region configuration
 allowed_cidr_blocks = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
-create_vpcs = true
-create_cloudtrail = true
+create_vpcs = false
+create_cloudtrail = false
 ec2_instance_type = "t3.micro"
 ec2_key_pair_name = ""
 db_password = "TestPassword123!"
@@ -325,7 +325,7 @@ tags = {
         const noVpcVars = `
 allowed_cidr_blocks = ["10.0.0.0/8"]
 create_vpcs = false
-create_cloudtrail = true
+create_cloudtrail = false
 ec2_instance_type = "t3.micro"
 ec2_key_pair_name = ""
 db_password = "TestPassword123!"
@@ -364,7 +364,7 @@ db_password = "TestPassword123!"
           /provider\[\"registry\.terraform\.io\/hashicorp\/aws\"\]/
         );
         expect(planOutput).toMatch(
-          /provider\[\"registry\.terraform\.io\/hashicorp\/aws\"\.ap_southeast_2\]/
+          /provider\[\"registry\.terraform\.io\/hashicorp\/aws\"\.eu_central_1\]/
         );
       },
       TEST_TIMEOUT

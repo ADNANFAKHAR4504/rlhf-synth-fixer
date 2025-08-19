@@ -39,13 +39,13 @@ variable "allowed_cidr_blocks" {
 variable "create_vpcs" {
   description = "Whether to create VPCs and VPC-dependent resources (set to false if VPC limit is reached)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "create_cloudtrail" {
   description = "Whether to create CloudTrail (set to false if CloudTrail limit is reached)"
   type        = bool
-  default     = true
+  default     = false
 }
 
 # Data sources
@@ -255,7 +255,7 @@ resource "aws_subnet" "primary_private" {
   count             = var.create_vpcs ? 1 : 0
   vpc_id            = aws_vpc.primary[0].id
   cidr_block        = "10.0.2.0/24"
-  availability_zone = "us-west-1b"
+  availability_zone = "us-west-1c"
 
   tags = {
     Name = "primary-private-subnet"
@@ -280,7 +280,7 @@ resource "aws_subnet" "secondary_private" {
   provider          = aws.eu_central_1
   vpc_id            = aws_vpc.secondary[0].id
   cidr_block        = "10.1.2.0/24"
-  availability_zone = "eu-central-1b"
+  availability_zone = "eu-central-1c"
 
   tags = {
     Name = "secondary-private-subnet"

@@ -73,10 +73,10 @@ describe('Terraform Configuration Unit Tests', () => {
   describe('Data Sources', () => {
     test('defines AMI data sources for both regions', () => {
       expect(stackContent).toMatch(
-        /data\s+"aws_ami"\s+"amazon_linux_ap_south_1"/
+        /data\s+"aws_ami"\s+"amazon_linux_us_west_1"/
       );
       expect(stackContent).toMatch(
-        /data\s+"aws_ami"\s+"amazon_linux_ap_southeast_2"/
+        /data\s+"aws_ami"\s+"amazon_linux_eu_central_1"/
       );
     });
 
@@ -91,7 +91,7 @@ describe('Terraform Configuration Unit Tests', () => {
 
     test('secondary AMI data source uses correct provider', () => {
       expect(stackContent).toMatch(
-        /data\s+"aws_ami"\s+"amazon_linux_ap_southeast_2"\s*{[^}]*provider\s*=\s*aws\.ap_southeast_2/
+        /data\s+"aws_ami"\s+"amazon_linux_eu_central_1"\s*{[^}]*provider\s*=\s*aws\.eu_central_1/
       );
     });
   });
@@ -113,10 +113,10 @@ describe('Terraform Configuration Unit Tests', () => {
 
     test('secondary KMS resources use correct provider', () => {
       expect(stackContent).toMatch(
-        /resource\s+"aws_kms_key"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.ap_southeast_2/
+        /resource\s+"aws_kms_key"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.eu_central_1/
       );
       expect(stackContent).toMatch(
-        /resource\s+"aws_kms_alias"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.ap_southeast_2/
+        /resource\s+"aws_kms_alias"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.eu_central_1/
       );
     });
   });
@@ -143,7 +143,7 @@ describe('Terraform Configuration Unit Tests', () => {
 
     test('secondary VPC uses correct provider', () => {
       expect(stackContent).toMatch(
-        /resource\s+"aws_vpc"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.ap_southeast_2/
+        /resource\s+"aws_vpc"\s+"secondary"\s*{[^}]*provider\s*=\s*aws\.eu_central_1/
       );
     });
   });
@@ -368,10 +368,10 @@ describe('Terraform Configuration Unit Tests', () => {
 
     test('EC2 instances use correct AMI data sources', () => {
       expect(stackContent).toMatch(
-        /ami\s*=\s*data\.aws_ami\.amazon_linux_ap_south_1\.id/
+        /ami\s*=\s*data\.aws_ami\.amazon_linux_us_west_1\.id/
       );
       expect(stackContent).toMatch(
-        /ami\s*=\s*data\.aws_ami\.amazon_linux_ap_southeast_2\.id/
+        /ami\s*=\s*data\.aws_ami\.amazon_linux_eu_central_1\.id/
       );
     });
 
@@ -527,13 +527,13 @@ describe('Terraform Configuration Unit Tests', () => {
 
     test('provider.tf defines primary AWS provider', () => {
       expect(providerContent).toMatch(
-        /provider\s+"aws"\s*{[^}]*region\s*=\s*"ap-south-1"/
+        /provider\s+"aws"\s*{[^}]*region\s*=\s*"us-west-1"/
       );
     });
 
     test('provider.tf defines secondary AWS provider with alias', () => {
       expect(providerContent).toMatch(
-        /provider\s+"aws"\s*{[^}]*alias\s*=\s*"ap_southeast_2"[^}]*region\s*=\s*"ap-southeast-2"/
+        /provider\s+"aws"\s*{[^}]*alias\s*=\s*"eu_central_1"[^}]*region\s*=\s*"eu-central-1"/
       );
     });
   });

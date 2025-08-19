@@ -39,10 +39,10 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
       /required_providers\s*{[\s\S]*aws\s*=\s*{[\s\S]*source\s*=\s*"hashicorp\/aws"/
     );
     expect(content).toMatch(
-      /provider\s+"aws"\s*{[\s\S]*region\s*=\s*"ap-south-1"/
+      /provider\s+"aws"\s*{[\s\S]*region\s*=\s*"us-west-1"/
     );
     expect(content).toMatch(
-      /provider\s+"aws"\s*{[\s\S]*alias\s*=\s*"ap_southeast_2"[\s\S]*region\s*=\s*"ap-southeast-2"/
+      /provider\s+"aws"\s*{[\s\S]*alias\s*=\s*"eu_central_1"[\s\S]*region\s*=\s*"eu-central-1"/
     );
   });
 });
