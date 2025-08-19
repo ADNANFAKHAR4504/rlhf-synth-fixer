@@ -38,7 +38,7 @@ async function findResourcesByTag(tagKey: string, tagValue: string) {
 beforeAll(async () => {
   console.log('Starting AWS API integration tests...');
   console.log('Using AWS region:', AWS_REGION);
-}, 10000);
+});
 
 describe('AWS Infrastructure Validation via AWS APIs', () => {
   describe('S3 Buckets', () => {
