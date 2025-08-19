@@ -1,45 +1,34 @@
-You are an expert in Terraform best practices. I need you to design a multi-environment Terraform setup that supports both staging and production environments, ensuring consistency, maintainability, and reusability across both.
+I need your help designing a Terraform multi-environment setup that supports both staging and production. The solution should be consistent, maintainable, and reusable, following Terraform best practices.
 
-Environment & Requirements:
+Requirements
+	1.	Environment separation
+	•	Use Terraform workspaces to separate staging and production environments cleanly.
+	2.	Consistency
+	•	Ensure variable names are consistent across environments for predictability and easier management.
+	3.	Reusability
+	•	Implement Terraform modules for common infrastructure components so that code duplication is minimized.
+	4.	Shared outputs
+	•	Define output values that can be shared across environments (useful for deployments and CI/CD pipelines).
+	5.	Multi-region support
+	•	Deploy the infrastructure in two AWS regions:
+	•	us-west-2
+	•	eu-west-1
+	•	Each environment should have its own dedicated workspace.
 
-Environment Management – Use Terraform workspaces to clearly differentiate between staging and production.
+Expected Outcome
 
-Consistencies – Use consistent environment variable naming across environments to make the setup predictable and easy to maintain.
+A Terraform codebase that:
+	•	Correctly uses workspaces for environment separation
+	•	Leverages modules to reuse infrastructure components
+	•	Applies consistent naming conventions for variables
+	•	Exposes useful output values that can be shared across environments
 
-Reusability – Implement Terraform modules to abstract and reuse common configurations, reducing redundancies.
+Constraints
+	•	Must rely on Terraform workspaces for environment separation
+	•	Must follow consistent naming conventions for environment variables
+	•	Must avoid duplication by using modules
+	•	Must define shared output values
 
-Shared Output – Implement output values that can be accessed and shared between environments to support deployment processes.
-
-Multi-Region Deployment – Deploy to two AWS regions: us-west-2 and eu-west-1, using distinct Terraform workspaces for each environment.
-
-Expected Output:
-
-A Terraform codebase that meets all the above requirements.
-
-The code should pass tests related to:
-
-Workspace differentiation
-
-Module reusability
-
-Consistent environment variable naming
-
-Output value sharing between environments
-
-Constraints:
-
-Must use Terraform workspaces for environment separation.
-
-Must follow naming consistency for environment variables.
-
-Must reduce duplication through modules.
-
-Must support shared output values.I am following this structure
-.
-├── IDEAL_RESPONSE.md
-├── MODEL_FAILURES.md
-├── MODEL_RESPONSE.md
-├── PROMPT.md
-├── provider.tf
-└── tap_stack.tf
-so the files should be in provider.tf and tap_stack.tf
+File Structure
+	•	provider.tf
+	•	tap_stack.tf
