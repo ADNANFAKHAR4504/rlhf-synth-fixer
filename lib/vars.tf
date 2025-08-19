@@ -11,11 +11,13 @@ variable "secondary_region" {
 variable "environment" {
   description = "Environment name"
   type        = string
+  default     = "production"
 }
 
 variable "project_name" {
   description = "Project name for tagging"
   type        = string
+  default     = "multi-region-webapp"
 }
 
 variable "primary_vpc_cidr" {

@@ -2,14 +2,16 @@
 # This module creates a VPC with public and private subnets across multiple AZs
 # for high availability and proper network segmentation
 
-# terraform {
-#   required_providers {
-#     aws = {
-#       source  = "hashicorp/aws"
-#       version = "~> 5.0"
-#     }
-#   }
-# }
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
 
 # Main VPC
 resource "aws_vpc" "main" {

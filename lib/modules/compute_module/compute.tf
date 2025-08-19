@@ -1,14 +1,16 @@
 # Compute Module - Creates Auto Scaling Group with EC2 instances
 # This module creates an ASG with launch template for scalable web servers
 
-# terraform {
-#   required_providers {
-#     aws = {
-#       source  = "hashicorp/aws"
-#       version = "~> 5.0"
-#     }
-#   }
-# }
+terraform {
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
 
 # Get latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux" {
