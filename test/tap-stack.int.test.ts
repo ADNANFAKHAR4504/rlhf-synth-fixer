@@ -94,7 +94,7 @@ describe('High Availability Network Infrastructure - Integration Tests', () => {
       // InternetGateway doesn't have a State property - check attachment state instead
       expect(igwDetails.Attachments).toHaveLength(1);
       expect(igwDetails.Attachments![0].VpcId).toBe(outputs.VPC);
-      expect(igwDetails.Attachments![0].State).toBe('attached');
+      expect(igwDetails.Attachments![0].State).toBe('available');
       expect(igwDetails.InternetGatewayId).toBe(outputs.InternetGateway);
     });
 
