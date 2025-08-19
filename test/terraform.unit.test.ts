@@ -215,7 +215,7 @@ describe('terraform main.tf static validation', () => {
     );
     [
       'ACCESS_KEYS_ROTATED',
-      'KMS_KEY_ROTATION_ENABLED',
+      'CMK_BACKING_KEY_ROTATION_ENABLED',
       'CLOUD_TRAIL_ENABLED',
     ].forEach(id => {
       expect(content).toMatch(new RegExp(`source_identifier\\s*=\\s*"${id}"`));

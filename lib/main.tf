@@ -1283,8 +1283,6 @@ resource "aws_db_instance" "mysql" {
   parameter_group_name       = aws_db_parameter_group.mysql.name
   monitoring_interval        = 60
   monitoring_role_arn        = aws_iam_role.rds_enhanced_monitoring.arn
-  performance_insights_enabled = true
-  performance_insights_kms_key_id = aws_kms_key.rds.arn
   tags = local.pii_tags
 }
 
@@ -1397,7 +1395,35 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config_attach" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRole"
+}
+
+# Additional policy for Config to access S3 bucket
+resource "aws_iam_role_policy" "config_s3_policy" {
+  name = "${var.project_name}-${var.environment}-config-s3-policy"
+  role = aws_iam_role.config.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketAcl",
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.logs.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${aws_s3_bucket.logs.arn}/config/*"
+      }
+    ]
+  })
 }
 
 resource "aws_config_configuration_recorder" "main" {
@@ -1413,12 +1439,13 @@ resource "aws_config_delivery_channel" "main" {
   name           = "default"
   s3_bucket_name = aws_s3_bucket.logs.id
   s3_key_prefix  = "config"
-  depends_on     = [aws_config_configuration_recorder.main]
+  depends_on     = [aws_config_configuration_recorder.main, aws_s3_bucket_policy.logs]
 }
 
 resource "aws_config_configuration_recorder_status" "main" {
   name       = aws_config_configuration_recorder.main.name
   is_enabled = true
+  depends_on = [aws_config_delivery_channel.main]
 }
 
 # AWS Config Managed Rules
