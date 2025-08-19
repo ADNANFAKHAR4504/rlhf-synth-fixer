@@ -31,7 +31,7 @@ const outputs = JSON.parse(
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)  
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = outputs.AWSRegion || process.env.AWS_REGION || 'us-west-2';
+const region = 'us-west-2'; // Fixed region as per requirements
 
 const ec2Client = new EC2Client({ region });
 
@@ -91,10 +91,11 @@ describe('High Availability Network Infrastructure - Integration Tests', () => {
       
       expect(igw.InternetGateways).toHaveLength(1);
       const igwDetails = igw.InternetGateways![0];
-      expect((igwDetails as any).State).toBe('available');
+      // InternetGateway doesn't have a State property - check attachment state instead
       expect(igwDetails.Attachments).toHaveLength(1);
       expect(igwDetails.Attachments![0].VpcId).toBe(outputs.VPC);
       expect(igwDetails.Attachments![0].State).toBe('attached');
+      expect(igwDetails.InternetGatewayId).toBe(outputs.InternetGateway);
     });
 
     test('should have correct availability zones deployed', async () => {
