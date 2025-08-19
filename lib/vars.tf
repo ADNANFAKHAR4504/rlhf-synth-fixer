@@ -57,3 +57,9 @@ variable "availability_zones" {
   type        = list(string)
    default     = []
 }
+
+variable "backup_vault_name_to_clean" {
+  description = "The name of the AWS Backup vault to clean recovery points from."
+  type        = string
+}
+
