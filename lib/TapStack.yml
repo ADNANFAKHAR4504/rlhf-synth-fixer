@@ -25,18 +25,27 @@ Parameters:
     AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
     ConstraintDescription: Must be a valid IP CIDR range
 
+  AMIOperatingSystem:
+    Description: Operating system for EC2 instances
+    Type: String
+    Default: AmazonLinux2023
+    AllowedValues:
+      - AmazonLinux2
+      - AmazonLinux2023
+      - Ubuntu20
+      - Ubuntu22
+
+# Mappings for SSM Parameter paths to get latest AMI IDs
 Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c02fb55956c7d316
-    us-west-1:
-      AMI: ami-011996ff98de391d1
-    us-west-2:
-      AMI: ami-0c2d06d50ce30b442
-    eu-west-1:
-      AMI: ami-0d71ea30463e0ff8d
-    eu-central-1:
-      AMI: ami-0a6dc7529cd559185
+  OSToSSMParam:
+    AmazonLinux2:
+      SSMParam: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    AmazonLinux2023:
+      SSMParam: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Ubuntu20:
+      SSMParam: /aws/service/canonical/ubuntu/server/20.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+    Ubuntu22:
+      SSMParam: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
 
 Resources:
   # KMS Key for encryption
@@ -58,8 +67,22 @@ Resources:
               Service: s3.amazonaws.com
             Action:
               - kms:Decrypt
-              - kms:GenerateDataKey
+              - kms:GenerateDataKey*
             Resource: '*'
+          - Sid: Allow use of the key for EBS via EC2
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
 
   FinAppKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -402,8 +425,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${ApplicationDataBucket}/*'
-              - !Ref ApplicationDataBucket
+              - !GetAtt ApplicationDataBucket.Arn
+              - !Sub '${ApplicationDataBucket.Arn}/*'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -419,8 +442,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${LoggingBucket}/*'
-              - !Ref LoggingBucket
+              - !GetAtt LoggingBucket.Arn
+              - !Sub '${LoggingBucket.Arn}/*'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -429,6 +452,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${EnvironmentName}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -448,16 +472,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${ApplicationDataBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::finapp-${EnvironmentSuffix}-app-data-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref ApplicationDataBucket
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                  - kms:GenerateDataKey
-                Resource: !GetAtt FinAppKMSKey.Arn
+                Resource: !Sub 'arn:aws:s3:::finapp-${EnvironmentSuffix}-app-data-${AWS::AccountId}'
         - PolicyName: CloudWatchLogsPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -477,13 +496,36 @@ Resources:
       Roles:
         - !Ref EC2InstanceRole
 
-  # Launch Template
+  # Additional KMS policy to allow the EC2 role access after role creation
+  EC2KMSAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: EC2KMSAccess
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+            Resource: !GetAtt FinAppKMSKey.Arn
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # Launch Template with SSM Parameter for AMI ID
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        # Use SSM Parameter to get latest AMI ID
+        ImageId: !Sub
+          - '{{resolve:ssm:${SSMParam}}}'
+          - SSMParam:
+              !FindInMap [OSToSSMParam, !Ref AMIOperatingSystem, SSMParam]
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
@@ -492,21 +534,47 @@ Resources:
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
-            yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
-
-            # Install CloudWatch agent
-            wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-            rpm -U ./amazon-cloudwatch-agent.rpm
+            # Dynamic installation based on OS type
+            if command -v yum &> /dev/null; then
+                # Amazon Linux
+                yum update -y
+                yum install -y httpd
+                systemctl start httpd
+                systemctl enable httpd
+                
+                # Install CloudWatch agent
+                wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+                rpm -U ./amazon-cloudwatch-agent.rpm
+                
+            elif command -v apt-get &> /dev/null; then
+                # Ubuntu
+                apt-get update -y
+                apt-get install -y apache2 wget
+                systemctl start apache2
+                systemctl enable apache2
+                
+                # Install CloudWatch agent
+                wget https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+                dpkg -i -E ./amazon-cloudwatch-agent.deb
+            fi
 
             # Create a simple web page
             INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
             AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
-            echo "<h1>Financial Application Server</h1>" > /var/www/html/index.html
-            echo "<p>Instance ID: $INSTANCE_ID</p>" >> /var/www/html/index.html
-            echo "<p>Availability Zone: $AZ</p>" >> /var/www/html/index.html
+            OS_TYPE="${AMIOperatingSystem}"
+
+            # Determine web root directory
+            if command -v yum &> /dev/null; then
+                WEB_ROOT="/var/www/html"
+            else
+                WEB_ROOT="/var/www/html"
+            fi
+
+            echo "<h1>Financial Application Server</h1>" > $WEB_ROOT/index.html
+            echo "<p>Instance ID: $INSTANCE_ID</p>" >> $WEB_ROOT/index.html
+            echo "<p>Availability Zone: $AZ</p>" >> $WEB_ROOT/index.html
+            echo "<p>Operating System: $OS_TYPE</p>" >> $WEB_ROOT/index.html
+            echo "<p>Launch Time: $(date)</p>" >> $WEB_ROOT/index.html
 
             # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF
@@ -542,6 +610,16 @@ Resources:
                         "file_path": "/var/log/httpd/error_log",
                         "log_group_name": "/aws/ec2/finapp/httpd/error",
                         "log_stream_name": "{instance_id}"
+                      },
+                      {
+                        "file_path": "/var/log/apache2/access.log",
+                        "log_group_name": "/aws/ec2/finapp/apache2/access",
+                        "log_stream_name": "{instance_id}"
+                      },
+                      {
+                        "file_path": "/var/log/apache2/error.log",
+                        "log_group_name": "/aws/ec2/finapp/apache2/error",
+                        "log_stream_name": "{instance_id}"
                       }
                     ]
                   }
@@ -557,7 +635,7 @@ Resources:
               VolumeType: gp3
               VolumeSize: 20
               Encrypted: true
-              KmsKeyId: !Ref FinAppKMSKey
+              KmsKeyId: !GetAtt FinAppKMSKey.Arn
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -565,6 +643,8 @@ Resources:
                 Value: !Sub '${EnvironmentName}-WebServer'
               - Key: Environment
                 Value: !Ref EnvironmentName
+              - Key: OS
+                Value: !Ref AMIOperatingSystem
 
   # Application Load Balancer
   ApplicationLoadBalancer:
@@ -637,6 +717,9 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
           PropagateAtLaunch: true
+        - Key: OS
+          Value: !Ref AMIOperatingSystem
+          PropagateAtLaunch: true
 
   # Auto Scaling Policies
   ScaleUpPolicy:
@@ -694,11 +777,13 @@ Resources:
       AlarmActions:
         - !Ref ScaleDownPolicy
 
-  # Bastion Host (Optional - for secure access)
+  # Bastion Host with SSM Parameter for AMI ID
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: !Sub
+        - '{{resolve:ssm:${SSMParam}}}'
+        - SSMParam: !FindInMap [OSToSSMParam, !Ref AMIOperatingSystem, SSMParam]
       InstanceType: t3.micro
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
@@ -710,17 +795,25 @@ Resources:
             VolumeType: gp3
             VolumeSize: 8
             Encrypted: true
-            KmsKeyId: !Ref FinAppKMSKey
+            KmsKeyId: !GetAtt FinAppKMSKey.Arn
       UserData:
         Fn::Base64: |
           #!/bin/bash
-          yum update -y
-          yum install -y aws-cli
+          # Dynamic installation based on OS type
+          if command -v yum &> /dev/null; then
+              yum update -y
+              yum install -y aws-cli
+          elif command -v apt-get &> /dev/null; then
+              apt-get update -y
+              apt-get install -y awscli
+          fi
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Bastion'
         - Key: Environment
           Value: !Ref EnvironmentName
+        - Key: OS
+          Value: !Ref AMIOperatingSystem
 
 Outputs:
   VPCId:
@@ -770,3 +863,15 @@ Outputs:
     Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
     Export:
       Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Subnets'
+
+  AMIParameterUsed:
+    Description: SSM Parameter used to fetch the latest AMI ID
+    Value: !FindInMap [OSToSSMParam, !Ref AMIOperatingSystem, SSMParam]
+    Export:
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-AMI-Parameter'
+
+  SelectedOperatingSystem:
+    Description: Operating system selected for EC2 instances
+    Value: !Ref AMIOperatingSystem
+    Export:
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Operating-System'
