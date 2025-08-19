@@ -429,7 +429,7 @@ export class TapStack extends cdk.Stack {
               repo: 'iac-test-automations',
               branch: 'IAC-291873',
               oauthToken: cdk.SecretValue.secretsManager(
-                'arn:aws:secretsmanager:us-west-2:718240086340:secret:github-token-IAC-291873-NqyjXr'
+                'arn:aws:secretsmanager:us-west-2:718240086340:secret:github-token-IAC-291873-K5769N'
               ),
               output: sourceOutput,
               trigger: codepipeline_actions.GitHubTrigger.POLL,
