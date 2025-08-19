@@ -215,9 +215,9 @@ module "asg" {
   max_size         = local.current_config.max_size
   desired_capacity = local.current_config.desired_capacity
   
-  # Network Configuration
+  # Network Configuration (TEMP: use public subnets for debugging)
   vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnet_ids
+  subnet_ids = module.vpc.public_subnet_ids
   
   # Security Groups
   security_group_ids = [module.security_groups.ec2_security_group_id]
@@ -227,6 +227,9 @@ module "asg" {
   
   # Tags
   tags = local.common_tags
+
+  # TEMP: Give more time for capacity
+  wait_for_capacity_timeout = "30m"
 }
 
 # RDS Module
@@ -249,6 +252,16 @@ module "rds" {
   
   # Tags
   tags = local.common_tags
+
+  # TEMP: Relax health check (ensure your alb module supports these variables)
+  health_check = {
+    path                = "/"
+    matcher             = "200-399"
+    interval            = 15
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
 }
 
 # Data sources
