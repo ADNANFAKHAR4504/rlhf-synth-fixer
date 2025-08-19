@@ -161,7 +161,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/tap/${EnvironmentSuffix}/audit-logs'
       RetentionInDays: 90
-      KmsKeyId: !If [KMSEnabled, !Ref TapStackKMSKey, !Ref 'AWS::NoValue']
+      KmsKeyId: !If [KMSEnabled, !GetAtt TapStackKMSKey.Arn, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub 'TAP-${EnvironmentSuffix}-Logs'
@@ -207,26 +207,23 @@ Resources:
                   - 'dynamodb:DescribeTable'
                   - 'dynamodb:DescribeStream'
                 Resource: !GetAtt TurnAroundPromptTable.Arn
-        - !If
-          - SecurityEnabled
-          - PolicyName: 'S3AccessPolicy'
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - 's3:GetObject'
-                    - 's3:PutObject'
-                    - 's3:DeleteObject'
-                  Resource: !Sub '${TapStackDataBucket}/*'
-                - Effect: Allow
-                  Action:
-                    - 's3:ListBucket'
-                  Resource: !Ref TapStackDataBucket
-                  Condition:
-                    StringEquals:
-                      's3:prefix': !Sub '${EnvironmentSuffix}/*'
-          - !Ref 'AWS::NoValue'
+        - PolicyName: 'S3AccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                Resource: !Sub '${TapStackDataBucket}/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                Resource: !Ref TapStackDataBucket
+                Condition:
+                  StringEquals:
+                    's3:prefix': !Sub '${EnvironmentSuffix}/*'
         - PolicyName: 'KMSAccessPolicy'
           PolicyDocument:
             Version: '2012-10-17'
