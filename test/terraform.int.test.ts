@@ -246,7 +246,7 @@ describe('AWS Infrastructure Integration Tests', () => {
       // Test primary ALB
       const primaryAlbResponse = await elbClientPrimary.send(
         new DescribeLoadBalancersCommand({
-          Names: [outputs.primary_alb_dns.split('.')[0]],
+          Names: [outputs.primary_alb_name],
         })
       );
 
@@ -270,7 +270,7 @@ describe('AWS Infrastructure Integration Tests', () => {
       // Test secondary ALB
       const secondaryAlbResponse = await elbClientSecondary.send(
         new DescribeLoadBalancersCommand({
-          Names: [outputs.secondary_alb_dns.split('.')[0]],
+          Names: [outputs.secondary_alb_name],
         })
       );
 
@@ -369,10 +369,7 @@ describe('AWS Infrastructure Integration Tests', () => {
     it('should have RDS in private subnets only', async () => {
       const dbSubnetGroupResponse = await rdsClient.send(
         new DescribeDBSubnetGroupsCommand({
-          DBSubnetGroupName: outputs.primary_db_identifier.replace(
-            /^rds-postgres-primary-/,
-            'sng-rds-primary-'
-          ),
+          DBSubnetGroupName: outputs.db_subnet_group_name,
         })
       );
 
@@ -570,7 +567,7 @@ describe('AWS Infrastructure Integration Tests', () => {
       // Test primary health check
       const primaryHealthResponse = await route53Client.send(
         new GetHealthCheckCommand({
-          HealthCheckId: outputs.primary_route53_health_check_id,
+          HealthCheckId: outputs.primary_health_check_id,
         })
       );
 
@@ -589,7 +586,7 @@ describe('AWS Infrastructure Integration Tests', () => {
       // Test secondary health check
       const secondaryHealthResponse = await route53Client.send(
         new GetHealthCheckCommand({
-          HealthCheckId: outputs.secondary_route53_health_check_id,
+          HealthCheckId: outputs.secondary_health_check_id,
         })
       );
 
@@ -1139,7 +1136,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
         const healthCheck = await route53Client.send(
           new GetHealthCheckCommand({
-            HealthCheckId: outputs.primary_route53_health_check_id,
+            HealthCheckId: outputs.primary_health_check_id,
           })
         );
         infrastructureChecks.healthChecks =

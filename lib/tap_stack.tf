@@ -336,7 +336,7 @@ resource "aws_autoscaling_group" "primary_app" {
   }
   target_group_arns         = [aws_lb_target_group.primary_app.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 600 # Increased to allow more time for httpd to start
+  health_check_grace_period = 300
   tag {
     key                 = "Name"
     value               = "asg-primary-${local.deployment_suffix}"
@@ -346,7 +346,7 @@ resource "aws_autoscaling_group" "primary_app" {
 
 resource "aws_lb" "primary_app" {
   provider                   = aws.primary
-  name_prefix                = "aprim-"
+  name_prefix                = "p-"
   internal                   = false
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.primary_alb.id]
@@ -637,7 +637,7 @@ resource "aws_autoscaling_group" "secondary_app" {
 
 resource "aws_lb" "secondary_app" {
   provider                   = aws.secondary
-  name_prefix                = "asec-"
+  name_prefix                = "s-"
   internal                   = false
   load_balancer_type         = "application"
   security_groups            = [aws_security_group.secondary_alb.id]
@@ -1100,4 +1100,34 @@ output "rds_backup_retention_period" {
 output "rds_storage_encrypted" {
   description = "Storage encryption status of the RDS instance"
   value       = aws_db_instance.primary_db_new.storage_encrypted
+}
+
+output "iam_ec2_role_name" {
+  description = "Name of the EC2 IAM role"
+  value       = aws_iam_role.ec2_role.name
+}
+
+output "iam_lambda_role_name" {
+  description = "Name of the Lambda IAM role"
+  value       = aws_iam_role.lambda_role.name
+}
+
+output "route53_zone_id" {
+  description = "Route 53 hosted zone ID"
+  value       = aws_route53_zone.main.zone_id
+}
+
+output "primary_health_check_id" {
+  description = "Primary Route 53 health check ID"
+  value       = aws_route53_health_check.primary.id
+}
+
+output "secondary_health_check_id" {
+  description = "Secondary Route 53 health check ID"
+  value       = aws_route53_health_check.secondary.id
+}
+
+output "db_subnet_group_name" {
+  description = "Name of the RDS DB subnet group"
+  value       = aws_db_subnet_group.primary_rds.name
 }
