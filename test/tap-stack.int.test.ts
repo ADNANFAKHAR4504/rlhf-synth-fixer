@@ -12,7 +12,7 @@ const outputs = JSON.parse(
 );
 
 // Get environment suffix and AWS region from environment variables
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr176';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'us-west-2';
 
 describe('TAP Stack Integration Tests - Deployed AWS Resources', () => {
