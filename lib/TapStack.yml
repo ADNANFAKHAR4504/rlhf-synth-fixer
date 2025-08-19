@@ -82,6 +82,7 @@ Resources:
     Properties:
       Description: !Sub 'KMS Key for application data encryption - ${AWS::StackName}'
       KeyPolicy:
+        Version: '2012-10-17'
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
@@ -89,35 +90,30 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow CloudTrail to encrypt logs
+          - Sid: Allow use of the key
             Effect: Allow
             Principal:
-              Service: cloudtrail.amazonaws.com
+              AWS: !GetAtt EC2InstanceRole.Arn
             Action:
-              - kms:GenerateDataKey*
               - kms:DescribeKey
-            Resource: '*'
-          - Sid: Allow S3 service to use the key
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-            Resource: '*'
-          - Sid: Allow EC2 and EBS to use the key
-            Effect: Allow
-            Principal:
-              Service:
-                - ec2.amazonaws.com
-                - ebs.amazonaws.com
-            Action:
               - kms:Encrypt
               - kms:Decrypt
               - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlaintext
             Resource: '*'
+          - Sid: Allow attachment of persistent resources
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt EC2InstanceRole.Arn
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                kms:GrantIsForAWSResource: 'true'
       Tags:
         - Key: Environment
           Value: !Ref Environment
