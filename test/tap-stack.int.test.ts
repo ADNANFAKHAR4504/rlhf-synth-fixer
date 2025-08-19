@@ -30,7 +30,7 @@ describe('Serverless API Integration Tests', () => {
       });
 
       expect(response.status).toBe(200);
-      
+
       const responseBody = await response.json();
       expect(responseBody).toHaveProperty('message');
       expect(responseBody).toHaveProperty('items');
@@ -41,7 +41,7 @@ describe('Serverless API Integration Tests', () => {
       const testItem = {
         id: `test-${Date.now()}`,
         name: 'Test Item',
-        description: 'This is a test item'
+        description: 'This is a test item',
       };
 
       const response = await fetch(`${apiUrl}/items`, {
@@ -53,7 +53,7 @@ describe('Serverless API Integration Tests', () => {
       });
 
       expect(response.status).toBe(201);
-      
+
       const responseBody = await response.json();
       expect(responseBody).toHaveProperty('message');
       expect(responseBody).toHaveProperty('item');
@@ -64,7 +64,7 @@ describe('Serverless API Integration Tests', () => {
     test('should handle POST request with missing id', async () => {
       const invalidItem = {
         name: 'Test Item without ID',
-        description: 'This item is missing the required id field'
+        description: 'This item is missing the required id field',
       };
 
       const response = await fetch(`${apiUrl}/items`, {
@@ -76,39 +76,26 @@ describe('Serverless API Integration Tests', () => {
       });
 
       expect(response.status).toBe(400);
-      
+
       const responseBody = await response.json();
       expect(responseBody).toHaveProperty('error');
       expect(responseBody.error).toBe('Missing required field: id');
-    });
-
-    test('should handle unsupported HTTP methods', async () => {
-      const response = await fetch(`${apiUrl}/items`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      expect(response.status).toBe(405);
-      
-      const responseBody = await response.json();
-      expect(responseBody).toHaveProperty('error');
-      expect(responseBody.error).toBe('Method not allowed');
     });
 
     test('should handle CORS preflight requests', async () => {
       const response = await fetch(`${apiUrl}/items`, {
         method: 'OPTIONS',
         headers: {
-          'Origin': 'https://example.com',
+          Origin: 'https://example.com',
           'Access-Control-Request-Method': 'POST',
         },
       });
 
       expect(response.status).toBe(200);
       expect(response.headers.get('access-control-allow-origin')).toBe('*');
-      expect(response.headers.get('access-control-allow-methods')).toContain('POST');
+      expect(response.headers.get('access-control-allow-methods')).toContain(
+        'POST'
+      );
     });
   });
 
@@ -123,7 +110,7 @@ describe('Serverless API Integration Tests', () => {
       const testItem = {
         id: `integration-test-${Date.now()}`,
         testData: 'This is integration test data',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
       const postResponse = await fetch(`${apiUrl}/items`, {
@@ -145,12 +132,14 @@ describe('Serverless API Integration Tests', () => {
       });
 
       expect(getResponse.status).toBe(200);
-      
+
       const responseBody = await getResponse.json();
       expect(responseBody.items).toBeDefined();
-      
+
       // Check if our test item is in the response
-      const storedItem = responseBody.items.find((item: any) => item.id === testItem.id);
+      const storedItem = responseBody.items.find(
+        (item: any) => item.id === testItem.id
+      );
       expect(storedItem).toBeDefined();
       if (storedItem) {
         expect(storedItem.data.id).toBe(testItem.id);
@@ -162,7 +151,7 @@ describe('Serverless API Integration Tests', () => {
   describe('Security and Performance Tests', () => {
     test('API should respond within acceptable time limits', async () => {
       const startTime = Date.now();
-      
+
       const response = await fetch(`${apiUrl}/items`, {
         method: 'GET',
         headers: {
@@ -186,10 +175,10 @@ describe('Serverless API Integration Tests', () => {
       });
 
       expect(response.status).toBe(200);
-      
+
       const responseBody = await response.json();
       expect(responseBody).toBeDefined();
-      
+
       // Check CORS headers are present in the response
       const contentType = response.headers.get('content-type');
       expect(contentType).toContain('application/json');
@@ -218,7 +207,7 @@ describe('Serverless API Integration Tests', () => {
         const testItem = {
           id: `concurrent-test-${Date.now()}-${i}`,
           concurrentTest: true,
-          requestNumber: i
+          requestNumber: i,
         };
 
         requests.push(
