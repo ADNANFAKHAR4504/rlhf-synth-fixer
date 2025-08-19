@@ -49,7 +49,7 @@ const macieClient = new Macie2Client({ region });
 
 describe("Terraform Infrastructure Integration Tests", () => {
   describe("S3 Bucket Tests", () => {
-    const bucketNames = outputs.bucket_names || [];
+    const bucketNames = outputs.bucket_names ? JSON.parse(outputs.bucket_names) : [];
 
     test("All S3 buckets should exist and be accessible", async () => {
       expect(bucketNames).toHaveLength(3);
@@ -235,7 +235,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
 
   describe("End-to-End Security Workflow", () => {
     test("Complete encryption workflow: write, list, and delete encrypted objects", async () => {
-      const testBucket = outputs.bucket_names?.find((b: string) => b.includes("storage"));
+      const parsedBucketNames = outputs.bucket_names ? JSON.parse(outputs.bucket_names) : [];
+      const testBucket = parsedBucketNames.find((b: string) => b.includes("storage"));
       expect(testBucket).toBeDefined();
 
       const testObjects = [
@@ -286,8 +287,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
 
     test("Verify secure infrastructure naming conventions", () => {
       // Check bucket names follow the pattern
-      const bucketNames = outputs.bucket_names || [];
-      bucketNames.forEach((bucket: string) => {
+      const parsedBucketNames = outputs.bucket_names ? JSON.parse(outputs.bucket_names) : [];
+      parsedBucketNames.forEach((bucket: string) => {
         expect(bucket).toMatch(/^myapp-(storage|logs|backup)-prod-/);
       });
 
