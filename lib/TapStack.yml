@@ -189,8 +189,8 @@ Resources:
                   - s3:ListBucket
                   - s3:GetBucketLocation
                 Resource:
-                  - !Sub 'arn:aws:s3:::secure-data-*-${EnvironmentSuffix}'
-                  - !Sub 'arn:aws:s3:::secure-data-*-${EnvironmentSuffix}/*'
+                  - !Sub 'arn:aws:s3:::secure-datascience-*-${EnvironmentSuffix}'
+                  - !Sub 'arn:aws:s3:::secure-datascience-*-${EnvironmentSuffix}/*'
       Tags:
         - Key: Name
           Value: !Sub 'data-scientist-role-${EnvironmentSuffix}'
@@ -221,7 +221,7 @@ Resources:
           - Sid: Allow DataScientist Role
             Effect: Allow
             Principal:
-              AWS: !GetAtt DataScientistRole.Arn
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/DataScientistRole-${EnvironmentSuffix}'
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -256,6 +256,59 @@ Resources:
   # CLOUDTRAIL LOGGING
   # ---------------------------------------------------------------------------
 
+  # Dedicated S3 bucket for CloudTrail logs
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub 'cloudtrail-bucket-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudTrail bucket policy to allow CloudTrail service access
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-${EnvironmentSuffix}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-${EnvironmentSuffix}'
+
   # CloudTrail for audit logging
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
@@ -268,24 +321,18 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  # CloudTrail trail for S3 and KMS activity
+  # CloudTrail trail for S3 and KMS activity  
   CloudTrailTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
       TrailName: !Sub '${AWS::StackName}-${EnvironmentSuffix}'
-      S3BucketName: !Ref SecureS3Bucket
+      S3BucketName: !Ref CloudTrailBucket
       S3KeyPrefix: 'cloudtrail-logs/'
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: false
       IsLogging: true
-      EventSelectors:
-        - ReadWriteType: All
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values:
-                - !Sub '${SecureS3Bucket.Arn}/*'
       Tags:
         - Key: Name
           Value: !Sub 'cloudtrail-${EnvironmentSuffix}'
@@ -304,7 +351,6 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: sts:AssumeRole
-      # No managed policies needed - using custom policy below
       Policies:
         - PolicyName: CloudTrailPermissions
           PolicyDocument:
@@ -320,8 +366,8 @@ Resources:
                   - s3:PutObject
                   - s3:GetBucketAcl
                 Resource:
-                  - !GetAtt SecureS3Bucket.Arn
-                  - !Sub '${SecureS3Bucket.Arn}/cloudtrail-logs/*'
+                  - !GetAtt CloudTrailBucket.Arn
+                  - !Sub '${CloudTrailBucket.Arn}/cloudtrail-logs/*'
       Tags:
         - Key: Name
           Value: !Sub 'cloudtrail-logs-role-${EnvironmentSuffix}'
@@ -368,16 +414,13 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              AWS: !GetAtt DataScientistRole.Arn
+            Principal: '*'
             Action:
               - s3:GetObject
               - s3:PutObject
               - s3:ListBucket
               - s3:GetBucketLocation
-            Resource:
-              - !GetAtt SecureS3Bucket.Arn
-              - !Sub '${SecureS3Bucket.Arn}/*'
+            Resource: '*'
 
   # ---------------------------------------------------------------------------
   # ACCESS LOGGING BUCKET (PROD ONLY)
@@ -476,19 +519,7 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Allow CloudTrail service to write logs
-          - Sid: AllowCloudTrailService
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action:
-              - s3:PutObject
-              - s3:GetBucketAcl
-            Resource:
-              - !GetAtt SecureS3Bucket.Arn
-              - !Sub '${SecureS3Bucket.Arn}/cloudtrail-logs/*'
-
-          # Allow DataScientistRole to get and put objects
+          # Allow DataScientistRole to get and put objects (only through VPC endpoint)
           - Sid: AllowDataScientistAccess
             Effect: Allow
             Principal:
@@ -501,6 +532,9 @@ Resources:
             Resource:
               - !GetAtt SecureS3Bucket.Arn
               - !Sub '${SecureS3Bucket.Arn}/*'
+            Condition:
+              StringEquals:
+                'aws:SourceVpce': !Ref S3VPCEndpoint
 
           # Note: CloudTrail service access is allowed above
           # VPC endpoint security is enforced at the network level through routing
@@ -563,6 +597,12 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub '${AWS::StackName}-Environment'
+
+  CloudTrailBucketName:
+    Description: 'CloudTrail S3 bucket name for audit logs'
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucketName'
 
   CloudTrailTrailName:
     Description: 'CloudTrail trail name for audit logging'

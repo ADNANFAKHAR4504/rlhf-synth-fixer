@@ -194,8 +194,8 @@ Resources:
                   - s3:ListBucket
                   - s3:GetBucketLocation
                 Resource:
-                  - !Sub 'arn:aws:s3:::secure-data-*-${EnvironmentSuffix}'
-                  - !Sub 'arn:aws:s3:::secure-data-*-${EnvironmentSuffix}/*'
+                  - !Sub 'arn:aws:s3:::secure-datascience-*-${EnvironmentSuffix}'
+                  - !Sub 'arn:aws:s3:::secure-datascience-*-${EnvironmentSuffix}/*'
       Tags:
         - Key: Name
           Value: !Sub 'data-scientist-role-${EnvironmentSuffix}'
@@ -226,7 +226,7 @@ Resources:
           - Sid: Allow DataScientist Role
             Effect: Allow
             Principal:
-              AWS: !GetAtt DataScientistRole.Arn
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/DataScientistRole-${EnvironmentSuffix}'
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -258,8 +258,153 @@ Resources:
       TargetKeyId: !Ref S3EncryptionKey
 
   # ---------------------------------------------------------------------------
+  # CLOUDTRAIL LOGGING
+  # ---------------------------------------------------------------------------
+
+  # Dedicated S3 bucket for CloudTrail logs
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub 'cloudtrail-bucket-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudTrail bucket policy to allow CloudTrail service access
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-${EnvironmentSuffix}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-${EnvironmentSuffix}'
+
+  # CloudTrail for audit logging
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}-${EnvironmentSuffix}'
+      RetentionInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub 'cloudtrail-logs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudTrail trail for S3 and KMS activity
+  CloudTrailTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub '${AWS::StackName}-${EnvironmentSuffix}'
+      S3BucketName: !Ref CloudTrailBucket
+      S3KeyPrefix: 'cloudtrail-logs/'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: false
+      IsLogging: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'cloudtrail-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # IAM role for CloudTrail to write to CloudWatch Logs
+  CloudTrailLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'CloudTrailLogsRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CloudTrailLogGroup.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                Resource:
+                  - !GetAtt CloudTrailBucket.Arn
+                  - !Sub '${CloudTrailBucket.Arn}/cloudtrail-logs/*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'cloudtrail-logs-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ---------------------------------------------------------------------------
   # S3 VPC ENDPOINT
   # ---------------------------------------------------------------------------
+
+  # Security group for VPC endpoint
+  VPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'vpc-endpoint-sg-${EnvironmentSuffix}'
+      GroupDescription: !Sub 'Security group for VPC endpoint access - ${EnvironmentSuffix}'
+      VpcId: !Ref SecureVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.1.0/24 # Private subnet CIDR
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0 # Allow HTTPS outbound to S3
+      Tags:
+        - Key: Name
+          Value: !Sub 'vpc-endpoint-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
 
   # VPC Endpoint for S3 (Gateway type)
   S3VPCEndpoint:
@@ -379,7 +524,7 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Allow DataScientistRole to get and put objects
+          # Allow DataScientistRole to get and put objects (only through VPC endpoint)
           - Sid: AllowDataScientistAccess
             Effect: Allow
             Principal:
@@ -392,6 +537,12 @@ Resources:
             Resource:
               - !GetAtt SecureS3Bucket.Arn
               - !Sub '${SecureS3Bucket.Arn}/*'
+            Condition:
+              StringEquals:
+                'aws:SourceVpce': !Ref S3VPCEndpoint
+
+          # Note: CloudTrail service access is allowed above
+          # VPC endpoint security is enforced at the network level through routing
 
 # =============================================================================
 # OUTPUTS
@@ -451,6 +602,30 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub '${AWS::StackName}-Environment'
+
+  CloudTrailBucketName:
+    Description: 'CloudTrail S3 bucket name for audit logs'
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucketName'
+
+  CloudTrailTrailName:
+    Description: 'CloudTrail trail name for audit logging'
+    Value: !Ref CloudTrailTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailTrailName'
+
+  CloudTrailLogGroupName:
+    Description: 'CloudTrail CloudWatch Logs group name'
+    Value: !Ref CloudTrailLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailLogGroupName'
+
+  VPCEndpointSecurityGroupId:
+    Description: 'Security group ID for VPC endpoint access'
+    Value: !Ref VPCEndpointSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCEndpointSecurityGroupId'
 
   PublicSubnetId:
     Description: 'Public Subnet ID'
