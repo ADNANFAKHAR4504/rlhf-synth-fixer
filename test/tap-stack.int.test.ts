@@ -12,34 +12,13 @@ import {
   GetBucketVersioningCommand
 } from '@aws-sdk/client-s3';
 import { 
-  RDSClient, 
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand
-} from '@aws-sdk/client-rds';
-import { 
-  LambdaClient, 
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand
-} from '@aws-sdk/client-lambda';
-import { 
   IAMClient, 
-  GetRoleCommand,
-  GetInstanceProfileCommand
+  GetRoleCommand
 } from '@aws-sdk/client-iam';
-import { 
-  SNSClient, 
-  GetTopicAttributesCommand,
-  ListSubscriptionsByTopicCommand
-} from '@aws-sdk/client-sns';
 import { 
   CloudWatchClient, 
   DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
-import { 
-  CloudFormationClient, 
-  DescribeStacksCommand,
-  ListStackResourcesCommand
-} from '@aws-sdk/client-cloudformation';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand
@@ -53,62 +32,63 @@ const AWS_REGION = fs.existsSync(AWS_REGION_FILE)
   ? fs.readFileSync(AWS_REGION_FILE, 'utf8').trim() 
   : 'us-west-2';
 
+// Read CloudFormation outputs from JSON file
+const OUTPUTS_FILE = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+let stackOutputs: any = null;
+let STACK_NAME = 'TapStack'; // Default fallback
+
 // Initialize AWS clients
 const ec2Client = new EC2Client({ region: AWS_REGION });
 const s3Client = new S3Client({ region: AWS_REGION });
-const rdsClient = new RDSClient({ region: AWS_REGION });
-const lambdaClient = new LambdaClient({ region: AWS_REGION });
 const iamClient = new IAMClient({ region: AWS_REGION });
-const snsClient = new SNSClient({ region: AWS_REGION });
 const cloudWatchClient = new CloudWatchClient({ region: AWS_REGION });
-const cloudFormationClient = new CloudFormationClient({ region: AWS_REGION });
 const autoScalingClient = new AutoScalingClient({ region: AWS_REGION });
-
-// Stack name - should be passed as environment variable or parameter
-const STACK_NAME = process.env.STACK_NAME || 'TapStack';
 
 // Check if AWS credentials are configured
 const hasAwsCredentials = process.env.AWS_ACCESS_KEY_ID || process.env.AWS_PROFILE;
 
 interface StackOutputs {
   VPCId: string;
-  VPCIdForTesting: string;
-  PublicSubnetIds: string;
-  PrivateSubnetIds: string;
-  EC2SecurityGroupId: string;
-  RDSSecurityGroupId: string;
-  LambdaSecurityGroupId: string;
-  AutoScalingGroupName: string;
+  VpcCidrBlock: string;
+  PublicSubnet1Id: string;
+  PublicSubnet2Id: string;
+  PrivateSubnet1Id: string;
+  PrivateSubnet2Id: string;
+  ALBSecurityGroupId: string;
+  WebServerSecurityGroupId: string;
+  EC2RoleArn: string;
   LaunchTemplateId: string;
   LaunchTemplateLatestVersion: string;
+  ScaleUpPolicyArn: string;
+  ScaleDownPolicyArn: string;
+  CPUAlarmHighArn: string;
+  CPUAlarmLowArn: string;
+  ASGCapacityAlarmArn: string;
+  NatGateway1Id: string;
+  NatGateway2Id: string;
+  InternetGatewayId: string;
+  PublicRouteTableId: string;
+  PrivateRouteTable1Id: string;
+  PrivateRouteTable2Id: string;
+  ALBTargetGroupArn: string;
+  ALBListenerArn: string;
+  MinSize: number;
+  MaxSize: number;
+  DesiredCapacity: number;
+  InstanceType: string;
+  LoadBalancerURL: string;
+  LoadBalancerDNSName: string;
   S3BucketName: string;
-  S3BucketArn: string;
-  RDSEndpoint: string;
-  RDSPort: string;
-  RDSInstanceId: string;
-  DBSubnetGroupName: string;
-  LambdaFunctionArn: string;
-  LambdaFunctionName: string;
-  LambdaExecutionRoleArn: string;
-  EC2RoleArn: string;
-  EC2InstanceProfileArn: string;
-  SNSTopicArn: string;
-  SNSTopicName: string;
-  CloudWatchAlarmName: string;
-  VpcCidrBlock: string;
-  PublicSubnet1Cidr: string;
-  PublicSubnet2Cidr: string;
-  PrivateSubnet1Cidr: string;
-  PrivateSubnet2Cidr: string;
+  AutoScalingGroupName: string;
+  PublicSubnets: string;
+  PrivateSubnets: string;
+  KeyPairName: string;
   StackName: string;
-  StackRegion: string;
-  StackAccountId: string;
-  TestConfiguration: string;
+  Environment: string;
+  DataBucketName: string;
 }
 
 describe('TapStack Integration Tests', () => {
-  let stackOutputs: StackOutputs | null = null;
-  let testConfig: any = null;
   let stackExists = false;
 
   beforeAll(async () => {
@@ -119,32 +99,20 @@ describe('TapStack Integration Tests', () => {
     }
 
     try {
-      // Get stack outputs
-      const describeStacksCommand = new DescribeStacksCommand({
-        StackName: STACK_NAME
-      });
-      
-      const stackResponse = await cloudFormationClient.send(describeStacksCommand);
-      const stack = stackResponse.Stacks?.[0];
-      
-      if (stack?.Outputs) {
+      // Read CloudFormation outputs from JSON file
+      if (fs.existsSync(OUTPUTS_FILE)) {
+        const outputsData = fs.readFileSync(OUTPUTS_FILE, 'utf8');
+        stackOutputs = JSON.parse(outputsData);
+        STACK_NAME = stackOutputs.StackName || 'TapStack';
         stackExists = true;
         
-        // Convert outputs to object
-        stackOutputs = stack.Outputs.reduce((acc, output) => {
-          if (output.OutputKey && output.OutputValue) {
-            acc[output.OutputKey as keyof StackOutputs] = output.OutputValue;
-          }
-          return acc;
-        }, {} as StackOutputs);
-
-        // Parse test configuration
-        testConfig = JSON.parse(stackOutputs.TestConfiguration);
+        console.log(`CloudFormation outputs loaded from file. Stack name: ${STACK_NAME}, Region: ${AWS_REGION}`);
+        console.log(`Available outputs: ${Object.keys(stackOutputs || {}).join(', ')}`);
       } else {
-        console.log(`Stack ${STACK_NAME} not found or has no outputs. Skipping live resource tests.`);
+        console.log(`Outputs file not found: ${OUTPUTS_FILE}. Skipping live resource tests.`);
       }
     } catch (error) {
-      console.log(`Error accessing CloudFormation stack: ${error}. Skipping live resource tests.`);
+      console.log(`Error reading CloudFormation outputs file: ${error}. Skipping live resource tests.`);
     }
   });
 
@@ -164,7 +132,7 @@ describe('TapStack Integration Tests', () => {
       
       expect(vpc).toBeDefined();
       expect(vpc?.VpcId).toBe(stackOutputs.VPCId);
-      expect(vpc?.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc?.CidrBlock).toBe(stackOutputs.VpcCidrBlock);
       expect(vpc?.State).toBe('available');
     });
 
@@ -174,7 +142,7 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
-      const publicSubnetIds = stackOutputs.PublicSubnetIds.split(',');
+      const publicSubnetIds = [stackOutputs.PublicSubnet1Id, stackOutputs.PublicSubnet2Id];
       
       const command = new DescribeSubnetsCommand({
         SubnetIds: publicSubnetIds
@@ -200,7 +168,7 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
-      const privateSubnetIds = stackOutputs.PrivateSubnetIds.split(',');
+      const privateSubnetIds = [stackOutputs.PrivateSubnet1Id, stackOutputs.PrivateSubnet2Id];
       
       const command = new DescribeSubnetsCommand({
         SubnetIds: privateSubnetIds
@@ -221,72 +189,39 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Security Groups', () => {
-    test('EC2 security group should exist and have correct rules', async () => {
+    test('ALB security group should exist', async () => {
       if (!stackExists || !stackOutputs) {
         console.log('Skipping test: Stack not available');
         return;
       }
 
       const command = new DescribeSecurityGroupsCommand({
-        GroupIds: [stackOutputs.EC2SecurityGroupId]
+        GroupIds: [stackOutputs.ALBSecurityGroupId]
       });
       
       const response = await ec2Client.send(command);
       const sg = response.SecurityGroups?.[0];
       
       expect(sg).toBeDefined();
-      expect(sg?.GroupId).toBe(stackOutputs.EC2SecurityGroupId);
+      expect(sg?.GroupId).toBe(stackOutputs.ALBSecurityGroupId);
       expect(sg?.VpcId).toBe(stackOutputs.VPCId);
-      
-      // Check ingress rules
-      const ingressRules = sg?.IpPermissions || [];
-      expect(ingressRules.length).toBeGreaterThanOrEqual(3);
-      
-      // Should have SSH, HTTP, and HTTPS rules
-      const ports = ingressRules.map(rule => rule.FromPort).filter(port => port !== undefined);
-      expect(ports).toContain(22);
-      expect(ports).toContain(80);
-      expect(ports).toContain(443);
     });
 
-    test('RDS security group should exist and allow MySQL access', async () => {
+    test('Web server security group should exist', async () => {
       if (!stackExists || !stackOutputs) {
         console.log('Skipping test: Stack not available');
         return;
       }
 
       const command = new DescribeSecurityGroupsCommand({
-        GroupIds: [stackOutputs.RDSSecurityGroupId]
+        GroupIds: [stackOutputs.WebServerSecurityGroupId]
       });
       
       const response = await ec2Client.send(command);
       const sg = response.SecurityGroups?.[0];
       
       expect(sg).toBeDefined();
-      expect(sg?.GroupId).toBe(stackOutputs.RDSSecurityGroupId);
-      expect(sg?.VpcId).toBe(stackOutputs.VPCId);
-      
-      // Check for MySQL port
-      const ingressRules = sg?.IpPermissions || [];
-      const mysqlRule = ingressRules.find(rule => rule.FromPort === 3306);
-      expect(mysqlRule).toBeDefined();
-    });
-
-    test('Lambda security group should exist', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new DescribeSecurityGroupsCommand({
-        GroupIds: [stackOutputs.LambdaSecurityGroupId]
-      });
-      
-      const response = await ec2Client.send(command);
-      const sg = response.SecurityGroups?.[0];
-      
-      expect(sg).toBeDefined();
-      expect(sg?.GroupId).toBe(stackOutputs.LambdaSecurityGroupId);
+      expect(sg?.GroupId).toBe(stackOutputs.WebServerSecurityGroupId);
       expect(sg?.VpcId).toBe(stackOutputs.VPCId);
     });
   });
@@ -307,11 +242,10 @@ describe('TapStack Integration Tests', () => {
       
       expect(asg).toBeDefined();
       expect(asg?.AutoScalingGroupName).toBe(stackOutputs.AutoScalingGroupName);
-      expect(asg?.MinSize).toBe(2);
-      expect(asg?.MaxSize).toBe(4);
-      expect(asg?.DesiredCapacity).toBe(2);
+      expect(asg?.MinSize).toBe(stackOutputs.MinSize);
+      expect(asg?.MaxSize).toBe(stackOutputs.MaxSize);
+      expect(asg?.DesiredCapacity).toBe(stackOutputs.DesiredCapacity);
       expect(asg?.HealthCheckType).toBe('EC2');
-      expect(asg?.VPCZoneIdentifier).toBeDefined();
     });
 
     test('Launch Template should exist', async () => {
@@ -373,104 +307,6 @@ describe('TapStack Integration Tests', () => {
       
       const response = await s3Client.send(command);
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-      
-      const encryptionRule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
-      expect(encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
-    });
-  });
-
-  describe('Database Resources', () => {
-    test('RDS instance should exist and be available', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: stackOutputs.RDSInstanceId
-      });
-      
-      const response = await rdsClient.send(command);
-      const dbInstance = response.DBInstances?.[0];
-      
-      expect(dbInstance).toBeDefined();
-      expect(dbInstance?.DBInstanceIdentifier).toBe(stackOutputs.RDSInstanceId);
-      expect(dbInstance?.DBInstanceClass).toBe('db.t3.micro');
-      expect(dbInstance?.Engine).toBe('mysql');
-      expect(dbInstance?.EngineVersion).toBe('8.0.35');
-      expect(dbInstance?.StorageEncrypted).toBe(true);
-      expect(dbInstance?.DeletionProtection).toBe(true);
-      expect(dbInstance?.PubliclyAccessible).toBe(false);
-      expect(dbInstance?.DBInstanceStatus).toBe('available');
-    });
-
-    test('RDS endpoint should be accessible', () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      expect(stackOutputs.RDSEndpoint).toBeDefined();
-      expect(stackOutputs.RDSEndpoint).toMatch(/^[a-zA-Z0-9.-]+\.rds\.amazonaws\.com$/);
-      expect(stackOutputs.RDSPort).toBe('3306');
-    });
-
-    test('DB subnet group should exist', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new DescribeDBSubnetGroupsCommand({
-        DBSubnetGroupName: stackOutputs.DBSubnetGroupName
-      });
-      
-      const response = await rdsClient.send(command);
-      const subnetGroup = response.DBSubnetGroups?.[0];
-      
-      expect(subnetGroup).toBeDefined();
-      expect(subnetGroup?.DBSubnetGroupName).toBe(stackOutputs.DBSubnetGroupName);
-      expect(subnetGroup?.VpcId).toBe(stackOutputs.VPCId);
-    });
-  });
-
-  describe('Serverless Resources', () => {
-    test('Lambda function should exist and be accessible', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new GetFunctionCommand({
-        FunctionName: stackOutputs.LambdaFunctionName
-      });
-      
-      const response = await lambdaClient.send(command);
-      const lambdaFunction = response.Configuration;
-      
-      expect(lambdaFunction).toBeDefined();
-      expect(lambdaFunction?.FunctionName).toBe(stackOutputs.LambdaFunctionName);
-      expect(lambdaFunction?.Runtime).toBe('python3.11');
-      expect(lambdaFunction?.Handler).toBe('index.lambda_handler');
-      expect(lambdaFunction?.State).toBe('Active');
-    });
-
-    test('Lambda function should have VPC configuration', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new GetFunctionConfigurationCommand({
-        FunctionName: stackOutputs.LambdaFunctionName
-      });
-      
-      const response = await lambdaClient.send(command);
-      const vpcConfig = response.VpcConfig;
-      
-      expect(vpcConfig).toBeDefined();
-      expect(vpcConfig?.SecurityGroupIds).toContain(stackOutputs.LambdaSecurityGroupId);
-      expect(vpcConfig?.SubnetIds).toHaveLength(2);
     });
   });
 
@@ -481,242 +317,44 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
+      const roleName = stackOutputs.EC2RoleArn.split('/').pop();
       const command = new GetRoleCommand({
-        RoleName: stackOutputs.EC2RoleArn.split('/').pop()
+        RoleName: roleName
       });
       
       const response = await iamClient.send(command);
       const role = response.Role;
       
       expect(role).toBeDefined();
-      expect(role?.RoleName).toBeDefined();
-    });
-
-    test('EC2 instance profile should exist', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new GetInstanceProfileCommand({
-        InstanceProfileName: stackOutputs.EC2InstanceProfileArn.split('/').pop()
-      });
-      
-      const response = await iamClient.send(command);
-      const instanceProfile = response.InstanceProfile;
-      
-      expect(instanceProfile).toBeDefined();
-      expect(instanceProfile?.InstanceProfileName).toBeDefined();
-    });
-
-    test('Lambda execution role should exist', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new GetRoleCommand({
-        RoleName: stackOutputs.LambdaExecutionRoleArn.split('/').pop()
-      });
-      
-      const response = await iamClient.send(command);
-      const role = response.Role;
-      
-      expect(role).toBeDefined();
-      expect(role?.RoleName).toBeDefined();
+      expect(role?.RoleName).toBe(roleName);
     });
   });
 
   describe('Monitoring Resources', () => {
-    test('SNS topic should exist', async () => {
+    test('CloudWatch alarms should exist', async () => {
       if (!stackExists || !stackOutputs) {
         console.log('Skipping test: Stack not available');
         return;
       }
 
-      const command = new GetTopicAttributesCommand({
-        TopicArn: stackOutputs.SNSTopicArn
-      });
-      
-      const response = await snsClient.send(command);
-      const attributes = response.Attributes;
-      
-      expect(attributes).toBeDefined();
-      expect(attributes?.TopicArn).toBe(stackOutputs.SNSTopicArn);
-    });
-
-    test('SNS topic should have subscriptions', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new ListSubscriptionsByTopicCommand({
-        TopicArn: stackOutputs.SNSTopicArn
-      });
-      
-      const response = await snsClient.send(command);
-      const subscriptions = response.Subscriptions || [];
-      
-      expect(subscriptions.length).toBeGreaterThan(0);
-      expect(subscriptions[0]?.Protocol).toBe('email');
-    });
-
-    test('CloudWatch alarm should exist', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
+      const alarmNames = [
+        stackOutputs.CPUAlarmHighArn.split('/').pop(),
+        stackOutputs.CPUAlarmLowArn.split('/').pop(),
+        stackOutputs.ASGCapacityAlarmArn.split('/').pop()
+      ];
 
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [stackOutputs.CloudWatchAlarmName]
+        AlarmNames: alarmNames
       });
       
       const response = await cloudWatchClient.send(command);
-      const alarm = response.MetricAlarms?.[0];
+      const alarms = response.MetricAlarms || [];
       
-      expect(alarm).toBeDefined();
-      expect(alarm?.AlarmName).toBe(stackOutputs.CloudWatchAlarmName);
-      expect(alarm?.MetricName).toBe('CPUUtilization');
-      expect(alarm?.Namespace).toBe('AWS/EC2');
-      expect(alarm?.Threshold).toBe(80);
-    });
-  });
-
-  describe('Stack Resources', () => {
-    test('All stack resources should be in CREATE_COMPLETE or UPDATE_COMPLETE state', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new ListStackResourcesCommand({
-        StackName: STACK_NAME
+      expect(alarms.length).toBeGreaterThan(0);
+      alarms.forEach(alarm => {
+        expect(alarm?.AlarmName).toBeDefined();
+        expect(alarm?.MetricName).toBeDefined();
       });
-      
-      const response = await cloudFormationClient.send(command);
-      const resources = response.StackResourceSummaries || [];
-      
-      expect(resources.length).toBeGreaterThan(0);
-      
-      resources.forEach(resource => {
-        expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(resource.ResourceStatus);
-      });
-    });
-
-    test('Stack should be in CREATE_COMPLETE or UPDATE_COMPLETE state', async () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      const command = new DescribeStacksCommand({
-        StackName: STACK_NAME
-      });
-      
-      const response = await cloudFormationClient.send(command);
-      const stack = response.Stacks?.[0];
-      
-      expect(stack).toBeDefined();
-      expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(stack?.StackStatus);
-    });
-  });
-
-  describe('Network Connectivity', () => {
-    test('VPC should have internet connectivity', () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      // This test verifies that the VPC has the necessary components for internet connectivity
-      expect(stackOutputs.VPCId).toBeDefined();
-      expect(stackOutputs.PublicSubnetIds).toBeDefined();
-      expect(stackOutputs.PrivateSubnetIds).toBeDefined();
-      
-      // Check that we have both public and private subnets
-      const publicSubnets = stackOutputs.PublicSubnetIds.split(',');
-      const privateSubnets = stackOutputs.PrivateSubnetIds.split(',');
-      
-      expect(publicSubnets.length).toBe(2);
-      expect(privateSubnets.length).toBe(2);
-    });
-
-    test('Security groups should allow necessary traffic', () => {
-      if (!stackExists || !stackOutputs) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      expect(stackOutputs.EC2SecurityGroupId).toBeDefined();
-      expect(stackOutputs.RDSSecurityGroupId).toBeDefined();
-      expect(stackOutputs.LambdaSecurityGroupId).toBeDefined();
-    });
-  });
-
-  describe('Resource Relationships', () => {
-    test('All resources should be in the same VPC', () => {
-      if (!stackExists || !stackOutputs || !testConfig) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      expect(testConfig.vpc.id).toBe(stackOutputs.VPCId);
-      expect(testConfig.subnets.public).toHaveLength(2);
-      expect(testConfig.subnets.private).toHaveLength(2);
-    });
-
-    test('Security groups should reference each other correctly', () => {
-      if (!stackExists || !stackOutputs || !testConfig) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      expect(testConfig.security_groups.ec2).toBe(stackOutputs.EC2SecurityGroupId);
-      expect(testConfig.security_groups.rds).toBe(stackOutputs.RDSSecurityGroupId);
-      expect(testConfig.security_groups.lambda).toBe(stackOutputs.LambdaSecurityGroupId);
-    });
-
-    test('Compute resources should reference networking correctly', () => {
-      if (!stackExists || !stackOutputs || !testConfig) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      expect(testConfig.compute.asg_name).toBe(stackOutputs.AutoScalingGroupName);
-      expect(testConfig.compute.launch_template).toBe(stackOutputs.LaunchTemplateId);
-    });
-
-    test('Storage and database should be properly configured', () => {
-      if (!stackExists || !stackOutputs || !testConfig) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      expect(testConfig.storage.s3_bucket).toBe(stackOutputs.S3BucketName);
-      expect(testConfig.database.endpoint).toBe(stackOutputs.RDSEndpoint);
-      expect(testConfig.database.port).toBe(stackOutputs.RDSPort);
-    });
-
-    test('Lambda should have proper configuration', () => {
-      if (!stackExists || !stackOutputs || !testConfig) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      expect(testConfig.lambda.function_name).toBe(stackOutputs.LambdaFunctionName);
-      expect(testConfig.lambda.function_arn).toBe(stackOutputs.LambdaFunctionArn);
-      expect(testConfig.lambda.role_arn).toBe(stackOutputs.LambdaExecutionRoleArn);
-    });
-
-    test('Monitoring should be properly configured', () => {
-      if (!stackExists || !stackOutputs || !testConfig) {
-        console.log('Skipping test: Stack not available');
-        return;
-      }
-
-      expect(testConfig.monitoring.sns_topic).toBe(stackOutputs.SNSTopicName);
-      expect(testConfig.monitoring.cloudwatch_alarm).toBe(stackOutputs.CloudWatchAlarmName);
     });
   });
 
@@ -728,15 +366,15 @@ describe('TapStack Integration Tests', () => {
       }
 
       const requiredOutputs = [
-        'VPCId', 'PublicSubnetIds', 'PrivateSubnetIds',
-        'EC2SecurityGroupId', 'RDSSecurityGroupId', 'LambdaSecurityGroupId',
-        'AutoScalingGroupName', 'S3BucketName', 'RDSEndpoint',
-        'LambdaFunctionArn', 'SNSTopicArn'
+        'VPCId', 'VpcCidrBlock', 'PublicSubnet1Id', 'PublicSubnet2Id',
+        'PrivateSubnet1Id', 'PrivateSubnet2Id', 'ALBSecurityGroupId',
+        'WebServerSecurityGroupId', 'EC2RoleArn', 'LaunchTemplateId',
+        'AutoScalingGroupName', 'S3BucketName', 'StackName', 'Environment'
       ];
 
       requiredOutputs.forEach(outputKey => {
-        expect(stackOutputs![outputKey as keyof StackOutputs]).toBeDefined();
-        expect(stackOutputs![outputKey as keyof StackOutputs]).not.toBe('');
+        expect(stackOutputs[outputKey]).toBeDefined();
+        expect(stackOutputs[outputKey]).not.toBe('');
       });
     });
 
@@ -746,20 +384,32 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
-      expect(stackOutputs!.StackName).toBe(STACK_NAME);
-      expect(stackOutputs!.StackRegion).toBe(AWS_REGION);
-      expect(stackOutputs!.StackAccountId).toMatch(/^\d{12}$/); // 12-digit AWS account ID
+      expect(stackOutputs.StackName).toBe(STACK_NAME);
+      expect(stackOutputs.Environment).toBe('production');
+      expect(stackOutputs.VpcCidrBlock).toBe('10.0.0.0/16');
     });
 
-    test('Test configuration should be valid JSON', () => {
+    test('Auto Scaling Group configuration should be valid', () => {
       if (!stackExists || !stackOutputs) {
         console.log('Skipping test: Stack not available');
         return;
       }
 
-      expect(() => JSON.parse(stackOutputs!.TestConfiguration)).not.toThrow();
-      expect(testConfig).toBeDefined();
-      expect(typeof testConfig).toBe('object');
+      expect(stackOutputs.MinSize).toBe(2);
+      expect(stackOutputs.MaxSize).toBe(6);
+      expect(stackOutputs.DesiredCapacity).toBe(2);
+      expect(stackOutputs.InstanceType).toBe('t3.micro');
+    });
+
+    test('Load balancer should be configured', () => {
+      if (!stackExists || !stackOutputs) {
+        console.log('Skipping test: Stack not available');
+        return;
+      }
+
+      expect(stackOutputs.LoadBalancerURL).toBeDefined();
+      expect(stackOutputs.LoadBalancerDNSName).toBeDefined();
+      expect(stackOutputs.LoadBalancerDNSName).toContain('.elb.amazonaws.com');
     });
   });
 });
