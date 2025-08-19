@@ -1061,7 +1061,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_response_time" {
   alarm_name          = "${var.app_name}-alb-response-time-${local.suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "TargetResponseTime"
+  metric_name         = "ResponseTime"
   namespace           = "AWS/ApplicationELB"
   period              = "300"
   statistic           = "Average"
