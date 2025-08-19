@@ -136,7 +136,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.0.0/16
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-WebSG'
@@ -147,7 +147,7 @@ Resources:
     Properties:
       LaunchTemplateData:
         InstanceType: !Ref InstanceType
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: ami-00ca32bbc84273381
         SecurityGroupIds:
           - !Ref InstanceSecurityGroup
         UserData:
@@ -170,7 +170,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.0.0/16
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-ALBSG'
