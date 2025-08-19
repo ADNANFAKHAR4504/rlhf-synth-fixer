@@ -138,6 +138,7 @@ Resources:
           import os
           import logging
           from datetime import datetime
+          from decimal import Decimal
 
           # Configure logging
           logger = logging.getLogger()
@@ -145,6 +146,13 @@ Resources:
 
           dynamodb = boto3.resource('dynamodb')
           table = dynamodb.Table(os.environ['TABLE_NAME'])
+
+          # Custom JSON encoder for DynamoDB Decimal types
+          class DecimalEncoder(json.JSONEncoder):
+              def default(self, obj):
+                  if isinstance(obj, Decimal):
+                      return float(obj)
+                  return super(DecimalEncoder, self).default(obj)
 
           def lambda_handler(event, context):
               try:
@@ -190,7 +198,7 @@ Resources:
                       'body': json.dumps({
                           'message': 'Success',
                           'items': response.get('Items', [])
-                      })
+                      }, cls=DecimalEncoder)
                   }
               except Exception as e:
                   logger.error(f"Error in GET handler: {str(e)}")
