@@ -209,7 +209,7 @@ export class SecurityModules extends Construct {
 
     // Generate unique bucket name to avoid conflicts
     const uniqueSuffix = Math.random().toString(36).substring(2, 8);
-
+    
     // IAM Policy with minimal required permissions - Updated with bucket name
     const iamPolicy = new IamPolicy(this, 'MyApp-IAM-Policy-EC2', {
       name: 'MyApp-IAM-Policy-EC2',
