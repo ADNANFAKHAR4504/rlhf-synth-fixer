@@ -213,7 +213,6 @@ echo "EC2 instance setup complete" > /var/log/setup.log
       deleteAutomatedBackups: false,
       deletionProtection: false, // Set to true for production
       monitoringInterval: cdk.Duration.seconds(60), // Enhanced monitoring
-      enablePerformanceInsights: true,
       performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
     });
