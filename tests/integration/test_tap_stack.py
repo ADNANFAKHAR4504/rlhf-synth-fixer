@@ -13,12 +13,9 @@ import boto3
 import pytest
 from botocore.exceptions import BotoCoreError, ClientError
 
-# AWS Region configuration
-REGION = (
-    os.getenv("AWS_REGION")
-    or os.getenv("AWS_DEFAULT_REGION")
-    or "us-west-2"  # Primary region from deployment
-)
+# AWS Region configuration - based on deployment output
+PRIMARY_REGION = "us-west-2"  # Primary region from deployment
+SECONDARY_REGION = "us-east-1"  # Secondary region from deployment
 
 # ---- Helper Functions ------------------------------------------------------
 
@@ -40,38 +37,38 @@ def _first(predicate, iterable):
 
 @pytest.fixture(scope="module")
 def secrets_client():
-  """Secrets Manager client for primary region."""
-  return boto3.client("secretsmanager", region_name=REGION)
+  """Secrets Manager client for secondary region (where secrets are actually deployed)."""
+  return boto3.client("secretsmanager", region_name=SECONDARY_REGION)
 
 
 @pytest.fixture(scope="module")
 def s3_client():
   """S3 client for primary region."""
-  return boto3.client("s3", region_name=REGION)
+  return boto3.client("s3", region_name=PRIMARY_REGION)
 
 
 @pytest.fixture(scope="module")
 def lambda_client():
   """Lambda client for primary region."""
-  return boto3.client("lambda", region_name=REGION)
+  return boto3.client("lambda", region_name=PRIMARY_REGION)
 
 
 @pytest.fixture(scope="module")
 def apigateway_client():
   """API Gateway client for primary region."""
-  return boto3.client("apigatewayv2", region_name=REGION)
+  return boto3.client("apigatewayv2", region_name=PRIMARY_REGION)
 
 
 @pytest.fixture(scope="module")
 def sns_client():
-  """SNS client for primary region."""
-  return boto3.client("sns", region_name=REGION)
+  """SNS client for secondary region (where SNS is deployed)."""
+  return boto3.client("sns", region_name=SECONDARY_REGION)
 
 
 @pytest.fixture(scope="module")
 def budgets_client():
-  """Budgets client for primary region."""
-  return boto3.client("budgets", region_name=REGION)
+  """Budgets client for secondary region (where budget is deployed)."""
+  return boto3.client("budgets", region_name=SECONDARY_REGION)
 
 
 # ---- Secrets Manager Tests -------------------------------------------------
@@ -198,7 +195,7 @@ def test_sns_topic_exists(sns_client):
 
 def test_budget_exists(budgets_client):
   """Verify budget exists."""
-  budget_name = "nova-cicd-budget-dev"
+  budget_name = "monthly-budget-dev"  # Actual name from deployment output
 
   try:
     response = budgets_client.describe_budget(
