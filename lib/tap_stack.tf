@@ -78,8 +78,6 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
-data "aws_caller_identity" "current" {}
-
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.this.id
 
