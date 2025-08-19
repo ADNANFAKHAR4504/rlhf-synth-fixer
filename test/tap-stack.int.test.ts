@@ -368,7 +368,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
             new DescribeLogGroupsCommand({ logGroupNamePrefix: prefix })
           );
           
-          if (response.logGroups.length > 0) {
+          if (response.logGroups && response.logGroups.length > 0) {
             expect(response.logGroups[0].kmsKeyId).toBeDefined();
             expect(response.logGroups[0].retentionInDays).toBe(7);
           }
@@ -472,7 +472,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
               new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName })
             );
             
-            if (response.logGroups.length > 0) {
+            if (response.logGroups && response.logGroups.length > 0) {
               expect(response.logGroups[0].retentionInDays).toBe(7);
             }
           } catch (error) {
