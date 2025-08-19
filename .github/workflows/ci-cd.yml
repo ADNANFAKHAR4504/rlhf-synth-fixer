@@ -173,14 +173,6 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
-
-      - name: Upload Deployment Outputs
-        uses: actions/upload-artifact@v4
-        with:
-          name: cfn-outputs
-          path: |
-            cfn-outputs/
-            cdk-stacks.json
   lint:
     name: Lint
     runs-on: ubuntu-24.04
