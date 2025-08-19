@@ -13,7 +13,14 @@ fi
 # Build the project based on language
 if [ "$LANGUAGE" = "java" ]; then
   echo "Building Java project with Gradle..."
-  ./gradlew build --build-cache --parallel --info
+  echo "Current working directory: $(pwd)"
+  echo "Gradle wrapper: $(ls -la gradlew)"
+  
+  # Make sure gradlew is executable
+  chmod +x ./gradlew
+  
+  # Run with explicit working directory and clear task specification
+  ./gradlew build --build-cache --parallel --no-daemon
   echo "✅ Java build completed successfully"
 elif [ "$LANGUAGE" != "py" ]; then
   echo "Building project..."

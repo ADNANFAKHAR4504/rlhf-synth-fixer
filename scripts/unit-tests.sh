@@ -23,7 +23,8 @@ fi
 # Run unit tests based on platform and language
 if [ "$LANGUAGE" = "java" ]; then
   echo "✅ Java project detected, running JUnit tests..."
-  ./gradlew test --build-cache
+  chmod +x ./gradlew
+  ./gradlew test --build-cache --no-daemon
 elif [ "$LANGUAGE" = "ts" ] && [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ Terraform TypeScript project detected, running unit tests..."
   npm run test:unit-cdktf

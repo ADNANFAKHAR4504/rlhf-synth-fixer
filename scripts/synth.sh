@@ -21,6 +21,12 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF get and synth..."
   npm run cdktf:get
   npm run cdktf:synth
+elif [ "$PLATFORM" = "pulumi" ]; then
+  echo "✅ Pulumi project detected, skipping synth (build already completed)"
+  echo "Pulumi projects use compiled JAR files rather than synth"
+  # Create empty cdk.out directory to satisfy artifact upload
+  mkdir -p cdk.out
+  echo "# No synth artifacts for Pulumi projects - uses compiled JAR" > cdk.out/README.md
 else
   echo "ℹ️ Not a CDK project, skipping CDK synth"
   echo "This is expected for non-CDK projects like CloudFormation templates"
