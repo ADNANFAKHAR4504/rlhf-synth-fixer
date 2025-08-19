@@ -1,5 +1,7 @@
 # Compiled JavaScript files (but keep config files)
+./bin/*.js
 /bin/*.js
+./lib/*.js
 /lib/*.js
 /test/*.js
 /cli/*.js
@@ -100,3 +102,5 @@ bin/tfplan
 
 build
 tasks.csv
+.sherlock/data
+.sherlock/reports
