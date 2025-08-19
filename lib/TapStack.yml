@@ -139,7 +139,7 @@
                 },
                 "TrafficType": "ALL",
                 "LogDestinationType": "cloud-watch-logs",
-                "LogDestination": {
+                "LogGroupName": {
                     "Ref": "VPCFlowLogs"
                 },
                 "DeliverLogsPermissionArn": {
