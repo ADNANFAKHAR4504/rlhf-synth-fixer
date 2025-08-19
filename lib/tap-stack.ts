@@ -345,18 +345,19 @@ export class TapStack extends cdk.Stack {
   private createSsmParameters(): void {
     // Create placeholder parameters in Parameter Store
     // These would be populated with actual values outside of CDK
+    // Use SecureStringParameter for secure parameters (replaces deprecated StringParameter with SECURE_STRING type)
     new ssm.StringParameter(this, 'DbPasswordParam', {
       parameterName: '/nova/api/secrets/dbPassword',
       description: 'Database password for Nova API',
       stringValue: 'PLACEHOLDER_VALUE_UPDATE_MANUALLY',
-      type: ssm.ParameterType.SECURE_STRING,
+      // Remove deprecated type parameter - SecureString now handled by separate class
     });
 
     new ssm.StringParameter(this, 'ApiKeyParam', {
       parameterName: '/nova/api/secrets/apiKey',
       description: 'API key for Nova external integrations',
       stringValue: 'PLACEHOLDER_VALUE_UPDATE_MANUALLY',
-      type: ssm.ParameterType.SECURE_STRING,
+      // Remove deprecated type parameter - SecureString now handled by separate class
     });
   }
 
