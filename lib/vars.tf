@@ -61,12 +61,11 @@ variable "availability_zones" {
 variable "backup_vault_name_to_clean" {
   description = "The name of the AWS Backup vault to clean recovery points from."
   type        = string
-  default     = "default-backup-vault"
+  default     = "tap-app-dev-070301-qcf7m9d3-backup-vault"
 }
 
 variable "s3_bucket_name_to_clean" {
   description = "The name of the S3 bucket to empty before deletion."
   type        = string
-  default     = "default-s3-bucket-to-clean"
+  default     = "tap-app-dev-064031-qcf7m9d3-logs-bucket"
 }
-

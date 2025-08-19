@@ -1,3 +1,6 @@
+---
+---
+
 You are an expert AWS infrastructure architect and Terraform developer specializing in secure, production-ready cloud environments. Create a comprehensive Terraform configuration that establishes a secure AWS infrastructure with proper resource connectivity and security isolation.
 
 ## Project Requirements

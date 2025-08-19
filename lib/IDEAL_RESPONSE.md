@@ -1,3 +1,7 @@
+---
+---
+
+```terraform
 ######################
 
 # Data
@@ -61,3 +65,4 @@ output "instance_profile_name" {
 description = "Name of the EC2 instance profile"
 value = module.infra.instance_profile_name
 }
+```

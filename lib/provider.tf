@@ -33,7 +33,11 @@ resource "null_resource" "backup_recovery_point_cleanup" {
   lifecycle {
     create_before_destroy = true
   }
-  
+
+  # This provisioner requires the following IAM permissions:
+  # - backup:DescribeBackupVault
+  # - backup:ListRecoveryPointsByBackupVault
+  # - backup:DeleteRecoveryPoint
   provisioner "local-exec" {
     when    = destroy
     command = <<EOT
@@ -78,7 +82,7 @@ resource "null_resource" "backup_recovery_point_cleanup" {
 
 resource "null_resource" "s3_bucket_cleanup" {
   lifecycle {
-  create_before_destroy = true
+    create_before_destroy = true
   }
 
   triggers = {
@@ -86,6 +90,12 @@ resource "null_resource" "s3_bucket_cleanup" {
     s3_bucket_name = var.s3_bucket_name_to_clean
   }
 
+  # This provisioner requires the following IAM permissions:
+  # - s3:ListBucket
+  # - s3:ListBucketVersions
+  # - s3:DeleteObject
+  # - s3:DeleteObjectVersion
+  # - s3:DeleteBucket
   provisioner "local-exec" {
     when    = destroy
     command = <<EOT
