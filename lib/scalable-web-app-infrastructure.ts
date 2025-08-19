@@ -709,6 +709,28 @@ EOF
       { provider, parent: this }
     );
 
+    // S3 Bucket Policy for ALB access logs
+    new aws.s3.BucketPolicy(
+      `${environmentSuffix}-alb-logs-bucket-policy`,
+      {
+        bucket: albLogsBucket.id,
+        policy: pulumi.all([aws.getCallerIdentity().then(i => i.accountId)]).apply(([accountId]) => JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                AWS: 'arn:aws:iam::718504428378:root', // ALB service account for ap-south-1
+              },
+              Action: 's3:PutObject',
+              Resource: `arn:aws:s3:::${environmentSuffix}-alb-logs-bucket-*/*`,
+            },
+          ],
+        })),
+      },
+      { provider, parent: this }
+    );
+
     // Application Load Balancer
     const alb = new aws.lb.LoadBalancer(
       `app-alb-${environmentSuffix}`,
@@ -976,8 +998,7 @@ EOF
         finalSnapshotIdentifier: `app-database-final-snapshot-${environmentSuffix}`,
         deletionProtection: true,
         enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
-        performanceInsightsEnabled: true,
-        performanceInsightsRetentionPeriod: 7,
+        performanceInsightsEnabled: false,
         monitoringInterval: 60,
         monitoringRoleArn: rdsMonitoringRole.arn,
         autoMinorVersionUpgrade: true,
