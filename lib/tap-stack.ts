@@ -39,30 +39,6 @@ export class TapStack extends cdk.Stack {
             actions: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
             resources: ['*'],
           }),
-          new iam.PolicyStatement({
-            sid: 'Allow CloudWatch Logs from Stack Region',
-            effect: iam.Effect.ALLOW,
-            principals: [
-              new iam.ServicePrincipal(`logs.${cdk.Aws.REGION}.amazonaws.com`),
-            ],
-            actions: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
-            resources: ['*'],
-          }),
-
-          new iam.PolicyStatement({
-            sid: 'Allow Lambda Execution Role',
-            effect: iam.Effect.ALLOW,
-            principals: [
-              new iam.ArnPrincipal(`arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/*`),
-            ],
-            actions: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:DescribeKey'],
-            resources: ['*'],
-            conditions: {
-              StringEquals: {
-                'kms:ViaService': 'lambda.us-west-2.amazonaws.com',
-              },
-            },
-          }),
         ],
       }),
     });
@@ -77,7 +53,7 @@ export class TapStack extends cdk.Stack {
     const appSecrets = new secretsmanager.Secret(this, 'TapAppSecrets', {
       secretName: 'tap-app/secrets',
       description: 'Application secrets for TAP serverless app',
-      encryptionKey: kmsKey,
+      // Removed KMS encryption to avoid CDK policy injection issues
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'admin' }),
         generateStringKey: 'password',
