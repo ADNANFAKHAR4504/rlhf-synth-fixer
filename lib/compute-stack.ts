@@ -206,9 +206,9 @@ echo "<p>Environment: ${environmentSuffix}</p>" >> /var/www/html/index.html
 `;
 
     const launchTemplate = new aws.ec2.LaunchTemplate(
-      `tap-lt-${region}-${environmentSuffix}`,
+      `tap-lt-${region}-${environmentSuffix}-primary-2`,
       {
-        name: `tap-lt-${region}-${environmentSuffix}`,
+        name: `tap-lt-${region}-${environmentSuffix}-primary-2`,
         imageId: aws.ec2
           .getAmi({
             mostRecent: true,
