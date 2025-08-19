@@ -435,18 +435,18 @@ describe('TapStack Integration Tests', () => {
         return;
       }
 
-      // If no outputs are available, skip the test
-      if (!outputs.ProdCloudTrailName && !outputs.ProdTrailBucketName) {
-        console.log(
-          'Skipping CloudTrail test - no CloudTrail outputs available'
-        );
-        return;
-      }
-
       // If outputs are empty objects (no real data), skip the test
       if (Object.keys(outputs).length === 0) {
         console.log(
           'Skipping CloudTrail test - no CloudFormation outputs available'
+        );
+        return;
+      }
+
+      // If no CloudTrail outputs are available, skip the test
+      if (!outputs.ProdCloudTrailName && !outputs.ProdTrailBucketName) {
+        console.log(
+          'Skipping CloudTrail test - no CloudTrail outputs available'
         );
         return;
       }
