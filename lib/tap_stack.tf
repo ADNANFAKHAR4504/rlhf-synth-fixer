@@ -329,14 +329,14 @@ resource "aws_autoscaling_group" "primary_app" {
   desired_capacity    = 2
   max_size            = 4
   min_size            = 1
-  vpc_zone_identifier = [for subnet in aws_subnet.primary_public : subnet.id]
+  vpc_zone_identifier = [for subnet in aws_subnet.primary_private : subnet.id]
   launch_template {
     id      = aws_launch_template.primary_app.id
     version = "$Latest"
   }
   target_group_arns         = [aws_lb_target_group.primary_app.arn]
   health_check_type         = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600  # Increased to allow more time for httpd to start
   tag {
     key                 = "Name"
     value               = "asg-primary-${local.deployment_suffix}"
@@ -362,8 +362,12 @@ resource "aws_lb_target_group" "primary_app" {
   protocol    = "HTTP"
   vpc_id      = aws_vpc.primary.id
   health_check {
-    path    = "/"
-    matcher = "200"
+    path                = "/"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 10
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
   }
   tags = merge(local.common_tags, { Name = "tg-app-primary-${local.deployment_suffix}" })
 }
@@ -393,21 +397,21 @@ resource "aws_db_subnet_group" "primary_rds" {
   }
 }
 
-resource "aws_db_instance" "primary_db" {
+resource "aws_db_instance" "primary_db_new" {
   provider                = aws.primary
-  identifier_prefix       = "rds-postgres-primary-"
+  identifier              = "rds-postgres-primary-v2-${local.deployment_suffix}"
   allocated_storage       = 20
   storage_type            = "gp3"
   storage_encrypted       = true
   engine                  = "postgres"
-  engine_version          = "14.5"
+  engine_version          = "14.9"
   instance_class          = "db.t3.micro"
   db_name                 = "novadb"
   username                = var.db_username
   password                = random_password.db_password.result
   db_subnet_group_name    = aws_db_subnet_group.primary_rds.name
   vpc_security_group_ids  = [aws_security_group.primary_rds.id]
-  multi_az                = true
+  multi_az                = true  # Create new RDS with Multi-AZ directly in new subnet group
   backup_retention_period = 7
   skip_final_snapshot     = true
   deletion_protection     = false
@@ -416,6 +420,7 @@ resource "aws_db_instance" "primary_db" {
 
   depends_on = [aws_db_subnet_group.primary_rds]
 }
+
 
 # ------------------------------------------------------------------------------
 # SECONDARY REGION (us-west-2) RESOURCES
@@ -615,7 +620,7 @@ resource "aws_autoscaling_group" "secondary_app" {
   desired_capacity    = 2
   max_size            = 4
   min_size            = 1
-  vpc_zone_identifier = [for subnet in aws_subnet.secondary_public : subnet.id]
+  vpc_zone_identifier = [for subnet in aws_subnet.secondary_private : subnet.id]
   launch_template {
     id      = aws_launch_template.secondary_app.id
     version = "$Latest"
@@ -993,7 +998,7 @@ output "secondary_alb_dns" {
 
 output "rds_endpoint" {
   description = "RDS endpoint for the PostgreSQL database"
-  value       = aws_db_instance.primary_db.endpoint
+  value       = aws_db_instance.primary_db_new.endpoint
   sensitive   = true
 }
 
@@ -1044,7 +1049,7 @@ output "secondary_asg_name" {
 
 output "primary_db_identifier" {
   description = "Identifier of the primary RDS instance"
-  value       = aws_db_instance.primary_db.identifier
+  value       = aws_db_instance.primary_db_new.identifier
 }
 
 output "event_rule_name" {
@@ -1084,15 +1089,15 @@ output "s3_bucket_versioning_status" {
 
 output "rds_multi_az" {
   description = "Multi-AZ status of the RDS instance"
-  value       = aws_db_instance.primary_db.multi_az
+  value       = aws_db_instance.primary_db_new.multi_az
 }
 
 output "rds_backup_retention_period" {
   description = "Backup retention period for RDS"
-  value       = aws_db_instance.primary_db.backup_retention_period
+  value       = aws_db_instance.primary_db_new.backup_retention_period
 }
 
 output "rds_storage_encrypted" {
   description = "Storage encryption status of the RDS instance"
-  value       = aws_db_instance.primary_db.storage_encrypted
+  value       = aws_db_instance.primary_db_new.storage_encrypted
 }

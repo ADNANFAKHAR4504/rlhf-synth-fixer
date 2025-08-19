@@ -43,7 +43,7 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
     });
 
     it('should use the generated password in the RDS instance', () => {
-      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db');
+      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db_new');
       expect(rdsBlock).not.toBeNull();
       expect(rdsBlock).toMatch(
         /password\s*=\s*random_password\.db_password\.result/
@@ -95,7 +95,7 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
     });
 
     it('1. should ensure RDS storage is encrypted', () => {
-      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db');
+      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db_new');
       expect(rdsBlock).not.toBeNull();
       expect(rdsBlock).toMatch(/storage_encrypted\s*=\s*true/);
     });
@@ -150,7 +150,7 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
   // --- NEW TESTS FOR HIGH AVAILABILITY AND NETWORKING ---
   describe('High Availability & Networking Validation', () => {
     it('6. should enable Multi-AZ for the RDS instance', () => {
-      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db');
+      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db_new');
       expect(rdsBlock).not.toBeNull();
       expect(rdsBlock).toMatch(/multi_az\s*=\s*true/);
     });
@@ -189,7 +189,7 @@ describe('Multi-Region Terraform Configuration: ../lib/tap_stack.tf', () => {
   // --- NEW TEST FOR CONFIGURATION ---
   describe('Configuration Best Practices', () => {
     it('10. should explicitly set RDS deletion protection to false', () => {
-      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db');
+      const rdsBlock = getResourceBlock('aws_db_instance', 'primary_db_new');
       expect(rdsBlock).not.toBeNull();
       expect(rdsBlock).toMatch(/deletion_protection\s*=\s*false/);
     });
