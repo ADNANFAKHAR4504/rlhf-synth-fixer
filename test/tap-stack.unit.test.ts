@@ -341,7 +341,30 @@ describe('TapStack CloudFormation Template', () => {
           'NatGatewayEIP',
           'AllocationId',
         ]);
-        expect(natGateway.Properties.SubnetId['Ref']).toBe('PublicSubnet1');
+        expect(natGateway.Properties.SubnetId['Fn::If']).toBeDefined();
+        expect(natGateway.Properties.SubnetId['Fn::If'][0]).toBe(
+          'CreateNewVPC'
+        );
+        expect(natGateway.Properties.SubnetId['Fn::If'][1]['Ref']).toBe(
+          'PublicSubnet1'
+        );
+        expect(natGateway.Properties.SubnetId['Fn::If'][2]['Ref']).toBe(
+          'AWS::NoValue'
+        );
+      });
+
+      test('NAT Gateway EIP should have conditional dependency', () => {
+        const natGatewayEIP = template.Resources.NatGatewayEIP;
+        expect(natGatewayEIP.Type).toBe('AWS::EC2::EIP');
+        expect(natGatewayEIP.Condition).toBe('CreateNATGateway');
+        expect(natGatewayEIP.DependsOn['Fn::If']).toBeDefined();
+        expect(natGatewayEIP.DependsOn['Fn::If'][0]).toBe('CreateNewVPC');
+        expect(natGatewayEIP.DependsOn['Fn::If'][1]).toBe(
+          'VPCGatewayAttachment'
+        );
+        expect(natGatewayEIP.DependsOn['Fn::If'][2]['Ref']).toBe(
+          'AWS::NoValue'
+        );
       });
 
       test('Route tables should be conditional', () => {

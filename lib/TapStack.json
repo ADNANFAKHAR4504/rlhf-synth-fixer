@@ -504,7 +504,15 @@
         "NatGatewayEIP": {
             "Type": "AWS::EC2::EIP",
             "Condition": "CreateNATGateway",
-            "DependsOn": "VPCGatewayAttachment",
+            "DependsOn": {
+                "Fn::If": [
+                    "CreateNewVPC",
+                    "VPCGatewayAttachment",
+                    {
+                        "Ref": "AWS::NoValue"
+                    }
+                ]
+            },
             "Properties": {
                 "Domain": "vpc",
                 "Tags": [
@@ -532,7 +540,15 @@
                     ]
                 },
                 "SubnetId": {
-                    "Ref": "PublicSubnet1"
+                    "Fn::If": [
+                        "CreateNewVPC",
+                        {
+                            "Ref": "PublicSubnet1"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
                 },
                 "Tags": [
                     {

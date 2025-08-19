@@ -258,7 +258,7 @@ Resources:
   NatGatewayEIP:
     Type: AWS::EC2::EIP
     Condition: CreateNATGateway
-    DependsOn: VPCGatewayAttachment
+    DependsOn: !If [CreateNewVPC, VPCGatewayAttachment, !Ref 'AWS::NoValue']
     Properties:
       Domain: vpc
       Tags:
@@ -272,7 +272,7 @@ Resources:
     Condition: CreateNATGateway
     Properties:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
+      SubnetId: !If [CreateNewVPC, !Ref PublicSubnet1, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-nat-gw'
