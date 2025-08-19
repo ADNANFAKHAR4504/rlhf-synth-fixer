@@ -370,14 +370,6 @@ resource "aws_s3_bucket" "logs" {
   }
 }
 
-resource "null_resource" "empty_bucket" {
-  triggers = {
-    bucket = aws_s3_bucket.logs.id
-  }
-  provisioner "local-exec" {
-    command = "aws s3 rm s3://${self.triggers.bucket} --recursive"
-  }
-}
 
 resource "random_string" "bucket_suffix" {
   length  = 8
@@ -533,4 +525,11 @@ resource "aws_s3_bucket_policy" "logs" {
 # IAM User with MFA requirement
 data "aws_iam_user" "app_user" {
   user_name = "${var.project_name}-app-user"
+}
+
+resource "null_resource" "delete_backup_vault" {
+  provisioner "local-exec" {
+    when    = destroy
+    command = "aws backup delete-backup-vault --backup-vault-name ${var.project_name}-${var.environment}-070301-qcf7m9d3-backup-vault --region us-east-1"
+  }
 }
