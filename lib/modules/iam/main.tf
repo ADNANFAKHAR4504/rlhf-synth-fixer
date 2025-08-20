@@ -116,30 +116,6 @@ resource "aws_iam_user_policy_attachment" "mfa_enforcement" {
   policy_arn = aws_iam_policy.mfa_enforcement.arn
 }
 
-resource "aws_iam_policy" "s3_access" {
-  name_prefix = "${var.project_name}-s3-access-policy"
-  description = "Allow access to the test data S3 bucket"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action   = "s3:*"
-        Effect   = "Allow"
-        Resource = [
-          "arn:aws:s3:::test-data-bucket20250819215334281000000002",
-          "arn:aws:s3:::test-data-bucket20250819215334281000000002/*"
-        ]
-      },
-    ]
-  })
-}
-
-resource "aws_iam_user_policy_attachment" "s3_access" {
-  user       = "iac-rlhf-github"
-  policy_arn = aws_iam_policy.s3_access.arn
-}
-
 resource "aws_iam_role" "flow_log" {
   name_prefix = "${var.project_name}-flow-log-role"
 
