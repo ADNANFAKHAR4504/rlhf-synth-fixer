@@ -3,6 +3,7 @@
   "task_id": "trainr932",
   "problem_id": "Cloud_Environment_Setup_Terraform_HCL_ywbkx9n3sh6q",
   "difficulty": "hard",
+  "complexity": "hard",
   "platform": "tf",
   "language": "hcl",
   "team": "synth",
