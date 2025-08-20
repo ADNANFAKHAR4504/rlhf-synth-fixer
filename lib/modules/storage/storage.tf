@@ -99,6 +99,16 @@ data "aws_iam_policy_document" "s3_logs" {
     ]
     resources = [aws_s3_bucket.logs.arn, "${aws_s3_bucket.logs.arn}/*"]
   }
+
+  statement {
+    sid = "AllowAllS3ActionsForCiUser"
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/iac-rlhf-github"]
+    }
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.logs.arn, "${aws_s3_bucket.logs.arn}/*"]
+  }
 }
 
 data "aws_caller_identity" "current" {}
