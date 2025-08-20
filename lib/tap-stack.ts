@@ -20,7 +20,8 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Configuration
-    const domainName = 'example.com'; // Replace with your domain
+    const domainName = (this.node.tryGetContext('domainName') as string) || '';
+    const hostedZoneId = (this.node.tryGetContext('hostedZoneId') as string) || '';
     const primaryRegion = 'us-east-2';
     const secondaryRegion = 'us-west-2';
     const currentRegion = this.region;
@@ -328,19 +329,18 @@ EOF
     // Note: Failover Lambda function removed to simplify deployment
     // In a real multi-region setup, you would implement proper failover automation
 
-    // Route 53 Hosted Zone (only create in primary region)
+    // Route 53 Hosted Zone (use context when provided, otherwise skip DNS)
     let hostedZone: route53.IHostedZone | undefined;
-    if (isPrimaryRegion) {
-      hostedZone = new route53.HostedZone(this, 'HostedZone', {
+    if (domainName && hostedZoneId) {
+      hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
+        hostedZoneId,
         zoneName: domainName,
       });
     }
-    // Note: In secondary region, hosted zone lookup is skipped to avoid synthesis errors
-    // The failover records will be created manually after primary region deployment
 
-    // Health Check (only in primary region)
+    // Health Check (only in primary region and when DNS is configured)
     let healthCheck: route53.HealthCheck | undefined;
-    if (isPrimaryRegion) {
+    if (isPrimaryRegion && hostedZone) {
       healthCheck = new route53.HealthCheck(this, 'HealthCheck', {
         type: route53.HealthCheckType.HTTP, // Changed to HTTP since we're using port 80
         resourcePath: '/health',
@@ -351,8 +351,8 @@ EOF
       });
     }
 
-        // Route 53 Records (only in primary region)
-    if (hostedZone && isPrimaryRegion) {
+        // Route 53 Records (only in primary region and when DNS is configured)
+    if (hostedZone && isPrimaryRegion && domainName) {
       // Primary region record with health check
       new route53.ARecord(this, 'PrimaryRecord', {
         zone: hostedZone,
