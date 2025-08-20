@@ -20,6 +20,7 @@
         },
         "NotificationEmail": {
             "Type": "String",
+            "Default": "no-reply@gmail.com",
             "Description": "Email address for security notifications",
             "AllowedPattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
         }
@@ -66,6 +67,21 @@
                                 "kms:DescribeKey"
                             ],
                             "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs use of the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logs.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
                         }
                     ]
                 },
@@ -87,7 +103,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/security-${Environment}"
+                    "Fn::Sub": "alias/security-${Environment}-${AWS::StackName}"
                 },
                 "TargetKeyId": {
                     "Ref": "SecurityKMSKey"
@@ -353,7 +369,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "restricted-sg-${Environment}"
+                    "Fn::Sub": "restricted-sg-${Environment}-${AWS::StackName}"
                 },
                 "GroupDescription": "Security group with restricted access",
                 "VpcId": {
@@ -399,7 +415,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "restricted-sg-${Environment}"
+                            "Fn::Sub": "restricted-sg-${Environment}-${AWS::StackName}"
                         }
                     },
                     {
@@ -415,7 +431,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "EC2InstanceRole-${Environment}"
+                    "Fn::Sub": "EC2InstanceRole-${Environment}-${AWS::StackName}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -455,7 +471,7 @@
                                         "s3:GetObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${SecurityLogsBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${SecurityLogsBucket}/*"
                                     }
                                 }
                             ]
@@ -476,7 +492,7 @@
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "InstanceProfileName": {
-                    "Fn::Sub": "EC2InstanceProfile-${Environment}"
+                    "Fn::Sub": "EC2InstanceProfile-${Environment}-${AWS::StackName}"
                 },
                 "Roles": [
                     {
@@ -489,7 +505,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "CloudTrailRole-${Environment}"
+                    "Fn::Sub": "CloudTrailRole-${Environment}-${AWS::StackName}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -538,7 +554,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "ConfigRole-${Environment}"
+                    "Fn::Sub": "ConfigRole-${Environment}-${AWS::StackName}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -553,7 +569,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/ConfigRole"
+                    "arn:aws:iam::aws:policy/service-role/AWSConfigRoleForOrganizations"
                 ],
                 "Policies": [
                     {
@@ -581,7 +597,7 @@
                                         "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${ConfigBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${ConfigBucket}/*"
                                     }
                                 }
                             ]
@@ -631,19 +647,7 @@
                         {
                             "Id": "DeleteOldLogs",
                             "Status": "Enabled",
-                            "ExpirationInDays": 2555
-                        }
-                    ]
-                },
-                "NotificationConfiguration": {
-                    "CloudWatchConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "CloudWatchConfiguration": {
-                                "LogGroupName": {
-                                    "Ref": "SecurityLogsGroup"
-                                }
-                            }
+                            "ExpirationInDays": 2557
                         }
                     ]
                 },
@@ -707,9 +711,9 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/security/${Environment}"
+                    "Fn::Sub": "/aws/security/${Environment}-${AWS::StackName}"
                 },
-                "RetentionInDays": 2555,
+                "RetentionInDays": 2557,
                 "KmsKeyId": {
                     "Fn::GetAtt": [
                         "SecurityKMSKey",
@@ -730,9 +734,9 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/cloudtrail/${Environment}"
+                    "Fn::Sub": "/aws/cloudtrail/${Environment}-${AWS::StackName}"
                 },
-                "RetentionInDays": 2555,
+                "RetentionInDays": 2557,
                 "KmsKeyId": {
                     "Fn::GetAtt": [
                         "SecurityKMSKey",
@@ -754,7 +758,7 @@
             "DependsOn": "SecurityLogsBucketPolicy",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "security-trail-${Environment}"
+                    "Fn::Sub": "security-trail-${Environment}-${AWS::StackName}"
                 },
                 "S3BucketName": {
                     "Ref": "SecurityLogsBucket"
@@ -787,13 +791,12 @@
                             {
                                 "Type": "AWS::S3::Object",
                                 "Values": [
-                                    "arn:aws:s3:::*/*"
-                                ]
-                            },
-                            {
-                                "Type": "AWS::S3::Bucket",
-                                "Values": [
-                                    "arn:aws:s3:::*"
+                                    {
+                                        "Fn::Sub": "arn:aws:s3:::${SecurityLogsBucket}/*"
+                                    },
+                                    {
+                                        "Fn::Sub": "arn:aws:s3:::${ConfigBucket}/*"
+                                    }
                                 ]
                             }
                         ]
@@ -826,10 +829,7 @@
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
-                                "Fn::GetAtt": [
-                                    "SecurityLogsBucket",
-                                    "Arn"
-                                ]
+                                "Fn::Sub": "arn:aws:s3:::${SecurityLogsBucket}"
                             }
                         },
                         {
@@ -840,7 +840,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${SecurityLogsBucket}/cloudtrail-logs/*"
+                                "Fn::Sub": "arn:aws:s3:::${SecurityLogsBucket}/cloudtrail-logs/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -856,7 +856,7 @@
             "Type": "AWS::Config::DeliveryChannel",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "config-delivery-channel-${Environment}"
+                    "Fn::Sub": "config-delivery-channel-${Environment}-${AWS::StackName}"
                 },
                 "S3BucketName": {
                     "Ref": "ConfigBucket"
@@ -867,7 +867,7 @@
             "Type": "AWS::Config::ConfigurationRecorder",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "config-recorder-${Environment}"
+                    "Fn::Sub": "config-recorder-${Environment}-${AWS::StackName}"
                 },
                 "RoleARN": {
                     "Fn::GetAtt": [
@@ -889,7 +889,7 @@
                 "Description": "Checks whether MFA is enabled for the root user",
                 "Source": {
                     "Owner": "AWS",
-                    "SourceIdentifier": "ROOT_MFA_ENABLED"
+                    "SourceIdentifier": "ROOT_ACCOUNT_MFA_ENABLED"
                 }
             }
         },
@@ -901,7 +901,7 @@
                 "Description": "Checks that S3 buckets do not allow public access",
                 "Source": {
                     "Owner": "AWS",
-                    "SourceIdentifier": "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
                 }
             }
         },
@@ -946,7 +946,7 @@
             "Type": "AWS::SNS::Topic",
             "Properties": {
                 "TopicName": {
-                    "Fn::Sub": "security-notifications-${Environment}"
+                    "Fn::Sub": "security-notifications-${Environment}-${AWS::StackName}"
                 },
                 "DisplayName": "Security Notifications",
                 "KmsMasterKeyId": {
@@ -978,7 +978,7 @@
             "Type": "AWS::Events::Rule",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "guardduty-findings-${Environment}"
+                    "Fn::Sub": "guardduty-findings-${Environment}-${AWS::StackName}"
                 },
                 "Description": "Capture GuardDuty findings",
                 "EventPattern": {
@@ -1078,7 +1078,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "IncidentResponseRole-${Environment}"
+                    "Fn::Sub": "IncidentResponseRole-${Environment}-${AWS::StackName}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -1132,7 +1132,7 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "incident-response-${Environment}"
+                    "Fn::Sub": "incident-response-${Environment}-${AWS::StackName}"
                 },
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
