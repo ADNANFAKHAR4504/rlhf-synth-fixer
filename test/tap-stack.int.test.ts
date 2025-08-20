@@ -116,8 +116,18 @@ describe("Terraform E2E Integration Tests", () => {
       );
       expect(prodNacl).toBeTruthy();
       const ingressRules = prodNacl?.Entries?.filter(e => e.Egress === false) || [];
-      expect(ingressRules.some(e => e.RuleAction === "allow" && e.Protocol === "6" && e.PortRange?.From === 443)).toBe(true);
-      expect(ingressRules.some(e => e.RuleAction === "allow" && e.Protocol === "6" && e.PortRange?.From === 22)).toBe(true);
+      console.log("NACL ingress rules:", ingressRules);
+      expect(ingressRules.some(
+        e => e.RuleAction === "allow" &&
+          (Number(e.Protocol) === 6) &&
+          e.PortRange?.From === 443
+      )).toBe(true);
+
+      expect(ingressRules.some(
+        e => e.RuleAction === "allow" &&
+          (Number(e.Protocol) === 6) &&
+          e.PortRange?.From === 22
+      )).toBe(true);
       expect(ingressRules.some(e => e.RuleAction === "deny")).toBe(true);
     });
   });
