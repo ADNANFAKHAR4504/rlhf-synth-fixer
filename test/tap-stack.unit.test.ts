@@ -358,10 +358,11 @@ describe('TapStack CloudFormation Template - Secure Infrastructure', () => {
       expect(flowLogs.Properties.LogDestinationType).toBe('cloud-watch-logs');
     });
 
-    test('log group should have retention and encryption', () => {
+    test('log group should have retention', () => {
       const logGroup = template.Resources.CorpVPCFlowLogsGroup;
       expect(logGroup.Properties.RetentionInDays).toBe(90);
-      expect(logGroup.Properties.KmsKeyId).toBeDefined();
+      // KMS encryption uses AWS managed key for CloudWatch Logs by default
+      expect(logGroup.Properties.KmsKeyId).toBeUndefined();
     });
 
     test('should have VPC Flow Logs IAM role', () => {

@@ -1122,10 +1122,7 @@
                 "LogGroupName": {
                     "Fn::Sub": "/corp/cloudtrail/${EnvironmentSuffix}"
                 },
-                "RetentionInDays": 365,
-                "KmsKeyId": {
-                    "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/logs"
-                }
+                "RetentionInDays": 365
             }
         },
         "CorpCloudTrailLogRole": {
@@ -1693,10 +1690,7 @@
                 "LogGroupName": {
                     "Fn::Sub": "/corp/vpc/flowlogs/${EnvironmentSuffix}"
                 },
-                "RetentionInDays": 90,
-                "KmsKeyId": {
-                    "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/logs"
-                }
+                "RetentionInDays": 90
             }
         },
         "CorpVPCFlowLogsRole": {
