@@ -141,8 +141,8 @@ locals {
   
   # VPC and subnet IDs
   vpc_id = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
-  private_subnet_ids = length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : data.aws_subnets.all[0].ids
-  public_subnet_ids = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : data.aws_subnets.all[0].ids
+  private_subnet_ids = length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : aws_subnet.default_private[*].id
+  public_subnet_ids = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : aws_subnet.default_public[*].id
 }
 
 # Data Sources
@@ -170,6 +170,68 @@ data "aws_subnets" "all" {
     name   = "vpc-id"
     values = [var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id]
   }
+}
+
+# Create default subnets if none exist
+resource "aws_subnet" "default_private" {
+  count = length(var.private_subnet_ids) == 0 ? 2 : 0
+  
+  vpc_id            = local.vpc_id
+  cidr_block        = "10.0.${count.index + 1}.0/24"
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
+  })
+}
+
+resource "aws_subnet" "default_public" {
+  count = length(var.public_subnet_ids) == 0 ? 2 : 0
+  
+  vpc_id            = local.vpc_id
+  cidr_block        = "10.0.${count.index + 10}.0/24"
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  
+  map_public_ip_on_launch = true
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
+  })
+}
+
+# Internet Gateway for public subnets
+resource "aws_internet_gateway" "default" {
+  count = length(var.public_subnet_ids) == 0 ? 1 : 0
+  
+  vpc_id = local.vpc_id
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-igw"
+  })
+}
+
+# Route table for public subnets
+resource "aws_route_table" "public" {
+  count = length(var.public_subnet_ids) == 0 ? 1 : 0
+  
+  vpc_id = local.vpc_id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.default[0].id
+  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-public-rt"
+  })
+}
+
+# Route table association for public subnets
+resource "aws_route_table_association" "public" {
+  count = length(var.public_subnet_ids) == 0 ? 2 : 0
+  
+  subnet_id      = aws_subnet.default_public[count.index].id
+  route_table_id = aws_route_table.public[0].id
 }
 
 
