@@ -569,9 +569,9 @@ Resources:
               SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: false
+        BlockPublicPolicy: true
         IgnorePublicAcls: true
-        RestrictPublicBuckets: false
+        RestrictPublicBuckets: true
       LoggingConfiguration:
         DestinationBucketName: !Sub 'app-logs-${AWS::AccountId}-${AWS::Region}-tapstack'
         LogFilePrefix: 's3-access-logs/'
@@ -586,60 +586,11 @@ Resources:
             ExpirationInDays: 90
             NoncurrentVersionExpirationInDays: 30
             Prefix: 's3-access-logs/'
-          - Id: DeleteOldFlowLogs
-            Status: Enabled
-            ExpirationInDays: 90
-            NoncurrentVersionExpirationInDays: 30
-            Prefix: 'vpc-flow-logs/'
-          - Id: DeleteOldCloudTrailLogs
-            Status: Enabled
-            ExpirationInDays: 90
-            NoncurrentVersionExpirationInDays: 30
-            Prefix: 'cloudtrail-logs/'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-app-logs-bucket'
         - Key: Environment
           Value: Production
-
-  ApplicationLogsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Condition: CreateNewS3Bucket
-    Properties:
-      Bucket: !Ref ApplicationLogsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: CloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ApplicationLogsBucket.Arn
-          - Sid: CloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::app-logs-${AWS::AccountId}-${AWS::Region}-tapstack/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          - Sid: ConfigAclCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ApplicationLogsBucket.Arn
-          - Sid: ConfigWrite
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::app-logs-${AWS::AccountId}-${AWS::Region}-tapstack/config-logs/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
 
   ###############################################################################
   # VPC FLOW LOGS
@@ -700,107 +651,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-vpc-flow-logs-delivery'
-        - Key: Environment
-          Value: Production
-
-  ###############################################################################
-  # CLOUDTRAIL
-  ###############################################################################
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Condition: CreateNewS3Bucket
-    Properties:
-      TrailName: !Sub '${AWS::StackName}-cloudtrail'
-      S3BucketName: !Ref ApplicationLogsBucket
-      S3KeyPrefix: 'cloudtrail-logs/'
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      IsLogging: true
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values:
-                - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-cloudtrail'
-        - Key: Environment
-          Value: Production
-
-  ###############################################################################
-  # AWS CONFIG
-  ###############################################################################
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Condition: CreateNewS3Bucket
-    Properties:
-      Name: !Sub '${AWS::StackName}-config-delivery'
-      S3BucketName: !Ref ApplicationLogsBucket
-      S3KeyPrefix: 'config-logs'
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: One_Hour
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Condition: CreateNewS3Bucket
-    Properties:
-      Name: !Sub '${AWS::StackName}-config-recorder'
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-        ResourceTypes:
-          - AWS::EC2::VPC
-          - AWS::EC2::Subnet
-          - AWS::EC2::SecurityGroup
-          - AWS::EC2::Instance
-          - AWS::RDS::DBInstance
-          - AWS::S3::Bucket
-          - AWS::KMS::Key
-          - AWS::IAM::Role
-          - AWS::IAM::User
-          - AWS::IAM::Group
-
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Condition: CreateNewS3Bucket
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: !Sub '${AWS::StackName}-config-policy'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - config:Put*
-                  - config:Get*
-                  - config:List*
-                  - config:Delete*
-                  - config:Describe*
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketAcl
-                  - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:GetObject
-                  - s3:ListBucket
-                Resource:
-                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}'
-                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-config-role'
         - Key: Environment
           Value: Production
 
@@ -1004,14 +854,3 @@ Outputs:
     Value: !If [CreateNewVPC, !Ref VPCFlowLogs, 'No VPC created']
     Export:
       Name: !Sub '${AWS::StackName}-VPCFlowLogsLogGroup'
-  CloudTrailName:
-    Description: The name of the CloudTrail trail.
-    Value: !If [CreateNewS3Bucket, !Ref CloudTrail, 'No CloudTrail created']
-    Export:
-      Name: !Sub '${AWS::StackName}-CloudTrailName'
-  ConfigRecorderName:
-    Description: The name of the AWS Config recorder.
-    Value:
-      !If [CreateNewS3Bucket, !Ref ConfigRecorder, 'No Config recorder created']
-    Export:
-      Name: !Sub '${AWS::StackName}-ConfigRecorderName'

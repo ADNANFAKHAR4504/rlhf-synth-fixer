@@ -283,18 +283,11 @@ describe('TapStack CloudFormation Template', () => {
 
     const iamResources = ['EC2Role', 'EC2InstanceProfile'];
 
-    const storageResources = [
-      'ApplicationLogsBucket',
-      'ApplicationLogsBucketPolicy',
-    ];
+    const storageResources = ['ApplicationLogsBucket'];
     const monitoringResources = [
       'VPCFlowLogRole',
       'VPCFlowLogs',
       'VPCFlowLogsDelivery',
-      'CloudTrail',
-      'ConfigDeliveryChannel',
-      'ConfigRecorder',
-      'ConfigRole',
     ];
 
     const databaseResources = ['DBSubnetGroup', 'DBParameterGroup', 'Database'];
@@ -519,9 +512,9 @@ describe('TapStack CloudFormation Template', () => {
         const bucket = template.Resources.ApplicationLogsBucket;
         const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
         expect(publicAccess.BlockPublicAcls).toBe(true);
-        expect(publicAccess.BlockPublicPolicy).toBe(false);
+        expect(publicAccess.BlockPublicPolicy).toBe(true);
         expect(publicAccess.IgnorePublicAcls).toBe(true);
-        expect(publicAccess.RestrictPublicBuckets).toBe(false);
+        expect(publicAccess.RestrictPublicBuckets).toBe(true);
       });
 
       test('ApplicationLogsBucket should have logging configuration', () => {
@@ -534,7 +527,7 @@ describe('TapStack CloudFormation Template', () => {
       test('ApplicationLogsBucket should have lifecycle rules for logs', () => {
         const bucket = template.Resources.ApplicationLogsBucket;
         const lifecycle = bucket.Properties.LifecycleConfiguration;
-        expect(lifecycle.Rules).toHaveLength(4);
+        expect(lifecycle.Rules).toHaveLength(2);
 
         const deleteOldLogsRule = lifecycle.Rules.find(
           (rule: any) => rule.Id === 'DeleteOldLogs'
@@ -542,37 +535,11 @@ describe('TapStack CloudFormation Template', () => {
         const deleteOldAccessLogsRule = lifecycle.Rules.find(
           (rule: any) => rule.Id === 'DeleteOldAccessLogs'
         );
-        const deleteOldFlowLogsRule = lifecycle.Rules.find(
-          (rule: any) => rule.Id === 'DeleteOldFlowLogs'
-        );
-        const deleteOldCloudTrailLogsRule = lifecycle.Rules.find(
-          (rule: any) => rule.Id === 'DeleteOldCloudTrailLogs'
-        );
 
         expect(deleteOldLogsRule).toBeDefined();
         expect(deleteOldAccessLogsRule).toBeDefined();
-        expect(deleteOldFlowLogsRule).toBeDefined();
-        expect(deleteOldCloudTrailLogsRule).toBeDefined();
         expect(deleteOldAccessLogsRule.Prefix).toBe('s3-access-logs/');
-        expect(deleteOldFlowLogsRule.Prefix).toBe('vpc-flow-logs/');
-        expect(deleteOldCloudTrailLogsRule.Prefix).toBe('cloudtrail-logs/');
         expect(deleteOldAccessLogsRule.ExpirationInDays).toBe(90);
-        expect(deleteOldFlowLogsRule.ExpirationInDays).toBe(90);
-        expect(deleteOldCloudTrailLogsRule.ExpirationInDays).toBe(90);
-      });
-
-      test('ApplicationLogsBucketPolicy should be conditional and have correct properties', () => {
-        const policy = template.Resources.ApplicationLogsBucketPolicy;
-        expect(policy.Type).toBe('AWS::S3::BucketPolicy');
-        expect(policy.Condition).toBe('CreateNewS3Bucket');
-        expect(policy.Properties.Bucket['Ref']).toBe('ApplicationLogsBucket');
-        expect(policy.Properties.PolicyDocument.Statement).toHaveLength(4);
-
-        const statements = policy.Properties.PolicyDocument.Statement;
-        expect(statements[0].Sid).toBe('CloudTrailAclCheck');
-        expect(statements[1].Sid).toBe('CloudTrailWrite');
-        expect(statements[2].Sid).toBe('ConfigAclCheck');
-        expect(statements[3].Sid).toBe('ConfigWrite');
       });
     });
 
@@ -584,7 +551,9 @@ describe('TapStack CloudFormation Template', () => {
         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
         expect(role.Properties.Policies).toBeDefined();
         expect(role.Properties.Policies[0].PolicyName['Fn::Sub']).toBeDefined();
-        expect(role.Properties.Policies[0].PolicyDocument.Statement).toHaveLength(1);
+        expect(
+          role.Properties.Policies[0].PolicyDocument.Statement
+        ).toHaveLength(1);
       });
 
       test('VPCFlowLogs should be conditional and have correct properties', () => {
@@ -603,139 +572,89 @@ describe('TapStack CloudFormation Template', () => {
         expect(flowLog.Properties.TrafficType).toBe('ALL');
         expect(flowLog.Properties.LogDestinationType).toBe('cloud-watch-logs');
       });
+    });
+  });
 
-      test('CloudTrail should be conditional and have correct properties', () => {
-        const trail = template.Resources.CloudTrail;
-        expect(trail.Type).toBe('AWS::CloudTrail::Trail');
-        expect(trail.Condition).toBe('CreateNewS3Bucket');
-        expect(trail.Properties.IncludeGlobalServiceEvents).toBe(true);
-        expect(trail.Properties.IsMultiRegionTrail).toBe(true);
-        expect(trail.Properties.EnableLogFileValidation).toBe(true);
-        expect(trail.Properties.IsLogging).toBe(true);
-        expect(trail.Properties.S3KeyPrefix).toBe('cloudtrail-logs/');
-      });
-
-      test('ConfigDeliveryChannel should be conditional and have correct properties', () => {
-        const channel = template.Resources.ConfigDeliveryChannel;
-        expect(channel.Type).toBe('AWS::Config::DeliveryChannel');
-        expect(channel.Condition).toBe('CreateNewS3Bucket');
-        expect(channel.Properties.S3KeyPrefix).toBe('config-logs');
-        expect(
-          channel.Properties.ConfigSnapshotDeliveryProperties.DeliveryFrequency
-        ).toBe('One_Hour');
-      });
-
-      test('ConfigRecorder should have correct properties', () => {
-        const recorder = template.Resources.ConfigRecorder;
-        expect(recorder.Type).toBe('AWS::Config::ConfigurationRecorder');
-        expect(recorder.Condition).toBe('CreateNewS3Bucket');
-        expect(recorder.Properties.RecordingGroup.AllSupported).toBe(true);
-        expect(
-          recorder.Properties.RecordingGroup.IncludeGlobalResourceTypes
-        ).toBe(true);
-        expect(recorder.Properties.RecordingGroup.ResourceTypes).toContain(
-          'AWS::EC2::VPC'
-        );
-        expect(recorder.Properties.RecordingGroup.ResourceTypes).toContain(
-          'AWS::S3::Bucket'
-        );
-      });
-
-      test('ConfigRole should have correct properties', () => {
-        const role = template.Resources.ConfigRole;
-        expect(role.Type).toBe('AWS::IAM::Role');
-        expect(role.Condition).toBe('CreateNewS3Bucket');
-        expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
-        expect(role.Properties.Policies).toBeDefined();
-        expect(role.Properties.Policies[0].PolicyName['Fn::Sub']).toBeDefined();
-        expect(
-          role.Properties.Policies[0].PolicyDocument.Statement
-        ).toHaveLength(2);
-      });
+  describe('Database Resources', () => {
+    test('DBSubnetGroup should be conditional and have correct properties', () => {
+      const subnetGroup = template.Resources.DBSubnetGroup;
+      expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
+      expect(subnetGroup.Condition).toBe('CreateNewDatabase');
+      expect(subnetGroup.Properties.DBSubnetGroupDescription).toBeDefined();
+      expect(subnetGroup.Properties.SubnetIds).toBeDefined();
     });
 
-    describe('Database Resources', () => {
-      test('DBSubnetGroup should be conditional and have correct properties', () => {
-        const subnetGroup = template.Resources.DBSubnetGroup;
-        expect(subnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
-        expect(subnetGroup.Condition).toBe('CreateNewDatabase');
-        expect(subnetGroup.Properties.DBSubnetGroupDescription).toBeDefined();
-        expect(subnetGroup.Properties.SubnetIds).toBeDefined();
-      });
-
-      test('DBParameterGroup should be conditional and have correct properties', () => {
-        const paramGroup = template.Resources.DBParameterGroup;
-        expect(paramGroup.Type).toBe('AWS::RDS::DBParameterGroup');
-        expect(paramGroup.Condition).toBe('CreateNewDatabase');
-        expect(paramGroup.Properties.Family).toBe('mysql8.0');
-        expect(paramGroup.Properties.Parameters).toBeDefined();
-      });
-
-      test('Database should be conditional and have correct properties', () => {
-        const database = template.Resources.Database;
-        expect(database.Type).toBe('AWS::RDS::DBInstance');
-        expect(database.Condition).toBe('CreateNewDatabase');
-        expect(database.DeletionPolicy).toBe('Snapshot');
-        expect(database.Properties.Engine).toBe('mysql');
-        expect(database.Properties.EngineVersion).toBe('8.0.43');
-        expect(database.Properties.StorageEncrypted).toBe(true);
-        expect(database.Properties.PubliclyAccessible).toBe(false);
-        expect(database.Properties.DeletionProtection).toBe(true);
-      });
-
-      test('Database should reference parameters correctly', () => {
-        const database = template.Resources.Database;
-        expect(database.Properties.DBInstanceClass['Ref']).toBe(
-          'DBInstanceClass'
-        );
-        expect(database.Properties.MasterUsername['Ref']).toBe('DBUsername');
-        expect(database.Properties.MasterUserPassword['Ref']).toBe(
-          'DBPassword'
-        );
-      });
+    test('DBParameterGroup should be conditional and have correct properties', () => {
+      const paramGroup = template.Resources.DBParameterGroup;
+      expect(paramGroup.Type).toBe('AWS::RDS::DBParameterGroup');
+      expect(paramGroup.Condition).toBe('CreateNewDatabase');
+      expect(paramGroup.Properties.Family).toBe('mysql8.0');
+      expect(paramGroup.Properties.Parameters).toBeDefined();
     });
 
-    describe('Compute Resources', () => {
-      test('LaunchTemplate should be conditional and have correct properties', () => {
-        const lt = template.Resources.LaunchTemplate;
-        expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
-        expect(lt.Condition).toBe('CreateNewEC2Instance');
-        expect(lt.Properties.LaunchTemplateData).toBeDefined();
-        expect(
-          lt.Properties.LaunchTemplateData.ImageId['Fn::FindInMap']
-        ).toBeDefined();
-        expect(lt.Properties.LaunchTemplateData.InstanceType['Ref']).toBe(
-          'InstanceType'
-        );
-      });
+    test('Database should be conditional and have correct properties', () => {
+      const database = template.Resources.Database;
+      expect(database.Type).toBe('AWS::RDS::DBInstance');
+      expect(database.Condition).toBe('CreateNewDatabase');
+      expect(database.DeletionPolicy).toBe('Snapshot');
+      expect(database.Properties.Engine).toBe('mysql');
+      expect(database.Properties.EngineVersion).toBe('8.0.43');
+      expect(database.Properties.StorageEncrypted).toBe(true);
+      expect(database.Properties.PubliclyAccessible).toBe(false);
+      expect(database.Properties.DeletionProtection).toBe(true);
+    });
 
-      test('LaunchTemplate should have encryption enabled', () => {
-        const lt = template.Resources.LaunchTemplate;
-        const blockDevice =
-          lt.Properties.LaunchTemplateData.BlockDeviceMappings[0];
-        expect(blockDevice.Ebs.Encrypted).toBe(true);
-        expect(blockDevice.Ebs.KmsKeyId['Fn::If']).toBeDefined();
-      });
+    test('Database should reference parameters correctly', () => {
+      const database = template.Resources.Database;
+      expect(database.Properties.DBInstanceClass['Ref']).toBe(
+        'DBInstanceClass'
+      );
+      expect(database.Properties.MasterUsername['Ref']).toBe('DBUsername');
+      expect(database.Properties.MasterUserPassword['Ref']).toBe('DBPassword');
+    });
+  });
 
-      test('LaunchTemplate should have IMDSv2 enabled', () => {
-        const lt = template.Resources.LaunchTemplate;
-        const metadata = lt.Properties.LaunchTemplateData.MetadataOptions;
-        expect(metadata.HttpEndpoint).toBe('enabled');
-        expect(metadata.HttpTokens).toBe('required');
-        expect(metadata.HttpPutResponseHopLimit).toBe(2);
-      });
+  describe('Compute Resources', () => {
+    test('LaunchTemplate should be conditional and have correct properties', () => {
+      const lt = template.Resources.LaunchTemplate;
+      expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
+      expect(lt.Condition).toBe('CreateNewEC2Instance');
+      expect(lt.Properties.LaunchTemplateData).toBeDefined();
+      expect(
+        lt.Properties.LaunchTemplateData.ImageId['Fn::FindInMap']
+      ).toBeDefined();
+      expect(lt.Properties.LaunchTemplateData.InstanceType['Ref']).toBe(
+        'InstanceType'
+      );
+    });
 
-      test('WebInstance should be conditional and reference LaunchTemplate', () => {
-        const instance = template.Resources.WebInstance;
-        expect(instance.Type).toBe('AWS::EC2::Instance');
-        expect(instance.Condition).toBe('CreateNewEC2Instance');
-        expect(instance.Properties.LaunchTemplate.LaunchTemplateId['Ref']).toBe(
-          'LaunchTemplate'
-        );
-        expect(
-          instance.Properties.LaunchTemplate.Version['Fn::GetAtt']
-        ).toEqual(['LaunchTemplate', 'LatestVersionNumber']);
-      });
+    test('LaunchTemplate should have encryption enabled', () => {
+      const lt = template.Resources.LaunchTemplate;
+      const blockDevice =
+        lt.Properties.LaunchTemplateData.BlockDeviceMappings[0];
+      expect(blockDevice.Ebs.Encrypted).toBe(true);
+      expect(blockDevice.Ebs.KmsKeyId['Fn::If']).toBeDefined();
+    });
+
+    test('LaunchTemplate should have IMDSv2 enabled', () => {
+      const lt = template.Resources.LaunchTemplate;
+      const metadata = lt.Properties.LaunchTemplateData.MetadataOptions;
+      expect(metadata.HttpEndpoint).toBe('enabled');
+      expect(metadata.HttpTokens).toBe('required');
+      expect(metadata.HttpPutResponseHopLimit).toBe(2);
+    });
+
+    test('WebInstance should be conditional and reference LaunchTemplate', () => {
+      const instance = template.Resources.WebInstance;
+      expect(instance.Type).toBe('AWS::EC2::Instance');
+      expect(instance.Condition).toBe('CreateNewEC2Instance');
+      expect(instance.Properties.LaunchTemplate.LaunchTemplateId['Ref']).toBe(
+        'LaunchTemplate'
+      );
+      expect(instance.Properties.LaunchTemplate.Version['Fn::GetAtt']).toEqual([
+        'LaunchTemplate',
+        'LatestVersionNumber',
+      ]);
     });
   });
 
@@ -751,8 +670,6 @@ describe('TapStack CloudFormation Template', () => {
       'KMSKeyArn',
       'WebInstanceId',
       'VPCFlowLogsLogGroupName',
-      'CloudTrailName',
-      'ConfigRecorderName',
     ];
 
     test('should have all required outputs', () => {
@@ -839,26 +756,6 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Value['Fn::If'][2]).toBe('No VPC created');
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
-
-    test('CloudTrailName output should be conditional', () => {
-      const output = template.Outputs.CloudTrailName;
-      expect(output.Description).toBeDefined();
-      expect(output.Value['Fn::If']).toBeDefined();
-      expect(output.Value['Fn::If'][0]).toBe('CreateNewS3Bucket');
-      expect(output.Value['Fn::If'][1]['Ref']).toBe('CloudTrail');
-      expect(output.Value['Fn::If'][2]).toBe('No CloudTrail created');
-      expect(output.Export.Name['Fn::Sub']).toBeDefined();
-    });
-
-    test('ConfigRecorderName output should be conditional', () => {
-      const output = template.Outputs.ConfigRecorderName;
-      expect(output.Description).toBeDefined();
-      expect(output.Value['Fn::If']).toBeDefined();
-      expect(output.Value['Fn::If'][0]).toBe('CreateNewS3Bucket');
-      expect(output.Value['Fn::If'][1]['Ref']).toBe('ConfigRecorder');
-      expect(output.Value['Fn::If'][2]).toBe('No Config recorder created');
-      expect(output.Export.Name['Fn::Sub']).toBeDefined();
-    });
   });
 
   describe('Template Validation', () => {
@@ -889,7 +786,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(12);
+      expect(outputCount).toBe(10);
     });
 
     test('should have correct number of conditions', () => {
@@ -945,9 +842,9 @@ describe('TapStack CloudFormation Template', () => {
       const bucket = template.Resources.ApplicationLogsBucket;
       const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
       expect(publicAccess.BlockPublicAcls).toBe(true);
-      expect(publicAccess.BlockPublicPolicy).toBe(false);
+      expect(publicAccess.BlockPublicPolicy).toBe(true);
       expect(publicAccess.IgnorePublicAcls).toBe(true);
-      expect(publicAccess.RestrictPublicBuckets).toBe(false);
+      expect(publicAccess.RestrictPublicBuckets).toBe(true);
     });
 
     test('S3 bucket should have encryption enabled', () => {

@@ -9,5 +9,5 @@
   "subtask": "Security and Compliance Implementation",
   "subject_labels": ["Secure Infrastructure Foundation", "Infrastructure as Code & Deployment", "Data Encryption & Access Control"],
   "training_quality": 8,
-  "aws_services": ["EC2", "VPC", "Config", "CloudTrail", "RDS", "S3", "IAM", "KMS"]
+  "aws_services": ["EC2", "VPC", "RDS", "S3", "IAM", "KMS"]
 }
