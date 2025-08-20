@@ -19,24 +19,20 @@ if [ "$LANGUAGE" = "ts" ]; then
     npm run lint
 elif [ "$LANGUAGE" = "go" ]; then
     echo "✅ Go project detected, running go fmt and go vet..."
-    if [ -d "lib" ]; then
-        cd lib
-        # Ensure module deps and go.sum are present
-        if [ -f go.mod ]; then
-            echo "Running go mod tidy to populate go.sum and fetch deps"
-            go mod tidy
-        fi
-        UNFORMATTED=$(gofmt -l . || true)
-        if [ -n "$UNFORMATTED" ]; then
-            echo "❌ The following files are not gofmt formatted:" 
-            echo "$UNFORMATTED"
-            exit 1
-        fi
-        go vet ./...
-        cd ..
-    else
-        echo "ℹ️ lib directory not found, skipping Go lint"
+    # Ensure provider bindings exist for CDKTF Go projects before tidy
+    if [ "$PLATFORM" = "cdktf" ]; then
+        echo "Running cdktf get to generate local bindings in .gen/"
+        npx --yes cdktf get
     fi
+    echo "Running go mod tidy to populate go.sum and fetch deps"
+    go mod tidy
+    UNFORMATTED=$(gofmt -l . || true)
+    if [ -n "$UNFORMATTED" ]; then
+        echo "❌ The following files are not gofmt formatted:"
+        echo "$UNFORMATTED"
+        exit 1
+    fi
+    go vet ./...
 elif [ "$LANGUAGE" = "py" ]; then
     LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
     LINT_EXIT_CODE=$?

@@ -7,19 +7,20 @@ import (
 	"path/filepath"
 
 	jsii "github.com/aws/jsii-runtime-go"
-	logs "github.com/cdktf/cdktf-provider-aws-go/aws/v18/cloudwatchloggroup"
-	iampolicy "github.com/cdktf/cdktf-provider-aws-go/aws/v18/iampolicy"
-	iamrole "github.com/cdktf/cdktf-provider-aws-go/aws/v18/iamrole"
-	iampolattach "github.com/cdktf/cdktf-provider-aws-go/aws/v18/iamrolepolicyattachment"
-	lambda "github.com/cdktf/cdktf-provider-aws-go/aws/v18/lambdafunction"
-	lambdaperm "github.com/cdktf/cdktf-provider-aws-go/aws/v18/lambdapermission"
-	awscdktf "github.com/cdktf/cdktf-provider-aws-go/aws/v18/provider"
-	s3 "github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucket"
-	s3notif "github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucketnotification"
-	s3pab "github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucketpublicaccessblock"
-	s3enc "github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucketserversideencryptionconfiguration"
-	s3ver "github.com/cdktf/cdktf-provider-aws-go/aws/v18/s3bucketversioning"
 	cdktf "github.com/hashicorp/terraform-cdk-go/cdktf"
+
+	logs "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/cloudwatchloggroup"
+	iampolicy "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/iampolicy"
+	iamrole "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/iamrole"
+	iampolattach "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/iamrolepolicyattachment"
+	lambda "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/lambdafunction"
+	lambdaperm "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/lambdapermission"
+	awscdktf "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/provider"
+	s3 "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/s3bucket"
+	s3notif "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/s3bucketnotification"
+	s3pab "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/s3bucketpublicaccessblock"
+	s3enc "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/s3bucketserversideencryptionconfiguration"
+	s3ver "github.com/TuringGpt/iac-test-automations/.gen/providers/aws/s3bucketversioning"
 )
 
 // BuildApp constructs the CDKTF app and stack with the serverless image processing stack (no VPC).
@@ -63,7 +64,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 		},
 	})
 
-	// Versioning (use escape hatch to avoid type mismatches across versions)
+	// Versioning (use escape hatch)
 	ver := s3ver.NewS3BucketVersioningA(stack, str("ImageBucketVersioning"), &s3ver.S3BucketVersioningAConfig{
 		Bucket: bucket.Id(),
 	})
@@ -80,7 +81,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 		RestrictPublicBuckets: jsii.Bool(true),
 	})
 
-	// SSE (use escape hatch for rule structure)
+	// SSE (use escape hatch)
 	enc := s3enc.NewS3BucketServerSideEncryptionConfigurationA(stack, str("ImageBucketEncryption"), &s3enc.S3BucketServerSideEncryptionConfigurationAConfig{
 		Bucket: bucket.Id(),
 	})
