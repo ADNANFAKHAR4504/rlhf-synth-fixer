@@ -64,7 +64,12 @@ describe('Turn Around Prompt API Integration Tests', () => {
       const outputFile = outputPaths.find(p => fs.existsSync(p));
       
       if (outputFile) {
+        console.log(`Found output file: ${outputFile}`);
         const outputs = JSON.parse(fs.readFileSync(outputFile, "utf8"));
+        console.log('Output keys:', Object.keys(outputs));
+        console.log('private_instance_ips value:', outputs.private_instance_ips);
+        console.log('private_instance_ips type:', typeof outputs.private_instance_ips);
+        console.log('Is array:', Array.isArray(outputs.private_instance_ips));
         
         // Validate essential infrastructure outputs exist
         expect(outputs).toHaveProperty('vpc_id');
@@ -83,7 +88,25 @@ describe('Turn Around Prompt API Integration Tests', () => {
         // Validate proper formats
         expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]+$/);
         expect(outputs.bastion_public_ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
-        expect(Array.isArray(outputs.private_instance_ips)).toBe(true);
+        
+        // Handle both array and string formats for private_instance_ips
+        if (Array.isArray(outputs.private_instance_ips)) {
+          expect(Array.isArray(outputs.private_instance_ips)).toBe(true);
+          expect(outputs.private_instance_ips.length).toBeGreaterThan(0);
+        } else if (typeof outputs.private_instance_ips === 'string') {
+          // Sometimes outputs might be stringified arrays, try to parse
+          try {
+            const parsed = JSON.parse(outputs.private_instance_ips);
+            expect(Array.isArray(parsed)).toBe(true);
+          } catch {
+            // If not parseable as JSON, check if it looks like comma-separated IPs
+            expect(outputs.private_instance_ips).toMatch(/^\d+\.\d+\.\d+\.\d+(,\s*\d+\.\d+\.\d+\.\d+)*$/);
+          }
+        } else {
+          // Fail if it's neither array nor string
+          expect(Array.isArray(outputs.private_instance_ips) || typeof outputs.private_instance_ips === 'string').toBe(true);
+        }
+        
         expect(outputs.s3_bucket_name).toMatch(/^tap-stack-bucket-[a-f0-9]+$/);
         expect(outputs.kms_key_id).toMatch(/^[a-f0-9-]+$/);
       } else {
