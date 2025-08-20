@@ -67,7 +67,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
       
       if (outputFile) {
         console.log(`Found output file: ${outputFile}`);
-        let outputs;
+        let outputs: any;
         
         if (outputFile.endsWith('.tfstate')) {
           // Parse Terraform state file
@@ -110,7 +110,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(Array.isArray(outputs.private_instance_ips)).toBe(true);
           expect(outputs.private_instance_ips.length).toBeGreaterThan(0);
           // Validate each IP in the array
-          outputs.private_instance_ips.forEach(ip => {
+          outputs.private_instance_ips.forEach((ip: string) => {
             expect(ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
           });
         } else if (typeof outputs.private_instance_ips === 'string') {
@@ -118,7 +118,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           try {
             const parsed = JSON.parse(outputs.private_instance_ips);
             expect(Array.isArray(parsed)).toBe(true);
-            parsed.forEach(ip => {
+            parsed.forEach((ip: string) => {
               expect(ip).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
             });
           } catch {
