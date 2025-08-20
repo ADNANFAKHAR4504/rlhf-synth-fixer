@@ -11,7 +11,11 @@ const elbServiceAccount = aws.elb.getServiceAccount({
 
 export class LoggingStack extends pulumi.ComponentResource {
   public readonly cloudTrailArn: pulumi.Output<string>;
+  public readonly cloudTrailName: pulumi.Output<string>;
   public readonly logBucketName: pulumi.Output<string>;
+  public readonly flowLogsRoleName: pulumi.Output<string>;
+  public readonly flowLogsPolicyName: pulumi.Output<string>;
+  public readonly vpcLogGroupName: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -37,31 +41,59 @@ export class LoggingStack extends pulumi.ComponentResource {
       `${args.environment}-logs-bucket`,
       {
         bucket: `${args.environment}-infrastructure-logs-${Date.now()}`,
-        versioning: {
-          enabled: true,
-        },
-        serverSideEncryptionConfiguration: {
-          rule: {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
-          },
-        },
-        lifecycleRules: [
-          {
-            enabled: true,
-            expiration: {
-              days: 90,
-            },
-            noncurrentVersionExpiration: {
-              days: 30,
-            },
-          },
-        ],
         tags: {
           ...commonTags,
           Name: `${args.environment}-Infrastructure-Logs`,
         },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // S3 Bucket Versioning
+    new aws.s3.BucketVersioningV2(
+      `${args.environment}-logs-bucket-versioning`,
+      {
+        bucket: logBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // S3 Bucket Encryption
+    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+      `${args.environment}-logs-bucket-encryption`,
+      {
+        bucket: logBucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+          },
+        ],
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // S3 Bucket Lifecycle
+    new aws.s3.BucketLifecycleConfigurationV2(
+      `${args.environment}-logs-bucket-lifecycle`,
+      {
+        bucket: logBucket.id,
+        rules: [
+          {
+            id: 'expire-logs',
+            status: 'Enabled',
+            expiration: {
+              days: 90,
+            },
+            noncurrentVersionExpiration: {
+              noncurrentDays: 30,
+            },
+          },
+        ],
       },
       { provider: primaryProvider, parent: this }
     );
@@ -105,13 +137,35 @@ export class LoggingStack extends pulumi.ComponentResource {
       { provider: primaryProvider, parent: this }
     );
 
-    // Policy for VPC Flow Logs
-    new aws.iam.RolePolicyAttachment(
+    // Custom policy for VPC Flow Logs
+    const flowLogsPolicy = new aws.iam.Policy(
       `${args.environment}-vpc-flow-logs-policy`,
       {
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `${args.environment}-vpc-flow-logs-attachment`,
+      {
         role: flowLogsRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+        policyArn: flowLogsPolicy.arn,
       },
       { provider: primaryProvider, parent: this }
     );
@@ -220,10 +274,18 @@ export class LoggingStack extends pulumi.ComponentResource {
     );
 
     this.cloudTrailArn = cloudTrail.arn;
+    this.cloudTrailName = cloudTrail.name;
+    this.flowLogsRoleName = flowLogsRole.name;
+    this.flowLogsPolicyName = flowLogsPolicy.name;
+    this.vpcLogGroupName = vpcLogGroup.name;
 
     this.registerOutputs({
       cloudTrailArn: this.cloudTrailArn,
+      cloudTrailName: this.cloudTrailName,
       logBucketName: this.logBucketName,
+      flowLogsRoleName: this.flowLogsRoleName,
+      flowLogsPolicyName: this.flowLogsPolicyName,
+      vpcLogGroupName: this.vpcLogGroupName,
     });
   }
 }

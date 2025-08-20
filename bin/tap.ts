@@ -78,4 +78,21 @@ export const outputs = {
   autoScalingGroupName:
     stack.secureStack.autoScalingStack.autoScalingGroup.name,
   autoScalingGroupArn: stack.secureStack.autoScalingStack.autoScalingGroup.arn,
+
+  // Monitoring
+  snsTopicArn: stack.secureStack.monitoringStack.snsTopicArn,
+  snsTopicName: stack.secureStack.monitoringStack.snsTopicName,
+
+  // Logging
+  cloudTrailArn: stack.secureStack.loggingStack.cloudTrailArn,
+  cloudTrailName: stack.secureStack.loggingStack.cloudTrailName,
+  logBucketName: stack.secureStack.loggingStack.logBucketName,
+  flowLogsRoleName: stack.secureStack.loggingStack.flowLogsRoleName,
+  flowLogsPolicyName: stack.secureStack.loggingStack.flowLogsPolicyName,
+  vpcLogGroupName: stack.secureStack.loggingStack.vpcLogGroupName,
+
+  // WAF & Shield
+  webAclArn: stack.secureStack.wafShieldStack.webAclArn,
+  webAclName: stack.secureStack.wafShieldStack.webAclName,
+  webAclId: stack.secureStack.wafShieldStack.webAclId,
 };

@@ -203,6 +203,23 @@ export class SecureStack extends pulumi.ComponentResource {
       // Auto Scaling Group
       autoScalingGroupName: this.autoScalingStack.autoScalingGroup.name,
       autoScalingGroupArn: this.autoScalingStack.autoScalingGroup.arn,
+
+      // Monitoring
+      snsTopicArn: this.monitoringStack.snsTopicArn,
+      snsTopicName: this.monitoringStack.snsTopicName,
+
+      // Logging
+      cloudTrailArn: this.loggingStack.cloudTrailArn,
+      cloudTrailName: this.loggingStack.cloudTrailName,
+      logBucketName: this.loggingStack.logBucketName,
+      flowLogsRoleName: this.loggingStack.flowLogsRoleName,
+      flowLogsPolicyName: this.loggingStack.flowLogsPolicyName,
+      vpcLogGroupName: this.loggingStack.vpcLogGroupName,
+
+      // WAF & Shield
+      webAclArn: this.wafShieldStack.webAclArn,
+      webAclName: this.wafShieldStack.webAclName,
+      webAclId: this.wafShieldStack.webAclId,
     });
   }
 }

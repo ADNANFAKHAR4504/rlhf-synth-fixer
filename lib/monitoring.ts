@@ -7,6 +7,7 @@ import { LoadBalancerStack } from './load-balancer';
 
 export class MonitoringStack extends pulumi.ComponentResource {
   public readonly snsTopicArn: pulumi.Output<string>;
+  public readonly snsTopicName: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -42,6 +43,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     );
 
     this.snsTopicArn = snsTopic.arn;
+    this.snsTopicName = snsTopic.name;
 
     // RDS CPU Utilization Alarm
     new aws.cloudwatch.MetricAlarm(
@@ -136,6 +138,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
 
     this.registerOutputs({
       snsTopicArn: this.snsTopicArn,
+      snsTopicName: this.snsTopicName,
     });
   }
 }

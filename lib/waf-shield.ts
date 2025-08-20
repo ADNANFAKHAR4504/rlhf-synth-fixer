@@ -5,6 +5,8 @@ import { LoadBalancerStack } from './load-balancer';
 
 export class WafShieldStack extends pulumi.ComponentResource {
   public readonly webAclArn: pulumi.Output<string>;
+  public readonly webAclName: pulumi.Output<string>;
+  public readonly webAclId: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -104,6 +106,8 @@ export class WafShieldStack extends pulumi.ComponentResource {
     );
 
     this.webAclArn = webAcl.arn;
+    this.webAclName = webAcl.name;
+    this.webAclId = webAcl.id;
 
     // Associate WAF with ALB
     new aws.wafv2.WebAclAssociation(
@@ -117,6 +121,8 @@ export class WafShieldStack extends pulumi.ComponentResource {
 
     this.registerOutputs({
       webAclArn: this.webAclArn,
+      webAclName: this.webAclName,
+      webAclId: this.webAclId,
     });
   }
 }

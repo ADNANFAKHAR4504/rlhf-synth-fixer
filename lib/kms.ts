@@ -2,6 +2,9 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { getCommonTags, primaryRegion, secondaryRegion } from './config';
 
+// Get account ID for KMS policy
+const accountId = aws.getCallerIdentity();
+
 export class KmsStack extends pulumi.ComponentResource {
   public readonly primaryKmsKey: aws.kms.Key;
   public readonly primaryKmsAlias: aws.kms.Alias;
@@ -41,25 +44,32 @@ export class KmsStack extends pulumi.ComponentResource {
       `${args.environment}-primary-kms-key`,
       {
         description: 'KMS key for encryption in primary region',
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'Enable IAM User Permissions',
-              Effect: 'Allow',
-              Principal: { AWS: 'arn:aws:iam::*:root' },
-              Action: 'kms:*',
-              Resource: '*',
-            },
-            {
-              Sid: 'Allow RDS Service',
-              Effect: 'Allow',
-              Principal: { Service: 'rds.amazonaws.com' },
-              Action: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:CreateGrant'],
-              Resource: '*',
-            },
-          ],
-        }),
+        policy: accountId.then(id =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Allow administration of the key',
+                Effect: 'Allow',
+                Principal: { AWS: `arn:aws:iam::${id.accountId}:root` },
+                Action: ['kms:*'],
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow use of the key for RDS',
+                Effect: 'Allow',
+                Principal: { Service: 'rds.amazonaws.com' },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:DescribeKey',
+                  'kms:GenerateDataKey*',
+                ],
+                Resource: '*',
+              },
+            ],
+          })
+        ),
         tags: {
           ...commonTags,
           Name: `${args.environment}-primary-kms-key`,
@@ -89,25 +99,32 @@ export class KmsStack extends pulumi.ComponentResource {
       `${args.environment}-secondary-kms-key`,
       {
         description: 'KMS key for encryption in secondary region',
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'Enable IAM User Permissions',
-              Effect: 'Allow',
-              Principal: { AWS: 'arn:aws:iam::*:root' },
-              Action: 'kms:*',
-              Resource: '*',
-            },
-            {
-              Sid: 'Allow RDS Service',
-              Effect: 'Allow',
-              Principal: { Service: 'rds.amazonaws.com' },
-              Action: ['kms:Decrypt', 'kms:GenerateDataKey', 'kms:CreateGrant'],
-              Resource: '*',
-            },
-          ],
-        }),
+        policy: accountId.then(id =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Allow administration of the key',
+                Effect: 'Allow',
+                Principal: { AWS: `arn:aws:iam::${id.accountId}:root` },
+                Action: ['kms:*'],
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow use of the key for RDS',
+                Effect: 'Allow',
+                Principal: { Service: 'rds.amazonaws.com' },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:DescribeKey',
+                  'kms:GenerateDataKey*',
+                ],
+                Resource: '*',
+              },
+            ],
+          })
+        ),
         tags: {
           ...commonTags,
           Name: `${args.environment}-secondary-kms-key`,
