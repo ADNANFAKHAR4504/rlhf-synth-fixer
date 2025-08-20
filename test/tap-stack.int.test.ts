@@ -1,4 +1,15 @@
 import {
+  CloudTrailClient,
+  DescribeTrailsCommand,
+  GetTrailStatusCommand,
+} from '@aws-sdk/client-cloudtrail';
+import {
+  ConfigServiceClient,
+  DescribeConfigurationRecordersCommand,
+  DescribeDeliveryChannelsCommand,
+} from '@aws-sdk/client-config-service';
+import {
+  DescribeFlowLogsCommand,
   DescribeInstancesCommand,
   DescribeLaunchTemplatesCommand,
   DescribeSecurityGroupsCommand,
@@ -55,6 +66,12 @@ const kmsClient = new KMSClient({
   region: process.env.AWS_REGION || 'us-east-1',
 });
 const iamClient = new IAMClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const cloudTrailClient = new CloudTrailClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const configClient = new ConfigServiceClient({
   region: process.env.AWS_REGION || 'us-east-1',
 });
 
@@ -345,6 +362,93 @@ describe('TapStack Integration Tests', () => {
             's3-access-logs/'
           );
         }
+      }
+    });
+  });
+
+  describe('VPC Flow Logs', () => {
+    test('VPC Flow Logs should be enabled for VPC', async () => {
+      if (
+        outputs.VPCFlowLogsLogGroupName &&
+        outputs.VPCFlowLogsLogGroupName !== 'No VPC created'
+      ) {
+        const flowLogsResponse = await ec2Client.send(
+          new DescribeFlowLogsCommand({
+            Filter: [
+              {
+                Name: 'resource-id',
+                Values: [outputs.VPCId],
+              },
+            ],
+          })
+        );
+
+        expect(flowLogsResponse.FlowLogs).toBeDefined();
+        expect(flowLogsResponse.FlowLogs!.length).toBeGreaterThan(0);
+        const flowLog = flowLogsResponse.FlowLogs![0];
+        expect(flowLog.ResourceId).toBe(outputs.VPCId);
+        expect(flowLog.TrafficType).toBe('ALL');
+        expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
+      }
+    });
+  });
+
+  describe('CloudTrail', () => {
+    test('CloudTrail should be enabled and configured correctly', async () => {
+      if (
+        outputs.CloudTrailName &&
+        outputs.CloudTrailName !== 'No CloudTrail created'
+      ) {
+        const trailsResponse = await cloudTrailClient.send(
+          new DescribeTrailsCommand({
+            trailNameList: [outputs.CloudTrailName],
+          })
+        );
+
+        expect(trailsResponse.trailList).toBeDefined();
+        expect(trailsResponse.trailList!.length).toBe(1);
+        const trail = trailsResponse.trailList![0];
+        expect(trail.Name).toBe(outputs.CloudTrailName);
+        expect(trail.IncludeGlobalServiceEvents).toBe(true);
+        expect(trail.IsMultiRegionTrail).toBe(true);
+        expect(trail.LogFileValidationEnabled).toBe(true);
+        expect(trail.S3BucketName).toBe(outputs.ApplicationLogsBucketName);
+
+        const statusResponse = await cloudTrailClient.send(
+          new GetTrailStatusCommand({
+            Name: outputs.CloudTrailName,
+          })
+        );
+        expect(statusResponse.IsLogging).toBe(true);
+      }
+    });
+  });
+
+  describe('AWS Config', () => {
+    test('AWS Config recorder should be enabled', async () => {
+      if (outputs.ConfigRecorderName) {
+        const recordersResponse = await configClient.send(
+          new DescribeConfigurationRecordersCommand({})
+        );
+
+        expect(recordersResponse.ConfigurationRecorders).toBeDefined();
+        expect(
+          recordersResponse.ConfigurationRecorders!.length
+        ).toBeGreaterThan(0);
+      }
+    });
+
+    test('AWS Config delivery channel should be configured', async () => {
+      if (
+        outputs.ApplicationLogsBucketName &&
+        outputs.ApplicationLogsBucketName !== 'No bucket created'
+      ) {
+        const channelsResponse = await configClient.send(
+          new DescribeDeliveryChannelsCommand({})
+        );
+
+        expect(channelsResponse.DeliveryChannels).toBeDefined();
+        expect(channelsResponse.DeliveryChannels!.length).toBeGreaterThan(0);
       }
     });
   });

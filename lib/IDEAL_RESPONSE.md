@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Highly secure cloud infrastructure (VPC, EC2, RDS, S3) with encryption, least privilege IAM, and conditional resource creation.'
 Metadata:
@@ -572,15 +573,162 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Sub 'app-logs-${AWS::AccountId}-${AWS::Region}-tapstack'
+        LogFilePrefix: 's3-access-logs/'
       LifecycleConfiguration:
         Rules:
           - Id: DeleteOldLogs
             Status: Enabled
             ExpirationInDays: 365
             NoncurrentVersionExpirationInDays: 30
+          - Id: DeleteOldAccessLogs
+            Status: Enabled
+            ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 30
+            Prefix: 's3-access-logs/'
+          - Id: DeleteOldFlowLogs
+            Status: Enabled
+            ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 30
+            Prefix: 'vpc-flow-logs/'
+          - Id: DeleteOldCloudTrailLogs
+            Status: Enabled
+            ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 30
+            Prefix: 'cloudtrail-logs/'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-app-logs-bucket'
+        - Key: Environment
+          Value: Production
+
+  ###############################################################################
+  # VPC FLOW LOGS
+  ###############################################################################
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Condition: CreateNewVPC
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/VPCFlowLogsRole
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc-flow-logs-role'
+        - Key: Environment
+          Value: Production
+
+  VPCFlowLogs:
+    Type: AWS::Logs::LogGroup
+    Condition: CreateNewVPC
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${AWS::StackName}'
+      RetentionInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc-flow-logs'
+        - Key: Environment
+          Value: Production
+
+  VPCFlowLogsDelivery:
+    Type: AWS::EC2::FlowLog
+    Condition: CreateNewVPC
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
+      LogDestination: !GetAtt VPCFlowLogs.Arn
+      LogDestinationType: cloud-watch-logs
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+      LogFormat: '$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-vpc-flow-logs-delivery'
+        - Key: Environment
+          Value: Production
+
+  ###############################################################################
+  # CLOUDTRAIL
+  ###############################################################################
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Condition: CreateNewS3Bucket
+    Properties:
+      TrailName: !Sub '${AWS::StackName}-cloudtrail'
+      S3BucketName: !Ref ApplicationLogsBucket
+      S3KeyPrefix: 'cloudtrail-logs/'
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values:
+                - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-cloudtrail'
+        - Key: Environment
+          Value: Production
+
+  ###############################################################################
+  # AWS CONFIG
+  ###############################################################################
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Condition: CreateNewS3Bucket
+    Properties:
+      Name: !Sub '${AWS::StackName}-config-delivery'
+      S3BucketName: !Ref ApplicationLogsBucket
+      S3KeyPrefix: 'config-logs/'
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: One_Hour
+
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub '${AWS::StackName}-config-recorder'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+        ResourceTypes:
+          - AWS::EC2::VPC
+          - AWS::EC2::Subnet
+          - AWS::EC2::SecurityGroup
+          - AWS::EC2::Instance
+          - AWS::RDS::DBInstance
+          - AWS::S3::Bucket
+          - AWS::KMS::Key
+          - AWS::IAM::Role
+          - AWS::IAM::User
+          - AWS::IAM::Group
+
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/ConfigRole
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-config-role'
         - Key: Environment
           Value: Production
 
@@ -779,3 +927,19 @@ Outputs:
     Value: !If [CreateNewEC2Instance, !Ref WebInstance, 'No instance created']
     Export:
       Name: !Sub '${AWS::StackName}-WebInstanceId'
+  VPCFlowLogsLogGroupName:
+    Description: The name of the VPC Flow Logs CloudWatch Log Group.
+    Value: !If [CreateNewVPC, !Ref VPCFlowLogs, 'No VPC created']
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCFlowLogsLogGroup'
+  CloudTrailName:
+    Description: The name of the CloudTrail trail.
+    Value: !If [CreateNewS3Bucket, !Ref CloudTrail, 'No CloudTrail created']
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailName'
+  ConfigRecorderName:
+    Description: The name of the AWS Config recorder.
+    Value: !Ref ConfigRecorder
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigRecorderName'
+```

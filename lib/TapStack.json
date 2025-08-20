@@ -1101,6 +1101,20 @@
                             "ExpirationInDays": 90,
                             "NoncurrentVersionExpirationInDays": 30,
                             "Prefix": "s3-access-logs/"
+                        },
+                        {
+                            "Id": "DeleteOldFlowLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "NoncurrentVersionExpirationInDays": 30,
+                            "Prefix": "vpc-flow-logs/"
+                        },
+                        {
+                            "Id": "DeleteOldCloudTrailLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "NoncurrentVersionExpirationInDays": 30,
+                            "Prefix": "cloudtrail-logs/"
                         }
                     ]
                 },
@@ -1109,6 +1123,221 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${AWS::StackName}-app-logs-bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/VPCFlowLogsRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-vpc-flow-logs-role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogs": {
+            "Type": "AWS::Logs::LogGroup",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/flowlogs/${AWS::StackName}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-vpc-flow-logs"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogsDelivery": {
+            "Type": "AWS::EC2::FlowLog",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogRole",
+                        "Arn"
+                    ]
+                },
+                "LogDestination": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogs",
+                        "Arn"
+                    ]
+                },
+                "LogDestinationType": "cloud-watch-logs",
+                "ResourceId": {
+                    "Ref": "VPC"
+                },
+                "ResourceType": "VPC",
+                "TrafficType": "ALL",
+                "LogFormat": "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-vpc-flow-logs-delivery"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "CloudTrail": {
+            "Type": "AWS::CloudTrail::Trail",
+            "Condition": "CreateNewS3Bucket",
+            "Properties": {
+                "TrailName": {
+                    "Fn::Sub": "${AWS::StackName}-cloudtrail"
+                },
+                "S3BucketName": {
+                    "Ref": "ApplicationLogsBucket"
+                },
+                "S3KeyPrefix": "cloudtrail-logs/",
+                "IncludeGlobalServiceEvents": true,
+                "IsMultiRegionTrail": true,
+                "EnableLogFileValidation": true,
+                "IsLogging": true,
+                "EventSelectors": [
+                    {
+                        "ReadWriteType": "All",
+                        "IncludeManagementEvents": true,
+                        "DataResources": [
+                            {
+                                "Type": "AWS::S3::Object",
+                                "Values": [
+                                    {
+                                        "Fn::Sub": "arn:aws:s3:::${ApplicationLogsBucket}/*"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-cloudtrail"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "ConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "CreateNewS3Bucket",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-config-delivery"
+                },
+                "S3BucketName": {
+                    "Ref": "ApplicationLogsBucket"
+                },
+                "S3KeyPrefix": "config-logs/",
+                "ConfigSnapshotDeliveryProperties": {
+                    "DeliveryFrequency": "One_Hour"
+                }
+            }
+        },
+        "ConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-config-recorder"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "ConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true,
+                    "ResourceTypes": [
+                        "AWS::EC2::VPC",
+                        "AWS::EC2::Subnet",
+                        "AWS::EC2::SecurityGroup",
+                        "AWS::EC2::Instance",
+                        "AWS::RDS::DBInstance",
+                        "AWS::S3::Bucket",
+                        "AWS::KMS::Key",
+                        "AWS::IAM::Role",
+                        "AWS::IAM::User",
+                        "AWS::IAM::Group"
+                    ]
+                }
+            }
+        },
+        "ConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/ConfigRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-config-role"
                         }
                     },
                     {
@@ -1572,6 +1801,51 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-WebInstanceId"
+                }
+            }
+        },
+        "VPCFlowLogsLogGroupName": {
+            "Description": "The name of the VPC Flow Logs CloudWatch Log Group.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewVPC",
+                    {
+                        "Ref": "VPCFlowLogs"
+                    },
+                    "No VPC created"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCFlowLogsLogGroup"
+                }
+            }
+        },
+        "CloudTrailName": {
+            "Description": "The name of the CloudTrail trail.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewS3Bucket",
+                    {
+                        "Ref": "CloudTrail"
+                    },
+                    "No CloudTrail created"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CloudTrailName"
+                }
+            }
+        },
+        "ConfigRecorderName": {
+            "Description": "The name of the AWS Config recorder.",
+            "Value": {
+                "Ref": "ConfigRecorder"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ConfigRecorderName"
                 }
             }
         }

@@ -284,6 +284,15 @@ describe('TapStack CloudFormation Template', () => {
     const iamResources = ['EC2Role', 'EC2InstanceProfile'];
 
     const storageResources = ['ApplicationLogsBucket'];
+    const monitoringResources = [
+      'VPCFlowLogRole',
+      'VPCFlowLogs',
+      'VPCFlowLogsDelivery',
+      'CloudTrail',
+      'ConfigDeliveryChannel',
+      'ConfigRecorder',
+      'ConfigRole',
+    ];
 
     const databaseResources = ['DBSubnetGroup', 'DBParameterGroup', 'Database'];
 
@@ -295,6 +304,7 @@ describe('TapStack CloudFormation Template', () => {
       ...encryptionResources,
       ...iamResources,
       ...storageResources,
+      ...monitoringResources,
       ...databaseResources,
       ...computeResources,
     ];
@@ -482,7 +492,9 @@ describe('TapStack CloudFormation Template', () => {
         expect(bucket.Properties.PublicAccessBlockConfiguration).toBeDefined();
         expect(bucket.Properties.LoggingConfiguration).toBeDefined();
         expect(
-          bucket.Properties.LoggingConfiguration.DestinationBucketName['Fn::Sub']
+          bucket.Properties.LoggingConfiguration.DestinationBucketName[
+            'Fn::Sub'
+          ]
         ).toBeDefined();
         expect(bucket.Properties.LoggingConfiguration.LogFilePrefix).toBe(
           's3-access-logs/'
@@ -519,7 +531,7 @@ describe('TapStack CloudFormation Template', () => {
       test('ApplicationLogsBucket should have lifecycle rules for logs', () => {
         const bucket = template.Resources.ApplicationLogsBucket;
         const lifecycle = bucket.Properties.LifecycleConfiguration;
-        expect(lifecycle.Rules).toHaveLength(2);
+        expect(lifecycle.Rules).toHaveLength(4);
 
         const deleteOldLogsRule = lifecycle.Rules.find(
           (rule: any) => rule.Id === 'DeleteOldLogs'
@@ -527,11 +539,97 @@ describe('TapStack CloudFormation Template', () => {
         const deleteOldAccessLogsRule = lifecycle.Rules.find(
           (rule: any) => rule.Id === 'DeleteOldAccessLogs'
         );
+        const deleteOldFlowLogsRule = lifecycle.Rules.find(
+          (rule: any) => rule.Id === 'DeleteOldFlowLogs'
+        );
+        const deleteOldCloudTrailLogsRule = lifecycle.Rules.find(
+          (rule: any) => rule.Id === 'DeleteOldCloudTrailLogs'
+        );
 
         expect(deleteOldLogsRule).toBeDefined();
         expect(deleteOldAccessLogsRule).toBeDefined();
+        expect(deleteOldFlowLogsRule).toBeDefined();
+        expect(deleteOldCloudTrailLogsRule).toBeDefined();
         expect(deleteOldAccessLogsRule.Prefix).toBe('s3-access-logs/');
+        expect(deleteOldFlowLogsRule.Prefix).toBe('vpc-flow-logs/');
+        expect(deleteOldCloudTrailLogsRule.Prefix).toBe('cloudtrail-logs/');
         expect(deleteOldAccessLogsRule.ExpirationInDays).toBe(90);
+        expect(deleteOldFlowLogsRule.ExpirationInDays).toBe(90);
+        expect(deleteOldCloudTrailLogsRule.ExpirationInDays).toBe(90);
+      });
+    });
+
+    describe('Monitoring Resources', () => {
+      test('VPCFlowLogRole should be conditional and have correct properties', () => {
+        const role = template.Resources.VPCFlowLogRole;
+        expect(role.Type).toBe('AWS::IAM::Role');
+        expect(role.Condition).toBe('CreateNewVPC');
+        expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
+        expect(role.Properties.ManagedPolicyArns).toContain(
+          'arn:aws:iam::aws:policy/service-role/VPCFlowLogsRole'
+        );
+      });
+
+      test('VPCFlowLogs should be conditional and have correct properties', () => {
+        const logGroup = template.Resources.VPCFlowLogs;
+        expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+        expect(logGroup.Condition).toBe('CreateNewVPC');
+        expect(logGroup.Properties.LogGroupName['Fn::Sub']).toBeDefined();
+        expect(logGroup.Properties.RetentionInDays).toBe(30);
+      });
+
+      test('VPCFlowLogsDelivery should be conditional and have correct properties', () => {
+        const flowLog = template.Resources.VPCFlowLogsDelivery;
+        expect(flowLog.Type).toBe('AWS::EC2::FlowLog');
+        expect(flowLog.Condition).toBe('CreateNewVPC');
+        expect(flowLog.Properties.ResourceType).toBe('VPC');
+        expect(flowLog.Properties.TrafficType).toBe('ALL');
+        expect(flowLog.Properties.LogDestinationType).toBe('cloud-watch-logs');
+      });
+
+      test('CloudTrail should be conditional and have correct properties', () => {
+        const trail = template.Resources.CloudTrail;
+        expect(trail.Type).toBe('AWS::CloudTrail::Trail');
+        expect(trail.Condition).toBe('CreateNewS3Bucket');
+        expect(trail.Properties.IncludeGlobalServiceEvents).toBe(true);
+        expect(trail.Properties.IsMultiRegionTrail).toBe(true);
+        expect(trail.Properties.EnableLogFileValidation).toBe(true);
+        expect(trail.Properties.IsLogging).toBe(true);
+        expect(trail.Properties.S3KeyPrefix).toBe('cloudtrail-logs/');
+      });
+
+      test('ConfigDeliveryChannel should be conditional and have correct properties', () => {
+        const channel = template.Resources.ConfigDeliveryChannel;
+        expect(channel.Type).toBe('AWS::Config::DeliveryChannel');
+        expect(channel.Condition).toBe('CreateNewS3Bucket');
+        expect(channel.Properties.S3KeyPrefix).toBe('config-logs/');
+        expect(
+          channel.Properties.ConfigSnapshotDeliveryProperties.DeliveryFrequency
+        ).toBe('One_Hour');
+      });
+
+      test('ConfigRecorder should have correct properties', () => {
+        const recorder = template.Resources.ConfigRecorder;
+        expect(recorder.Type).toBe('AWS::Config::ConfigurationRecorder');
+        expect(recorder.Properties.RecordingGroup.AllSupported).toBe(true);
+        expect(
+          recorder.Properties.RecordingGroup.IncludeGlobalResourceTypes
+        ).toBe(true);
+        expect(recorder.Properties.RecordingGroup.ResourceTypes).toContain(
+          'AWS::EC2::VPC'
+        );
+        expect(recorder.Properties.RecordingGroup.ResourceTypes).toContain(
+          'AWS::S3::Bucket'
+        );
+      });
+
+      test('ConfigRole should have correct properties', () => {
+        const role = template.Resources.ConfigRole;
+        expect(role.Type).toBe('AWS::IAM::Role');
+        expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
+        expect(role.Properties.ManagedPolicyArns).toContain(
+          'arn:aws:iam::aws:policy/service-role/ConfigRole'
+        );
       });
     });
 
@@ -631,6 +729,9 @@ describe('TapStack CloudFormation Template', () => {
       'ApplicationLogsBucketName',
       'KMSKeyArn',
       'WebInstanceId',
+      'VPCFlowLogsLogGroupName',
+      'CloudTrailName',
+      'ConfigRecorderName',
     ];
 
     test('should have all required outputs', () => {
@@ -707,6 +808,33 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Value['Fn::If'][2]).toBe('No instance created');
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
+
+    test('VPCFlowLogsLogGroupName output should be conditional', () => {
+      const output = template.Outputs.VPCFlowLogsLogGroupName;
+      expect(output.Description).toBeDefined();
+      expect(output.Value['Fn::If']).toBeDefined();
+      expect(output.Value['Fn::If'][0]).toBe('CreateNewVPC');
+      expect(output.Value['Fn::If'][1]['Ref']).toBe('VPCFlowLogs');
+      expect(output.Value['Fn::If'][2]).toBe('No VPC created');
+      expect(output.Export.Name['Fn::Sub']).toBeDefined();
+    });
+
+    test('CloudTrailName output should be conditional', () => {
+      const output = template.Outputs.CloudTrailName;
+      expect(output.Description).toBeDefined();
+      expect(output.Value['Fn::If']).toBeDefined();
+      expect(output.Value['Fn::If'][0]).toBe('CreateNewS3Bucket');
+      expect(output.Value['Fn::If'][1]['Ref']).toBe('CloudTrail');
+      expect(output.Value['Fn::If'][2]).toBe('No CloudTrail created');
+      expect(output.Export.Name['Fn::Sub']).toBeDefined();
+    });
+
+    test('ConfigRecorderName output should reference config recorder', () => {
+      const output = template.Outputs.ConfigRecorderName;
+      expect(output.Description).toBeDefined();
+      expect(output.Value['Ref']).toBe('ConfigRecorder');
+      expect(output.Export.Name['Fn::Sub']).toBeDefined();
+    });
   });
 
   describe('Template Validation', () => {
@@ -737,7 +865,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(9);
+      expect(outputCount).toBe(12);
     });
 
     test('should have correct number of conditions', () => {
