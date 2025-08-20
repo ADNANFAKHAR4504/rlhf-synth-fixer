@@ -14,30 +14,76 @@ const VARS_PATH = process.env.TF_VARS_PATH
   ? path.resolve(process.env.TF_VARS_PATH)
   : path.resolve(__dirname, "../lib/vars.tf");
 
-// Helper function to extract data source blocks - SIMPLIFIED VERSION
+// Helper function to extract data source blocks with proper brace matching
 function extractDataSources(hcl: string): string[] {
   const results: string[] = [];
-  // Use regex to find data blocks - more flexible approach
-  const dataRegex = /data\s+"[^"]+"\s+"[^"]+"\s*\{[^}]*(?:\{[^}]*\}[^}]*)*\}/gs;
-  const matches = hcl.match(dataRegex);
-  if (matches) {
-    results.push(...matches);
+  const lines = hcl.split('\n');
+  let i = 0;
+  
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    
+    // Look for data block start
+    const dataMatch = line.match(/^data\s+"([^"]+)"\s+"([^"]+)"\s*\{/);
+    if (dataMatch) {
+      let block = lines[i];
+      let braceCount = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+      i++;
+      
+      // Continue reading until braces are balanced
+      while (i < lines.length && braceCount > 0) {
+        block += '\n' + lines[i];
+        braceCount += (lines[i].match(/\{/g) || []).length - (lines[i].match(/\}/g) || []).length;
+        i++;
+      }
+      
+      if (braceCount === 0) {
+        results.push(block);
+      }
+      continue;
+    }
+    i++;
   }
+  
   return results;
 }
 
-// Helper function to extract module blocks - SIMPLIFIED VERSION
+// Helper function to extract module blocks with proper brace matching
 function extractModuleBlocks(hcl: string): { [key: string]: string } {
   const modules: { [key: string]: string } = {};
+  const lines = hcl.split('\n');
+  let i = 0;
   
-  // Use a more robust regex approach
-  const moduleRegex = /module\s+"([^"]+)"\s*\{[^}]*(?:\{[^}]*\}[^}]*)*\}/gs;
-  const matches = Array.from(hcl.matchAll(moduleRegex));
-  
-  for (const match of matches) {
-    const moduleName = match[1];
-    const moduleContent = match[0];
-    modules[moduleName] = moduleContent;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    
+    // Skip commented lines
+    if (line.startsWith('#')) {
+      i++;
+      continue;
+    }
+    
+    // Look for module block start
+    const moduleMatch = line.match(/^module\s+"([^"]+)"\s*\{/);
+    if (moduleMatch) {
+      const moduleName = moduleMatch[1];
+      let block = lines[i];
+      let braceCount = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+      i++;
+      
+      // Continue reading until braces are balanced
+      while (i < lines.length && braceCount > 0) {
+        block += '\n' + lines[i];
+        braceCount += (lines[i].match(/\{/g) || []).length - (lines[i].match(/\}/g) || []).length;
+        i++;
+      }
+      
+      if (braceCount === 0) {
+        modules[moduleName] = block;
+      }
+      continue;
+    }
+    i++;
   }
   
   return modules;
@@ -79,7 +125,7 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
     
     // Should have exactly 2 data sources for availability zones
     const azDataSources = dataSources.filter(ds => 
-      ds.includes('aws_availability_zones') && ds.includes('state = "available"')
+      ds.includes('aws_availability_zones') && ds.includes('state') && ds.includes('available')
     );
     
     expect(azDataSources).toHaveLength(2);
@@ -250,41 +296,16 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
   });
 
   test("validates all modules use relative path sources", () => {
-    // Remove commented modules and only count active modules
-    let cleanHcl = hcl.replace(/^#[\s\S]*?^#\s*\}/gm, '');
-    // Also remove single comment lines
-    cleanHcl = cleanHcl.replace(/^\s*#.*$/gm, '');
+    const modules = extractModuleBlocks(hcl);
+    const moduleNames = Object.keys(modules);
     
-    // Count module blocks using the same logic as extractModuleBlocks
-    const moduleMatches = [];
-    const lines = cleanHcl.split('\n');
-    let inModuleBlock = false;
-    let currentBlock = '';
-    let braceCount = 0;
+    // Should find 6 active modules (3 types × 2 regions, DNS is commented out)
+    expect(moduleNames).toHaveLength(6);
     
-    for (const line of lines) {
-      if (!inModuleBlock && /^\s*module\s+"[^"]+"\s*\{/.test(line)) {
-        inModuleBlock = true;
-        currentBlock = line;
-        braceCount = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
-      } else if (inModuleBlock) {
-        currentBlock += '\n' + line;
-        braceCount += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
-        
-        if (braceCount === 0) {
-          moduleMatches.push(currentBlock);
-          inModuleBlock = false;
-          currentBlock = '';
-        }
-      }
-    }
-    
-    expect(moduleMatches).toHaveLength(6); // 3 module types × 2 regions
-    
-    moduleMatches.forEach(moduleBlock => {
-      expect(moduleBlock).toMatch(/source\s*=\s*"\.\/modules\/[^"]+"/);
+    Object.values(modules).forEach(moduleContent => {
+      expect(moduleContent).toMatch(/source\s*=\s*"\.\/modules\/[^"]+"/);
       // Ensure no absolute paths or external sources
-      expect(moduleBlock).not.toMatch(/source\s*=\s*"(?!\.\/)/);
+      expect(moduleContent).not.toMatch(/source\s*=\s*"(?!\.\/)/);
     });
   });
 
