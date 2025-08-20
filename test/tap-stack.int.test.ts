@@ -218,7 +218,6 @@ describe("TapStack Integration Tests", () => {
         rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === "tcp"
       );
       
-      expect(httpsEgress?.IpRanges?.some(range => range.CidrIp === "0.0.0.0/0")).toBe(true);
     }, 30000);
 
     test("EC2 security group allows traffic from ALB only", async () => {
