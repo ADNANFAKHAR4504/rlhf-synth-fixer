@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Highly Available Web Application Infrastructure on AWS
 
 Parameters:
-
   VpcCIDR:
     Type: String
     Default: 10.0.0.0/16
@@ -35,7 +34,6 @@ Parameters:
 
 Resources:
 
-  ### VPC and Networking ###
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -109,22 +107,20 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-  ### S3 Bucket for Logs ###
   AppLogBucket:
-  Type: AWS::S3::Bucket
-  Properties:
-    LifecycleConfiguration:
-      Rules:
-        - Id: TransitionLogsToGlacier
-          Status: Enabled
-          Transitions:
-            - StorageClass: GLACIER
-              TransitionInDays: 30
-    Tags:
-      - Key: Name
-        Value: AppLogBucket
+    Type: AWS::S3::Bucket
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionLogsToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 30
+      Tags:
+        - Key: Name
+          Value: AppLogBucket
 
-  ### Security Group ###
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -139,10 +135,10 @@ Resources:
         - Key: Name
           Value: !Sub '${Environment}-WebSG'
 
-  ### Launch Template ###
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
+      LaunchTemplateName: !Sub '${Environment}-WebAppLT'
       LaunchTemplateData:
         InstanceType: !Ref InstanceType
         ImageId: ami-00ca32bbc84273381
@@ -156,9 +152,7 @@ Resources:
             systemctl enable httpd
             systemctl start httpd
             echo "Welcome to the High Availability Web App" > /var/www/html/index.html
-      LaunchTemplateName: !Sub '${Environment}-WebAppLT'
 
-  ### Application Load Balancer ###
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -210,7 +204,6 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
 
-  ### Auto Scaling ###
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -220,8 +213,8 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: '2'
-      MaxSize: '10'
+      MinSize: 2
+      MaxSize: 10
       TargetGroupARNs:
         - !Ref TargetGroup
       HealthCheckType: EC2
