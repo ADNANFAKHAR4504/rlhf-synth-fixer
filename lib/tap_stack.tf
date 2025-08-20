@@ -87,8 +87,8 @@ data "aws_caller_identity" "current" {}
 resource "random_password" "rds_password" {
   length  = 16
   special = true
+  override_special = "!#$%&()*+-=:?@^_"
 }
-
 # Generate random username for RDS
 resource "random_password" "rds_username" {
   length  = 8
@@ -598,33 +598,10 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 }
 
 # CloudTrail
-resource "aws_cloudtrail" "main" {
-  name           = "${local.name_prefix}-cloudtrail-new"
-  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
-  
-  include_global_service_events = true
-  is_multi_region_trail        = false
-  enable_logging               = true
-  
-  event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
-    exclude_management_event_sources = []
-    
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["${aws_s3_bucket.main.arn}/*"]
-    }
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-cloudtrail-new"
-    Type = "CloudTrail"
-  })
-  
-  depends_on = [aws_s3_bucket_policy.cloudtrail]
+# Use a data source to reference the existing CloudTrail by name
+data "aws_cloudtrail" "existing_main" {
+  name = "main-cloudtrail-f787f84a77e68ca9"
 }
-
 # ============================================================================
 # SYSTEMS MANAGER PARAMETER STORE
 # ============================================================================
@@ -728,10 +705,6 @@ output "s3_bucket_arn" {
   value       = aws_s3_bucket.main.arn
 }
 
-output "cloudtrail_s3_bucket_name" {
-  description = "Name of the CloudTrail S3 bucket"
-  value       = aws_s3_bucket.cloudtrail.bucket
-}
 
 # IAM Outputs
 output "rds_access_role_arn" {
@@ -760,10 +733,14 @@ output "rds_security_group_id" {
   value       = aws_security_group.rds.id
 }
 
-# CloudTrail Output
 output "cloudtrail_arn" {
-  description = "ARN of the CloudTrail"
-  value       = aws_cloudtrail.main.arn
+  description = "ARN of the existing CloudTrail"
+  value       = data.aws_cloudtrail.existing_main.arn
+}
+
+output "cloudtrail_s3_bucket_name" {
+  description = "S3 Bucket for the existing CloudTrail"
+  value       = data.aws_cloudtrail.existing_main.s3_bucket_name
 }
 
 # SSM Parameter Outputs
