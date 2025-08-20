@@ -1,0 +1,402 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure infrastructure stack with VPC, subnets, NAT, EC2, S3, KMS - all using secure defaults'
+Parameters:
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'Latest Amazon Linux 2 AMI (HVM, x86_64, EBS gp2)'
+  AllowedSSHRange:
+    Type: String
+    Default: '203.0.113.0/24'
+    Description: 'Allowed CIDR range for SSH access to EC2 instances'
+
+Resources:
+  SecureVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      AvailabilityZone: !Select [1, !GetAZs 'us-east-1']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      CidrBlock: 10.0.3.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      AvailabilityZone: !Select [1, !GetAZs 'us-east-1']
+      CidrBlock: 10.0.4.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SecureVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  NatEIPa:
+    Type: AWS::EC2::EIP
+    DependsOn: SecureVPC
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  NatGatewayA:
+    Type: AWS::EC2::NatGateway
+    
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      AllocationId: !GetAtt NatEIPa.AllocationId
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  NatEIPb:
+    Type: AWS::EC2::EIP
+    DependsOn: SecureVPC
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      AllocationId: !GetAtt NatEIPb.AllocationId
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecureVPC
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayA
+
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayB
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTableA
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTableB
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref SecureVPC
+      GroupDescription: 'Security group for EC2 instances (SSH restricted)'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSSHRange
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'ec2.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'InstanceAccessPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                Resource: !Sub 'arn:aws:s3:::${SecureBucket}'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Sub 'arn:aws:s3:::${SecureBucket}/*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:Encrypt'
+                  - 'kms:ReEncrypt*'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:DescribeKey'
+                Resource: !GetAtt KMSKey.Arn
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: '/'
+      Roles:
+        - !Ref InstanceRole
+
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: 'key-default-1'
+        Statement:
+          - Sid: 'AllowRootAccount'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  SecureBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  EC2InstanceA:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      IamInstanceProfile: !Ref InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 8
+            Encrypted: true
+            KmsKeyId: !Ref KMSKey
+            DeleteOnTermination: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
+
+  EC2InstanceB:
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      SecurityGroupIds:
+        - !Ref InstanceSecurityGroup
+      IamInstanceProfile: !Ref InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: '/dev/xvda'
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 8
+            Encrypted: true
+            KmsKeyId: !Ref KMSKey
+            DeleteOnTermination: true
+      Tags:
+        - Key: Environment
+          Value: Production
+        - Key: Owner
+          Value: SecurityTeam
+        - Key: Application
+          Value: SecureInfra
