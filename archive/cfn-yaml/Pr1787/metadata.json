@@ -19,7 +19,7 @@
   "aws_services": [
     "AWS::KMS",
     "AWS::EC2",
-    "AWS::IAM", 
+    "AWS::IAM",
     "AWS::Logs",
     "AWS::S3",
     "AWS::Lambda",
@@ -27,5 +27,11 @@
     "AWS::Config",
     "AWS::GuardDuty",
     "AWS::SecurityHub"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
