@@ -63,7 +63,7 @@ describe('TapStack CloudFormation Template', () => {
     test('CompanyPrefix parameter should have correct properties', () => {
       const param = template.Parameters.CompanyPrefix;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('prod');
+      expect(param.Default).toBe('corp-sec');
       expect(param.Description).toBe('Resource name prefix');
     });
 

@@ -52,7 +52,7 @@
     "Parameters": {
         "CompanyPrefix": {
             "Type": "String",
-            "Default": "prod",
+            "Default": "corp-sec",
             "Description": "Resource name prefix"
         },
         "UseExistingVPC": {
@@ -1004,6 +1004,28 @@
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
+                        {
+                            "Sid": "DenyNonHttpsRequests",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "ProdTrailBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${ProdTrailBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
                         {
                             "Sid": "AWSCloudTrailAclCheck",
                             "Effect": "Allow",
