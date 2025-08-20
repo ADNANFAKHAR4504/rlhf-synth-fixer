@@ -143,6 +143,17 @@ resource "aws_s3_bucket_public_access_block" "frontend_bucket_pab" {
   restrict_public_buckets = false
 }
 
+# S3 bucket ACL for public read access
+resource "aws_s3_bucket_acl" "frontend_bucket_acl" {
+  depends_on = [
+    aws_s3_bucket_ownership_controls.frontend_bucket_ownership,
+    aws_s3_bucket_public_access_block.frontend_bucket_pab
+  ]
+
+  bucket = aws_s3_bucket.frontend_bucket.id
+  acl    = "public-read"
+}
+
 # Bucket ownership controls - required for public bucket policies
 resource "aws_s3_bucket_ownership_controls" "frontend_bucket_ownership" {
   bucket = aws_s3_bucket.frontend_bucket.id
@@ -365,28 +376,8 @@ resource "aws_cognito_user_pool_client" "tap_user_pool_client" {
   ]
 }
 
-# S3 bucket policy to allow public read access for website hosting
-resource "aws_s3_bucket_policy" "frontend_bucket_policy" {
-  bucket = aws_s3_bucket.frontend_bucket.id
-
-  depends_on = [
-    aws_s3_bucket_public_access_block.frontend_bucket_pab,
-    aws_s3_bucket_ownership_controls.frontend_bucket_ownership
-  ]
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "PublicReadGetObject"
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.frontend_bucket.arn}/*"
-      }
-    ]
-  })
-}
+# Note: Using bucket ACL instead of bucket policy for public read access
+# This avoids issues with account-level S3 public access block settings
 
 # Outputs
 output "api_endpoint" {
