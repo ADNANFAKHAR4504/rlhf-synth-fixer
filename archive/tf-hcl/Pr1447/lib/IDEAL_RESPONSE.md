@@ -1,117 +1,11 @@
-# Multi-Region AWS Infrastructure - Complete Implementation
+# Infrastructure as Code Solution
 
-## Infrastructure Overview
+## Terraform Configuration Files
 
-This implementation provides a secure, highly available, multi-region AWS infrastructure using Terraform. The infrastructure spans two AWS regions (us-east-1 and eu-west-2) and implements enterprise-grade security, observability, and scalability patterns.
 
-### **Architecture Highlights**
+### provider.tf
 
-- **Multi-Region Deployment**: Primary (us-east-1) and Secondary (eu-west-2)
-- **High Availability**: Multi-AZ RDS, Auto Scaling Groups, Load Balancers
-- **Security**: KMS encryption, Secrets Manager, Security Groups, IAM least privilege
-- **Observability**: CloudWatch logging, monitoring, and alarming
-- **Scalability**: Auto Scaling with CloudWatch-based policies
-- **Disaster Recovery**: Cross-region RDS read replica
-
----
-
-## **Recent Optimizations & Fixes**
-
-### **Platform Modernization (Latest Updates)**
-1. **Amazon Linux 2023**: Upgraded from AL2 to AL2023 for better performance and security
-2. **Smart Package Manager**: Automatic detection between `dnf` (AL2023) and `yum` (AL2)
-3. **Enhanced Debugging**: Comprehensive user data logging and troubleshooting
-4. **Deployment Optimization**: ASG timeout bypass for faster iteration during debugging
-
-### **Critical Production Fixes Applied**
-1. **RDS Password Compliance**: Fixed special character exclusions for AWS RDS requirements
-2. **KMS CloudWatch Integration**: Added proper service permissions for log encryption
-3. **Cross-Region RDS Encryption**: Enabled encryption for read replicas across regions
-4. **Cross-Region RDS VPC Assignment**: Added explicit subnet group for read replica VPC placement
-5. **Amazon Linux 2023 Storage**: Increased EBS volumes to 30GB minimum requirement
-6. **Secrets Manager Handling**: Force recreation for development iteration cycles
-7. **Target Group Naming**: Shortened names to comply with AWS 32-character limit
-8. **Health Check Optimization**: Tuned ALB health checks for faster recovery
-9. **Resource Naming Conflicts**: Added 3-character random suffix to prevent naming collisions
-
-### **Latest Technical Fixes (Deployment-Critical)**
-
-#### **Cross-Region RDS VPC Assignment Fix**
-```terraform
-# FIXED: Added explicit subnet group assignment for cross-region read replica
-resource "aws_db_instance" "secondary" {
-  provider               = aws.secondary
-  identifier             = "${var.project_name}-db-secondary"
-  replicate_source_db    = aws_db_instance.primary.arn
-  instance_class         = "db.t3.micro"
-  vpc_security_group_ids = [aws_security_group.db_secondary.id]
-+ db_subnet_group_name   = aws_db_subnet_group.secondary.name  # CRITICAL FIX
-  # ... rest of configuration
-}
-```
-**Issue**: RDS read replica creation failed due to VPC security group mismatch  
-**Root Cause**: Missing subnet group assignment for cross-region deployment  
-**Solution**: Explicit `db_subnet_group_name` ensures replica is created in correct VPC
-
-#### **Amazon Linux 2023 Storage Requirements Fix**
-```terraform
-# FIXED: Increased volume size for AL2023 compatibility
-block_device_mappings {
-  device_name = "/dev/xvda"
-  ebs {
--   volume_size           = 8   # TOO SMALL for AL2023
-+   volume_size           = 30  # MEETS AL2023 MINIMUM
-    volume_type           = "gp3"
-    encrypted             = true
-    # ... rest of configuration
-  }
-}
-```
-**Issue**: ASG launch template validation failed due to insufficient volume size  
-**Root Cause**: Amazon Linux 2023 requires ≥30GB (vs AL2's 8GB minimum)  
-**Solution**: Increased EBS volume size to 30GB for both regions
-
-#### **Resource Naming Conflict Prevention**
-```terraform
-# ADDED: Random suffix generator for unique resource names
-resource "random_id" "suffix" {
-  byte_length = 2
-  # This creates a 3-character alphanumeric suffix
-}
-
-# UPDATED: All resource names now include random suffix
-resource "aws_kms_key" "primary" {
-  # ... configuration ...
-  tags = {
-    Name = "${var.project_name}-kms-key-primary-${random_id.suffix.hex}"
-  }
-}
-
-resource "aws_s3_bucket" "static_content_primary" {
-  provider = aws.primary
-  bucket   = "${var.project_name}-static-content-primary-${random_id.suffix.hex}"
-  # ... rest of configuration
-}
-```
-**Issue**: Resource naming conflicts when deploying multiple instances of infrastructure  
-**Root Cause**: Static resource names cause conflicts in shared AWS accounts or regions  
-**Solution**: Added `random_id` generator creating unique 3-character suffix for all resources
-
----
-
-## **File Structure**
-
-```
-lib/
-├── provider.tf    # Terraform and AWS provider configuration
-└── tap_stack.tf   # Complete multi-region infrastructure
-```
-
----
-
-## **Provider Configuration** (`provider.tf`)
-
-```terraform
+```hcl
 # provider.tf
 
 # ============================================================================
@@ -151,7 +45,7 @@ provider "aws" {
   }
 }
 
-# Secondary region provider (eu-west-2)
+# Secondary region provider (eu-west-1)
 provider "aws" {
   alias  = "secondary"
   region = var.secondary_region
@@ -166,11 +60,10 @@ provider "aws" {
 }
 ```
 
----
 
-## **Complete Infrastructure** (`tap_stack.tf`)
+### tap_stack.tf
 
-```terraform
+```hcl
 
 # ============================================================================
 # VARIABLES
@@ -253,7 +146,7 @@ data "aws_availability_zones" "secondary" {
   state    = "available"
 }
 
-# Get latest Amazon Linux 2023 AMI for primary region
+# Get latest Amazon Linux 2 AMI for primary region
 data "aws_ami" "amazon_linux_primary" {
   provider    = aws.primary
   most_recent = true
@@ -265,7 +158,7 @@ data "aws_ami" "amazon_linux_primary" {
   }
 }
 
-# Get latest Amazon Linux 2023 AMI for secondary region
+# Get latest Amazon Linux 2 AMI for secondary region
 data "aws_ami" "amazon_linux_secondary" {
   provider    = aws.secondary
   most_recent = true
@@ -332,7 +225,7 @@ resource "aws_kms_key" "primary" {
         Resource = "*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}/web-primary"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}/web-primary-${random_id.suffix.hex}"
           }
         }
       }
@@ -385,7 +278,7 @@ resource "aws_kms_key" "secondary" {
         Resource = "*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}/web-secondary"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/${var.project_name}/web-secondary-${random_id.suffix.hex}"
           }
         }
       }
@@ -916,7 +809,7 @@ resource "aws_security_group" "db_secondary" {
 # ============================================================================
 # IAM role for EC2 instances with necessary permissions
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}-ec2-role"
+  name = "${var.project_name}-ec2-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -938,7 +831,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # IAM policy for EC2 instances to access Secrets Manager and CloudWatch
 resource "aws_iam_role_policy" "ec2_policy" {
-  name = "${var.project_name}-ec2-policy"
+  name = "${var.project_name}-ec2-policy-${random_id.suffix.hex}"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -1003,7 +896,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 
 # Instance profile for EC2 instances
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-ec2-profile"
+  name = "${var.project_name}-ec2-profile-${random_id.suffix.hex}"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -1180,7 +1073,7 @@ resource "aws_s3_bucket_policy" "static_content_secondary" {
 # CloudWatch Log Group for web servers (Primary Region)
 resource "aws_cloudwatch_log_group" "web_logs_primary" {
   provider          = aws.primary
-  name              = "/aws/ec2/${var.project_name}/web-primary"
+  name              = "/aws/ec2/${var.project_name}/web-primary-${random_id.suffix.hex}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.primary.arn
 
@@ -1192,7 +1085,7 @@ resource "aws_cloudwatch_log_group" "web_logs_primary" {
 # CloudWatch Log Group for web servers (Secondary Region)
 resource "aws_cloudwatch_log_group" "web_logs_secondary" {
   provider          = aws.secondary
-  name              = "/aws/ec2/${var.project_name}/web-secondary"
+  name              = "/aws/ec2/${var.project_name}/web-secondary-${random_id.suffix.hex}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.secondary.arn
 
@@ -1207,7 +1100,7 @@ resource "aws_cloudwatch_log_group" "web_logs_secondary" {
 # DB Subnet Group for primary region
 resource "aws_db_subnet_group" "primary" {
   provider   = aws.primary
-  name       = "${var.project_name}-db-subnet-group-primary"
+  name       = "${var.project_name}-db-subnet-group-primary-${random_id.suffix.hex}"
   subnet_ids = aws_subnet.db_primary[*].id
 
   tags = {
@@ -1218,7 +1111,7 @@ resource "aws_db_subnet_group" "primary" {
 # DB Subnet Group for secondary region
 resource "aws_db_subnet_group" "secondary" {
   provider   = aws.secondary
-  name       = "${var.project_name}-db-subnet-group-secondary"
+  name       = "${var.project_name}-db-subnet-group-secondary-${random_id.suffix.hex}"
   subnet_ids = aws_subnet.db_secondary[*].id
 
   tags = {
@@ -1229,7 +1122,7 @@ resource "aws_db_subnet_group" "secondary" {
 # RDS Instance in primary region (Multi-AZ enabled)
 resource "aws_db_instance" "primary" {
   provider                = aws.primary
-  identifier              = "${var.project_name}-db-primary"
+  identifier              = "${var.project_name}-db-primary-${random_id.suffix.hex}"
   allocated_storage       = 20
   max_allocated_storage   = 100
   storage_type            = "gp2"
@@ -1267,7 +1160,7 @@ resource "aws_db_instance" "primary" {
 # RDS Instance in secondary region (Read Replica)
 resource "aws_db_instance" "secondary" {
   provider               = aws.secondary
-  identifier             = "${var.project_name}-db-secondary"
+  identifier             = "${var.project_name}-db-secondary-${random_id.suffix.hex}"
   replicate_source_db    = aws_db_instance.primary.arn
   instance_class         = "db.t3.micro"
   vpc_security_group_ids = [aws_security_group.db_secondary.id]
@@ -1291,7 +1184,7 @@ resource "aws_db_instance" "secondary" {
 
 # IAM role for RDS enhanced monitoring
 resource "aws_iam_role" "rds_monitoring" {
-  name = "${var.project_name}-rds-monitoring-role"
+  name = "${var.project_name}-rds-monitoring-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1318,12 +1211,12 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 }
 
 # ============================================================================
-# LAUNCH TEMPLATES - EC2 CONFIGURATION WITH ENHANCED DEBUGGING
+# LAUNCH TEMPLATES - EC2 CONFIGURATION
 # ============================================================================
 # Launch template for primary region
 resource "aws_launch_template" "web_primary" {
   provider      = aws.primary
-  name          = "${var.project_name}-web-template-primary"
+  name          = "${var.project_name}-web-template-primary-${random_id.suffix.hex}"
   description   = "Launch template for web servers in primary region"
   image_id      = data.aws_ami.amazon_linux_primary.id
   instance_type = var.instance_type
@@ -1339,7 +1232,7 @@ resource "aws_launch_template" "web_primary" {
     enabled = true
   }
 
-  # User data script with enhanced debugging and smart package manager detection
+  # User data script to configure web server
   user_data = base64encode(<<-EOF
 #!/bin/bash
 # Ultra-simple user data script with extensive debugging
@@ -1443,7 +1336,7 @@ EOF
 # Launch template for secondary region
 resource "aws_launch_template" "web_secondary" {
   provider      = aws.secondary
-  name          = "${var.project_name}-web-template-secondary"
+  name          = "${var.project_name}-web-template-secondary-${random_id.suffix.hex}"
   description   = "Launch template for web servers in secondary region"
   image_id      = data.aws_ami.amazon_linux_secondary.id
   instance_type = var.instance_type
@@ -1563,7 +1456,7 @@ EOF
 # Application Load Balancer for primary region
 resource "aws_lb" "primary" {
   provider           = aws.primary
-  name               = "${var.project_name}-alb-primary"
+  name               = "mrapp-alb-pri-${random_id.suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_primary.id]
@@ -1579,7 +1472,7 @@ resource "aws_lb" "primary" {
 # Application Load Balancer for secondary region
 resource "aws_lb" "secondary" {
   provider           = aws.secondary
-  name               = "${var.project_name}-alb-secondary"
+  name               = "mrapp-alb-sec-${random_id.suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_secondary.id]
@@ -1592,10 +1485,10 @@ resource "aws_lb" "secondary" {
   }
 }
 
-# Target Group for primary region with optimized health checks
+# Target Group for primary region
 resource "aws_lb_target_group" "web_primary" {
   provider = aws.primary
-  name     = "${var.project_name}-web-primary"
+  name     = "mrapp-web-pri-${random_id.suffix.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.primary.id
@@ -1617,10 +1510,10 @@ resource "aws_lb_target_group" "web_primary" {
   }
 }
 
-# Target Group for secondary region with optimized health checks
+# Target Group for secondary region
 resource "aws_lb_target_group" "web_secondary" {
   provider = aws.secondary
-  name     = "${var.project_name}-web-secondary"
+  name     = "mrapp-web-sec-${random_id.suffix.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.secondary.id
@@ -1677,12 +1570,12 @@ resource "aws_lb_listener" "web_secondary" {
 }
 
 # ============================================================================
-# AUTO SCALING GROUPS - ELASTIC WEB TIER WITH DEBUG CONFIGURATION
+# AUTO SCALING GROUPS - ELASTIC WEB TIER
 # ============================================================================
 # Auto Scaling Group for primary region
 resource "aws_autoscaling_group" "web_primary" {
   provider                  = aws.primary
-  name                      = "${var.project_name}-asg-primary"
+  name                      = "${var.project_name}-asg-primary-${random_id.suffix.hex}"
   vpc_zone_identifier       = aws_subnet.private_primary[*].id
   target_group_arns         = [aws_lb_target_group.web_primary.arn]
   health_check_type         = "ELB"
@@ -1724,7 +1617,7 @@ resource "aws_autoscaling_group" "web_primary" {
 # Auto Scaling Group for secondary region
 resource "aws_autoscaling_group" "web_secondary" {
   provider                  = aws.secondary
-  name                      = "${var.project_name}-asg-secondary"
+  name                      = "${var.project_name}-asg-secondary-${random_id.suffix.hex}"
   vpc_zone_identifier       = aws_subnet.private_secondary[*].id
   target_group_arns         = [aws_lb_target_group.web_secondary.arn]
   health_check_type         = "ELB"
@@ -1768,7 +1661,7 @@ resource "aws_autoscaling_group" "web_secondary" {
 # Scale up policy for primary region
 resource "aws_autoscaling_policy" "scale_up_primary" {
   provider               = aws.primary
-  name                   = "${var.project_name}-scale-up-primary"
+  name                   = "${var.project_name}-scale-up-primary-${random_id.suffix.hex}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1778,7 +1671,7 @@ resource "aws_autoscaling_policy" "scale_up_primary" {
 # Scale down policy for primary region
 resource "aws_autoscaling_policy" "scale_down_primary" {
   provider               = aws.primary
-  name                   = "${var.project_name}-scale-down-primary"
+  name                   = "${var.project_name}-scale-down-primary-${random_id.suffix.hex}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1788,7 +1681,7 @@ resource "aws_autoscaling_policy" "scale_down_primary" {
 # CloudWatch alarms for primary region
 resource "aws_cloudwatch_metric_alarm" "cpu_high_primary" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-cpu-high-primary"
+  alarm_name          = "${var.project_name}-cpu-high-primary-${random_id.suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1810,7 +1703,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high_primary" {
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low_primary" {
   provider            = aws.primary
-  alarm_name          = "${var.project_name}-cpu-low-primary"
+  alarm_name          = "${var.project_name}-cpu-low-primary-${random_id.suffix.hex}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1833,7 +1726,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low_primary" {
 # Scale up policy for secondary region
 resource "aws_autoscaling_policy" "scale_up_secondary" {
   provider               = aws.secondary
-  name                   = "${var.project_name}-scale-up-secondary"
+  name                   = "${var.project_name}-scale-up-secondary-${random_id.suffix.hex}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1843,7 +1736,7 @@ resource "aws_autoscaling_policy" "scale_up_secondary" {
 # Scale down policy for secondary region
 resource "aws_autoscaling_policy" "scale_down_secondary" {
   provider               = aws.secondary
-  name                   = "${var.project_name}-scale-down-secondary"
+  name                   = "${var.project_name}-scale-down-secondary-${random_id.suffix.hex}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -1853,7 +1746,7 @@ resource "aws_autoscaling_policy" "scale_down_secondary" {
 # CloudWatch alarms for secondary region
 resource "aws_cloudwatch_metric_alarm" "cpu_high_secondary" {
   provider            = aws.secondary
-  alarm_name          = "${var.project_name}-cpu-high-secondary"
+  alarm_name          = "${var.project_name}-cpu-high-secondary-${random_id.suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1875,7 +1768,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high_secondary" {
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low_secondary" {
   provider            = aws.secondary
-  alarm_name          = "${var.project_name}-cpu-low-secondary"
+  alarm_name          = "${var.project_name}-cpu-low-secondary-${random_id.suffix.hex}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1930,146 +1823,3 @@ output "s3_bucket_secondary" {
   value       = aws_s3_bucket.static_content_secondary.bucket
 }
 ```
-
----
-
-## **Security Features**
-
-### **Encryption at Rest**
-- **KMS Keys**: Customer-managed keys with automatic rotation
-- **RDS Encryption**: Database storage and backups
-- **S3 Encryption**: Static content with KMS keys
-- **EBS Encryption**: Instance storage volumes
-- **CloudWatch Logs**: Encrypted log storage
-
-### **Secrets Management**
-- **AWS Secrets Manager**: RDS credentials storage
-- **Automatic Rotation**: Configurable password rotation
-- **Cross-Region Replication**: Secrets available in both regions
-
-### **Network Security**
-- **Security Groups**: Least privilege access control
-- **Private Subnets**: Web servers isolated from internet
-- **Database Isolation**: RDS in dedicated subnets
-- **NAT Gateways**: Controlled outbound internet access
-
-### **Identity & Access Management**
-- **IAM Roles**: Service-specific least privilege policies
-- **Instance Profiles**: EC2 service permissions
-- **Resource-Based Policies**: S3 bucket access control
-
----
-
-## **Observability & Monitoring**
-
-### **CloudWatch Integration**
-- **Log Groups**: Centralized application logging
-- **Metrics**: Auto scaling triggers and performance monitoring
-- **Alarms**: CPU-based scaling and alerting
-- **Retention**: 14-day log retention for cost optimization
-
-### **Application Load Balancer Health Checks**
-- **Optimized Timing**: 10-second intervals with 5-second timeout
-- **Graceful Failure Handling**: 10 unhealthy threshold for stability
-- **Multiple Endpoints**: `/health.html` and `/health` for redundancy
-
----
-
-## **Deployment & Operations**
-
-### **Auto Scaling Configuration**
-- **Elastic Capacity**: 1-6 instances per region (configurable)
-- **Health Check Grace Period**: 900 seconds for bootstrap time
-- **Rolling Updates**: 50% minimum healthy percentage
-- **Debug Mode**: Temporary capacity timeout bypass for troubleshooting
-
-### **Multi-Region Architecture**
-- **Primary Region**: us-east-1 (Main traffic and RDS primary)
-- **Secondary Region**: eu-west-2 (Disaster recovery and read replica)
-- **Cross-Region Replication**: RDS read replica for DR
-
-### **Instance Bootstrap**
-- **Amazon Linux 2023**: Latest AMI with enhanced performance
-- **Smart Package Detection**: Automatic dnf/yum detection
-- **Comprehensive Logging**: Detailed bootstrap and health check logging
-- **Retry Logic**: Resilient package installation with retries
-
----
-
-## **Deployment Instructions**
-
-### **Prerequisites**
-```bash
-# Ensure Terraform is installed
-terraform version
-
-# Configure AWS credentials
-aws configure
-```
-
-### **Deployment Steps**
-```bash
-# Navigate to the infrastructure directory
-cd lib
-
-# Initialize Terraform
-terraform init
-
-# Plan the deployment
-terraform plan
-
-# Apply the infrastructure
-terraform apply
-
-# Get output values
-terraform output primary_alb_dns
-terraform output secondary_alb_dns
-```
-
-### **Post-Deployment Verification**
-```bash
-# Test primary region
-curl http://$(terraform output -raw primary_alb_dns)/health.html
-
-# Test secondary region  
-curl http://$(terraform output -raw secondary_alb_dns)/health.html
-
-# Check RDS connectivity (from within VPC)
-mysql -h $(terraform output -raw primary_rds_endpoint) -u admin -p
-```
-
----
-
-## **Troubleshooting Guide**
-
-### **ASG Health Check Issues**
-1. **Check User Data Logs**: `sudo cat /var/log/user-data.log`
-2. **Verify Apache Status**: `sudo systemctl status httpd`
-3. **Test Health Endpoint**: `curl http://localhost/health.html`
-4. **Check Security Groups**: Ensure ALB → Instance communication on port 80
-
-### **Database Connection Issues**
-1. **Verify Security Groups**: Database SG allows web server access
-2. **Check Secrets Manager**: Credentials properly stored and accessible
-3. **Network Connectivity**: Ensure database subnets have proper routing
-
-### **Debug Mode Features**
-- **Enhanced Logging**: Comprehensive user data script logging
-- **Network Diagnostics**: Internet connectivity and DNS resolution tests
-- **Service Verification**: Apache installation and startup validation
-- **Deployment Bypass**: ASG timeout configuration for faster iteration
-
----
-
-## **Best Practices Implemented**
-
-- **Infrastructure as Code**: Complete Terraform implementation
-- **Multi-Region Deployment**: High availability across regions
-- **Security by Design**: Encryption, least privilege, network isolation
-- **Observability**: Comprehensive logging and monitoring
-- **Scalability**: Auto scaling based on demand
-- **Disaster Recovery**: Cross-region RDS read replica
-- **Cost Optimization**: Right-sized instances and log retention
-- **Operational Excellence**: Enhanced debugging and troubleshooting capabilities
-
-This implementation provides a production-ready, secure, and scalable multi-region AWS infrastructure with enhanced debugging capabilities for reliable deployment and operation.

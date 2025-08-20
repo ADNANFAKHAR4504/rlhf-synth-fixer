@@ -1,4 +1,8 @@
-```
+# TAP Stack - AWS CDK Infrastructure
+
+## `tap_stack.py` - Complete CDK Implementation
+
+```python
 import aws_cdk as cdk
 from aws_cdk import (
   Stack,

@@ -1,67 +1,296 @@
-# IDEAL RESPONSE - Comprehensive Infrastructure Solution
+```typescript
+// tap-stack.ts
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
 
-## 🎯 **Project Overview**
+import { WebServerStack } from './web-server';
 
-This is a comprehensive AWS CDK infrastructure solution that implements a production-ready web server stack with enterprise-grade monitoring, backup strategies, and multi-region support. The solution has been thoroughly tested and optimized for production deployment.
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+  vpcId: string;
+  region?: string;
+  enableMonitoring?: boolean;
+  enableBackups?: boolean;
+  backupRetentionDays?: number;
+  enableAlarms?: boolean;
+  alarmEmail?: string;
+}
 
-## ✅ **Key Features Implemented**
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
+    super(scope, id, props);
 
-### **1. Core Infrastructure Components**
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
 
-- **EC2 Instance**: Web server with Apache HTTP server
-- **RDS Database**: MySQL 8.0 with Multi-AZ deployment
-- **S3 Bucket**: Secure storage with versioning and encryption
-- **Elastic IP**: Static IP address for web server
-- **Security Groups**: Proper network security configuration
-- **IAM Roles**: Least-privilege access policies
+    // Use parameterized region or default to us-east-1
+    const region =
+      props?.region ||
+      this.node.tryGetContext('region') ||
+      process.env.CDK_DEFAULT_REGION ||
+      'us-east-1';
 
-### **2. CloudWatch Monitoring & Alerting** ✅
-
-- **Real-time Dashboards**: CPU, network, and database metrics
-- **CloudWatch Alarms**: Proactive alerting for performance issues
-- **SNS Notifications**: Email alerts for critical events
-- **Log Management**: Centralized logging for EC2 and RDS
-- **Performance Insights**: Database performance monitoring
-
-### **3. RDS Backup Strategies** ✅
-
-- **Automated Backups**: Configurable retention (default: 7 days)
-- **Multi-AZ Deployment**: High availability and disaster recovery
-- **Storage Encryption**: AES-256 encryption enabled
-- **Performance Insights**: Database performance monitoring
-- **Deletion Protection**: Production environment safeguards
-
-### **4. Parameterized Region Support** ✅
-
-- **Multi-Region Deployment**: Support for any AWS region
-- **Context-Based Configuration**: CDK context integration
-- **Environment Variables**: `CDK_DEFAULT_REGION` support
-- **Fallback Defaults**: Graceful degradation to us-east-1
-
-## 📁 **File Structure**
+    new WebServerStack(this, 'WebServerStack', {
+      environmentSuffix,
+      vpcId: props.vpcId,
+      region,
+      enableMonitoring: props?.enableMonitoring ?? true,
+      enableBackups: props?.enableBackups ?? true,
+      backupRetentionDays: props?.backupRetentionDays || 7,
+      enableAlarms: props?.enableAlarms ?? true,
+      alarmEmail: props?.alarmEmail,
+      env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: region,
+      },
+    });
+  }
+}
 
 ```
-lib/
-├── web-server.ts          # Main infrastructure stack
-├── tap-stack.ts           # Stack orchestration
-├── vpc-utils.ts           # VPC utility functions
-└── IDEAL_RESPONSE.md      # This comprehensive guide
-
-test/
-├── web-server.unit.test.ts    # Unit tests
-├── tap-stack.unit.test.ts     # Stack tests
-├── tap-stack.int.test.ts      # Integration tests
-└── vpc-utils.unit.test.ts     # VPC utility tests
-
-bin/
-└── tap.ts                 # CDK app entry point
-```
-
-## 🚀 **Latest Working Solution**
-
-### **1. Enhanced Web Server Stack (`lib/web-server.ts`)**
 
 ```typescript
+// vpc-utils.ts
+// lib/vpc-utils.ts
+import {
+  DescribeRouteTablesCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+
+export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
+  const client = new EC2Client({ region: 'us-east-1' });
+  const result = await client.send(new DescribeVpcsCommand({}));
+  const vpc = result.Vpcs?.find(v => v.CidrBlock === cidr);
+  console.log(`VPC found by CIDR ${cidr}: ${vpc?.VpcId}`);
+  if (!vpc?.VpcId) {
+    return undefined;
+  }
+
+  // Validate that this VPC has the required subnet configuration
+  const hasValidSubnets = await validateVpcSubnetConfiguration(vpc.VpcId);
+  return hasValidSubnets ? vpc.VpcId : undefined;
+}
+
+export async function findVpcById(vpcId: string): Promise<string | undefined> {
+  const client = new EC2Client({ region: 'us-east-1' });
+  const result = await client.send(
+    new DescribeVpcsCommand({
+      VpcIds: [vpcId],
+    })
+  );
+  const vpc = result.Vpcs?.find(v => v.VpcId === vpcId);
+
+  if (!vpc?.VpcId) {
+    return undefined;
+  }
+
+  // Validate that this VPC has the required subnet configuration
+  const hasValidSubnets = await validateVpcSubnetConfiguration(vpc.VpcId);
+  return hasValidSubnets ? vpc.VpcId : undefined;
+}
+
+// Specific function for the target VPC ID
+export async function findTargetVpc(): Promise<string | undefined> {
+  return findVpcById('vpc-0ea3cebfe865ee72f');
+}
+
+// Function to validate VPC has exactly 2 private and 1 public subnet
+export async function validateVpcSubnetConfiguration(
+  vpcId: string
+): Promise<boolean> {
+  const subnetConfig = await getSubnetConfiguration(vpcId);
+
+  const hasValidConfiguration =
+    subnetConfig.privateSubnets.length >= 2 &&
+    subnetConfig.publicSubnets.length >= 1;
+
+  if (!hasValidConfiguration) {
+    console.log(
+      `VPC ${vpcId} does not have the required subnet configuration:`
+    );
+    console.log(
+      `  - Private subnets: ${subnetConfig.privateSubnets.length} (required: 2)`
+    );
+    console.log(
+      `  - Public subnets: ${subnetConfig.publicSubnets.length} (required: 1)`
+    );
+  }
+
+  return hasValidConfiguration;
+}
+
+// Interface for subnet information
+export interface SubnetInfo {
+  subnetId: string;
+  cidrBlock: string;
+  availabilityZone: string;
+  isPublic: boolean;
+}
+
+// Function to get all subnets for a VPC
+export async function getVpcSubnets(vpcId: string): Promise<SubnetInfo[]> {
+  if (!vpcId || !vpcId.startsWith('vpc-')) {
+    throw new Error(`Invalid VPC ID: ${vpcId}`);
+  }
+
+  const client = new EC2Client({ region: 'us-east-1' });
+
+  const result = await client.send(
+    new DescribeSubnetsCommand({
+      Filters: [
+        {
+          Name: 'vpc-id',
+          Values: [vpcId],
+        },
+      ],
+    })
+  );
+
+  if (!result.Subnets) {
+    return [];
+  }
+
+  return result.Subnets.map(subnet => ({
+    subnetId: subnet.SubnetId!,
+    cidrBlock: subnet.CidrBlock!,
+    availabilityZone: subnet.AvailabilityZone!,
+    isPublic: subnet.MapPublicIpOnLaunch || false,
+  }));
+}
+
+// Function to check if a subnet has a route to Internet Gateway
+async function hasInternetGatewayRoute(
+  subnetId: string,
+  vpcId: string
+): Promise<boolean> {
+  if (!vpcId || !vpcId.startsWith('vpc-')) {
+    throw new Error(`Invalid VPC ID: ${vpcId}`);
+  }
+  if (!subnetId || !subnetId.startsWith('subnet-')) {
+    throw new Error(`Invalid Subnet ID: ${subnetId}`);
+  }
+
+  const client = new EC2Client({ region: 'us-east-1' });
+
+  try {
+    const result = await client.send(
+      new DescribeRouteTablesCommand({
+        Filters: [
+          {
+            Name: 'association.subnet-id',
+            Values: [subnetId],
+          },
+        ],
+      })
+    );
+
+    // If no explicit route table association, check the main route table
+    if (!result.RouteTables || result.RouteTables.length === 0) {
+      const mainRouteTableResult = await client.send(
+        new DescribeRouteTablesCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+            {
+              Name: 'association.main',
+              Values: ['true'],
+            },
+          ],
+        })
+      );
+
+      if (
+        mainRouteTableResult.RouteTables &&
+        mainRouteTableResult.RouteTables.length > 0
+      ) {
+        const routes = mainRouteTableResult.RouteTables[0].Routes || [];
+        return routes.some(
+          route => route.GatewayId && route.GatewayId.startsWith('igw-')
+        );
+      }
+    }
+
+    // Check explicit route table associations
+    for (const routeTable of result.RouteTables || []) {
+      const routes = routeTable.Routes || [];
+      if (
+        routes.some(
+          route => route.GatewayId && route.GatewayId.startsWith('igw-')
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch (error) {
+    console.error(`Error checking IGW route for subnet ${subnetId}:`, error);
+    return false;
+  }
+}
+
+// Function to get private subnets (subnets without IGW route)
+export async function getPrivateSubnets(vpcId: string): Promise<SubnetInfo[]> {
+  const allSubnets = await getVpcSubnets(vpcId);
+  const privateSubnets: SubnetInfo[] = [];
+
+  for (const subnet of allSubnets) {
+    const hasIGW = await hasInternetGatewayRoute(subnet.subnetId, vpcId);
+    if (!hasIGW) {
+      privateSubnets.push({
+        ...subnet,
+        isPublic: false,
+      });
+    }
+  }
+
+  console.log(`Private subnets found: ${privateSubnets.length}`);
+  return privateSubnets;
+}
+
+// Function to get public subnets (subnets with IGW route)
+export async function getPublicSubnets(vpcId: string): Promise<SubnetInfo[]> {
+  const allSubnets = await getVpcSubnets(vpcId);
+  const publicSubnets: SubnetInfo[] = [];
+
+  for (const subnet of allSubnets) {
+    const hasIGW = await hasInternetGatewayRoute(subnet.subnetId, vpcId);
+    if (hasIGW) {
+      publicSubnets.push({
+        ...subnet,
+        isPublic: true,
+      });
+    }
+  }
+
+  console.log(`Public subnets found: ${publicSubnets.length}`);
+  return publicSubnets;
+}
+
+// Function to get subnet configuration (2 private + 1 public)
+export async function getSubnetConfiguration(vpcId: string): Promise<{
+  privateSubnets: SubnetInfo[];
+  publicSubnets: SubnetInfo[];
+}> {
+  const privateSubnets = await getPrivateSubnets(vpcId);
+  const publicSubnets = await getPublicSubnets(vpcId);
+
+  return {
+    privateSubnets: privateSubnets.slice(0, 2), // Take first 2 private subnets
+    publicSubnets: publicSubnets.slice(0, 1), // Take first 1 public subnet
+  };
+}
+
+```
+
+```typescript
+// web-server.ts
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -109,8 +338,8 @@ export interface WebServerProps extends cdk.StackProps {
 }
 
 function generateUniqueBucketName(): string {
-  const timestamp = Date.now().toString(36);
-  const random = Math.random().toString(36).substring(2, 8);
+  const timestamp = Date.now().toString(36); // base36 for compactness
+  const random = Math.random().toString(36).substring(2, 8); // 6-char random string
   return `webserver-assets-${timestamp}-${random}`;
 }
 
@@ -118,7 +347,7 @@ export class WebServerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: WebServerProps) {
     super(scope, id, props);
 
-    // Configuration with defaults
+    // Use parameterized region or default to us-east-1
     const region = props?.region || 'us-east-1';
     const enableMonitoring = props?.enableMonitoring ?? true;
     const enableBackups = props?.enableBackups ?? true;
@@ -126,16 +355,16 @@ export class WebServerStack extends cdk.Stack {
     const enableAlarms = props?.enableAlarms ?? true;
     const alarmEmail = props?.alarmEmail;
 
-    // Resource tagging
     Tags.of(this).add('Environment', 'Dev');
     Tags.of(this).add('Region', region);
 
-    // VPC and Security Configuration
+    // Use existing VPC
     const vpc = Vpc.fromLookup(this, 'ExistingVPC', {
       vpcId: props?.vpcId,
     });
     const sshCidr = props?.allowedSshCidr ?? '10.0.0.0/16';
 
+    // Security Group
     const securityGroup = new SecurityGroup(this, 'SecurityGroup', {
       vpc,
       allowAllOutbound: true,
@@ -152,7 +381,7 @@ export class WebServerStack extends cdk.Stack {
       'Allow HTTP access from anywhere'
     );
 
-    // S3 Bucket with enhanced security
+    // S3 Bucket
     const bucketID = generateUniqueBucketName();
     const s3Bucket = new Bucket(this, 'S3Bucket', {
       bucketName: `webserver-assets-${bucketID}`,
@@ -161,12 +390,14 @@ export class WebServerStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // CloudWatch Log Groups
+    // CloudWatch Log Group for EC2
     const ec2LogGroup = new logs.LogGroup(this, 'EC2LogGroup', {
       logGroupName: `/aws/ec2/${props?.environmentSuffix || 'dev'}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
+    // Note: RDS logs are handled by the RDS instance configuration via cloudwatchLogsExports
 
     // SNS Topic for CloudWatch Alarms
     let alarmTopic: sns.Topic | undefined;
@@ -176,12 +407,13 @@ export class WebServerStack extends cdk.Stack {
         displayName: `${props?.environmentSuffix || 'dev'} Infrastructure Alarms`,
       });
 
+      // Add email subscription
       alarmTopic.addSubscription(
         new snsSubscriptions.EmailSubscription(alarmEmail)
       );
     }
 
-    // Enhanced IAM Role with CloudWatch permissions
+    // EC2 Instance Role with enhanced monitoring permissions
     const ec2Role = new Role(this, 'EC2Role', {
       roleName: `ec2-instance-role-${props?.environmentSuffix}`,
       assumedBy: new ServicePrincipal('ec2.amazonaws.com'),
@@ -244,7 +476,7 @@ export class WebServerStack extends cdk.Stack {
       vpcSubnets: { subnetType: SubnetType.PUBLIC },
     });
 
-    // Enhanced User Data with CloudWatch agent
+    // Enhanced User Data script with CloudWatch agent installation
     ec2Instance.userData.addCommands(
       'yum update -y',
       'yum install -y httpd amazon-cloudwatch-agent',
@@ -254,6 +486,7 @@ export class WebServerStack extends cdk.Stack {
       'echo "<html><body><h1>Hello, World!</h1><p>Region: ' +
         region +
         '</p></body></html>" > /var/www/html/index.html',
+      // Configure CloudWatch agent
       "cat > /opt/aws/amazon-cloudwatch-agent/bin/config.json << 'EOF'",
       '{',
       '  "logs": {',
@@ -287,13 +520,13 @@ export class WebServerStack extends cdk.Stack {
       instanceId: ec2Instance.instanceId,
     });
 
-    // RDS Subnet Group
+    // Create RDS Subnet Group
     const rdsSubnetGroup = new SubnetGroup(this, 'RdsSubnetGroup', {
       description: 'Subnet group for RDS',
       vpc,
-      vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_NAT },
+      vpcSubnets: { subnetType: SubnetType.PRIVATE_ISOLATED }, // PRIVATE_ISOLATED
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      subnetGroupName: 'rds-subnet-group',
+      subnetGroupName: `rds-subnet-group-${props?.environmentSuffix || 'dev'}`,
     });
 
     // Enhanced RDS Instance with backup and monitoring
@@ -302,7 +535,7 @@ export class WebServerStack extends cdk.Stack {
         version: MysqlEngineVersion.VER_8_0,
       }),
       vpc,
-      multiAz: enableBackups,
+      multiAz: enableBackups, // Enable Multi-AZ for backup strategy
       allocatedStorage: 20,
       instanceType: cdk.aws_ec2.InstanceType.of(
         cdk.aws_ec2.InstanceClass.BURSTABLE3,
@@ -312,25 +545,28 @@ export class WebServerStack extends cdk.Stack {
       credentials: cdk.aws_rds.Credentials.fromGeneratedSecret('admin'),
       publiclyAccessible: false,
       subnetGroup: rdsSubnetGroup,
+      // Enhanced backup configuration
       backupRetention: enableBackups
         ? cdk.Duration.days(backupRetentionDays)
         : cdk.Duration.days(0),
       storageEncrypted: true,
-      enablePerformanceInsights: enableMonitoring,
-      performanceInsightRetention: enableMonitoring
-        ? cdk.aws_rds.PerformanceInsightRetention.DEFAULT
-        : undefined,
+      // Performance Insights is not supported on t3.micro instances
+      // Only enable if monitoring is enabled and we're not using micro instance
+      enablePerformanceInsights: false, // Disabled for t3.micro compatibility
+      // CloudWatch logging (basic logs supported on t3.micro)
       cloudwatchLogsExports: enableMonitoring
-        ? ['error', 'general', 'slow-query']
+        ? ['error', 'general']
         : undefined,
       cloudwatchLogsRetention: enableMonitoring
         ? logs.RetentionDays.ONE_WEEK
         : undefined,
+      // Deletion protection for production
       deletionProtection: props?.environmentSuffix === 'prod',
     });
 
     // CloudWatch Alarms for EC2
     if (enableAlarms) {
+      // CPU Utilization Alarm
       const cpuAlarm = new cloudwatch.Alarm(this, 'EC2CPUAlarm', {
         metric: new cloudwatch.Metric({
           namespace: 'AWS/EC2',
@@ -346,6 +582,7 @@ export class WebServerStack extends cdk.Stack {
         alarmName: `${instanceName}-cpu-utilization`,
       });
 
+      // Status Check Alarm
       const statusAlarm = new cloudwatch.Alarm(this, 'EC2StatusAlarm', {
         metric: new cloudwatch.Metric({
           namespace: 'AWS/EC2',
@@ -361,6 +598,7 @@ export class WebServerStack extends cdk.Stack {
         alarmName: `${instanceName}-status-check`,
       });
 
+      // Add SNS actions if topic exists
       if (alarmTopic) {
         cpuAlarm.addAlarmAction(new actions.SnsAction(alarmTopic));
         statusAlarm.addAlarmAction(new actions.SnsAction(alarmTopic));
@@ -369,6 +607,7 @@ export class WebServerStack extends cdk.Stack {
 
     // CloudWatch Alarms for RDS
     if (enableAlarms) {
+      // RDS CPU Utilization Alarm
       const rdsCpuAlarm = new cloudwatch.Alarm(this, 'RDSCPUAlarm', {
         metric: new cloudwatch.Metric({
           namespace: 'AWS/RDS',
@@ -384,6 +623,7 @@ export class WebServerStack extends cdk.Stack {
         alarmName: `${rdsInstance.instanceIdentifier}-cpu-utilization`,
       });
 
+      // RDS Database Connections Alarm
       const rdsConnectionsAlarm = new cloudwatch.Alarm(
         this,
         'RDSConnectionsAlarm',
@@ -403,6 +643,7 @@ export class WebServerStack extends cdk.Stack {
         }
       );
 
+      // Add SNS actions if topic exists
       if (alarmTopic) {
         rdsCpuAlarm.addAlarmAction(new actions.SnsAction(alarmTopic));
         rdsConnectionsAlarm.addAlarmAction(new actions.SnsAction(alarmTopic));
@@ -488,7 +729,7 @@ export class WebServerStack extends cdk.Stack {
       });
     }
 
-    // CloudFormation Outputs
+    // Outputs
     new cdk.CfnOutput(this, 'EC2InstanceName', {
       value: instanceName,
       description: 'EC2 instance name',
@@ -537,252 +778,5 @@ export class WebServerStack extends cdk.Stack {
     }
   }
 }
+
 ```
-
-### **2. Enhanced Tap Stack (`lib/tap-stack.ts`)**
-
-```typescript
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-
-import { WebServerStack } from './web-server';
-
-interface TapStackProps extends cdk.StackProps {
-  environmentSuffix?: string;
-  vpcId: string;
-  region?: string;
-  enableMonitoring?: boolean;
-  enableBackups?: boolean;
-  backupRetentionDays?: number;
-  enableAlarms?: boolean;
-  alarmEmail?: string;
-}
-
-export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: TapStackProps) {
-    super(scope, id, props);
-
-    const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
-
-    // Use parameterized region or default to us-east-1
-    const region = props?.region || 
-                   this.node.tryGetContext('region') || 
-                   process.env.CDK_DEFAULT_REGION || 
-                   'us-east-1';
-
-    new WebServerStack(this, 'WebServerStack', {
-      environmentSuffix,
-      vpcId: props.vpcId,
-      region,
-      enableMonitoring: props?.enableMonitoring ?? true,
-      enableBackups: props?.enableBackups ?? true,
-      backupRetentionDays: props?.backupRetentionDays || 7,
-      enableAlarms: props?.enableAlarms ?? true,
-      alarmEmail: props?.alarmEmail,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: region,
-      },
-    });
-  }
-}
-```
-
-### **3. VPC Utilities (`lib/vpc-utils.ts`)**
-
-```typescript
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeRouteTablesCommand } from '@aws-sdk/client-ec2';
-
-export async function findVpcByCidr(cidr: string): Promise<string | undefined> {
-  const client = new EC2Client({ region: 'us-east-1' });
-  const result = await client.send(new DescribeVpcsCommand({}));
-  return result.Vpcs?.find(v => v.CidrBlock === cidr)?.VpcId;
-}
-
-// Additional VPC utility functions for subnet management and validation
-// ... (comprehensive VPC utility functions)
-```
-
-## 🧪 **Testing Results**
-
-### **Test Coverage**
-
-- **Total Tests:** 68 tests
-- **Passed:** 68 tests (100% success rate)
-- **Code Coverage:** 94.83% statements, 79.34% branches
-- **Test Suites:** 4 passed, 0 failed
-
-### **Test Categories**
-
-- ✅ Unit tests for WebServerStack
-- ✅ Unit tests for TapStack
-- ✅ Unit tests for VPC utilities
-- ✅ Integration tests for deployed infrastructure
-- ✅ Security group validation tests
-- ✅ S3 bucket security and policy tests
-- ✅ HTTP server functionality tests
-- ✅ EC2 instance and role integration tests
-- ✅ Resource tagging validation tests
-
-## 🚀 **Usage Examples**
-
-### **Basic Usage (with defaults)**
-
-```typescript
-new WebServerStack(this, 'WebServerStack', {
-  environmentSuffix: 'dev',
-  vpcId: 'vpc-12345678',
-});
-```
-
-### **Advanced Usage (with all features)**
-
-```typescript
-new WebServerStack(this, 'WebServerStack', {
-  environmentSuffix: 'prod',
-  vpcId: 'vpc-12345678',
-  region: 'us-west-2',
-  enableMonitoring: true,
-  enableBackups: true,
-  backupRetentionDays: 30,
-  enableAlarms: true,
-  alarmEmail: 'admin@company.com',
-});
-```
-
-### **CDK App Entry Point (`bin/tap.ts`)**
-
-```typescript
-#!/usr/bin/env node
-import 'source-map-support/register';
-import * as cdk from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
-
-const app = new cdk.App();
-new TapStack(app, 'TapStack', {
-  environmentSuffix: 'dev',
-  vpcId: 'vpc-12345678',
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION,
-  },
-});
-```
-
-## 📊 **Infrastructure Features**
-
-### **Security Features**
-
-- ✅ **Network Security**: Proper security group configuration
-- ✅ **IAM Security**: Least-privilege access policies
-- ✅ **Data Encryption**: S3 and RDS encryption enabled
-- ✅ **Access Control**: SSH access restricted to specified CIDR
-
-### **Monitoring & Observability**
-
-- ✅ **CloudWatch Dashboard**: Real-time infrastructure metrics
-- ✅ **CloudWatch Alarms**: Proactive alerting system
-- ✅ **SNS Notifications**: Email alerts for critical events
-- ✅ **Log Management**: Centralized logging for all components
-- ✅ **Performance Insights**: Database performance monitoring
-
-### **Reliability & Backup**
-
-- ✅ **Multi-AZ RDS**: High availability database deployment
-- ✅ **Automated Backups**: Configurable backup retention
-- ✅ **Deletion Protection**: Production environment safeguards
-- ✅ **Elastic IP**: Static IP for consistent access
-
-### **Scalability & Flexibility**
-
-- ✅ **Multi-Region Support**: Deploy to any AWS region
-- ✅ **Configurable Features**: Enable/disable features as needed
-- ✅ **Environment-Specific**: Different configurations per environment
-- ✅ **Parameterized Configuration**: Flexible deployment options
-
-## 🎯 **Deployment Commands**
-
-### **Synthesize CloudFormation**
-
-```bash
-npm run build
-cdk synth
-```
-
-### **Deploy to AWS**
-
-```bash
-cdk deploy
-```
-
-### **Run Tests**
-
-```bash
-npm test
-```
-
-### **Code Quality Checks**
-
-```bash
-npm run format
-npm run lint
-```
-
-## 📈 **Performance & Cost Optimization**
-
-### **Cost Optimization Features**
-
-- **Configurable Monitoring**: Enable/disable features to control costs
-- **Efficient Resource Sizing**: T2.micro instances for development
-- **Backup Retention**: Configurable backup periods
-- **Resource Tagging**: Proper tagging for cost allocation
-
-### **Performance Features**
-
-- **CloudWatch Agent**: Efficient metric collection
-- **Performance Insights**: Database performance optimization
-- **Multi-AZ Deployment**: High availability without performance impact
-- **Optimized IAM Policies**: Minimal required permissions
-
-## 🔧 **Maintenance & Operations**
-
-### **Monitoring Dashboard**
-
-- Real-time CPU utilization graphs
-- Network traffic monitoring
-- Database performance metrics
-- Connection count tracking
-
-### **Alerting System**
-
-- CPU utilization alerts (80% threshold)
-- Instance status check failures
-- Database connection alerts
-- Email notifications via SNS
-
-### **Log Management**
-
-- Apache HTTP access logs
-- Apache HTTP error logs
-- RDS database logs
-- CloudWatch log retention (1 week)
-
-## 🎉 **Production Ready**
-
-This solution is **production-ready** with:
-
-- ✅ **Enterprise-grade monitoring** and alerting
-- ✅ **Comprehensive backup strategies**
-- ✅ **Multi-region deployment support**
-- ✅ **Security best practices**
-- ✅ **Cost optimization features**
-- ✅ **Comprehensive testing** (100% test pass rate)
-- ✅ **Code quality standards** (format and lint compliant)
-- ✅ **Well-documented** implementation
-
----
-
-**This solution represents a complete, production-ready AWS infrastructure with enterprise-grade features, comprehensive testing, and excellent documentation.** 🚀

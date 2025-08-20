@@ -1,16 +1,4 @@
-# Description:
-
-This CloudFormation template defines a secure, production-ready AWS environment
-within the us-west-2 region. It adheres to enterprise best practices including: - Private, KMS-encrypted S3 buckets - Least-privilege IAM roles for all services - Auto Scaling Groups (minimum 2 instances) with Launch Templates - Application Load Balancer (ALB) with multi-AZ support and HTTPS readiness - CloudTrail and AWS Config for monitoring and compliance - Dedicated VPC with public and private subnets - NAT Gateways for private subnet internet access - Uniform tagging for 'Environment: Production' and 'Project: IaC - AWS Nova Model Breaking'
-
-# Special Notes:
-
-- Conditional logic is implemented to reuse existing VPCs, subnets, S3 buckets,
-  and IAM roles to prevent deployment failures in busy environments.
-- Multi-AZ and ELB integration ensure high availability and fault tolerance.
-- Designed for enterprise-grade deployment and AWS best practices compliance.
-
-```yml
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Secure Production Environment with Multi-AZ, ELB with HTTPS, Auto Scaling, CloudTrail, AWS Config, and full tagging.
 Metadata:
@@ -729,4 +717,54 @@ Outputs:
   ALBEndpoint:
     Description: 'ALB DNS Name'
     Value: !GetAtt ProdALB.DNSName
+  PublicRouteTableId:
+    Description: 'Public Route Table ID'
+    Value: !If [CreateVPC, !Ref PublicRouteTable, !Ref 'AWS::NoValue']
+  PrivateRouteTableAId:
+    Description: 'Private Route Table A ID'
+    Value:
+      !If [CreatePrivateSubnets, !Ref PrivateRouteTableA, !Ref 'AWS::NoValue']
+  PrivateRouteTableBId:
+    Description: 'Private Route Table B ID'
+    Value:
+      !If [CreatePrivateSubnets, !Ref PrivateRouteTableB, !Ref 'AWS::NoValue']
+  NatGW1Id:
+    Description: 'NAT Gateway 1 ID'
+    Value: !If [CreateVPC, !Ref NatGW1, !Ref 'AWS::NoValue']
+  NatGW2Id:
+    Description: 'NAT Gateway 2 ID'
+    Value: !If [CreateVPC, !Ref NatGW2, !Ref 'AWS::NoValue']
+  ProdSecurityGroupId:
+    Description: 'Production Security Group ID'
+    Value: !Ref ProdSecurityGroup
+  EC2RoleName:
+    Description: 'EC2 IAM Role Name'
+    Value: !Ref EC2Role
+  EC2InstanceProfileName:
+    Description: 'EC2 Instance Profile Name'
+    Value: !Ref EC2InstanceProfile
+  ConfigRoleName:
+    Description: 'Config IAM Role Name'
+    Value: !Ref ConfigRole
+  ProdTrailBucketName:
+    Description: 'CloudTrail S3 Bucket Name'
+    Value: !Ref ProdTrailBucket
+  CloudTrailKMSKeyId:
+    Description: 'CloudTrail KMS Key ID'
+    Value: !Ref CloudTrailKMSKey
+  ProdCloudTrailName:
+    Description: 'CloudTrail Name'
+    Value: !Ref ProdCloudTrail
+  ProdASGName:
+    Description: 'Auto Scaling Group Name'
+    Value: !Ref ProdASG
+  ProdLaunchTemplateName:
+    Description: 'Launch Template Name'
+    Value: !Ref ProdLaunchTemplate
+  ConfigRecorderName:
+    Description: 'Config Recorder Name'
+    Value: !Ref ConfigRecorder
+  S3BucketCleanupFunctionName:
+    Description: 'S3 Bucket Cleanup Lambda Function Name'
+    Value: !Ref S3BucketCleanupFunction
 ```

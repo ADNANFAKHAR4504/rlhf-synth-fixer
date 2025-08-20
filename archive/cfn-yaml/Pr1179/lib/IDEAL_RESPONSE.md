@@ -1,320 +1,405 @@
-# CloudFormation Template: Secure Cloud Environment with High Availability
-
-## Template Overview
-
-This CloudFormation template deploys a production-ready, highly available, and secure cloud environment on AWS. It implements best practices for infrastructure as code, network isolation, and auto-scaling capabilities.
-
-## Infrastructure Components
-
-### 1. VPC & Networking
-
 ```yaml
-# Virtual Private Cloud with DNS support
-VPC:
-  Type: AWS::EC2::VPC
-  Properties:
-    CidrBlock: !Ref VpcCIDR
-    EnableDnsHostnames: true
-    EnableDnsSupport: true
-    Tags:
-      - Key: Name
-        Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPC'
-```
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-ready highly available and secure cloud environment with VPC, EC2 Auto Scaling, and security groups'
 
-**Key Features:**
-- Configurable CIDR block (default: 10.192.0.0/16)
-- DNS hostnames and support enabled for service discovery
-- Environment-based naming with suffix for multi-deployment support
+Parameters:
+  EnvironmentSuffix:
+    Description: A suffix to ensure unique resource names across deployments
+    Type: String
+    Default: dev
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]*$'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters and hyphens
 
-### 2. Internet Gateway & Routing
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+    Default: Production
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]*$'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters and hyphens
 
-```yaml
-# Internet Gateway for public internet access
-InternetGateway:
-  Type: AWS::EC2::InternetGateway
-  
-# Route table with internet route
-DefaultPublicRoute:
-  Type: AWS::EC2::Route
-  DependsOn: InternetGatewayAttachment
-  Properties:
-    RouteTableId: !Ref PublicRouteTable
-    DestinationCidrBlock: 0.0.0.0/0
-    GatewayId: !Ref InternetGateway
-```
+  VpcCIDR:
+    Description: CIDR block for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
 
-**Implementation:**
-- Internet Gateway attached to VPC for public connectivity
-- Public route table with default route to IGW
-- Proper dependency management with DependsOn
+  PublicSubnet1CIDR:
+    Description: CIDR block for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.192.10.0/24
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
 
-### 3. High Availability Subnets
+  PublicSubnet2CIDR:
+    Description: CIDR block for the public subnet in the second Availability Zone
+    Type: String
+    Default: 10.192.11.0/24
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
 
-```yaml
-# Public Subnet in AZ1
-PublicSubnet1:
-  Type: AWS::EC2::Subnet
-  Properties:
-    VpcId: !Ref VPC
-    AvailabilityZone: !Select [0, !GetAZs '']
-    CidrBlock: !Ref PublicSubnet1CIDR
-    MapPublicIpOnLaunch: true
+  InstanceType:
+    Description: EC2 instance type for the Auto Scaling Group
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.nano
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - t3.2xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+    ConstraintDescription: Must be a valid EC2 instance type
 
-# Public Subnet in AZ2
-PublicSubnet2:
-  Type: AWS::EC2::Subnet
-  Properties:
-    VpcId: !Ref VPC
-    AvailabilityZone: !Select [1, !GetAZs '']
-    CidrBlock: !Ref PublicSubnet2CIDR
-    MapPublicIpOnLaunch: true
-```
+  KeyPairName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances (optional)
+    Type: String
+    Default: 'MyKeyPair'
+    ConstraintDescription: Leave empty if SSH access is not required
 
-**High Availability Design:**
-- Two public subnets in different Availability Zones
-- Automatic public IP assignment for instances
-- Separate CIDR blocks for network isolation
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI ID (automatically resolved)
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
-### 4. Security Groups with Least Privilege
+  MinSize:
+    Description: Minimum number of instances in Auto Scaling Group
+    Type: Number
+    Default: 2
+    MinValue: 2
+    MaxValue: 10
 
-```yaml
-WebServerSecurityGroup:
-  Type: AWS::EC2::SecurityGroup
-  Properties:
-    SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        CidrIp: 0.0.0.0/0
-        Description: 'Allow HTTP traffic from anywhere'
-      - IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        CidrIp: 0.0.0.0/0
-        Description: 'Allow HTTPS traffic from anywhere'
-      - IpProtocol: tcp
-        FromPort: 22
-        ToPort: 22
-        CidrIp: !Ref VpcCIDR  # Restricted to VPC only
-        Description: 'Allow SSH access from within VPC'
-    SecurityGroupEgress:
-      # Limited egress rules for essential services only
-```
+  MaxSize:
+    Description: Maximum number of instances in Auto Scaling Group
+    Type: Number
+    Default: 6
+    MinValue: 2
+    MaxValue: 20
 
-**Security Best Practices:**
-- HTTP/HTTPS open to internet for web traffic
-- SSH restricted to VPC CIDR only
-- Minimal egress rules (HTTP, HTTPS, DNS, NTP)
-- Descriptive rule documentation
+  DesiredCapacity:
+    Description: Desired number of instances in Auto Scaling Group
+    Type: Number
+    Default: 2
+    MinValue: 2
+    MaxValue: 10
 
-### 5. Auto Scaling with Launch Template
-
-```yaml
-# Conditional KeyPair handling
+# Conditions
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
-LaunchTemplate:
-  Type: AWS::EC2::LaunchTemplate
-  Properties:
-    LaunchTemplateData:
-      ImageId: !Ref LatestAmiId
-      InstanceType: !Ref InstanceType
-      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
-      IamInstanceProfile:
-        Name: !Ref EC2InstanceProfile
-      SecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-```
+Resources:
+  # VPC Configuration
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPC'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Main VPC for highly available infrastructure'
 
-**Advanced Features:**
-- Conditional KeyPair (optional SSH access)
-- Latest Amazon Linux 2 AMI via SSM Parameter
-- IAM Instance Profile for CloudWatch monitoring
-- UserData script for web server setup
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-IGW'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Internet Gateway for public access'
 
-### 6. Auto Scaling Group Configuration
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
 
-```yaml
-AutoScalingGroup:
-  Type: AWS::AutoScaling::AutoScalingGroup
-  Properties:
-    AutoScalingGroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ASG'
-    VPCZoneIdentifier:
-      - !Ref PublicSubnet1
-      - !Ref PublicSubnet2
-    LaunchTemplate:
-      LaunchTemplateId: !Ref LaunchTemplate
-      Version: !GetAtt LaunchTemplate.LatestVersionNumber
-    MinSize: !Ref MinSize  # Default: 2
-    MaxSize: !Ref MaxSize  # Default: 6
-    DesiredCapacity: !Ref DesiredCapacity  # Default: 2
-    HealthCheckType: EC2
-    HealthCheckGracePeriod: 300
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet1CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Subnet-AZ1'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Public subnet in first availability zone'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Ref PublicSubnet2CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Subnet-AZ2'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Public subnet in second availability zone'
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-Public-Routes'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Route table for public subnets'
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Security Groups
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer-SG'
+      GroupDescription: Security group for web servers allowing HTTP and HTTPS traffic
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTP traffic from anywhere'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow HTTPS traffic from anywhere'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref VpcCIDR
+          Description: 'Allow SSH access from within VPC'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow outbound HTTP traffic'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow outbound HTTPS traffic'
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow outbound DNS over TCP'
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow outbound DNS over UDP'
+        - IpProtocol: tcp
+          FromPort: 123
+          ToPort: 123
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow outbound NTP traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer-SecurityGroup'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'Security group for web server instances'
+
+  # IAM Role for EC2 instances
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-EC2-Role'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Purpose
+          Value: 'IAM role for EC2 instances'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  # Launch Template
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-LaunchTemplate'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+        IamInstanceProfile:
+          Name: !Ref EC2InstanceProfile
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "<h1>Hello from ${EnvironmentName} Environment</h1>" > /var/www/html/index.html
+            echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+            echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer'
+              - Key: Environment
+                Value: !Ref EnvironmentName
+              - Key: Purpose
+                Value: 'Web server instance'
+          - ResourceType: volume
+            Tags:
+              - Key: Name
+                Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WebServer-Volume'
+              - Key: Environment
+                Value: !Ref EnvironmentName
+              - Key: Purpose
+                Value: 'Root volume for web server'
+
+  # Auto Scaling Group
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ASG'
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: !Ref MinSize
+      MaxSize: !Ref MaxSize
+      DesiredCapacity: !Ref DesiredCapacity
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ASG'
+          PropagateAtLaunch: false
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+        - Key: Purpose
+          Value: 'Auto Scaling Group for web servers'
+          PropagateAtLaunch: true
     UpdatePolicy:
       AutoScalingRollingUpdate:
         MinInstancesInService: 1
         MaxBatchSize: 1
         PauseTime: PT5M
-```
+        WaitOnResourceSignals: false
 
-**High Availability Features:**
-- Multi-AZ deployment across two subnets
-- Minimum 2 instances for redundancy
-- Health checks with 5-minute grace period
-- Rolling update policy for zero-downtime deployments
-
-## Key Improvements & Best Practices
-
-### 1. Environment Isolation
-- **EnvironmentSuffix Parameter**: Enables multiple deployments in same account
-- **Unique Resource Names**: All resources include environment suffix
-- **Export Names**: Include environment suffix for cross-stack references
-
-### 2. Security Enhancements
-- **No Retain Policies**: All resources are destroyable (no data retention issues)
-- **IAM Roles**: EC2 instances use IAM roles instead of access keys
-- **CloudWatch Integration**: Managed policy for monitoring
-- **Network Isolation**: Private SSH access, public web access
-
-### 3. Operational Excellence
-- **Parameter Validation**: AllowedPattern for CIDR blocks and names
-- **Comprehensive Tagging**: Environment, Purpose, and Name tags
-- **Clear Descriptions**: All parameters and outputs documented
-- **Intrinsic Functions**: Proper use of !Ref, !Sub, !GetAtt
-
-### 4. Scalability & Reliability
-- **Auto Scaling**: Automatic capacity management
-- **Multi-AZ**: Resources distributed across availability zones
-- **Health Checks**: EC2 health monitoring
-- **Update Policies**: Safe rolling deployments
-
-## Template Parameters
-
-```yaml
-Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Default: dev
-    Description: Suffix for unique resource naming
-    
-  EnvironmentName:
-    Type: String
-    Default: Production
-    Description: Environment name prefix
-    
-  VpcCIDR:
-    Type: String
-    Default: 10.192.0.0/16
-    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}...'
-    
-  InstanceType:
-    Type: String
-    Default: t3.micro
-    AllowedValues: [t3.nano, t3.micro, t3.small, ...]
-    
-  KeyPairName:
-    Type: String
-    Default: ''
-    Description: Optional EC2 KeyPair for SSH access
-```
-
-## Template Outputs
-
-```yaml
 Outputs:
   VPC:
-    Description: VPC ID
+    Description: A reference to the created VPC
     Value: !Ref VPC
     Export:
       Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPCID'
-      
+
+  VPCCidr:
+    Description: CIDR block of the VPC
+    Value: !Ref VpcCIDR
+    Export:
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPC-CIDR'
+
   PublicSubnets:
-    Description: List of public subnet IDs
+    Description: A list of the public subnets
     Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
     Export:
       Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-PUB-NETS'
-      
+
+  PublicSubnet1:
+    Description: A reference to the public subnet in the 1st Availability Zone
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-PUB1-SN'
+
+  PublicSubnet2:
+    Description: A reference to the public subnet in the 2nd Availability Zone
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-PUB2-SN'
+
+  WebServerSecurityGroup:
+    Description: Security group with HTTP and HTTPS access
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-WEB-SG'
+
   AutoScalingGroupName:
-    Description: Auto Scaling Group name
+    Description: Name of the Auto Scaling Group
     Value: !Ref AutoScalingGroup
     Export:
       Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ASG-NAME'
+
+  LaunchTemplateId:
+    Description: ID of the Launch Template
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-LT-ID'
+
+  InternetGateway:
+    Description: A reference to the Internet Gateway
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-IGW'
 ```
-
-## Deployment Instructions
-
-### 1. Validate Template
-```bash
-aws cloudformation validate-template \
-  --template-body file://lib/TapStack.yml
-```
-
-### 2. Deploy Stack
-```bash
-aws cloudformation deploy \
-  --template-file lib/TapStack.yml \
-  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
-  --capabilities CAPABILITY_IAM \
-  --parameter-overrides \
-    EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
-    KeyPairName="" \
-  --tags \
-    Environment=Production \
-    Purpose=SecureCloudEnvironment
-```
-
-### 3. Verify Deployment
-```bash
-# Check stack status
-aws cloudformation describe-stacks \
-  --stack-name TapStack${ENVIRONMENT_SUFFIX}
-
-# Get outputs
-aws cloudformation describe-stacks \
-  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
-  --query 'Stacks[0].Outputs'
-```
-
-### 4. Clean Up
-```bash
-aws cloudformation delete-stack \
-  --stack-name TapStack${ENVIRONMENT_SUFFIX}
-```
-
-## Testing Coverage
-
-### Unit Tests (90%+ Coverage)
-- Template structure validation
-- Parameter configuration checks
-- Resource property verification
-- Security group rule validation
-- High availability configuration
-- Naming convention compliance
-
-### Integration Tests
-- VPC and subnet connectivity
-- Internet Gateway attachment
-- Security group effectiveness
-- Auto Scaling Group operations
-- Multi-AZ distribution
-- Resource tagging validation
-
-## Conclusion
-
-This CloudFormation template provides a robust, secure, and scalable foundation for cloud infrastructure. It implements AWS best practices for:
-
-- **High Availability**: Multi-AZ deployment with auto-scaling
-- **Security**: Least privilege access, network isolation
-- **Operational Excellence**: Comprehensive tagging, monitoring
-- **Cost Optimization**: Right-sized instances, auto-scaling
-- **Reliability**: Health checks, rolling updates
-
-The template is production-ready and can be deployed multiple times in the same account using the EnvironmentSuffix parameter for complete isolation between deployments.
