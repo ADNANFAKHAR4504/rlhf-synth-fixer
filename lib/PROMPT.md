@@ -4,13 +4,13 @@ You are an expert DevOps engineer specializing in AWS multi-region infrastructur
 Generate a complete, modular Terraform configuration that deploys a highly available and scalable web application across two AWS regions.
 
 # Requirements
-- Deploy all application components in **two AWS regions** using the Terraform provider alias feature.
-- Implement **AWS Auto Scaling** groups to handle traffic spikes and maintain responsiveness.
-- Use an **Elastic Load Balancer (ELB/ALB)** in each region to distribute traffic across instances.
-- Configure **Amazon Route 53** with health checks and failover routing to automatically route traffic to the healthy region in case of regional failure.
-- Ensure all AWS resources are defined using **Terraform HCL** (no manual steps).
-- The solution must be **modularized** (separate modules for VPC, compute/ASG, load balancer, DNS).
-- The configuration must **validate successfully with AWS** and be deployable as-is.
+- Deploy all application components in two AWS regions using the Terraform provider alias feature.
+- Implement AWS Auto Scaling groups to handle traffic spikes and maintain responsiveness.
+- Use an Elastic Load Balancer (ELB/ALB) in each region to distribute traffic across instances.
+- Configure Amazon Route 53 with health checks and failover routing to automatically route traffic to the healthy region in case of regional failure.
+- Ensure all AWS resources are defined using Terraform HCL (no manual steps).
+- The solution must be modularized (separate modules for VPC, compute/ASG, load balancer, DNS).
+- The configuration must validate successfully with AWS and be deployable as-is.
 
 # Expected Output
 - A full Terraform codebase (HCL) with:
