@@ -9,7 +9,7 @@ import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwa
 import * as fs from "fs";
 import * as path from "path";
 
-const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "eu-west-1";
+const awsRegion = "eu-west-1";
 const s3Client = new S3Client({ region: awsRegion });
 const iamClient = new IAMClient({ region: awsRegion });
 const ec2Client = new EC2Client({ region: awsRegion });
