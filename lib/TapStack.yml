@@ -1134,7 +1134,7 @@ Resources:
     Properties:
       ResourceArn: !GetAtt WebACL.Arn
       LogDestinationConfigs:
-        - !GetAtt WAFLogGroup.Arn
+        - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${WAFLogGroup}'
       RedactedFields:
         - SingleHeader:
             Name: 'authorization'
