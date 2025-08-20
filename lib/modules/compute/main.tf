@@ -64,6 +64,7 @@ resource "aws_autoscaling_group" "main" {
       on_demand_base_capacity                  = 0
       on_demand_percentage_above_base_capacity = 0
       spot_allocation_strategy                 = "capacity-optimized"
+      # Removed spot_instance_pools as it's only compatible with lowest-price strategy
     }
   }
 
