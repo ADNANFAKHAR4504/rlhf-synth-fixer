@@ -1350,7 +1350,7 @@ Outputs:
 - **WAF**: Web application firewall with managed rule sets
 
 ### 🛡️ **Best Practices Implemented**
-- All resources use the `SecureApp-` prefix as required
+- All resources use the `SecureApp` prefix as required
 - No hardcoded regions (uses dynamic references)
 - Proper resource dependencies and conditions
 - Comprehensive tagging strategy

@@ -36,7 +36,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: SecureApp-VPC
+          Value: SecureAppVPC
 
   # Internet Gateway
   SecureAppInternetGateway:
@@ -44,7 +44,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: SecureApp-InternetGateway
+          Value: SecureAppInternetGateway
 
   SecureAppVPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -62,7 +62,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: SecureApp-PublicSubnet1
+          Value: SecureAppPublicSubnet1
 
   SecureAppPublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -73,7 +73,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: SecureApp-PublicSubnet2
+          Value: SecureAppPublicSubnet2
 
   # Private Subnets
   SecureAppPrivateSubnet1:
@@ -84,7 +84,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateSubnet1
+          Value: SecureAppPrivateSubnet1
 
   SecureAppPrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -94,7 +94,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateSubnet2
+          Value: SecureAppPrivateSubnet2
 
   # NAT Gateways for Private Subnets
   SecureAppNATGateway1EIP:
@@ -104,7 +104,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: SecureApp-NATGateway1EIP
+          Value: SecureAppNATGateway1EIP
 
   SecureAppNATGateway2EIP:
     Type: AWS::EC2::EIP
@@ -113,7 +113,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: SecureApp-NATGateway2EIP
+          Value: SecureAppNATGateway2EIP
 
   SecureAppNATGateway1:
     Type: AWS::EC2::NatGateway
@@ -122,7 +122,7 @@ Resources:
       SubnetId: !Ref SecureAppPublicSubnet1
       Tags:
         - Key: Name
-          Value: SecureApp-NATGateway1
+          Value: SecureAppNATGateway1
 
   SecureAppNATGateway2:
     Type: AWS::EC2::NatGateway
@@ -131,7 +131,7 @@ Resources:
       SubnetId: !Ref SecureAppPublicSubnet2
       Tags:
         - Key: Name
-          Value: SecureApp-NATGateway2
+          Value: SecureAppNATGateway2
 
   # Route Tables
   SecureAppPublicRouteTable:
@@ -140,7 +140,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PublicRouteTable
+          Value: SecureAppPublicRouteTable
 
   SecureAppPrivateRouteTable1:
     Type: AWS::EC2::RouteTable
@@ -148,7 +148,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateRouteTable1
+          Value: SecureAppPrivateRouteTable1
 
   SecureAppPrivateRouteTable2:
     Type: AWS::EC2::RouteTable
@@ -156,7 +156,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateRouteTable2
+          Value: SecureAppPrivateRouteTable2
 
   # Routes
   SecureAppPublicRoute:
@@ -213,7 +213,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PublicNetworkACL
+          Value: SecureAppPublicNetworkACL
 
   SecureAppPrivateNetworkACL:
     Type: AWS::EC2::NetworkAcl
@@ -221,7 +221,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateNetworkACL
+          Value: SecureAppPrivateNetworkACL
 
   # Network ACL Rules - Public
   SecureAppPublicNetworkACLInboundRule:
@@ -311,12 +311,12 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Name
-          Value: SecureApp-KMSKey
+          Value: SecureAppKMSKey
 
   SecureAppKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/SecureApp-Key
+      AliasName: alias/SecureAppKey
       TargetKeyId: !Ref SecureAppKMSKey
 
   # S3 Bucket for CloudTrail Logs
@@ -337,7 +337,7 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Name
-          Value: SecureApp-CloudTrailBucket
+          Value: SecureAppCloudTrailBucket
 
   # S3 Bucket Policy for CloudTrail
   SecureAppCloudTrailBucketPolicy:
@@ -380,13 +380,13 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Name
-          Value: SecureApp-DataBucket
+          Value: SecureAppDataBucket
 
   # IAM Role for EC2 Instances
   SecureAppEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: SecureApp-EC2Role
+      RoleName: SecureAppEC2Role
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -396,7 +396,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: SecureApp-EC2MinimalPolicy
+        - PolicyName: SecureAppEC2MinimalPolicy
           PolicyDocument:
             Statement:
               - Effect: Allow
@@ -412,12 +412,12 @@ Resources:
                 Resource: '*'
       Tags:
         - Key: Name
-          Value: SecureApp-EC2Role
+          Value: SecureAppEC2Role
 
   SecureAppEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: SecureApp-EC2InstanceProfile
+      InstanceProfileName: SecureAppEC2InstanceProfile
       Roles:
         - !Ref SecureAppEC2Role
 
@@ -426,7 +426,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: SecureAppCloudTrailBucketPolicy
     Properties:
-      TrailName: SecureApp-CloudTrail
+      TrailName: SecureAppCloudTrail
       S3BucketName: !Ref SecureAppCloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -441,13 +441,13 @@ Resources:
                 - !Sub '${SecureAppDataBucket}/*'
       Tags:
         - Key: Name
-          Value: SecureApp-CloudTrail
+          Value: SecureAppCloudTrail
 
   # WAF Web ACL
   SecureAppWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: SecureApp-WebACL
+      Name: SecureAppWebACL
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -482,7 +482,7 @@ Resources:
         MetricName: SecureAppWebACL
       Tags:
         - Key: Name
-          Value: SecureApp-WebACL
+          Value: SecureAppWebACL
 
   # GuardDuty Detector
   SecureAppGuardDutyDetector:
@@ -498,7 +498,7 @@ Resources:
             EbsVolumes: true
       Tags:
         - Key: Name
-          Value: SecureApp-GuardDutyDetector
+          Value: SecureAppGuardDutyDetector
 
   # Config Configuration Recorder
   SecureAppConfigServiceRole:
@@ -521,7 +521,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: SecureApp-ConfigBucket
+          Value: SecureAppConfigBucket
 
   SecureAppConfigBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -561,13 +561,13 @@ Resources:
   SecureAppConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: SecureApp-ConfigDeliveryChannel
+      Name: SecureAppConfigDeliveryChannel
       S3BucketName: !Ref SecureAppConfigBucket
 
   SecureAppConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: SecureApp-ConfigurationRecorder
+      Name: SecureAppConfigurationRecorder
       RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true
@@ -644,7 +644,7 @@ Outputs:
 - **WAF**: Web application firewall with managed rule sets
 
 ### 🛡️ **Best Practices Implemented**
-- All resources use the `SecureApp-` prefix as required
+- All resources use the `SecureApp` prefix as required
 - No hardcoded regions (uses dynamic references)
 - Proper resource dependencies and conditions
 - Comprehensive tagging strategy
@@ -692,7 +692,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: SecureApp-VPC
+          Value: SecureAppVPC
 
   # Internet Gateway
   SecureAppInternetGateway:
@@ -700,7 +700,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: SecureApp-InternetGateway
+          Value: SecureAppInternetGateway
 
   SecureAppVPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -718,7 +718,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: SecureApp-PublicSubnet1
+          Value: SecureAppPublicSubnet1
 
   SecureAppPublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -729,7 +729,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: SecureApp-PublicSubnet2
+          Value: SecureAppPublicSubnet2
 
   # Private Subnets
   SecureAppPrivateSubnet1:
@@ -740,7 +740,7 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateSubnet1
+          Value: SecureAppPrivateSubnet1
 
   SecureAppPrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -750,7 +750,7 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateSubnet2
+          Value: SecureAppPrivateSubnet2
 
   # NAT Gateways for Private Subnets
   SecureAppNATGateway1EIP:
@@ -760,7 +760,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: SecureApp-NATGateway1EIP
+          Value: SecureAppNATGateway1EIP
 
   SecureAppNATGateway2EIP:
     Type: AWS::EC2::EIP
@@ -769,7 +769,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: SecureApp-NATGateway2EIP
+          Value: SecureAppNATGateway2EIP
 
   SecureAppNATGateway1:
     Type: AWS::EC2::NatGateway
@@ -778,7 +778,7 @@ Resources:
       SubnetId: !Ref SecureAppPublicSubnet1
       Tags:
         - Key: Name
-          Value: SecureApp-NATGateway1
+          Value: SecureAppNATGateway1
 
   SecureAppNATGateway2:
     Type: AWS::EC2::NatGateway
@@ -787,7 +787,7 @@ Resources:
       SubnetId: !Ref SecureAppPublicSubnet2
       Tags:
         - Key: Name
-          Value: SecureApp-NATGateway2
+          Value: SecureAppNATGateway2
 
   # Route Tables
   SecureAppPublicRouteTable:
@@ -796,7 +796,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PublicRouteTable
+          Value: SecureAppPublicRouteTable
 
   SecureAppPrivateRouteTable1:
     Type: AWS::EC2::RouteTable
@@ -804,7 +804,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateRouteTable1
+          Value: SecureAppPrivateRouteTable1
 
   SecureAppPrivateRouteTable2:
     Type: AWS::EC2::RouteTable
@@ -812,7 +812,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateRouteTable2
+          Value: SecureAppPrivateRouteTable2
 
   # Routes
   SecureAppPublicRoute:
@@ -869,7 +869,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PublicNetworkACL
+          Value: SecureAppPublicNetworkACL
 
   SecureAppPrivateNetworkACL:
     Type: AWS::EC2::NetworkAcl
@@ -877,7 +877,7 @@ Resources:
       VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
-          Value: SecureApp-PrivateNetworkACL
+          Value: SecureAppPrivateNetworkACL
 
   # Network ACL Rules - Public
   SecureAppPublicNetworkACLInboundRule:
@@ -967,12 +967,12 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Name
-          Value: SecureApp-KMSKey
+          Value: SecureAppKMSKey
 
   SecureAppKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/SecureApp-Key
+      AliasName: alias/SecureAppKey
       TargetKeyId: !Ref SecureAppKMSKey
 
   # S3 Bucket for CloudTrail Logs
@@ -993,7 +993,7 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Name
-          Value: SecureApp-CloudTrailBucket
+          Value: SecureAppCloudTrailBucket
 
   # S3 Bucket Policy for CloudTrail
   SecureAppCloudTrailBucketPolicy:
@@ -1036,13 +1036,13 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Name
-          Value: SecureApp-DataBucket
+          Value: SecureAppDataBucket
 
   # IAM Role for EC2 Instances
   SecureAppEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: SecureApp-EC2Role
+      RoleName: SecureAppEC2Role
       AssumeRolePolicyDocument:
         Statement:
           - Effect: Allow
@@ -1052,7 +1052,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: SecureApp-EC2MinimalPolicy
+        - PolicyName: SecureAppEC2MinimalPolicy
           PolicyDocument:
             Statement:
               - Effect: Allow
@@ -1068,12 +1068,12 @@ Resources:
                 Resource: '*'
       Tags:
         - Key: Name
-          Value: SecureApp-EC2Role
+          Value: SecureAppEC2Role
 
   SecureAppEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: SecureApp-EC2InstanceProfile
+      InstanceProfileName: SecureAppEC2InstanceProfile
       Roles:
         - !Ref SecureAppEC2Role
 
@@ -1082,7 +1082,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: SecureAppCloudTrailBucketPolicy
     Properties:
-      TrailName: SecureApp-CloudTrail
+      TrailName: SecureAppCloudTrail
       S3BucketName: !Ref SecureAppCloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -1097,13 +1097,13 @@ Resources:
                 - !Sub '${SecureAppDataBucket}/*'
       Tags:
         - Key: Name
-          Value: SecureApp-CloudTrail
+          Value: SecureAppCloudTrail
 
   # WAF Web ACL
   SecureAppWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: SecureApp-WebACL
+      Name: SecureAppWebACL
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -1138,7 +1138,7 @@ Resources:
         MetricName: SecureAppWebACL
       Tags:
         - Key: Name
-          Value: SecureApp-WebACL
+          Value: SecureAppWebACL
 
   # GuardDuty Detector
   SecureAppGuardDutyDetector:
@@ -1154,7 +1154,7 @@ Resources:
             EbsVolumes: true
       Tags:
         - Key: Name
-          Value: SecureApp-GuardDutyDetector
+          Value: SecureAppGuardDutyDetector
 
   # Config Configuration Recorder
   SecureAppConfigServiceRole:
@@ -1177,7 +1177,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Name
-          Value: SecureApp-ConfigBucket
+          Value: SecureAppConfigBucket
 
   SecureAppConfigBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -1217,13 +1217,13 @@ Resources:
   SecureAppConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: SecureApp-ConfigDeliveryChannel
+      Name: SecureAppConfigDeliveryChannel
       S3BucketName: !Ref SecureAppConfigBucket
 
   SecureAppConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: SecureApp-ConfigurationRecorder
+      Name: SecureAppConfigurationRecorder
       RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true

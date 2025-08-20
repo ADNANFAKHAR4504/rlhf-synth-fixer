@@ -50,7 +50,7 @@ This document lists common model failures and misconfigurations when generating 
 - **Mitigation:** Enable AWS Config and define rules for all critical compliance checks.
 
 ## 10. Naming Conventions and Tagging
-- **Failure:** Resources do not use the 'SecureApp-' prefix or lack required tags.
+- **Failure:** Resources do not use the 'SecureApp' prefix or lack required tags.
 - **Impact:** Harder to manage, track, and audit resources.
 - **Mitigation:** Apply naming conventions and tags to all resources.
 

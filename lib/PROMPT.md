@@ -11,7 +11,7 @@ Design a secure and highly available AWS CloudFormation YAML template to impleme
 - Configure AWS KMS for secure encryption key management
 - Enable AWS GuardDuty for threat detection across utilized AWS regions
 - Set up AWS Config for continuous configuration compliance monitoring
-- Prepend all resource names with 'SecureApp-' prefix
+- Prepend all resource names with 'SecureApp' prefix
 - Configure CloudFormation stack namespace as 'SecureStack'
 
 # Constraints
@@ -28,14 +28,14 @@ Design a secure and highly available AWS CloudFormation YAML template to impleme
 - Use dynamic references for secrets (no hardcoded values)
 - Do not use 'Fn::Sub' unless variables are required
 - Avoid invalid properties in resource definitions
-- Follow company naming convention ('SecureApp-' prefix)
+- Follow company naming convention ('SecureApp' prefix)
 
 # Output Expectations
 - A single, production-ready CloudFormation YAML template that:
   - Implements all security and compliance requirements
   - Creates a highly available infrastructure across multiple AZs
   - Deploys all specified AWS resources without errors
-  - Uses descriptive logical resource names with 'SecureApp-' prefix
+  - Uses descriptive logical resource names with 'SecureApp' prefix
   - Follows AWS security best practices and guidelines
   - Enables comprehensive monitoring and threat detection
   - Passes AWS CloudFormation validation and cfn-lint checks
