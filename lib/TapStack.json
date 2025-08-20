@@ -188,7 +188,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "app-logs-${AWS::Region}-${AWS::AccountId}"
+                    "Fn::Sub": "app-log-${AWS::Region}-${AWS::AccountId}"
                 },
                 "LifecycleConfiguration": {
                     "Rules": [
