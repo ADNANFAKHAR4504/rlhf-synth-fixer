@@ -23,11 +23,8 @@ function extractDataSources(hcl: string): string[] {
 
 // Helper function to extract module blocks - UPDATED TO EXCLUDE COMMENTS
 function extractModuleBlocks(hcl: string): { [key: string]: string } {
-  // Remove multi-line commented blocks that contain module definitions
-  // This handles cases like: # module "name" { ... }
-  let cleanHcl = hcl.replace(/^#\s*module\s+"[^"]+"\s*\{[\s\S]*?^#\s*\}/gm, '');
-  // Also remove single comment lines
-  cleanHcl = cleanHcl.replace(/^\s*#.*$/gm, '');
+  // First remove commented-out module blocks to avoid counting them
+  const cleanHcl = hcl.replace(/^\s*#.*$/gm, ''); // Remove comment lines
   
   const moduleRegex = /module\s+"([^"]+)"\s*\{([\s\S]*?)\}/g;
   const modules: { [key: string]: string } = {};
@@ -236,11 +233,7 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
 
   test("validates all modules use relative path sources", () => {
     // FIXED: Remove commented modules and only count active modules
-    // Handle multi-line commented module blocks
-    let cleanHcl = hcl.replace(/^#\s*module\s+"[^"]+"\s*\{[\s\S]*?^#\s*\}/gm, '');
-    // Also remove single comment lines
-    cleanHcl = cleanHcl.replace(/^\s*#.*$/gm, '');
-    
+    const cleanHcl = hcl.replace(/^\s*#.*$/gm, ''); // Remove comment lines
     const moduleBlocks = cleanHcl.match(/module\s+"[^"]+"\s*{[^}]+}/g) || [];
     
     expect(moduleBlocks).toHaveLength(6); // 3 module types × 2 regions
