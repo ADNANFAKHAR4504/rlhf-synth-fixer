@@ -1,7 +1,3 @@
-# Secure S3 CloudFormation Template
-
-Here's a production-ready CloudFormation template that creates a secure S3 bucket with all the requirements you specified:
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure S3 bucket for data science team with VPC endpoint and KMS encryption'
