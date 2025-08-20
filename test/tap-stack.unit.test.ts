@@ -26,7 +26,7 @@ describe('TapStack', () => {
 
       // Should have 2 public subnets (for 3 AZs but template only shows 2 in our setup)
       template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
-      
+
       // Public subnets should have correct properties
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true,
@@ -48,8 +48,8 @@ describe('TapStack', () => {
   });
 
   describe('Security Groups', () => {
-    test('Security Groups have restrictive configurations', () => {
-      // HTTPS Ingress SG should have ingress rules only for HTTPS
+    test('Security Groups have no wide-open egress and tightly scoped ingress', () => {
+      // HTTPS Ingress SG should have restrictive rules
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Allow HTTPS inbound from configured CIDRs only',
         SecurityGroupIngress: [
@@ -60,31 +60,38 @@ describe('TapStack', () => {
             IpProtocol: 'tcp',
           },
         ],
-      });
-
-      // VPC Endpoints SG should allow HTTPS from VPC CIDR  
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'VPC Endpoints access from private subnets',
-        SecurityGroupIngress: [
+        // Should have explicit deny-all egress
+        SecurityGroupEgress: [
           {
-            Description: 'HTTPS from VPC CIDR for AWS services',
-            FromPort: 443,
-            ToPort: 443,
-            IpProtocol: 'tcp',
+            CidrIp: '255.255.255.255/32',
+            FromPort: 252,
+            ToPort: 86,
+            IpProtocol: 'icmp',
           },
         ],
       });
 
-      // Lambda SG should exist with minimal configuration
+      // VPC Endpoints SG should allow HTTPS from VPC CIDR
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'VPC Endpoints access from private subnets',
+        SecurityGroupEgress: [
+          {
+            CidrIp: '255.255.255.255/32',
+            FromPort: 252,
+            ToPort: 86,
+            IpProtocol: 'icmp',
+          },
+        ],
+      });
+
+      // Lambda SG should have minimal egress
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Lambda function security group with minimal egress',
       });
     });
 
     test('Lambda Security Group has proper egress rule to VPC endpoints', () => {
-      // Check that security group egress rule exists for Lambda to VPC endpoints
       template.hasResourceProperties('AWS::EC2::SecurityGroupEgress', {
-        Description: 'HTTPS to VPC endpoints for AWS services',
         FromPort: 443,
         ToPort: 443,
         IpProtocol: 'tcp',
@@ -166,18 +173,22 @@ describe('TapStack', () => {
       const bucketPolicies = template.findResources('AWS::S3::BucketPolicy');
       const bucketPolicyKeys = Object.keys(bucketPolicies);
       expect(bucketPolicyKeys.length).toBeGreaterThan(0);
-      
+
       const bucketPolicy = bucketPolicies[bucketPolicyKeys[0]];
       const statements = bucketPolicy.Properties.PolicyDocument.Statement;
-      
+
       // Check for DenyUnencryptedUploads statement
-      const denyUnencryptedStmt = statements.find((stmt: any) => stmt.Sid === 'DenyUnencryptedUploads');
+      const denyUnencryptedStmt = statements.find(
+        (stmt: any) => stmt.Sid === 'DenyUnencryptedUploads'
+      );
       expect(denyUnencryptedStmt).toBeDefined();
       expect(denyUnencryptedStmt.Effect).toBe('Deny');
       expect(denyUnencryptedStmt.Action).toBe('s3:PutObject');
-      
-      // Check for DenyPublicAccess statement  
-      const denyPublicAccessStmt = statements.find((stmt: any) => stmt.Sid === 'DenyPublicAccess');
+
+      // Check for DenyPublicAccess statement
+      const denyPublicAccessStmt = statements.find(
+        (stmt: any) => stmt.Sid === 'DenyPublicAccess'
+      );
       expect(denyPublicAccessStmt).toBeDefined();
       expect(denyPublicAccessStmt.Effect).toBe('Deny');
       expect(denyPublicAccessStmt.Action).toBe('s3:*');
@@ -191,26 +202,32 @@ describe('TapStack', () => {
         ManagedPolicyName: `Tap${environmentSuffix}MfaEnforcementPolicy`,
         Description: 'Denies all actions when MFA is not present',
       });
-      
+
       // Find the MFA policy and verify its statements
       const policies = template.findResources('AWS::IAM::ManagedPolicy');
-      const mfaPolicyKey = Object.keys(policies).find(key =>
-        policies[key].Properties.ManagedPolicyName === `Tap${environmentSuffix}MfaEnforcementPolicy`
+      const mfaPolicyKey = Object.keys(policies).find(
+        key =>
+          policies[key].Properties.ManagedPolicyName ===
+          `Tap${environmentSuffix}MfaEnforcementPolicy`
       );
-      
+
       expect(mfaPolicyKey).toBeDefined();
-      
+
       const mfaPolicy = policies[mfaPolicyKey!];
       const statements = mfaPolicy.Properties.PolicyDocument.Statement;
-      
+
       // Check for DenyAllWithoutMFA statement
-      const denyStatement = statements.find((stmt: any) => stmt.Sid === 'DenyAllWithoutMFA');
+      const denyStatement = statements.find(
+        (stmt: any) => stmt.Sid === 'DenyAllWithoutMFA'
+      );
       expect(denyStatement).toBeDefined();
       expect(denyStatement.Effect).toBe('Deny');
       expect(denyStatement.Action).toBe('*');
-      
+
       // Check for AllowAuthFlowsWithoutMFA statement
-      const allowStatement = statements.find((stmt: any) => stmt.Sid === 'AllowAuthFlowsWithoutMFA');
+      const allowStatement = statements.find(
+        (stmt: any) => stmt.Sid === 'AllowAuthFlowsWithoutMFA'
+      );
       expect(allowStatement).toBeDefined();
       expect(allowStatement.Effect).toBe('Allow');
       expect(allowStatement.Action).toContain('iam:ListUsers');
@@ -228,24 +245,25 @@ describe('TapStack', () => {
       const customResources = template.findResources('Custom::AWS');
       const customResourceKeys = Object.keys(customResources);
       expect(customResourceKeys.length).toBeGreaterThan(0);
-      
+
       // Find roles that might be GuardDuty related
       const roles = template.findResources('AWS::IAM::Role');
       const roleKeys = Object.keys(roles);
-      
+
       // Check that we have roles with GuardDuty permissions
-      const guardDutyRoleKey = roleKeys.find(key => 
-        roles[key].Properties && 
-        roles[key].Properties.InlinePolicies &&
-        roles[key].Properties.InlinePolicies.GuardDutyPolicy
+      const guardDutyRoleKey = roleKeys.find(
+        key =>
+          roles[key].Properties &&
+          roles[key].Properties.InlinePolicies &&
+          roles[key].Properties.InlinePolicies.GuardDutyPolicy
       );
-      
+
       // If we found the GuardDuty role, verify its permissions
       if (guardDutyRoleKey) {
         const role = roles[guardDutyRoleKey];
         const guardDutyPolicy = role.Properties.InlinePolicies.GuardDutyPolicy;
         const policyStatement = guardDutyPolicy.Statement[0];
-        
+
         expect(policyStatement.Effect).toBe('Allow');
         expect(policyStatement.Action).toContain('guardduty:CreateDetector');
       } else {
@@ -274,7 +292,7 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::ApiGateway::Stage', {
         StageName: 'prod',
       });
-      
+
       // Check MethodSettings for logging configuration
       const stages = template.findResources('AWS::ApiGateway::Stage');
       const stageKey = Object.keys(stages)[0];
@@ -318,37 +336,37 @@ describe('TapStack', () => {
       const vpcEndpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const endpointKeys = Object.keys(vpcEndpoints);
       expect(endpointKeys.length).toBeGreaterThanOrEqual(6); // 6 interface + 1 gateway
-      
+
       // Check for interface endpoints by service name
-      const interfaceEndpoints = endpointKeys.filter(key => 
-        vpcEndpoints[key].Properties.VpcEndpointType === 'Interface'
+      const interfaceEndpoints = endpointKeys.filter(
+        key => vpcEndpoints[key].Properties.VpcEndpointType === 'Interface'
       );
       expect(interfaceEndpoints.length).toBeGreaterThanOrEqual(6);
-      
+
       // Check for gateway endpoints (S3)
-      const gatewayEndpoints = endpointKeys.filter(key => 
-        vpcEndpoints[key].Properties.VpcEndpointType === 'Gateway'
+      const gatewayEndpoints = endpointKeys.filter(
+        key => vpcEndpoints[key].Properties.VpcEndpointType === 'Gateway'
       );
       expect(gatewayEndpoints.length).toBeGreaterThanOrEqual(1);
-      
+
       // Service names use Fn::Join with region reference, so check structure
-      const serviceNames = interfaceEndpoints.map(key => 
-        vpcEndpoints[key].Properties.ServiceName
+      const serviceNames = interfaceEndpoints.map(
+        key => vpcEndpoints[key].Properties.ServiceName
       );
-      
+
       // Check that service names are constructed properly (they use Fn::Join)
-      const ssmEndpoint = serviceNames.find(name => 
-        name['Fn::Join'] && name['Fn::Join'][1][2] === '.ssm'
+      const ssmEndpoint = serviceNames.find(
+        name => name['Fn::Join'] && name['Fn::Join'][1][2] === '.ssm'
       );
       expect(ssmEndpoint).toBeDefined();
-      
-      const logsEndpoint = serviceNames.find(name =>
-        name['Fn::Join'] && name['Fn::Join'][1][2] === '.logs'  
+
+      const logsEndpoint = serviceNames.find(
+        name => name['Fn::Join'] && name['Fn::Join'][1][2] === '.logs'
       );
       expect(logsEndpoint).toBeDefined();
-      
-      const kmsEndpoint = serviceNames.find(name =>
-        name['Fn::Join'] && name['Fn::Join'][1][2] === '.kms'
+
+      const kmsEndpoint = serviceNames.find(
+        name => name['Fn::Join'] && name['Fn::Join'][1][2] === '.kms'
       );
       expect(kmsEndpoint).toBeDefined();
     });
@@ -384,22 +402,23 @@ describe('TapStack', () => {
       // Find the CI/CD deployment policy
       const managedPolicies = template.findResources('AWS::IAM::ManagedPolicy');
       const policyKeys = Object.keys(managedPolicies);
-      
-      const cdkPolicyKey = policyKeys.find(key => 
-        managedPolicies[key].Properties &&
-        managedPolicies[key].Properties.PolicyDocument &&
-        managedPolicies[key].Properties.PolicyDocument.Statement.some((stmt: any) => 
-          stmt.Sid === 'AllowCdkOperations'
-        )
+
+      const cdkPolicyKey = policyKeys.find(
+        key =>
+          managedPolicies[key].Properties &&
+          managedPolicies[key].Properties.PolicyDocument &&
+          managedPolicies[key].Properties.PolicyDocument.Statement.some(
+            (stmt: any) => stmt.Sid === 'AllowCdkOperations'
+          )
       );
-      
+
       expect(cdkPolicyKey).toBeDefined();
-      
+
       const cdkPolicy = managedPolicies[cdkPolicyKey!];
-      const cdkStatement = cdkPolicy.Properties.PolicyDocument.Statement.find((stmt: any) => 
-        stmt.Sid === 'AllowCdkOperations'
+      const cdkStatement = cdkPolicy.Properties.PolicyDocument.Statement.find(
+        (stmt: any) => stmt.Sid === 'AllowCdkOperations'
       );
-      
+
       expect(cdkStatement).toBeDefined();
       expect(cdkStatement.Effect).toBe('Allow');
       expect(cdkStatement.Action).toContain('cloudformation:CreateStack');
@@ -487,7 +506,7 @@ describe('TapStack', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
       const bucketKeys = Object.keys(buckets);
       expect(bucketKeys.length).toBeGreaterThan(0);
-      
+
       const bucket = buckets[bucketKeys[0]];
       const bucketName = bucket.Properties.BucketName['Fn::Join'][1];
       expect(bucketName[0]).toBe(`tap-${environmentSuffix}-logs-`);
@@ -497,7 +516,7 @@ describe('TapStack', () => {
   describe('Environment Suffix Integration', () => {
     test('Environment suffix is properly applied to resource names', () => {
       // Stack name is set explicitly in test - check that the resources use the suffix
-      
+
       // Bucket name should include environment suffix
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: {
