@@ -29,12 +29,18 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
     const maxCapacity = config.getNumber('maxCapacity') || 10;
     const desiredCapacity = config.getNumber('desiredCapacity') || 3;
     const dbUsername = config.get('dbUsername') || 'admin';
-    const allowedSshCidrs = config.getObject<string[]>('allowedSshCidrs') || [
-      '10.0.1.0/24',
-    ];
-    const allowedAlbCidrs = config.getObject<string[]>('allowedAlbCidrs') || [
-      '0.0.0.0/0',
-    ];
+    // Generate random secret for CloudFront header validation
+    const cfSecret = new random.RandomString(
+      `cf-secret-${environmentSuffix}`,
+      {
+        length: 32,
+        special: false,
+        upper: true,
+        lower: true,
+        numeric: true,
+      },
+      { parent: this }
+    );
 
     // Generate secure password
     const dbPassword = new random.RandomPassword(
@@ -63,7 +69,30 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       `secrets-kms-key-${environmentSuffix}`,
       {
         description: `KMS key for Secrets Manager - ${environmentSuffix}`,
-        deletionWindowInDays: 7,
+        deletionWindowInDays: 30,
+        policy: pulumi
+          .all([aws.getCallerIdentity().then(i => i.accountId)])
+          .apply(([accountId]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'Enable IAM User Permissions',
+                  Effect: 'Allow',
+                  Principal: { AWS: `arn:aws:iam::${accountId}:root` },
+                  Action: 'kms:*',
+                  Resource: '*',
+                },
+                {
+                  Sid: 'Allow Secrets Manager',
+                  Effect: 'Allow',
+                  Principal: { Service: 'secretsmanager.amazonaws.com' },
+                  Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
         tags: {
           Name: `secrets-kms-key-${environmentSuffix}`,
           Environment: 'production',
@@ -151,31 +180,6 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // VPC Flow Logs Policy
-    new aws.iam.RolePolicy(
-      `vpc-flow-logs-policy-${environmentSuffix}`,
-      {
-        role: vpcFlowLogsRole.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams',
-              ],
-              Resource: '*',
-            },
-          ],
-        }),
-      },
-      { provider, parent: this }
-    );
-
     // CloudWatch Log Groups (create before VPC Flow Logs)
     const vpcFlowLogsGroup = new aws.cloudwatch.LogGroup(
       `vpc-flow-logs-group-${environmentSuffix}`,
@@ -185,6 +189,32 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
         tags: {
           Environment: 'production',
         },
+      },
+      { provider, parent: this }
+    );
+
+    // VPC Flow Logs Policy
+    new aws.iam.RolePolicy(
+      `vpc-flow-logs-policy-${environmentSuffix}`,
+      {
+        role: vpcFlowLogsRole.id,
+        policy: vpcFlowLogsGroup.arn.apply(logGroupArn =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                Resource: `${logGroupArn}:*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: ['logs:CreateLogGroup'],
+                Resource: '*',
+              },
+            ],
+          })
+        ),
       },
       { provider, parent: this }
     );
@@ -386,25 +416,10 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
         vpcId: vpc.id,
         ingress: [
           {
-            description: 'HTTP',
+            description: 'HTTP from anywhere (CloudFront validated by header)',
             fromPort: 80,
             toPort: 80,
             protocol: 'tcp',
-            cidrBlocks: allowedAlbCidrs,
-          },
-          {
-            description: 'HTTPS',
-            fromPort: 443,
-            toPort: 443,
-            protocol: 'tcp',
-            cidrBlocks: allowedAlbCidrs,
-          },
-        ],
-        egress: [
-          {
-            fromPort: 0,
-            toPort: 0,
-            protocol: '-1',
             cidrBlocks: ['0.0.0.0/0'],
           },
         ],
@@ -429,19 +444,20 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
             protocol: 'tcp',
             securityGroups: [albSecurityGroup.id],
           },
-          {
-            description: 'SSH from allowed CIDRs',
-            fromPort: 22,
-            toPort: 22,
-            protocol: 'tcp',
-            cidrBlocks: allowedSshCidrs,
-          },
         ],
         egress: [
           {
-            fromPort: 0,
-            toPort: 0,
-            protocol: '-1',
+            description: 'HTTPS for updates and SSM',
+            fromPort: 443,
+            toPort: 443,
+            protocol: 'tcp',
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+          {
+            description: 'HTTP for updates',
+            fromPort: 80,
+            toPort: 80,
+            protocol: 'tcp',
             cidrBlocks: ['0.0.0.0/0'],
           },
         ],
@@ -467,9 +483,38 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
             securityGroups: [ec2SecurityGroup.id],
           },
         ],
+        egress: [],
         tags: {
           Name: `rds-sg-${environmentSuffix}`,
         },
+      },
+      { provider, parent: this }
+    );
+
+    // Add ALB egress rule after EC2 security group is created
+    new aws.ec2.SecurityGroupRule(
+      `alb-egress-to-ec2-${environmentSuffix}`,
+      {
+        type: 'egress',
+        fromPort: 80,
+        toPort: 80,
+        protocol: 'tcp',
+        sourceSecurityGroupId: ec2SecurityGroup.id,
+        securityGroupId: albSecurityGroup.id,
+      },
+      { provider, parent: this }
+    );
+
+    // Add EC2 egress rule for MySQL to RDS
+    new aws.ec2.SecurityGroupRule(
+      `ec2-egress-to-rds-${environmentSuffix}`,
+      {
+        type: 'egress',
+        fromPort: 3306,
+        toPort: 3306,
+        protocol: 'tcp',
+        sourceSecurityGroupId: rdsSecurityGroup.id,
+        securityGroupId: ec2SecurityGroup.id,
       },
       { provider, parent: this }
     );
@@ -506,7 +551,7 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
     const cloudWatchLogsPolicy = new aws.iam.Policy(
       `cloudwatch-logs-policy-${environmentSuffix}`,
       {
-        description: 'Policy for EC2 instances to write to CloudWatch Logs',
+        description: 'EC2 -> CloudWatch Logs & metrics',
         policy: pulumi
           .all([aws.getCallerIdentity().then(i => i.accountId)])
           .apply(([accountId]) =>
@@ -515,8 +560,12 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
               Statement: [
                 {
                   Effect: 'Allow',
+                  Action: ['logs:CreateLogGroup'],
+                  Resource: '*',
+                },
+                {
+                  Effect: 'Allow',
                   Action: [
-                    'logs:CreateLogGroup',
                     'logs:CreateLogStream',
                     'logs:PutLogEvents',
                     'logs:DescribeLogStreams',
@@ -530,7 +579,6 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
                   Condition: {
                     StringEquals: {
                       'cloudwatch:namespace': 'CustomApp/EC2',
-                      'aws:RequestedRegion': 'ap-south-1',
                     },
                   },
                 },
@@ -541,12 +589,22 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Attach policy to role
+    // Attach policies to role
     new aws.iam.RolePolicyAttachment(
       `ec2-role-policy-attachment-${environmentSuffix}`,
       {
         role: ec2Role.name,
         policyArn: cloudWatchLogsPolicy.arn,
+      },
+      { provider, parent: this }
+    );
+
+    // Attach SSM Session Manager policy for secure access
+    new aws.iam.RolePolicyAttachment(
+      `ec2-ssm-policy-attachment-${environmentSuffix}`,
+      {
+        role: ec2Role.name,
+        policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
       },
       { provider, parent: this }
     );
@@ -660,7 +718,7 @@ EOF
         name: `app-launch-template-${environmentSuffix}`,
         imageId: amazonLinuxAmi.then(ami => ami.id),
         instanceType: 't3.micro',
-        keyName: config.get('keyPairName') || undefined, // Use config for key pair name
+        // SSH access removed - use SSM Session Manager instead
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
         iamInstanceProfile: {
           name: instanceProfile.name,
@@ -710,6 +768,66 @@ EOF
       { provider, parent: this }
     );
 
+    // S3 Bucket Versioning
+    new aws.s3.BucketVersioningV2(
+      `${environmentSuffix}-alb-logs-bucket-versioning`,
+      {
+        bucket: albLogsBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      },
+      { provider, parent: this }
+    );
+
+    // S3 Bucket Server-Side Encryption
+    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+      `${environmentSuffix}-alb-logs-bucket-encryption`,
+      {
+        bucket: albLogsBucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      },
+      { provider, parent: this }
+    );
+
+    // S3 Bucket Public Access Block
+    new aws.s3.BucketPublicAccessBlock(
+      `${environmentSuffix}-alb-logs-bucket-pab`,
+      {
+        bucket: albLogsBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { provider, parent: this }
+    );
+
+    // S3 Bucket Lifecycle Configuration
+    new aws.s3.BucketLifecycleConfigurationV2(
+      `${environmentSuffix}-alb-logs-bucket-lifecycle`,
+      {
+        bucket: albLogsBucket.id,
+        rules: [
+          {
+            id: 'delete-old-logs',
+            status: 'Enabled',
+            expiration: {
+              days: 90,
+            },
+          },
+        ],
+      },
+      { provider, parent: this }
+    );
+
     // S3 Bucket Policy for ALB access logs
     new aws.s3.BucketPolicy(
       `${environmentSuffix}-alb-logs-bucket-policy`,
@@ -726,6 +844,9 @@ EOF
                 },
                 Action: 's3:PutObject',
                 Resource: `arn:aws:s3:::${bucketName}/*`,
+                Condition: {
+                  StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' },
+                },
               },
             ],
           })
@@ -783,11 +904,85 @@ EOF
       { provider, parent: this }
     );
 
+    // ALB HTTP Listener with CloudFront header validation
+    const albListener = new aws.lb.Listener(
+      `app-alb-http-listener-${environmentSuffix}`,
+      {
+        loadBalancerArn: alb.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: [
+          {
+            type: 'fixed-response',
+            fixedResponse: {
+              contentType: 'text/plain',
+              statusCode: '403',
+              messageBody: 'Access Denied',
+            },
+          },
+        ],
+      },
+      { provider, parent: this }
+    );
+
+    // Allow traffic only with CloudFront secret header
+    new aws.lb.ListenerRule(
+      `only-cf-header-${environmentSuffix}`,
+      {
+        listenerArn: albListener.arn,
+        priority: 10,
+        actions: [{ type: 'forward', targetGroupArn: targetGroup.arn }],
+        conditions: [
+          {
+            httpHeader: {
+              httpHeaderName: 'X-From-CF',
+              values: [cfSecret.result],
+            },
+          },
+        ],
+      },
+      { provider, parent: this }
+    );
+
+    // CloudFront WAF WebACL
+    const cfWebAcl = new aws.wafv2.WebAcl(
+      `cf-web-acl-${environmentSuffix}`,
+      {
+        scope: 'CLOUDFRONT',
+        defaultAction: { allow: {} },
+        rules: [
+          {
+            name: 'AWS-AWSManagedRulesCommonRuleSet',
+            priority: 0,
+            overrideAction: { none: {} },
+            statement: {
+              managedRuleGroupStatement: {
+                vendorName: 'AWS',
+                name: 'AWSManagedRulesCommonRuleSet',
+              },
+            },
+            visibilityConfig: {
+              cloudwatchMetricsEnabled: true,
+              metricName: `cfCommonRules-${environmentSuffix}`,
+              sampledRequestsEnabled: true,
+            },
+          },
+        ],
+        visibilityConfig: {
+          cloudwatchMetricsEnabled: true,
+          metricName: `cfWebAcl-${environmentSuffix}`,
+          sampledRequestsEnabled: true,
+        },
+      },
+      { provider, parent: this }
+    );
+
     // CloudFront in front of ALB
     const cfDistribution = new aws.cloudfront.Distribution(
       `cf-dist-${environmentSuffix}`,
       {
         enabled: true,
+        webAclId: cfWebAcl.arn,
         origins: [
           {
             originId: `alb-origin-${environmentSuffix}`,
@@ -798,6 +993,12 @@ EOF
               httpsPort: 443,
               originSslProtocols: ['TLSv1.2'],
             },
+            customHeaders: [
+              {
+                name: 'X-From-CF',
+                value: cfSecret.result,
+              },
+            ],
           },
         ],
         defaultCacheBehavior: {
@@ -949,7 +1150,34 @@ EOF
       `rds-kms-key-${environmentSuffix}`,
       {
         description: `KMS key for RDS encryption - ${environmentSuffix}`,
-        deletionWindowInDays: 7,
+        deletionWindowInDays: 30,
+        policy: pulumi
+          .all([aws.getCallerIdentity().then(i => i.accountId)])
+          .apply(([accountId]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'Enable IAM User Permissions',
+                  Effect: 'Allow',
+                  Principal: { AWS: `arn:aws:iam::${accountId}:root` },
+                  Action: 'kms:*',
+                  Resource: '*',
+                },
+                {
+                  Sid: 'Allow RDS Service',
+                  Effect: 'Allow',
+                  Principal: { Service: 'rds.amazonaws.com' },
+                  Action: [
+                    'kms:Decrypt',
+                    'kms:GenerateDataKey',
+                    'kms:CreateGrant',
+                  ],
+                  Resource: '*',
+                },
+              ],
+            })
+          ),
         tags: {
           Name: `rds-kms-key-${environmentSuffix}`,
           Environment: 'production',
@@ -1082,97 +1310,6 @@ EOF
           TargetGroup: targetGroup.arnSuffix,
           LoadBalancer: alb.arnSuffix,
         },
-      },
-      { provider, parent: this }
-    );
-
-    // Create a WAF WebACL with comprehensive security rules
-    const webAcl = new aws.wafv2.WebAcl(
-      `web-acl-${environmentSuffix}`,
-      {
-        scope: 'REGIONAL',
-        defaultAction: { allow: {} },
-        rules: [
-          {
-            name: 'AWS-AWSManagedRulesCommonRuleSet',
-            priority: 0,
-            overrideAction: { none: {} },
-            statement: {
-              managedRuleGroupStatement: {
-                vendorName: 'AWS',
-                name: 'AWSManagedRulesCommonRuleSet',
-              },
-            },
-            visibilityConfig: {
-              sampledRequestsEnabled: true,
-              metricName: 'CommonRuleSetMetric',
-              cloudwatchMetricsEnabled: true,
-            },
-          },
-          {
-            name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
-            priority: 1,
-            overrideAction: { none: {} },
-            statement: {
-              managedRuleGroupStatement: {
-                vendorName: 'AWS',
-                name: 'AWSManagedRulesKnownBadInputsRuleSet',
-              },
-            },
-            visibilityConfig: {
-              sampledRequestsEnabled: true,
-              metricName: 'KnownBadInputsMetric',
-              cloudwatchMetricsEnabled: true,
-            },
-          },
-          {
-            name: 'AWS-AWSManagedRulesSQLiRuleSet',
-            priority: 2,
-            overrideAction: { none: {} },
-            statement: {
-              managedRuleGroupStatement: {
-                vendorName: 'AWS',
-                name: 'AWSManagedRulesSQLiRuleSet',
-              },
-            },
-            visibilityConfig: {
-              sampledRequestsEnabled: true,
-              metricName: 'SQLiRuleSetMetric',
-              cloudwatchMetricsEnabled: true,
-            },
-          },
-          {
-            name: 'RateLimitRule',
-            priority: 3,
-            action: { block: {} },
-            statement: {
-              rateBasedStatement: {
-                limit: 2000,
-                aggregateKeyType: 'IP',
-              },
-            },
-            visibilityConfig: {
-              sampledRequestsEnabled: true,
-              metricName: 'RateLimitMetric',
-              cloudwatchMetricsEnabled: true,
-            },
-          },
-        ],
-        visibilityConfig: {
-          cloudwatchMetricsEnabled: true,
-          metricName: 'webAclMetric',
-          sampledRequestsEnabled: true,
-        },
-      },
-      { provider, parent: this }
-    );
-
-    // Associate WAF WebACL with ALB
-    new aws.wafv2.WebAclAssociation(
-      `web-acl-association-${environmentSuffix}`,
-      {
-        resourceArn: alb.arn,
-        webAclArn: webAcl.arn,
       },
       { provider, parent: this }
     );
