@@ -165,7 +165,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
 
   describe('Counts', () => {
     test('should have expected number of parameters, resources, and outputs', () => {
-      expect(Object.keys(template.Parameters)).toHaveLength(5);
+      expect(Object.keys(template.Parameters)).toHaveLength(3);
       expect(Object.keys(template.Resources)).toHaveLength(20);
       expect(Object.keys(template.Outputs)).toHaveLength(9);
     });
