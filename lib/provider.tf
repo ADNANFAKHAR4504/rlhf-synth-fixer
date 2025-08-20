@@ -18,3 +18,9 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
+
+# Replica AWS provider for cross-region replication (us-east-1)
+provider "aws" {
+  alias  = "replica"
+  region = "us-east-1"
+}
