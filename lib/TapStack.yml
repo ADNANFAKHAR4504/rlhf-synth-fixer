@@ -749,7 +749,9 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !GetAtt CloudTrailLogGroup.Arn
+                Resource: 
+                  - !GetAtt CloudTrailLogGroup.Arn
+                  - !Sub '${CloudTrailLogGroup.Arn}:*'
 
   CloudTrailBucket:
     Type: AWS::S3::Bucket
