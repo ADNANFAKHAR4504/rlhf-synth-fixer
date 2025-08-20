@@ -45,7 +45,7 @@ describe("Terraform E2E Integration Tests", () => {
       ? outputs.bucket_tags.value
       : JSON.parse(outputs.bucket_tags?.value || "{}");
     environment = process.env.ENVIRONMENT_SUFFIX || bucketTags.Environment || "prod";
-    bucketRegion = outputs.bucket_region?.value || outputs.bucket_region || process.env.AWS_REGION || "us-east-1";
+    bucketRegion = outputs.bucket_region?.value || outputs.bucket_region || process.env.AWS_REGION || "us-west-2";
     testRegion = outputs.aws_region?.value || outputs.aws_region || bucketRegion;
 
     // Load resource ids/names from outputs
@@ -64,11 +64,11 @@ describe("Terraform E2E Integration Tests", () => {
 
     test("bucket exists in expected region", async () => {
       const loc = await s3.send(new GetBucketLocationCommand({ Bucket: bucketName }));
-      // AWS returns "US" for us-east-1, so normalize it
+      // AWS returns "US" for us-west-2, so normalize it
       const location = loc.LocationConstraint as string | undefined;
       const actualRegion =
         location === undefined || location === "" || location === "US"
-          ? "us-east-1"
+          ? "us-west-2"
           : location;
       expect(actualRegion).toBe(bucketRegion);
     });
