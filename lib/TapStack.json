@@ -1223,7 +1223,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                    "arn:aws:iam::aws:policy/service-role/VPCFlowLogsRole"
                 ],
                 "Tags": [
                     {

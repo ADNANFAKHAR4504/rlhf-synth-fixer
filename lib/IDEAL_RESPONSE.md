@@ -658,7 +658,7 @@ Resources:
               Service: vpc-flow-logs.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+        - arn:aws:iam::aws:policy/service-role/VPCFlowLogsRole
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-vpc-flow-logs-role'
