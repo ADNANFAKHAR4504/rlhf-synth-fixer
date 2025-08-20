@@ -14,19 +14,26 @@ const VARS_PATH = process.env.TF_VARS_PATH
   ? path.resolve(process.env.TF_VARS_PATH)
   : path.resolve(__dirname, "../lib/vars.tf");
 
-// Helper function to extract data source blocks
+// Helper function to extract data source blocks - FIXED REGEX
 function extractDataSources(hcl: string): string[] {
-  const dataSourceRegex = /data\s+"[^"]+"\s+"[^"]+"\s*{[\s\S]*?^}/gm;
+  // Updated regex to handle indented closing braces and multiline content properly
+  const dataSourceRegex = /data\s+"[^"]+"\s+"[^"]+"\s*\{[\s\S]*?\}/g;
   return hcl.match(dataSourceRegex) || [];
 }
 
-// Helper function to extract module blocks
+// Helper function to extract module blocks - UPDATED TO EXCLUDE COMMENTS
 function extractModuleBlocks(hcl: string): { [key: string]: string } {
-  const moduleRegex = /module\s+"([^"]+)"\s*{([\s\S]*?)^}/gm;
+  // Remove multi-line commented blocks that contain module definitions
+  // This handles cases like: # module "name" { ... }
+  let cleanHcl = hcl.replace(/^#\s*module\s+"[^"]+"\s*\{[\s\S]*?^#\s*\}/gm, '');
+  // Also remove single comment lines
+  cleanHcl = cleanHcl.replace(/^\s*#.*$/gm, '');
+  
+  const moduleRegex = /module\s+"([^"]+)"\s*\{([\s\S]*?)\}/g;
   const modules: { [key: string]: string } = {};
   let match;
   
-  while ((match = moduleRegex.exec(hcl)) !== null) {
+  while ((match = moduleRegex.exec(cleanHcl)) !== null) {
     modules[match[1]] = match[0];
   }
   
@@ -228,7 +235,13 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
   });
 
   test("validates all modules use relative path sources", () => {
-    const moduleBlocks = hcl.match(/module\s+"[^"]+"\s*{[^}]+}/g) || [];
+    // FIXED: Remove commented modules and only count active modules
+    // Handle multi-line commented module blocks
+    let cleanHcl = hcl.replace(/^#\s*module\s+"[^"]+"\s*\{[\s\S]*?^#\s*\}/gm, '');
+    // Also remove single comment lines
+    cleanHcl = cleanHcl.replace(/^\s*#.*$/gm, '');
+    
+    const moduleBlocks = cleanHcl.match(/module\s+"[^"]+"\s*{[^}]+}/g) || [];
     
     expect(moduleBlocks).toHaveLength(6); // 3 module types × 2 regions
     
