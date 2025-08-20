@@ -76,7 +76,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(outputs.SecurityGroupId).toMatch(/^sg-[0-9a-f]+$/);
       
       // S3 bucket should include account ID for uniqueness
-      expect(outputs.S3BucketName).toMatch(/-\d+-/);
+      expect(outputs.S3BucketName).toMatch(/-\d+$/);
       
       // IAM role should have ARN format
       expect(outputs.ApplicationRoleArn).toContain(':role/');
