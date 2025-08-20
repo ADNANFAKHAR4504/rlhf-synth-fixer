@@ -286,7 +286,7 @@ def create_sns_topic(region: str, tags: Dict[str, str]) -> aws.sns.Topic:
   # Subscribe email to the topic
   aws.sns.TopicSubscription(
     f"{project_name}-{environment}-email-subscription-{region}",
-    topic_arn=topic.arn,
+    topic=topic.arn,
     protocol="email",
     endpoint=notification_email,
     opts=ResourceOptions(

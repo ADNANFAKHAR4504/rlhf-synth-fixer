@@ -154,3 +154,13 @@
 - Updated `BucketPolicyV2` to `BucketPolicy`
 - These resources don't have V2 versions in the current Pulumi AWS provider
 - The V1 versions provide the same functionality and are fully compatible
+
+### 12. **SNS Topic Subscription Parameter Issue**
+
+**Problem**: The deployment was failing with `TypeError: TopicSubscription._internal_init() got an unexpected keyword argument 'topic_arn'` because the SNS TopicSubscription resource uses `topic` instead of `topic_arn` as the parameter name.
+
+**Fix**:
+
+- Updated `topic_arn=topic.arn` to `topic=topic.arn` in the SNS TopicSubscription resource
+- The Pulumi AWS provider expects the parameter to be named `topic`, not `topic_arn`
+- This aligns with the correct Pulumi resource API
