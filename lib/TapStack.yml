@@ -413,6 +413,14 @@ Resources:
                 Resource:
                   - !GetAtt KMSKey.Arn
                   - !Sub "${KMSKey.Arn}/*"
+        - PolicyName: CloudFormationSignal
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:SignalResource
+                Resource: !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}/*"
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -571,10 +579,15 @@ Resources:
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: |
+          Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
-            yum install -y httpd mysql
+            yum install -y httpd mysql aws-cli
+
+            # Install CloudFormation helper scripts
+            yum install -y aws-cfn-bootstrap
+
+            # Start and enable httpd
             systemctl start httpd
             systemctl enable httpd
 
@@ -585,7 +598,7 @@ Resources:
             # Create a simple health check endpoint
             echo "OK" > /var/www/html/health
 
-            # Create a simple index page
+            # Create a simple index page with dynamic content
             cat << 'EOF' > /var/www/html/index.html
             <!DOCTYPE html>
             <html>
@@ -595,8 +608,16 @@ Resources:
             <body>
                 <h1>Welcome to IaC - AWS Nova Model Breaking</h1>
                 <p>This is a highly available web application deployed using AWS CloudFormation.</p>
-                <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-                <p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>
+                <p>Instance ID: <span id="instance-id">Loading...</span></p>
+                <p>Availability Zone: <span id="az">Loading...</span></p>
+                <script>
+                fetch('http://169.254.169.254/latest/meta-data/instance-id')
+                  .then(response => response.text())
+                  .then(data => document.getElementById('instance-id').textContent = data);
+                fetch('http://169.254.169.254/latest/meta-data/placement/availability-zone')
+                  .then(response => response.text())
+                  .then(data => document.getElementById('az').textContent = data);
+                </script>
             </body>
             </html>
             EOF
@@ -625,7 +646,20 @@ Resources:
             }
             EOF
 
+            # Start CloudWatch agent
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+
+            # Wait for httpd to be fully ready
+            sleep 10
+
+            # Test that the web server is responding
+            if curl -f http://localhost/health > /dev/null 2>&1; then
+                # Signal success to CloudFormation
+                /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+            else
+                # Signal failure to CloudFormation
+                /opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+            fi
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
@@ -685,8 +719,8 @@ Resources:
           PropagateAtLaunch: true
     CreationPolicy:
       ResourceSignal:
-        Count: 2
-        Timeout: PT15M
+        Count: 1
+        Timeout: PT10M
       AutoScalingCreationPolicy:
         MinSuccessfulInstancesPercent: 50
 
