@@ -1,4 +1,20 @@
 Ideal Response Implementation Guide
+# 
+# Production-ready AWS infrastructure with security and compliance controls
+#
+# VALIDATION NOTES / REQUIREMENTS CHECKLIST
+# - Region guard: ensures deployment only in us-west-2 (see null_resource.region_guard precondition)
+# - Security Groups (Ingress): aws_security_group.* restrict ingress strictly to var.allowed_ingress_cidrs
+# - S3 Encryption (CMK): aws_kms_key.main with rotation; all buckets use customer-managed KMS; policies enforce CMK key-id
+# - S3 Access Logging: All buckets log to central access logs bucket (access logs bucket also logs per requirement)
+# - IAM Least Privilege: Scoped resource ARNs and conditions; managed policies where applicable
+# - CloudWatch Alarms: Metric filter on CloudTrail for unauthorized API calls + SNS notification (encrypted topic)
+# - VPC Flow Logs: Enabled to CloudWatch Logs with retention; minimal IAM permissions (no CreateLogGroup)
+# - RDS High Availability: Multi-AZ, encrypted with CMK, private subnets, locked-down SG, deletion protection, backups
+# - EC2 AMIs: Latest AL2023 via SSM Parameter Store; hardened SGs; IMDSv2 enforced; no public IPs; EBS encrypted with CMK
+# - Patch Automation: SSM Maintenance Window + task to run AWS-RunPatchBaseline (Install) on tagged instances
+# - S3 Public Access Block: Bucket-level + account-level; bucket policies also deny public ACLs/policies and non-TLS
+
 
 This document outlines the ideal approach for implementing the AWS infrastructure requirements, serving as a comprehensive reference for best practices and optimal solutions.
 

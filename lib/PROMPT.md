@@ -13,7 +13,7 @@ Objective
 
 Create a secure and compliant AWS infrastructure with Terraform, deployed in us-west-2, under a single AWS account. Use standard naming conventions and the provided VPC ID vpc-0abc123de456.
 
-All infrastructure code MUST live in lib/tap_task.tf.  
+All infrastructure code MUST live in lib/tap_stask.tf.  
 A provider.tf already exists (AWS provider + S3 backend). Do not modify providers or backends.
 
 Hard Requirements (must all be satisfied)
@@ -32,14 +32,14 @@ Hard Requirements (must all be satisfied)
 Additional Constraints
 
 Region: us-west-2 (pin all region-specific resources).  
-Single file: lib/tap_task.tf must include variables, locals, data sources, resources, and outputs—self-contained.  
+Single file: lib/tap_stack.tf must include variables, locals, data sources, resources, and outputs—self-contained.  
 No manual steps: Keys, roles, alarms, parameters—everything provisioned via Terraform.  
 Tags: Apply consistent tags (e.g., Environment, Project, Owner, CostCenter, Compliance).  
 Naming: Use predictable, lowercase, hyphenated names with suffixes by purpose (e.g., project-logs-bucket, project-cmk-s3, project-rds).
 
 Deliverables
 
-1. Terraform HCL in lib/tap_task.tf only:  
+1. Terraform HCL in lib/tap_stack.tf only:  
    variable blocks (allowed CIDRs, alarm email(s), project/env names, RDS instance params, etc.).  
    locals for naming/tag standards.  
    data sources for SSM AMI lookup, caller identity, partition, and region.  

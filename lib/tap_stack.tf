@@ -872,7 +872,7 @@ resource "aws_flow_log" "vpc" {
   traffic_type    = "ALL"
   vpc_id          = local.vpc_id
 
-  log_format = "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}"
+  log_format = "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${action}"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-logs"
@@ -901,7 +901,7 @@ resource "aws_cloudtrail" "main" {
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:${data.aws_partition.current.partition}:s3:::*/*"]
+      values = ["arn:${data.aws_partition.current.partition}:s3:::*/"]
     }
   }
 
