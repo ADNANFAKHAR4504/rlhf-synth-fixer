@@ -333,7 +333,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
         console.log(`   Bastion host accessible via public IP: ${bastionIP}`);
         
         const privateIPs = Array.isArray(outputs.private_instance_ips) ? outputs.private_instance_ips : [outputs.private_instance_ips];
-        privateIPs.forEach(ip => expect(ip).toMatch(/^10\.0\./)); // Private range
+        privateIPs.forEach((ip: string) => expect(ip).toMatch(/^10\.0\./)); // Private range
         console.log(`   Private instances isolated: ${privateIPs.join(', ')}`);
         
         // Phase 3: Security and Encryption Validation
@@ -369,7 +369,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
         console.log(`   Multi-AZ deployment: ${privateIPs.length} private instances`);
         
         // Validate instances are in different subnets (if multiple)
-        const uniqueSubnets = new Set(privateIPs.map(ip => ip.split('.')[2])); // 3rd octet indicates subnet
+        const uniqueSubnets = new Set(privateIPs.map((ip: string) => ip.split('.')[2])); // 3rd octet indicates subnet
         expect(uniqueSubnets.size).toBeGreaterThanOrEqual(1);
         console.log(`   Multi-subnet deployment: ${uniqueSubnets.size} subnets used`);
         
