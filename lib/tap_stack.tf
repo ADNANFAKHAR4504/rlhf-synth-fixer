@@ -291,7 +291,7 @@ resource "aws_security_group" "rds" {
 
 # IAM Role for RDS Access
 resource "aws_iam_role" "rds_access" {
-  name = "${local.name_prefix}-rds-access-role"
+  name = "${local.name_prefix}-rds-access-role-new"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -307,7 +307,7 @@ resource "aws_iam_role" "rds_access" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-rds-access-role"
+    Name = "${local.name_prefix}-rds-access-role-new"
     Type = "IAMRole"
   })
 }
@@ -348,7 +348,7 @@ resource "aws_iam_role_policy" "rds_access" {
 
 # IAM Role for User with Least Privilege
 resource "aws_iam_role" "user_least_privilege" {
-  name = "${local.name_prefix}-user-role"
+  name = "${local.name_prefix}-user-role-new"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -364,7 +364,7 @@ resource "aws_iam_role" "user_least_privilege" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-user-role"
+    Name = "${local.name_prefix}-user-role-new"
     Type = "IAMRole"
   })
 }
@@ -501,10 +501,10 @@ resource "aws_db_instance" "main" {
 
 # S3 Bucket
 resource "aws_s3_bucket" "main" {
-  bucket = "${local.name_prefix}-secure-bucket-${random_password.rds_username.id}"
+  bucket = "${local.name_prefix}-secure-bucket-new-${random_password.rds_username.id}"
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-secure-bucket"
+    Name = "${local.name_prefix}-secure-bucket-new"
     Type = "S3Bucket"
   })
 }
@@ -545,10 +545,10 @@ resource "aws_s3_bucket_versioning" "main" {
 
 # CloudTrail S3 Bucket
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${local.name_prefix}-cloudtrail-logs-${random_password.rds_username.id}"
+  bucket = "${local.name_prefix}-cloudtrail-logs-new-${random_password.rds_username.id}"
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-cloudtrail-bucket"
+    Name = "${local.name_prefix}-cloudtrail-bucket-new"
     Type = "S3Bucket"
   })
 }
