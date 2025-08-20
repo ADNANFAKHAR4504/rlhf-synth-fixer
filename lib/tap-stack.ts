@@ -290,7 +290,6 @@ EOF
         multiAz: true,
         storageEncrypted: true,
         monitoringInterval: cdk.Duration.minutes(1),
-        enablePerformanceInsights: true,
         cloudwatchLogsExports: ['error', 'general', 'slowquery'],
       });
     } else {
@@ -317,7 +316,6 @@ EOF
         deleteAutomatedBackups: false,
         deletionProtection: true,
         monitoringInterval: cdk.Duration.minutes(1),
-        enablePerformanceInsights: true,
       });
     }
 
