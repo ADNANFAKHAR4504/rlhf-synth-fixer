@@ -102,9 +102,19 @@ describe('Turn Around Prompt API Integration Tests', () => {
         console.log(`Bastion public IP validated: ${bastionIP}`);
         
         // Private instance IPs - must be in VPC private range
-        const privateIPs = Array.isArray(outputs.private_instance_ips) 
-          ? outputs.private_instance_ips 
-          : [outputs.private_instance_ips];
+        let privateIPs: string[];
+        if (Array.isArray(outputs.private_instance_ips)) {
+          privateIPs = outputs.private_instance_ips;
+        } else if (typeof outputs.private_instance_ips === 'string') {
+          // Handle JSON string format from Terraform output
+          try {
+            privateIPs = JSON.parse(outputs.private_instance_ips);
+          } catch {
+            privateIPs = [outputs.private_instance_ips];
+          }
+        } else {
+          privateIPs = [outputs.private_instance_ips];
+        }
         
         privateIPs.forEach((ip: string) => {
           expect(ip).toMatch(/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/);
@@ -332,7 +342,19 @@ describe('Turn Around Prompt API Integration Tests', () => {
         expect(bastionIP).not.toMatch(/^10\./); // Not private IP
         console.log(`   Bastion host accessible via public IP: ${bastionIP}`);
         
-        const privateIPs = Array.isArray(outputs.private_instance_ips) ? outputs.private_instance_ips : [outputs.private_instance_ips];
+        let privateIPs: string[];
+        if (Array.isArray(outputs.private_instance_ips)) {
+          privateIPs = outputs.private_instance_ips;
+        } else if (typeof outputs.private_instance_ips === 'string') {
+          // Handle JSON string format from Terraform output
+          try {
+            privateIPs = JSON.parse(outputs.private_instance_ips);
+          } catch {
+            privateIPs = [outputs.private_instance_ips];
+          }
+        } else {
+          privateIPs = [outputs.private_instance_ips];
+        }
         privateIPs.forEach((ip: string) => expect(ip).toMatch(/^10\.0\./)); // Private range
         console.log(`   Private instances isolated: ${privateIPs.join(', ')}`);
         
