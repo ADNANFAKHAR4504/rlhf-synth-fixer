@@ -10,20 +10,20 @@ Main goals:
 - All in one region (us-east-1), keep names/tags clean
 
 Tags to put everywhere:
-Project=SecureInfra  
-Environment=Prod  
+Project=SecureInfra 
+Environment=Prod 
 Owner=Akshat Jain
 
 For the code structure, keep separate constructs in the same stack file:
-IamConstruct – roles/policies  
-StorageConstruct – sensitive S3 buckets  
-BackendConstruct – backend setup (S3+DynamoDB)
+IamConstruct roles/policies 
+StorageConstruct sensitive S3 buckets 
+BackendConstruct backend setup (S3+DynamoDB)
 
 Root stack just sets AWS provider and pulls it together. Each construct should be reusable and take config options (interfaces are fine). No hardcoded creds, assume AWS CLI/env vars.
 
 Should be able to run:
-cdktf synth  
-cdktf plan  
+cdktf synth 
+cdktf plan 
 cdktf deploy
 
 Use @cdktf/provider-aws. Output should be valid TypeScript and ready to go.

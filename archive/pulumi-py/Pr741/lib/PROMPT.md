@@ -1,4 +1,4 @@
-You are an expert in Pulumi (Python) and AWS CI/CD. Write the full content of tap_stack.py implementing a TapStack Pulumi ComponentResource that provisions a production-ready CI/CD pipeline using AWS in us-west-2 for project “IaC - AWS Nova Model Breaking”.
+You are an expert in Pulumi (Python) and AWS CI/CD. Write the full content of tap_stack.py implementing a TapStack Pulumi ComponentResource that provisions a production-ready CI/CD pipeline using AWS in us-west-2 for project IaC - AWS Nova Model Breaking.
 
 Do not generate pulumi.yaml or tap.py (they already exist and instantiate TapStack). All infrastructure must be implemented in this single file using methods inside the TapStack class for logic separation.
 
@@ -28,7 +28,7 @@ Implement the following private methods and call them from init:
 
 \_create_codebuild_project()
 
-\_create_codepipeline() (Source → Build → Deploy, with Manual Approval before Deploy)
+\_create_codepipeline() (Source Build Deploy, with Manual Approval before Deploy)
 
 \_create_notifications() (AWS Chatbot + CodeStar Notifications to Slack)
 
@@ -64,7 +64,7 @@ CloudFormation stack deploy (generic), or
 
 ECS service deploy.
 
-Choose S3 static hosting deploy by default for simplicity; make target bucket name configurable via Pulumi config deploy.targetBucketName. The CodeBuild deploy action can run aws s3 sync in a separate “Deploy” CodeBuild project or as a CodePipeline Deploy action using the artifacts.
+Choose S3 static hosting deploy by default for simplicity; make target bucket name configurable via Pulumi config deploy.targetBucketName. The CodeBuild deploy action can run aws s3 sync in a separate Deploy CodeBuild project or as a CodePipeline Deploy action using the artifacts.
 
 Insert a Manual Approval action before the Deploy stage.
 
@@ -74,7 +74,7 @@ Enforce RBAC at two levels:
 
 Only a configured allow-list of IAM principals (from Pulumi config array rbac.approverArns) can approve the Manual Approval action and start the pipeline.
 
-The pipeline’s IAM role and CodeBuild role must be least-privilege.
+The pipelines IAM role and CodeBuild role must be least-privilege.
 
 Create an IAM policy that grants codepipeline:StartPipelineExecution and codepipeline:PutApprovalResult only to the specified principals. Bind as needed (document the recommended attachment approach in comments if AWS account-level enforcement is preferable).
 
@@ -156,25 +156,25 @@ class TapStackArgs: def init(self, environment_suffix: Optional[str] = None, tag
 
 class TapStack(pulumi.ComponentResource): def init(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None): super().init('tap:stack:TapStack', name, None, opts) self.environment_suffix = args.environment_suffix self.tags = args.tags or {}
 
-    # 1) load config
-    self._load_config()
+# 1) load config
+self._load_config()
 
-    # 2) infra creation orchestration
-    self._create_artifacts_bucket()
-    self._create_service_roles()
-    self._create_codestar_connection()
-    self._create_codebuild_project()
-    self._create_codepipeline()
-    self._create_notifications()
-    self._enforce_rbac()
+# 2) infra creation orchestration
+self._create_artifacts_bucket()
+self._create_service_roles()
+self._create_codestar_connection()
+self._create_codebuild_project()
+self._create_codepipeline()
+self._create_notifications()
+self._enforce_rbac()
 
-    self.register_outputs({
-        "pipelineName": self.pipeline_name,
-        "artifactsBucket": self.artifacts_bucket.bucket,
-        "buildProjectName": self.build_project.name,
-        "notificationsTopicArn": self.notifications_topic.arn,
-        "chatbotConfigName": self.chatbot_config.name,
-    })
+self.register_outputs({
+"pipelineName": self.pipeline_name,
+"artifactsBucket": self.artifacts_bucket.bucket,
+"buildProjectName": self.build_project.name,
+"notificationsTopicArn": self.notifications_topic.arn,
+"chatbotConfigName": self.chatbot_config.name,
+})
 
 def \_load_config(self) -> None: # Read all config here (env, prefixes, GitHub info, Slack IDs, RBAC principals, target bucket, secrets)
 ...

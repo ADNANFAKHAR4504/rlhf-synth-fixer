@@ -1,8 +1,15 @@
-# Production-Ready AWS CloudFormation Template
+# CloudFormation Infrastructure Solution
 
-Below is a comprehensive CloudFormation template that meets all your requirements for a secure, scalable web application environment:
+This solution implements the infrastructure requirements using AWS CloudFormation.
 
-```AWSTemplateFormatVersion: '2010-09-09'
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready web application infrastructure with ALB, Auto Scaling, RDS PostgreSQL, and comprehensive security'
 
 Parameters:
@@ -529,38 +536,24 @@ Outputs:
     Value: !Ref ProdAppAutoScalingGroup
     Export:
       Name: !Sub '${AWS::StackName}-ASG-Name-${EnvironmentSuffix}'
+
 ```
 
-## Key Features and Security Implementations
+## Key Features
 
-### 🔒 Security Best Practices
-- **HTTPS-only ALB**: Configured to accept only HTTPS traffic on port 443
-- **Security Groups**: Restrictive rules allowing only necessary traffic
-- **Database Security**: RDS in private subnets with security group restrictions
-- **Encrypted Storage**: RDS storage encryption enabled
-- **IAM Roles**: Least privilege access for EC2 instances
+- Infrastructure as Code using CloudFormation YAML
+- Parameterized configuration for flexibility
+- Resource outputs for integration
+- Environment suffix support for multi-environment deployments
 
-### 🚀 Scalability and High Availability
-- **Multi-AZ Deployment**: Resources distributed across multiple availability zones
-- **Auto Scaling**: Configured with CPU-based scaling policies
-- **Rolling Updates**: UpdatePolicy ensures zero-downtime deployments
-- **Load Balancing**: ALB distributes traffic across healthy instances
+## Deployment
 
-### 📊 Comprehensive Logging
-- **ALB Access Logs**: Stored in S3 with lifecycle policies
-- **RDS Logs**: PostgreSQL logs exported to CloudWatch
-- **EC2 Logs**: Apache access and error logs via CloudWatch agent
-- **CloudWatch Integration**: Centralized monitoring and alerting
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
 
-### 🎯 Dynamic Configuration
-- **Region Agnostic**: Uses `!GetAZs` and `!Ref AWS::Region`
-- **Parameterized**: Configurable CIDR blocks, instance types, and DB classes
-- **Managed Secrets**: RDS password managed by AWS Secrets Manager
-
-### ✅ Compliance Features
-- **Resource Naming**: All resources prefixed with 'ProdApp'
-- **CloudFormation Validation**: Template structure follows AWS best practices
-- **Rolling Updates**: Properly configured for Auto Scaling group
-- **No Hard-coded Regions**: Uses dynamic references throughout
-
-This template creates a production-ready environment that can be deployed in any AWS region supporting the required services. The infrastructure is secure, scalable, and follows AWS Well-Architected Framework principles.
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+```

@@ -1,6 +1,6 @@
 ```yaml
 
-## High-level user prompt — AWS CloudFormation Secure Infrastructure for Compliance
+## High-level user prompt AWS CloudFormation Secure Infrastructure for Compliance
 
 **Goal (one sentence):**
 Design and implement a secure, compliance-ready AWS CloudFormation YAML template that creates a least-privilege infrastructure with IAM roles, CloudTrail logging, VPC subnets, S3 encryption, and EC2 monitoring to meet organizational security requirements.

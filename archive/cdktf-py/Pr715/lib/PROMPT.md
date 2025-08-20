@@ -13,7 +13,7 @@ IAM Least Privilege
 
 Define IAM roles and policies that follow the principle of least privilege: access to S3 must be limited to exactly what is needed.
 
-No wildcard (“*”) permissions on actions or resources unless explicitly justified in code comments.
+No wildcard (*) permissions on actions or resources unless explicitly justified in code comments.
 
 Example scenario to implement: a role that can read objects from a specific bucket and another role that can write objects to a different prefix, with minimal other privileges.
 
@@ -46,7 +46,7 @@ Must be a single .py file using CDKTF (Python), not raw HCL or multiple modules/
 
 Do not rely on external proprietary modules; use official cdktf_cdktf_provider_aws constructs.
 
-Avoid hard-coding ARNs where input flexibility is reasonable — accept inputs (via variables/stack parameters) for bucket names and role identifiers, but default to secure sane values for standalone execution.
+Avoid hard-coding ARNs where input flexibility is reasonable accept inputs (via variables/stack parameters) for bucket names and role identifiers, but default to secure sane values for standalone execution.
 
 Expected Output
 A single Python CDKTF stack defining:
@@ -67,17 +67,17 @@ Analytics Reader Role: Can only s3:GetObject on arn:aws:s3:::secure-data-bucket/
 Uploader Role: Can s3:PutObject to arn:aws:s3:::secure-data-bucket/uploads/*, but uploads must be encrypted server-side (enforced via bucket policy or IAM condition).
 
 Validation Checklist (for automated/security unit tests)
- S3 buckets have server_side_encryption_configuration with AES256.
+S3 buckets have server_side_encryption_configuration with AES256.
 
- Bucket policies or IAM deny access if aws:SecureTransport is false.
+Bucket policies or IAM deny access if aws:SecureTransport is false.
 
- IAM policies do not contain "Resource": "*" unless the justification is commented and scoped elsewhere.
+IAM policies do not contain "Resource": "*" unless the justification is commented and scoped elsewhere.
 
- Permissions are split to reflect least privilege (read vs write, per-prefix).
+Permissions are split to reflect least privilege (read vs write, per-prefix).
 
- All resources have appropriate tags for auditability.
+All resources have appropriate tags for auditability.
 
- Outputs expose enough information for test harness to introspect policies and encryption settings.
+Outputs expose enough information for test harness to introspect policies and encryption settings.
 
 Delivery Instructions
 Provide the Python file as the primary artifact.

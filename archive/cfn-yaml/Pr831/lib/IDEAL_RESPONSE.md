@@ -1,3 +1,13 @@
+# CloudFormation Infrastructure Solution
+
+This solution implements a secure AWS infrastructure configuration with comprehensive security controls including S3, CloudFront, WAF, GuardDuty, VPC, and RDS security best practices.
+
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS Infrastructure Configuration with S3, CloudFront, WAF, GuardDuty, VPC, and RDS security best practices'
@@ -654,4 +664,24 @@ Outputs:
     Value: !GetAtt SecureRDSInstance.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-RDSEndpoint'
+```
+
+## Key Features
+
+- **Multi-Layer Security**: Implements S3 encryption with KMS, CloudFront with WAF protection, and GuardDuty threat detection
+- **Network Security**: VPC with private subnets, Network ACLs blocking suspicious IPs, and security groups with least privilege access
+- **RDS Security**: Database encryption at rest, private subnet deployment, enhanced monitoring, and automated backups
+- **Access Control**: IAM policies with IP-based restrictions and CloudFront Origin Access Control for S3
+- **Compliance Features**: Server access logging, versioning, deletion protection, and comprehensive tagging
+- **Infrastructure as Code**: Fully parameterized CloudFormation template with security best practices
+
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 ```
