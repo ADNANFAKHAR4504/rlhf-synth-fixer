@@ -4,9 +4,9 @@ import fs from 'fs';
 let outputs: any = {};
 
 // Check if outputs file exists (only present when a stack has been deployed)
-if (fs.existsSync('test/cfn-outputs/flat-outputs.json')) {
+if (fs.existsSync('cfn-outputs/flat-outputs.json')) {
   outputs = JSON.parse(
-    fs.readFileSync('test/cfn-outputs/flat-outputs.json', 'utf8')
+    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
 }
 
