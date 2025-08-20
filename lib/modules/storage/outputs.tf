@@ -16,5 +16,5 @@ output "vpc_endpoint_s3_id" {
 
 output "s3_logs_bucket_name" {
   description = "The name of the S3 logs bucket"
-  value       = aws_s3_bucket.logs.id
+  value       = aws_s3_bucket.logs.bucket
 }
