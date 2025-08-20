@@ -116,7 +116,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
     bucket=f"{project_name}-{environment}-storage-{region}",
     tags=tags,
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-s3-{region}", region=region)
+      provider=aws.Provider(f"aws-s3-bucket-{region}", region=region)
     )
   )
 
@@ -128,7 +128,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
       status="Enabled"
     ),
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-s3-{region}", region=region)
+      provider=aws.Provider(f"aws-s3-versioning-{region}", region=region)
     )
   )
 
@@ -152,7 +152,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
     bucket=bucket.id,
     rules=encryption_config.rules,
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-s3-{region}", region=region)
+      provider=aws.Provider(f"aws-s3-encryption-{region}", region=region)
     )
   )
 
@@ -165,7 +165,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
     ignore_public_acls=True,
     restrict_public_buckets=True,
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-s3-{region}", region=region)
+      provider=aws.Provider(f"aws-s3-public-access-{region}", region=region)
     )
   )
 
@@ -283,7 +283,7 @@ def create_sns_topic(region: str, tags: Dict[str, str]) -> aws.sns.Topic:
     name=f"{project_name}-{environment}-security-alerts-{region}",
     tags=tags,
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-sns-{region}", region=region)
+      provider=aws.Provider(f"aws-sns-topic-{region}", region=region)
     )
   )
 
@@ -294,7 +294,7 @@ def create_sns_topic(region: str, tags: Dict[str, str]) -> aws.sns.Topic:
     protocol="email",
     endpoint=notification_email,
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-sns-{region}", region=region)
+      provider=aws.Provider(f"aws-sns-subscription-{region}", region=region)
     )
   )
 
@@ -320,7 +320,7 @@ def create_security_group_alarm(region: str, sns_topic: aws.sns.Topic, tags: Dic
     retention_in_days=30,
     tags=tags,
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-cloudwatch-{region}", region=region)
+      provider=aws.Provider(f"aws-cloudwatch-loggroup-{region}", region=region)
     )
   )
 
@@ -344,7 +344,7 @@ def create_security_group_alarm(region: str, sns_topic: aws.sns.Topic, tags: Dic
       default_value="0"
     ),
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-cloudwatch-{region}", region=region)
+      provider=aws.Provider(f"aws-cloudwatch-metricfilter-{region}", region=region)
     )
   )
 
@@ -364,7 +364,7 @@ def create_security_group_alarm(region: str, sns_topic: aws.sns.Topic, tags: Dic
     treat_missing_data="notBreaching",
     tags=tags,
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-cloudwatch-{region}", region=region),
+      provider=aws.Provider(f"aws-cloudwatch-alarm-{region}", region=region),
       depends_on=[metric_filter]
     )
   )
@@ -424,7 +424,7 @@ def create_cloudtrail(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) 
     bucket=bucket.id,
     policy=cloudtrail_policy.json,
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-s3-{region}", region=region)
+      provider=aws.Provider(f"aws-s3-cloudtrail-policy-{region}", region=region)
     )
   )
 
@@ -439,7 +439,7 @@ def create_cloudtrail(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) 
     enable_logging=True,
     tags=tags,
     opts=ResourceOptions(
-      provider=aws.Provider(f"aws-cloudtrail-{region}", region=region)
+      provider=aws.Provider(f"aws-cloudtrail-trail-{region}", region=region)
     )
   )
 

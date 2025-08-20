@@ -112,13 +112,24 @@
 
 ### 9. **Duplicate AWS Provider URN Issue**
 
-**Problem**: The deployment was failing with `Duplicate resource URN 'urn:pulumi:TapStackpr1730::TapStack::pulumi:providers:aws::aws-us-east-1'` because multiple AWS providers were being created with the same name.
+**Problem**: The deployment was failing with `Duplicate resource URN 'urn:pulumi:TapStackpr1730::TapStack::pulumi:providers:aws::aws-s3-us-east-1'` because multiple AWS providers were being created with the same name, even within the same resource type.
 
 **Fix**:
 
-- Updated all AWS provider names to be unique by including the resource type:
-  - S3 resources: `aws-s3-{region}`
-  - SNS resources: `aws-sns-{region}`
-  - CloudWatch resources: `aws-cloudwatch-{region}`
-  - CloudTrail resources: `aws-cloudtrail-{region}`
-- This ensures each provider has a unique URN and prevents conflicts
+- Updated all AWS provider names to be unique by including specific resource functionality:
+  - S3 resources:
+    - `aws-s3-bucket-{region}` (main bucket)
+    - `aws-s3-versioning-{region}` (versioning configuration)
+    - `aws-s3-encryption-{region}` (encryption configuration)
+    - `aws-s3-public-access-{region}` (public access blocking)
+    - `aws-s3-cloudtrail-policy-{region}` (CloudTrail bucket policy)
+  - SNS resources:
+    - `aws-sns-topic-{region}` (SNS topic)
+    - `aws-sns-subscription-{region}` (email subscription)
+  - CloudWatch resources:
+    - `aws-cloudwatch-loggroup-{region}` (log group)
+    - `aws-cloudwatch-metricfilter-{region}` (metric filter)
+    - `aws-cloudwatch-alarm-{region}` (alarm)
+  - CloudTrail resources:
+    - `aws-cloudtrail-trail-{region}` (CloudTrail trail)
+- This ensures each provider instance has a completely unique URN and prevents all conflicts

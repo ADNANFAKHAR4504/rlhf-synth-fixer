@@ -47,7 +47,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
         bucket=f"{project_name}-{environment}-storage-{region}",
         tags=tags,
         opts=pulumi.ResourceOptions(
-            provider=aws.Provider(f"aws-s3-{region}", region=region)
+            provider=aws.Provider(f"aws-s3-bucket-{region}", region=region)
         )
     )
 
@@ -59,7 +59,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
             status="Enabled"
         ),
         opts=pulumi.ResourceOptions(
-            provider=aws.Provider(f"aws-s3-{region}", region=region)
+            provider=aws.Provider(f"aws-s3-versioning-{region}", region=region)
         )
     )
 
@@ -81,7 +81,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
         bucket=bucket.id,
         rules=encryption_config.rules,
         opts=pulumi.ResourceOptions(
-            provider=aws.Provider(f"aws-s3-{region}", region=region)
+            provider=aws.Provider(f"aws-s3-encryption-{region}", region=region)
         )
     )
 
@@ -94,7 +94,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
         ignore_public_acls=True,
         restrict_public_buckets=True,
         opts=pulumi.ResourceOptions(
-            provider=aws.Provider(f"aws-s3-{region}", region=region)
+            provider=aws.Provider(f"aws-s3-public-access-{region}", region=region)
         )
     )
 
