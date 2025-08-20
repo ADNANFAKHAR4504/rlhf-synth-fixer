@@ -638,7 +638,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - 'arn:aws:s3:::*/*'
+                - !Sub '${CorpCloudTrailBucket}/*'
       InsightSelectors:
         - InsightType: ApiCallRateInsight
       Tags:

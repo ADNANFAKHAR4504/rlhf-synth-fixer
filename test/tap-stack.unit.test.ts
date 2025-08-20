@@ -45,7 +45,7 @@ describe('TapStack CloudFormation Template - Secure Infrastructure', () => {
 
   describe('Parameters', () => {
     test('should have all required parameters', () => {
-      const expectedParams = ['Environment', 'Owner', 'Project', 'DBUsername', 'DBPassword'];
+      const expectedParams = ['Environment', 'Owner', 'Project', 'DBUsername'];
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
@@ -58,12 +58,12 @@ describe('TapStack CloudFormation Template - Secure Infrastructure', () => {
       expect(envParam.Description).toContain('Environment name');
     });
 
-    test('DBPassword parameter should have security constraints', () => {
-      const dbPassParam = template.Parameters.DBPassword;
-      expect(dbPassParam.Type).toBe('String');
-      expect(dbPassParam.NoEcho).toBe(true);
-      expect(dbPassParam.MinLength).toBe(12);
-      expect(dbPassParam.MaxLength).toBe(128);
+    test('DBPasswordSecret should exist for secure password management', () => {
+      const dbPasswordSecret = template.Resources.DBPasswordSecret;
+      expect(dbPasswordSecret).toBeDefined();
+      expect(dbPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(dbPasswordSecret.Properties.GenerateSecretString).toBeDefined();
+      expect(dbPasswordSecret.Properties.GenerateSecretString.PasswordLength).toBe(16);
     });
 
     test('DBUsername parameter should be marked as sensitive', () => {
@@ -479,7 +479,7 @@ describe('TapStack CloudFormation Template - Secure Infrastructure', () => {
 
     test('should have reasonable parameter count', () => {
       const paramCount = Object.keys(template.Parameters).length;
-      expect(paramCount).toBe(6);
+      expect(paramCount).toBe(5);
     });
 
     test('should have comprehensive outputs', () => {
