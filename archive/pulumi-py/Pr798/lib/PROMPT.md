@@ -43,4 +43,4 @@ Design and implement a robust Pulumi-based strategy to migrate an existing AWS i
 
 ### **Expected Output**
 
-Submit a complete Pulumi project with all necessary code files (e.g., \_\_main\_\_.py for Python). The provided scripts must be executable without errors against a provided AWS account. All resource creations, deletions, or modifications should be logged, and tests must confirm the environment's full dual-stack operability post-migration.
+Submit a complete Pulumi project with all necessary code files (e.g., __main__.py for Python). The provided scripts must be executable without errors against a provided AWS account. All resource creations, deletions, or modifications should be logged, and tests must confirm the environment's full dual-stack operability post-migration.

@@ -30,7 +30,7 @@ All permissions must strictly adhere to the principle of least privilege.
 
 CloudWatch Monitoring:
 
-Integrate AWS CloudWatch to monitor Lambda’s invocation count and error rates via appropriate metrics and alarms.
+Integrate AWS CloudWatch to monitor Lambdas invocation count and error rates via appropriate metrics and alarms.
 
 Best Practices & Compliance:
 

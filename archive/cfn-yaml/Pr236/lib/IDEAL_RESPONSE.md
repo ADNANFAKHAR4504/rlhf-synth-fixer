@@ -1,17 +1,14 @@
-### ✅ Ideal Response Checklist for CloudFormation YAML Template
+# CloudFormation Infrastructure Solution
 
-The generated template is correct because:
+This solution implements a basic public network infrastructure in AWS using CloudFormation YAML for a production environment.
 
-- ✅ **VPC** is created with `10.0.0.0/16` CIDR, DNS support, and correct tags.
-- ✅ **Public Subnets A & B** are created with proper CIDRs and dynamic AZ mapping using `!Select` and `!GetAZs`.
-- ✅ **Internet Gateway** is provisioned and attached to the VPC.
-- ✅ **Route Table** includes a default route to the IGW.
-- ✅ **Subnet Associations** ensure both subnets are linked to the public route table.
-- ✅ **All resources are tagged** with `Environment: Production` and `ManagedBy: CloudFormation`.
-- ✅ **Outputs** export useful values like Subnet IDs, VPC ID, Route Table ID, etc.
-- ✅ **YAML structure** is valid, indented properly, and deployable without errors.
+## Template Structure
 
-yaml:
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Basic Production Network Infrastructure - VPC with Public Subnets'
 
@@ -151,3 +148,24 @@ Outputs:
     Value: !Ref AWS::StackName
     Export:
       Name: !Sub ${AWS::StackName}-StackName
+```
+
+## Key Features
+
+- **Production-Ready VPC**: Creates a VPC with CIDR block 10.0.0.0/16 configured for production use
+- **High Availability**: Two public subnets deployed across different availability zones
+- **Internet Connectivity**: Internet Gateway with proper routing configuration for public access
+- **Resource Tagging**: Comprehensive tagging strategy for environment, type, and management tracking
+- **CloudFormation Exports**: All resource IDs exported for cross-stack references
+- **Infrastructure as Code**: Fully parameterized and reusable CloudFormation template
+
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --region us-east-1
+```
