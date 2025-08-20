@@ -1,3 +1,10 @@
+# Ideal Terraform Response
+
+This document contains the complete Terraform configuration for setting up a secure AWS VPC with network access controls.
+
+## Complete Terraform Configuration
+
+```terraform
 ########################
 # Variables
 ########################
@@ -306,3 +313,4 @@ output "internet_gateway_id" {
   description = "ID of the internet gateway"
   value       = aws_internet_gateway.main.id
 }
+```

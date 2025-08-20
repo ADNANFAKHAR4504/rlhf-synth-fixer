@@ -1,51 +1,44 @@
-# Terraform Infrastructure Setup: Secure AWS VPC with Network Access Controls
+# Setting up a secure AWS environment with Terraform
 
-## Project Overview
-You are tasked with designing and implementing a secure, production-ready AWS infrastructure using Terraform. This environment will serve as the foundation for our organization's cloud-based applications and services, requiring robust security measures and compliance with AWS best practices.
+## What we're building
 
-## Infrastructure Requirements
+We need to create a VPC with both public and private subnets. The public subnets will handle internet-facing stuff, and the private subnet will be for our sensitive workloads that shouldn't have direct internet access.
 
-### Network Architecture
-Create a comprehensive AWS VPC with the following subnet structure:
-- **3 Public Subnets**: Strategically distributed across multiple availability zones for high availability
-- **1 Private Subnet**: Isolated from direct internet access for sensitive workloads
-- **Proper naming conventions**: Follow organizational standards for resource naming
+For the network setup, we're looking at:
+- 3 public subnets spread across different availability zones (for redundancy)
+- 1 private subnet for internal resources
+- Proper naming that makes sense for our organization
 
-### Security Implementation
-Implement network access controls using AWS Security Groups with the following specifications:
-- **Restrictive inbound rules**: Limit incoming traffic to specific IP ranges only
-- **Controlled outbound traffic**: Define and restrict outbound connections
-- **Least privilege principle**: Grant only necessary network access
-- **Documentation**: Clearly document the purpose and scope of each security group rule
+## Security is key here
 
-### Resource Tagging Strategy
-All AWS resources must be tagged consistently with:
-- **Environment = Production**: Primary environment identifier
-- **Additional tags**: Consider adding tags for cost allocation, ownership, and compliance
+We absolutely need to lock down network access using Security Groups. This means:
+- Only allowing specific IP ranges to connect in
+- Controlling what can go out
+- Following the principle of least privilege - only give access to what's actually needed
+- Making sure we document why each rule exists
 
-### Compliance and Best Practices
-Ensure the infrastructure adheres to:
-- **AWS Well-Architected Framework**: Follow security, reliability, and operational excellence pillars
-- **Security best practices**: Implement proper network segmentation and access controls
-- **Terraform best practices**: Use proper state management, variable definitions, and module structure
-- **Documentation standards**: Include comprehensive comments and README files
+## Tagging everything
 
-## Technical Constraints
-- **Terraform only**: All infrastructure must be defined using Terraform
-- **Security Groups**: Must be the primary mechanism for network access control
-- **IP-based restrictions**: Implement specific IP range restrictions for security
-- **Production readiness**: Infrastructure must be suitable for production workloads
+All our AWS resources need to be tagged with "Environment = Production". This helps with cost tracking and makes it clear what's what in our AWS account.
 
-## Expected Deliverables
-1. **Complete Terraform configuration**: All necessary .tf files for the infrastructure
-2. **Security group definitions**: Properly configured security groups with documented rules
-3. **Tagging implementation**: Consistent resource tagging across all components
-4. **Documentation**: Clear explanations of the architecture and security measures
-5. **Validation**: Terraform plan and apply should execute without errors
+## Following AWS best practices
 
-## Success Criteria
-- Terraform deployment completes successfully without errors
-- Network access controls function as specified
-- All resources are properly tagged with Environment = Production
-- Infrastructure follows AWS security best practices
-- Configuration is maintainable and well-documented
+We want to make sure we're following AWS recommendations for security, reliability, and operations. This includes proper network segmentation, good Terraform practices (like using variables and modules), and making sure everything is well documented.
+
+## What we need to deliver
+
+The end result should be:
+- A complete Terraform setup that actually works
+- Security groups that do what we need them to do
+- Everything properly tagged
+- Good documentation explaining what we built and why
+- A Terraform plan that runs without errors
+
+## Success looks like
+
+When we're done, we should have:
+- A working Terraform deployment
+- Network access controls that actually restrict traffic properly
+- All resources tagged correctly
+- Infrastructure that follows AWS security guidelines
+- Code that's maintainable and well-documented

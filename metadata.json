@@ -5,5 +5,23 @@
   "turn_type": "single",
   "po_id": "291616",
   "team": "3",
-  "startedAt": "2025-08-20T12:43:55.411Z"
+  "startedAt": "2025-08-20T12:43:55.411Z",
+  "subtask": "infrastructure_security",
+  "subject_labels": [
+    "terraform",
+    "aws",
+    "vpc",
+    "security_groups",
+    "networking",
+    "infrastructure_as_code"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "internet_gateway",
+    "route_tables",
+    "security_groups",
+    "subnets"
+  ]
 }
