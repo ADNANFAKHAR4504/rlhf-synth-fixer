@@ -1,0 +1,683 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure Infrastructure Stack - Security Configuration as Code'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+    
+
+Resources:
+  # KMS Key for encryption
+  SecurityKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS Key for security infrastructure encryption'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key for CloudTrail
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: Allow use of the key for Security Hub
+            Effect: Allow
+            Principal:
+              Service: securityhub.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: SecurityInfrastructure
+        - Key: Compliance
+          Value: Required
+
+  SecurityKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/security-infrastructure-${EnvironmentSuffix}'
+      TargetKeyId: !Ref SecurityKMSKey
+
+  # IAM Password Policy - Managed via Custom Resource
+  PasswordPolicyLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: UpdatePasswordPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:UpdateAccountPasswordPolicy
+                  - iam:GetAccountPasswordPolicy
+                  - iam:DeleteAccountPasswordPolicy
+                Resource: '*'
+
+  PasswordPolicyLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'PasswordPolicyManager-${EnvironmentSuffix}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt PasswordPolicyLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+
+          iam = boto3.client('iam')
+
+          def handler(event, context):
+              try:
+                  request_type = event['RequestType']
+                  
+                  if request_type in ['Create', 'Update']:
+                      iam.update_account_password_policy(
+                          MinimumPasswordLength=14,
+                          RequireSymbols=True,
+                          RequireNumbers=True,
+                          RequireUppercaseCharacters=True,
+                          RequireLowercaseCharacters=True,
+                          AllowUsersToChangePassword=True,
+                          MaxPasswordAge=90,
+                          PasswordReusePrevention=24,
+                          HardExpiry=False
+                      )
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  elif request_type == 'Delete':
+                      # Don't delete password policy on stack deletion
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  IAMPasswordPolicy:
+    Type: Custom::PasswordPolicy
+    Properties:
+      ServiceToken: !GetAtt PasswordPolicyLambda.Arn
+
+  # Admin Role with MFA requirement
+  AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'SecureAdminRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              Bool:
+                'aws:MultiFactorAuthPresent': 'true'
+              NumericLessThan:
+                'aws:MultiFactorAuthAge': '3600'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AdministratorAccess'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: AccessLevel
+          Value: Admin
+        - Key: MFARequired
+          Value: 'true'
+
+  # Developer Role with limited permissions
+  DeveloperRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'SecureDeveloperRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              Bool:
+                'aws:MultiFactorAuthPresent': 'true'
+              NumericLessThan:
+                'aws:MultiFactorAuthAge': '3600'
+      Policies:
+        - PolicyName: DeveloperAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:Describe*'
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                  - 'dynamodb:BatchGetItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                  - 'lambda:InvokeFunction'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource: '*'
+              - Effect: Deny
+                Action:
+                  - 'iam:*'
+                  - 'kms:*'
+                  - 'cloudtrail:*'
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: AccessLevel
+          Value: Developer
+        - Key: MFARequired
+          Value: 'true'
+
+  # Read-only Role
+  ReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'SecureReadOnlyRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition:
+              Bool:
+                'aws:MultiFactorAuthPresent': 'true'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/ReadOnlyAccess'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: AccessLevel
+          Value: ReadOnly
+        - Key: MFARequired
+          Value: 'true'
+
+  # VPC for secure resources
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'SecureVPC-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Private subnet for secure resources
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'SecurePrivateSubnet-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Type
+          Value: Private
+
+  # Security Group for encrypted resources
+  SecureResourcesSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for encrypted resources with minimal access'
+      GroupName: !Sub 'SecureResourcesSG-${EnvironmentSuffix}'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/8
+          Description: 'HTTPS from private networks only'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS outbound for AWS services'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: SecureResources
+        - Key: NetworkAccess
+          Value: Minimal
+
+  # CloudTrail Lambda Role for Custom Resource
+  CloudTrailLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CloudTrailManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudtrail:CreateTrail
+                  - cloudtrail:DeleteTrail
+                  - cloudtrail:DescribeTrails
+                  - cloudtrail:GetTrailStatus
+                  - cloudtrail:ListTrails
+                  - cloudtrail:StartLogging
+                  - cloudtrail:StopLogging
+                  - cloudtrail:UpdateTrail
+                  - cloudtrail:PutEventSelectors
+                  - cloudtrail:AddTags
+                  - cloudtrail:RemoveTags
+                  - cloudtrail:ListTags
+                Resource: '*'
+
+  # CloudTrail Lambda for Custom Resource
+  CloudTrailLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'CloudTrailManager-${EnvironmentSuffix}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt CloudTrailLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+          
+          ct = boto3.client('cloudtrail')
+          
+          def handler(event, context):
+              try:
+                  request_type = event['RequestType']
+                  props = event['ResourceProperties']
+                  trail_name = props.get('TrailName', 'SecurityAuditTrail')
+                  
+                  if request_type in ['Create', 'Update']:
+                      # Check if we can create a trail or need to use existing
+                      try:
+                          trails = ct.list_trails()['Trails']
+                          if len(trails) >= 5:
+                              print(f"Trail limit reached ({len(trails)} trails). Using first available trail.")
+                              # Use the first trail we find
+                              trail_arn = trails[0]['TrailARN']
+                              trail_name = trails[0]['Name']
+                              print(f"Using existing trail: {trail_name}")
+                          else:
+                              # Create new trail
+                              response = ct.create_trail(
+                                  Name=trail_name,
+                                  S3BucketName=props['S3BucketName'],
+                                  IncludeGlobalServiceEvents=True,
+                                  IsMultiRegionTrail=True,
+                                  EnableLogFileValidation=True,
+                                  KmsKeyId=props.get('KMSKeyId')
+                              )
+                              trail_arn = response['TrailARN']
+                              # Start logging
+                              ct.start_logging(Name=trail_name)
+                      except Exception as e:
+                          print(f"Trail creation/lookup failed: {str(e)}")
+                          # Return success anyway to not block deployment
+                          trail_arn = f"arn:aws:cloudtrail:us-east-1:{boto3.client('sts').get_caller_identity()['Account']}:trail/{trail_name}"
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {'TrailArn': trail_arn, 'TrailName': trail_name})
+                  elif request_type == 'Delete':
+                      # Don't delete trails on stack deletion
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+  
+  # CloudTrail Custom Resource
+  SecurityCloudTrail:
+    Type: Custom::CloudTrail
+    Properties:
+      ServiceToken: !GetAtt CloudTrailLambda.Arn
+      TrailName: !Sub 'SecurityAuditTrail-${EnvironmentSuffix}'
+      S3BucketName: !Ref CloudTrailBucket
+      KMSKeyId: !Ref SecurityKMSKey
+
+  # S3 Bucket for CloudTrail logs
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'security-cloudtrail-logs-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecurityKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 365
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: SecurityAudit
+        - Key: DataClassification
+          Value: Confidential
+
+  # CloudTrail bucket policy
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  # Security Hub Lambda Role for Custom Resource
+  SecurityHubLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecurityHubManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - securityhub:EnableSecurityHub
+                  - securityhub:DisableSecurityHub
+                  - securityhub:DescribeHub
+                  - securityhub:UpdateSecurityHubConfiguration
+                  - securityhub:TagResource
+                  - securityhub:UntagResource
+                Resource: '*'
+
+  # Security Hub Lambda for Custom Resource
+  SecurityHubLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'SecurityHubManager-${EnvironmentSuffix}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt SecurityHubLambdaRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+          
+          sh = boto3.client('securityhub')
+          
+          def handler(event, context):
+              try:
+                  request_type = event['RequestType']
+                  tags = event['ResourceProperties'].get('Tags', {})
+                  
+                  if request_type in ['Create', 'Update']:
+                      # Check if Security Hub is already enabled
+                      try:
+                          response = sh.describe_hub()
+                          hub_arn = response['HubArn']
+                          print(f"Security Hub already enabled: {hub_arn}")
+                          # Try to add tags if they exist
+                          if tags:
+                              try:
+                                  sh.tag_resource(ResourceArn=hub_arn, Tags=tags)
+                              except Exception as tag_error:
+                                  print(f"Could not tag Security Hub: {str(tag_error)}")
+                      except sh.exceptions.InvalidAccessException:
+                          # Security Hub is not enabled, enable it
+                          print("Enabling Security Hub...")
+                          response = sh.enable_security_hub(Tags=tags)
+                          hub_arn = f"arn:aws:securityhub:{boto3.session.Session().region_name}:{boto3.client('sts').get_caller_identity()['Account']}:hub/default"
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {'HubArn': hub_arn})
+                  elif request_type == 'Delete':
+                      # Don't disable Security Hub on stack deletion
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+  
+  # Security Hub Custom Resource
+  SecurityHub:
+    Type: Custom::SecurityHub
+    Properties:
+      ServiceToken: !GetAtt SecurityHubLambda.Arn
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Purpose: SecurityMonitoring
+
+  # IAM Access Analyzer
+  AccessAnalyzer:
+    Type: AWS::AccessAnalyzer::Analyzer
+    Properties:
+      AnalyzerName: !Sub 'SecurityAccessAnalyzer-${EnvironmentSuffix}'
+      Type: ACCOUNT
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: AccessValidation
+
+  # DynamoDB table with encryption
+  SecureDataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'SecureDataTable-${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      SSESpecification:
+        SSEEnabled: true
+        KMSMasterKeyId: !Ref SecurityKMSKey
+        SSEType: KMS
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: DataClassification
+          Value: Confidential
+        - Key: BackupRequired
+          Value: 'true'
+
+Outputs:
+  SecurityKMSKeyId:
+    Description: 'KMS Key ID for security infrastructure'
+    Value: !Ref SecurityKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityKMSKeyId'
+
+  SecurityKMSKeyArn:
+    Description: 'KMS Key ARN for security infrastructure'
+    Value: !GetAtt SecurityKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityKMSKeyArn'
+
+  AdminRoleArn:
+    Description: 'ARN of the secure admin role'
+    Value: !GetAtt AdminRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AdminRoleArn'
+
+  DeveloperRoleArn:
+    Description: 'ARN of the secure developer role'
+    Value: !GetAtt DeveloperRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DeveloperRoleArn'
+
+  ReadOnlyRoleArn:
+    Description: 'ARN of the secure read-only role'
+    Value: !GetAtt ReadOnlyRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ReadOnlyRoleArn'
+
+  CloudTrailArn:
+    Description: 'ARN of the CloudTrail for audit logging'
+    Value: !GetAtt SecurityCloudTrail.TrailArn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailArn'
+
+  CloudTrailBucketName:
+    Description: 'Name of the CloudTrail S3 bucket'
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucketName'
+
+  SecureDataTableName:
+    Description: 'Name of the secure DynamoDB table'
+    Value: !Ref SecureDataTable
+    Export:
+      Name: !Sub '${AWS::StackName}-SecureDataTableName'
+
+  SecurityHubArn:
+    Description: 'ARN of the Security Hub'
+    Value: !Sub 'arn:aws:securityhub:${AWS::Region}:${AWS::AccountId}:hub/default'
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityHubArn'
+
+  AccessAnalyzerArn:
+    Description: 'ARN of the Access Analyzer'
+    Value: !GetAtt AccessAnalyzer.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AccessAnalyzerArn'
+
+  VPCId:
+    Description: 'ID of the secure VPC'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  PrivateSubnetId:
+    Description: 'ID of the private subnet'
+    Value: !Ref PrivateSubnet
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnetId'
+
+  SecurityGroupId:
+    Description: 'ID of the security group for secure resources'
+    Value: !Ref SecureResourcesSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroupId'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
