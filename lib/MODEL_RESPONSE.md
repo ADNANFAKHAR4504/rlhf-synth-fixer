@@ -1,10 +1,7 @@
-I'll create a comprehensive AWS CDK v2 TypeScript project that meets all your security requirements. Let me break this down into the required files:
-
 ## Project Files
 
-
-
 ### bin/tap.ts
+
 ```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -14,7 +11,8 @@ import { TapStack } from '../lib/tapstack';
 const app = new cdk.App();
 
 // Get project name from context with default
-const projectName = app.node.tryGetContext('projectName') || 'IaC - AWS Nova Model Breaking';
+const projectName =
+  app.node.tryGetContext('projectName') || 'IaC - AWS Nova Model Breaking';
 
 new TapStack(app, 'TapStack', {
   projectName,
@@ -27,6 +25,7 @@ new TapStack(app, 'TapStack', {
 ```
 
 ### lib/tapstack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -193,7 +192,7 @@ export class TapStack extends cdk.Stack {
     // Remove default egress rule and add restrictive rules
     // Note: CDK doesn't allow modifying default SG rules directly,
     // so we create a custom security group for our resources
-    
+
     return vpc;
   }
 
@@ -218,7 +217,7 @@ export class TapStack extends cdk.Stack {
     // Interface endpoints for AWS services
     const interfaceEndpoints = [
       'ssm',
-      'ssmmessages', 
+      'ssmmessages',
       'ec2messages',
       'monitoring', // CloudWatch
       'logs',       // CloudWatch Logs
@@ -385,7 +384,7 @@ export class TapStack extends cdk.Stack {
     new ssm.StringParameter(this, 'ApiKeyParam', {
       parameterName: '/nova/api/secrets/apiKey',
       description: 'API key for Nova external integrations',
-      stringValue: 'PLACEHOLDER_VALUE_UPDATE_MANUALLY', 
+      stringValue: 'PLACEHOLDER_VALUE_UPDATE_MANUALLY',
       type: ssm.ParameterType.SECURE_STRING,
       keyId: this.kmsKey,
     });
@@ -493,7 +492,7 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnResource(this, 'MfaGroupGuidance', {
       type: 'AWS::CloudFormation::WaitConditionHandle',
       properties: {},
-    }).addMetadata('Guidance', 
+    }).addMetadata('Guidance',
       'To attach users to MfaRequiredGroup: aws iam add-user-to-group --group-name MfaRequiredGroup --user-name <username>'
     );
   }
@@ -567,10 +566,10 @@ export class TapStack extends cdk.Stack {
       role: lambdaRole,
       code: lambda.Code.fromInline(`
         const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
-        
+
         exports.handler = async (event) => {
           console.log('Health check request:', JSON.stringify(event, null, 2));
-          
+
           try {
             // Example of accessing Parameter Store (optional)
             // const ssmClient = new SSMClient({ region: process.env.AWS_REGION });
@@ -579,7 +578,7 @@ export class TapStack extends cdk.Stack {
             //   WithDecryption: true
             // });
             // const parameter = await ssmClient.send(command);
-            
+
             return {
               statusCode: 200,
               headers: {
@@ -685,6 +684,7 @@ export class TapStack extends cdk.Stack {
 
     // Create /health resource
     const healthResource = api.root.addResource('health');
-    
+
     // Add GET method to /health
     healthResource.addMethod('GET', new apigateway.LambdaIntegration(healthCheckL
+```
