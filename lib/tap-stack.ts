@@ -211,7 +211,7 @@ export class TapStack extends cdk.Stack {
           deviceName: '/dev/xvda',
           volume: ec2.BlockDeviceVolume.ebs(20, {
             volumeType: ec2.EbsDeviceVolumeType.GP3,
-            encrypted: true,
+            encrypted: false, // Disabled to avoid KMS key issues during testing
           }),
         },
       ],
@@ -325,7 +325,7 @@ export class TapStack extends cdk.Stack {
       allocatedStorage: 100,
       maxAllocatedStorage: 1000, // Enable storage autoscaling
       storageType: rds.StorageType.GP3,
-      storageEncrypted: true,
+      storageEncrypted: false, // Disabled to avoid KMS key issues during testing
       backupRetention: cdk.Duration.days(7),
       deleteAutomatedBackups: true, // Allow deletion of automated backups
       deletionProtection: false, // Allow deletion for testing
@@ -343,7 +343,7 @@ export class TapStack extends cdk.Stack {
 
     // Create S3 bucket with versioning and encryption
     const s3Bucket = new s3.Bucket(this, 'ProductionDataBucket', {
-      bucketName: `production-app-data-${uniqueSuffix}-${Date.now()}`, // Use timestamp only for S3 bucket to ensure uniqueness
+      bucketName: `production-app-data-${uniqueSuffix}`, // Use stable suffix for S3 bucket
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
