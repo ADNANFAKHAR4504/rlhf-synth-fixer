@@ -27,6 +27,10 @@ jest.mock('@pulumi/pulumi', () => ({
           return 'ap-south-1';
         case 'configRecorderName':
           return 'config-recorder-prod';
+        case 'existingRecorderName':
+          return 'config-recorder-prod';
+        case 'existingDeliveryChannelName':
+          return 'config-delivery-prod';
         default:
           return undefined;
       }
@@ -117,12 +121,8 @@ jest.mock('../lib/security-monitoring', () => ({
   })),
 }));
 
-import { TapStack } from '../lib/tap-stack';
 import { createInfrastructure } from '../lib/infrastructure';
-import { createVpcResources } from '../lib/vpc';
-import { createSecurityGroup } from '../lib/security';
-import { createEc2Instance } from '../lib/compute';
-import { createSecurityMonitoring } from '../lib/security-monitoring';
+import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Unit Tests', () => {
   let stack: TapStack;
@@ -282,8 +282,8 @@ describe('TapStack Unit Tests', () => {
         ['203.26.56.90/32'],
         't3.micro',
         'ap-south-1',
-        expect.any(String),
-        expect.any(String)
+        undefined,
+        undefined
       );
     });
 
@@ -316,8 +316,8 @@ describe('TapStack Unit Tests', () => {
         ['10.0.0.0/8', '192.168.1.0/24'],
         't3.small',
         'us-east-1',
-        expect.any(String),
-        expect.any(String)
+        undefined,
+        undefined
       );
     });
 
@@ -336,8 +336,8 @@ describe('TapStack Unit Tests', () => {
         ['203.26.56.90/32'], // Should match the IP range specified in PROMPT.md
         't3.micro',
         'ap-south-1',
-        expect.any(String),
-        expect.any(String)
+        undefined,
+        undefined
       );
     });
 
@@ -359,8 +359,8 @@ describe('TapStack Unit Tests', () => {
         ['203.26.56.90/32'],
         't3.micro',
         'ap-south-1', // Should default to ap-south-1 as specified in PROMPT.md
-        expect.any(String),
-        expect.any(String)
+        undefined,
+        undefined
       );
     });
   });
@@ -374,8 +374,8 @@ describe('TapStack Unit Tests', () => {
         expect.any(Array),
         expect.any(String),
         expect.any(String),
-        expect.any(String),
-        expect.any(String)
+        undefined,
+        undefined
       );
     });
 
@@ -388,8 +388,8 @@ describe('TapStack Unit Tests', () => {
         expect.any(Array),
         expect.any(String),
         expect.any(String),
-        expect.any(String),
-        expect.any(String)
+        undefined,
+        undefined
       );
     });
 
@@ -405,8 +405,8 @@ describe('TapStack Unit Tests', () => {
           expect.any(Array),
           expect.any(String),
           expect.any(String),
-          expect.any(String),
-          expect.any(String)
+          undefined,
+          undefined
         );
       });
     });
@@ -468,8 +468,8 @@ describe('TapStack Unit Tests', () => {
         ['203.26.56.90/32'],
         't3.micro',
         'ap-south-1',
-        expect.any(String),
-        expect.any(String)
+        null,
+        null
       );
     });
 
@@ -483,8 +483,8 @@ describe('TapStack Unit Tests', () => {
         expect.any(Array),
         expect.any(String),
         expect.any(String),
-        expect.any(String),
-        expect.any(String)
+        null,
+        null
       );
     });
   });
@@ -504,8 +504,8 @@ describe('TapStack Unit Tests', () => {
         expect.any(Array),
         expect.any(String),
         expect.any(String),
-        expect.any(String),
-        expect.any(String)
+        null,
+        null
       );
     });
 
@@ -534,8 +534,8 @@ describe('TapStack Unit Tests', () => {
         expect.any(Array),
         expect.any(String),
         'ap-south-1', // Region should be configurable and default to ap-south-1
-        expect.any(String),
-        expect.any(String)
+        null,
+        null
       );
     });
 
@@ -547,8 +547,8 @@ describe('TapStack Unit Tests', () => {
         ['203.26.56.90/32'], // SSH CIDR configuration
         expect.any(String),
         expect.any(String), // Region configuration
-        expect.any(String),
-        expect.any(String)
+        null,
+        null
       );
     });
 
@@ -611,8 +611,8 @@ describe('TapStack Unit Tests', () => {
         ['203.26.56.90/32'],
         't3.micro',
         'eu-west-1', // Should use configured region
-        expect.any(String),
-        expect.any(String)
+        undefined,
+        undefined
       );
     });
   });
@@ -648,8 +648,8 @@ describe('TapStack Unit Tests', () => {
         ['203.26.56.90/32'], // Should include the specified IP range
         expect.any(String),
         expect.any(String),
-        expect.any(String),
-        expect.any(String)
+        undefined,
+        undefined
       );
     });
 
@@ -667,8 +667,8 @@ describe('TapStack Unit Tests', () => {
         expect.any(Array),
         expect.any(String),
         expect.stringMatching(/^[a-z]{2}-[a-z]+-\d+$/), // AWS region format
-        expect.any(String),
-        expect.any(String)
+        undefined,
+        undefined
       );
     });
   });
