@@ -121,6 +121,36 @@ resource "aws_kms_key" "main" {
           "kms:DescribeKey"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "Allow ELB Service for Access Logs"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::797873946194:root"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow Delivery Logs Service"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -389,7 +419,10 @@ resource "aws_lb" "main" {
     enabled = true
   }
 
-  depends_on = [aws_s3_bucket_policy.alb_logs]
+  depends_on = [
+    aws_s3_bucket_policy.alb_logs,
+    aws_s3_bucket_public_access_block.webapp_assets
+  ]
 
   tags = {
     Name        = "${var.project_name}-${var.environment_suffix}-alb"
@@ -406,15 +439,10 @@ resource "aws_s3_bucket_policy" "alb_logs" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::797873946194:root" # ELB service account for us-west-2
+          AWS = "arn:aws:iam::797873946194:root"
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.webapp_assets.arn}/alb-access-logs/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
       },
       {
         Effect = "Allow"
@@ -423,16 +451,11 @@ resource "aws_s3_bucket_policy" "alb_logs" {
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.webapp_assets.arn}/alb-access-logs/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
       },
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::797873946194:root" # ELB service account for us-west-2
+          AWS = "arn:aws:iam::797873946194:root"
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.webapp_assets.arn
