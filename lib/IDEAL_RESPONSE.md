@@ -1,4 +1,5 @@
 ```yaml
+
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Highly secure cloud infrastructure (VPC, EC2, RDS, S3) with encryption, least privilege IAM, and conditional resource creation.'
 Metadata:
@@ -696,6 +697,7 @@ Resources:
 
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateNewS3Bucket
     Properties:
       Name: !Sub '${AWS::StackName}-config-recorder'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -716,6 +718,7 @@ Resources:
 
   ConfigRole:
     Type: AWS::IAM::Role
+    Condition: CreateNewS3Bucket
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -724,8 +727,29 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      Policies:
+        - PolicyName: !Sub '${AWS::StackName}-config-policy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:Put*
+                  - config:Get*
+                  - config:List*
+                  - config:Delete*
+                  - config:Describe*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}'
+                  - !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/*'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-config-role'
@@ -939,7 +963,10 @@ Outputs:
       Name: !Sub '${AWS::StackName}-CloudTrailName'
   ConfigRecorderName:
     Description: The name of the AWS Config recorder.
-    Value: !Ref ConfigRecorder
+    Value:
+      !If [CreateNewS3Bucket, !Ref ConfigRecorder, 'No Config recorder created']
     Export:
       Name: !Sub '${AWS::StackName}-ConfigRecorderName'
+
+
 ```

@@ -611,6 +611,7 @@ describe('TapStack CloudFormation Template', () => {
       test('ConfigRecorder should have correct properties', () => {
         const recorder = template.Resources.ConfigRecorder;
         expect(recorder.Type).toBe('AWS::Config::ConfigurationRecorder');
+        expect(recorder.Condition).toBe('CreateNewS3Bucket');
         expect(recorder.Properties.RecordingGroup.AllSupported).toBe(true);
         expect(
           recorder.Properties.RecordingGroup.IncludeGlobalResourceTypes
@@ -623,14 +624,15 @@ describe('TapStack CloudFormation Template', () => {
         );
       });
 
-      test('ConfigRole should have correct properties', () => {
-        const role = template.Resources.ConfigRole;
-        expect(role.Type).toBe('AWS::IAM::Role');
-        expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
-        expect(role.Properties.ManagedPolicyArns).toContain(
-          'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
-        );
-      });
+             test('ConfigRole should have correct properties', () => {
+         const role = template.Resources.ConfigRole;
+         expect(role.Type).toBe('AWS::IAM::Role');
+         expect(role.Condition).toBe('CreateNewS3Bucket');
+         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
+         expect(role.Properties.Policies).toBeDefined();
+         expect(role.Properties.Policies[0].PolicyName['Fn::Sub']).toBeDefined();
+         expect(role.Properties.Policies[0].PolicyDocument.Statement).toHaveLength(2);
+       });
     });
 
     describe('Database Resources', () => {
@@ -829,10 +831,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
 
-    test('ConfigRecorderName output should reference config recorder', () => {
+    test('ConfigRecorderName output should be conditional', () => {
       const output = template.Outputs.ConfigRecorderName;
       expect(output.Description).toBeDefined();
-      expect(output.Value['Ref']).toBe('ConfigRecorder');
+      expect(output.Value['Fn::If']).toBeDefined();
+      expect(output.Value['Fn::If'][0]).toBe('CreateNewS3Bucket');
+      expect(output.Value['Fn::If'][1]['Ref']).toBe('ConfigRecorder');
+      expect(output.Value['Fn::If'][2]).toBe('No Config recorder created');
       expect(output.Export.Name['Fn::Sub']).toBeDefined();
     });
   });

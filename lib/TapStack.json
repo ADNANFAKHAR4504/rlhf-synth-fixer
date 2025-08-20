@@ -1287,6 +1287,7 @@
         },
         "ConfigRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "CreateNewS3Bucket",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-config-recorder"
@@ -1317,6 +1318,7 @@
         },
         "ConfigRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "CreateNewS3Bucket",
             "Properties": {
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -1330,8 +1332,46 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${AWS::StackName}-config-policy"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:Put*",
+                                        "config:Get*",
+                                        "config:List*",
+                                        "config:Delete*",
+                                        "config:Describe*"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketAcl",
+                                        "s3:PutObject",
+                                        "s3:DeleteObject",
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ApplicationLogsBucket}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ApplicationLogsBucket}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
                 ],
                 "Tags": [
                     {
@@ -1841,7 +1881,13 @@
         "ConfigRecorderName": {
             "Description": "The name of the AWS Config recorder.",
             "Value": {
-                "Ref": "ConfigRecorder"
+                "Fn::If": [
+                    "CreateNewS3Bucket",
+                    {
+                        "Ref": "ConfigRecorder"
+                    },
+                    "No Config recorder created"
+                ]
             },
             "Export": {
                 "Name": {
