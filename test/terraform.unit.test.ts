@@ -37,7 +37,7 @@ describe("Terraform Secure Infra - Unit Tests", () => {
     expect(tfContent).toMatch(/server_side_encryption_configuration/);
     expect(tfContent).toMatch(/sse_algorithm\s*=\s*"aws:kms"/);
     expect(tfContent).toMatch(/bucket_key_enabled\s*=\s*true/);
-    expect(tfContent).toMatch(/versioning\s*{/);
+    expect(tfContent).toMatch(/versioning_configuration/);
     expect(tfContent).toMatch(/status\s*=\s*"Enabled"/);
   });
 
@@ -56,7 +56,7 @@ describe("Terraform Secure Infra - Unit Tests", () => {
   });
 
   it("should include CloudWatch metric filter for unauthorized API calls", () => {
-    expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_metric_filter"/);
+    expect(tfContent).toMatch(/resource\s+"aws_cloudwatch_log_metric_filter"/);
     expect(tfContent).toMatch(/UnauthorizedOperation/);
     expect(tfContent).toMatch(/AccessDenied/);
   });
@@ -68,16 +68,18 @@ describe("Terraform Secure Infra - Unit Tests", () => {
   });
 
   // ---------- AUDITING & COMPLIANCE ----------
-  it("should configure CloudTrail for auditing", () => {
+  it("should have conditional CloudTrail configuration", () => {
+    expect(tfContent).toMatch(/variable\s+"create_cloudtrail"/);
     expect(tfContent).toMatch(/resource\s+"aws_cloudtrail"/);
-    expect(tfContent).toMatch(/enable_logging\s*=\s*true/);
-    expect(tfContent).toMatch(/include_global_service_events\s*=\s*true/);
+    expect(tfContent).toMatch(/count\s*=\s*var\.create_cloudtrail/);
   });
 
-  it("should have CloudTrail with S3 and CloudWatch integration", () => {
+  it("should have CloudTrail with S3 and CloudWatch integration when enabled", () => {
     expect(tfContent).toMatch(/s3_bucket_name/);
     expect(tfContent).toMatch(/cloud_watch_logs_group_arn/);
     expect(tfContent).toMatch(/cloud_watch_logs_role_arn/);
+    expect(tfContent).toMatch(/enable_logging\s*=\s*true/);
+    expect(tfContent).toMatch(/include_global_service_events\s*=\s*true/);
   });
 
   // ---------- STANDARDS ----------

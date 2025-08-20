@@ -30,6 +30,12 @@ variable "owner" {
   default     = "platform-team"
 }
 
+variable "create_cloudtrail" {
+  description = "Whether to create CloudTrail (set to false if trail limit exceeded)"
+  type        = bool
+  default     = false
+}
+
 ########################################
 # Locals
 ########################################
@@ -205,6 +211,7 @@ resource "aws_s3_bucket_policy" "trail_logs" {
 # CloudWatch Logs
 ########################################
 resource "aws_cloudwatch_log_group" "cloudtrail" {
+  count             = var.create_cloudtrail ? 1 : 0
   name              = "/aws/${local.name_prefix}-${random_id.resource_suffix.hex}/cloudtrail"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.main.arn
@@ -215,7 +222,8 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 # IAM Role for CloudTrail Logs
 ########################################
 resource "aws_iam_role" "cloudtrail_logs_role" {
-  name = "${local.name_prefix}-ct-to-cwl-role-${random_id.resource_suffix.hex}"
+  count = var.create_cloudtrail ? 1 : 0
+  name  = "${local.name_prefix}-ct-to-cwl-role-${random_id.resource_suffix.hex}"
   assume_role_policy = jsonencode({
     Version : "2012-10-17",
     Statement : [
@@ -230,8 +238,9 @@ resource "aws_iam_role" "cloudtrail_logs_role" {
 }
 
 resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
-  name = "${local.name_prefix}-ct-to-cwl-policy-${random_id.resource_suffix.hex}"
-  role = aws_iam_role.cloudtrail_logs_role.id
+  count = var.create_cloudtrail ? 1 : 0
+  name  = "${local.name_prefix}-ct-to-cwl-policy-${random_id.resource_suffix.hex}"
+  role  = aws_iam_role.cloudtrail_logs_role[0].id
   policy = jsonencode({
     Version : "2012-10-17",
     Statement : [
@@ -242,8 +251,8 @@ resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
           "logs:PutLogEvents"
         ],
         Resource : [
-          aws_cloudwatch_log_group.cloudtrail.arn,
-          "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+          aws_cloudwatch_log_group.cloudtrail[0].arn,
+          "${aws_cloudwatch_log_group.cloudtrail[0].arn}:*"
         ]
       }
     ]
@@ -254,14 +263,15 @@ resource "aws_iam_role_policy" "cloudtrail_logs_policy" {
 # CloudTrail
 ########################################
 resource "aws_cloudtrail" "main" {
+  count                         = var.create_cloudtrail ? 1 : 0
   name                          = "${local.name_prefix}-trail-${random_id.resource_suffix.hex}"
   s3_bucket_name                = aws_s3_bucket.trail_logs.bucket
   kms_key_id                    = aws_kms_key.main.arn
   include_global_service_events = true
   is_multi_region_trail         = false
   enable_logging                = true
-  cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
-  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_logs_role.arn
+  cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.cloudtrail[0].arn}:*"
+  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_logs_role[0].arn
   tags                          = local.common_tags
 }
 
@@ -269,8 +279,9 @@ resource "aws_cloudtrail" "main" {
 # CloudWatch Alarms + SNS
 ########################################
 resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_requests" {
+  count          = var.create_cloudtrail ? 1 : 0
   name           = "${local.name_prefix}-unauth-api-${random_id.resource_suffix.hex}"
-  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
+  log_group_name = aws_cloudwatch_log_group.cloudtrail[0].name
   pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
 
   metric_transformation {
@@ -303,10 +314,11 @@ resource "aws_sns_topic_policy" "security_alerts" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "unauthorized_api_requests" {
+  count               = var.create_cloudtrail ? 1 : 0
   alarm_name          = "${local.name_prefix}-unauth-api-alarm-${random_id.resource_suffix.hex}"
   alarm_description   = "Triggers on unauthorized API requests detected via CloudTrail"
   namespace           = "${local.name_prefix}/Security"
-  metric_name         = aws_cloudwatch_log_metric_filter.unauthorized_api_requests.metric_transformation[0].name
+  metric_name         = aws_cloudwatch_log_metric_filter.unauthorized_api_requests[0].metric_transformation[0].name
   statistic           = "Sum"
   period              = 300
   evaluation_periods  = 1
@@ -337,11 +349,11 @@ output "cloudtrail_bucket_name" {
 }
 
 output "cloudtrail_arn" {
-  value = aws_cloudtrail.main.arn
+  value = var.create_cloudtrail ? aws_cloudtrail.main[0].arn : null
 }
 
 output "cloudtrail_log_group" {
-  value = aws_cloudwatch_log_group.cloudtrail.name
+  value = var.create_cloudtrail ? aws_cloudwatch_log_group.cloudtrail[0].name : null
 }
 
 output "security_alerts_topic_arn" {
