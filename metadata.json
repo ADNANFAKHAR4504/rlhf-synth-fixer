@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr165",
+  "team": "synth",
+  "startedAt": "2025-08-20T21:07:17+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "IAM",
+    "S3",
+    "CloudWatch",
+    "Secrets Manager"
+  ]
+}
