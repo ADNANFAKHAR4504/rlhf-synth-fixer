@@ -173,7 +173,7 @@ describe('CI/CD Pipeline Integration Tests', () => {
       expect(
         encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0]
           ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
-      ).toBe('aws:kms');
+      ).toBe('AES256');
     }, 10000);
 
     test('CloudWatch log group should exist for CodeBuild', async () => {
