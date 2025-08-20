@@ -79,17 +79,13 @@ async function initializeLiveTesting() {
   // Initialize AWS clients
   ec2Client = new EC2Client({ region });
 
-  // Test connectivity with a simple API call - only if VPC ID looks real
-  if (OUT.vpcId && OUT.vpcId.startsWith('vpc-') && OUT.vpcId !== 'vpc-0123456789abcdef0') {
-    try {
-      await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] }));
-      console.log(`Live testing enabled - using region: ${region}`);
-    } catch (error) {
-      console.log(`Warning: VPC ${OUT.vpcId} not found in AWS. Infrastructure may not be deployed yet.`);
-      console.log(`Live testing will be skipped until infrastructure is deployed.`);
-    }
-  } else {
-    console.log(`Mock VPC ID detected. Live testing will be skipped until real infrastructure is deployed.`);
+  // Test connectivity with a simple API call to verify infrastructure is deployed
+  try {
+    await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [OUT.vpcId] }));
+    console.log(`Live testing enabled - using region: ${region}`);
+  } catch (error) {
+    console.log(`Warning: VPC ${OUT.vpcId} not found in AWS. Infrastructure may not be deployed yet.`);
+    console.log(`Live testing will be skipped until infrastructure is deployed.`);
   }
 }
 
@@ -110,17 +106,9 @@ async function retry<T>(fn: () => Promise<T>, attempts = 3, baseMs = 1000): Prom
 }
 
 function hasRealInfrastructure(): boolean {
-  // Check if we have real AWS infrastructure by looking for real resource IDs
-  // Real AWS resource IDs have specific patterns, mock ones are different
-  const isRealVpc = OUT.vpcId && OUT.vpcId.match(/^vpc-[a-f0-9]{8,17}$/) && OUT.vpcId !== 'vpc-0123456789abcdef0';
-  const areRealPublicSubnets = OUT.publicSubnetIds.every((id: string) => id.match(/^subnet-[a-f0-9]{8,17}$/) && id !== 'subnet-01234567890abcdef');
-  const isRealPrivateSubnet = OUT.privateSubnetId && OUT.privateSubnetId.match(/^subnet-[a-f0-9]{8,17}$/) && OUT.privateSubnetId !== 'subnet-11111111111111111';
-  const isRealPublicSg = OUT.publicSecurityGroupId && OUT.publicSecurityGroupId.match(/^sg-[a-f0-9]{8,17}$/) && OUT.publicSecurityGroupId !== 'sg-0123456789abcdef0';
-  const isRealPrivateSg = OUT.privateSecurityGroupId && OUT.privateSecurityGroupId.match(/^sg-[a-f0-9]{8,17}$/) && OUT.privateSecurityGroupId !== 'sg-abcdef0123456789';
-  const isRealIgw = OUT.internetGatewayId && OUT.internetGatewayId.match(/^igw-[a-f0-9]{8,17}$/) && OUT.internetGatewayId !== 'igw-0123456789abcdef0';
-  
-  return isRealVpc && areRealPublicSubnets && isRealPrivateSubnet && 
-         isRealPublicSg && isRealPrivateSg && isRealIgw;
+  // For live infrastructure testing, we assume the outputs file contains real resource IDs
+  // The infrastructure detection is done in initializeLiveTesting() via AWS API calls
+  return true;
 }
 
 /** ===================== Jest Config ===================== */
