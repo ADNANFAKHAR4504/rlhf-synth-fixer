@@ -49,11 +49,11 @@ describe('TapStack', () => {
 
     test('should create security groups with proper rules', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'ALB Security Group for dev environment'
+        GroupDescription: `ALB Security Group for ${environmentSuffix} environment`
       });
       
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'EC2 Security Group for dev environment'
+        GroupDescription: `EC2 Security Group for ${environmentSuffix} environment`
       });
     });
 
