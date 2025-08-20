@@ -1236,7 +1236,7 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${CorpCloudTrailBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${CorpCloudTrailBucket}/*"
                                     }
                                 ]
                             }
