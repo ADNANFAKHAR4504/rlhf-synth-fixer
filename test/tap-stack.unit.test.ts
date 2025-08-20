@@ -566,7 +566,7 @@ describe('TapStack CloudFormation Template', () => {
         expect(role.Condition).toBe('CreateNewVPC');
         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
         expect(role.Properties.ManagedPolicyArns).toContain(
-          'arn:aws:iam::aws:policy/service-role/VPCFlowLogsRole'
+          'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
         );
       });
 
@@ -628,7 +628,7 @@ describe('TapStack CloudFormation Template', () => {
         expect(role.Type).toBe('AWS::IAM::Role');
         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
         expect(role.Properties.ManagedPolicyArns).toContain(
-          'arn:aws:iam::aws:policy/service-role/ConfigRole'
+          'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
         );
       });
     });
