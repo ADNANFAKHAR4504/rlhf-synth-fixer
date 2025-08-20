@@ -162,9 +162,9 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
           r.type === 'aws_s3_bucket_public_access_block' &&
           r.name === 'frontend_bucket_pab'
       );
-      expect(publicAccessBlock.values.block_public_acls).toBe(true);
+      expect(publicAccessBlock.values.block_public_acls).toBe(false);
       expect(publicAccessBlock.values.block_public_policy).toBe(false);
-      expect(publicAccessBlock.values.ignore_public_acls).toBe(true);
+      expect(publicAccessBlock.values.ignore_public_acls).toBe(false);
       expect(publicAccessBlock.values.restrict_public_buckets).toBe(false);
 
       const ownershipControls = plan.planned_values.root_module.resources.find(

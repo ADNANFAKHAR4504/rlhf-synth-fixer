@@ -137,9 +137,9 @@ resource "aws_s3_bucket_versioning" "frontend_bucket_versioning" {
 # Frontend bucket public access block (allows public read access for website hosting)
 resource "aws_s3_bucket_public_access_block" "frontend_bucket_pab" {
   bucket                  = aws_s3_bucket.frontend_bucket.id
-  block_public_acls       = true
+  block_public_acls       = false
   block_public_policy     = false
-  ignore_public_acls      = true
+  ignore_public_acls      = false
   restrict_public_buckets = false
 }
 
