@@ -1,9 +1,9 @@
 You are a senior cloud platform engineer. Generate working Terraform (HCL) for AWS that fully implements the secure infrastructure described below.
 Important file rule: Produce exactly two Terraform files and nothing else for the IaC:
 
-provider.tf — providers, required versions, backend (local by default), and provider configuration.
+provider.tf providers, required versions, backend (local by default), and provider configuration.
 
-main.tf — all variables/locals/resources/data/outputs live here (no additional .tf files, no external Terraform modules).
+main.tf all variables/locals/resources/data/outputs live here (no additional .tf files, no external Terraform modules).
 Inline comments must explain key blocks and security decisions.
 
 Where details are missing, choose secure, cost‑aware, standards‑aligned defaults and list them in an Assumptions preface comment at the top of main.tf.
@@ -77,7 +77,7 @@ VPC endpoints (Gateway for S3; Interface endpoints for SSM/EC2 Messages/SSM Mess
 
 Ingress, Load Balancing & WAF
 
-ALB (HTTP→HTTPS redirect) fronting web/app tier in private subnets via Target Groups; ACM cert for TLS.
+ALB (HTTPHTTPS redirect) fronting web/app tier in private subnets via Target Groups; ACM cert for TLS.
 
 WAFv2 Web ACL (managed rules: AWSManagedRulesCommonRuleSet, KnownBadInputs, SQLi, etc.) associated to the ALB.
 
@@ -93,7 +93,7 @@ Parameter group (secure defaults); SG allows inbound only from app tier SG on th
 
 Storage & Encryption
 
-Central S3 “log bucket” (unique name via random suffix): versioning, SSE‑KMS, public access block, lifecycle (e.g., transition to IA/Glacier).
+Central S3 log bucket (unique name via random suffix): versioning, SSE‑KMS, public access block, lifecycle (e.g., transition to IA/Glacier).
 
 Any other S3 buckets (artifacts, backups) also SSE enabled and public‑blocked by default.
 
@@ -111,7 +111,7 @@ RDS enhanced monitoring (if used).
 
 CloudTrail + Config delivery to S3, KMS permissions.
 
-Deny policies or SCP‑like patterns are out of scope—focus on role policies.
+Deny policies or SCP‑like patterns are out of scopefocus on role policies.
 
 Observability, Audit & Compliance
 
@@ -157,7 +157,7 @@ No public RDS; RDS SG only allows from app SG on DB port.
 
 ALB is public; app instances are private.
 
-HTTPS‑only (redirect HTTP→HTTPS at ALB).
+HTTPS‑only (redirect HTTPHTTPS at ALB).
 
 S3: block_public_acls, block_public_policy, ignore_public_acls, restrict_public_buckets all true on every bucket unless var.allow_public_storage is explicitly set.
 
@@ -187,7 +187,7 @@ KMS key ARNs/aliases used.
 
 Bastion instance ID, SSM target name (if applicable).
 
-Add a Markdown‑styled comment block at the end of main.tf titled “Resource Inventory & Console Links” with:
+Add a Markdown‑styled comment block at the end of main.tf titled Resource Inventory & Console Links with:
 
 Names/IDs/ARNs and quick console URLs (region‑aware) for VPC, ALB, WAF, RDS, S3 log bucket, CloudTrail, AWS Config, KMS keys.
 
@@ -195,7 +195,7 @@ Testing & Policy Verification (must be provided)
 
 Include a brief README comment at the bottom of main.tf describing how to run tests.
 
-Terratest (Go) — provide a single file example snippet (e.g., test/terraform.int.test.ts and test/terraform.unit.test.ts.  go inline in a fenced code block) that:
+Terratest (Go) provide a single file example snippet (e.g., test/terraform.int.test.ts and test/terraform.unit.test.ts. go inline in a fenced code block) that:
 
 terraform init/plan/apply on a temp workspace,
 
@@ -207,7 +207,7 @@ asserts S3 log bucket has versioning + SSE‑KMS,
 
 asserts CloudTrail/Config resources exist.
 
-Conftest/OPA — provide example policy snippets (inline fenced code blocks) that reject:
+Conftest/OPA provide example policy snippets (inline fenced code blocks) that reject:
 
 any resource with S3 public access,
 
@@ -227,7 +227,7 @@ private_subnet_cidrs default ["10.0.11.0/24","10.0.12.0/24"]
 
 allowed_https_cidrs default ["0.0.0.0/0"] (can narrow)
 
-bastion_allowed_cidrs default [] (empty → only SSM Session Manager)
+bastion_allowed_cidrs default [] (empty only SSM Session Manager)
 
 tags map with Environment, Project, Owner, CostCenter
 

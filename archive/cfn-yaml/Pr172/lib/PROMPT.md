@@ -2,19 +2,19 @@ Here is a **comprehensive, structured prompt** you can use to generate or test a
 
 ---
 
-### ✅ Prompt Title:
+### Prompt Title:
 
 **Generate secure AWS infrastructure using CloudFormation YAML for production in `us-east-1`**
 
 ---
 
-### 📌 Prompt Description:
+### Prompt Description:
 
 Act as an expert AWS Solutions Architect. You are tasked with designing a secure, production-grade infrastructure using **AWS CloudFormation YAML** syntax. The infrastructure must align with **AWS security, networking, and IAM best practices** and must be **fully deployable** via a new CloudFormation stack in the **`us-east-1` region**.
 
 ---
 
-### 🧩 Required Modules & Constraints:
+### Required Modules & Constraints:
 
 Develop a complete CloudFormation YAML template named **`secure_infrastructure.yaml`** that satisfies the following requirements:
 
@@ -58,9 +58,9 @@ Develop a complete CloudFormation YAML template named **`secure_infrastructure.y
 
 * Create a **Security Group** for EC2 that:
 
-  * **Allows only inbound HTTPS (TCP 443)** traffic from a **known CIDR block** (e.g., `203.0.113.0/24`).
-  * Allows only **required outbound traffic**.
-  * Deny all other traffic implicitly.
+* **Allows only inbound HTTPS (TCP 443)** traffic from a **known CIDR block** (e.g., `203.0.113.0/24`).
+* Allows only **required outbound traffic**.
+* Deny all other traffic implicitly.
 
 ---
 
@@ -68,12 +68,12 @@ Develop a complete CloudFormation YAML template named **`secure_infrastructure.y
 
 * Apply the following **mandatory tags to *all* resources**:
 
-  * `Environment: Production`
-  * `Owner: TeamA`
+* `Environment: Production`
+* `Owner: TeamA`
 
 ---
 
-### ✅ Output Requirements:
+### Output Requirements:
 
 * Provide a complete **CloudFormation YAML template** named **`secure_infrastructure.yaml`**.
 * The template **must be deployable** using AWS CLI or Console.
@@ -84,7 +84,7 @@ Develop a complete CloudFormation YAML template named **`secure_infrastructure.y
 
 ---
 
-### 📍 Additional Instructions:
+### Additional Instructions:
 
 * Do **not** include placeholder text like `REPLACE_ME` in final output.
 * Do **not** use overly permissive IAM policies (`*:*`).

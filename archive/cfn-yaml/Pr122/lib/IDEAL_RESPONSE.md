@@ -1,5 +1,4 @@
-Ideal response is as below
-```
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   A secure, serverless greeting API using API Gateway and Lambda. This template
@@ -117,7 +116,44 @@ Resources:
 
 Outputs:
   ApiUrl:
-    Description: "URL for invoking the Greeting API"
+    Description: "URL for invoking the Greeting API endpoint"
     Value: !Sub "https://${GreetingApi}.execute-api.${AWS::Region}.amazonaws.com/prod/greet"
 
+  # --- NEW OUTPUTS FOR TESTING ---
+
+  ApiId:
+    Description: "The ID of the API Gateway REST API"
+    Value: !Ref GreetingApi
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiId"
+
+  LambdaFunctionName:
+    Description: "The name of the Lambda function"
+    Value: !Ref GreetingFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionName"
+
+  LambdaFunctionArn:
+    Description: "The ARN of the Lambda function"
+    Value: !GetAtt GreetingFunction.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionArn"
+
+  LambdaExecutionRoleArn:
+    Description: "The ARN of the Lambda function's execution role"
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaExecutionRoleArn"
+
+  CloudWatchLogGroupName:
+    Description: "The name of the CloudWatch Log Group for the Lambda function"
+    Value: !Ref LogGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudWatchLogGroupName"
+
+  Region:
+    Description: "The AWS Region the stack is deployed in"
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub "${AWS::StackName}-Region"
 ```

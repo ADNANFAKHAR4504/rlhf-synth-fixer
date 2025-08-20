@@ -1,4 +1,4 @@
-You are an expert AWS Solutions Architect and Infrastructure-as-Code engineer specializing in cloud security and compliance. Your task is to design and implement a highly secure, compliant, and resilient enterprise AWS environment using AWS CDK. Carefully follow all instructions and constraints, and output only the final, production-ready AWS CDK code (TypeScript or Python preferred), with clear comments. Do not include explanations or extra commentary—output only the code.
+You are an expert AWS Solutions Architect and Infrastructure-as-Code engineer specializing in cloud security and compliance. Your task is to design and implement a highly secure, compliant, and resilient enterprise AWS environment using AWS CDK. Carefully follow all instructions and constraints, and output only the final, production-ready AWS CDK code (TypeScript or Python preferred), with clear comments. Do not include explanations or extra commentaryoutput only the code.
 
 **Constraints:**
 - Use AWS IAM roles and policies to enforce least-privileged access for all users and services.
@@ -27,7 +27,7 @@ Design and implement an advanced, production-grade security configuration strate
 
 **Expected output:** Output the complete AWS CDK code that, when deployed, configures this infrastructure according to all provided requirements. The solution must be comprehensive, pass all security and compliance tests, and reflect AWS best practices for enterprise security.
 
-**Environment:**  
+**Environment:** 
 The infrastructure is hosted on AWS, utilizing S3, IAM, EC2, RDS, CloudWatch, VPC, WAF, KMS, Secrets Manager, and spanning at least three availability zones.
 
 **Instructions:**

@@ -1,3 +1,14 @@
+# CloudFormation Infrastructure Solution
+
+This solution implements the infrastructure requirements using AWS CloudFormation.
+
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure S3 bucket and IAM role for FinApp with encryption, access controls, and least-privilege permissions'
 
@@ -43,7 +54,7 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${FinAppS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${FinAppS3Bucket}/*'
               - !GetAtt FinAppS3Bucket.Arn
             Condition:
               Bool:
@@ -53,7 +64,6 @@ Resources:
   FinAppS3AccessRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'FinApp-S3AccessRole-${AWS::Region}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -72,7 +82,7 @@ Resources:
   FinAppS3AccessPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: FinApp-S3AccessPolicy
+      PolicyName: !Sub '${AWS::StackName}-S3AccessPolicy'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -82,7 +92,7 @@ Resources:
               - s3:GetObject
               - s3:PutObject
               - s3:DeleteObject
-            Resource: !Sub '${FinAppS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${FinAppS3Bucket}/*'
           - Sid: AllowS3BucketLocationAccess
             Effect: Allow
             Action:
@@ -95,7 +105,6 @@ Resources:
   FinAppS3AccessInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'FinApp-S3AccessInstanceProfile-${AWS::Region}'
       Path: /
       Roles:
         - !Ref FinAppS3AccessRole
@@ -124,3 +133,23 @@ Outputs:
     Value: !GetAtt FinAppS3AccessInstanceProfile.Arn
     Export:
       Name: !Sub '${AWS::StackName}-InstanceProfileArn'
+```
+
+## Key Features
+
+- Infrastructure as Code using CloudFormation YAML
+- Parameterized configuration for flexibility
+- Resource outputs for integration
+- Environment suffix support for multi-environment deployments
+
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+```

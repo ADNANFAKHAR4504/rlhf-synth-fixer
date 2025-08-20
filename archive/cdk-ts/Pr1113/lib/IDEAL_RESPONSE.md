@@ -1,46 +1,5 @@
-# Secure Infrastructure for Global Ecommerce Platform - IDEAL Implementation
-
-This CDK TypeScript application implements a comprehensive security infrastructure for a global ecommerce platform with all 16 security requirements fully validated and tested.
-
-## Security Compliance Status: 100% (16/16 Requirements Met)
-
-### Implementation Files
-
-#### bin/tap.ts
-
 ```typescript
-#!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
-
-const app = new cdk.App();
-
-const environmentSuffix =
-  app.node.tryGetContext('environmentSuffix') ||
-  process.env.ENVIRONMENT_SUFFIX ||
-  'dev';
-const region = process.env.CDK_DEFAULT_REGION || 'us-west-1';
-
-new TapStack(app, `TapStack${environmentSuffix}`, {
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: region,
-  },
-  environmentSuffix,
-});
-
-// Enable termination protection for production
-if (environmentSuffix === 'prod') {
-  cdk.Tags.of(app).add('Environment', 'Production');
-  cdk.Tags.of(app).add('CriticalWorkload', 'true');
-}
-
-app.synth();
-```
-
-#### lib/tap-stack.ts
-
-```typescript
+// tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -460,6 +419,67 @@ export class TapStack extends cdk.Stack {
       },
     });
 
+    // 10. IAM Password Policy Setup via Lambda Function
+    // Using a Lambda function to set the IAM password policy directly
+    const passwordPolicyFunction = new lambda.Function(
+      this,
+      'PasswordPolicyFunction',
+      {
+        runtime: lambda.Runtime.PYTHON_3_12,
+        handler: 'index.lambda_handler',
+        code: lambda.Code.fromInline(`
+import boto3
+import json
+
+def lambda_handler(event, context):
+    """Set IAM account password policy"""
+    try:
+        iam = boto3.client('iam')
+        
+        # Set account password policy
+        response = iam.update_account_password_policy(
+            MinimumPasswordLength=12,
+            RequireSymbols=True,
+            RequireNumbers=True,
+            RequireUppercaseCharacters=True,
+            RequireLowercaseCharacters=True,
+            AllowUsersToChangePassword=True,
+            MaxPasswordAge=90,
+            PasswordReusePrevention=24
+        )
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': 'IAM password policy updated successfully',
+                'response': response
+            })
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps({
+                'error': str(e)
+            })
+        }
+      `),
+        timeout: cdk.Duration.minutes(5),
+        description: 'Lambda function to set IAM account password policy',
+      }
+    );
+
+    // Grant IAM permissions to the password policy function
+    passwordPolicyFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'iam:UpdateAccountPasswordPolicy',
+          'iam:GetAccountPasswordPolicy',
+        ],
+        resources: ['*'],
+      })
+    );
+
     // 11. SNS Topic for security notifications
     const securityTopic = new sns.Topic(this, 'SecurityNotificationsTopic', {
       topicName: `security-alerts-${environmentSuffix}`,
@@ -699,144 +719,5 @@ def lambda_handler(event, context):
     cdk.Tags.of(this).add('CostCenter', 'Security');
   }
 }
+
 ```
-
-#### cdk.json
-
-```json
-{
-  "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
-  "watch": {
-    "include": ["**"],
-    "exclude": [
-      "README.md",
-      "cdk*.json",
-      "**/*.d.ts",
-      "**/*.js",
-      "tsconfig.json",
-      "package*.json",
-      "yarn.lock",
-      "node_modules",
-      "test"
-    ]
-  },
-  "context": {
-    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
-    "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:target": "CDK_PIPELINE_1_126_0",
-    "@aws-cdk-containers/ecs-service-extensions:enableLogging": true,
-    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
-    "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
-    "@aws-cdk/aws-iam:minimizePolicies": true,
-    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
-    "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": true,
-    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
-    "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
-    "@aws-cdk/aws-apigateway:disableCloudWatchRole": true,
-    "@aws-cdk/core:enablePartitionLiterals": true,
-    "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
-    "@aws-cdk/aws-iam:standardizedServicePrincipals": true,
-    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
-    "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": true,
-    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
-    "@aws-cdk/aws-route53-patters:useCertificate": true,
-    "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
-    "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": true,
-    "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": true,
-    "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
-    "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": true,
-    "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
-    "@aws-cdk/aws-redshift:columnId": true,
-    "@aws-cdk/aws-stepfunctions-tasks:enableLogging": true,
-    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
-    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
-    "@aws-cdk/aws-kms:aliasNameRef": true,
-    "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true,
-    "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
-    "@aws-cdk/aws-efs:denyAnonymousAccess": true,
-    "@aws-cdk/aws-opensearchservice:enableLogging": true,
-    "@aws-cdk/aws-normlizer:lib": true,
-    "@aws-cdk/aws-lambda:useCorrectChromiumVersion": true,
-    "@aws-cdk/aws-ec2:ebsDefaultGp3Volume": true,
-    "@aws-cdk/aws-ecs-patterns:removeDefaultDesiredCount": true,
-    "@aws-cdk/aws-rds:preventRenderingDeprecatedCredentials": true,
-    "@aws-cdk/aws-codepipeline-actions:useNewDefaultBranchForSourceAction": true
-  }
-}
-```
-
-## Security Compliance Summary
-
-### All 16 Security Requirements Implemented ✅
-
-| #   | Requirement                                               | Status | Implementation Details                              |
-| --- | --------------------------------------------------------- | ------ | --------------------------------------------------- |
-| 1   | IAM roles with least privilege principles                 | ✅     | EC2 role with minimal S3 and CloudWatch permissions |
-| 2   | S3 buckets with server-side encryption enforcement        | ✅     | KMS encryption with SSL/TLS enforcement             |
-| 3   | Security groups allowing only ports 80/443 from 0.0.0.0/0 | ✅     | Web SG restricted to HTTP/HTTPS only                |
-| 4   | DNS query logging via CloudTrail                          | ✅     | CloudTrail with S3 data events                      |
-| 5   | AWS Config enabled for resource change tracking           | ✅     | Config recorder with all resources tracked          |
-| 6   | CloudTrail activated in all AWS regions                   | ✅     | Multi-region trail with global events               |
-| 7   | KMS encryption keys for S3 buckets                        | ✅     | Dedicated KMS keys with rotation                    |
-| 8   | MFA enforcement for all IAM users                         | ✅     | Password policy with MFA requirements               |
-| 9   | VPC Flow Logs enabled for all subnets in all VPCs         | ✅     | Flow logs for entire VPC with encryption            |
-| 10  | RDS database access restricted to specific IP ranges      | ✅     | Database SG limited to 10.0.0.0/8                   |
-| 11  | Password policies with minimum 12 character length        | ✅     | 12-char minimum with complexity                     |
-| 12  | EC2 instances requiring IMDSv2 for metadata service       | ✅     | Launch template with requireImdsv2                  |
-| 13  | SNS notifications for security group changes              | ✅     | EventBridge rules for SG modifications              |
-| 14  | Daily automated compliance checks                         | ✅     | Lambda with scheduled CloudWatch Events             |
-| 15  | AWS Systems Manager Session Manager                       | ✅     | Secure shell access without SSH keys                |
-| 16  | Amazon Inspector v2 for vulnerability assessment          | ✅     | High/Critical findings routed to SNS                |
-
-### Additional Enterprise Security Features
-
-- **GuardDuty**: Enhanced threat detection with malware protection
-- **Secrets Manager**: Secure credential storage for RDS
-- **Encryption at Rest**: All data encrypted using KMS
-- **Network Segmentation**: Multi-tier VPC architecture
-- **Backup & Recovery**: 7-day RDS backup retention
-- **Cost Optimization**: S3 lifecycle policies
-- **Resource Cleanup**: Proper removal policies for all resources
-
-## Test Coverage
-
-- **Unit Tests**: 63 tests passing with 100% code coverage
-- **Integration Tests**: Comprehensive AWS resource validation
-- **Compliance Validation**: All 16 requirements verified
-
-## Deployment
-
-```bash
-# Set environment suffix
-export ENVIRONMENT_SUFFIX=synthtrainr638
-
-# Build
-npm run build
-
-# Lint
-npm run lint
-
-# Synthesize
-npm run cdk:synth
-
-# Deploy
-npm run cdk:deploy
-
-# Run tests
-npm run test:unit
-npm run test:integration
-
-# Destroy (cleanup)
-npm run cdk:destroy
-```
-
-## Key Improvements from Original Implementation
-
-1. **Password Policy**: Properly implemented using CfnResource workaround
-2. **Resource Cleanup**: Added removal policies to all stateful resources
-3. **SSM Session Manager**: Complete configuration with encrypted logging
-4. **Inspector v2**: EventBridge integration for vulnerability findings
-5. **Comprehensive Testing**: 100% code coverage with 63 unit tests
-6. **Production Ready**: All resources properly tagged and configured
-
-This implementation achieves 100% compliance (16/16 requirements) and provides enterprise-grade security for a global ecommerce platform.
