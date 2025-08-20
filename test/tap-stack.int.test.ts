@@ -44,8 +44,8 @@ describe("Terraform E2E Integration Tests", () => {
     bucketTags = typeof outputs.bucket_tags?.value === "object"
       ? outputs.bucket_tags.value
       : JSON.parse(outputs.bucket_tags?.value || "{}");
-    environment = bucketTags.Environment || "prod";
-    bucketRegion = outputs.bucket_region?.value || outputs.bucket_region || "us-east-1";
+    environment = process.env.ENVIRONMENT_SUFFIX || bucketTags.Environment || "prod";
+    bucketRegion = outputs.bucket_region?.value || outputs.bucket_region || process.env.AWS_REGION || "us-east-1";
     testRegion = outputs.aws_region?.value || outputs.aws_region || bucketRegion;
 
     // Load resource ids/names from outputs
@@ -64,7 +64,13 @@ describe("Terraform E2E Integration Tests", () => {
 
     test("bucket exists in expected region", async () => {
       const loc = await s3.send(new GetBucketLocationCommand({ Bucket: bucketName }));
-      expect(["us-west-2", "US"]).toContain(loc.LocationConstraint ?? "US");
+      // AWS returns "US" for us-east-1, so normalize it
+      const location = loc.LocationConstraint as string | undefined;
+      const actualRegion =
+        location === undefined || location === "" || location === "US"
+          ? "us-east-1"
+          : location;
+      expect(actualRegion).toBe(bucketRegion);
     });
 
     test("bucket has versioning enabled", async () => {
@@ -94,6 +100,7 @@ describe("Terraform E2E Integration Tests", () => {
     });
 
     test("RDS secret exists", async () => {
+      // Always use environment from dynamic value
       const secretName = rdsSecretName || `secure-rds-password-${environment}`;
       const res = await secrets.send(new DescribeSecretCommand({ SecretId: secretName }));
       expect(res.Name).toBe(secretName);
@@ -171,6 +178,7 @@ describe("Terraform E2E Integration Tests", () => {
     });
 
     test("EC2 role exists, policies attached", async () => {
+      // Always use environment from dynamic value
       const roleName = ec2RoleName || `secure-ec2-role-${environment}`;
       const roleRes = await iam.send(new GetRoleCommand({ RoleName: roleName }));
       expect(roleRes.Role).toBeDefined();
@@ -195,6 +203,7 @@ describe("Terraform E2E Integration Tests", () => {
     });
 
     test("dashboard exists", async () => {
+      // Always use environment from dynamic value
       const dashboardName = cloudwatchDashboardName || `secure-dashboard-${environment}`;
       const res = await cw.send(new GetDashboardCommand({ DashboardName: dashboardName }));
       expect(res.DashboardName).toBe(dashboardName);
