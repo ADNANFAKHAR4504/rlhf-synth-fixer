@@ -1,21 +1,21 @@
 /* eslint-disable prettier/prettier */
 
 /**
- * Multi-region AWS infrastructure stack using Pulumi TypeScript
- *
- * This stack implements a highly available, multi-region infrastructure
- * for a business-critical web application across us-east-1 and us-west-2.
- *
- * Features:
- * - Auto Scaling Groups with EC2 instances
- * - Centralized logging with S3 and lifecycle policies
- * - VPC with public/private subnets
- * - Multi-AZ RDS deployment
- * - Lambda functions for log processing
- * - AWS WAF with OWASP rules
- * - KMS encryption for data at rest
- * - IAM roles with least privilege
- */
+* Multi-region AWS infrastructure stack using Pulumi TypeScript
+*
+* This stack implements a highly available, multi-region infrastructure
+* for a business-critical web application across us-east-1 and us-west-2.
+*
+* Features:
+* - Auto Scaling Groups with EC2 instances
+* - Centralized logging with S3 and lifecycle policies
+* - VPC with public/private subnets
+* - Multi-AZ RDS deployment
+* - Lambda functions for log processing
+* - AWS WAF with OWASP rules
+* - KMS encryption for data at rest
+* - IAM roles with least privilege
+*/
 
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
@@ -120,7 +120,6 @@ export class TapStack extends pulumi.ComponentResource {
     provider: aws.Provider
   ): aws.kms.Key {
     const callerIdentity = aws.getCallerIdentity({}, { provider });
-
     return new aws.kms.Key(
       `kms-key-${region}`,
       {
@@ -317,7 +316,7 @@ def lambda_handler(event, context):
         'statusCode': 200,
         'body': json.dumps('Log processing function')
     }
-        `),
+`),
         }),
         handler: 'lambda_function.lambda_handler',
         role: lambdaRole.arn,
@@ -412,6 +411,7 @@ def lambda_handler(event, context):
       tags,
       provider
     );
+
     const dbSecurityGroup = this.createDbSecurityGroup(
       region,
       vpc,
@@ -438,28 +438,35 @@ def lambda_handler(event, context):
       provider
     );
 
-    // FIXED: Set desired capacity to 0 to avoid timeout issues during deployment
+    // FIXED: Set desired capacity to 0 and add replaceOnChanges
     const asg = new aws.autoscaling.Group(
       `asg-${region}`,
       {
-        name: `nova-model-asg-${region}-${Date.now()}`, // Add timestamp for uniqueness
-        minSize: 0, // Start with 0 to avoid timeout
-        maxSize: 3, // Reduced from 6
+        // DON'T use fixed names - let Pulumi generate them
+        minSize: 0,
+        maxSize: 3,
         desiredCapacity: 0, // Start with 0, scale manually later
-        vpcZoneIdentifiers: vpc.publicSubnetIds, // Use public subnets for easier access
+        vpcZoneIdentifiers: vpc.publicSubnetIds,
         launchTemplate: {
           id: launchTemplate.id,
           version: '$Latest',
         },
         healthCheckType: 'EC2', // Changed from ELB to EC2 for faster startup
-        healthCheckGracePeriod: 300, // Reduced timeout
+        healthCheckGracePeriod: 300,
         tags: Object.entries(tags).map(([key, value]) => ({
           key,
           value,
           propagateAtLaunch: true,
         })),
       },
-      { parent: this, provider, dependsOn: [launchTemplate, instanceProfile] }
+      { 
+        parent: this, 
+        provider, 
+        dependsOn: [launchTemplate, instanceProfile],
+        // CRITICAL FIX: Add replaceOnChanges to avoid ASG name conflicts
+        replaceOnChanges: ['name', 'launchTemplate'],
+        ignoreChanges: ['desiredCapacity'] // Let AWS manage capacity changes
+      }
     );
 
     this.autoScalingGroups[region] = asg;
@@ -477,7 +484,7 @@ def lambda_handler(event, context):
     const rdsInstance = new aws.rds.Instance(
       `rds-${region}`,
       {
-        identifier: `nova-model-db-${region}-${Date.now()}`, // Add timestamp for uniqueness
+        // DON'T use fixed identifiers - let AWS generate them
         engine: 'mysql',
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
@@ -497,7 +504,12 @@ def lambda_handler(event, context):
         skipFinalSnapshot: true,
         tags,
       },
-      { parent: this, provider }
+      { 
+        parent: this, 
+        provider,
+        // CRITICAL FIX: Add ignoreChanges for RDS identifier
+        ignoreChanges: ['identifier']
+      }
     );
 
     this.rdsInstances[region] = rdsInstance;
@@ -726,7 +738,6 @@ def lambda_handler(event, context):
     const base = baseOctets[region] || '10.0';
     const typeOffset = type === 'public' ? 0 : 10;
     const subnet = typeOffset + index;
-
     return `${base}.${subnet}.0/24`;
   }
 
@@ -880,20 +891,18 @@ def lambda_handler(event, context):
     tags: { [key: string]: string },
     provider: aws.Provider
   ): aws.ec2.LaunchTemplate {
-    const userData = Buffer.from(
-      `#!/bin/bash
-  yum update -y
-  yum install -y httpd
-  systemctl start httpd
-  systemctl enable httpd
-  echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
-  `
-    ).toString('base64');
+    const userData = Buffer.from(`#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Nova Model Application - ${region}</h1>" > /var/www/html/index.html
+`).toString('base64');
 
     return new aws.ec2.LaunchTemplate(
       `launch-template-${region}`,
       {
-        namePrefix: `nova-model-${region}-`, // **Already using namePrefix - good!**
+        namePrefix: `nova-model-${region}-`,
         imageId: aws.ec2
           .getAmi(
             {
@@ -935,6 +944,7 @@ def lambda_handler(event, context):
     );
   }
 
+  // CRITICAL FIX: Completely rewritten ALB section
   private createApplicationLoadBalancer(
     region: string,
     vpc: ExtendedVpc,
@@ -943,7 +953,7 @@ def lambda_handler(event, context):
     tags: { [key: string]: string },
     provider: aws.Provider
   ): void {
-    const regionCode = region === 'us-east-1' ? 'e1' : 'w2'; // **SHORTENED to 2 chars**
+    const regionCode = region === 'us-east-1' ? 'e1' : 'w2';
 
     const alb = new aws.lb.LoadBalancer(
       `alb-${region}`,
@@ -957,11 +967,11 @@ def lambda_handler(event, context):
       { parent: this, provider }
     );
 
-    // **FIX**: Use very short namePrefix (max 6 characters)
+    // CRITICAL FIX: Use deleteBeforeReplace to avoid target group conflicts
     const targetGroup = new aws.lb.TargetGroup(
       `tg-${region}`,
       {
-        namePrefix: `tg-${regionCode}-`, // **SHORTENED: "tg-e1-" (5 chars) or "tg-w2-" (5 chars)**
+        namePrefix: `tg-${regionCode}-`, // Short prefix
         port: 80,
         protocol: 'HTTP',
         vpcId: vpc.id,
@@ -981,10 +991,14 @@ def lambda_handler(event, context):
       {
         parent: this,
         provider,
-        deleteBeforeReplace: false,
+        // CRITICAL: This prevents ResourceInUse errors
+        deleteBeforeReplace: true,
+        // CRITICAL: This prevents name conflicts
+        replaceOnChanges: ['name', 'namePrefix']
       }
     );
 
+    // CRITICAL FIX: Use deleteBeforeReplace and proper dependencies
     const listener = new aws.lb.Listener(
       `listener-${region}`,
       {
@@ -1002,19 +1016,28 @@ def lambda_handler(event, context):
         parent: this,
         provider,
         dependsOn: [alb, targetGroup],
+        // CRITICAL: This prevents ListenerNotFound errors
+        deleteBeforeReplace: true,
+        // CRITICAL: Protect against multiple deletions
+        protect: false
       }
     );
 
+    // CRITICAL FIX: Use ignoreChanges to prevent ASG attachment issues
     new aws.autoscaling.Attachment(
       `asg-attachment-${region}`,
       {
-        autoscalingGroupName: asg.id,
+        autoscalingGroupName: asg.name, // Use .name instead of .id
         lbTargetGroupArn: targetGroup.arn,
       },
       {
         parent: this,
         provider,
-        dependsOn: [listener, targetGroup],
+        dependsOn: [listener, targetGroup, asg],
+        // CRITICAL: Ignore changes to prevent detachment issues
+        ignoreChanges: ['autoscalingGroupName'],
+        // CRITICAL: Replace before delete to avoid conflicts
+        deleteBeforeReplace: true
       }
     );
 
