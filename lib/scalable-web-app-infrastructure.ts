@@ -12,6 +12,7 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly cloudFrontDomain: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -780,37 +781,42 @@ EOF
       { provider, parent: this }
     );
 
-    // HTTPS Listener
-    new aws.lb.Listener(
-      `app-alb-https-listener-${environmentSuffix}`,
+    // CloudFront in front of ALB
+    const cfDistribution = new aws.cloudfront.Distribution(
+      `cf-dist-${environmentSuffix}`,
       {
-        loadBalancerArn: alb.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
-        defaultActions: [
+        enabled: true,
+        origins: [
           {
-            type: 'forward',
-            targetGroupArn: targetGroup.arn,
+            originId: `alb-origin-${environmentSuffix}`,
+            domainName: alb.dnsName,
+            customOriginConfig: {
+              originProtocolPolicy: 'http-only',
+              httpPort: 80,
+              httpsPort: 443,
+              originSslProtocols: ['TLSv1.2'],
+            },
           },
         ],
-      },
-      { provider, parent: this }
-    );
-
-    // HTTP Listener
-    new aws.lb.Listener(
-      `app-alb-http-listener-${environmentSuffix}`,
-      {
-        loadBalancerArn: alb.arn,
-        port: 80,
-        protocol: 'HTTP',
-        defaultActions: [
-          {
-            type: 'forward',
-            targetGroupArn: targetGroup.arn,
+        defaultCacheBehavior: {
+          targetOriginId: `alb-origin-${environmentSuffix}`,
+          viewerProtocolPolicy: 'redirect-to-https', // Clients always use HTTPS
+          allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'PATCH', 'POST', 'DELETE'],
+          cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
+          forwardedValues: {
+            queryString: true,
+            cookies: { forward: 'all' },
           },
-        ],
+        },
+        priceClass: 'PriceClass_100',
+        restrictions: { geoRestriction: { restrictionType: 'none' } },
+        viewerCertificate: {
+          cloudfrontDefaultCertificate: true,
+        },
+        tags: {
+          Name: `cf-dist-${environmentSuffix}`,
+          Environment: 'production',
+        },
       },
       { provider, parent: this }
     );
@@ -1166,6 +1172,7 @@ EOF
     this.vpcId = vpc.id;
     this.rdsEndpoint = rdsInstance.endpoint;
     this.autoScalingGroupName = autoScalingGroup.name;
+    this.cloudFrontDomain = cfDistribution.domainName;
 
     // Register outputs
     this.registerOutputs({
@@ -1173,6 +1180,7 @@ EOF
       vpcId: this.vpcId,
       rdsEndpoint: this.rdsEndpoint,
       autoScalingGroupName: this.autoScalingGroupName,
+      cloudFrontDomain: this.cloudFrontDomain
     });
   }
 }
