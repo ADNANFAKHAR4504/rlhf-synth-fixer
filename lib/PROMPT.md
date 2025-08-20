@@ -6,12 +6,12 @@ Create a single Terraform configuration file named tap_stack.tf containing all v
 5.Encrypt all EBS volumes and sensitive data at rest using AWS KMS with an AWS-managed key.
 6. Define IAM roles and policies strictly following the principle of least privilege.
 7.Adjust security groups to only allow incoming traffic on necessary ports defined by variables and specific CIDR only of the subnet or VPC CIDR only
-8. Ensure all web-facing resources are accessible exclusively over HTTPS .
-9.Enable detailed logging for all possible AWS resources (e.g., EC2, RDS, IAM, etc.) with logs centralized in CloudWatch Logs.
+8. Ensure all web-facing resources are accessible exclusively over HTTPS and HTTP.
+9.Enable detailed logging for all possible AWS resources EC2, RDS, IAM with logs ceintralized in CloudWatch Logs. 
 10.Configure CloudWatch Alarms to monitor and alert on security-related events based on customizable thresholds for CPU alarms only.Also no cloudtrail logging is needed as per the task requirement.
 11. Apply S3 Buckets configuration enforcing Block Public Access to prevent unintended public exposure.
-12. Create RDS in primary region with RDS specific security groups for primary region only.
-13. NAT Gateway and routetable and route table association is not needed in secondary region.
+12. Create RDS in each region with RDS specific security groups.
+13. NAT Gateway and routetable and route table association is needed in secondary region as well.
 14.Automate scheduled backups for all RDS databases using native RDS snapshot features with configurable retention.
 15. Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.
 
