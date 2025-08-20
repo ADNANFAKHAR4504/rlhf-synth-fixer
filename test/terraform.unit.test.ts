@@ -43,24 +43,35 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
 
     test('should create the correct number of resources', () => {
       const resourceCount = plan.planned_values.root_module.resources.length;
-      expect(resourceCount).toBe(22); // Updated count for all new resources
+      expect(resourceCount).toBe(25); // Updated count for CloudFront + WAF approach
     });
 
     test('S3 bucket should have versioning and encryption enabled', () => {
       const bucketVersioning = plan.planned_values.root_module.resources.find(
-        (r: any) => r.type === 'aws_s3_bucket_versioning' && r.name === 'lambda_bucket_versioning'
+        (r: any) =>
+          r.type === 'aws_s3_bucket_versioning' &&
+          r.name === 'lambda_bucket_versioning'
       );
       const bucketEncryption = plan.planned_values.root_module.resources.find(
-        (r: any) => r.type === 'aws_s3_bucket_server_side_encryption_configuration' && r.name === 'lambda_bucket_sse'
+        (r: any) =>
+          r.type === 'aws_s3_bucket_server_side_encryption_configuration' &&
+          r.name === 'lambda_bucket_sse'
       );
 
-      expect(bucketVersioning.values.versioning_configuration[0].status).toBe('Enabled');
-      expect(bucketEncryption.values.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm).toBe('AES256');
+      expect(bucketVersioning.values.versioning_configuration[0].status).toBe(
+        'Enabled'
+      );
+      expect(
+        bucketEncryption.values.rule[0]
+          .apply_server_side_encryption_by_default[0].sse_algorithm
+      ).toBe('AES256');
     });
 
     test('S3 bucket should block all public access', () => {
       const publicAccessBlock = plan.planned_values.root_module.resources.find(
-        (r: any) => r.type === 'aws_s3_bucket_public_access_block' && r.name === 'lambda_bucket_pab'
+        (r: any) =>
+          r.type === 'aws_s3_bucket_public_access_block' &&
+          r.name === 'lambda_bucket_pab'
       );
 
       expect(publicAccessBlock.values.block_public_acls).toBe(true);
@@ -71,18 +82,32 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
 
     test('IAM policy should grant least-privilege permissions', () => {
       const iamPolicy = plan.planned_values.root_module.resources.find(
-        (r: any) => r.type === 'aws_iam_policy' && r.name === 'lambda_exec_policy'
+        (r: any) =>
+          r.type === 'aws_iam_policy' && r.name === 'lambda_exec_policy'
       );
       const policyDocument = JSON.parse(iamPolicy.values.policy);
       const statements = policyDocument.Statement;
 
-      const logStatement = statements.find((s: any) => s.Resource === 'arn:aws:logs:*:*:*');
+      const logStatement = statements.find(
+        (s: any) => s.Resource === 'arn:aws:logs:*:*:*'
+      );
       expect(logStatement.Effect).toBe('Allow');
-      expect(logStatement.Action).toEqual(['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents']);
+      expect(logStatement.Action).toEqual([
+        'logs:CreateLogGroup',
+        'logs:CreateLogStream',
+        'logs:PutLogEvents',
+      ]);
 
-      const dynamoStatement = statements.find((s: any) => s.Action.includes('dynamodb:GetItem'));
+      const dynamoStatement = statements.find((s: any) =>
+        s.Action.includes('dynamodb:GetItem')
+      );
       expect(dynamoStatement.Effect).toBe('Allow');
-      expect(dynamoStatement.Action).toEqual(['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem', 'dynamodb:DeleteItem']);
+      expect(dynamoStatement.Action).toEqual([
+        'dynamodb:GetItem',
+        'dynamodb:PutItem',
+        'dynamodb:UpdateItem',
+        'dynamodb:DeleteItem',
+      ]);
       expect(dynamoStatement.Resource).not.toBe('*');
     });
 
@@ -94,27 +119,63 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
     });
 
     test('Frontend S3 bucket should have versioning and encryption enabled', () => {
-      const frontendBucketVersioning = plan.planned_values.root_module.resources.find(
-        (r: any) => r.type === 'aws_s3_bucket_versioning' && r.name === 'frontend_bucket_versioning'
-      );
-      const frontendBucketEncryption = plan.planned_values.root_module.resources.find(
-        (r: any) => r.type === 'aws_s3_bucket_server_side_encryption_configuration' && r.name === 'frontend_bucket_sse'
-      );
+      const frontendBucketVersioning =
+        plan.planned_values.root_module.resources.find(
+          (r: any) =>
+            r.type === 'aws_s3_bucket_versioning' &&
+            r.name === 'frontend_bucket_versioning'
+        );
+      const frontendBucketEncryption =
+        plan.planned_values.root_module.resources.find(
+          (r: any) =>
+            r.type === 'aws_s3_bucket_server_side_encryption_configuration' &&
+            r.name === 'frontend_bucket_sse'
+        );
 
-      expect(frontendBucketVersioning.values.versioning_configuration[0].status).toBe('Enabled');
-      expect(frontendBucketEncryption.values.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm).toBe('AES256');
+      expect(
+        frontendBucketVersioning.values.versioning_configuration[0].status
+      ).toBe('Enabled');
+      expect(
+        frontendBucketEncryption.values.rule[0]
+          .apply_server_side_encryption_by_default[0].sse_algorithm
+      ).toBe('AES256');
     });
 
     test('CloudFront distribution should enforce HTTPS', () => {
-      const cloudFrontDistribution = plan.planned_values.root_module.resources.find(
-        (r: any) => r.type === 'aws_cloudfront_distribution' && r.name === 'frontend_distribution'
-      );
-      expect(cloudFrontDistribution.values.default_cache_behavior[0].viewer_protocol_policy).toBe('redirect-to-https');
+      const cloudFrontDistribution =
+        plan.planned_values.root_module.resources.find(
+          (r: any) =>
+            r.type === 'aws_cloudfront_distribution' &&
+            r.name === 'frontend_distribution'
+        );
+      expect(
+        cloudFrontDistribution.values.default_cache_behavior[0]
+          .viewer_protocol_policy
+      ).toBe('redirect-to-https');
+    });
+
+    test('API CloudFront distribution should have no caching for API calls', () => {
+      const apiCloudFrontDistribution =
+        plan.planned_values.root_module.resources.find(
+          (r: any) =>
+            r.type === 'aws_cloudfront_distribution' &&
+            r.name === 'api_distribution'
+        );
+      expect(
+        apiCloudFrontDistribution.values.default_cache_behavior[0].default_ttl
+      ).toBe(0);
+      expect(
+        apiCloudFrontDistribution.values.default_cache_behavior[0].max_ttl
+      ).toBe(0);
+      expect(
+        apiCloudFrontDistribution.values.default_cache_behavior[0].min_ttl
+      ).toBe(0);
     });
 
     test('Cognito User Pool should have strong password policy', () => {
       const cognitoUserPool = plan.planned_values.root_module.resources.find(
-        (r: any) => r.type === 'aws_cognito_user_pool' && r.name === 'tap_user_pool'
+        (r: any) =>
+          r.type === 'aws_cognito_user_pool' && r.name === 'tap_user_pool'
       );
       const passwordPolicy = cognitoUserPool.values.password_policy[0];
       expect(passwordPolicy.minimum_length).toBe(8);
@@ -124,12 +185,41 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
       expect(passwordPolicy.require_uppercase).toBe(true);
     });
 
-    test('WAF should be configured with rate limiting', () => {
+    test('WAF should be configured with CLOUDFRONT scope and rate limiting', () => {
       const wafWebAcl = plan.planned_values.root_module.resources.find(
-        (r: any) => r.type === 'aws_wafv2_web_acl' && r.name === 'api_gateway_waf'
+        (r: any) =>
+          r.type === 'aws_wafv2_web_acl' && r.name === 'api_gateway_waf'
       );
-      const rateLimitRule = wafWebAcl.values.rule.find((rule: any) => rule.name === 'RateLimitRule');
-      expect(rateLimitRule.statement[0].rate_based_statement[0].limit).toBe(2000);
+      expect(wafWebAcl.values.scope).toBe('CLOUDFRONT');
+
+      const rateLimitRule = wafWebAcl.values.rule.find(
+        (rule: any) => rule.name === 'RateLimitRule'
+      );
+      expect(rateLimitRule.statement[0].rate_based_statement[0].limit).toBe(
+        2000
+      );
+
+      const managedRulesRule = wafWebAcl.values.rule.find(
+        (rule: any) => rule.name === 'AWSManagedRulesCommonRuleSet'
+      );
+      expect(managedRulesRule).toBeDefined();
+    });
+
+    test('WAF should be associated with both CloudFront distributions', () => {
+      const frontendWafAssociation =
+        plan.planned_values.root_module.resources.find(
+          (r: any) =>
+            r.type === 'aws_wafv2_web_acl_association' &&
+            r.name === 'frontend_cloudfront_waf_association'
+        );
+      const apiWafAssociation = plan.planned_values.root_module.resources.find(
+        (r: any) =>
+          r.type === 'aws_wafv2_web_acl_association' &&
+          r.name === 'api_cloudfront_waf_association'
+      );
+
+      expect(frontendWafAssociation).toBeDefined();
+      expect(apiWafAssociation).toBeDefined();
     });
 
     test('All resources should have proper tagging', () => {
@@ -139,8 +229,9 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
         'aws_dynamodb_table.tap_table',
         'aws_apigatewayv2_api.tap_api',
         'aws_cloudfront_distribution.frontend_distribution',
+        'aws_cloudfront_distribution.api_distribution',
         'aws_cognito_user_pool.tap_user_pool',
-        'aws_wafv2_web_acl.api_gateway_waf'
+        'aws_wafv2_web_acl.api_gateway_waf',
       ];
 
       taggedResources.forEach(resourcePath => {

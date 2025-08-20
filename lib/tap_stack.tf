@@ -384,6 +384,60 @@ resource "aws_cloudfront_distribution" "frontend_distribution" {
   }
 }
 
+# CloudFront Distribution for API Gateway (with WAF protection)
+resource "aws_cloudfront_distribution" "api_distribution" {
+  origin {
+    domain_name = replace(aws_apigatewayv2_api.tap_api.api_endpoint, "https://", "")
+    origin_id   = "API-Gateway-${aws_apigatewayv2_api.tap_api.id}"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = ""
+
+  default_cache_behavior {
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "API-Gateway-${aws_apigatewayv2_api.tap_api.id}"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      cookies {
+        forward = "all"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0  # No caching for API calls
+    max_ttl                = 0
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+
+  tags = {
+    Name        = "API Gateway CloudFront Distribution"
+    Environment = var.environment
+    Owner       = var.owner
+  }
+}
+
 # S3 bucket policy to allow CloudFront access
 resource "aws_s3_bucket_policy" "frontend_bucket_policy" {
   bucket = aws_s3_bucket.frontend_bucket.id
@@ -443,10 +497,10 @@ resource "aws_cognito_user_pool_client" "tap_user_pool_client" {
   ]
 }
 
-# WAF Web ACL for API Gateway
+# WAF Web ACL for CloudFront and API Gateway Protection
 resource "aws_wafv2_web_acl" "api_gateway_waf" {
-  name  = "tap-api-gateway-waf"
-  scope = "REGIONAL"
+  name  = "tap-api-protection-waf"
+  scope = "CLOUDFRONT"  # Changed to CLOUDFRONT for global protection
 
   default_action {
     allow {}
@@ -474,22 +528,49 @@ resource "aws_wafv2_web_acl" "api_gateway_waf" {
     }
   }
 
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 2
+
+    override_action {
+      none {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                 = "AWSManagedRulesCommonRuleSet"
+      sampled_requests_enabled    = true
+    }
+  }
+
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                 = "tapAPIGatewayWAF"
+    metric_name                 = "tapAPIProtectionWAF"
     sampled_requests_enabled    = true
   }
 
   tags = {
-    Name        = "TAP API Gateway WAF"
+    Name        = "TAP API Protection WAF"
     Environment = var.environment
     Owner       = var.owner
   }
 }
 
-# Associate WAF with API Gateway v2 Stage
-resource "aws_wafv2_web_acl_association" "api_gateway_waf_association" {
-  resource_arn = aws_apigatewayv2_stage.tap_api_stage.arn
+# Associate WAF with CloudFront Distributions (Production-recommended approach)
+resource "aws_wafv2_web_acl_association" "frontend_cloudfront_waf_association" {
+  resource_arn = aws_cloudfront_distribution.frontend_distribution.arn
+  web_acl_arn  = aws_wafv2_web_acl.api_gateway_waf.arn
+}
+
+resource "aws_wafv2_web_acl_association" "api_cloudfront_waf_association" {
+  resource_arn = aws_cloudfront_distribution.api_distribution.arn
   web_acl_arn  = aws_wafv2_web_acl.api_gateway_waf.arn
 }
 
@@ -506,6 +587,11 @@ output "frontend_bucket_name" {
 output "cloudfront_distribution_domain" {
   description = "The domain name of the CloudFront distribution."
   value       = aws_cloudfront_distribution.frontend_distribution.domain_name
+}
+
+output "protected_api_endpoint" {
+  description = "The WAF-protected API endpoint through CloudFront."
+  value       = "https://${aws_cloudfront_distribution.api_distribution.domain_name}"
 }
 
 output "cognito_user_pool_id" {
