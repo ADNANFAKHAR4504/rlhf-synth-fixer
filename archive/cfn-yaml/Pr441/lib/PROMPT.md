@@ -25,9 +25,9 @@ Create a **single CloudFormation YAML template** that provisions the following:
 
 * It should:
 
-  * Be triggered by the API Gateway.
-  * Read from and write to a DynamoDB table.
-  * Include **CloudWatch Logs** enabled for debugging and monitoring.
+* Be triggered by the API Gateway.
+* Read from and write to a DynamoDB table.
+* Include **CloudWatch Logs** enabled for debugging and monitoring.
 
 ---
 
@@ -35,8 +35,8 @@ Create a **single CloudFormation YAML template** that provisions the following:
 
 * Define both:
 
-  * **Partition key** (e.g., `userId` - String)
-  * **Sort key** (e.g., `createdAt` - String or Number)
+* **Partition key** (e.g., `userId` - String)
+* **Sort key** (e.g., `createdAt` - String or Number)
 * Use `PAY_PER_REQUEST` billing mode for cost efficiency.
 
 ---
@@ -45,11 +45,11 @@ Create a **single CloudFormation YAML template** that provisions the following:
 
 * Create IAM roles for:
 
-  * Any additional roles required by API Gateway (if applicable).
+* Any additional roles required by API Gateway (if applicable).
 * Roles must have **least privilege access**, scoped only to:
 
-  * DynamoDB actions like `GetItem`, `PutItem`, `Query`
-  * Logging permissions for CloudWatch.
+* DynamoDB actions like `GetItem`, `PutItem`, `Query`
+* Logging permissions for CloudWatch.
 
 ---
 
@@ -64,15 +64,15 @@ Create a **single CloudFormation YAML template** that provisions the following:
 
 * Configure **CloudWatch metrics and alarms** for the Lambda function:
 
-  * Track `Invocations`, `Errors`, and `Duration`.
-  * Add an alarm for high error rates (e.g., more than 5 errors in 5 minutes).
+* Track `Invocations`, `Errors`, and `Duration`.
+* Add an alarm for high error rates (e.g., more than 5 errors in 5 minutes).
 
 ---
 
 
 ---
 
-### ✅ **Expected Output:**
+### **Expected Output:**
 
 A **single, complete CloudFormation YAML file** that:
 

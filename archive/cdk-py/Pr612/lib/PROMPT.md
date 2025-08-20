@@ -1,7 +1,7 @@
 CDK Infrastructure Creation Prompt (Python, Serverless)
 You are tasked with building a serverless infrastructure using AWS CDK with Python. The project structure is as follows:
 
-📁 Project Structure
+Project Structure
 graphql
 Copy
 Edit
@@ -9,7 +9,7 @@ project-root/
 ├── tap.py             # CDK app entry point (like app.py)
 └── lib/
     └── tap_stack.py   # CDK stack definition file
-📌 Environment Requirements
+Environment Requirements
 Build a serverless application with the following:
 
 Lambda Function (Python)
@@ -67,7 +67,7 @@ Region
 
 Deploy the stack in the us-east-1 AWS region.
 
-⚙️ CDK Constructs to Use
+CDK Constructs to Use
 aws_cdk.aws_lambda
 
 aws_cdk.aws_apigateway
@@ -80,7 +80,7 @@ aws_cdk.aws_cloudwatch
 
 aws_cdk.Tags
 
-🧠 Prompt Summary for Code Generation
+Prompt Summary for Code Generation
 Create an AWS CDK Python program with the following:
 
 CDK entry point: tap.py

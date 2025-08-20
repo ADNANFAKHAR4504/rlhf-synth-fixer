@@ -1,4 +1,4 @@
-You are an expert cloud infrastructure engineer and Terraform developer. Your task is to design and deploy a production-grade AWS cloud environment using Terraform written in Python (e.g., via CDK for Terraform (CDKTF)). The solution must be secure, modular in logical structure, and scalable — but all code must be written in a single Python file.
+You are an expert cloud infrastructure engineer and Terraform developer. Your task is to design and deploy a production-grade AWS cloud environment using Terraform written in Python (e.g., via CDK for Terraform (CDKTF)). The solution must be secure, modular in logical structure, and scalable but all code must be written in a single Python file.
 Infrastructure Requirements
 Modular Resource Structure (Logical)
 Although everything is implemented in a single Python file, organize the logic using classes, functions, or clear code sections to simulate Terraform's modular structure.

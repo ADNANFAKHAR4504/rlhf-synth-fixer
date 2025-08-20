@@ -12,8 +12,8 @@ Requirements:
 4. Launch an **EC2 instance** inside the provided VPC in a **public subnet**, associating it with the Security Group and Instance Profile.
 5. All resources must follow the naming convention `<project>-<component>-<environment>` where:
 
-   * project = `myapp`
-   * environment = `production`
+* project = `myapp`
+* environment = `production`
 6. Output the equivalent CloudFormation YAML template that references the existing VPC and accepts a parameter for a public subnet ID.
 7. Keep all CDK infrastructure in a **single file** named `lib/myapp-stack.ts`.
 
@@ -27,4 +27,4 @@ Requirements:
 **Output format**
 
 1. The complete AWS CDK project (`package.json`, `cdk.json`, `tsconfig.json`, `bin/myapp.ts`, and `lib/myapp-stack.ts`).
-2. The CloudFormation YAML template matching the CDK stack’s resources and constraints.
+2. The CloudFormation YAML template matching the CDK stacks resources and constraints.

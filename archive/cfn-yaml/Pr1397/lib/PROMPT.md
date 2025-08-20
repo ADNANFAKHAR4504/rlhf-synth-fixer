@@ -8,7 +8,7 @@ AWS Lambda Function
 • Runtime: Choose a suitable runtime (e.g., nodejs18.x or python3.9).
 • Memory: Assign appropriate memory (e.g., 256 MB).
 • Timeout: Set a reasonable timeout (e.g., 30 seconds).
-• IAM Permissions: The Lambda function’s IAM role must have the necessary permissions to:
+• IAM Permissions: The Lambda functions IAM role must have the necessary permissions to:
 • Be invoked by API Gateway.
 • Write items to the specified DynamoDB table.
 • Write logs to CloudWatch Logs.

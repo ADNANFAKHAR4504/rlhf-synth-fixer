@@ -67,7 +67,7 @@ Based on this architecture, generate a **single, self-contained CloudFormation t
 1. CloudFormation template synthesizes without errors
 2. Deployment succeeds in us-east-1 region
 3. All security requirements are implemented (encryption, least privilege IAM, no additional ports)
-4. Event-driven architecture functions correctly (EventBridge → Lambda → SSM → EC2 → S3)
+4. Event-driven architecture functions correctly (EventBridge Lambda SSM EC2 S3)
 5. Resources can be destroyed cleanly
 6. No security best practices violations
 7. Backup process executes successfully on schedule
