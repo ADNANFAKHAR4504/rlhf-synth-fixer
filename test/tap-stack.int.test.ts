@@ -137,7 +137,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
       const identity = await clients.sts.send(new GetCallerIdentityCommand({}));
       accountId = identity.Account!;
       console.log(`Running tests with AWS Account: ${accountId}`);
-      console.log(`Region: ${process.env.AWS_REGION || 'ap-south-1'}`);
+      console.log(`Region: 'ap-south-1'`);
     } catch (error) {
       console.warn(`AWS credentials not available: ${error}`);
       process.env.SKIP_AWS_TESTS = 'true';
@@ -315,7 +315,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
 
       // Check ALB security group
       const albSg = securityGroups.find((sg: any) =>
-        sg.GroupName?.includes('alb-sg') || sg.Description?.includes('Application Load Balancer')
+        sg.GroupName?.includes('alb-security-group') || sg.Description?.includes('Application Load Balancer')
       );
       expect(albSg).toBeDefined();
       expect(
@@ -324,7 +324,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
 
       // Check EC2 security group - should NOT have SSH access
       const ec2Sg = securityGroups.find((sg: any) =>
-        sg.GroupName?.includes('ec2-sg') || sg.Description?.includes('EC2 instances')
+        sg.GroupName?.includes('ec2-security-group') || sg.Description?.includes('EC2 instances')
       );
       expect(ec2Sg).toBeDefined();
       expect(
@@ -336,7 +336,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
 
       // Check RDS security group
       const rdsSg = securityGroups.find((sg: any) =>
-        sg.GroupName?.includes('rds-sg') || sg.Description?.includes('RDS database')
+        sg.GroupName?.includes('rds-security-group') || sg.Description?.includes('RDS database')
       );
       expect(rdsSg).toBeDefined();
       expect(
@@ -359,7 +359,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
       );
 
       const ec2Sg = response.SecurityGroups!.find((sg: any) =>
-        sg.GroupName?.includes('ec2-sg')
+        sg.GroupName?.includes('ec2-security-group') || sg.Description?.includes('EC2 instances')
       );
       expect(ec2Sg).toBeDefined();
 
@@ -941,10 +941,10 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
 
       // RDS security group should only allow access from EC2 security group
       const rdsSg = securityGroups.find((sg: any) =>
-        sg.GroupName?.includes('rds-sg')
+        sg.GroupName?.includes('rds-security-group')
       );
       const ec2Sg = securityGroups.find((sg: any) =>
-        sg.GroupName?.includes('ec2-sg')
+        sg.GroupName?.includes('ec2-security-group')
       );
 
       if (rdsSg && ec2Sg) {
@@ -1098,7 +1098,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
 
   describe('Integration Test Summary', () => {
     it('should validate deployment region compliance', async () => {
-      const expectedRegion = process.env.AWS_REGION || 'ap-south-1';
+      const expectedRegion = 'ap-south-1';
 
       // Check VPC region (implicitly validated by successful API calls)
       const vpcId = outputs.vpcId;
