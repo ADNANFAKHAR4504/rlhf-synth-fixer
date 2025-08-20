@@ -582,9 +582,9 @@ describe('TapStack CloudFormation Template', () => {
         expect(role.Type).toBe('AWS::IAM::Role');
         expect(role.Condition).toBe('CreateNewVPC');
         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
-        expect(role.Properties.ManagedPolicyArns).toContain(
-          'arn:aws:iam::aws:policy/service-role/VPCFlowLogsRole'
-        );
+        expect(role.Properties.Policies).toBeDefined();
+        expect(role.Properties.Policies[0].PolicyName['Fn::Sub']).toBeDefined();
+        expect(role.Properties.Policies[0].PolicyDocument.Statement).toHaveLength(1);
       });
 
       test('VPCFlowLogs should be conditional and have correct properties', () => {
