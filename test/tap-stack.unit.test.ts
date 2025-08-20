@@ -46,6 +46,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.KeyPairName).toBeDefined();
       expect(template.Parameters.KeyPairName.Type).toBe('String');
     });
+
+    test('should have LatestAmiId parameter', () => {
+      expect(template.Parameters.LatestAmiId).toBeDefined();
+      expect(template.Parameters.LatestAmiId.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(template.Parameters.LatestAmiId.Default).toBe('/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64');
+    });
   });
 
   describe('Lambda Function for Random Suffix Generation', () => {
@@ -368,9 +374,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBe(25);
     });
 
-    test('should have 3 parameters', () => {
+    test('should have 4 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(4);
     });
 
     test('should have 19 outputs for complete visibility', () => {

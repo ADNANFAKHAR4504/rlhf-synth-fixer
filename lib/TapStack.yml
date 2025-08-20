@@ -23,6 +23,11 @@ Parameters:
     Default: ''
     Description: EC2 Key Pair for SSH access (if needed for emergency access). Leave empty if no SSH access needed.
 
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Description: Latest Amazon Linux 2023 AMI ID from Systems Manager Parameter Store
+
 Conditions:
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
@@ -467,7 +472,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub 'tapstack${EnvironmentSuffix}-launch-template-${AWS::AccountId}-${GenerateRandomSuffix.RandomSuffix}'
       LaunchTemplateData:
-        ImageId: ami-0d70546e43a941d70 # Amazon Linux 2023 AMI in us-west-1
+        ImageId: !Ref LatestAmiId
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
