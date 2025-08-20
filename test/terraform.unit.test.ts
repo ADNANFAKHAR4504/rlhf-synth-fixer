@@ -14,7 +14,7 @@ const VARS_PATH = process.env.TF_VARS_PATH
   ? path.resolve(process.env.TF_VARS_PATH)
   : path.resolve(__dirname, "../lib/vars.tf");
 
-// Helper function to extract data source blocks - FIXED REGEX
+// Helper function to extract data source blocks
 function extractDataSources(hcl: string): string[] {
   const results: string[] = [];
   const lines = hcl.split('\n');
@@ -42,7 +42,7 @@ function extractDataSources(hcl: string): string[] {
   return results;
 }
 
-// Helper function to extract module blocks - UPDATED TO HANDLE NESTED BRACES
+// Helper function to extract module blocks
 function extractModuleBlocks(hcl: string): { [key: string]: string } {
   // Remove multi-line commented blocks that contain module definitions
   let cleanHcl = hcl.replace(/^#[\s\S]*?^#\s*\}/gm, '');
@@ -132,7 +132,7 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
     const primaryVpc = modules['vpc_primary'];
     expect(primaryVpc).toBeTruthy();
     expect(primaryVpc).toMatch(/source\s*=\s*"\.\/modules\/vpc_module"/);
-    expect(primaryVpc).toMatch(/aws\s*=\s*aws\.primary/);
+    expect(primaryVpc).toMatch(/providers\s*=\s*\{\s*aws\s*=\s*aws\.primary\s*\}/);
     expect(primaryVpc).toMatch(/vpc_cidr\s*=\s*var\.primary_vpc_cidr/);
     expect(primaryVpc).toMatch(/availability_zones\s*=\s*data\.aws_availability_zones\.primary\.names/);
     expect(primaryVpc).toMatch(/environment\s*=\s*var\.environment/);
@@ -142,7 +142,7 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
     const secondaryVpc = modules['vpc_secondary'];
     expect(secondaryVpc).toBeTruthy();
     expect(secondaryVpc).toMatch(/source\s*=\s*"\.\/modules\/vpc_module"/);
-    expect(secondaryVpc).toMatch(/aws\s*=\s*aws\.secondary/);
+    expect(secondaryVpc).toMatch(/providers\s*=\s*\{\s*aws\s*=\s*aws\.secondary\s*\}/);
     expect(secondaryVpc).toMatch(/vpc_cidr\s*=\s*var\.secondary_vpc_cidr/);
     expect(secondaryVpc).toMatch(/availability_zones\s*=\s*data\.aws_availability_zones\.secondary\.names/);
     expect(secondaryVpc).toMatch(/environment\s*=\s*var\.environment/);
@@ -156,7 +156,7 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
     const primaryLb = modules['load_balancer_primary'];
     expect(primaryLb).toBeTruthy();
     expect(primaryLb).toMatch(/source\s*=\s*"\.\/modules\/loadbalancer_module"/);
-    expect(primaryLb).toMatch(/aws\s*=\s*aws\.primary/);
+    expect(primaryLb).toMatch(/providers\s*=\s*\{\s*aws\s*=\s*aws\.primary\s*\}/);
     expect(primaryLb).toMatch(/vpc_id\s*=\s*module\.vpc_primary\.vpc_id/);
     expect(primaryLb).toMatch(/public_subnet_ids\s*=\s*module\.vpc_primary\.public_subnet_ids/);
     expect(primaryLb).toMatch(/environment\s*=\s*var\.environment/);
@@ -166,7 +166,7 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
     const secondaryLb = modules['load_balancer_secondary'];
     expect(secondaryLb).toBeTruthy();
     expect(secondaryLb).toMatch(/source\s*=\s*"\.\/modules\/loadbalancer_module"/);
-    expect(secondaryLb).toMatch(/aws\s*=\s*aws\.secondary/);
+    expect(secondaryLb).toMatch(/providers\s*=\s*\{\s*aws\s*=\s*aws\.secondary\s*\}/);
     expect(secondaryLb).toMatch(/vpc_id\s*=\s*module\.vpc_secondary\.vpc_id/);
     expect(secondaryLb).toMatch(/public_subnet_ids\s*=\s*module\.vpc_secondary\.public_subnet_ids/);
     expect(secondaryLb).toMatch(/environment\s*=\s*var\.environment/);
@@ -180,7 +180,7 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
     const primaryCompute = modules['compute_primary'];
     expect(primaryCompute).toBeTruthy();
     expect(primaryCompute).toMatch(/source\s*=\s*"\.\/modules\/compute_module"/);
-    expect(primaryCompute).toMatch(/aws\s*=\s*aws\.primary/);
+    expect(primaryCompute).toMatch(/providers\s*=\s*\{\s*aws\s*=\s*aws\.primary\s*\}/);
     expect(primaryCompute).toMatch(/vpc_id\s*=\s*module\.vpc_primary\.vpc_id/);
     expect(primaryCompute).toMatch(/private_subnet_ids\s*=\s*module\.vpc_primary\.private_subnet_ids/);
     expect(primaryCompute).toMatch(/alb_target_group_arn\s*=\s*module\.load_balancer_primary\.target_group_arn/);
@@ -194,7 +194,7 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
     const secondaryCompute = modules['compute_secondary'];
     expect(secondaryCompute).toBeTruthy();
     expect(secondaryCompute).toMatch(/source\s*=\s*"\.\/modules\/compute_module"/);
-    expect(secondaryCompute).toMatch(/aws\s*=\s*aws\.secondary/);
+    expect(secondaryCompute).toMatch(/providers\s*=\s*\{\s*aws\s*=\s*aws\.secondary\s*\}/);
     expect(secondaryCompute).toMatch(/vpc_id\s*=\s*module\.vpc_secondary\.vpc_id/);
     expect(secondaryCompute).toMatch(/private_subnet_ids\s*=\s*module\.vpc_secondary\.private_subnet_ids/);
     expect(secondaryCompute).toMatch(/alb_target_group_arn\s*=\s*module\.load_balancer_secondary\.target_group_arn/);
@@ -265,19 +265,18 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
     // Primary region modules should use aws.primary provider
     const primaryModules = ['vpc_primary', 'load_balancer_primary', 'compute_primary'];
     primaryModules.forEach(moduleName => {
-      expect(modules[moduleName]).toMatch(/aws\s*=\s*aws\.primary/);
+      expect(modules[moduleName]).toMatch(/providers\s*=\s*\{\s*aws\s*=\s*aws\.primary\s*\}/);
     });
     
     // Secondary region modules should use aws.secondary provider
     const secondaryModules = ['vpc_secondary', 'load_balancer_secondary', 'compute_secondary'];
     secondaryModules.forEach(moduleName => {
-      expect(modules[moduleName]).toMatch(/aws\s*=\s*aws\.secondary/);
+      expect(modules[moduleName]).toMatch(/providers\s*=\s*\{\s*aws\s*=\s*aws\.secondary\s*\}/);
     });
   });
 
   test("validates all modules use relative path sources", () => {
-    // FIXED: Remove commented modules and only count active modules
-    // Handle multi-line commented module blocks
+    // Remove commented modules and only count active modules
     let cleanHcl = hcl.replace(/^#[\s\S]*?^#\s*\}/gm, '');
     // Also remove single comment lines
     cleanHcl = cleanHcl.replace(/^\s*#.*$/gm, '');
