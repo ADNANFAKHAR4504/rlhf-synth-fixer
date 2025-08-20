@@ -7,7 +7,8 @@ import {
   DescribeSecurityGroupsCommand,
   DescribeInstancesCommand,
   DescribeNatGatewaysCommand,
-  DescribeFlowLogsCommand
+  DescribeFlowLogsCommand,
+  DescribeVpcAttributeCommand
 } from '@aws-sdk/client-ec2';
 import { 
   S3Client, 
@@ -97,8 +98,19 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(vpc.State).toBe('available');
       
       // Check DNS settings
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsHostnames'
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.VPCId,
+        Attribute: 'enableDnsSupport'
+      });
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('Public subnet should exist and be configured correctly', async () => {
