@@ -49,6 +49,10 @@ describe("Terraform Infrastructure Unit Tests", () => {
     test("declares environment variable", () => {
       expect(stackContent).toMatch(/variable\s+"environment"\s*{/);
     });
+
+    test("declares environment_suffix variable", () => {
+      expect(stackContent).toMatch(/variable\s+"environment_suffix"\s*{/);
+    });
   });
 
   describe("VPC Configuration", () => {

@@ -25,6 +25,12 @@ variable "environment" {
   default     = "Production"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix for resource names to avoid conflicts"
+  type        = string
+  default     = "dev"
+}
+
 ########################
 # Data Sources
 ########################
@@ -41,7 +47,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "production-vpc"
+    Name        = "production-vpc-${var.environment_suffix}"
     Environment = var.environment
     ManagedBy   = "terraform"
   }
@@ -54,7 +60,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name        = "production-igw"
+    Name        = "production-igw-${var.environment_suffix}"
     Environment = var.environment
     ManagedBy   = "terraform"
   }
@@ -72,7 +78,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "public-subnet-${count.index + 1}"
+    Name        = "public-subnet-${count.index + 1}-${var.environment_suffix}"
     Environment = var.environment
     ManagedBy   = "terraform"
     Type        = "public"
@@ -88,7 +94,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[0]
 
   tags = {
-    Name        = "private-subnet"
+    Name        = "private-subnet-${var.environment_suffix}"
     Environment = var.environment
     ManagedBy   = "terraform"
     Type        = "private"
@@ -107,7 +113,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name        = "public-route-table"
+    Name        = "public-route-table-${var.environment_suffix}"
     Environment = var.environment
     ManagedBy   = "terraform"
   }
@@ -126,7 +132,7 @@ resource "aws_route_table_association" "public" {
 # Security Group for Public Resources
 ########################
 resource "aws_security_group" "public" {
-  name        = "public-security-group"
+  name        = "public-security-group-${var.environment_suffix}"
   description = "Security group for public resources with IP restrictions"
   vpc_id      = aws_vpc.main.id
 
@@ -190,7 +196,7 @@ resource "aws_security_group" "public" {
   }
 
   tags = {
-    Name        = "public-security-group"
+    Name        = "public-security-group-${var.environment_suffix}"
     Environment = var.environment
     ManagedBy   = "terraform"
   }
@@ -200,7 +206,7 @@ resource "aws_security_group" "public" {
 # Security Group for Private Resources
 ########################
 resource "aws_security_group" "private" {
-  name        = "private-security-group"
+  name        = "private-security-group-${var.environment_suffix}"
   description = "Security group for private resources"
   vpc_id      = aws_vpc.main.id
 
@@ -255,7 +261,7 @@ resource "aws_security_group" "private" {
   }
 
   tags = {
-    Name        = "private-security-group"
+    Name        = "private-security-group-${var.environment_suffix}"
     Environment = var.environment
     ManagedBy   = "terraform"
   }

@@ -110,3 +110,31 @@ resource "aws_vpc" "main" {
 # FAILURE EXAMPLE
 # Missing output blocks for vpc_id, subnet_ids, etc.
 ```
+
+## QA Pipeline Compliance Failures
+
+### 11. Missing Environment Suffix
+**Failure**: Not including environment_suffix in resource names for deployment isolation
+```hcl
+# FAILURE EXAMPLE
+resource "aws_vpc" "main" {
+  tags = {
+    Name = "production-vpc"  # Should be "production-vpc-${var.environment_suffix}"
+  }
+}
+```
+
+**Fix**: Add environment_suffix variable and use it in all resource names:
+```hcl
+variable "environment_suffix" {
+  description = "Environment suffix for resource names to avoid conflicts"
+  type        = string
+  default     = "dev"
+}
+
+resource "aws_vpc" "main" {
+  tags = {
+    Name = "production-vpc-${var.environment_suffix}"
+  }
+}
+```
