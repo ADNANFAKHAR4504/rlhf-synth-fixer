@@ -1,4 +1,4 @@
-import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
+import { TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -25,16 +25,21 @@ import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 
+// FIX: Added 'test' to the allowed environment types to fix the build error.
 export interface TapStackConfig {
-  readonly environment: 'dev' | 'test' | 'prod';
+  readonly environment: 'dev' | 'staging' | 'prod' | 'test';
   readonly vpcCidr: string;
   readonly instanceType: string;
   readonly dbInstanceClass: string;
   readonly tags: { [key: string]: string };
 }
 
+export interface MultiEnvStackProps {
+  readonly environments: TapStackConfig[];
+}
+
 export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, config: TapStackConfig) {
+  constructor(scope: Construct, id: string, props: MultiEnvStackProps) {
     super(scope, id);
 
     new AwsProvider(this, 'aws', { region: 'us-east-1' });
@@ -45,250 +50,294 @@ export class TapStack extends TerraformStack {
       filter: [{ name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] }],
     });
 
-    const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
+    for (const config of props.environments) {
+      const env = config.environment;
+      const envSuffix = `-${env}`;
 
-    const vpc = new Vpc(this, 'VPC', {
-      cidrBlock: config.vpcCidr,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      tags: { ...config.tags, Name: `vpc-${config.environment}` },
-    });
+      // ## NETWORKING ##
+      const vpc = new Vpc(this, `VPC${envSuffix}`, {
+        cidrBlock: config.vpcCidr,
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: { ...config.tags, Name: `vpc${envSuffix}` },
+      });
 
-    const igw = new InternetGateway(this, 'IGW', {
-      vpcId: vpc.id,
-      tags: { ...config.tags, Name: `igw-${config.environment}` },
-    });
-    const publicSubnetA = new Subnet(this, 'PublicSubnetA', {
-      vpcId: vpc.id,
-      cidrBlock: `${config.vpcCidr.split('.').slice(0, 2).join('.')}.1.0/24`,
-      availabilityZone: 'us-east-1a',
-      mapPublicIpOnLaunch: true,
-      tags: { ...config.tags, Name: `public-subnet-a-${config.environment}` },
-    });
-    const publicSubnetB = new Subnet(this, 'PublicSubnetB', {
-      vpcId: vpc.id,
-      cidrBlock: `${config.vpcCidr.split('.').slice(0, 2).join('.')}.3.0/24`,
-      availabilityZone: 'us-east-1b',
-      mapPublicIpOnLaunch: true,
-      tags: { ...config.tags, Name: `public-subnet-b-${config.environment}` },
-    });
-    const privateSubnetA = new Subnet(this, 'PrivateSubnetA', {
-      vpcId: vpc.id,
-      cidrBlock: `${config.vpcCidr.split('.').slice(0, 2).join('.')}.2.0/24`,
-      availabilityZone: 'us-east-1a',
-      tags: { ...config.tags, Name: `private-subnet-a-${config.environment}` },
-    });
-    const privateSubnetB = new Subnet(this, 'PrivateSubnetB', {
-      vpcId: vpc.id,
-      cidrBlock: `${config.vpcCidr.split('.').slice(0, 2).join('.')}.4.0/24`,
-      availabilityZone: 'us-east-1b',
-      tags: { ...config.tags, Name: `private-subnet-b-${config.environment}` },
-    });
+      const publicSubnetA = new Subnet(this, `PublicSubnetA${envSuffix}`, {
+        vpcId: vpc.id,
+        cidrBlock: `${config.vpcCidr.split('.').slice(0, 2).join('.')}.1.0/24`,
+        availabilityZone: 'us-east-1a',
+        mapPublicIpOnLaunch: true,
+        tags: { ...config.tags, Name: `public-subnet-a${envSuffix}` },
+      });
+      const publicSubnetB = new Subnet(this, `PublicSubnetB${envSuffix}`, {
+        vpcId: vpc.id,
+        cidrBlock: `${config.vpcCidr.split('.').slice(0, 2).join('.')}.3.0/24`,
+        availabilityZone: 'us-east-1b',
+        mapPublicIpOnLaunch: true,
+        tags: { ...config.tags, Name: `public-subnet-b${envSuffix}` },
+      });
+      const privateSubnetA = new Subnet(this, `PrivateSubnetA${envSuffix}`, {
+        vpcId: vpc.id,
+        cidrBlock: `${config.vpcCidr.split('.').slice(0, 2).join('.')}.2.0/24`,
+        availabilityZone: 'us-east-1a',
+        tags: { ...config.tags, Name: `private-subnet-a${envSuffix}` },
+      });
+      const privateSubnetB = new Subnet(this, `PrivateSubnetB${envSuffix}`, {
+        vpcId: vpc.id,
+        cidrBlock: `${config.vpcCidr.split('.').slice(0, 2).join('.')}.4.0/24`,
+        availabilityZone: 'us-east-1b',
+        tags: { ...config.tags, Name: `private-subnet-b${envSuffix}` },
+      });
 
-    const publicRouteTable = new RouteTable(this, 'PublicRouteTable', {
-      vpcId: vpc.id,
-      route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
-    });
-    new RouteTableAssociation(this, 'PublicRTAssocA', {
-      subnetId: publicSubnetA.id,
-      routeTableId: publicRouteTable.id,
-    });
-    new RouteTableAssociation(this, 'PublicRTAssocB', {
-      subnetId: publicSubnetB.id,
-      routeTableId: publicRouteTable.id,
-    });
-
-    const eip = new Eip(this, 'NatEip', {});
-    const natGateway = new NatGateway(this, 'NATGateway', {
-      allocationId: eip.id,
-      subnetId: publicSubnetA.id,
-    });
-    const privateRouteTable = new RouteTable(this, 'PrivateRouteTable', {
-      vpcId: vpc.id,
-      route: [{ cidrBlock: '0.0.0.0/0', natGatewayId: natGateway.id }],
-    });
-    new RouteTableAssociation(this, 'PrivateRTAssocA', {
-      subnetId: privateSubnetA.id,
-      routeTableId: privateRouteTable.id,
-    });
-    new RouteTableAssociation(this, 'PrivateRTAssocB', {
-      subnetId: privateSubnetB.id,
-      routeTableId: privateRouteTable.id,
-    });
-
-    const albSg = new SecurityGroup(this, 'AlbSg', {
-      name: `alb-sg-${config.environment}-${uniqueSuffix}`,
-      vpcId: vpc.id,
-      ingress: [
+      const igw = new InternetGateway(this, `IGW${envSuffix}`, {
+        vpcId: vpc.id,
+      });
+      const publicRouteTable = new RouteTable(
+        this,
+        `PublicRouteTable${envSuffix}`,
         {
-          protocol: 'tcp',
-          fromPort: 80,
-          toPort: 80,
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
-      egress: [
-        { protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'] },
-      ],
-    });
-    const webSg = new SecurityGroup(this, 'WebSg', {
-      name: `web-sg-${config.environment}-${uniqueSuffix}`,
-      vpcId: vpc.id,
-      ingress: [
-        {
-          protocol: 'tcp',
-          fromPort: 80,
-          toPort: 80,
-          securityGroups: [albSg.id],
-        },
-      ],
-      egress: [
-        { protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'] },
-      ],
-    });
-    const dbSg = new SecurityGroup(this, 'DbSg', {
-      name: `db-sg-${config.environment}-${uniqueSuffix}`,
-      vpcId: vpc.id,
-      ingress: [
-        {
-          protocol: 'tcp',
-          fromPort: 5432,
-          toPort: 5432,
-          securityGroups: [webSg.id],
-        },
-      ],
-    });
+          vpcId: vpc.id,
+          route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
+        }
+      );
+      new RouteTableAssociation(this, `PublicRTAssocA${envSuffix}`, {
+        subnetId: publicSubnetA.id,
+        routeTableId: publicRouteTable.id,
+      });
+      new RouteTableAssociation(this, `PublicRTAssocB${envSuffix}`, {
+        subnetId: publicSubnetB.id,
+        routeTableId: publicRouteTable.id,
+      });
 
-    const nacl = new NetworkAcl(this, 'NACL', {
-      vpcId: vpc.id,
-      subnetIds: [
-        publicSubnetA.id,
-        publicSubnetB.id,
-        privateSubnetA.id,
-        privateSubnetB.id,
-      ],
-      tags: { ...config.tags, Name: `nacl-${config.environment}` },
-    });
-    new NetworkAclRule(this, 'AllowInboundHttp', {
-      networkAclId: nacl.id,
-      ruleNumber: 100,
-      egress: false,
-      protocol: 'tcp',
-      ruleAction: 'allow',
-      cidrBlock: '0.0.0.0/0',
-      fromPort: 80,
-      toPort: 80,
-    });
-    new NetworkAclRule(this, 'AllowOutboundAll', {
-      networkAclId: nacl.id,
-      ruleNumber: 100,
-      egress: true,
-      protocol: '-1',
-      ruleAction: 'allow',
-      cidrBlock: '0.0.0.0/0',
-      fromPort: 0,
-      toPort: 0,
-    });
+      const eip = new Eip(this, `NatEip${envSuffix}`, {});
+      const natGateway = new NatGateway(this, `NATGateway${envSuffix}`, {
+        allocationId: eip.id,
+        subnetId: publicSubnetA.id,
+      });
+      const privateRouteTable = new RouteTable(
+        this,
+        `PrivateRouteTable${envSuffix}`,
+        {
+          vpcId: vpc.id,
+          route: [{ cidrBlock: '0.0.0.0/0', natGatewayId: natGateway.id }],
+        }
+      );
+      new RouteTableAssociation(this, `PrivateRTAssocA${envSuffix}`, {
+        subnetId: privateSubnetA.id,
+        routeTableId: privateRouteTable.id,
+      });
+      new RouteTableAssociation(this, `PrivateRTAssocB${envSuffix}`, {
+        subnetId: privateSubnetB.id,
+        routeTableId: privateRouteTable.id,
+      });
 
-    const webServerRole = new IamRole(this, 'WebServerRole', {
-      name: `web-server-role-${config.environment}-${uniqueSuffix}`,
-      assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
+      // ## SECURITY ##
+      const albSg = new SecurityGroup(this, `AlbSg${envSuffix}`, {
+        name: `alb-sg${envSuffix}`,
+        vpcId: vpc.id,
+        ingress: [
           {
-            Action: 'sts:AssumeRole',
-            Effect: 'Allow',
-            Principal: { Service: 'ec2.amazonaws.com' },
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
           },
         ],
-      }),
-    });
-    const webServerPolicy = new IamPolicy(this, 'WebServerPolicy', {
-      name: `web-server-policy-${config.environment}-${uniqueSuffix}`,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
+        egress: [
+          { protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'] },
+        ],
+      });
+      const webSg = new SecurityGroup(this, `WebSg${envSuffix}`, {
+        name: `web-sg${envSuffix}`,
+        vpcId: vpc.id,
+        ingress: [
           {
-            Action: [
-              's3:GetObject',
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            securityGroups: [albSg.id],
+          },
+        ],
+        egress: [
+          { protocol: '-1', fromPort: 0, toPort: 0, cidrBlocks: ['0.0.0.0/0'] },
+        ],
+      });
+      const dbSg = new SecurityGroup(this, `DbSg${envSuffix}`, {
+        name: `db-sg${envSuffix}`,
+        vpcId: vpc.id,
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 5432,
+            toPort: 5432,
+            securityGroups: [webSg.id],
+          },
+        ],
+      });
+
+      // FIX: Added Network ACL and Rules to fix linting errors and fulfill requirement.
+      const nacl = new NetworkAcl(this, `NACL${envSuffix}`, {
+        vpcId: vpc.id,
+        subnetIds: [
+          publicSubnetA.id,
+          publicSubnetB.id,
+          privateSubnetA.id,
+          privateSubnetB.id,
+        ],
+        tags: { ...config.tags, Name: `nacl${envSuffix}` },
+      });
+      new NetworkAclRule(this, `AllowInboundHttp${envSuffix}`, {
+        networkAclId: nacl.id,
+        ruleNumber: 100,
+        egress: false,
+        protocol: 'tcp',
+        ruleAction: 'allow',
+        cidrBlock: '0.0.0.0/0',
+        fromPort: 80,
+        toPort: 80,
+      });
+      new NetworkAclRule(this, `AllowInboundEphemeral${envSuffix}`, {
+        networkAclId: nacl.id,
+        ruleNumber: 200,
+        egress: false,
+        protocol: 'tcp',
+        ruleAction: 'allow',
+        cidrBlock: '0.0.0.0/0',
+        fromPort: 1024,
+        toPort: 65535,
+      });
+      new NetworkAclRule(this, `AllowOutboundAll${envSuffix}`, {
+        networkAclId: nacl.id,
+        ruleNumber: 100,
+        egress: true,
+        protocol: '-1',
+        ruleAction: 'allow',
+        cidrBlock: '0.0.0.0/0',
+        fromPort: 0,
+        toPort: 0,
+      });
+
+      // ## IAM ##
+      const webServerRole = new IamRole(this, `WebServerRole${envSuffix}`, {
+        name: `web-server-role${envSuffix}`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: { Service: 'ec2.amazonaws.com' },
+            },
+          ],
+        }),
+      });
+      const webServerPolicy = new IamPolicy(
+        this,
+        `WebServerPolicy${envSuffix}`,
+        {
+          name: `web-server-policy${envSuffix}`,
+          policy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Action: [
+                  's3:GetObject',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Effect: 'Allow',
+                Resource: '*',
+              },
             ],
-            Effect: 'Allow',
-            Resource: '*',
-          },
-        ],
-      }),
-    });
-    new IamRolePolicyAttachment(this, 'RolePolicyAttachment', {
-      role: webServerRole.name,
-      policyArn: webServerPolicy.arn,
-    });
-    const instanceProfile = new IamInstanceProfile(this, 'InstanceProfile', {
-      name: `web-server-profile-${config.environment}-${uniqueSuffix}`,
-      role: webServerRole.name,
-    });
+          }),
+        }
+      );
+      new IamRolePolicyAttachment(this, `RolePolicyAttachment${envSuffix}`, {
+        role: webServerRole.name,
+        policyArn: webServerPolicy.arn,
+      });
+      const instanceProfile = new IamInstanceProfile(
+        this,
+        `InstanceProfile${envSuffix}`,
+        { name: `web-server-profile${envSuffix}`, role: webServerRole.name }
+      );
 
-    const launchTemplate = new LaunchTemplate(this, 'LaunchTemplate', {
-      name: `lt-${config.environment}-${uniqueSuffix}`,
-      imageId: ami.id,
-      instanceType: config.instanceType,
-      iamInstanceProfile: { name: instanceProfile.name },
-      vpcSecurityGroupIds: [webSg.id],
-    });
-    const asg = new AutoscalingGroup(this, 'ASG', {
-      name: `asg-${config.environment}-${uniqueSuffix}`,
-      launchTemplate: { id: launchTemplate.id },
-      minSize: 1,
-      maxSize: 3,
-      desiredCapacity: 1,
-      vpcZoneIdentifier: [privateSubnetA.id, privateSubnetB.id],
-    });
-    const alb = new Lb(this, 'ALB', {
-      name: `alb-${config.environment}-${uniqueSuffix}`,
-      internal: false,
-      loadBalancerType: 'application',
-      securityGroups: [albSg.id],
-      subnets: [publicSubnetA.id, publicSubnetB.id],
-    });
-    const targetGroup = new LbTargetGroup(this, 'TargetGroup', {
-      name: `tg-${config.environment}-${uniqueSuffix}`,
-      port: 80,
-      protocol: 'HTTP',
-      vpcId: vpc.id,
-    });
-    new LbListener(this, 'Listener', {
-      loadBalancerArn: alb.arn,
-      port: 80,
-      protocol: 'HTTP',
-      defaultAction: [{ type: 'forward', targetGroupArn: targetGroup.arn }],
-    });
-    asg.targetGroupArns = [targetGroup.arn];
+      // ## COMPUTE & LOAD BALANCING ##
+      const launchTemplate = new LaunchTemplate(
+        this,
+        `LaunchTemplate${envSuffix}`,
+        {
+          name: `lt${envSuffix}`,
+          imageId: ami.id,
+          instanceType: config.instanceType,
+          iamInstanceProfile: { name: instanceProfile.name },
+          vpcSecurityGroupIds: [webSg.id],
+        }
+      );
+      const alb = new Lb(this, `ALB${envSuffix}`, {
+        name: `alb${envSuffix}`,
+        internal: false,
+        loadBalancerType: 'application',
+        securityGroups: [albSg.id],
+        subnets: [publicSubnetA.id, publicSubnetB.id],
+      });
+      const targetGroup = new LbTargetGroup(this, `TargetGroup${envSuffix}`, {
+        name: `tg${envSuffix}`,
+        port: 80,
+        protocol: 'HTTP',
+        vpcId: vpc.id,
+      });
+      new LbListener(this, `Listener${envSuffix}`, {
+        loadBalancerArn: alb.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultAction: [{ type: 'forward', targetGroupArn: targetGroup.arn }],
+      });
+      new AutoscalingGroup(this, `ASG${envSuffix}`, {
+        name: `asg${envSuffix}`,
+        launchTemplate: { id: launchTemplate.id },
+        minSize: 1,
+        maxSize: 3,
+        desiredCapacity: 1,
+        vpcZoneIdentifier: [privateSubnetA.id, privateSubnetB.id],
+        targetGroupArns: [targetGroup.arn],
+      });
 
-    const dbKmsKey = new KmsKey(this, 'DbKmsKey', {
-      description: `KMS key for ${config.environment} RDS`,
-      enableKeyRotation: true,
-    });
-    const dbSubnetGroup = new DbSubnetGroup(this, 'DbSubnetGroup', {
-      name: `db-subnet-group-${config.environment}-${uniqueSuffix}`,
-      subnetIds: [privateSubnetA.id, privateSubnetB.id],
-    });
-    const db = new DbInstance(this, 'Database', {
-      identifier: `appdb-${config.environment}-${uniqueSuffix}`,
-      instanceClass: config.dbInstanceClass,
-      engine: 'postgres',
-      allocatedStorage: 20,
-      username: 'dbadmin',
-      password: 'use-secrets-manager-in-production',
-      skipFinalSnapshot: true,
-      backupRetentionPeriod: 7,
-      vpcSecurityGroupIds: [dbSg.id],
-      dbSubnetGroupName: dbSubnetGroup.name,
-      storageEncrypted: true,
-      kmsKeyId: dbKmsKey.arn,
-    });
+      // ## DATABASE ##
+      const dbKmsKey = new KmsKey(this, `DbKmsKey${envSuffix}`, {
+        description: `KMS key for ${env} RDS`,
+        enableKeyRotation: true,
+      });
+      const dbSubnetGroup = new DbSubnetGroup(
+        this,
+        `DbSubnetGroup${envSuffix}`,
+        {
+          name: `db-subnet-group${envSuffix}`,
+          subnetIds: [privateSubnetA.id, privateSubnetB.id],
+        }
+      );
+      const db = new DbInstance(this, `Database${envSuffix}`, {
+        identifier: `appdb${envSuffix}`,
+        instanceClass: config.dbInstanceClass,
+        engine: 'postgres',
+        allocatedStorage: 20,
+        username: 'dbadmin',
+        password: 'use-secrets-manager-in-production',
+        skipFinalSnapshot: true,
+        backupRetentionPeriod: 7,
+        vpcSecurityGroupIds: [dbSg.id],
+        dbSubnetGroupName: dbSubnetGroup.name,
+        storageEncrypted: true,
+        kmsKeyId: dbKmsKey.arn,
+      });
 
-    new TerraformOutput(this, 'AlbDnsName', { value: alb.dnsName });
-    new TerraformOutput(this, 'RdsEndpoint', { value: db.endpoint });
+      // ## OUTPUTS ##
+      new TerraformOutput(this, `AlbDnsName${envSuffix}`, {
+        value: alb.dnsName,
+      });
+      new TerraformOutput(this, `RdsEndpoint${envSuffix}`, {
+        value: db.endpoint,
+      });
+    }
   }
 }

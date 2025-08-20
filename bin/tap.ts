@@ -5,7 +5,8 @@ import { TapStack, TapStackConfig } from '../lib/tap-stack';
 
 const app = new App();
 
-const environments: TapStackConfig[] = [
+// A single list containing the configuration for every environment
+const allEnvironments: TapStackConfig[] = [
   {
     environment: 'dev',
     vpcCidr: '10.10.0.0/16',
@@ -14,11 +15,11 @@ const environments: TapStackConfig[] = [
     tags: { Environment: 'Development', ManagedBy: 'CDKTF' },
   },
   {
-    environment: 'test',
+    environment: 'staging',
     vpcCidr: '10.20.0.0/16',
     instanceType: 't3.small',
     dbInstanceClass: 'db.t3.small',
-    tags: { Environment: 'Test', ManagedBy: 'CDKTF' },
+    tags: { Environment: 'Staging', ManagedBy: 'CDKTF' },
   },
   {
     environment: 'prod',
@@ -29,9 +30,8 @@ const environments: TapStackConfig[] = [
   },
 ];
 
-// Create a separate stack for each environment
-environments.forEach(config => {
-  new TapStack(app, `webapp-${config.environment}`, config);
-});
+// Instantiate the single stack ONCE and pass all environment configs to it.
+// This one stack will manage all the resources defined in the list above.
+new TapStack(app, 'unified-infra-stack', { environments: allEnvironments });
 
 app.synth();
