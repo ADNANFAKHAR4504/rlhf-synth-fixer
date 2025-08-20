@@ -1123,7 +1123,7 @@ Resources:
   WAFLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/wafv2/${AWS::StackName}-${EnvironmentSuffix}'
+      LogGroupName: !Sub 'aws-wafv2-logs-${AWS::StackName}-${EnvironmentSuffix}'
       RetentionInDays: 30
       Tags:
         - Key: 'Name'
@@ -1299,7 +1299,7 @@ Resources:
     Properties:
       Name: !Sub '${AWS::StackName}-ConfigDelivery-${EnvironmentSuffix}'
       S3BucketName: !Ref LoggingBucket
-      S3KeyPrefix: 'config/'
+      S3KeyPrefix: 'config'
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: 'TwentyFour_Hours'
 
