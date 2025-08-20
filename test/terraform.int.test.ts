@@ -139,8 +139,7 @@ describe("Live AWS Resource Validation", () => {
   test("VPC exists and is properly configured", async () => {
     if (!hasRealInfrastructure()) {
       console.log('Skipping live test - infrastructure not deployed');
-      expect(true).toBe(true);
-      return;
+      throw new Error('Infrastructure not deployed. Please run terraform apply first.');
     }
 
     const command = new DescribeVpcsCommand({
@@ -166,8 +165,7 @@ describe("Live AWS Resource Validation", () => {
   test("Public subnets exist and are properly configured", async () => {
     if (!hasRealInfrastructure()) {
       console.log('Skipping live test - infrastructure not deployed');
-      expect(true).toBe(true);
-      return;
+      throw new Error('Infrastructure not deployed. Please run terraform apply first.');
     }
 
     const command = new DescribeSubnetsCommand({
@@ -195,8 +193,7 @@ describe("Live AWS Resource Validation", () => {
   test("Private subnet exists and is properly configured", async () => {
     if (!hasRealInfrastructure()) {
       console.log('Skipping live test - infrastructure not deployed');
-      expect(true).toBe(true);
-      return;
+      throw new Error('Infrastructure not deployed. Please run terraform apply first.');
     }
 
     const command = new DescribeSubnetsCommand({
@@ -223,8 +220,7 @@ describe("Live AWS Resource Validation", () => {
   test("Internet Gateway exists and is attached to VPC", async () => {
     if (!hasRealInfrastructure()) {
       console.log('Skipping live test - infrastructure not deployed');
-      expect(true).toBe(true);
-      return;
+      throw new Error('Infrastructure not deployed. Please run terraform apply first.');
     }
 
     const command = new DescribeInternetGatewaysCommand({
@@ -249,8 +245,7 @@ describe("Live AWS Resource Validation", () => {
   test("Public subnets have route to internet gateway", async () => {
     if (!hasRealInfrastructure()) {
       console.log('Skipping live test - infrastructure not deployed');
-      expect(true).toBe(true);
-      return;
+      throw new Error('Infrastructure not deployed. Please run terraform apply first.');
     }
 
     for (const subnetId of OUT.publicSubnetIds) {
@@ -277,8 +272,7 @@ describe("Live AWS Resource Validation", () => {
   test("Security groups exist and have proper rules", async () => {
     if (!hasRealInfrastructure()) {
       console.log('Skipping live test - infrastructure not deployed');
-      expect(true).toBe(true);
-      return;
+      throw new Error('Infrastructure not deployed. Please run terraform apply first.');
     }
 
     // Get security groups for the VPC
@@ -336,8 +330,7 @@ describe("Live AWS Resource Validation", () => {
   test("Resources have proper tagging", async () => {
     if (!hasRealInfrastructure()) {
       console.log('Skipping live test - infrastructure not deployed');
-      expect(true).toBe(true);
-      return;
+      throw new Error('Infrastructure not deployed. Please run terraform apply first.');
     }
 
     // Check VPC tags
