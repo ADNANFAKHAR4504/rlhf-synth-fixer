@@ -5,7 +5,7 @@
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
   tags = {
-    Name        = "secure-prod-vpc"
+    Name        = "secure-vpc-${var.environment}"
     Environment = var.environment
     ManagedBy   = "terraform"
     Project     = "secure-env"
@@ -14,7 +14,7 @@ resource "aws_vpc" "main" {
 
 resource "aws_s3_bucket" "secure_prod" {
   bucket = "${var.bucket_name}-${var.environment}"
-  tags   = merge(var.bucket_tags, { Environment = var.environment })
+  tags   = merge(var.bucket_tags, { Environment = var.environment, Name = "secure-s3-${var.environment}" })
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "secure_prod_encryption" {
