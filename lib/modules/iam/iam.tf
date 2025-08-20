@@ -27,9 +27,13 @@ resource "aws_iam_role" "ec2" {
 }
 
 
+resource "random_pet" "suffix" {
+  length = 2
+}
+
 resource "aws_iam_user" "main" {
   count = length(var.iam_users)
-  name  = var.iam_users[count.index]
+  name  = "${var.iam_users[count.index]}-${random_pet.suffix.id}"
 }
 
 resource "aws_iam_user_login_profile" "main" {
