@@ -329,7 +329,7 @@ describe("Terraform Infrastructure - Database Module", () => {
   test("Database module creates parameter group", () => {
     const mainContent = fs.readFileSync(path.join(DATABASE_MODULE_PATH, "main.tf"), "utf8");
     expect(mainContent).toMatch(/resource\s+"aws_db_parameter_group"\s+"main"/);
-    expect(mainContent).toMatch(/family\s*=\s*"postgres13"/);
+    expect(mainContent).toMatch(/family\s*=\s*"postgres14"/);
   });
 
   test("Database module creates primary database instance", () => {

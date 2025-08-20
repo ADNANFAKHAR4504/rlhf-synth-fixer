@@ -29,7 +29,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_parameter_group" "main" {
-  family = "postgres13"
+  family = "postgres14"
   name   = "${var.environment}-db-params-${var.region}"
 
   parameter {
@@ -48,7 +48,7 @@ resource "aws_db_instance" "main" {
   identifier = "${var.environment}-postgres-${var.region}"
 
   engine         = "postgres"
-  engine_version = "13.22"
+  engine_version = "14.19"
   instance_class = var.db_instance_class
 
   allocated_storage     = var.allocated_storage
