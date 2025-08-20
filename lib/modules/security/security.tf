@@ -68,33 +68,6 @@ resource "aws_security_group" "rds" {
   }
 }
 
-resource "aws_security_group" "vpc_endpoint" {
-  name        = "${var.project_name}-vpc-endpoint-sg"
-  description = "Allow HTTPS from VPC"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    description = "HTTPS from VPC"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name        = "${var.project_name}-vpc-endpoint-sg"
-    Project     = var.project_name
-    Environment = var.environment
-  }
-}
-
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-alb-sg"
   description = "Allow HTTP and HTTPS from anywhere"

@@ -107,11 +107,6 @@ output "rds_sg_id" {
   value       = module.security.rds_sg_id
 }
 
-output "vpc_endpoint_sg_id" {
-  description = "The ID of the VPC endpoint security group"
-  value       = module.security.vpc_endpoint_sg_id
-}
-
 output "kms_key_id" {
   description = "The ID of the KMS key"
   value       = module.storage.kms_key_id

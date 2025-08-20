@@ -76,9 +76,6 @@ describe('Terraform Core Infrastructure (static checks)', () => {
   test('security module creates all required security groups', () => {
     expect(securityHcl).toMatch(/resource\s+"aws_security_group"\s+"ec2"/);
     expect(securityHcl).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
-    expect(securityHcl).toMatch(
-      /resource\s+"aws_security_group"\s+"vpc_endpoint"/
-    );
     expect(securityHcl).toMatch(/resource\s+"aws_security_group"\s+"alb"/);
   });
 

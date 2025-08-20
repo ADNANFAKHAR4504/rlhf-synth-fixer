@@ -9,18 +9,8 @@ resource "random_pet" "suffix" {
   length = 2
 }
 
-resource "aws_s3_bucket" "data" {
-  bucket = "${lower(substr(var.project_name, 0, 20))}-data-bucket-${random_pet.suffix.id}"
-
-  tags = {
-    Name        = "${var.project_name}-data-bucket"
-    Project     = var.project_name
-    Environment = var.environment
-  }
-}
-
 resource "aws_s3_bucket" "logs" {
-  bucket = "${lower(substr(var.project_name, 0, 20))}-logs-bucket-${random_pet.suffix.id}"
+  bucket_prefix = "${lower(replace(var.project_name, "-", ""))}-logs-"
 
   tags = {
     Name        = "${var.project_name}-logs-bucket"
