@@ -1407,7 +1407,7 @@
                     "Owner": "AWS",
                     "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
                 },
-                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
+                "MaximumExecutionFrequency": "TwentyFour_Hours"
             }
         },
 
@@ -1427,7 +1427,7 @@
                     "Owner": "AWS",
                     "SourceIdentifier": "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
                 },
-                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
+                "MaximumExecutionFrequency": "TwentyFour_Hours"
             }
         },
 
@@ -1446,8 +1446,7 @@
                 "Source": {
                     "Owner": "AWS",
                     "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
-                },
-                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
+                }
             }
         },
 
@@ -1465,9 +1464,8 @@
                 },
                 "Source": {
                     "Owner": "AWS",
-                    "SourceIdentifier": "RDS_INSTANCE_ENCRYPTION_ENABLED"
-                },
-                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
+                    "SourceIdentifier": "RDS_STORAGE_ENCRYPTED"
+                }
             }
         },
 
@@ -1486,8 +1484,7 @@
                 "Source": {
                     "Owner": "AWS",
                     "SourceIdentifier": "VPC_DEFAULT_SECURITY_GROUP_CLOSED"
-                },
-                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
+                }
             }
         },
 

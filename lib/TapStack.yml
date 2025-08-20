@@ -828,7 +828,7 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
-      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
+      MaximumExecutionFrequency: TwentyFour_Hours
 
   # AWS Config Rule: S3 Bucket Public Write Prohibited
   S3BucketPublicWriteProhibitedRule:
@@ -842,7 +842,7 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED
-      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
+      MaximumExecutionFrequency: TwentyFour_Hours
 
   # AWS Config Rule: S3 Bucket Encryption
   S3BucketEncryptionRule:
@@ -856,7 +856,6 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
-      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
 
   # AWS Config Rule: RDS Instance Encryption
   RDSInstanceEncryptionRule:
@@ -869,8 +868,7 @@ Resources:
           - AWS::RDS::DBInstance
       Source:
         Owner: AWS
-        SourceIdentifier: RDS_INSTANCE_ENCRYPTION_ENABLED
-      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
+        SourceIdentifier: RDS_STORAGE_ENCRYPTED
 
   # AWS Config Rule: VPC Default Security Group Closed
   VPCDefaultSecurityGroupClosedRule:
@@ -884,7 +882,6 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: VPC_DEFAULT_SECURITY_GROUP_CLOSED
-      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
 
   # Bastion Host
   BastionHost:
