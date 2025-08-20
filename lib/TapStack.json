@@ -1164,7 +1164,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${ApplicationLogsBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "${ApplicationLogsBucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1194,7 +1194,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${ApplicationLogsBucket}/config-logs/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "${ApplicationLogsBucket.Arn}/config-logs/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
