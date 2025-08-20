@@ -44,6 +44,7 @@
                 "Description": {
                     "Fn::Sub": "${ProjectName}-data-${Environment} - KMS key for data encryption"
                 },
+                "EnableKeyRotation": true,
                 "KeyPolicy": {
                     "Version": "2012-10-17",
                     "Statement": [
