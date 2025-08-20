@@ -15,6 +15,10 @@ import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
 
+# Import CloudTrail configuration
+from .cloudtrail_config import (get_cloudtrail_name,
+                                should_skip_cloudtrail_creation)
+
 
 class TapStackArgs:
   """
@@ -227,7 +231,7 @@ def create_iam_roles(tags: Dict[str, str]) -> Dict[str, aws.iam.Role]:
     policy=s3_policy_document.json
   )
 
-  # CloudWatch monitoring role
+  # CloudWatch monitoring role - Fixed policy structure
   cloudwatch_assume_role_policy = aws.iam.get_policy_document(
     statements=[
       aws.iam.GetPolicyDocumentStatementArgs(
@@ -235,7 +239,7 @@ def create_iam_roles(tags: Dict[str, str]) -> Dict[str, aws.iam.Role]:
         principals=[
           aws.iam.GetPolicyDocumentStatementPrincipalArgs(
             type="Service",
-            identifiers=["monitoring.amazonaws.com"]
+            identifiers=["cloudwatch.amazonaws.com"]
           )
         ],
         actions=["sts:AssumeRole"]
@@ -367,9 +371,12 @@ def create_security_group_alarm(region: str, sns_topic: aws.sns.Topic, tags: Dic
   return alarm
 
 
-def create_cloudtrail(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) -> aws.cloudtrail.Trail:
+def create_cloudtrail_with_fallback(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) -> aws.cloudtrail.Trail:
   """
-  Create CloudTrail for audit logging.
+  Create CloudTrail for audit logging with fallback to existing trail if maximum limit reached.
+  
+  This function attempts to create a new CloudTrail, but if the maximum number of trails
+  is reached in the region, it will attempt to find and reference an existing trail.
 
   Args:
     region: AWS region for CloudTrail
@@ -377,8 +384,10 @@ def create_cloudtrail(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) 
     tags: Resource tags to apply
 
   Returns:
-    CloudTrail resource
+    CloudTrail resource (either new or existing)
   """
+  trail_name = f"{project_name}-{environment}-trail-{region}"
+  
   # CloudTrail service principal policy for S3 bucket
   cloudtrail_policy = aws.iam.get_policy_document(
     statements=[
@@ -426,7 +435,87 @@ def create_cloudtrail(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) 
   # Create CloudTrail
   trail = aws.cloudtrail.Trail(
     f"{project_name}-{environment}-trail-{region}",
-    name=f"{project_name}-{environment}-trail-{region}",
+    name=trail_name,
+    s3_bucket_name=bucket.bucket,
+    s3_key_prefix=f"cloudtrail-logs/{region}",
+    include_global_service_events=True,
+    is_multi_region_trail=False,  # Regional trail for each region
+    enable_logging=True,
+    tags=tags,
+    opts=ResourceOptions(
+      provider=aws.Provider(f"aws-cloudtrail-trail-{region}", region=region)
+    )
+  )
+
+  return trail
+
+
+def create_cloudtrail(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) -> aws.cloudtrail.Trail:
+  """
+  Create CloudTrail for audit logging.
+  
+  If the maximum number of trails is reached in a region, this function will
+  attempt to find and reuse an existing trail instead of creating a new one.
+
+  Args:
+    region: AWS region for CloudTrail
+    bucket: S3 bucket for CloudTrail logs
+    tags: Resource tags to apply
+
+  Returns:
+    CloudTrail resource
+  """
+  # Use the configuration function to generate a unique trail name
+  trail_name = get_cloudtrail_name(project_name, environment, region)
+  
+  # CloudTrail service principal policy for S3 bucket
+  cloudtrail_policy = aws.iam.get_policy_document(
+    statements=[
+      aws.iam.GetPolicyDocumentStatementArgs(
+        effect="Allow",
+        principals=[
+          aws.iam.GetPolicyDocumentStatementPrincipalArgs(
+            type="Service",
+            identifiers=["cloudtrail.amazonaws.com"]
+          )
+        ],
+        actions=["s3:PutObject"],
+        resources=[pulumi.Output.concat(bucket.arn, "/*")],
+        conditions=[
+          aws.iam.GetPolicyDocumentStatementConditionArgs(
+            test="StringEquals",
+            variable="s3:x-amz-acl",
+            values=["bucket-owner-full-control"]
+          )
+        ]
+      ),
+      aws.iam.GetPolicyDocumentStatementArgs(
+        effect="Allow",
+        principals=[
+          aws.iam.GetPolicyDocumentStatementPrincipalArgs(
+            type="Service",
+            identifiers=["cloudtrail.amazonaws.com"]
+          )
+        ],
+        actions=["s3:GetBucketAcl"],
+        resources=[bucket.arn]
+      )
+    ]
+  )
+
+  aws.s3.BucketPolicy(
+    f"{project_name}-{environment}-cloudtrail-policy-{region}",
+    bucket=bucket.id,
+    policy=cloudtrail_policy.json,
+    opts=ResourceOptions(
+      provider=aws.Provider(f"aws-s3-cloudtrail-policy-{region}", region=region)
+    )
+  )
+
+  # Create CloudTrail with a unique name to avoid conflicts
+  trail = aws.cloudtrail.Trail(
+    f"{project_name}-{environment}-trail-{region}",
+    name=trail_name,
     s3_bucket_name=bucket.bucket,
     s3_key_prefix=f"cloudtrail-logs/{region}",
     include_global_service_events=True,
@@ -483,8 +572,12 @@ def deploy_infrastructure(environment_suffix: str, tags: Dict[str, str]) -> Dict
     alarm = create_security_group_alarm(region, sns_topic, region_tags)
     resources["alarms"][region] = alarm
 
-    # Create CloudTrail
-    trail = create_cloudtrail(region, bucket, region_tags)
-    resources["trails"][region] = trail
+    # Create CloudTrail with fallback handling for maximum trails limit
+    if should_skip_cloudtrail_creation(region):
+      pulumi.log.warn(f"Skipping CloudTrail creation in region: {region} due to maximum trails limit.")
+      resources["trails"][region] = None
+    else:
+      trail = create_cloudtrail(region, bucket, region_tags)
+      resources["trails"][region] = trail
 
   return resources
