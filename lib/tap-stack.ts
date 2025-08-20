@@ -245,19 +245,24 @@ export class TapStack extends TerraformStack {
     });
 
     // --- Secrets Manager for RDS password ---
-    // Use a static or environment-based password (no random provider)
-    const rdsPasswordSecret = new SecretsmanagerSecret(this, 'RdsPasswordSecret', {
-      provider: primaryProvider,
-      name: `pci-rds-password-${uniqueSuffix}`,
-      description: 'RDS master password for PCI stack',
-      recoveryWindowInDays: 7,
-      tags,
-    });
+    const rdsPasswordSecret = new SecretsmanagerSecret(
+      this,
+      'RdsPasswordSecret',
+      {
+        provider: primaryProvider,
+        name: `pci-rds-password-${uniqueSuffix}`,
+        description: 'RDS master password for PCI stack',
+        recoveryWindowInDays: 7,
+        tags,
+      }
+    );
 
     new SecretsmanagerSecretVersion(this, 'RdsPasswordSecretVersion', {
       provider: primaryProvider,
       secretId: rdsPasswordSecret.id,
-      secretString: JSON.stringify({ password: process.env.RDS_PASSWORD || 'ChangeMe123!@#' }),
+      secretString: JSON.stringify({
+        password: process.env.RDS_PASSWORD || 'ChangeMe123!@#',
+      }),
     });
 
     const primaryInfra = new RegionalInfra(this, 'PrimaryInfra', {
@@ -487,6 +492,7 @@ export class TapStack extends TerraformStack {
         metricName: `pci-waf-acl-${uniqueSuffix}`,
         sampledRequestsEnabled: true,
       },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       rule: [
         {
           name: 'AWS-Managed-Rules-Common',
