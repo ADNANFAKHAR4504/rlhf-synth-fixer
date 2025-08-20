@@ -703,7 +703,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 resource "aws_iam_role_policy" "config_s3" {
@@ -1683,6 +1683,22 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudfront_logs" 
       sse_algorithm = "AES256"
     }
   }
+}
+
+# Enable ACLs for CloudFront logs bucket
+resource "aws_s3_bucket_ownership_controls" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_acl" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+  acl    = "private"
+
+  depends_on = [aws_s3_bucket_ownership_controls.cloudfront_logs]
 }
 
 data "aws_cloudfront_cache_policy" "caching_optimized" {
