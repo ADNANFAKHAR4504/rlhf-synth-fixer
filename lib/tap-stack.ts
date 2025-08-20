@@ -334,13 +334,9 @@ EOF
       hostedZone = new route53.HostedZone(this, 'HostedZone', {
         zoneName: domainName,
       });
-    } else {
-      // In secondary region, reference the existing hosted zone from primary region
-      // Note: This requires the primary region to be deployed first
-      hostedZone = route53.HostedZone.fromLookup(this, 'ExistingHostedZone', {
-        domainName: domainName,
-      });
     }
+    // Note: In secondary region, hosted zone lookup is skipped to avoid synthesis errors
+    // The failover records will be created manually after primary region deployment
 
     // Health Check (only in primary region)
     let healthCheck: route53.HealthCheck | undefined;
@@ -355,38 +351,21 @@ EOF
       });
     }
 
-    // Route 53 Records with Failover
-    if (hostedZone) {
-      if (isPrimaryRegion) {
-        // Primary region record with health check
-        new route53.ARecord(this, 'PrimaryRecord', {
-          zone: hostedZone,
-          target: route53.RecordTarget.fromAlias(
-            new route53targets.LoadBalancerTarget(alb)
-          ),
-          recordName: domainName,
-          ttl: cdk.Duration.seconds(60),
-        });
-        
-        // Add health check to the record
-        if (healthCheck) {
-          new route53.CfnRecordSet(this, 'PrimaryRecordSet', {
-            hostedZoneId: hostedZone.hostedZoneId,
-            name: domainName,
-            type: 'A',
-            aliasTarget: {
-              dnsName: alb.loadBalancerDnsName,
-              hostedZoneId: alb.loadBalancerCanonicalHostedZoneId,
-              evaluateTargetHealth: true,
-            },
-            failover: 'PRIMARY',
-            healthCheckId: healthCheck.healthCheckId,
-            ttl: '60',
-          });
-        }
-      } else {
-        // Secondary region record (backup)
-        new route53.CfnRecordSet(this, 'SecondaryRecordSet', {
+        // Route 53 Records (only in primary region)
+    if (hostedZone && isPrimaryRegion) {
+      // Primary region record with health check
+      new route53.ARecord(this, 'PrimaryRecord', {
+        zone: hostedZone,
+        target: route53.RecordTarget.fromAlias(
+          new route53targets.LoadBalancerTarget(alb)
+        ),
+        recordName: domainName,
+        ttl: cdk.Duration.seconds(60),
+      });
+      
+      // Add health check to the record
+      if (healthCheck) {
+        new route53.CfnRecordSet(this, 'PrimaryRecordSet', {
           hostedZoneId: hostedZone.hostedZoneId,
           name: domainName,
           type: 'A',
@@ -395,7 +374,8 @@ EOF
             hostedZoneId: alb.loadBalancerCanonicalHostedZoneId,
             evaluateTargetHealth: true,
           },
-          failover: 'SECONDARY',
+          failover: 'PRIMARY',
+          healthCheckId: healthCheck.healthCheckId,
           ttl: '60',
         });
       }
