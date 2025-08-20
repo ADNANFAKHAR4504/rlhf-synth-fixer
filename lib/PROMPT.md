@@ -2,7 +2,7 @@ Prompt:
 
 You are a cloud infrastructure expert. Your task is to design and implement a resilient AWS environment using Terraform according to the following requirements and constraints:
 
-Requirement:
+Requirements:
 
 Deploy infrastructure across two AWS regions (us-east-1 as primary, us-west-2 as secondary) with failover capabilities to ensure high availability.
 
