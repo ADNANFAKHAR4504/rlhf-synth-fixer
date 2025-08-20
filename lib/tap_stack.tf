@@ -150,9 +150,230 @@ resource "aws_kms_alias" "logs_usw2" {
 }
 
 ########################
+# IAM Roles and Policies (Least Privilege Principle)
+########################
+
+# IAM Role for Application Access
+resource "aws_iam_role" "application_role" {
+  for_each = local.environments
+  name     = "${each.value}-application-role-${local.project_name}-${var.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${each.value}-application-role-${local.project_name}-${var.environment_suffix}"
+    Environment = each.value
+  }
+}
+
+# IAM Role for Audit Access (Read-only logs)
+resource "aws_iam_role" "audit_role" {
+  for_each = local.environments
+  name     = "${each.value}-audit-role-${local.project_name}-${var.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${each.value}-audit-role-${local.project_name}-${var.environment_suffix}"
+    Environment = each.value
+  }
+}
+
+# IAM Role for Read-only Access
+resource "aws_iam_role" "readonly_role" {
+  for_each = local.environments
+  name     = "${each.value}-readonly-role-${local.project_name}-${var.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${each.value}-readonly-role-${local.project_name}-${var.environment_suffix}"
+    Environment = each.value
+  }
+}
+
+# IAM Policy for Application Role - CloudWatch Logs Write Access
+resource "aws_iam_policy" "application_logs_policy" {
+  for_each = local.environments
+  name     = "${each.value}-application-logs-policy-${local.project_name}-${var.environment_suffix}"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = [
+          "${aws_cloudwatch_log_group.application_logs_use1[each.value].arn}:*",
+          "${aws_cloudwatch_log_group.application_logs_usw2[each.value].arn}:*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = [
+          aws_kms_key.logs_use1[each.value].arn,
+          aws_kms_key.logs_usw2[each.value].arn
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${each.value}-application-logs-policy-${local.project_name}-${var.environment_suffix}"
+    Environment = each.value
+  }
+}
+
+# IAM Policy for Audit Role - Read-only access to audit logs
+resource "aws_iam_policy" "audit_logs_policy" {
+  for_each = local.environments
+  name     = "${each.value}-audit-logs-policy-${local.project_name}-${var.environment_suffix}"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents"
+        ]
+        Resource = [
+          "${aws_cloudwatch_log_group.audit_logs_use1[each.value].arn}:*",
+          "${aws_cloudwatch_log_group.audit_logs_usw2[each.value].arn}:*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = [
+          aws_kms_key.logs_use1[each.value].arn,
+          aws_kms_key.logs_usw2[each.value].arn
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${each.value}-audit-logs-policy-${local.project_name}-${var.environment_suffix}"
+    Environment = each.value
+  }
+}
+
+# IAM Policy for Read-only Role - Read-only access to all logs
+resource "aws_iam_policy" "readonly_logs_policy" {
+  for_each = local.environments
+  name     = "${each.value}-readonly-logs-policy-${local.project_name}-${var.environment_suffix}"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents"
+        ]
+        Resource = [
+          "${aws_cloudwatch_log_group.application_logs_use1[each.value].arn}:*",
+          "${aws_cloudwatch_log_group.application_logs_usw2[each.value].arn}:*",
+          "${aws_cloudwatch_log_group.audit_logs_use1[each.value].arn}:*",
+          "${aws_cloudwatch_log_group.audit_logs_usw2[each.value].arn}:*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey"
+        ]
+        Resource = [
+          aws_kms_key.logs_use1[each.value].arn,
+          aws_kms_key.logs_usw2[each.value].arn
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${each.value}-readonly-logs-policy-${local.project_name}-${var.environment_suffix}"
+    Environment = each.value
+  }
+}
+
+# Policy Attachments
+resource "aws_iam_role_policy_attachment" "application_logs_attachment" {
+  for_each   = local.environments
+  policy_arn = aws_iam_policy.application_logs_policy[each.value].arn
+  role       = aws_iam_role.application_role[each.value].name
+}
+
+resource "aws_iam_role_policy_attachment" "audit_logs_attachment" {
+  for_each   = local.environments
+  policy_arn = aws_iam_policy.audit_logs_policy[each.value].arn
+  role       = aws_iam_role.audit_role[each.value].name
+}
+
+resource "aws_iam_role_policy_attachment" "readonly_logs_attachment" {
+  for_each   = local.environments
+  policy_arn = aws_iam_policy.readonly_logs_policy[each.value].arn
+  role       = aws_iam_role.readonly_role[each.value].name
+}
+
+########################
 # CloudWatch Log Groups (split by region to bind correct provider & key)
 ########################
-# us-east-1
+# us-east-1 - Application Logs
 resource "aws_cloudwatch_log_group" "application_logs_use1" {
   for_each          = local.environments
   name              = "/aws/application/${each.value}-logs-${local.project_name}-${var.environment_suffix}"
@@ -160,13 +381,27 @@ resource "aws_cloudwatch_log_group" "application_logs_use1" {
   kms_key_id        = aws_kms_key.logs_use1[each.value].arn
 
   tags = {
-    Name        = "${each.value}-logs-${local.project_name}-${var.environment_suffix}"
+    Name        = "${each.value}-application-logs-${local.project_name}-${var.environment_suffix}"
     Environment = each.value
     Region      = var.primary_region
   }
 }
 
-# us-west-2
+# us-east-1 - Audit Logs
+resource "aws_cloudwatch_log_group" "audit_logs_use1" {
+  for_each          = local.environments
+  name              = "/aws/audit/${each.value}-audit-logs-${local.project_name}-${var.environment_suffix}"
+  retention_in_days = each.value == "production" ? 365 : 30
+  kms_key_id        = aws_kms_key.logs_use1[each.value].arn
+
+  tags = {
+    Name        = "${each.value}-audit-logs-${local.project_name}-${var.environment_suffix}"
+    Environment = each.value
+    Region      = var.primary_region
+  }
+}
+
+# us-west-2 - Application Logs
 resource "aws_cloudwatch_log_group" "application_logs_usw2" {
   provider          = aws.secondary
   for_each          = local.environments
@@ -175,7 +410,22 @@ resource "aws_cloudwatch_log_group" "application_logs_usw2" {
   kms_key_id        = aws_kms_key.logs_usw2[each.value].arn
 
   tags = {
-    Name        = "${each.value}-logs-${local.project_name}-${var.environment_suffix}"
+    Name        = "${each.value}-application-logs-${local.project_name}-${var.environment_suffix}"
+    Environment = each.value
+    Region      = var.secondary_region
+  }
+}
+
+# us-west-2 - Audit Logs
+resource "aws_cloudwatch_log_group" "audit_logs_usw2" {
+  provider          = aws.secondary
+  for_each          = local.environments
+  name              = "/aws/audit/${each.value}-audit-logs-${local.project_name}-${var.environment_suffix}"
+  retention_in_days = each.value == "production" ? 365 : 30
+  kms_key_id        = aws_kms_key.logs_usw2[each.value].arn
+
+  tags = {
+    Name        = "${each.value}-audit-logs-${local.project_name}-${var.environment_suffix}"
     Environment = each.value
     Region      = var.secondary_region
   }
@@ -270,5 +520,86 @@ output "log_group_usw2_arn_by_key" {
 output "log_group_usw2_kms_key_id_by_key" {
   description = "KMS key IDs used by the usw2 log groups, keyed by each.key"
   value       = { for k, v in aws_cloudwatch_log_group.application_logs_usw2 : k => v.kms_key_id }
+}
+
+# --- IAM Roles ---
+
+output "iam_application_role_name_by_key" {
+  description = "Application role names, keyed by each.key"
+  value       = { for k, v in aws_iam_role.application_role : k => v.name }
+}
+
+output "iam_application_role_arn_by_key" {
+  description = "Application role ARNs, keyed by each.key"
+  value       = { for k, v in aws_iam_role.application_role : k => v.arn }
+}
+
+output "iam_audit_role_name_by_key" {
+  description = "Audit role names, keyed by each.key"
+  value       = { for k, v in aws_iam_role.audit_role : k => v.name }
+}
+
+output "iam_audit_role_arn_by_key" {
+  description = "Audit role ARNs, keyed by each.key"
+  value       = { for k, v in aws_iam_role.audit_role : k => v.arn }
+}
+
+output "iam_readonly_role_name_by_key" {
+  description = "Read-only role names, keyed by each.key"
+  value       = { for k, v in aws_iam_role.readonly_role : k => v.name }
+}
+
+output "iam_readonly_role_arn_by_key" {
+  description = "Read-only role ARNs, keyed by each.key"
+  value       = { for k, v in aws_iam_role.readonly_role : k => v.arn }
+}
+
+# --- IAM Policies ---
+
+output "iam_application_policy_arn_by_key" {
+  description = "Application policy ARNs, keyed by each.key"
+  value       = { for k, v in aws_iam_policy.application_logs_policy : k => v.arn }
+}
+
+output "iam_audit_policy_arn_by_key" {
+  description = "Audit policy ARNs, keyed by each.key"
+  value       = { for k, v in aws_iam_policy.audit_logs_policy : k => v.arn }
+}
+
+output "iam_readonly_policy_arn_by_key" {
+  description = "Read-only policy ARNs, keyed by each.key"
+  value       = { for k, v in aws_iam_policy.readonly_logs_policy : k => v.arn }
+}
+
+# --- Audit Log Groups ---
+
+output "audit_log_group_use1_name_by_key" {
+  description = "Audit log group names for us-east-1, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.audit_logs_use1 : k => v.name }
+}
+
+output "audit_log_group_use1_arn_by_key" {
+  description = "Audit log group ARNs for us-east-1, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.audit_logs_use1 : k => v.arn }
+}
+
+output "audit_log_group_use1_kms_key_id_by_key" {
+  description = "KMS key IDs used by the us-east-1 audit log groups, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.audit_logs_use1 : k => v.kms_key_id }
+}
+
+output "audit_log_group_usw2_name_by_key" {
+  description = "Audit log group names for us-west-2, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.audit_logs_usw2 : k => v.name }
+}
+
+output "audit_log_group_usw2_arn_by_key" {
+  description = "Audit log group ARNs for us-west-2, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.audit_logs_usw2 : k => v.arn }
+}
+
+output "audit_log_group_usw2_kms_key_id_by_key" {
+  description = "KMS key IDs used by the us-west-2 audit log groups, keyed by each.key"
+  value       = { for k, v in aws_cloudwatch_log_group.audit_logs_usw2 : k => v.kms_key_id }
 }
 
