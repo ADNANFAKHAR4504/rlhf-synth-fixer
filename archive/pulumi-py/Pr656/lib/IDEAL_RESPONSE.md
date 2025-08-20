@@ -1,4 +1,16 @@
-Provide your ideal response here"""
+# Pulumi Python Infrastructure Code
+
+This file contains the complete Pulumi Python infrastructure code from the lib folder.
+
+## __init__.py
+
+```python
+```
+
+## tap_stack.py
+
+```python
+"""
 tap_stack.py
 
 AWS Security Configuration Infrastructure - Complete Implementation
@@ -30,11 +42,14 @@ The infrastructure is designed to pass CI/CD pipeline validation and includes
 comprehensive error handling and resource dependencies.
 """
 
-from typing import Optional, List, Dict, Any
+# 1. Standard library imports
+import json
+from typing import Any, Dict, List, Optional
+
+# 2. Third-party library imports
 import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
-import json
 
 
 class TapStackArgs:
@@ -1036,3 +1051,4 @@ def lambda_handler(event, context):
     pulumi.export("ec2_role_arn", self.ec2_role.arn)
     pulumi.export("lambda_role_arn", self.lambda_role.arn)
     pulumi.export("flow_log_role_arn", self.flow_log_role.arn)
+```

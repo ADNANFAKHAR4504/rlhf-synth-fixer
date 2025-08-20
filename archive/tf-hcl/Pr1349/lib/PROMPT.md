@@ -1,8 +1,8 @@
 # Terraform Cloud Environment Setup Prompt
 
 ```markdown
-We need to set up a resilient AWS environment using Terraform, supporting both **test** and **production** accounts spread across multiple AWS regions.  
-The configuration should be clean, modular, and reusable — meaning we’ll be breaking down the setup into **Terraform modules** for different AWS resources.
+We need to set up a resilient AWS environment using Terraform, supporting both **test** and **production** accounts spread across multiple AWS regions. 
+The configuration should be clean, modular, and reusable meaning well be breaking down the setup into **Terraform modules** for different AWS resources.
 
 1. **Module Organization**: Our current Terraform configs are all in one massive file, and it's becoming impossible to maintain. I need to break this down into reusable modules that we can use across different environments. We have common resources like VPCs, security groups, RDS instances, and load balancers that should be templated.
 

@@ -26,10 +26,10 @@ During review, the following improvements were suggested.
 We addressed them as follows:
 
 1. **RDS Deletion Protection**  
-   → Enabled `deletion_protection=True` on the RDS instance to safeguard against accidental deletion.
+   - Enabled `deletion_protection=True` on the RDS instance to safeguard against accidental deletion.
 
 2. **Test Coverage for Security Groups & Scaling Policies**  
-   → Added integration tests to confirm the existence and configuration of:
+   - Added integration tests to confirm the existence and configuration of:
    - `dev-alb-sg`, `dev-ec2-sg`, `dev-rds-sg` security groups
    - AutosScaling scaling policies: `dev-scale-up` and dev-scale-down`
 
