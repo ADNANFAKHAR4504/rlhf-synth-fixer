@@ -17,8 +17,8 @@ import {
   RdsModule,
   S3Module,
   VpcModule,
-  AlbModule,      // ✅ Added missing import
-  Route53Module,  // ✅ Added missing import
+  AlbModule, // ✅ Added missing import
+  Route53Module, // ✅ Added missing import
 } from './module';
 
 interface TapStackProps {
@@ -45,7 +45,7 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
-    
+
     // ✅ Added Route53 configuration with defaults
     const domainName = props?.domainName || 'example.com';
     const recordName = props?.recordName || `app-${environmentSuffix}`;
@@ -213,8 +213,8 @@ export class TapStack extends TerraformStack {
     new Route53Module(this, 'dns-record', {
       zoneName: domainName,
       recordName: recordName,
-      albZoneId: alb.albZoneIdOutput,     // ✅ Using ALB zone ID output
-      albDnsName: alb.albDnsNameOutput,   // ✅ Using ALB DNS name output
+      albZoneId: alb.albZoneIdOutput, // ✅ Using ALB zone ID output
+      albDnsName: alb.albDnsNameOutput, // ✅ Using ALB DNS name output
     });
 
     new CloudwatchModule(this, 'alarms', {
