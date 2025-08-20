@@ -62,6 +62,7 @@ Resources:
               - kms:ReEncrypt*
               - kms:GenerateDataKey*
               - kms:DescribeKey
+              - kms:CreateGrant
             Resource: '*'
       Tags:
         - Key: Name
@@ -292,18 +293,20 @@ Resources:
   # CloudWatch Log Group for S3 access logs
   S3AccessLogGroup:
     Type: AWS::Logs::LogGroup
+    DependsOn: DataEncryptionKey
     Properties:
       LogGroupName: !Sub '/aws/s3/${ProjectName}-${Environment}'
       RetentionInDays: 30
-      KmsKeyId: !Ref DataEncryptionKey
+      KmsKeyId: !GetAtt DataEncryptionKey.Arn
 
   # CloudWatch Log Group for CloudTrail
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
+    DependsOn: DataEncryptionKey
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${ProjectName}-${Environment}'
       RetentionInDays: 90
-      KmsKeyId: !Ref DataEncryptionKey
+      KmsKeyId: !GetAtt DataEncryptionKey.Arn
 
   # IAM Role for CloudTrail
   CloudTrailRole:
