@@ -43,6 +43,8 @@ Mappings:
   AWSRegionAMI:
     us-east-1:
       AMI: ami-0c02fb55956c7d316
+    us-east-2:
+      AMI: ami-0b0884a542ed17bc8
 
 Resources:
   # VPC Configuration for network isolation and security
