@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { Fn, TerraformIterator } from 'cdktf';
+import { TerraformIterator } from 'cdktf';
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
@@ -306,10 +306,12 @@ export class SecureModules extends Construct {
       targetPrefix: 'access-logs/',
     });
 
-    // FIXED: Extract subnet IDs and use Fn.tolist for proper token handling
-    const privateSubnetIds = this.privateSubnets.map(subnet => subnet.id);
+    // FIXED: Create TerraformIterator for private subnet IDs
+    const privateSubnetIterator = TerraformIterator.fromList(
+      this.privateSubnets.map(subnet => subnet.id)
+    );
 
-    // Lambda Function - FIXED: Use Fn.tolist for proper list handling
+    // Lambda Function - FIXED: Use direct array of subnet IDs
     this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
       functionName: `${config.appName}-Function`,
       role: this.lambdaRole.arn,
@@ -321,8 +323,8 @@ export class SecureModules extends Construct {
       memorySize: 128,
       kmsKeyArn: this.kmsKey.arn,
       vpcConfig: {
-        // FIXED: Use Fn.tolist to convert IResolvable to string[]
-        subnetIds: Fn.tolist(privateSubnetIds),
+        // FIXED: Use the iterator's value directly as an array
+        subnetIds: privateSubnetIterator.value,
         securityGroupIds: [lambdaSecurityGroup.id],
       },
       dependsOn: [this.lambdaLogGroup],
@@ -337,11 +339,11 @@ export class SecureModules extends Construct {
       },
     });
 
-    // DB Subnet Group for RDS - FIXED: Use Fn.tolist for proper list handling
+    // DB Subnet Group for RDS - FIXED: Use the iterator's value directly
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       name: `${config.appName.toLowerCase()}-db-subnet-group`,
-      // FIXED: Use Fn.tolist to convert IResolvable to string[]
-      subnetIds: Fn.tolist(privateSubnetIds),
+      // FIXED: Use the iterator's value directly as an array
+      subnetIds: privateSubnetIterator.value,
       description: 'Subnet group for RDS instance',
       tags: {
         Name: `${config.appName}-DB-SubnetGroup`,

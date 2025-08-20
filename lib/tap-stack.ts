@@ -7,12 +7,12 @@ import {
   TerraformStack,
   TerraformOutput,
   TerraformVariable,
+  TerraformIterator,
 } from 'cdktf';
 import { Construct } from 'constructs';
 
 // ? Import your stacks here
 import { SecureModules, ModulesConfig } from './modules';
-import { Fn } from 'cdktf';
 
 // import { MyStack } from './my-stack';
 
@@ -134,19 +134,23 @@ export class TapStack extends TerraformStack {
       description: 'VPC ID for the secure infrastructure',
     });
 
-    // FIXED: Extract subnet IDs for outputs
-    const publicSubnetIds = secureInfra.publicSubnets.map(subnet => subnet.id);
-    const privateSubnetIds = secureInfra.privateSubnets.map(subnet => subnet.id);
-
-    // FIXED: Use Fn.tolist for subnet ID outputs
+    // FIXED: Create iterators for subnet outputs
+    const publicSubnetIterator = TerraformIterator.fromList(
+      secureInfra.publicSubnets.map(subnet => subnet.id)
+    );
+    const privateSubnetIterator = TerraformIterator.fromList(
+      secureInfra.privateSubnets.map(subnet => subnet.id)
+    );
+    // FIXED: Use iterator values for subnet ID outputs
     new TerraformOutput(this, 'public_subnet_ids', {
-      value: Fn.tolist(publicSubnetIds),
+      value: publicSubnetIterator.value,
       description: 'Public subnet IDs',
     });
 
     new TerraformOutput(this, 'private_subnet_ids', {
-      value: Fn.tolist(privateSubnetIds),
-      description: 'Private subnet IDs where application resources are deployed',
+      value: privateSubnetIterator.value,
+      description:
+        'Private subnet IDs where application resources are deployed',
     });
 
     // Security Information
