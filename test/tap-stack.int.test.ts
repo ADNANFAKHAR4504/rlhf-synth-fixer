@@ -28,17 +28,24 @@ describe("Terraform E2E Integration Tests", () => {
   let bucketName: string;
   let bucketTags: any;
   let environment: string;
+  let bucketRegion: string;
+  let testRegion: string;
 
   beforeAll(() => {
     outputs = loadOutputs();
     bucketName = outputs.bucket_name?.value || outputs.bucket_name;
     bucketTags = typeof outputs.bucket_tags?.value === "object" ? outputs.bucket_tags.value : JSON.parse(outputs.bucket_tags?.value || "{}");
     environment = bucketTags.Environment || "prod";
+    bucketRegion = outputs.bucket_region?.value || outputs.bucket_region || "us-east-1";
+    testRegion = outputs.aws_region?.value || outputs.aws_region || bucketRegion;
   });
 
 
   describe("S3 Bucket", () => {
-    const s3 = new S3Client({ region: "us-west-2" });
+    let s3: S3Client;
+    beforeAll(() => {
+      s3 = new S3Client({ region: bucketRegion });
+    });
 
     test("bucket exists in expected region", async () => {
       const loc = await s3.send(new GetBucketLocationCommand({ Bucket: bucketName }));
@@ -67,7 +74,10 @@ describe("Terraform E2E Integration Tests", () => {
 
 
   describe("Secrets Manager", () => {
-    const secrets = new SecretsManagerClient({ region: "us-west-2" });
+    let secrets: SecretsManagerClient;
+    beforeAll(() => {
+      secrets = new SecretsManagerClient({ region: testRegion });
+    });
     test("RDS secret exists", async () => {
       const secretName = `secure-rds-password-${environment}`;
       const res = await secrets.send(new DescribeSecretCommand({ SecretId: secretName }));
@@ -78,7 +88,10 @@ describe("Terraform E2E Integration Tests", () => {
 
 
   describe("VPC", () => {
-    const ec2 = new EC2Client({ region: "us-west-2" });
+    let ec2: EC2Client;
+    beforeAll(() => {
+      ec2 = new EC2Client({ region: testRegion });
+    });
     test("VPC exists", async () => {
       const vpcs = await ec2.send(new DescribeVpcsCommand({ Filters: [{ Name: "tag:Name", Values: ["secure-prod-vpc"] }] }));
       expect(vpcs.Vpcs?.length).toBeGreaterThan(0);
@@ -91,7 +104,10 @@ describe("Terraform E2E Integration Tests", () => {
 
 
   describe("Network ACL", () => {
-    const ec2 = new EC2Client({ region: "us-west-2" });
+    let ec2: EC2Client;
+    beforeAll(() => {
+      ec2 = new EC2Client({ region: testRegion });
+    });
     test("NACL exists and has correct rules", async () => {
       const nacls = await ec2.send(new DescribeNetworkAclsCommand({}));
       // Find by tag or VPC ID
@@ -108,7 +124,10 @@ describe("Terraform E2E Integration Tests", () => {
 
 
   describe("IAM Role and Policies", () => {
-    const iam = new IAMClient({ region: "us-west-2" });
+    let iam: IAMClient;
+    beforeAll(() => {
+      iam = new IAMClient({ region: testRegion });
+    });
     test("EC2 role exists, policies attached", async () => {
       const roleName = `secure-ec2-role-${environment}`;
       const roleRes = await iam.send(new GetRoleCommand({ RoleName: roleName }));
@@ -129,7 +148,10 @@ describe("Terraform E2E Integration Tests", () => {
 
 
   describe("CloudWatch Dashboard", () => {
-    const cw = new CloudWatchClient({ region: "us-west-2" });
+    let cw: CloudWatchClient;
+    beforeAll(() => {
+      cw = new CloudWatchClient({ region: testRegion });
+    });
     test("dashboard exists", async () => {
       const dashboardName = `secure-dashboard-${environment}`;
       const res = await cw.send(new GetDashboardCommand({ DashboardName: dashboardName }));
