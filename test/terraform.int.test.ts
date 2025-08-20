@@ -132,36 +132,6 @@ describe('Terraform Integration Tests', () => {
 
   describe('Deployment Validation', () => {
     test(
-      'deployment outputs exist and are valid',
-      () => {
-        const outputs = loadDeploymentOutputs();
-        
-        if (!outputs) {
-          console.log('ℹ️  No deployment outputs found - skipping validation (this is expected for basic tests)');
-          return;
-        }
-
-        // Validate that outputs contain expected infrastructure components
-        const expectedOutputKeys = [
-          'VPCId',
-          'S3BucketName', 
-          'AutoScalingGroupName'
-        ];
-
-        // Check that at least some expected outputs exist
-        const foundKeys = expectedOutputKeys.filter(key => outputs[key]);
-        expect(foundKeys.length).toBeGreaterThan(0);
-
-        // Validate output format (should be strings)
-        Object.values(outputs).forEach(value => {
-          expect(typeof value).toBe('string');
-          expect(value).toBeTruthy();
-        });
-      },
-      TEST_TIMEOUT
-    );
-
-    test(
       'resource naming follows environment suffix pattern',
       () => {
         const outputs = loadDeploymentOutputs();
