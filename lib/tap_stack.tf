@@ -90,10 +90,13 @@ resource "random_password" "rds_password" {
 }
 
 # Generate random username for RDS
-resource "random_pet" "rds_username" {
-  length = 2
+resource "random_password" "rds_username" {
+  length  = 8
+  special = false
+  upper   = true
+  lower   = true
+  numeric = true
 }
-
 # ============================================================================
 # VPC AND NETWORKING
 # ============================================================================
@@ -412,11 +415,11 @@ resource "aws_iam_role_policy" "user_least_privilege" {
 
 # Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2" {
-  name = "${local.name_prefix}-ec2-profile"
+  name = "${local.name_prefix}-ec2-profile-new"
   role = aws_iam_role.rds_access.name
   
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-ec2-profile"
+    Name = "${local.name_prefix}-ec2-profile-new"
     Type = "InstanceProfile"
   })
 }
@@ -596,7 +599,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name           = "${local.name_prefix}-cloudtrail"
+  name           = "${local.name_prefix}-cloudtrail-new"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
   
   include_global_service_events = true
@@ -615,7 +618,7 @@ resource "aws_cloudtrail" "main" {
   }
   
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-cloudtrail"
+    Name = "${local.name_prefix}-cloudtrail-new"
     Type = "CloudTrail"
   })
   
