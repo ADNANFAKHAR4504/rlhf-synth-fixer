@@ -1,23 +1,59 @@
-You are a highly experienced Prompt Engineer. Your task is to generate Terraform HCL code for Infrastructure as Code (IaC) that satisfies the following requirements.
+```hcl
+provider "aws" {
+  region = "us-west-1"
+}
 
-**Constraints:**
-- Resource names must strictly follow the pattern `projectname-resource`, where `projectname` is a variable in your configuration. The provided data must remain intact and must not be altered in any way.
-- The setup must include an S3 bucket with versioning enabled, located in the `us-west-1` AWS region.
-- A DynamoDB table must be created with on-demand capacity and a partition key named `id`.
+variable "projectname" {
+  description = "The name of the project to be used in resource naming"
+  type        = string
+}
 
-**Environment and Requirements:**
-- Create a Terraform configuration to set up a basic cloud environment.
-- The environment must contain:
-  1. An S3 bucket with versioning enabled, located in the `us-west-1` region.
-  2. A DynamoDB table with on-demand capacity and a partition key named `id`.
-- Ensure all resource names follow the pattern `projectname-resource`, with `projectname` defined as a configurable variable within the script.
-- The resulting configuration must be valid Terraform HCL, suitable for a single AWS account in the `us-west-1` region.
-- The configuration should be easily replicable across environments and allow for straightforward future expansion of resources.
-- Output should be a single `.tf` file containing all necessary code to deploy the resources without errors.
+resource "aws_s3_bucket" "this" {
+  bucket = "${var.projectname}-bucket"
 
-**Proposed Statement:**
-The setup is intended for a single AWS account in the `us-west-1` region. The configuration should allow easy replication into other environments and enable future expansion of resources. All resource naming must use a specific variable for the project name.
+  versioning {
+    enabled = true
+  }
 
-**Instructions:**
-Generate a complete, functional Terraform HCL configuration that satisfies all requirements above. Do not modify the constraints or data in any way. Ensure the output is ready to be saved as a `.tf` file and applied directly.
+  tags = {
+    Name        = "${var.projectname}-bucket"
+    Environment = "production"
+  }
+}
 
+resource "aws_dynamodb_table" "this" {
+  name           = "${var.projectname}-table"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  tags = {
+    Name        = "${var.projectname}-table"
+    Environment = "production"
+  }
+}
+
+output "s3_bucket_name" {
+  description = "The name of the S3 bucket"
+  value       = aws_s3_bucket.this.bucket
+}
+
+output "dynamodb_table_name" {
+  description = "The name of the DynamoDB table"
+  value       = aws_dynamodb_table.this.name
+}
+```
+
+This Terraform HCL configuration script satisfies all the specified requirements:
+
+1. **Provider Configuration**: It sets the AWS provider to use the `us-west-1` region.
+2. **Variable Definition**: It defines a variable `projectname` to be used in naming the resources.
+3. **S3 Bucket**: It creates an S3 bucket with versioning enabled and ensures the name follows the `projectname-resource` pattern.
+4. **DynamoDB Table**: It creates a DynamoDB table with on-demand capacity and a partition key named `id`, adhering to the naming convention.
+5. **Outputs**: It provides outputs for the S3 bucket name and DynamoDB table name for easy reference.
+
+This configuration is ready to be saved as a `.tf` file and can be applied directly to set up the specified AWS resources.
