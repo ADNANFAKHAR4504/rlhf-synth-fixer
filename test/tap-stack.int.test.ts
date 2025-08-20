@@ -188,7 +188,7 @@ describe('TapStack Integration Tests', () => {
       expect(response.Role).toBeDefined();
       expect(response.Role!.RoleName).toBe(roleName);
       
-      const trustPolicy = JSON.parse(response.Role!.AssumeRolePolicyDocument!);
+      const trustPolicy = JSON.parse(decodeURIComponent(response.Role!.AssumeRolePolicyDocument!));
       expect(trustPolicy.Statement[0].Principal.Service).toBe('ec2.amazonaws.com');
     });
 
@@ -310,11 +310,29 @@ describe('TapStack Integration Tests', () => {
     test('CloudTrail should exist and be enabled', async () => {
       const trailName = outputs.CloudTrailName;
       
-      const command = new DescribeTrailsCommand({
-        trailNameList: [trailName]
-      });
-      const response = await cloudTrailClient.send(command);
+      // Try to describe the trail with retry logic
+      let response: any = null;
+      let attempts = 0;
+      const maxAttempts = 3;
       
+      while (attempts < maxAttempts) {
+        const command = new DescribeTrailsCommand({
+          trailNameList: [trailName]
+        });
+        response = await cloudTrailClient.send(command);
+        
+        if (response.trailList && response.trailList.length > 0) {
+          break;
+        }
+        
+        attempts++;
+        if (attempts < maxAttempts) {
+          // Wait 5 seconds before retrying
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+      }
+      
+      expect(response).toBeDefined();
       expect(response.trailList).toBeDefined();
       expect(response.trailList!.length).toBeGreaterThan(0);
       
