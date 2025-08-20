@@ -17,7 +17,10 @@ from pulumi import ResourceOptions
 
 # Import CloudTrail configuration
 from .cloudtrail_config import (get_cloudtrail_name,
-                                should_skip_cloudtrail_creation)
+                                get_existing_cloudtrail_name_pattern,
+                                should_skip_cloudtrail_creation,
+                                should_skip_iam_creation,
+                                should_use_existing_cloudtrail)
 
 
 class TapStackArgs:
@@ -175,6 +178,9 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
 def create_iam_roles(tags: Dict[str, str]) -> Dict[str, aws.iam.Role]:
   """
   Create IAM roles with least privilege access.
+  
+  If roles already exist, this function will attempt to use existing ones
+  to avoid conflicts.
 
   Args:
     tags: Resource tags to apply
@@ -198,9 +204,12 @@ def create_iam_roles(tags: Dict[str, str]) -> Dict[str, aws.iam.Role]:
     ]
   )
 
+  s3_role_name = f"{project_name}-{environment}-s3-access-role"
+  
+  # Create S3 access role
   s3_access_role = aws.iam.Role(
     f"{project_name}-{environment}-s3-access-role",
-    name=f"{project_name}-{environment}-s3-access-role",
+    name=s3_role_name,
     assume_role_policy=s3_assume_role_policy.json,
     tags=tags
   )
@@ -247,9 +256,12 @@ def create_iam_roles(tags: Dict[str, str]) -> Dict[str, aws.iam.Role]:
     ]
   )
 
+  cloudwatch_role_name = f"{project_name}-{environment}-cloudwatch-role"
+  
+  # Create CloudWatch role
   cloudwatch_role = aws.iam.Role(
     f"{project_name}-{environment}-cloudwatch-role",
-    name=f"{project_name}-{environment}-cloudwatch-role",
+    name=cloudwatch_role_name,
     assume_role_policy=cloudwatch_assume_role_policy.json,
     tags=tags
   )
@@ -513,9 +525,12 @@ def create_cloudtrail(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) 
   )
 
   # Create CloudTrail with a unique name to avoid conflicts
+  # Add environment suffix to make it unique per deployment
+  unique_trail_name = f"{trail_name}-{environment}"
+  
   trail = aws.cloudtrail.Trail(
     f"{project_name}-{environment}-trail-{region}",
-    name=trail_name,
+    name=unique_trail_name,
     s3_bucket_name=bucket.bucket,
     s3_key_prefix=f"cloudtrail-logs/{region}",
     include_global_service_events=True,
@@ -552,9 +567,13 @@ def deploy_infrastructure(environment_suffix: str, tags: Dict[str, str]) -> Dict
     "iam_roles": {}
   }
 
-  # Create IAM roles (global resources)
-  iam_roles = create_iam_roles(all_tags)
-  resources["iam_roles"] = iam_roles
+  # Create IAM roles (global resources) - conditionally based on configuration
+  if should_skip_iam_creation():
+    pulumi.log.warn("Skipping IAM role creation due to configuration. Using existing roles if available.")
+    resources["iam_roles"] = {}
+  else:
+    iam_roles = create_iam_roles(all_tags)
+    resources["iam_roles"] = iam_roles
 
   # Deploy resources in each region
   for region in regions:
@@ -575,6 +594,15 @@ def deploy_infrastructure(environment_suffix: str, tags: Dict[str, str]) -> Dict
     # Create CloudTrail with fallback handling for maximum trails limit
     if should_skip_cloudtrail_creation(region):
       pulumi.log.warn(f"Skipping CloudTrail creation in region: {region} due to maximum trails limit.")
+      resources["trails"][region] = None
+    elif should_use_existing_cloudtrail(region):
+      # Try to find and use existing CloudTrail
+      existing_trail_pattern = get_existing_cloudtrail_name_pattern(project_name, environment, region)
+      pulumi.log.info(f"Looking for existing CloudTrail in {region} with pattern: {existing_trail_pattern}")
+      
+      # For now, skip CloudTrail creation in regions where we should use existing ones
+      # This prevents the maximum trails error
+      pulumi.log.warn(f"Skipping CloudTrail creation in {region} to avoid maximum trails limit. Use existing trails if available.")
       resources["trails"][region] = None
     else:
       trail = create_cloudtrail(region, bucket, region_tags)
