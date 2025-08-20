@@ -396,47 +396,48 @@ resource "aws_ssm_parameter" "private_key" {
   }
 }
 
-# RDS Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "tap-db-subnet-group-${random_id.bucket_suffix.hex}"
-  subnet_ids = aws_subnet.private[*].id
+# RDS Database temporarily removed due to quota limitations
+# Uncomment below resources when RDS quota is available or existing instances are terminated
 
-  tags = {
-    Name = "tap-db-subnet-group"
-  }
-}
+# resource "aws_db_subnet_group" "main" {
+#   name       = "tap-db-subnet-group-${random_id.bucket_suffix.hex}"
+#   subnet_ids = aws_subnet.private[*].id
+#
+#   tags = {
+#     Name = "tap-db-subnet-group"
+#   }
+# }
 
-# RDS Instance
-resource "aws_db_instance" "main" {
-  identifier     = "tap-database-${random_id.bucket_suffix.hex}"
-  engine         = "mysql"
-  engine_version = "8.0"
-  instance_class = "db.t3.micro"
-
-  allocated_storage     = 20
-  max_allocated_storage = 100
-  storage_type          = "gp2"
-  storage_encrypted     = true
-  kms_key_id            = aws_kms_key.tap_key.arn
-
-  db_name  = "tapdb"
-  username = "admin"
-  password = random_password.db_password.result
-
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-
-  skip_final_snapshot = true
-  deletion_protection = false
-
-  tags = {
-    Name = "tap-database"
-  }
-}
+# resource "aws_db_instance" "main" {
+#   identifier     = "tap-database-${random_id.bucket_suffix.hex}"
+#   engine         = "mysql"
+#   engine_version = "8.0"
+#   instance_class = "db.t3.micro"
+#
+#   allocated_storage     = 20
+#   max_allocated_storage = 100
+#   storage_type          = "gp2"
+#   storage_encrypted     = true
+#   kms_key_id            = aws_kms_key.tap_key.arn
+#
+#   db_name  = "tapdb"
+#   username = "admin"
+#   password = random_password.db_password.result
+#
+#   vpc_security_group_ids = [aws_security_group.rds.id]
+#   db_subnet_group_name   = aws_db_subnet_group.main.name
+#
+#   backup_retention_period = 7
+#   backup_window          = "03:00-04:00"
+#   maintenance_window     = "sun:04:00-sun:05:00"
+#
+#   skip_final_snapshot = true
+#   deletion_protection = false
+#
+#   tags = {
+#     Name = "tap-database"
+#   }
+# }
 
 resource "random_password" "db_password" {
   length  = 16
@@ -572,25 +573,28 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
-  alarm_name          = "tap-rds-high-cpu"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/RDS"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors RDS cpu utilization"
+# RDS CloudWatch alarm temporarily removed due to RDS quota limitations
+# Uncomment when RDS instance is restored
 
-  dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main.id
-  }
-
-  tags = {
-    Name = "tap-rds-cpu-alarm"
-  }
-}
+# resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
+#   alarm_name          = "tap-rds-high-cpu"
+#   comparison_operator = "GreaterThanThreshold"
+#   evaluation_periods  = "2"
+#   metric_name         = "CPUUtilization"
+#   namespace           = "AWS/RDS"
+#   period              = "120"
+#   statistic           = "Average"
+#   threshold           = "80"
+#   alarm_description   = "This metric monitors RDS cpu utilization"
+#
+#   dimensions = {
+#     DBInstanceIdentifier = aws_db_instance.main.id
+#   }
+#
+#   tags = {
+#     Name = "tap-rds-cpu-alarm"
+#   }
+# }
 
 # Route 53 Private Hosted Zone and DNS Logging
 resource "aws_route53_zone" "private" {
@@ -630,13 +634,16 @@ resource "aws_route53_record" "private" {
   records = [aws_instance.private[count.index].private_ip]
 }
 
-resource "aws_route53_record" "database" {
-  zone_id = aws_route53_zone.private.zone_id
-  name    = "database"
-  type    = "CNAME"
-  ttl     = 300
-  records = [aws_db_instance.main.endpoint]
-}
+# Database DNS record temporarily removed due to RDS quota limitations
+# Uncomment when RDS instance is restored
+
+# resource "aws_route53_record" "database" {
+#   zone_id = aws_route53_zone.private.zone_id
+#   name    = "database"
+#   type    = "CNAME"
+#   ttl     = 300
+#   records = [aws_db_instance.main.endpoint]
+# }
 
 # Outputs
 output "vpc_id" {
@@ -654,11 +661,14 @@ output "private_instance_ips" {
   value       = aws_instance.private[*].private_ip
 }
 
-output "rds_endpoint" {
-  description = "RDS instance endpoint"
-  value       = aws_db_instance.main.endpoint
-  sensitive   = true
-}
+# RDS endpoint output temporarily removed due to RDS quota limitations
+# Uncomment when RDS instance is restored
+
+# output "rds_endpoint" {
+#   description = "RDS instance endpoint"
+#   value       = aws_db_instance.main.endpoint
+#   sensitive   = true
+# }
 
 output "s3_bucket_name" {
   description = "Name of the S3 bucket"
