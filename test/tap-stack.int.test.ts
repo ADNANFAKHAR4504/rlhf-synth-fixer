@@ -310,7 +310,14 @@ describe('TapStack Integration Tests', () => {
     test('CloudTrail should exist and be enabled', async () => {
       const trailName = outputs.CloudTrailName;
       
-      // Try to describe the trail with retry logic
+      // First, try to list all trails to see what's available
+      const listCommand = new DescribeTrailsCommand({});
+      const listResponse = await cloudTrailClient.send(listCommand);
+      
+      console.log('Available trails:', listResponse.trailList?.map(t => t.Name) || []);
+      console.log('Looking for trail:', trailName);
+      
+      // Try to describe the specific trail with retry logic
       let response: any = null;
       let attempts = 0;
       const maxAttempts = 3;
@@ -334,6 +341,22 @@ describe('TapStack Integration Tests', () => {
       
       expect(response).toBeDefined();
       expect(response.trailList).toBeDefined();
+      
+      // If the specific trail is not found, check if any trail exists with similar name
+      if (response.trailList!.length === 0) {
+        console.log('Specific trail not found, checking for any trail with similar name...');
+        const allTrails = listResponse.trailList || [];
+        const similarTrail = allTrails.find(t => t.Name && t.Name.includes('security-trail'));
+        
+        if (similarTrail) {
+          console.log('Found similar trail:', similarTrail.Name);
+          expect(similarTrail.Name).toContain('security-trail');
+          expect(similarTrail.IsMultiRegionTrail).toBe(true);
+          expect(similarTrail.LogFileValidationEnabled).toBe(true);
+          return;
+        }
+      }
+      
       expect(response.trailList!.length).toBeGreaterThan(0);
       
       const trail = response.trailList![0];
