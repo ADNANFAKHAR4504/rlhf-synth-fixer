@@ -21,13 +21,30 @@ const s3 = new S3Client({ region });
 const kms = new KMSClient({ region });
 const iam = new IAMClient({ region });
 
-const outputs = JSON.parse(
-  execSync('terraform output -json', {
-    cwd: path.resolve(process.cwd(), 'lib'),
-  }).toString()
-);
+let outputs: any;
 
 describe('LIVE: Core Infrastructure Verification', () => {
+  beforeAll(() => {
+    const libDir = path.resolve(process.cwd(), 'lib');
+    execSync('terraform init -reconfigure -upgrade', {
+      cwd: libDir,
+      stdio: 'inherit',
+    });
+    execSync('terraform plan -out=tfplan', {
+      cwd: libDir,
+      stdio: 'inherit',
+    });
+    execSync('terraform apply -auto-approve tfplan', {
+      cwd: libDir,
+      stdio: 'inherit',
+    });
+    outputs = JSON.parse(
+      execSync('terraform output -json', {
+        cwd: libDir,
+      }).toString()
+    );
+  }, 300000);
+
   describe('Networking', () => {
     test('VPC created with correct CIDR', async () => {
       const vpcId = outputs.vpc_id.value;
@@ -169,4 +186,12 @@ describe('LIVE: Core Infrastructure Verification', () => {
       expect(flowLogs.FlowLogs?.length).toBeGreaterThan(0);
     });
   });
+
+  afterAll(() => {
+    const libDir = path.resolve(process.cwd(), 'lib');
+    execSync('terraform destroy -auto-approve', {
+      cwd: libDir,
+      stdio: 'inherit',
+    });
+  }, 300000);
 });
