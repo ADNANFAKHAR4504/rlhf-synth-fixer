@@ -22,7 +22,7 @@ import (
 )
 
 // BuildApp constructs the CDKTF app and stack with the serverless image processing stack (no VPC).
-func BuildApp() *cdktf.App {
+func BuildApp() cdktf.App {
 	app := cdktf.NewApp(nil)
 	stack := cdktf.NewTerraformStack(app, str("TapStack"))
 
