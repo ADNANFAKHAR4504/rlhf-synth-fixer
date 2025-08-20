@@ -34,16 +34,30 @@ Parameters:
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
 
-  DBPassword:
-    Type: String
-    Description: 'RDS Database password'
-    NoEcho: true
-    MinLength: 12
-    MaxLength: 128
-    AllowedPattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$'
-    ConstraintDescription: 'Password must contain at least 12 characters including uppercase, lowercase, number, and special character'
 
 Resources:
+  # ===============================
+  # Secrets Management
+  # ===============================
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'corp-db-password-${EnvironmentSuffix}'
+      Description: 'RDS Database password'
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'corp-db-password-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: 'TapStack'
+
   # ===============================
   # VPC and Network Infrastructure
   # ===============================
@@ -677,7 +691,7 @@ Resources:
       StorageEncrypted: true
       KmsKeyId: alias/aws/rds
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref CorpDatabaseSecurityGroup
       DBSubnetGroupName: !Ref CorpDBSubnetGroup
