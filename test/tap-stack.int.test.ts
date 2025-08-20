@@ -10,6 +10,7 @@ import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
 import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
   GetBucketLocationCommand,
+  GetBucketLoggingCommand,
   GetBucketVersioningCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -80,7 +81,6 @@ describe('TapStack Security Infrastructure Integration Tests', () => {
     });
 
     test('ArtifactsBucket should have access logging enabled', async () => {
-      const { GetBucketLoggingCommand } = await import('@aws-sdk/client-s3');
       const bucket = outputs.ArtifactsBucket;
       const logging = await s3.send(
         new GetBucketLoggingCommand({ Bucket: bucket })
