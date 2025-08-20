@@ -21,9 +21,9 @@ module "security" {
 module "iam" {
   source = "./modules/iam"
 
-  project_name       = var.project_name
-  environment        = var.environment
-  iam_users          = ["testuser1", "testuser2"]
+  project_name = var.project_name
+  environment  = var.environment
+  iam_users    = ["testuser1", "testuser2"]
 }
 
 module "storage" {
@@ -120,12 +120,6 @@ output "kms_key_id" {
 output "kms_key_arn" {
   description = "The ARN of the KMS key"
   value       = module.storage.kms_key_arn
-}
-
-
-output "vpc_endpoint_s3_id" {
-  description = "The ID of the S3 VPC endpoint"
-  value       = module.storage.vpc_endpoint_s3_id
 }
 
 output "ec2_instance_profile_name" {

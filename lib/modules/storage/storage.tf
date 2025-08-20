@@ -57,15 +57,3 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 }
 
 data "aws_caller_identity" "current" {}
-
-resource "aws_vpc_endpoint" "s3" {
-  vpc_id          = var.vpc_id
-  service_name    = "com.amazonaws.${var.aws_region}.s3"
-  route_table_ids = var.private_route_table_ids
-
-  tags = {
-    Name        = "${var.project_name}-s3-vpc-endpoint"
-    Project     = var.project_name
-    Environment = var.environment
-  }
-}
