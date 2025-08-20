@@ -524,3 +524,8 @@ output "dynamodb_table_name" {
   description = "Name of the DynamoDB tables"
   value       = module.data.primary_table_name
 }
+
+output "vpc_peering_connection_id" {
+  description = "ID of the VPC peering connection between primary and secondary VPCs"
+  value       = module.network_xregion.vpc_peering_connection_id
+}

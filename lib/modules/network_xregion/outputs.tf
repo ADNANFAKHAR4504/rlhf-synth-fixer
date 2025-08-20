@@ -31,3 +31,7 @@ output "primary_security_group_id" {
 output "secondary_security_group_id" {
   value = var.create_vpcs ? aws_security_group.secondary[0].id : null
 }
+
+output "vpc_peering_connection_id" {
+  value = var.create_vpcs ? aws_vpc_peering_connection.primary_to_secondary[0].id : null
+}
