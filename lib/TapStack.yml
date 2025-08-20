@@ -484,13 +484,13 @@ Resources:
           - Sid: AWSLoadBalancerAccessLogs
             Effect: Allow
             Principal:
-              AWS: arn:aws:iam::127311923021:root  # ELB service account for us-east-1
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
             Action: s3:PutObject
             Resource: !Sub '${S3LoggingBucket.Arn}/alb-logs/*'
           - Sid: AWSLoadBalancerAccessLogsCheck
             Effect: Allow
             Principal:
-              AWS: arn:aws:iam::127311923021:root  # ELB service account for us-east-1
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt S3LoggingBucket.Arn
 
@@ -814,7 +814,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRolePolicy
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
 
   ConfigBucket:
     Type: AWS::S3::Bucket
