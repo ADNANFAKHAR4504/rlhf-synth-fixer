@@ -81,19 +81,19 @@ variable "ec2_instance_type" {
 variable "vpc_id" {
   description = "VPC ID to deploy resources in"
   type        = string
-  default     = "vpc-0abc123de456"
+  default     = ""  # Will be auto-detected if empty
 }
 
 variable "private_subnet_ids" {
   description = "List of private subnet IDs"
   type        = list(string)
-  default     = ["subnet-0123456789abcdef0", "subnet-0fedcba9876543210"]
+  default     = []  # Will be auto-detected if empty
 }
 
 variable "public_subnet_ids" {
   description = "List of public subnet IDs"
   type        = list(string)
-  default     = ["subnet-0abcdef1234567890", "subnet-09876543210fedcba"]
+  default     = []  # Will be auto-detected if empty
 }
 
 variable "flow_logs_retention_days" {
@@ -138,6 +138,11 @@ locals {
   }
 
   name_prefix = "${var.project_name}-${var.environment}"
+  
+  # VPC and subnet IDs
+  vpc_id = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
+  private_subnet_ids = length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : data.aws_subnets.all[0].ids
+  public_subnet_ids = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : data.aws_subnets.all[0].ids
 }
 
 # Data Sources
@@ -152,6 +157,22 @@ data "aws_ssm_parameter" "amazon_linux_2023_ami" {
 data "aws_availability_zones" "available" {
   state = "available"
 }
+
+# Auto-detect VPC and subnets if not provided
+data "aws_vpc" "default" {
+  count = var.vpc_id == "" ? 1 : 0
+  default = true
+}
+
+data "aws_subnets" "all" {
+  count = length(var.private_subnet_ids) == 0 ? 1 : 0
+  filter {
+    name   = "vpc-id"
+    values = [var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id]
+  }
+}
+
+
 
 # Region Guard
 resource "null_resource" "region_guard" {
@@ -260,7 +281,7 @@ resource "aws_kms_key" "main" {
         Sid    = "Allow KMS Administrators"
         Effect = "Allow"
         Principal = {
-          AWS = var.kms_key_administrators
+          AWS = length(var.kms_key_administrators) > 0 ? var.kms_key_administrators : ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"]
         }
         Action = [
           "kms:Create*",
@@ -284,7 +305,7 @@ resource "aws_kms_key" "main" {
         Sid    = "Allow KMS Users"
         Effect = "Allow"
         Principal = {
-          AWS = var.kms_key_users
+          AWS = length(var.kms_key_users) > 0 ? var.kms_key_users : ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"]
         }
         Action = [
           "kms:Decrypt",
@@ -741,8 +762,8 @@ resource "aws_iam_role_policy" "cloudtrail" {
 }
 
 resource "aws_iam_role" "ec2_role" {
-  # Use stable name to prevent replacement when variables change
-  name = "prod-ec2-role"
+  # Use unique name to prevent conflicts
+  name = "prod-ec2-role-${random_id.bucket_suffix.hex}-${formatdate("YYYYMMDD", timestamp())}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -772,8 +793,8 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  # Use stable name to prevent replacement when variables change
-  name = "prod-ec2-instance-profile"
+  # Use unique name to prevent conflicts
+  name = "prod-ec2-instance-profile-${random_id.bucket_suffix.hex}-${formatdate("YYYYMMDD", timestamp())}"
   role = aws_iam_role.ec2_role.name
 
   # Prevent cycle when replacing due to name changes
@@ -789,7 +810,7 @@ resource "aws_flow_log" "vpc" {
   iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
   traffic_type    = "ALL"
-  vpc_id          = var.vpc_id
+  vpc_id          = local.vpc_id
 
   log_format = "$${version} $${account-id} $${interface-id} $${srcaddr} $${dstaddr} $${srcport} $${dstport} $${protocol} $${packets} $${bytes} $${windowstart} $${windowend} $${action} $${flowlogstatus}"
 
@@ -876,7 +897,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
 resource "aws_security_group" "rds" {
   name        = "${local.name_prefix}-rds-sg"
   description = "Security group for RDS database"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.vpc_id
 
   ingress {
     description = "PostgreSQL from allowed CIDRs"
@@ -902,7 +923,7 @@ resource "aws_security_group" "rds" {
 resource "aws_security_group" "ec2" {
   name        = "${local.name_prefix}-ec2-sg"
   description = "Security group for EC2 instances"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.vpc_id
 
   ingress {
     description = "SSH from allowed CIDRs"
@@ -944,7 +965,7 @@ resource "aws_security_group" "ec2" {
 # RDS Resources
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group"
-  subnet_ids = var.private_subnet_ids
+  subnet_ids = local.private_subnet_ids
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-db-subnet-group"
@@ -1015,7 +1036,7 @@ resource "aws_secretsmanager_secret_version" "rds_password" {
 resource "aws_instance" "app" {
   ami                         = data.aws_ssm_parameter.amazon_linux_2023_ami.value
   instance_type               = var.ec2_instance_type
-  subnet_id                   = var.private_subnet_ids[0]
+  subnet_id                   = local.private_subnet_ids[0]
   vpc_security_group_ids      = [aws_security_group.ec2.id]
   associate_public_ip_address = false
   iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
