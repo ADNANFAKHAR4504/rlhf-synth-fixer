@@ -26,6 +26,7 @@ describe('@terraform.init (provider-only)', () => {
 
   afterAll(() => {
     // Cleanup init directory contents
+    if (!fs.existsSync(INIT_DIR)) return;
     const files = fs.readdirSync(INIT_DIR);
     for (const f of files) {
       try { fs.rmSync(path.join(INIT_DIR, f), { recursive: true, force: true }); } catch {}
@@ -49,6 +50,7 @@ describe('@terraform.init (provider-only)', () => {
         cwd: INIT_DIR,
         stdio: 'pipe',
         timeout: 30000,
+        shell: '/bin/sh',
       });
     }).not.toThrow();
   }, TEST_TIMEOUT);
@@ -59,6 +61,7 @@ describe('@terraform.init (provider-only)', () => {
         cwd: INIT_DIR,
         stdio: 'pipe',
         timeout: 30000,
+        shell: '/bin/sh',
       });
     }).not.toThrow();
   }, TEST_TIMEOUT);
@@ -338,7 +341,7 @@ tags = {
         expect(planDefault).not.toMatch(/aws_vpc\.secondary/);
 
         // Enable VPCs via temp tfvars -> VPC resources appear
-        const vpcVars = `create_vpcs = true\ncreate_cloudtrail = false\nallowed_cidr_blocks = ["10.0.0.0/8"]\n`;
+        const vpcVars = `create_vpcs = true\ncreate_cloudtrail = false\nallowed_cidr_blocks = ["10.0.0.0/8"]\ndb_password = "TestPassword123!"\n`;
         const vpcVarsFile = path.join(LIB_DIR, 'enable-vpc.tfvars');
         fs.writeFileSync(vpcVarsFile, vpcVars);
         try {
@@ -367,7 +370,7 @@ tags = {
         expect(planDefault).not.toMatch(/aws_cloudtrail\.secondary/);
 
         // Enable CloudTrail via temp tfvars -> CloudTrail resources appear
-        const ctVars = `create_cloudtrail = true\ncreate_vpcs = false\n`;
+        const ctVars = `create_cloudtrail = true\ncreate_vpcs = false\ndb_password = "TestPassword123!"\n`;
         const ctVarsFile = path.join(LIB_DIR, 'enable-cloudtrail.tfvars');
         fs.writeFileSync(ctVarsFile, ctVars);
         try {

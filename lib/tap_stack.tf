@@ -52,13 +52,12 @@ variable "db_password" {
   description = "Database password"
   type        = string
   sensitive   = true
-  default     = "changeme123!"
 }
 
 variable "allowed_cidr_blocks" {
   description = "Allowed CIDR blocks for SSH access"
   type        = list(string)
-  default     = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+  default     = ["10.0.0.0/24"]
 }
 
 variable "create_vpcs" {
@@ -113,42 +112,6 @@ resource "aws_kms_key" "primary" {
   description             = "KMS key for primary region (us-west-1)"
   deletion_window_in_days = 7
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CloudTrail to encrypt logs"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action = [
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey",
-          "kms:Encrypt",
-          "kms:ReEncrypt*",
-          "kms:CreateGrant",
-          "kms:Decrypt"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
-          }
-        }
-      }
-    ]
-  })
-
   tags = {
     Name        = "primary-kms-key"
     Environment = "production"
@@ -166,42 +129,6 @@ resource "aws_kms_key" "secondary" {
   description             = "KMS key for secondary region (eu-central-1)"
   deletion_window_in_days = 7
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CloudTrail to encrypt logs"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action = [
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey",
-          "kms:Encrypt",
-          "kms:ReEncrypt*",
-          "kms:CreateGrant",
-          "kms:Decrypt"
-        ]
-        Resource = "*"
-        Condition = {
-          StringLike = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:*:${data.aws_caller_identity.current.account_id}:trail/*"
-          }
-        }
-      }
-    ]
-  })
-
   tags = {
     Name        = "secondary-kms-key"
     Environment = "production"
@@ -213,6 +140,21 @@ resource "aws_kms_alias" "secondary" {
   provider      = aws.eu_central_1
   name          = "alias/secondary-key-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.secondary.key_id
+}
+
+## KMS policies module (attaches least-privilege policies to KMS keys)
+module "kms_policies" {
+  source = "./modules/kms_policies"
+
+  providers = {
+    aws              = aws
+    aws.eu_central_1 = aws.eu_central_1
+  }
+
+  primary_key_id    = aws_kms_key.primary.key_id
+  primary_key_arn   = aws_kms_key.primary.arn
+  secondary_key_id  = aws_kms_key.secondary.key_id
+  secondary_key_arn = aws_kms_key.secondary.arn
 }
 
 ## Network (cross-region) module
