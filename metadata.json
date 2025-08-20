@@ -5,5 +5,25 @@
   "turn_type": "single",
   "po_id": "291571",
   "team": "2",
-  "startedAt": "2025-08-18T11:46:51.380Z"
+  "startedAt": "2025-08-18T11:46:51.380Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration", 
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudTrail",
+    "GuardDuty",
+    "Config",
+    "S3",
+    "CloudWatch",
+    "Systems Manager"
+  ]
 }
