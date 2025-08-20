@@ -1,40 +1,41 @@
-import { Construct } from 'constructs';
-import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
+import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
+import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
+import { CloudfrontOriginAccessIdentity } from '@cdktf/provider-aws/lib/cloudfront-origin-access-identity';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { DataAwsRoute53Zone } from '@cdktf/provider-aws/lib/data-aws-route53-zone';
+import { DataAwsS3Bucket } from '@cdktf/provider-aws/lib/data-aws-s3-bucket';
 import {
   DbInstance,
   DbInstanceConfig,
 } from '@cdktf/provider-aws/lib/db-instance';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { DataAwsS3Bucket } from '@cdktf/provider-aws/lib/data-aws-s3-bucket';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
-import { CloudfrontOriginAccessIdentity } from '@cdktf/provider-aws/lib/cloudfront-origin-access-identity';
-import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
-import { DataAwsRoute53Zone } from '@cdktf/provider-aws/lib/data-aws-route53-zone';
-import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
-import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
-import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
-import { VpcPeeringConnection } from '@cdktf/provider-aws/lib/vpc-peering-connection';
-import { VpcPeeringConnectionAccepterA } from '@cdktf/provider-aws/lib/vpc-peering-connection-accepter';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
+import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { VpcPeeringConnection } from '@cdktf/provider-aws/lib/vpc-peering-connection';
+import { VpcPeeringConnectionAccepterA } from '@cdktf/provider-aws/lib/vpc-peering-connection-accepter';
+import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
+import { RandomPassword } from '@cdktf/provider-random/lib/random-password';
+import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
 
 // --- Reusable Regional Construct ---
 interface RegionalInfraProps {
@@ -132,7 +133,11 @@ class RegionalInfra extends Construct {
         engineVersion: '16',
         username: 'adminuser',
         password: rdsPasswordSecret
-          ? Fn.lookup(rdsPasswordSecret.arn, 'password', 'CHANGEME-use-secrets-manager')
+          ? Fn.lookup(
+              rdsPasswordSecret.arn,
+              'password',
+              'CHANGEME-use-secrets-manager'
+            )
           : 'CHANGEME-use-secrets-manager',
         multiAz: true,
         storageEncrypted: true,
@@ -195,7 +200,8 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     // Parameterized domain name for reusability
-    const domainName = process.env.DOMAIN_NAME || 'pci-multiregion-deploy-test-2.net';
+    const domainName =
+      process.env.DOMAIN_NAME || 'pci-multiregion-deploy-test-2.net';
     const primaryRegion = 'us-east-1';
     const secondaryRegion = 'us-west-2';
     const s3ReplicaRegion = 'us-west-2'; // FIX: Replication region changed to us-west-2
@@ -240,18 +246,30 @@ export class TapStack extends TerraformStack {
     });
 
     // --- Secrets Manager for RDS password ---
-    const rdsPasswordSecret = new SecretsmanagerSecret(this, 'RdsPasswordSecret', {
-      provider: primaryProvider,
-      name: `pci-rds-password-${uniqueSuffix}`,
-      description: 'RDS master password for PCI stack',
-      recoveryWindowInDays: 7,
-      tags,
+    const rdsPassword = new RandomPassword(this, 'RdsPassword', {
+      length: 20,
+      special: true,
+      upper: true,
+      lower: true,
+      number: true,
     });
+
+    const rdsPasswordSecret = new SecretsmanagerSecret(
+      this,
+      'RdsPasswordSecret',
+      {
+        provider: primaryProvider,
+        name: `pci-rds-password-${uniqueSuffix}`,
+        description: 'RDS master password for PCI stack',
+        recoveryWindowInDays: 7,
+        tags,
+      }
+    );
 
     new SecretsmanagerSecretVersion(this, 'RdsPasswordSecretVersion', {
       provider: primaryProvider,
       secretId: rdsPasswordSecret.id,
-      secretString: JSON.stringify({ password: Fn.randomPassword(20, true, true, true, true) }),
+      secretString: JSON.stringify({ password: rdsPassword.result }),
     });
 
     const primaryInfra = new RegionalInfra(this, 'PrimaryInfra', {

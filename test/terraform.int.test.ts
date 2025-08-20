@@ -34,6 +34,7 @@ import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-sec
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { RandomPassword } from '@cdktf/provider-random/lib/random-password';
 
 interface RegionalInfraProps {
   provider: AwsProvider;
@@ -238,6 +239,14 @@ export class TapStack extends TerraformStack {
     });
 
     // --- Secrets Manager for RDS password ---
+    const rdsPassword = new RandomPassword(this, 'RdsPassword', {
+      length: 20,
+      special: true,
+      upper: true,
+      lower: true,
+      number: true,
+    });
+
     const rdsPasswordSecret = new SecretsmanagerSecret(this, 'RdsPasswordSecret', {
       provider: primaryProvider,
       name: `pci-rds-password-${uniqueSuffix}`,
@@ -249,7 +258,7 @@ export class TapStack extends TerraformStack {
     new SecretsmanagerSecretVersion(this, 'RdsPasswordSecretVersion', {
       provider: primaryProvider,
       secretId: rdsPasswordSecret.id,
-      secretString: JSON.stringify({ password: Fn.randomPassword(20, true, true, true, true) }),
+      secretString: JSON.stringify({ password: rdsPassword.result }),
     });
 
     const primaryInfra = new RegionalInfra(this, 'PrimaryInfra', {
@@ -404,11 +413,7 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // Route53, ACM, CloudFront, WAF, Health Checks, Outputs (unchanged)
-    // ... (existing code for these resources) ...
-
     // --- Integration Test: VPC Peering Connectivity ---
-    // Find latest Amazon Linux 2 AMI for each region
     const primaryAmi = new DataAwsAmi(this, 'PrimaryAmi', {
       provider: primaryProvider,
       mostRecent: true,
@@ -429,7 +434,6 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // Security group to allow ICMP (ping) between VPCs
     const testSgPrimary = new SecurityGroup(this, 'TestSgPrimary', {
       provider: primaryProvider,
       vpcId: primaryInfra.vpc.id,
@@ -476,7 +480,6 @@ export class TapStack extends TerraformStack {
       tags,
     });
 
-    // Launch test EC2 instances in each VPC
     const testInstancePrimary = new Instance(this, 'TestInstancePrimary', {
       provider: primaryProvider,
       ami: primaryAmi.id,
@@ -495,7 +498,6 @@ export class TapStack extends TerraformStack {
       tags: { ...tags, Name: `vpc-peering-test-secondary-${uniqueSuffix}` },
     });
 
-    // Output private IPs for connectivity checks
     new TerraformOutput(this, 'PrimaryTestInstancePrivateIp', {
       value: testInstancePrimary.privateIp,
       description: 'Private IP of test EC2 in primary VPC for peering test',
