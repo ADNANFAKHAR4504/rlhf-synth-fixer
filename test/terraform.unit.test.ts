@@ -16,22 +16,66 @@ const VARS_PATH = process.env.TF_VARS_PATH
 
 // Helper function to extract data source blocks - FIXED REGEX
 function extractDataSources(hcl: string): string[] {
-  // Updated regex to handle indented closing braces and multiline content properly
-  const dataSourceRegex = /data\s+"[^"]+"\s+"[^"]+"\s*\{[\s\S]*?\}/g;
-  return hcl.match(dataSourceRegex) || [];
+  const results: string[] = [];
+  const lines = hcl.split('\n');
+  let inDataBlock = false;
+  let currentBlock = '';
+  let braceCount = 0;
+  
+  for (const line of lines) {
+    if (!inDataBlock && /^\s*data\s+"[^"]+"\s+"[^"]+"\s*\{/.test(line)) {
+      inDataBlock = true;
+      currentBlock = line;
+      braceCount = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+    } else if (inDataBlock) {
+      currentBlock += '\n' + line;
+      braceCount += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+      
+      if (braceCount === 0) {
+        results.push(currentBlock);
+        inDataBlock = false;
+        currentBlock = '';
+      }
+    }
+  }
+  
+  return results;
 }
 
-// Helper function to extract module blocks - UPDATED TO EXCLUDE COMMENTS
+// Helper function to extract module blocks - UPDATED TO HANDLE NESTED BRACES
 function extractModuleBlocks(hcl: string): { [key: string]: string } {
-  // First remove commented-out module blocks to avoid counting them
-  const cleanHcl = hcl.replace(/^\s*#.*$/gm, ''); // Remove comment lines
+  // Remove multi-line commented blocks that contain module definitions
+  let cleanHcl = hcl.replace(/^#[\s\S]*?^#\s*\}/gm, '');
+  // Also remove single comment lines
+  cleanHcl = cleanHcl.replace(/^\s*#.*$/gm, '');
   
-  const moduleRegex = /module\s+"([^"]+)"\s*\{([\s\S]*?)\}/g;
   const modules: { [key: string]: string } = {};
-  let match;
+  const lines = cleanHcl.split('\n');
+  let inModuleBlock = false;
+  let currentModuleName = '';
+  let currentBlock = '';
+  let braceCount = 0;
   
-  while ((match = moduleRegex.exec(cleanHcl)) !== null) {
-    modules[match[1]] = match[0];
+  for (const line of lines) {
+    if (!inModuleBlock && /^\s*module\s+"([^"]+)"\s*\{/.test(line)) {
+      const match = line.match(/module\s+"([^"]+)"/);
+      if (match) {
+        inModuleBlock = true;
+        currentModuleName = match[1];
+        currentBlock = line;
+        braceCount = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+      }
+    } else if (inModuleBlock) {
+      currentBlock += '\n' + line;
+      braceCount += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+      
+      if (braceCount === 0) {
+        modules[currentModuleName] = currentBlock;
+        inModuleBlock = false;
+        currentBlock = '';
+        currentModuleName = '';
+      }
+    }
   }
   
   return modules;
@@ -233,12 +277,38 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
 
   test("validates all modules use relative path sources", () => {
     // FIXED: Remove commented modules and only count active modules
-    const cleanHcl = hcl.replace(/^\s*#.*$/gm, ''); // Remove comment lines
-    const moduleBlocks = cleanHcl.match(/module\s+"[^"]+"\s*{[^}]+}/g) || [];
+    // Handle multi-line commented module blocks
+    let cleanHcl = hcl.replace(/^#[\s\S]*?^#\s*\}/gm, '');
+    // Also remove single comment lines
+    cleanHcl = cleanHcl.replace(/^\s*#.*$/gm, '');
     
-    expect(moduleBlocks).toHaveLength(6); // 3 module types × 2 regions
+    // Count module blocks using the same logic as extractModuleBlocks
+    const moduleMatches = [];
+    const lines = cleanHcl.split('\n');
+    let inModuleBlock = false;
+    let currentBlock = '';
+    let braceCount = 0;
     
-    moduleBlocks.forEach(moduleBlock => {
+    for (const line of lines) {
+      if (!inModuleBlock && /^\s*module\s+"[^"]+"\s*\{/.test(line)) {
+        inModuleBlock = true;
+        currentBlock = line;
+        braceCount = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+      } else if (inModuleBlock) {
+        currentBlock += '\n' + line;
+        braceCount += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
+        
+        if (braceCount === 0) {
+          moduleMatches.push(currentBlock);
+          inModuleBlock = false;
+          currentBlock = '';
+        }
+      }
+    }
+    
+    expect(moduleMatches).toHaveLength(6); // 3 module types × 2 regions
+    
+    moduleMatches.forEach(moduleBlock => {
       expect(moduleBlock).toMatch(/source\s*=\s*"\.\/modules\/[^"]+"/);
       // Ensure no absolute paths or external sources
       expect(moduleBlock).not.toMatch(/source\s*=\s*"(?!\.\/)/);
