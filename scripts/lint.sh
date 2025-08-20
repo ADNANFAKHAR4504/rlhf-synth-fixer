@@ -21,8 +21,12 @@ elif [ "$LANGUAGE" = "go" ]; then
     echo "✅ Go project detected, running go fmt and go vet..."
     # Ensure provider bindings exist for CDKTF Go projects before tidy
     if [ "$PLATFORM" = "cdktf" ]; then
-        echo "Running cdktf get to generate local bindings in .gen/"
-        npx --yes cdktf get
+        if [ ! -d ".gen/providers" ]; then
+            echo "Running cdktf get to generate local bindings in .gen/ (missing .gen/providers)"
+            npx --yes cdktf get
+        else
+            echo ".gen/providers exists, skipping cdktf get"
+        fi
     fi
     echo "Running go mod tidy to populate go.sum and fetch deps"
     go mod tidy
