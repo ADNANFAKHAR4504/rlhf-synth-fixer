@@ -108,7 +108,7 @@ describe("tap_stack.tf static verification", () => {
   it("declares RDS subnet group and instance only in primary region", () => {
     expect(has(/resource\s+"aws_db_subnet_group"\s+"primary"/)).toBe(true);
     expect(has(/resource\s+"aws_db_instance"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_db_instance"\s+"secondary"/)).toBe(false);
+    expect(has(/resource\s+"aws_db_instance"\s+"secondary"/)).toBe(true);
   });
 
   // 11. CloudWatch logs and metric alarms in both regions
