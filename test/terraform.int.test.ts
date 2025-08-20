@@ -34,7 +34,6 @@ import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-sec
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-import { RandomPassword } from '@cdktf/provider-random/lib/random-password';
 
 interface RegionalInfraProps {
   provider: AwsProvider;
@@ -239,14 +238,6 @@ export class TapStack extends TerraformStack {
     });
 
     // --- Secrets Manager for RDS password ---
-    const rdsPassword = new RandomPassword(this, 'RdsPassword', {
-      length: 20,
-      special: true,
-      upper: true,
-      lower: true,
-      number: true,
-    });
-
     const rdsPasswordSecret = new SecretsmanagerSecret(this, 'RdsPasswordSecret', {
       provider: primaryProvider,
       name: `pci-rds-password-${uniqueSuffix}`,
@@ -258,7 +249,7 @@ export class TapStack extends TerraformStack {
     new SecretsmanagerSecretVersion(this, 'RdsPasswordSecretVersion', {
       provider: primaryProvider,
       secretId: rdsPasswordSecret.id,
-      secretString: JSON.stringify({ password: rdsPassword.result }),
+      secretString: JSON.stringify({ password: process.env.RDS_PASSWORD || 'ChangeMe123!@#' }),
     });
 
     const primaryInfra = new RegionalInfra(this, 'PrimaryInfra', {

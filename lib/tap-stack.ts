@@ -33,7 +33,6 @@ import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { VpcPeeringConnection } from '@cdktf/provider-aws/lib/vpc-peering-connection';
 import { VpcPeeringConnectionAccepterA } from '@cdktf/provider-aws/lib/vpc-peering-connection-accepter';
 import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
-import { RandomPassword } from '@cdktf/provider-random/lib/random-password';
 import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -246,30 +245,19 @@ export class TapStack extends TerraformStack {
     });
 
     // --- Secrets Manager for RDS password ---
-    const rdsPassword = new RandomPassword(this, 'RdsPassword', {
-      length: 20,
-      special: true,
-      upper: true,
-      lower: true,
-      number: true,
+    // Use a static or environment-based password (no random provider)
+    const rdsPasswordSecret = new SecretsmanagerSecret(this, 'RdsPasswordSecret', {
+      provider: primaryProvider,
+      name: `pci-rds-password-${uniqueSuffix}`,
+      description: 'RDS master password for PCI stack',
+      recoveryWindowInDays: 7,
+      tags,
     });
-
-    const rdsPasswordSecret = new SecretsmanagerSecret(
-      this,
-      'RdsPasswordSecret',
-      {
-        provider: primaryProvider,
-        name: `pci-rds-password-${uniqueSuffix}`,
-        description: 'RDS master password for PCI stack',
-        recoveryWindowInDays: 7,
-        tags,
-      }
-    );
 
     new SecretsmanagerSecretVersion(this, 'RdsPasswordSecretVersion', {
       provider: primaryProvider,
       secretId: rdsPasswordSecret.id,
-      secretString: JSON.stringify({ password: rdsPassword.result }),
+      secretString: JSON.stringify({ password: process.env.RDS_PASSWORD || 'ChangeMe123!@#' }),
     });
 
     const primaryInfra = new RegionalInfra(this, 'PrimaryInfra', {
