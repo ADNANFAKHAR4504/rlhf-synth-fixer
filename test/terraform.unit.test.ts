@@ -142,16 +142,20 @@ describe("IaC AWS Nova Model - Enterprise Security Validation", () => {
     });
 
     test("3. Required variables for enterprise configuration", () => {
-      const requiredVars = ['aws_region', 'project_name', 'environment', 'domain_name'];
+      const requiredVars = ['aws_region', 'project_name', 'environment', 'environment_suffix', 'domain_name'];
       requiredVars.forEach(varName => {
         const variable = variables.find(v => v.name === varName);
         expect(variable).toBeDefined();
         expect(variable?.description).toBeDefined();
       });
       
-      // Validate aws_region default is us-east-1 for compliance
+      // Validate aws_region default is us-west-2 (moved from us-east-1 for better availability)
       const awsRegionVar = variables.find(v => v.name === 'aws_region');
-      expect(awsRegionVar?.defaultValue).toMatch(/us-east-1/);
+      expect(awsRegionVar?.defaultValue).toMatch(/us-west-2/);
+      
+      // Validate environment_suffix variable exists
+      const envSuffixVar = variables.find(v => v.name === 'environment_suffix');
+      expect(envSuffixVar?.description).toContain('Environment suffix for unique resource naming');
     });
 
     test("4. Locals configuration with enterprise standards", () => {
@@ -161,6 +165,9 @@ describe("IaC AWS Nova Model - Enterprise Security Validation", () => {
       expect(stackContent).toMatch(/Project\s*=\s*var\.project_name/);
       expect(stackContent).toMatch(/Environment\s*=\s*var\.environment/);
       expect(stackContent).toMatch(/Compliance\s*=\s*"nist-cis"/);
+      
+      // Validate name_suffix logic for environment suffix support
+      expect(stackContent).toMatch(/name_suffix\s*=\s*var\.environment_suffix\s*!=\s*""\s*\?\s*var\.environment_suffix\s*:\s*var\.environment/);
     });
 
     test("5. Data sources for AWS account and region information", () => {

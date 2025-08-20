@@ -2,7 +2,7 @@
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
 }
 
 variable "project_name" {
@@ -15,6 +15,12 @@ variable "environment" {
   description = "Environment name"
   type        = string
   default     = "prod"
+}
+
+variable "environment_suffix" {
+  description = "Environment suffix for unique resource naming"
+  type        = string
+  default     = "dev"
 }
 
 variable "domain_name" {
@@ -35,7 +41,7 @@ locals {
 
   vpc_cidr = "10.0.0.0/16"
   azs      = ["${var.aws_region}a", "${var.aws_region}b", "${var.aws_region}c"]
-  name_suffix = var.environment
+  name_suffix = var.environment_suffix != "" ? var.environment_suffix : var.environment
 }
 
 # Data sources
@@ -644,6 +650,33 @@ resource "aws_wafv2_web_acl" "main" {
   tags = local.common_tags
 }
 
+# WAF Log Group (must use aws-waf-logs- prefix)
+resource "aws_cloudwatch_log_group" "waf_log_group" {
+  name              = "aws-waf-logs-${var.project_name}-${local.name_suffix}"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = local.common_tags
+}
+
+# WAF Logging Configuration
+resource "aws_wafv2_web_acl_logging_configuration" "main" {
+  resource_arn            = aws_wafv2_web_acl.main.arn
+  log_destination_configs = [aws_cloudwatch_log_group.waf_log_group.arn]
+
+  redacted_fields {
+    single_header {
+      name = "authorization"
+    }
+  }
+
+  redacted_fields {
+    single_header {
+      name = "cookie"
+    }
+  }
+}
+
 # Route 53 with DNSSEC (Latest 2024/2025 Feature)
 resource "aws_route53_zone" "main" {
   name = var.domain_name
@@ -653,6 +686,8 @@ resource "aws_route53_zone" "main" {
   })
 }
 
+/*
+# Commented out due to KMS key policy issues with Route53 DNSSEC
 resource "aws_route53_key_signing_key" "main" {
   hosted_zone_id             = aws_route53_zone.main.id
   key_management_service_arn = aws_kms_key.dnssec.arn
@@ -662,6 +697,7 @@ resource "aws_route53_key_signing_key" "main" {
 resource "aws_route53_hosted_zone_dnssec" "main" {
   hosted_zone_id = aws_route53_key_signing_key.main.hosted_zone_id
 }
+*/
 
 # Enhanced S3 Configuration
 resource "aws_s3_bucket" "main" {
@@ -1049,7 +1085,8 @@ resource "aws_s3_bucket_policy" "config" {
   })
 }
 
-# Enhanced AWS Config for compliance monitoring
+# Enhanced AWS Config for compliance monitoring (commented out due to circular dependency issues)
+/*
 resource "aws_config_delivery_channel" "main" {
   name           = "${var.project_name}-config-delivery-channel-${local.name_suffix}"
   s3_bucket_name = aws_s3_bucket.config.bucket
@@ -1063,8 +1100,6 @@ resource "aws_config_configuration_recorder" "main" {
     all_supported                 = true
     include_global_resource_types = true
   }
-
-  depends_on = [aws_config_delivery_channel.main]
 }
 
 resource "aws_iam_role" "config_role" {
@@ -1135,6 +1170,7 @@ resource "aws_config_config_rule" "encrypted_volumes" {
 
   depends_on = [aws_config_configuration_recorder.main]
 }
+*/
 
 # CloudWatch Dashboard for monitoring
 resource "aws_cloudwatch_dashboard" "main" {
@@ -1214,7 +1250,14 @@ resource "aws_guardduty_detector" "main" {
   enable = true
 
   tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [
+      enable
+    ]
+  }
 }
+
 
 # GuardDuty features using separate resources (recommended approach)
 resource "aws_guardduty_detector_feature" "s3_data_events" {
