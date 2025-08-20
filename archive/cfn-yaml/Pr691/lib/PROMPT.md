@@ -30,7 +30,7 @@ Create an IAM Role intended for AWS Lambda or other compute resources that need 
 
 Assign a tightly scoped IAM policy granting only minimum required permissions to interact with the designated S3 bucket:
 
-Permit necessary S3 actions such as GetObject, PutObject, ListBucket scoped strictly to the bucket’s ARN.
+Permit necessary S3 actions such as GetObject, PutObject, ListBucket scoped strictly to the buckets ARN.
 
 Deny any broader permissions beyond what is essential.
 
@@ -58,7 +58,7 @@ Provision a Lambda function configured to run within the private subnet of the V
 
 Attach the previously created IAM Role to this Lambda.
 
-Configure the Lambda’s VPC configuration with references to the private subnet(s) and associated security groups.
+Configure the Lambdas VPC configuration with references to the private subnet(s) and associated security groups.
 
 Ensure the Lambda function has network connectivity as required for internal processing.
 

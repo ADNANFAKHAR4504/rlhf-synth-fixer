@@ -21,7 +21,7 @@ The infrastructure must meet **all** of the following requirements:
 
 1. **Region**: All resources must be deployed in `us-west-1`.
 2. **Encryption**: Use AWS Key Management Service (KMS) to create and manage cryptographic keys for all data at rest.
-3. **IAM Roles**: Implement IAM roles that apply the **least privilege** principle—grant only the minimal permissions
+3. **IAM Roles**: Implement IAM roles that apply the **least privilege** principle--grant only the minimal permissions
    necessary for each resource or user.
 4. **Centralized Logging**:
     - Capture logs from all AWS services (e.g., CloudTrail, VPC Flow Logs, etc.).

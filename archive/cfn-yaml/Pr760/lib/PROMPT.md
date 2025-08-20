@@ -1,4 +1,4 @@
-# Prompt: Secure AWS Environment with CloudFormation – SecureApp
+# Prompt: Secure AWS Environment with CloudFormation SecureApp
 
 ## Objective
 Design and implement a secure, monitored, and efficient AWS infrastructure using AWS CloudFormation in YAML, deployable in the `us-east-1` region. The infrastructure should follow a modular and best-practices-driven approach, ensuring security, observability, and role-based access.
@@ -12,26 +12,26 @@ You are tasked with building a secure and observable AWS environment using Cloud
 You must provision the following resources, ensuring they are properly configured, secured, and interconnected:
 
 1. **Amazon S3 Bucket** (`SecureApp-AppDataBucket`)
-   - Must have server-side encryption enabled.
-   - Used for secure application data storage.
-   - Bucket name must conform to naming convention and must not allow public access.
+- Must have server-side encryption enabled.
+- Used for secure application data storage.
+- Bucket name must conform to naming convention and must not allow public access.
 
 2. **Amazon RDS MySQL Instance** (`SecureApp-MySQLInstance`)
-   - Deployed in a public subnet to enable direct administrative access.
-   - Must follow secure configuration practices (e.g., no public snapshots, secure credentials via Secrets Manager is recommended).
-   - VPC, subnet, and security group setup must allow for secure but direct connectivity.
+- Deployed in a public subnet to enable direct administrative access.
+- Must follow secure configuration practices (e.g., no public snapshots, secure credentials via Secrets Manager is recommended).
+- VPC, subnet, and security group setup must allow for secure but direct connectivity.
 
 3. **Amazon EC2 Instance Group** (`SecureApp-AppServerGroup`)
-   - Must be able to connect to both the S3 bucket and RDS instance.
-   - An IAM Role and Instance Profile must be attached to allow:
-     - Read/Write access to the S3 bucket.
-     - Secure connection permissions to the RDS instance.
-   - EC2 security groups must allow appropriate ingress and egress traffic for application workloads and administration.
+- Must be able to connect to both the S3 bucket and RDS instance.
+- An IAM Role and Instance Profile must be attached to allow:
+- Read/Write access to the S3 bucket.
+- Secure connection permissions to the RDS instance.
+- EC2 security groups must allow appropriate ingress and egress traffic for application workloads and administration.
 
 4. **Amazon CloudWatch Alarm** (`SecureApp-HighCPUAlarm`)
-   - Set up to monitor CPU Utilization of the EC2 instances.
-   - Alarm must trigger when CPU utilization exceeds 75%.
-   - Optionally, integrate SNS topic and email subscription to notify administrators.
+- Set up to monitor CPU Utilization of the EC2 instances.
+- Alarm must trigger when CPU utilization exceeds 75%.
+- Optionally, integrate SNS topic and email subscription to notify administrators.
 
 ## Security & Best Practices
 
@@ -48,10 +48,10 @@ You must provision the following resources, ensuring they are properly configure
 
 ## Acceptance Criteria
 
-| Requirement                                       | Must Pass |
+| Requirement | Must Pass |
 |--------------------------------------------------|-----------|
-| S3 server-side encryption enabled                | Yes       |
-| RDS in public subnet with direct access          | Yes       |
-| IAM roles for EC2 to access S3 and RDS           | Yes       |
-| CloudWatch alarm on CPU > 75%                    | Yes       |
-| Secure configuration and best practices applied  | Yes       |
+| S3 server-side encryption enabled | Yes |
+| RDS in public subnet with direct access | Yes |
+| IAM roles for EC2 to access S3 and RDS | Yes |
+| CloudWatch alarm on CPU > 75% | Yes |
+| Secure configuration and best practices applied | Yes |

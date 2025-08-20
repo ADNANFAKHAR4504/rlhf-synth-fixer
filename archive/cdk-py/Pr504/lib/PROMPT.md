@@ -1,10 +1,10 @@
-## ✅ **Task Overview (As a Solution Architect)**
+## **Task Overview (As a Solution Architect)**
 
 You are tasked with designing and implementing a **production-ready, event-driven serverless architecture** using **AWS CDK with Python** in **AWS `us-east-1` region**. This infrastructure should enable **automatic processing, notification, and tracking** whenever new objects are added to an S3 bucket.
 
 ---
 
-## 🔧 **Architecture Requirements and Responsibilities**
+## **Architecture Requirements and Responsibilities**
 
 ### 1. **S3 Bucket with Encryption**
 
@@ -58,7 +58,7 @@ You are tasked with designing and implementing a **production-ready, event-drive
 
 ---
 
-## 🛠️ **Expected Output**
+## **Expected Output**
 
 * A **aws cdk Python script** (typically `__main__.py`) that:
 

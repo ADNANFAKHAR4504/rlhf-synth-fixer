@@ -1,7 +1,3 @@
-# AWS CloudFormation Template: Security Best Practices - Ideal Response
-
-Here's the ideal CloudFormation template named `security-config.yaml` that enforces security best practices across multiple AWS services:
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Security-focused CloudFormation template enforcing best practices across AWS services'
@@ -20,12 +16,14 @@ Parameters:
   Owner:
     Type: String
     Description: Team or individual responsible for these resources
+    Default: 'devops-team'
     MinLength: 1
 
   Project:
     Type: String
     Description: Project name for resource identification
     MinLength: 1
+    Default: 'security-best-practice'
 
   VpcCidr:
     Type: String
@@ -83,6 +81,21 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
             Resource: '*'
+          # Allow CloudWatch Logs service to use the key for encryption
+          - Sid: Allow CloudWatch Logs Service
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              ArnEquals:
+                'kms:EncryptionContext:aws:logs:arn': !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Project}-${Environment}-secure-function'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -307,7 +320,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: s3:PutObject
-            Resource: !Sub '${SecureS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -316,7 +329,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: s3:PutObject
-            Resource: !Sub '${SecureS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt SecurityKmsKey.Arn
@@ -326,8 +339,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !GetAtt SecureS3Bucket.Arn
-              - !Sub '${SecureS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -344,7 +357,7 @@ Resources:
             Action:
               - s3:GetObject
               - s3:PutObject
-            Resource: !Sub '${SecureS3Bucket}/*'
+            Resource: !Sub '${SecureS3Bucket.Arn}/*'
           - Effect: Allow
             Action:
               - s3:ListBucket
@@ -466,54 +479,3 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-LambdaExecutionRoleArn'
 ```
-
-## Security Features Implemented - Ideal Solution
-
-### 1. S3 Encryption with KMS ✅
-
-- **KMS Key Creation**: Dedicated customer-managed KMS key with comprehensive policy
-- **Server-Side Encryption**: S3 bucket configured with KMS encryption by default
-- **Encryption Enforcement**: Bucket policy denies unencrypted uploads and wrong key usage
-- **Public Access Prevention**: Complete public access block configuration
-- **Cost Optimization**: BucketKeyEnabled for reduced KMS costs
-
-### 2. IAM Roles and Policies - Least Privilege ✅
-
-- **Lambda Execution Role**: Minimal permissions with VPC access for Lambda
-- **No Wildcards**: Specific actions and resources only
-- **Separate Policies**: Dedicated policies for KMS and S3 access
-- **Resource-Specific ARNs**: All resource references use exact ARNs
-
-### 3. Resource Tagging ✅
-
-- **Consistent Tagging**: All resources tagged with Environment, Owner, Project
-- **Parameterized Values**: Tags use CloudFormation parameters
-- **Name Tags**: Descriptive names for easy identification
-- **Cost Allocation**: Proper tagging for cost tracking and management
-
-### 4. Lambda VPC Security ✅
-
-- **Private Deployment**: Lambda functions in private subnets only
-- **Restrictive Security Group**: Only necessary outbound traffic (HTTPS and DNS)
-- **No Inbound Rules**: Lambda functions don't expose inbound ports
-- **VPC Endpoints**: S3 VPC endpoint for secure access without internet routing
-- **Multi-AZ**: Lambda deployed across multiple availability zones
-
-### 5. Additional Security Enhancements ✅
-
-- **CloudWatch Logs Encryption**: Log groups encrypted with KMS
-- **S3 Versioning**: Data protection through object versioning
-- **HTTPS Enforcement**: Bucket policy denies non-SSL requests
-- **Lifecycle Management**: Cost optimization with storage class transitions
-- **Dependency Management**: Proper resource ordering to avoid circular dependencies
-
-## Key Improvements Over Basic Implementation
-
-1. **Enhanced KMS Policy**: Service principals instead of role ARNs to avoid circular dependencies
-2. **VPC Endpoint Integration**: S3 VPC endpoint for secure, private access
-3. **Comprehensive Outputs**: All important resource identifiers exported for cross-stack references
-4. **Cost Optimization**: BucketKey enabled, lifecycle rules, log retention policies
-5. **Multi-AZ Resilience**: Resources distributed across availability zones
-6. **Complete Network Isolation**: Private subnets with controlled egress only
-
-This template represents the ideal security configuration for AWS infrastructure, implementing all security best practices while maintaining operational efficiency and cost optimization.
