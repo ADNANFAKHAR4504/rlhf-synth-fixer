@@ -67,11 +67,10 @@ export class TapStack extends pulumi.ComponentResource {
     ];
     const instanceType = config.get('instanceType') || 't3.micro';
     const region = config.get('aws:region') || 'ap-south-1';
-    const existingRecorderName =
-      config.get('existingRecorderName') || 'config-recorder-pr1499';
-    const existingDeliveryChannelName =
-      config.get('existingDeliveryChannelName') ||
-      'config-delivery-channel-pr1499';
+    const existingRecorderName = config.get('existingRecorderName');
+    const existingDeliveryChannelName = config.get(
+      'existingDeliveryChannelName'
+    );
 
     // Create the complete infrastructure
     const infrastructure = createInfrastructure(
