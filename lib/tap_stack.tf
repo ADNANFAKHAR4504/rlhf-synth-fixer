@@ -463,18 +463,14 @@ resource "aws_wafv2_web_acl" "api_gateway_waf" {
       }
     }
 
-    override_action {
-      none {}
+    action {
+      block {}
     }
 
     visibility_config {
       cloudwatch_metrics_enabled = true
       metric_name                 = "RateLimitRule"
       sampled_requests_enabled    = true
-    }
-
-    action {
-      block {}
     }
   }
 
