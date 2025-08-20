@@ -115,7 +115,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       const httpFromAlb = ingress.find((r: any) => r.FromPort === 80 && r.SourceSecurityGroupId);
       const ssh = ingress.find((r: any) => r.FromPort === 22);
       expect(httpFromAlb).toBeDefined();
-      expect(httpFromAlb.SourceSecurityGroupId).toEqual('ALBSecurityGroup');
+      expect(httpFromAlb.SourceSecurityGroupId).toEqual({"Ref": "ALBSecurityGroup"});
       expect(ssh).toBeDefined();
       expect(ssh.CidrIp).toEqual( 'SSHLocation');
     });
@@ -140,8 +140,8 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       const r = template.Resources;
       expect(r.WebServer1.Type).toBe('AWS::EC2::Instance');
       expect(r.WebServer2.Type).toBe('AWS::EC2::Instance');
-      expect(r.WebServer1.Properties.SubnetId).toEqual('PublicSubnet1');
-      expect(r.WebServer2.Properties.SubnetId).toEqual('PublicSubnet2');
+      expect(r.WebServer1.Properties.SubnetId).toEqual({"Ref": "PublicSubnet1"});
+      expect(r.WebServer2.Properties.SubnetId).toEqual({"Ref": "PublicSubnet2"});
     });
   });
 
