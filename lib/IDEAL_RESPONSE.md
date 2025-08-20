@@ -95,6 +95,7 @@ bucket = "${var.frontend_bucket_name}-${data.aws_caller_identity.current.account
 force_destroy = true
 
 # Force recreation to ensure public access block settings are properly applied
+
 lifecycle {
 create_before_destroy = true
 }
@@ -145,10 +146,20 @@ status = "Enabled"
 
 resource "aws_s3_bucket_public_access_block" "frontend_bucket_pab" {
 bucket = aws_s3_bucket.frontend_bucket.id
-block_public_acls = false
+block_public_acls = true
 block_public_policy = false
-ignore_public_acls = false
+ignore_public_acls = true
 restrict_public_buckets = false
+}
+
+# Bucket ownership controls - required for public bucket policies
+
+resource "aws_s3_bucket_ownership_controls" "frontend_bucket_ownership" {
+bucket = aws_s3_bucket.frontend_bucket.id
+
+rule {
+object_ownership = "BucketOwnerPreferred"
+}
 }
 
 # S3 bucket for Lambda deployment packages
@@ -384,6 +395,11 @@ explicit_auth_flows = [
 
 resource "aws_s3_bucket_policy" "frontend_bucket_policy" {
 bucket = aws_s3_bucket.frontend_bucket.id
+
+depends_on = [
+aws_s3_bucket_public_access_block.frontend_bucket_pab,
+aws_s3_bucket_ownership_controls.frontend_bucket_ownership
+]
 
 policy = jsonencode({
 Version = "2012-10-17"

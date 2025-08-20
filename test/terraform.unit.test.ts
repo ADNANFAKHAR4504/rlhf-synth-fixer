@@ -43,7 +43,7 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
 
     test('should create the correct number of resources', () => {
       const resourceCount = plan.planned_values.root_module.resources.length;
-      expect(resourceCount).toBe(22); // Updated count for simplified stack without CloudFront
+      expect(resourceCount).toBe(23); // Updated count for simplified stack with bucket ownership controls
     });
 
     test('S3 bucket should have versioning and encryption enabled', () => {
@@ -153,6 +153,27 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
       );
       expect(frontendBucketWebsite.values.error_document[0].key).toBe(
         'error.html'
+      );
+    });
+
+    test('Frontend S3 bucket should have proper public access block and ownership controls', () => {
+      const publicAccessBlock = plan.planned_values.root_module.resources.find(
+        (r: any) =>
+          r.type === 'aws_s3_bucket_public_access_block' &&
+          r.name === 'frontend_bucket_pab'
+      );
+      expect(publicAccessBlock.values.block_public_acls).toBe(true);
+      expect(publicAccessBlock.values.block_public_policy).toBe(false);
+      expect(publicAccessBlock.values.ignore_public_acls).toBe(true);
+      expect(publicAccessBlock.values.restrict_public_buckets).toBe(false);
+
+      const ownershipControls = plan.planned_values.root_module.resources.find(
+        (r: any) =>
+          r.type === 'aws_s3_bucket_ownership_controls' &&
+          r.name === 'frontend_bucket_ownership'
+      );
+      expect(ownershipControls.values.rule[0].object_ownership).toBe(
+        'BucketOwnerPreferred'
       );
     });
 
