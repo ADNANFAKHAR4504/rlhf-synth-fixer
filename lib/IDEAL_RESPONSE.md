@@ -64,7 +64,9 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
     )
 
     # Configure server-side encryption
-    encryption_config = aws.s3.BucketServerSideEncryptionConfigurationV2Args(
+    aws.s3.BucketServerSideEncryptionConfigurationV2(
+        f"{project_name}-{environment}-encryption-{region}",
+        bucket=bucket.id,
         rules=[
             aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
                 apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
@@ -73,13 +75,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
                 ),
                 bucket_key_enabled=True if kms_key_id else None
             )
-        ]
-    )
-
-    aws.s3.BucketServerSideEncryptionConfigurationV2(
-        f"{project_name}-{environment}-encryption-{region}",
-        bucket=bucket.id,
-        rules=encryption_config.rules,
+        ],
         opts=pulumi.ResourceOptions(
             provider=aws.Provider(f"aws-s3-encryption-{region}", region=region)
         )

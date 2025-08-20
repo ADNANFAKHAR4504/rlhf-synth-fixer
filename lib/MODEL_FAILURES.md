@@ -133,3 +133,13 @@
   - CloudTrail resources:
     - `aws-cloudtrail-trail-{region}` (CloudTrail trail)
 - This ensures each provider instance has a completely unique URN and prevents all conflicts
+
+### 10. **S3 Encryption Configuration Args Issue**
+
+**Problem**: The deployment was failing with `TypeError: BucketServerSideEncryptionConfigurationV2Args.__init__() missing 1 required keyword-only argument: 'bucket'` because the encryption configuration was being created incorrectly.
+
+**Fix**:
+
+- Removed the separate `BucketServerSideEncryptionConfigurationV2Args` constructor call
+- Moved the encryption rules directly into the `BucketServerSideEncryptionConfigurationV2` resource constructor
+- This eliminates the unnecessary intermediate step and fixes the missing `bucket` parameter issue
