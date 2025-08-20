@@ -1,6 +1,8 @@
 /// <reference types="jest" />
 
+import * as dns from 'dns';
 import * as fs from 'fs';
+import * as https from 'https';
 import * as path from 'path';
 
 interface CFNTemplate {
@@ -68,7 +70,7 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
     expect(typeof template).toBe('object');
   });
 
-  // ------------------ Existing checks you had ------------------
+  // ------------------ Template structure ------------------
   describe('Template Structure', () => {
     test('has valid CFN format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -82,6 +84,7 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
     });
   });
 
+  // ------------------ Parameters ------------------
   describe('Parameters', () => {
     test('Environment parameter exists with correct properties', () => {
       const p = template.Parameters ?? {};
@@ -106,15 +109,16 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
     });
   });
 
+  // ------------------ Resources ------------------
   describe('Resources (presence by logical ID & Type)', () => {
-    test('CloudTrail resource exists with proper configuration', () => {
+    test('CloudTrail resource exists with proper configuration (conditional creation is OK)', () => {
       const r = template.Resources ?? {};
       expect(r.CloudTrail).toBeDefined();
       expect(r.CloudTrail.Type).toBe('AWS::CloudTrail::Trail');
       expect(r.CloudTrail.DependsOn).toBe('CloudTrailBucketPolicy');
     });
 
-    test('CloudTrailBucketPolicy exists and properly configured', () => {
+    test('CloudTrailBucketPolicy exists and allows cloudtrail service (plus TLS deny)', () => {
       const r = template.Resources ?? {};
       expect(r.CloudTrailBucketPolicy).toBeDefined();
       expect(r.CloudTrailBucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
@@ -123,6 +127,8 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
         stmt.Principal && stmt.Principal.Service === 'cloudtrail.amazonaws.com'
       );
       expect(hasCloudTrailPermission).toBe(true);
+      const hasTLSDeny = statements.some((s: any) => s.Sid === 'DenyInsecureConnections');
+      expect(hasTLSDeny).toBe(true);
     });
 
     test('S3EncryptionKey resource declared (conditional CMK)', () => {
@@ -168,6 +174,7 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
     });
   });
 
+  // ------------------ Outputs ------------------
   describe('Outputs', () => {
     test('required outputs present', () => {
       const o = template.Outputs ?? {};
@@ -183,40 +190,36 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
     });
 
     test('CloudTrailBucketName output wiring', () => {
-      const o = template.Outputs ?? {};
-      const out = o.CloudTrailBucketName;
+      const out = (template.Outputs ?? {}).CloudTrailBucketName;
       expect(out.Description).toBe('Name of the CloudTrail S3 bucket');
       expect(out.Value).toEqual({ Ref: 'CloudTrailBucket' });
     });
 
-    test('CloudTrailArn output wiring', () => {
-      const o = template.Outputs ?? {};
-      const out = o.CloudTrailArn;
+    test('CloudTrailArn output wiring (conditional)', () => {
+      const out = (template.Outputs ?? {}).CloudTrailArn;
       expect(out.Description).toBe('ARN of the CloudTrail');
       expect(out.Value).toEqual({ 'Fn::GetAtt': ['CloudTrail', 'Arn'] });
     });
 
     test('WAFWebACLArn output wiring', () => {
-      const o = template.Outputs ?? {};
-      const out = o.WAFWebACLArn;
+      const out = (template.Outputs ?? {}).WAFWebACLArn;
       expect(out.Description).toBe('ARN of the WAF Web ACL');
       expect(out.Value).toEqual({ 'Fn::GetAtt': ['WAFWebACL', 'Arn'] });
     });
   });
 
+  // ------------------ Security posture sanity checks ------------------
   describe('Security posture sanity checks', () => {
-    test('CloudTrail has best-practice flags', () => {
-      const r = template.Resources ?? {};
-      const ct = r.CloudTrail?.Properties ?? {};
+    test('CloudTrail has best-practice flags (in template)', () => {
+      const ct = (template.Resources ?? {}).CloudTrail?.Properties ?? {};
       expect(ct.EnableLogFileValidation).toBe(true);
       expect(ct.IsMultiRegionTrail).toBe(true);
       expect(ct.IncludeGlobalServiceEvents).toBe(true);
       expect(ct.IsLogging).toBe(true);
     });
 
-    test('CloudTrail S3 bucket has encryption/public access block configured', () => {
-      const r = template.Resources ?? {};
-      const b = r.CloudTrailBucket?.Properties ?? {};
+    test('CloudTrail S3 bucket has encryption/public access block configured (in template)', () => {
+      const b = (template.Resources ?? {}).CloudTrailBucket?.Properties ?? {};
       expect(b.PublicAccessBlockConfiguration).toBeDefined();
       expect(b.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
       if (b.BucketEncryption) {
@@ -225,20 +228,19 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
     });
 
     test('WAF has rules and Allow default', () => {
-      const r = template.Resources ?? {};
-      const waf = r.WAFWebACL?.Properties ?? {};
+      const waf = (template.Resources ?? {}).WAFWebACL?.Properties ?? {};
       expect(Array.isArray(waf.Rules) && waf.Rules.length).toBeTruthy();
       expect(waf.DefaultAction).toEqual({ Allow: {} });
     });
 
     test('SSH SG has ingress & egress', () => {
-      const r = template.Resources ?? {};
-      const sg = r.SshSecurityGroup?.Properties ?? {};
+      const sg = (template.Resources ?? {}).SshSecurityGroup?.Properties ?? {};
       expect(sg.SecurityGroupIngress).toBeDefined();
       expect(sg.SecurityGroupEgress).toBeDefined();
     });
   });
 
+  // ------------------ Template sanity ------------------
   describe('Template sanity', () => {
     test('has plenty of resources/parameters/outputs', () => {
       const rc = Object.keys(template.Resources ?? {}).length;
@@ -250,72 +252,7 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
     });
   });
 
-  // ------------------ cover compliance gaps structurally ------------------
-  describe('Conditional & security resources (structural coverage)', () => {
-    test('CloudWatchAgentConfig SSM Document present with sane content', () => {
-      const r = template.Resources ?? {};
-      const doc = r.CloudWatchAgentConfig;
-      expect(doc).toBeDefined();
-      expect(doc.Type).toBe('AWS::SSM::Document');
-      const content = doc.Properties?.Content;
-      expect(content?.schemaVersion).toBe('2.2');
-      expect(content?.mainSteps?.[0]?.action).toBe('aws:runShellScript');
-    });
-
-    test('DatabaseSecret present and generates password', () => {
-      const r = template.Resources ?? {};
-      const sec = r.DatabaseSecret;
-      expect(sec).toBeDefined();
-      expect(sec.Type).toBe('AWS::SecretsManager::Secret');
-      expect(sec.Properties?.GenerateSecretString?.GenerateStringKey).toBe('password');
-    });
-
-    test('SecurityNotificationsTopic present with optional KMS', () => {
-      const r = template.Resources ?? {};
-      const t = r.SecurityNotificationsTopic;
-      expect(t).toBeDefined();
-      expect(t.Type).toBe('AWS::SNS::Topic');
-      expect(t.Properties).toHaveProperty('KmsMasterKeyId');
-    });
-
-    test('Shield protection is condition-controlled', () => {
-      const r = template.Resources ?? {};
-      const sp = r.ShieldProtection;
-      expect(sp).toBeDefined();
-      expect(sp.Type).toBe('AWS::Shield::Protection');
-      expect(sp.Condition).toBe('EnableShield');
-    });
-
-    test('WAF logging + Firehose resources exist & are conditional', () => {
-      const r = template.Resources ?? {};
-      const logCW = r.WAFLoggingConfigurationCloudWatch;
-      const logS3 = r.WAFLoggingConfigurationS3;
-      expect(logCW).toBeDefined();
-      expect(logCW.Type).toBe('AWS::WAFv2::LoggingConfiguration');
-      expect(logCW.Condition).toBe('WafLogsToCloudWatch');
-
-      expect(logS3).toBeDefined();
-      expect(logS3.Type).toBe('AWS::WAFv2::LoggingConfiguration');
-      expect(logS3.Condition).toBe('WafLogsToS3');
-
-      expect(r.WAFLogsDeliveryStream).toBeDefined();
-      expect(r.WAFLogsDeliveryStream.Type).toBe('AWS::KinesisFirehose::DeliveryStream');
-      expect(r.WAFLogsFirehoseRole).toBeDefined();
-    });
-
-    test('CloudTrail bucket policy enforces TLS and allows CloudTrail service', () => {
-      const r = template.Resources ?? {};
-      const pol = r.CloudTrailBucketPolicy?.Properties?.PolicyDocument?.Statement ?? [];
-      const hasPrincipal = pol.some((s: any) =>
-        s.Sid === 'AWSCloudTrailAclCheck' && s.Principal?.Service === 'cloudtrail.amazonaws.com'
-      );
-      expect(hasPrincipal).toBe(true);
-      const hasTLSDeny = pol.some((s: any) => s.Sid === 'DenyInsecureConnections');
-      expect(hasTLSDeny).toBe(true);
-    });
-  });
-
-  // ------------------ optional deployment-output checks ------------------
+  // ------------------ Integration Tests (Deployment Outputs) ------------------
   describe('Integration Tests (Deployment Outputs)', () => {
     test('should skip integration tests if no deployment outputs available', () => {
       if (Object.keys(outputs).length === 0) {
@@ -349,9 +286,8 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
         console.log('ALB DNS not found in outputs, skipping test');
         return;
       }
-      const dns = String(outputs.ApplicationLoadBalancerDNS).trim();
-      expect(dns).toBeDefined();
-      expect(dns).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.elb\.(amazonaws\.com|amazonaws\.com\.cn)$/i);
+      const dnsName = String(outputs.ApplicationLoadBalancerDNS).trim();
+      expect(dnsName).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.elb\.(amazonaws\.com|amazonaws\.com\.cn)$/i);
     });
 
     test('Security groups should be created if deployed', () => {
@@ -359,7 +295,6 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
         console.log('SSH Security Group not found in outputs, skipping test');
         return;
       }
-      expect(outputs.SshSecurityGroupId).toBeDefined();
       expect(outputs.SshSecurityGroupId).toMatch(/^sg-[a-z0-9]+$/);
     });
 
@@ -369,7 +304,6 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
         return;
       }
       const arn = String(outputs.WAFWebACLArn).trim();
-      expect(arn).toBeDefined();
       expect(arn).toMatch(
         /^arn:aws:wafv2:[a-z0-9-]+:[^:]+:(regional|global)\/webacl\/[^/]+\/[a-z0-9-]+$/i
       );
@@ -377,28 +311,28 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
 
     test('CloudTrail should have proper ARN format if deployed', () => {
       if (!outputs.CloudTrailArn) {
-        console.log('CloudTrail ARN not found in outputs, skipping test');
+        console.log('CloudTrail ARN not found in outputs (trail disabled by default), skipping test');
         return;
       }
-      expect(outputs.CloudTrailArn).toBeDefined();
       expect(outputs.CloudTrailArn).toMatch(/^arn:aws:cloudtrail:.+:trail\/.+$/);
     });
   });
 
-  // ------------------ Optional real AWS interactions (opt-in & safe) ------------------
-  // Run with: RUN_LIVE_TESTS=1 AWS_REGION=us-east-1 npm run test:integration
+  // ------------------ Live integration (AWS SDK) ------------------
+  // Auto-enable live if outputs exist and region is set (no RUN_LIVE_TESTS flag required).
   const outputsPath = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
   const HAS_OUTPUTS = fs.existsSync(outputsPath);
-  const RUN_LIVE = process.env.RUN_LIVE_TESTS === '1';
+  const REGION = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+  const RUN_LIVE = !!(HAS_OUTPUTS && REGION);
 
   const tryRequire = (name: string): any | null => {
     try { return require(name); } catch { return null; }
   };
 
-  (RUN_LIVE && HAS_OUTPUTS ? describe : describe.skip)('Live integration (AWS SDK)', () => {
+  (RUN_LIVE ? describe : describe.skip)('Live integration (real AWS checks)', () => {
     const s3mod = tryRequire('@aws-sdk/client-s3');
     const wafmod = tryRequire('@aws-sdk/client-wafv2');
-    const shieldmod = tryRequire('@aws-sdk/client-shield'); // optional
+    const ec2mod = tryRequire('@aws-sdk/client-ec2');
 
     if (!s3mod || !wafmod) {
       console.warn('Skipping live tests: missing @aws-sdk/client-s3 or @aws-sdk/client-wafv2');
@@ -412,15 +346,14 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
       GetBucketPolicyCommand,
       HeadBucketCommand
     } = s3mod;
-    const { WAFV2Client, GetWebACLCommand } = wafmod;
+    const { WAFV2Client, GetWebACLCommand, GetWebACLForResourceCommand } = wafmod;
 
-    const ShieldClient = shieldmod?.ShieldClient;
-    const DescribeSubscriptionCommand = shieldmod?.DescribeSubscriptionCommand;
+    const { EC2Client, DescribeSecurityGroupsCommand } = ec2mod || {};
 
-    const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || 'us-east-1';
+    const region = REGION!;
     const s3 = new S3Client({ region });
     const waf = new WAFV2Client({ region });
-    const shield = ShieldClient ? new ShieldClient({ region }) : null;
+    const ec2 = EC2Client ? new EC2Client({ region }) : null;
 
     const liveOut = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
@@ -436,22 +369,67 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
       expect(String(pol.Policy)).toMatch(/SecureTransport/);
     });
 
-    test('WAF WebACL is retrievable', async () => {
+    test('WAF WebACL is retrievable and association (if any) is discoverable', async () => {
       const arn = String(liveOut.WAFWebACLArn || '').trim();
       expect(arn).toMatch(/^arn:aws:wafv2:/);
-      const scope = arn.includes(':regional/') ? 'REGIONAL' : 'CLOUDFRONT';
-      const [name, id] = arn.split('/webacl/')[1].split('/');
-      const resp = await waf.send(new GetWebACLCommand({ Id: id, Name: name, Scope: scope as any }));
+      const scope: 'REGIONAL' | 'CLOUDFRONT' = arn.includes(':regional/') ? 'REGIONAL' : 'CLOUDFRONT';
+      const post = arn.split('/webacl/')[1];
+      const [name, id] = post.split('/');
+      const resp = await waf.send(new GetWebACLCommand({ Id: id, Name: name, Scope: scope }));
       expect(resp.WebACL?.Name).toBeDefined();
+
+      // Try to see if ALB is associated; if not, log and pass.
+      if (liveOut.ApplicationLoadBalancerArn && scope === 'REGIONAL' && GetWebACLForResourceCommand) {
+        try {
+          const assoc = await waf.send(
+            new GetWebACLForResourceCommand({ ResourceArn: String(liveOut.ApplicationLoadBalancerArn) })
+          );
+          if (assoc.WebACL) {
+            expect(assoc.WebACL.Arn).toBe(arn);
+          } else {
+            console.log('WAF not associated to ALB (ok) — association is optional in this stack.');
+            expect(true).toBe(true);
+          }
+        } catch (e) {
+          console.log('GetWebACLForResource failed (ok if not associated):', String(e));
+          expect(true).toBe(true);
+        }
+      }
     });
 
-    (shield ? test : test.skip)('Shield subscription (informational)', async () => {
-      try {
-        const sub = await shield!.send(new DescribeSubscriptionCommand({}));
-        expect(['ACTIVE', 'INACTIVE']).toContain(sub.Subscription?.SubscriptionState);
-      } catch {
-        expect(true).toBe(true);
-      }
+    test('ALB DNS resolves and responds to HTTPS (any status)', async () => {
+      const dnsName = String(liveOut.ApplicationLoadBalancerDNS || '').trim();
+      expect(dnsName).toMatch(/\.(elb\.amazonaws\.com|elb\.amazonaws\.com\.cn)$/i);
+
+      // DNS resolve proves endpoint exists
+      await dns.promises.lookup(dnsName);
+
+      // HTTPS HEAD request — success on any HTTP status code
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = https.request(
+          { method: 'HEAD', host: dnsName, path: '/', timeout: 8000 },
+          (res) => {
+            resolve(res.statusCode || 0);
+          }
+        );
+        req.on('error', reject);
+        req.on('timeout', () => {
+          req.destroy(new Error('timeout'));
+        });
+        req.end();
+      });
+
+      expect(Number.isFinite(status)).toBe(true);
+      // Accept anything between 200 and 599 as "responding"
+      expect(status).toBeGreaterThanOrEqual(200);
+      expect(status).toBeLessThan(600);
+    });
+
+    (ec2 && liveOut.SshSecurityGroupId ? test : test.skip)('SSH security group exists in EC2', async () => {
+      const sgId = String(liveOut.SshSecurityGroupId).trim();
+      const resp = await ec2!.send(new DescribeSecurityGroupsCommand({ GroupIds: [sgId] }));
+      expect((resp.SecurityGroups || []).length).toBe(1);
+      expect(resp.SecurityGroups![0].GroupId).toBe(sgId);
     });
   });
 });

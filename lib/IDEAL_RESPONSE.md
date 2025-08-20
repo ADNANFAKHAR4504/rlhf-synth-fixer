@@ -1014,5 +1014,4 @@ Outputs:
     Description: DNS name of the Application Load Balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export: { Name: !Sub "${AWS::StackName}-ALBDNSName" }
-
 ```
