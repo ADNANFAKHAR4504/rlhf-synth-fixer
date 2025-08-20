@@ -25,20 +25,6 @@
             "Default": "admin",
             "NoEcho": true
         },
-        "UseExistingCloudTrail": {
-            "Type": "String",
-            "Description": "Set to true to use an existing CloudTrail and skip creating a new trail and its bucket",
-            "AllowedValues": [
-                "true",
-                "false"
-            ],
-            "Default": "false"
-        },
-        "ExistingCloudTrailArn": {
-            "Type": "String",
-            "Description": "ARN of the existing CloudTrail to use when UseExistingCloudTrail is true",
-            "Default": ""
-        },
         "UseExistingCloudFrontWebACL": {
             "Type": "String",
             "Description": "Set to true to attach an existing CloudFront WebACL and skip creating a new one",
@@ -52,17 +38,18 @@
             "Type": "String",
             "Description": "ARN of an existing CloudFront WebACL (CLOUDFRONT scope). Required when UseExistingCloudFrontWebACL is true.",
             "Default": ""
+        },
+        "EnableConfig": {
+            "Type": "String",
+            "Description": "Set to true to provision AWS Config resources; set to false to skip in accounts without required permissions.",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "false"
         }
     },
     "Conditions": {
-        "CreateCloudTrail": {
-            "Fn::Equals": [
-                {
-                    "Ref": "UseExistingCloudTrail"
-                },
-                "false"
-            ]
-        },
         "CreateCloudFrontWebACL": {
             "Fn::And": [
                 {
@@ -116,177 +103,27 @@
                     "Condition": "HasExistingCloudFrontWebACL"
                 }
             ]
+        },
+        "CreateConfig": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableConfig"
+                },
+                "true"
+            ]
         }
     },
     "Resources": {
-        "CloudTrailBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Condition": "CreateCloudTrail",
+        "ConfigServiceLinkedRole": {
+            "Type": "AWS::IAM::ServiceLinkedRole",
+            "Condition": "CreateConfig",
             "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "s3-${ProjectName}-${Environment}-cloudtrail-${AWS::AccountId}"
-                },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "AES256"
-                            }
-                        }
-                    ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                },
-                "LifecycleConfiguration": {
-                    "Rules": [
-                        {
-                            "Id": "DeleteOldLogs",
-                            "Status": "Enabled",
-                            "ExpirationInDays": 90
-                        }
-                    ]
-                }
-            }
-        },
-        "CloudTrailBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Condition": "CreateCloudTrail",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "CloudTrailBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSCloudTrailAclCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "CloudTrailBucket",
-                                    "Arn"
-                                ]
-                            }
-                        },
-                        {
-                            "Sid": "AWSCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${CloudTrailBucket.Arn}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "CloudTrail": {
-            "Type": "AWS::CloudTrail::Trail",
-            "Condition": "CreateCloudTrail",
-            "DependsOn": "CloudTrailBucketPolicy",
-            "Properties": {
-                "TrailName": {
-                    "Fn::Sub": "trail-${ProjectName}-${Environment}"
-                },
-                "S3BucketName": {
-                    "Ref": "CloudTrailBucket"
-                },
-                "IncludeGlobalServiceEvents": true,
-                "IsLogging": true,
-                "IsMultiRegionTrail": true,
-                "EnableLogFileValidation": true,
-                "EventSelectors": [
-                    {
-                        "ReadWriteType": "All",
-                        "IncludeManagementEvents": true,
-                        "DataResources": [
-                            {
-                                "Type": "AWS::S3::Object",
-                                "Values": [
-                                    "arn:aws:s3:::*/*"
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            }
-        },
-        "ConfigRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/ConfigRole"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "ConfigBucketDeliveryRolePolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetBucketAcl",
-                                        "s3:ListBucket"
-                                    ],
-                                    "Resource": {
-                                        "Fn::GetAtt": [
-                                            "ConfigBucket",
-                                            "Arn"
-                                        ]
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": "s3:PutObject",
-                                    "Resource": {
-                                        "Fn::Sub": "${ConfigBucket.Arn}/*"
-                                    },
-                                    "Condition": {
-                                        "StringEquals": {
-                                            "s3:x-amz-acl": "bucket-owner-full-control"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
+                "AWSServiceName": "config.amazonaws.com"
             }
         },
         "ConfigBucket": {
             "Type": "AWS::S3::Bucket",
+            "Condition": "CreateConfig",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "s3-${ProjectName}-${Environment}-config-${AWS::AccountId}"
@@ -310,6 +147,7 @@
         },
         "ConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "CreateConfig",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "delivery-${ProjectName}-${Environment}"
@@ -319,17 +157,60 @@
                 }
             }
         },
+        "ConfigBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Condition": "CreateConfig",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ConfigBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ConfigBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDelivery",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ConfigBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "ConfigRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "CreateConfig",
+            "DependsOn": "ConfigServiceLinkedRole",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "recorder-${ProjectName}-${Environment}"
                 },
                 "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigRole",
-                        "Arn"
-                    ]
+                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
                 },
                 "RecordingGroup": {
                     "AllSupported": true,
@@ -339,6 +220,7 @@
         },
         "ConfigRuleS3PublicRead": {
             "Type": "AWS::Config::ConfigRule",
+            "Condition": "CreateConfig",
             "DependsOn": "ConfigRecorder",
             "Properties": {
                 "ConfigRuleName": {
@@ -1226,20 +1108,7 @@
         },
         "CloudTrailArn": {
             "Description": "CloudTrail ARN",
-            "Value": {
-                "Fn::If": [
-                    "CreateCloudTrail",
-                    {
-                        "Fn::GetAtt": [
-                            "CloudTrail",
-                            "Arn"
-                        ]
-                    },
-                    {
-                        "Ref": "ExistingCloudTrailArn"
-                    }
-                ]
-            },
+            "Value": "",
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-CloudTrail-ARN"

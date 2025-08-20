@@ -29,9 +29,8 @@ describe('TapStack CloudFormation Template', () => {
       // so there is no DBPassword parameter anymore.
       expect(template.Parameters.DBPassword).toBeUndefined();
 
-      // New parameters for optional reuse/conditional creation
-      expect(template.Parameters.UseExistingCloudTrail).toBeDefined();
-      expect(template.Parameters.ExistingCloudTrailArn).toBeDefined();
+      // CloudTrail is no longer created or passed as a parameter.
+
       expect(template.Parameters.UseExistingCloudFrontWebACL).toBeDefined();
       expect(template.Parameters.ExistingCloudFrontWebACLArn).toBeDefined();
     });
@@ -40,16 +39,13 @@ describe('TapStack CloudFormation Template', () => {
   describe('Resources', () => {
     test('core resources exist', () => {
       const r = template.Resources;
-      ['VPC', 'PublicSubnet1', 'PublicSubnet2', 'PrivateSubnet1', 'PrivateSubnet2', 'NatGateway', 'ApplicationDataBucket', 'LambdaFunction', 'CloudFrontDistribution', 'WebACL', 'CloudTrail']
+      ['VPC', 'PublicSubnet1', 'PublicSubnet2', 'PrivateSubnet1', 'PrivateSubnet2', 'NatGateway', 'ApplicationDataBucket', 'LambdaFunction', 'CloudFrontDistribution', 'WebACL']
         .forEach(key => expect(r[key]).toBeDefined());
     });
 
     test('IAM roles and security groups do not use explicit names', () => {
       const iamRole = template.Resources.LambdaExecutionRole;
       expect(iamRole.Properties.RoleName).toBeUndefined();
-
-      const cfgRole = template.Resources.ConfigRole;
-      expect(cfgRole.Properties.RoleName).toBeUndefined();
 
       const dbSg = template.Resources.DatabaseSecurityGroup;
       expect(dbSg.Properties.GroupName).toBeUndefined();
