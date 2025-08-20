@@ -1139,8 +1139,10 @@ resource "aws_db_subnet_group" "secondary" {
 # Generate random username for RDS
 resource "random_password" "primary_db_username" {
   length  = 8
-  special = true
-  override_special = "!#$%&()*+-=:?@^_"
+  special = false
+  upper   = true
+  lower   = true
+  numeric = true
 }
 # Generate random password for RDS
 resource "random_password" "primary_db_password" {
@@ -1151,8 +1153,10 @@ resource "random_password" "primary_db_password" {
 # Generate random username for RDS
 resource "random_password" "secondary_db_username" {
   length  = 8
-  special = true
-  override_special = "!#$%&()*+-=:?@^_"
+  special = false
+  upper   = true
+  lower   = true
+  numeric = true
 }
 # Generate random password for RDS
 resource "random_password" "secondary_db_password" {
