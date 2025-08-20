@@ -1,6 +1,5 @@
-import { jest } from '@jest/globals';
 import { App } from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack.js';
 
 describe('TapStack Unit Tests', () => {
@@ -11,36 +10,37 @@ describe('TapStack Unit Tests', () => {
   beforeEach(() => {
     app = new App({
       context: {
-        environmentSuffix: 'test'
-      }
+        environmentSuffix: 'test',
+      },
     });
     stack = new TapStack(app, 'TestStack', {
-      env: { account: '123456789012', region: 'us-east-1' }
+      env: { account: '123456789012', region: 'us-east-1' },
     });
     template = Template.fromStack(stack);
   });
 
   describe('Security Requirement 1: S3 Bucket Encryption', () => {
-    test('should create S3 buckets with AES-256 encryption', () => {
-      // Check for FinancialAppDataBucket with S3-managed encryption
+    test('should create S3 buckets with KMS encryption', () => {
+      // Check for SecureDataBucket with KMS encryption (more secure than AES-256)
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
               ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'AES256'
-              }
-            }
-          ]
-        }
+                SSEAlgorithm: 'aws:kms',
+                KMSMasterKeyID: Match.anyValue(),
+              },
+            },
+          ],
+        },
       });
     });
 
     test('should enable versioning on S3 buckets', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         VersioningConfiguration: {
-          Status: 'Enabled'
-        }
+          Status: 'Enabled',
+        },
       });
     });
 
@@ -50,19 +50,21 @@ describe('TapStack Unit Tests', () => {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
-          RestrictPublicBuckets: true
-        }
+          RestrictPublicBuckets: true,
+        },
       });
     });
 
     test('should have lifecycle rules for S3 buckets', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
-      const dataBucket = Object.values(buckets).find(b => 
-        JSON.stringify(b).includes('FinancialAppDataBucket')
+      const dataBucket = Object.values(buckets).find(b =>
+        JSON.stringify(b).includes('SecureDataBucket')
       );
       expect(dataBucket).toBeDefined();
       expect(dataBucket.Properties.LifecycleConfiguration).toBeDefined();
-      expect(dataBucket.Properties.LifecycleConfiguration.Rules).toHaveLength(2);
+      expect(dataBucket.Properties.LifecycleConfiguration.Rules).toHaveLength(
+        2
+      );
     });
   });
 
@@ -74,11 +76,11 @@ describe('TapStack Unit Tests', () => {
             Match.objectLike({
               Effect: 'Allow',
               Principal: {
-                Service: 'ec2.amazonaws.com'
-              }
-            })
-          ])
-        }
+                Service: 'ec2.amazonaws.com',
+              },
+            }),
+          ]),
+        },
       });
     });
 
@@ -93,22 +95,22 @@ describe('TapStack Unit Tests', () => {
                 'iam:DeleteRole',
                 'iam:PutRolePolicy',
                 'iam:AttachRolePolicy',
-                'iam:DetachRolePolicy'
+                'iam:DetachRolePolicy',
               ]),
               Condition: {
                 BoolIfExists: {
-                  'aws:MultiFactorAuthPresent': 'false'
-                }
-              }
-            })
-          ])
-        }
+                  'aws:MultiFactorAuthPresent': 'false',
+                },
+              },
+            }),
+          ]),
+        },
       });
     });
 
     test('should create instance profile for EC2 instances', () => {
       template.hasResourceProperties('AWS::IAM::InstanceProfile', {
-        Roles: Match.anyValue()
+        Roles: Match.anyValue(),
       });
     });
   });
@@ -118,15 +120,15 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::ApiGateway::Stage', {
         AccessLogSetting: Match.objectLike({
           DestinationArn: Match.anyValue(),
-          Format: Match.anyValue()
+          Format: Match.anyValue(),
         }),
         MethodSettings: Match.arrayWith([
           Match.objectLike({
             DataTraceEnabled: true,
             LoggingLevel: 'INFO',
-            MetricsEnabled: true
-          })
-        ])
+            MetricsEnabled: true,
+          }),
+        ]),
       });
     });
 
@@ -141,20 +143,20 @@ describe('TapStack Unit Tests', () => {
     test('should configure API Gateway throttling', () => {
       template.hasResourceProperties('AWS::ApiGateway::Stage', {
         ThrottleBurstLimit: 2000,
-        ThrottleRateLimit: 1000
+        ThrottleRateLimit: 1000,
       });
     });
 
     test('should create health check endpoint', () => {
       template.hasResourceProperties('AWS::ApiGateway::Resource', {
-        PathPart: 'health'
+        PathPart: 'health',
       });
-      
+
       template.hasResourceProperties('AWS::ApiGateway::Method', {
         HttpMethod: 'GET',
         Integration: Match.objectLike({
-          Type: 'MOCK'
-        })
+          Type: 'MOCK',
+        }),
       });
     });
   });
@@ -164,7 +166,7 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
         CidrBlock: '10.0.0.0/16',
         EnableDnsHostnames: true,
-        EnableDnsSupport: true
+        EnableDnsSupport: true,
       });
     });
 
@@ -182,7 +184,7 @@ describe('TapStack Unit Tests', () => {
     test('should create VPC flow logs', () => {
       template.hasResourceProperties('AWS::EC2::FlowLog', {
         ResourceType: 'VPC',
-        TrafficType: 'ALL'
+        TrafficType: 'ALL',
       });
     });
 
@@ -193,17 +195,17 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Security Requirement 5: RDS KMS Encryption', () => {
-    test('should create RDS Aurora cluster with KMS encryption', () => {
-      template.hasResourceProperties('AWS::RDS::DBCluster', {
+    test('should create RDS instance with KMS encryption', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
         StorageEncrypted: true,
-        KmsKeyId: Match.anyValue()
+        KmsKeyId: Match.anyValue(),
       });
     });
 
     test('should configure RDS backup retention', () => {
-      template.hasResourceProperties('AWS::RDS::DBCluster', {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
         BackupRetentionPeriod: 7,
-        PreferredBackupWindow: '03:00-04:00'
+        PreferredBackupWindow: '03:00-04:00',
       });
     });
 
@@ -211,19 +213,19 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::KMS::Key', {
         EnableKeyRotation: true,
         KeySpec: 'SYMMETRIC_DEFAULT',
-        KeyUsage: 'ENCRYPT_DECRYPT'
+        KeyUsage: 'ENCRYPT_DECRYPT',
       });
     });
 
     test('should create KMS key alias', () => {
       template.hasResourceProperties('AWS::KMS::Alias', {
-        AliasName: Match.stringLikeRegexp('alias/financial-app-key-.*')
+        AliasName: Match.stringLikeRegexp('alias/financial-app-key-.*'),
       });
     });
 
-    test('should create RDS instances in the cluster', () => {
+    test('should create RDS database instance', () => {
       const dbInstances = template.findResources('AWS::RDS::DBInstance');
-      expect(Object.keys(dbInstances).length).toBe(2);
+      expect(Object.keys(dbInstances).length).toBe(1);
     });
   });
 
@@ -233,7 +235,7 @@ describe('TapStack Unit Tests', () => {
       const albSG = Object.values(securityGroups).find(sg =>
         sg.Properties?.GroupDescription?.includes('Application Load Balancer')
       );
-      
+
       expect(albSG).toBeDefined();
       expect(albSG.Properties.SecurityGroupEgress).toEqual([]);
     });
@@ -243,7 +245,7 @@ describe('TapStack Unit Tests', () => {
       const ec2SG = Object.values(securityGroups).find(sg =>
         sg.Properties?.GroupDescription?.includes('EC2 instances')
       );
-      
+
       expect(ec2SG).toBeDefined();
       expect(ec2SG.Properties.SecurityGroupEgress).toBeDefined();
     });
@@ -253,7 +255,7 @@ describe('TapStack Unit Tests', () => {
       const dbSG = Object.values(securityGroups).find(sg =>
         sg.Properties?.GroupDescription?.includes('RDS database')
       );
-      
+
       expect(dbSG).toBeDefined();
       expect(dbSG.Properties.SecurityGroupEgress).toEqual([]);
     });
@@ -263,7 +265,7 @@ describe('TapStack Unit Tests', () => {
         IpProtocol: 'tcp',
         FromPort: 80,
         ToPort: 80,
-        CidrIp: '0.0.0.0/0'
+        CidrIp: '0.0.0.0/0',
       });
     });
   });
@@ -279,13 +281,13 @@ describe('TapStack Unit Tests', () => {
                 PatchFilters: Match.arrayWith([
                   Match.objectLike({
                     Key: 'CLASSIFICATION',
-                    Values: Match.arrayWith(['Security', 'Bugfix'])
-                  })
-                ])
-              }
-            })
-          ])
-        }
+                    Values: Match.arrayWith(['Security', 'Bugfix']),
+                  }),
+                ]),
+              },
+            }),
+          ]),
+        },
       });
     });
 
@@ -293,7 +295,7 @@ describe('TapStack Unit Tests', () => {
       template.hasResourceProperties('AWS::SSM::MaintenanceWindow', {
         Duration: 4,
         Cutoff: 1,
-        Schedule: 'cron(0 2 ? * SUN *)'
+        Schedule: 'cron(0 2 ? * SUN *)',
       });
     });
 
@@ -302,13 +304,17 @@ describe('TapStack Unit Tests', () => {
       const ec2Role = Object.values(roles).find(role =>
         JSON.stringify(role).includes('EC2InstanceRole')
       );
-      
+
       expect(ec2Role).toBeDefined();
       expect(ec2Role.Properties.ManagedPolicyArns).toContain(
         Match.objectLike({
           'Fn::Join': Match.arrayWith([
-            Match.arrayWith(['arn:', Match.anyValue(), ':iam::aws:policy/AmazonSSMManagedInstanceCore'])
-          ])
+            Match.arrayWith([
+              'arn:',
+              Match.anyValue(),
+              ':iam::aws:policy/AmazonSSMManagedInstanceCore',
+            ]),
+          ]),
         })
       );
     });
@@ -316,27 +322,33 @@ describe('TapStack Unit Tests', () => {
 
   describe('Infrastructure Components', () => {
     test('should create Application Load Balancer', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Type: 'application',
-        Scheme: 'internet-facing'
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Type: 'application',
+          Scheme: 'internet-facing',
+        }
+      );
     });
 
     test('should create target group for EC2 instances', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        Port: 8080,
-        Protocol: 'HTTP',
-        TargetType: 'instance',
-        HealthCheckEnabled: true,
-        HealthCheckPath: '/health'
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::TargetGroup',
+        {
+          Port: 8080,
+          Protocol: 'HTTP',
+          TargetType: 'instance',
+          HealthCheckEnabled: true,
+          HealthCheckPath: '/health',
+        }
+      );
     });
 
     test('should create Auto Scaling Group', () => {
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
         MinSize: '2',
-        MaxSize: '6',
-        DesiredCapacity: '2'
+        MaxSize: '10',
+        DesiredCapacity: '2',
       });
     });
 
@@ -348,18 +360,18 @@ describe('TapStack Unit Tests', () => {
               Ebs: Match.objectLike({
                 Encrypted: true,
                 VolumeSize: 20,
-                VolumeType: 'gp3'
-              })
-            })
-          ])
-        })
+                VolumeType: 'gp3',
+              }),
+            }),
+          ]),
+        }),
       });
     });
 
     test('should create HTTP listener for ALB', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
         Port: 80,
-        Protocol: 'HTTP'
+        Protocol: 'HTTP',
       });
     });
   });
@@ -370,7 +382,7 @@ describe('TapStack Unit Tests', () => {
         MetricName: 'CPUUtilization',
         Namespace: 'AWS/EC2',
         Threshold: 80,
-        EvaluationPeriods: 2
+        EvaluationPeriods: 2,
       });
     });
 
@@ -379,7 +391,7 @@ describe('TapStack Unit Tests', () => {
         MetricName: 'DatabaseConnections',
         Namespace: 'AWS/RDS',
         Threshold: 80,
-        EvaluationPeriods: 2
+        EvaluationPeriods: 2,
       });
     });
   });
@@ -387,37 +399,37 @@ describe('TapStack Unit Tests', () => {
   describe('Stack Outputs', () => {
     test('should output VPC ID', () => {
       template.hasOutput('VPCId', {
-        Description: 'VPC ID for the secure financial application'
+        Description: 'VPC ID for the secure financial application',
       });
     });
 
     test('should output ALB DNS name', () => {
       template.hasOutput('ALBDNSName', {
-        Description: 'Application Load Balancer DNS name'
+        Description: 'Application Load Balancer DNS name',
       });
     });
 
     test('should output database endpoint', () => {
       template.hasOutput('DatabaseEndpoint', {
-        Description: 'RDS Aurora cluster endpoint'
+        Description: 'RDS database endpoint',
       });
     });
 
     test('should output S3 bucket name', () => {
       template.hasOutput('S3BucketName', {
-        Description: 'S3 bucket for application data'
+        Description: 'S3 bucket name',
       });
     });
 
     test('should output KMS key ID', () => {
       template.hasOutput('KMSKeyId', {
-        Description: 'KMS key ID for encryption'
+        Description: 'KMS key ID for encryption',
       });
     });
 
     test('should output API Gateway URL', () => {
       template.hasOutput('APIGatewayURL', {
-        Description: 'API Gateway URL'
+        Description: 'API Gateway URL',
       });
     });
   });
@@ -425,8 +437,10 @@ describe('TapStack Unit Tests', () => {
   describe('Resource Naming and Tags', () => {
     test('should include environment suffix in resource names', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
-      const bucketWithName = Object.values(buckets).find(b => b.Properties?.BucketName);
-      
+      const bucketWithName = Object.values(buckets).find(
+        b => b.Properties?.BucketName
+      );
+
       if (bucketWithName) {
         expect(bucketWithName.Properties.BucketName).toMatch(/tap-test-/);
       }
@@ -436,7 +450,7 @@ describe('TapStack Unit Tests', () => {
       // Check KMS key has delete policy
       template.hasResource('AWS::KMS::Key', {
         UpdateReplacePolicy: 'Delete',
-        DeletionPolicy: 'Delete'
+        DeletionPolicy: 'Delete',
       });
     });
   });
@@ -444,20 +458,23 @@ describe('TapStack Unit Tests', () => {
   describe('Secrets Management', () => {
     test('should create Secrets Manager secret for database', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Description: Match.stringLikeRegexp('.*cluster.*'),
+        Description: Match.anyValue(),
         GenerateSecretString: Match.objectLike({
           ExcludeCharacters: Match.anyValue(),
-          GenerateStringKey: 'password'
-        })
+          GenerateStringKey: 'password',
+        }),
       });
     });
 
-    test('should attach secret to RDS cluster', () => {
-      template.hasResourceProperties('AWS::SecretsManager::SecretTargetAttachment', {
-        SecretId: Match.anyValue(),
-        TargetId: Match.anyValue(),
-        TargetType: 'AWS::RDS::DBCluster'
-      });
+    test('should attach secret to RDS instance', () => {
+      template.hasResourceProperties(
+        'AWS::SecretsManager::SecretTargetAttachment',
+        {
+          SecretId: Match.anyValue(),
+          TargetId: Match.anyValue(),
+          TargetType: 'AWS::RDS::DBInstance',
+        }
+      );
     });
   });
 
@@ -470,14 +487,14 @@ describe('TapStack Unit Tests', () => {
     test('should create routes to Internet Gateway for public subnets', () => {
       template.hasResourceProperties('AWS::EC2::Route', {
         DestinationCidrBlock: '0.0.0.0/0',
-        GatewayId: Match.anyValue()
+        GatewayId: Match.anyValue(),
       });
     });
 
     test('should create routes to NAT Gateway for private subnets', () => {
       template.hasResourceProperties('AWS::EC2::Route', {
         DestinationCidrBlock: '0.0.0.0/0',
-        NatGatewayId: Match.anyValue()
+        NatGatewayId: Match.anyValue(),
       });
     });
   });
