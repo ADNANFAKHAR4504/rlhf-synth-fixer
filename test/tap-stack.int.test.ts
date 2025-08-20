@@ -53,10 +53,10 @@ describe("TapStack Integration Tests", () => {
   let kmsKeyArn: string;
 
   beforeAll(() => {
-    // Load outputs from the deployment
-    const outputFilePath = path.join(__dirname, "..", "cdktf-outputs.json");
+    // Updated path to match the reference pattern
+    const outputFilePath = path.join(__dirname, "..", "cfn-outputs", "flat-outputs.json");
     if (!fs.existsSync(outputFilePath)) {
-      throw new Error(`cdktf-outputs.json not found at ${outputFilePath}. Please run deployment first.`);
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}`);
     }
     
     const outputs = JSON.parse(fs.readFileSync(outputFilePath, "utf-8"));
@@ -83,10 +83,6 @@ describe("TapStack Integration Tests", () => {
         !s3BucketName || !cloudtrailS3BucketName || !kmsKeyId || !rdsEndpoint) {
       throw new Error("Missing required stack outputs for integration test.");
     }
-
-    console.log(`Running integration tests for stack: ${stackKey}`);
-    console.log(`VPC ID: ${vpcId}`);
-    console.log(`EC2 Instance ID: ${ec2InstanceId}`);
   });
 
   describe("VPC Infrastructure", () => {
@@ -102,7 +98,7 @@ describe("TapStack Integration Tests", () => {
       // Check for project tags
       expect(vpc?.Tags?.some(tag => tag.Key === "Project" && tag.Value === "tap-project")).toBe(true);
       expect(vpc?.Tags?.some(tag => tag.Key === "Name")).toBe(true);
-    }, 30000);
+    }, 20000);
 
     test("Public and private subnets exist with correct configuration", async () => {
       // Test public subnets
@@ -136,7 +132,7 @@ describe("TapStack Integration Tests", () => {
         // Check CIDR blocks follow pattern 10.0.{even}.0/24
         expect(subnet.CidrBlock).toMatch(/^10\.0\.[24]\.0\/24$/);
       });
-    }, 30000);
+    }, 20000);
   });
 
   describe("Security Groups", () => {
@@ -164,7 +160,7 @@ describe("TapStack Integration Tests", () => {
         rule.FromPort === 0 && rule.ToPort === 65535 && rule.IpProtocol === "tcp"
       );
       expect(egressRule).toBeDefined();
-    }, 30000);
+    }, 20000);
 
     test("RDS security group allows traffic only from EC2", async () => {
       const { SecurityGroups } = await ec2Client.send(
@@ -184,7 +180,7 @@ describe("TapStack Integration Tests", () => {
       );
       expect(mysqlRule).toBeDefined();
       expect(mysqlRule?.UserIdGroupPairs?.some(pair => pair.GroupId === ec2SecurityGroupId)).toBe(true);
-    }, 30000);
+    }, 20000);
   });
 
   describe("EC2 Instance", () => {
@@ -212,7 +208,7 @@ describe("TapStack Integration Tests", () => {
       // Check tags
       expect(instance?.Tags?.some(tag => tag.Key === "Project" && tag.Value === "tap-project")).toBe(true);
       expect(instance?.Tags?.some(tag => tag.Key === "Name")).toBe(true);
-    }, 30000);
+    }, 20000);
 
     test("EC2 instance has correct IAM instance profile", async () => {
       const { Reservations } = await ec2Client.send(
@@ -222,7 +218,7 @@ describe("TapStack Integration Tests", () => {
       const instance = Reservations?.[0]?.Instances?.[0];
       expect(instance?.IamInstanceProfile).toBeDefined();
       expect(instance?.IamInstanceProfile?.Arn).toContain("ec2-profile");
-    }, 30000);
+    }, 20000);
   });
 
   describe("RDS Database", () => {
@@ -257,7 +253,7 @@ describe("TapStack Integration Tests", () => {
       expect(dbInstance?.VpcSecurityGroups?.some(sg => 
         sg.VpcSecurityGroupId === rdsSecurityGroupId && sg.Status === "active"
       )).toBe(true);
-    }, 30000);
+    }, 20000);
   });
 
   describe("S3 Buckets", () => {
@@ -287,7 +283,7 @@ describe("TapStack Integration Tests", () => {
         new GetBucketVersioningCommand({ Bucket: s3BucketName })
       );
       expect(Status).toBe("Enabled");
-    }, 30000);
+    }, 20000);
 
     test("CloudTrail S3 bucket exists with correct security configuration", async () => {
       // Check bucket exists
@@ -308,7 +304,7 @@ describe("TapStack Integration Tests", () => {
       );
       expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
       expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBe(kmsKeyArn);
-    }, 30000);
+    }, 20000);
   });
 
   describe("CloudTrail", () => {
@@ -324,7 +320,7 @@ describe("TapStack Integration Tests", () => {
       expect(cloudTrail?.IsMultiRegionTrail).toBe(true);
       expect(cloudTrail?.LogFileValidationEnabled).toBe(true);
       expect(cloudTrail?.Name).toContain("trail");
-    }, 30000);
+    }, 20000);
   });
 
   describe("KMS Key", () => {
@@ -340,14 +336,14 @@ describe("TapStack Integration Tests", () => {
       expect(KeyMetadata?.Enabled).toBe(true);
       expect(KeyMetadata?.Description).toContain("KMS key for tap-project");
       expect(KeyMetadata?.DeletionDate).toBeUndefined(); // Not scheduled for deletion
-    }, 30000);
+    }, 20000);
 
     test("KMS key has rotation enabled", async () => {
       const { KeyRotationEnabled } = await kmsClient.send(
         new GetKeyRotationStatusCommand({ KeyId: kmsKeyId })
       );
       expect(KeyRotationEnabled).toBe(true);
-    }, 30000);
+    }, 20000);
   });
 
   describe("Security Compliance", () => {
@@ -371,7 +367,7 @@ describe("TapStack Integration Tests", () => {
       );
       const dbInstance = DBInstances?.[0];
       expect(dbInstance?.TagList?.some(tag => tag.Key === "Project" && tag.Value === "tap-project")).toBe(true);
-    }, 30000);
+    }, 20000);
 
     test("EC2 instance is properly isolated in private subnet", async () => {
       const { Reservations } = await ec2Client.send(
@@ -388,7 +384,7 @@ describe("TapStack Integration Tests", () => {
       
       // Must have private IP in expected range
       expect(instance?.PrivateIpAddress).toMatch(/^10\.0\.[24]\.\d+$/);
-    }, 30000);
+    }, 20000);
 
     test("RDS instance is properly secured", async () => {
       const dbIdentifier = rdsEndpoint.split('.')[0];
@@ -409,7 +405,7 @@ describe("TapStack Integration Tests", () => {
       
       // Must have automated backups
       expect(dbInstance?.BackupRetentionPeriod).toBeGreaterThan(0);
-    }, 30000);
+    }, 20000);
 
     test("All S3 buckets block public access", async () => {
       const buckets = [s3BucketName, cloudtrailS3BucketName];
@@ -424,7 +420,7 @@ describe("TapStack Integration Tests", () => {
         expect(PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
         expect(PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
       }
-    }, 30000);
+    }, 20000);
   });
 
   describe("Network Connectivity", () => {
@@ -438,7 +434,7 @@ describe("TapStack Integration Tests", () => {
       
       expect(uniqueAZs.length).toBe(2); // Should be in 2 different AZs
       expect(uniqueAZs.every(az => az?.startsWith(awsRegion))).toBe(true);
-    }, 30000);
+    }, 20000);
 
     test("Public subnets have different availability zones for high availability", async () => {
       const { Subnets } = await ec2Client.send(
@@ -450,6 +446,6 @@ describe("TapStack Integration Tests", () => {
       
       expect(uniqueAZs.length).toBe(2); // Should be in 2 different AZs
       expect(uniqueAZs.every(az => az?.startsWith(awsRegion))).toBe(true);
-    }, 30000);
+    }, 20000);
   });
 });
