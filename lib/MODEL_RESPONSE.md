@@ -436,11 +436,6 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Ref ApplicationLogsBucket
         LogFilePrefix: 'access-logs/'
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3LogGroup
 
   ApplicationLogsBucket:
     Type: AWS::S3::Bucket
@@ -457,11 +452,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
 
   # CloudTrail
   CloudTrailLogGroup:

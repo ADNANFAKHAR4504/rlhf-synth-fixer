@@ -306,7 +306,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          CidrIp: 0.0.0.0/0  # Can not use  !Ref ApplicationInstanceSecurityGroup as it will create circular dependency
           Description: 'HTTP to application instances'
       Tags:
         - Key: Name
@@ -322,7 +322,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          CidrIp: 0.0.0.0/0 # Can not use  !Ref ApplicationInstanceSecurityGroup as it will create circular dependency
           Description: 'HTTP from load balancer'
         - IpProtocol: tcp
           FromPort: 22
@@ -360,7 +360,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: 0.0.0.0/0 # Can not use  !Ref ApplicationInstanceSecurityGroup as it will create circular dependency
           Description: 'SSH to application instances'
         - IpProtocol: tcp
           FromPort: 443
@@ -431,7 +431,7 @@ Resources:
         RestrictPublicBuckets: true
       LoggingConfiguration:
         DestinationBucketName: !Ref ApplicationLogsBucket
-        LogFilePrefix: 'access-logs/'
+        LogFilePrefix: 'access-logs/' # no need to add additional property it is creating linting issues
 
   ApplicationLogsBucket:
     Type: AWS::S3::Bucket
