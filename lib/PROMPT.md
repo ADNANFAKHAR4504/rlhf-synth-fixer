@@ -126,7 +126,7 @@ Non-functional & Quality:
 
 No hardcoded ARNs/IDs—derive where possible.
 
-Strong inline documentation comments explaining sensitive choices and how to extend safely.
+Strong inline documentation comments explaining sensitive choices & how to extend safely.
 
 All constructs follow AWS security best practices by default.
 
