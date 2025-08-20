@@ -741,7 +741,8 @@ resource "aws_iam_role_policy" "cloudtrail" {
 }
 
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.name_prefix}-ec2-role"
+  # Use stable name to prevent replacement when variables change
+  name = "prod-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -756,17 +757,31 @@ resource "aws_iam_role" "ec2_role" {
     ]
   })
 
+  # Prevent cycle when replacing due to name changes
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = local.common_tags
 }
 
 resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  depends_on = [aws_iam_role.ec2_role]
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.name_prefix}-ec2-instance-profile"
+  # Use stable name to prevent replacement when variables change
+  name = "prod-ec2-instance-profile"
   role = aws_iam_role.ec2_role.name
+
+  # Prevent cycle when replacing due to name changes
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  depends_on = [aws_iam_role.ec2_role]
 }
 
 # VPC Flow Logs
@@ -1018,7 +1033,6 @@ resource "aws_instance" "app" {
     kms_key_id  = aws_kms_key.main.arn
     volume_type = "gp3"
   }
-  depends_on = [aws_iam_role_policy_attachment.ec2_ssm_core]
   tags = merge(local.common_tags, { Name = "${local.name_prefix}-ec2", SSMManaged = "true" })
 }
 
