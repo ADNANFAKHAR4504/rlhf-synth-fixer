@@ -9,7 +9,7 @@ You are an AWS Solutions Architect, Create a **serverless event processing pipel
 - **Region:** AWS us-east-1
 - **Architecture:** Event-driven data processing pipeline
 - **Security:** Well-defined IAM roles and policies with least privilege access
-- **Data Flow:** S3 → Lambda → DynamoDB with threshold-based notifications
+- **Data Flow:** S3 Lambda DynamoDB with threshold-based notifications
 
 ---
 

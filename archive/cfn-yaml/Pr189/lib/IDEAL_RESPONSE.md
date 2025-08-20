@@ -1,16 +1,3 @@
-# Ideal Response
-
-The template provisions:
-- A secure S3 bucket with all public access blocked
-- A t2.micro EC2 instance with Amazon Linux 2 AMI
-- Resources tagged by environment
-- Uses default VPC and AZs dynamically
-- Uses parameterization for KeyName and Environment
-
-This markdown file would contain the ideal CloudFormation YAML template that perfectly meets all the requirements specified in the prompt.
-
-```markdown
-
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Complete stack with S3, EC2, and auto-generated KeyPair in us-east-1'
@@ -149,4 +136,4 @@ Outputs:
 
   PrivateKeySecret:
     Description: 'Secrets Manager ARN containing key pair info'
-    Value: !Ref KeyPairSecret
+    Value: !Ref KeyPairSecret```

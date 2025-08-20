@@ -1,0 +1,608 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Minimal secure baseline for us-east-1 - excludes Config/CloudTrail per requirements",
+    "Parameters": {
+        "ResourcePrefix": {
+            "Type": "String",
+            "Default": "Prod",
+            "Description": "Prefix for all named resources"
+        },
+        "OwnerTag": {
+            "Type": "String",
+            "Default": "TechTeam",
+            "Description": "Owner tag value for all resources"
+        },
+        "LogRetentionDays": {
+            "Type": "Number",
+            "Default": 90,
+            "MinValue": 1,
+            "Description": "CloudWatch Logs retention period in days"
+        },
+        "BucketNameSuffix": {
+            "Type": "String",
+            "Default": "secure-artifacts",
+            "Description": "Suffix for S3 bucket name (lowercase)",
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming",
+            "AllowedPattern": "^[a-zA-Z0-9]+$"
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Resource Configuration"
+                    },
+                    "Parameters": [
+                        "ResourcePrefix",
+                        "OwnerTag"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Logging Configuration"
+                    },
+                    "Parameters": [
+                        "LogRetentionDays"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Storage Configuration"
+                    },
+                    "Parameters": [
+                        "BucketNameSuffix"
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "LogsKmsKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for CloudWatch Logs encryption",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": {
+                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "ArnEquals": {
+                                    "kms:EncryptionContext:aws:logs:arn": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/${ResourcePrefix}/central-${EnvironmentSuffix}"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    }
+                ]
+            }
+        },
+        "LogsKmsKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${ResourcePrefix}-logs-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "LogsKmsKey"
+                }
+            }
+        },
+        "CentralLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/${ResourcePrefix}/central-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "LogsKmsKey",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3KmsKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for S3 bucket encryption",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow S3 Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey*",
+                                "kms:ReEncrypt*"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3KmsKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${ResourcePrefix}-s3-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "S3KmsKey"
+                }
+            }
+        },
+        "SecureBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "prod-${BucketNameSuffix}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::GetAtt": [
+                                        "S3KmsKey",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerEnforced"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureConnections",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "SecureBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${SecureBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyUnencryptedObjectUploads",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringNotEquals": {
+                                    "s3:x-amz-server-side-encryption": "aws:kms"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyIncorrectEncryptionKey",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringNotEquals": {
+                                    "s3:x-amz-server-side-encryption-aws-kms-key-id": {
+                                        "Fn::GetAtt": [
+                                            "S3KmsKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CentralLogsWriterRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ResourcePrefix}-CentralLogsWriter-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com",
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CentralLogsWritePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${CentralLogGroup.Arn}:*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "logs:DescribeLogGroups",
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "CentralLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    }
+                ]
+            }
+        },
+        "MFAEnforcementPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "ManagedPolicyName": {
+                    "Fn::Sub": "${ResourcePrefix}-DenyWithoutMFA-${EnvironmentSuffix}"
+                },
+                "Description": "Deny all actions when MFA is not present except MFA enrollment and password change",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowViewAccountInfo",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:GetAccountPasswordPolicy",
+                                "iam:GetAccountSummary",
+                                "iam:ListVirtualMFADevices"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "AllowManageOwnPasswords",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:ChangePassword",
+                                "iam:GetUser"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": [
+                                    "arn:aws:iam::${AWS::AccountId}:user/${username}",
+                                    {
+                                        "username": "${aws:username}"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AllowManageOwnMFA",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:DeleteVirtualMFADevice",
+                                "iam:ListMFADevices",
+                                "iam:EnableMFADevice",
+                                "iam:ResyncMFADevice",
+                                "iam:DeactivateMFADevice"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": [
+                                        "arn:aws:iam::${AWS::AccountId}:mfa/${username}",
+                                        {
+                                            "username": "${aws:username}"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": [
+                                        "arn:aws:iam::${AWS::AccountId}:user/${username}",
+                                        {
+                                            "username": "${aws:username}"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "AllowGetSessionToken",
+                            "Effect": "Allow",
+                            "Action": "sts:GetSessionToken",
+                            "Resource": "*",
+                            "Condition": {
+                                "Bool": {
+                                    "aws:MultiFactorAuthPresent": false
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyAllExceptUnlessSignedInWithMFA",
+                            "Effect": "Deny",
+                            "NotAction": [
+                                "iam:CreateVirtualMFADevice",
+                                "iam:EnableMFADevice",
+                                "iam:GetUser",
+                                "iam:ListMFADevices",
+                                "iam:ListVirtualMFADevices",
+                                "iam:ResyncMFADevice",
+                                "iam:DeactivateMFADevice",
+                                "iam:DeleteVirtualMFADevice",
+                                "iam:GetAccountSummary",
+                                "iam:GetAccountPasswordPolicy",
+                                "iam:ChangePassword",
+                                "sts:GetSessionToken"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "BoolIfExists": {
+                                    "aws:MultiFactorAuthPresent": false
+                                },
+                                "Null": {
+                                    "aws:ViaAWSService": "true"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "MFARequiredGroup": {
+            "Type": "AWS::IAM::Group",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ResourcePrefix}-MFA-Required-${EnvironmentSuffix}"
+                },
+                "ManagedPolicyArns": [
+                    {
+                        "Ref": "MFAEnforcementPolicy"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "CentralLogGroupName": {
+            "Description": "Name of the central CloudWatch Logs group",
+            "Value": {
+                "Ref": "CentralLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CentralLogGroupName"
+                }
+            }
+        },
+        "CentralLogGroupArn": {
+            "Description": "ARN of the central CloudWatch Logs group",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CentralLogGroup",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CentralLogGroupArn"
+                }
+            }
+        },
+        "SecureBucketName": {
+            "Description": "Name of the secure S3 bucket",
+            "Value": {
+                "Ref": "SecureBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecureBucketName"
+                }
+            }
+        },
+        "LogsKmsKeyArn": {
+            "Description": "ARN of the KMS key for CloudWatch Logs encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LogsKmsKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogsKmsKeyArn"
+                }
+            }
+        },
+        "S3KmsKeyArn": {
+            "Description": "ARN of the KMS key for S3 encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "S3KmsKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3KmsKeyArn"
+                }
+            }
+        },
+        "MFARequiredGroupName": {
+            "Description": "Name of the IAM group that enforces MFA",
+            "Value": {
+                "Ref": "MFARequiredGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MFARequiredGroupName"
+                }
+            }
+        },
+        "CentralLogsWriterRoleArn": {
+            "Description": "ARN of the example role for centralized logging",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CentralLogsWriterRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CentralLogsWriterRoleArn"
+                }
+            }
+        }
+    }
+}
