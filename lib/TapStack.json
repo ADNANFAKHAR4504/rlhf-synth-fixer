@@ -154,7 +154,39 @@
                                 "kms:DescribeKey",
                                 "kms:CreateGrant"
                             ],
-                            "Resource": "*"
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow Auto Scaling Service Linked Role",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+                                }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey",
+                                "kms:CreateGrant"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
                         },
                         {
                             "Sid": "Allow EC2 Service",
@@ -170,7 +202,14 @@
                                 "kms:DescribeKey",
                                 "kms:CreateGrant"
                             ],
-                            "Resource": "*"
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
                         }
                     ]
                 },
@@ -1065,6 +1104,9 @@
         },
         "WebAutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "DependsOn": [
+                "FinanceAppKMSKey"
+            ],
             "Properties": {
                 "AutoScalingGroupName": {
                     "Fn::Sub": "FinanceApp-WebASG-${Environment}"

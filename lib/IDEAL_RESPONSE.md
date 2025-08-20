@@ -121,6 +121,24 @@ Resources:
               - 'kms:DescribeKey'
               - 'kms:CreateGrant'
             Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+          - Sid: Allow Auto Scaling Service Linked Role
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
           - Sid: Allow EC2 Service
             Effect: Allow
             Principal:
@@ -133,6 +151,9 @@ Resources:
               - 'kms:DescribeKey'
               - 'kms:CreateGrant'
             Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
       Tags:
         - Key: Name
           Value: !Sub 'FinanceApp-KMSKey-${Environment}'
@@ -581,6 +602,8 @@ Resources:
   # Auto Scaling Group
   WebAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: 
+      - FinanceAppKMSKey
     Properties:
       AutoScalingGroupName: !Sub 'FinanceApp-WebASG-${Environment}'
       VPCZoneIdentifier:
