@@ -38,7 +38,7 @@ import {
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
   DescribeTargetHealthCommand,
-  ELBv2Client,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   GetInstanceProfileCommand,
@@ -73,7 +73,7 @@ const stackName =
 
 const cloudformation = new CloudFormationClient({ region });
 const ec2 = new EC2Client({ region });
-const elbv2 = new ELBv2Client({ region });
+const elbv2 = new ElasticLoadBalancingV2Client({ region });
 const asg = new AutoScalingClient({ region });
 const iam = new IAMClient({ region });
 const kms = new KMSClient({ region });
