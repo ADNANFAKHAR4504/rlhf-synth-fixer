@@ -4,24 +4,61 @@ import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
 import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 
-// Configuration - These are coming from cfn-outputs after cdk deploy
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
-
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'synthtrainr140';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1727';
 
 // AWS Client configuration
-const region = 'us-west-2';
+const region = process.env.AWS_REGION || 'us-west-2';
+const stackSuffix = `${environmentSuffix}-${region}`;
+
+// Configuration - These are coming from cfn-outputs after cdk deploy
+let outputs = {};
+try {
+  outputs = JSON.parse(
+    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  );
+} catch (error) {
+  console.warn('Warning: cfn-outputs/flat-outputs.json not found or invalid. Integration tests will be skipped.');
+  outputs = {};
+}
+
+// Helper function to get output with region-based naming
+const getOutput = (baseName) => {
+  // Try different naming patterns that CDK might use
+  const patterns = [
+    `${baseName}${stackSuffix.replace(/-/g, '')}`, // testuswest2 format
+    `${baseName}${stackSuffix}`, // test-us-west-2 format
+    `${baseName}${environmentSuffix}`, // fallback to just env suffix
+    baseName // fallback to base name
+  ];
+  
+  for (const pattern of patterns) {
+    if (outputs[pattern]) {
+      return outputs[pattern];
+    }
+  }
+  return undefined;
+};
 const kmsClient = new KMSClient({ region });
 const iamClient = new IAMClient({ region });
 const s3Client = new S3Client({ region });
 
 describe('Security Infrastructure Integration Tests', () => {
+  // Check if required outputs are available before running tests
+  beforeAll(() => {
+    const requiredOutputs = ['EncryptionKeyId', 'EncryptionKeyArn', 'SigningKeyId', 'SecurityAuditRoleArn', 'SecurityMonitoringRoleArn'];
+    const missingOutputs = requiredOutputs.filter(output => !getOutput(output));
+    
+    if (missingOutputs.length > 0) {
+      console.warn(`Warning: Missing required outputs: ${missingOutputs.join(', ')}`);
+      console.warn('This usually means the stacks are not deployed or cfn-outputs.json is not up to date.');
+      console.warn('Integration tests will be skipped.');
+    }
+  });
+
   describe('KMS Key Validation', () => {
     test('should have a working encryption key', async () => {
-      const keyId = outputs.EncryptionKeyId;
+      const keyId = getOutput('EncryptionKeyId');
       expect(keyId).toBeDefined();
       
       const command = new DescribeKeyCommand({ KeyId: keyId });
@@ -35,7 +72,7 @@ describe('Security Infrastructure Integration Tests', () => {
     });
 
     test('should have a working signing key', async () => {
-      const keyId = outputs.SigningKeyId;
+      const keyId = getOutput('SigningKeyId');
       expect(keyId).toBeDefined();
       
       const command = new DescribeKeyCommand({ KeyId: keyId });
@@ -50,7 +87,7 @@ describe('Security Infrastructure Integration Tests', () => {
 
   describe('IAM Role Validation', () => {
     test('should have security audit role with correct configuration', async () => {
-      const roleArn = outputs.SecurityAuditRoleArn;
+      const roleArn = getOutput('SecurityAuditRoleArn');
       expect(roleArn).toBeDefined();
       
       const roleName = roleArn.split('/').pop();
@@ -68,7 +105,7 @@ describe('Security Infrastructure Integration Tests', () => {
     });
 
     test('should have security monitoring role with correct configuration', async () => {
-      const roleArn = outputs.SecurityMonitoringRoleArn;
+      const roleArn = getOutput('SecurityMonitoringRoleArn');
       expect(roleArn).toBeDefined();
       
       const roleName = roleArn.split('/').pop();
@@ -83,32 +120,38 @@ describe('Security Infrastructure Integration Tests', () => {
 
   describe('Stack Integration', () => {
     test('should have deployed successfully', () => {
-      expect(outputs.SecurityDeploymentComplete).toBe('SUCCESS');
+      expect(getOutput('SecurityDeploymentComplete')).toBe('SUCCESS');
     });
 
     test('should have all expected outputs', () => {
-      expect(outputs.EncryptionKeyId).toBeDefined();
-      expect(outputs.EncryptionKeyArn).toBeDefined();
-      expect(outputs.SigningKeyId).toBeDefined();
-      expect(outputs.SecurityMonitoringRoleArn).toBeDefined();
-      expect(outputs.SecurityAuditRoleArn).toBeDefined();
+      expect(getOutput('EncryptionKeyId')).toBeDefined();
+      expect(getOutput('EncryptionKeyArn')).toBeDefined();
+      expect(getOutput('SigningKeyId')).toBeDefined();
+      expect(getOutput('SecurityMonitoringRoleArn')).toBeDefined();
+      expect(getOutput('SecurityAuditRoleArn')).toBeDefined();
     });
 
     test('should have correct resource ARN format', () => {
-      expect(outputs.EncryptionKeyArn).toMatch(/^arn:aws:kms:us-west-2:\d{12}:key\/[a-f0-9-]+$/);
-      expect(outputs.SecurityMonitoringRoleArn).toMatch(/^arn:aws:iam::\d{12}:role\/.+$/);
-      expect(outputs.SecurityAuditRoleArn).toMatch(/^arn:aws:iam::\d{12}:role\/.+$/);
+      expect(getOutput('EncryptionKeyArn')).toMatch(/^arn:aws:kms:us-west-2:\d{12}:key\/[a-f0-9-]+$/);
+      expect(getOutput('SecurityMonitoringRoleArn')).toMatch(/^arn:aws:iam::\d{12}:role\/.+$/);
+      expect(getOutput('SecurityAuditRoleArn')).toMatch(/^arn:aws:iam::\d{12}:role\/.+$/);
     });
   });
 
   describe('Security Configuration', () => {
     test('should have KMS keys in correct region', () => {
-      expect(outputs.EncryptionKeyArn).toContain('us-west-2');
+      expect(getOutput('EncryptionKeyArn')).toContain('us-west-2');
     });
 
     test('should have proper role naming convention', () => {
-      const auditRoleName = outputs.SecurityAuditRoleArn.split('/').pop();
-      const monitoringRoleName = outputs.SecurityMonitoringRoleArn.split('/').pop();
+      const auditRoleArn = getOutput('SecurityAuditRoleArn');
+      const monitoringRoleArn = getOutput('SecurityMonitoringRoleArn');
+      
+      expect(auditRoleArn).toBeDefined();
+      expect(monitoringRoleArn).toBeDefined();
+      
+      const auditRoleName = auditRoleArn.split('/').pop();
+      const monitoringRoleName = monitoringRoleArn.split('/').pop();
       
       expect(auditRoleName).toContain('SecurityAuditRole');
       expect(monitoringRoleName).toContain('SecurityMonitoringRole');
@@ -118,7 +161,9 @@ describe('Security Infrastructure Integration Tests', () => {
   describe('Cross-Stack Dependencies', () => {
     test('IAM roles should reference the correct KMS key', async () => {
       // Get the audit role
-      const roleArn = outputs.SecurityAuditRoleArn;
+      const roleArn = getOutput('SecurityAuditRoleArn');
+      expect(roleArn).toBeDefined();
+      
       const roleName = roleArn.split('/').pop();
       const command = new GetRoleCommand({ RoleName: roleName });
       const response = await iamClient.send(command);
