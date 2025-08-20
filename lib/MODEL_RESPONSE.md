@@ -1,5 +1,3 @@
-I'll create a comprehensive AWS CDK application that meets all your security requirements. Here's the complete project structure:
-
 ## Project Structure
 
 ```
@@ -31,7 +29,8 @@ new TapStack(app, 'TapStack', {
     region: 'us-east-1',
     account: process.env.CDK_DEFAULT_ACCOUNT,
   },
-  description: 'Secure TAP infrastructure stack with comprehensive security controls',
+  description:
+    'Secure TAP infrastructure stack with comprehensive security controls',
 });
 
 app.synth();
@@ -96,7 +95,9 @@ export class TapStack extends cdk.Stack {
     const flowLogRole = new iam.Role(this, 'role-vpc-flow-logs', {
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/VPCFlowLogsDeliveryRolePolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/VPCFlowLogsDeliveryRolePolicy'
+        ),
       ],
     });
 
@@ -107,7 +108,10 @@ export class TapStack extends cdk.Stack {
 
     new ec2.FlowLog(this, 'VpcFlowLog', {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup, flowLogRole),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        flowLogGroup,
+        flowLogRole
+      ),
       trafficType: ec2.FlowLogTrafficType.ALL,
     });
 
@@ -132,11 +136,15 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create security groups with least privilege
-    const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
-      vpc,
-      description: 'Security group for Lambda functions',
-      allowAllOutbound: false,
-    });
+    const lambdaSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'LambdaSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for Lambda functions',
+        allowAllOutbound: false,
+      }
+    );
 
     // Allow HTTPS outbound for Lambda
     lambdaSecurityGroup.addEgressRule(
@@ -162,33 +170,30 @@ export class TapStack extends cdk.Stack {
     const lambdaRole = new iam.Role(this, 'role-lambda-execution', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaVPCAccessExecutionRole'
+        ),
       ],
     });
 
     // Add specific permissions for Lambda
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:PutObject',
-      ],
-      resources: [
-        dataBucket.bucketArn,
-        `${dataBucket.bucketArn}/*`,
-      ],
-    }));
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:PutObject'],
+        resources: [dataBucket.bucketArn, `${dataBucket.bucketArn}/*`],
+      })
+    );
 
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'ssm:GetParameter',
-        'ssm:GetParameters',
-      ],
-      resources: [
-        `arn:aws:ssm:${this.region}:${this.account}:parameter/tap/*`,
-      ],
-    }));
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/tap/*`,
+        ],
+      })
+    );
 
     // Store sensitive parameters in SSM Parameter Store
     new ssm.StringParameter(this, 'DatabasePassword', {
@@ -217,7 +222,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_4,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       securityGroups: [rdsSecurityGroup],
       subnetGroup: dbSubnetGroup,
@@ -322,46 +330,52 @@ export class TapStack extends cdk.Stack {
     });
 
     // Add MFA enforcement policy
-    consoleUserRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.DENY,
-      actions: ['*'],
-      resources: ['*'],
-      conditions: {
-        BoolIfExists: {
-          'aws:MultiFactorAuthPresent': 'false',
+    consoleUserRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        actions: ['*'],
+        resources: ['*'],
+        conditions: {
+          BoolIfExists: {
+            'aws:MultiFactorAuthPresent': 'false',
+          },
         },
-      },
-    }));
+      })
+    );
 
     // Create IAM user group with MFA enforcement
     const userGroup = new iam.Group(this, 'SecureUserGroup', {
       groupName: 'tap-secure-users',
     });
 
-    userGroup.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.DENY,
-      actions: ['*'],
-      resources: ['*'],
-      conditions: {
-        BoolIfExists: {
-          'aws:MultiFactorAuthPresent': 'false',
+    userGroup.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        actions: ['*'],
+        resources: ['*'],
+        conditions: {
+          BoolIfExists: {
+            'aws:MultiFactorAuthPresent': 'false',
+          },
         },
-      },
-    }));
+      })
+    );
 
-    userGroup.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'iam:ChangePassword',
-        'iam:CreateVirtualMFADevice',
-        'iam:EnableMFADevice',
-        'iam:GetUser',
-        'iam:ListMFADevices',
-        'iam:ListVirtualMFADevices',
-        'iam:ResyncMFADevice',
-      ],
-      resources: ['*'],
-    }));
+    userGroup.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'iam:ChangePassword',
+          'iam:CreateVirtualMFADevice',
+          'iam:EnableMFADevice',
+          'iam:GetUser',
+          'iam:ListMFADevices',
+          'iam:ListVirtualMFADevices',
+          'iam:ResyncMFADevice',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // Output important information
     new cdk.CfnOutput(this, 'ApiEndpoint', {
