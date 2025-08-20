@@ -110,8 +110,17 @@ async function retry<T>(fn: () => Promise<T>, attempts = 3, baseMs = 1000): Prom
 }
 
 function hasRealInfrastructure(): boolean {
-  // Check if we have real infrastructure by looking for non-mock VPC ID
-  return OUT.vpcId && OUT.vpcId.startsWith('vpc-') && OUT.vpcId !== 'vpc-0123456789abcdef0';
+  // Check if we have real AWS infrastructure by looking for real resource IDs
+  // Real AWS resource IDs have specific patterns, mock ones are different
+  const isRealVpc = OUT.vpcId && OUT.vpcId.match(/^vpc-[a-f0-9]{8,17}$/) && OUT.vpcId !== 'vpc-0123456789abcdef0';
+  const areRealPublicSubnets = OUT.publicSubnetIds.every((id: string) => id.match(/^subnet-[a-f0-9]{8,17}$/) && id !== 'subnet-01234567890abcdef');
+  const isRealPrivateSubnet = OUT.privateSubnetId && OUT.privateSubnetId.match(/^subnet-[a-f0-9]{8,17}$/) && OUT.privateSubnetId !== 'subnet-11111111111111111';
+  const isRealPublicSg = OUT.publicSecurityGroupId && OUT.publicSecurityGroupId.match(/^sg-[a-f0-9]{8,17}$/) && OUT.publicSecurityGroupId !== 'sg-0123456789abcdef0';
+  const isRealPrivateSg = OUT.privateSecurityGroupId && OUT.privateSecurityGroupId.match(/^sg-[a-f0-9]{8,17}$/) && OUT.privateSecurityGroupId !== 'sg-abcdef0123456789';
+  const isRealIgw = OUT.internetGatewayId && OUT.internetGatewayId.match(/^igw-[a-f0-9]{8,17}$/) && OUT.internetGatewayId !== 'igw-0123456789abcdef0';
+  
+  return isRealVpc && areRealPublicSubnets && isRealPrivateSubnet && 
+         isRealPublicSg && isRealPrivateSg && isRealIgw;
 }
 
 /** ===================== Jest Config ===================== */
