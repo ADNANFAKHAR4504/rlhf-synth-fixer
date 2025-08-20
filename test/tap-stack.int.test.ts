@@ -31,7 +31,7 @@ const outputs = JSON.parse(
 );
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr176';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS SDK clients
 const region = process.env.AWS_REGION || 'us-west-2';
