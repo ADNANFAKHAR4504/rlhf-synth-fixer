@@ -1134,7 +1134,7 @@ Resources:
     Properties:
       ResourceArn: !GetAtt WebACL.Arn
       LogDestinationConfigs:
-        - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/wafv2/${AWS::StackName}-${EnvironmentSuffix}'
+        - !GetAtt WAFLogGroup.Arn
       RedactedFields:
         - SingleHeader:
             Name: 'authorization'
@@ -1188,29 +1188,6 @@ Resources:
           Value: !Sub 'FinancialApp-VPC-FlowLogs-${EnvironmentSuffix}'
 
   # ==============================================
-  # GUARDDUTY THREAT DETECTION
-  # ==============================================
-  GuardDutyDetector:
-    Type: AWS::GuardDuty::Detector
-    Properties:
-      Enable: true
-      FindingPublishingFrequency: 'FIFTEEN_MINUTES'
-      DataSources:
-        S3Logs:
-          Enable: true
-        MalwareProtection:
-          ScanEc2InstanceWithFindings:
-            EbsVolumes: true
-        Kubernetes:
-          AuditLogs:
-            Enable: true
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'FinancialApp-GuardDuty-${EnvironmentSuffix}'
-        - Key: 'Environment'
-          Value: !Ref Environment
-
-  # ==============================================
   # AWS CLOUDTRAIL COMPREHENSIVE LOGGING
   # ==============================================
   CloudTrailLogGroup:
@@ -1247,7 +1224,7 @@ Resources:
                 Action:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
-                Resource: !Sub '${CloudTrailLogGroup}*'
+                Resource: !Sub '${CloudTrailLogGroup}:*'
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
@@ -1266,7 +1243,7 @@ Resources:
           IncludeManagementEvents: true
           DataResources:
             - Type: 'AWS::S3::Object'
-              Values: 
+              Values:
                 - !Sub '${ApplicationDataBucket}/*'
                 - !Sub '${LoggingBucket}/*'
       InsightSelectors:
@@ -1466,12 +1443,6 @@ Outputs:
     Value: !GetAtt WebACL.Arn
     Export:
       Name: !Sub '${AWS::StackName}-WebACL-ARN'
-
-  GuardDutyDetectorId:
-    Description: 'GuardDuty Detector ID for threat detection'
-    Value: !Ref GuardDutyDetector
-    Export:
-      Name: !Sub '${AWS::StackName}-GuardDuty-DetectorId'
 
   CloudTrailArn:
     Description: 'CloudTrail ARN for comprehensive audit logging'
