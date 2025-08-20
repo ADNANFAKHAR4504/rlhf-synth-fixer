@@ -2,7 +2,7 @@
 
 ## Goal
 
-Develop a CloudFormation YAML template named `high-availability-webapp.yaml` that provisions a **resilient**, **scalable**, and **cost-effective** infrastructure stack for a web application, following AWS architectural best practices.
+Develop a CloudFormation YAML template named `TapStack.yaml` that provisions a **resilient**, **scalable**, and **cost-effective** infrastructure stack for a web application, following AWS architectural best practices.
 
 ## Infrastructure Criteria
 
@@ -35,7 +35,7 @@ Your CloudFormation template should provision the following features:
 
 ## Final Deliverable
 
-- A fully functional CloudFormation template named: `high-availability-webapp.yaml`
+- A fully functional CloudFormation template named: `TapStack.yaml`
 - Must be:
   - **Deployable** in any AWS environment
   - **Syntactically correct**, **logically organized**, and written using **Infrastructure as Code (IaC)** best practices
