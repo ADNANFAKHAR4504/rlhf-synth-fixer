@@ -446,11 +446,6 @@ Resources:
   # RDS Database
   Database:
     Type: AWS::RDS::DBInstance
-    DependsOn:
-      - DBSecret
-      - DBSubnetGroup
-      - DatabaseSecurityGroup
-      - KMSKey
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
@@ -565,11 +560,6 @@ Resources:
   # Launch Template
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
-    DependsOn:
-      - KMSKey
-      - KMSKeyAlias
-      - WebServerSecurityGroup
-      - EC2InstanceProfile
     Properties:
       LaunchTemplateName: !Sub "${ResourceNamePrefix}LaunchTemplate"
       LaunchTemplateData:
@@ -666,12 +656,6 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
-      - LaunchTemplate
-      - KMSKey
-      - KMSKeyAlias
-      - TargetGroup
-      - PrivateSubnet1
-      - PrivateSubnet2
       - NatGateway1
       - NatGateway2
     Properties:
@@ -845,10 +829,10 @@ Resources:
               - kms:RevokeGrant
               - kms:ReEncrypt*
             Resource: "*"
-          - Sid: Allow Auto Scaling service-linked role
+          - Sid: Allow service-linked roles
             Effect: Allow
             Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+              AWS: "*"
             Action:
               - kms:Decrypt
               - kms:DescribeKey
@@ -860,15 +844,15 @@ Resources:
               - kms:RevokeGrant
               - kms:ReEncrypt*
             Resource: "*"
-          - Sid: Allow EC2 service-linked role
-            Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ec2.amazonaws.com/AWSServiceRoleForEC2Spot"
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:CreateGrant
-            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService":
+                  - !Sub "ec2.${AWS::Region}.amazonaws.com"
+                  - !Sub "autoscaling.${AWS::Region}.amazonaws.com"
+                  - !Sub "rds.${AWS::Region}.amazonaws.com"
+              StringLike:
+                "aws:PrincipalArn":
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/*"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-KMS-Key"
@@ -879,7 +863,6 @@ Resources:
 
   KMSKeyAlias:
     Type: AWS::KMS::Alias
-    DependsOn: KMSKey
     Properties:
       AliasName: !Sub "alias/${ResourceNamePrefix}-key"
       TargetKeyId: !Ref KMSKey
