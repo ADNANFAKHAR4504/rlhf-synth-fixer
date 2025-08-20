@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	jsii "github.com/aws/jsii-runtime-go"
 	logs "github.com/cdktf/cdktf-provider-aws-go/aws/v18/cloudwatchloggroup"
 	iampolicy "github.com/cdktf/cdktf-provider-aws-go/aws/v18/iampolicy"
 	iamrole "github.com/cdktf/cdktf-provider-aws-go/aws/v18/iamrole"
@@ -55,7 +56,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 	// S3 bucket
 	bucket := s3.NewS3Bucket(stack, str("ImageBucket"), &s3.S3BucketConfig{
 		BucketPrefix: str("serverless-image-processing"),
-		ForceDestroy: cdktf.Bool(true),
+		ForceDestroy: jsii.Bool(true),
 		Tags: &map[string]*string{
 			"Name":        str("ServerlessImageProcessingBucket"),
 			"Environment": str("Production"),
@@ -71,10 +72,10 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 	// Block public access
 	s3pab.NewS3BucketPublicAccessBlock(stack, str("ImageBucketPublicAccessBlock"), &s3pab.S3BucketPublicAccessBlockConfig{
 		Bucket:                bucket.Id(),
-		BlockPublicAcls:       cdktf.Bool(true),
-		BlockPublicPolicy:     cdktf.Bool(true),
-		IgnorePublicAcls:      cdktf.Bool(true),
-		RestrictPublicBuckets: cdktf.Bool(true),
+		BlockPublicAcls:       jsii.Bool(true),
+		BlockPublicPolicy:     jsii.Bool(true),
+		IgnorePublicAcls:      jsii.Bool(true),
+		RestrictPublicBuckets: jsii.Bool(true),
 	})
 
 	// SSE
@@ -85,7 +86,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 				ApplyServerSideEncryptionByDefault: &s3enc.S3BucketServerSideEncryptionConfigurationARuleApplyServerSideEncryptionByDefault{
 					SseAlgorithm: str("AES256"),
 				},
-				BucketKeyEnabled: cdktf.Bool(true),
+				BucketKeyEnabled: jsii.Bool(true),
 			},
 		},
 	})
@@ -93,7 +94,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 	// Log group
 	lg := logs.NewCloudwatchLogGroup(stack, str("LambdaLogGroup"), &logs.CloudwatchLogGroupConfig{
 		Name:            str("/aws/lambda/image-thumbnail-processor"),
-		RetentionInDays: cdktf.Number(30),
+		RetentionInDays: jsii.Number(30),
 		Tags: &map[string]*string{
 			"Name":               str("ImageThumbnailProcessorLogs"),
 			"SecurityMonitoring": str("enabled"),
@@ -106,7 +107,7 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 	role := iamrole.NewIamRole(stack, str("LambdaExecutionRole"), &iamrole.IamRoleConfig{
 		Name:               str("image-thumbnail-processor-role"),
 		AssumeRolePolicy:   str(assume),
-		MaxSessionDuration: cdktf.Number(3600),
+		MaxSessionDuration: jsii.Number(3600),
 		Tags: &map[string]*string{
 			"Name":                      str("ImageThumbnailProcessorRole"),
 			"SecurityLevel":             str("enhanced"),
@@ -142,9 +143,9 @@ func BuildServerlessImageStack(stack cdktf.TerraformStack, region string) {
 		Role:                         role.Arn(),
 		Filename:                     str(zipPath),
 		SourceCodeHash:               str(base64.StdEncoding.EncodeToString([]byte(code.zipBytes))),
-		Timeout:                      cdktf.Number(30),
-		MemorySize:                   cdktf.Number(256),
-		ReservedConcurrentExecutions: cdktf.Number(10),
+		Timeout:                      jsii.Number(30),
+		MemorySize:                   jsii.Number(256),
+		ReservedConcurrentExecutions: jsii.Number(10),
 		Environment: &lambda.LambdaFunctionEnvironment{
 			Variables: &map[string]*string{
 				"BUCKET_NAME":    bucket.Id(),
