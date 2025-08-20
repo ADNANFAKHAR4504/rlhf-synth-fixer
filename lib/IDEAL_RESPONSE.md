@@ -85,8 +85,9 @@ Resources:
   ApplicationKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: KMS Key for application data encryption
+      Description: !Sub 'KMS Key for application data encryption - ${AWS::StackName}'
       KeyPolicy:
+        Version: '2012-10-17'
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
@@ -94,22 +95,33 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow CloudTrail to encrypt logs
+          - Sid: AllowCloudTrailUseOfKey
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action:
+              - kms:Encrypt
               - kms:GenerateDataKey*
               - kms:DescribeKey
             Resource: '*'
-          - Sid: Allow S3 service to use the key
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+          # NEW: allow EC2/EBS to use this key for volumes in this region
+          - Sid: AllowEBSUseOfKey
             Effect: Allow
             Principal:
-              Service: s3.amazonaws.com
+              Service: ec2.amazonaws.com
             Action:
+              - kms:Encrypt
               - kms:Decrypt
-              - kms:GenerateDataKey
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
             Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub 'ec2.${AWS::Region}.amazonaws.com'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -119,7 +131,7 @@ Resources:
   ApplicationKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${Environment}-application-key'
+      AliasName: !Sub 'alias/${Environment}-application-key-${AWS::StackName}'
       TargetKeyId: !Ref ApplicationKMSKey
 
   # VPC and Network Infrastructure
@@ -131,7 +143,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-vpc'
+          Value: !Sub '${Environment}-vpc-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -141,7 +153,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-igw'
+          Value: !Sub '${Environment}-igw-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -161,7 +173,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-subnet-1'
+          Value: !Sub '${Environment}-public-subnet-1-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -174,7 +186,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-subnet-2'
+          Value: !Sub '${Environment}-public-subnet-2-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -187,7 +199,7 @@ Resources:
       CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 4, 8]]
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-1'
+          Value: !Sub '${Environment}-private-subnet-1-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -199,7 +211,7 @@ Resources:
       CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 4, 8]]
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet-2'
+          Value: !Sub '${Environment}-private-subnet-2-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -211,7 +223,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-nat-eip-1'
+          Value: !Sub '${Environment}-nat-eip-1-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -222,7 +234,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-nat-eip-2'
+          Value: !Sub '${Environment}-nat-eip-2-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -233,7 +245,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-nat-gateway-1'
+          Value: !Sub '${Environment}-nat-gateway-1-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -244,7 +256,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-nat-gateway-2'
+          Value: !Sub '${Environment}-nat-gateway-2-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -255,7 +267,7 @@ Resources:
       VpcId: !Ref ApplicationVPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-routes'
+          Value: !Sub '${Environment}-public-routes-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -285,7 +297,7 @@ Resources:
       VpcId: !Ref ApplicationVPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-routes-1'
+          Value: !Sub '${Environment}-private-routes-1-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -308,7 +320,7 @@ Resources:
       VpcId: !Ref ApplicationVPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-routes-2'
+          Value: !Sub '${Environment}-private-routes-2-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -332,7 +344,7 @@ Resources:
       VpcId: !Ref ApplicationVPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-nacl'
+          Value: !Sub '${Environment}-private-nacl-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -371,7 +383,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-alb-sg'
+      GroupName: !Sub '${Environment}-albsg-${AWS::StackName}'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
@@ -399,7 +411,7 @@ Resources:
       Tags:
         - Key: Name
           Value:
-            Fn::Sub: '${Environment}-alb-sg'
+            Fn::Sub: '${Environment}-albsg-${AWS::StackName}'
         - Key: Environment
           Value:
             Ref: Environment
@@ -408,7 +420,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName:
-        Fn::Sub: '${Environment}-app-sg'
+        Fn::Sub: '${Environment}-appsg-${AWS::StackName}'
       GroupDescription: Security group for application servers
       VpcId:
         Ref: ApplicationVPC
@@ -432,14 +444,14 @@ Resources:
           Description: HTTP for updates
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-app-sg'
+          Value: !Sub '${Environment}-appsg-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub '${Environment}-bastion-sg'
+      GroupName: !Sub '${Environment}-bsg-${AWS::StackName}'
       GroupDescription: Security group for bastion host
       VpcId: !Ref ApplicationVPC
       SecurityGroupIngress:
@@ -456,7 +468,7 @@ Resources:
           Description: SSH to application servers
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-bastion-sg'
+          Value: !Sub '${Environment}-bsg-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -464,7 +476,7 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-ec2-instance-role'
+      RoleName: !Sub '${Environment}-ec2role-${AWS::StackName}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -490,9 +502,22 @@ Resources:
                 Resource: !Sub 'arn:aws:s3:::${Environment}-app-artifacts-${AWS::AccountId}-${AWS::Region}'
               - Effect: Allow
                 Action:
+                  - kms:DescribeKey
+                  - kms:Encrypt
                   - kms:Decrypt
+                  - kms:ReEncrypt*
                   - kms:GenerateDataKey
+                  - kms:GenerateDataKeyWithoutPlaintext
                 Resource: !GetAtt ApplicationKMSKey.Arn
+              - Effect: Allow
+                Action:
+                  - kms:CreateGrant
+                  - kms:ListGrants
+                  - kms:RevokeGrant
+                Resource: !GetAtt ApplicationKMSKey.Arn
+                Condition:
+                  Bool:
+                    kms:GrantIsForAWSResource: 'true'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -500,7 +525,7 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Environment}-ec2-instance-profile'
+      InstanceProfileName: !Sub '${Environment}-ec2prof-${AWS::StackName}'
       Roles:
         - !Ref EC2InstanceRole
 
@@ -530,13 +555,13 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
         - Key: Name
-          Value: !Sub '${Environment}-app-artifacts'
+          Value: !Sub '${Environment}-app-artifacts-${AWS::StackName}'
 
   # S3 Bucket for logging
   LoggingS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${Environment}-log-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -562,7 +587,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
         - Key: Name
-          Value: !Sub '${Environment}-logs'
+          Value: !Sub '${Environment}-logs-${AWS::StackName}'
 
   LoggingS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -584,8 +609,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource:
-              'Fn::Sub': '${LoggingS3Bucket.Arn}/*'
+            Resource: !Sub '${LoggingS3Bucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -594,8 +618,6 @@ Resources:
             Principal:
               AWS: 
                 - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-                # ELB service account for ap-southeast-1
-                - 'arn:aws:iam::114774131450:root'
             Action:
               - s3:PutObject
             Resource:
@@ -606,7 +628,8 @@ Resources:
           - Sid: ALBAclCheck
             Effect: Allow
             Principal:
-              AWS: 'arn:aws:iam::114774131450:root'
+              AWS: 
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action:
               - s3:GetBucketAcl
             Resource:
@@ -616,7 +639,7 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-cloudtrail-role'
+      RoleName: !Sub '${Environment}-cloudtrail-role-${AWS::StackName}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -642,7 +665,7 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${Environment}'
+      LogGroupName: !Sub '/aws/cloudtrail/${Environment}-${AWS::StackName}'
       RetentionInDays: 90
 
   ApplicationCloudTrail:
@@ -650,7 +673,7 @@ Resources:
     Condition: IsProdOrStaging
     Properties:
       TrailName:
-        'Fn::Sub': '${Environment}-cloudtrail'
+        'Fn::Sub': '${Environment}-cloudtrail-${AWS::StackName}'
       S3BucketName:
         'Ref': LoggingS3Bucket
       S3KeyPrefix: cloudtrail-logs/
@@ -675,13 +698,13 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
         - Key: Name
-          Value: !Sub '${Environment}-cloudtrail'
+          Value: !Sub '${Environment}-cloudtrail-${AWS::StackName}'
 
   # VPC Flow Logs
   VPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-vpc-flow-log-role'
+      RoleName: !Sub '${Environment}-vpc-flow-log-role-${AWS::StackName}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -709,7 +732,7 @@ Resources:
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
       RetentionInDays: 30
 
   VPCFlowLog:
@@ -719,32 +742,32 @@ Resources:
       ResourceId: !Ref ApplicationVPC
       TrafficType: ALL
       LogDestinationType: cloud-watch-logs
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
       DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Name
-          Value: !Sub '${Environment}-vpc-flow-log'
+          Value: !Sub '${Environment}-vpc-flow-log-${AWS::StackName}'
 
   # CloudWatch Log Groups
   ApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/ec2/${Environment}/application'
+      LogGroupName: !Sub '/aws/ec2/${Environment}-${AWS::StackName}/application'
       RetentionInDays: 30
 
   S3AccessLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/s3/${Environment}/access'
+      LogGroupName: !Sub '/aws/s3/${Environment}-${AWS::StackName}/access'
       RetentionInDays: 90
 
   # Launch Template
   ApplicationLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${Environment}-app-launch-template'
+      LaunchTemplateName: !Sub '${Environment}-tmpl-${AWS::StackName}'
       LaunchTemplateData:
         ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
@@ -814,7 +837,6 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref ApplicationKMSKey
               DeleteOnTermination: true
         MetadataOptions:
           HttpEndpoint: enabled
@@ -824,7 +846,7 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub '${Environment}-app-server'
+                Value: !Sub '${Environment}-app-server-${AWS::StackName}'
               - Key: Environment
                 Value: !Ref Environment
 
@@ -832,7 +854,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${Environment}-app-alb'
+      Name: !Sub '${Environment}-alb-${AWS::StackName}'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
@@ -841,24 +863,18 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
       LoadBalancerAttributes:
-        - Key: access_logs.s3.enabled
-          Value: 'true'
-        - Key: access_logs.s3.bucket
-          Value: !Ref LoggingS3Bucket
-        - Key: access_logs.s3.prefix
-          Value: alb-access-logs
         - Key: deletion_protection.enabled
           Value: 'false'
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Name
-          Value: !Sub '${Environment}-app-alb'
+          Value: !Sub '${Environment}-alb-${AWS::StackName}'
 
   ApplicationTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${Environment}-app-tg'
+      Name: !Sub '${Environment}-app-tg-${AWS::StackName}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref ApplicationVPC
@@ -873,7 +889,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
         - Key: Name
-          Value: !Sub '${Environment}-app-tg'
+          Value: !Sub '${Environment}-app-tg-${AWS::StackName}'
 
   ApplicationListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -889,7 +905,7 @@ Resources:
   ApplicationAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${Environment}-app-asg'
+      AutoScalingGroupName: !Sub '${Environment}-app-asg-${AWS::StackName}'
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -906,7 +922,7 @@ Resources:
       Tags:
         - Key: Name
           Value: 
-            Fn::Sub: '${Environment}-app-server'
+            Fn::Sub: '${Environment}-app-server-${AWS::StackName}'
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref Environment
@@ -942,7 +958,7 @@ Resources:
           yum install -y amazon-cloudwatch-agent
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-bastion-host'
+          Value: !Sub '${Environment}-bastion-host-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
@@ -951,17 +967,198 @@ Outputs:
     Description: VPC ID
     Value: !Ref ApplicationVPC
     Export:
-      Name: !Sub '${Environment}-vpc-id'
+      Name: !Sub '${Environment}-vpc-id-${AWS::StackName}'
 
   PublicSubnets:
     Description: Public subnet IDs
     Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
     Export:
-      Name: 
-        Fn::Join:
-          - '-'
-          - - Ref: Environment
-            - 'public-subnets'
+      Name: !Sub '${Environment}-public-subnets-${AWS::StackName}'
+
+  PrivateSubnetIds:
+    Description: Comma-separated private subnet IDs
+    Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub '${Environment}-private-subnets-${AWS::StackName}'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${Environment}-igw-${AWS::StackName}'
+
+  PublicRouteTableId:
+    Description: Public Route Table ID
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${Environment}-public-rt-${AWS::StackName}'
+
+  PrivateRouteTableIds:
+    Description: Comma-separated Private Route Table IDs
+    Value: !Join [",", [!Ref PrivateRouteTable1, !Ref PrivateRouteTable2]]
+    Export:
+      Name: !Sub '${Environment}-private-rts-${AWS::StackName}'
+
+  NatGatewayIds:
+    Description: Comma-separated NAT Gateway IDs
+    Value: !Join [",", [!Ref NatGateway1, !Ref NatGateway2]]
+    Export:
+      Name: !Sub '${Environment}-nat-gws-${AWS::StackName}'
+
+  # -------- Security Groups --------
+  AlbSGId:
+    Description: ALB Security Group ID
+    Value: !Ref LoadBalancerSecurityGroup
+    Export:
+      Name: !Sub '${Environment}-alb-sg-${AWS::StackName}'
+
+  AppSGId:
+    Description: Application Security Group ID
+    Value: !Ref ApplicationSecurityGroup
+    Export:
+      Name: !Sub '${Environment}-app-sg-${AWS::StackName}'
+
+  BastionSGId:
+    Description: Bastion Security Group ID
+    Value: !Ref BastionSecurityGroup
+    Export:
+      Name: !Sub '${Environment}-bastion-sg-${AWS::StackName}'
+
+  # -------- KMS --------
+  KmsKeyId:
+    Description: Application KMS Key ID
+    Value: !Ref ApplicationKMSKey
+    Export:
+      Name: !Sub '${Environment}-kms-key-id-${AWS::StackName}'
+
+  KmsKeyArn:
+    Description: Application KMS Key ARN
+    Value: !GetAtt ApplicationKMSKey.Arn
+    Export:
+      Name: !Sub '${Environment}-kms-key-arn-${AWS::StackName}'
+
+  KmsAliasName:
+    Description: KMS Alias name
+    Value: !Ref ApplicationKMSKeyAlias
+    Export:
+      Name: !Sub '${Environment}-kms-alias-${AWS::StackName}'
+
+  # -------- S3 --------
+  ApplicationS3BucketName:
+    Description: Application artifacts bucket name
+    Value: !Ref ApplicationS3Bucket
+    Export:
+      Name: !Sub '${Environment}-app-bucket-${AWS::StackName}'
+
+  ApplicationS3BucketArn:
+    Description: Application artifacts bucket ARN
+    Value: !GetAtt ApplicationS3Bucket.Arn
+    Export:
+      Name: !Sub '${Environment}-app-bucket-arn-${AWS::StackName}'
+
+  LoggingS3BucketName:
+    Description: Central logging bucket name
+    Value: !Ref LoggingS3Bucket
+    Export:
+      Name: !Sub '${Environment}-log-bucket-${AWS::StackName}'
+
+  LoggingS3BucketArn:
+    Description: Central logging bucket ARN
+    Value: !GetAtt LoggingS3Bucket.Arn
+    Export:
+      Name: !Sub '${Environment}-log-bucket-arn-${AWS::StackName}'
+
+  # -------- CloudWatch Logs --------
+  ApplicationLogGroupName:
+    Description: EC2/agent application log group
+    Value: !Ref ApplicationLogGroup
+    Export:
+      Name: !Sub '${Environment}-app-lg-${AWS::StackName}'
+
+  S3AccessLogGroupName:
+    Description: S3 access log group
+    Value: !Ref S3AccessLogGroup
+    Export:
+      Name: !Sub '${Environment}-s3-access-lg-${AWS::StackName}'
+
+  VPCFlowLogGroupName:
+    Description: VPC Flow Logs log group
+    Value: !Ref VPCFlowLogGroup
+    Export:
+      Name: !Sub '${Environment}-vpc-flow-lg-${AWS::StackName}'
+
+  # -------- CloudTrail --------
+  CloudTrailName:
+    Description: CloudTrail trail name
+    Value: !Ref ApplicationCloudTrail
+    Condition: IsProdOrStaging
+    Export:
+      Name: !Sub '${Environment}-cloudtrail-name-${AWS::StackName}'
+
+  CloudTrailLogGroupName:
+    Description: CloudTrail CloudWatch log group name
+    Value: !Ref CloudTrailLogGroup
+    Condition: IsProdOrStaging
+    Export:
+      Name: !Sub '${Environment}-cloudtrail-lg-${AWS::StackName}'
+
+  # -------- ALB / Target Group / Listener --------
+  ALBDNSName:
+    Description: ALB DNS name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${Environment}-alb-dns-${AWS::StackName}'
+
+  LoadBalancerArn:
+    Description: ALB ARN
+    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
+    Export:
+      Name: !Sub '${Environment}-alb-arn-${AWS::StackName}'
+
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref ApplicationTargetGroup
+    Export:
+      Name: !Sub '${Environment}-tg-arn-${AWS::StackName}'
+
+  ListenerArn:
+    Description: HTTP (80) Listener ARN
+    Value: !Ref ApplicationListener
+    Export:
+      Name: !Sub '${Environment}-listener-arn-${AWS::StackName}'
+
+  # -------- Launch Template / Auto Scaling --------
+  LaunchTemplateId:
+    Description: EC2 Launch Template ID
+    Value: !Ref ApplicationLaunchTemplate
+    Export:
+      Name: !Sub '${Environment}-lt-id-${AWS::StackName}'
+
+  ASGName:
+    Description: Auto Scaling Group name
+    Value: !Ref ApplicationAutoScalingGroup
+    Export:
+      Name: !Sub '${Environment}-asg-name-${AWS::StackName}'
+
+  # -------- Bastion (optional) --------
+  BastionInstanceId:
+    Description: Bastion EC2 instance ID
+    Value: !Ref BastionHost
+    Export:
+      Name: !Sub '${Environment}-bastion-id-${AWS::StackName}'
+
+  # -------- IAM (helpful for tests/audits) --------
+  EC2InstanceRoleName:
+    Description: EC2 instance role name
+    Value: !Ref EC2InstanceRole
+    Export:
+      Name: !Sub '${Environment}-ec2-role-${AWS::StackName}'
+
+  EC2InstanceProfileName:
+    Description: EC2 instance profile name
+    Value: !Ref EC2InstanceProfile
+    Export:
+      Name: !Sub '${Environment}-ec2-prof-${AWS::StackName}'
 ```
 
 ## Key Features and Security Controls

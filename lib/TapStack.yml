@@ -90,6 +90,33 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
+          - Sid: AllowCloudTrailUseOfKey
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub 'arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*'
+          # NEW: allow EC2/EBS to use this key for volumes in this region
+          - Sid: AllowEBSUseOfKey
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub 'ec2.${AWS::Region}.amazonaws.com'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -577,8 +604,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource:
-              'Fn::Sub': '${LoggingS3Bucket.Arn}/*'
+            Resource: !Sub '${LoggingS3Bucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -587,8 +613,6 @@ Resources:
             Principal:
               AWS: 
                 - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-                # ELB service account for ap-southeast-1
-                - 'arn:aws:iam::114774131450:root'
             Action:
               - s3:PutObject
             Resource:
@@ -599,7 +623,8 @@ Resources:
           - Sid: ALBAclCheck
             Effect: Allow
             Principal:
-              AWS: 'arn:aws:iam::114774131450:root'
+              AWS: 
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action:
               - s3:GetBucketAcl
             Resource:
@@ -807,7 +832,6 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref ApplicationKMSKey
               DeleteOnTermination: true
         MetadataOptions:
           HttpEndpoint: enabled
@@ -945,3 +969,188 @@ Outputs:
     Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
     Export:
       Name: !Sub '${Environment}-public-subnets-${AWS::StackName}'
+
+  PrivateSubnetIds:
+    Description: Comma-separated private subnet IDs
+    Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub '${Environment}-private-subnets-${AWS::StackName}'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${Environment}-igw-${AWS::StackName}'
+
+  PublicRouteTableId:
+    Description: Public Route Table ID
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${Environment}-public-rt-${AWS::StackName}'
+
+  PrivateRouteTableIds:
+    Description: Comma-separated Private Route Table IDs
+    Value: !Join [",", [!Ref PrivateRouteTable1, !Ref PrivateRouteTable2]]
+    Export:
+      Name: !Sub '${Environment}-private-rts-${AWS::StackName}'
+
+  NatGatewayIds:
+    Description: Comma-separated NAT Gateway IDs
+    Value: !Join [",", [!Ref NatGateway1, !Ref NatGateway2]]
+    Export:
+      Name: !Sub '${Environment}-nat-gws-${AWS::StackName}'
+
+  # -------- Security Groups --------
+  AlbSGId:
+    Description: ALB Security Group ID
+    Value: !Ref LoadBalancerSecurityGroup
+    Export:
+      Name: !Sub '${Environment}-alb-sg-${AWS::StackName}'
+
+  AppSGId:
+    Description: Application Security Group ID
+    Value: !Ref ApplicationSecurityGroup
+    Export:
+      Name: !Sub '${Environment}-app-sg-${AWS::StackName}'
+
+  BastionSGId:
+    Description: Bastion Security Group ID
+    Value: !Ref BastionSecurityGroup
+    Export:
+      Name: !Sub '${Environment}-bastion-sg-${AWS::StackName}'
+
+  # -------- KMS --------
+  KmsKeyId:
+    Description: Application KMS Key ID
+    Value: !Ref ApplicationKMSKey
+    Export:
+      Name: !Sub '${Environment}-kms-key-id-${AWS::StackName}'
+
+  KmsKeyArn:
+    Description: Application KMS Key ARN
+    Value: !GetAtt ApplicationKMSKey.Arn
+    Export:
+      Name: !Sub '${Environment}-kms-key-arn-${AWS::StackName}'
+
+  KmsAliasName:
+    Description: KMS Alias name
+    Value: !Ref ApplicationKMSKeyAlias
+    Export:
+      Name: !Sub '${Environment}-kms-alias-${AWS::StackName}'
+
+  # -------- S3 --------
+  ApplicationS3BucketName:
+    Description: Application artifacts bucket name
+    Value: !Ref ApplicationS3Bucket
+    Export:
+      Name: !Sub '${Environment}-app-bucket-${AWS::StackName}'
+
+  ApplicationS3BucketArn:
+    Description: Application artifacts bucket ARN
+    Value: !GetAtt ApplicationS3Bucket.Arn
+    Export:
+      Name: !Sub '${Environment}-app-bucket-arn-${AWS::StackName}'
+
+  LoggingS3BucketName:
+    Description: Central logging bucket name
+    Value: !Ref LoggingS3Bucket
+    Export:
+      Name: !Sub '${Environment}-log-bucket-${AWS::StackName}'
+
+  LoggingS3BucketArn:
+    Description: Central logging bucket ARN
+    Value: !GetAtt LoggingS3Bucket.Arn
+    Export:
+      Name: !Sub '${Environment}-log-bucket-arn-${AWS::StackName}'
+
+  # -------- CloudWatch Logs --------
+  ApplicationLogGroupName:
+    Description: EC2/agent application log group
+    Value: !Ref ApplicationLogGroup
+    Export:
+      Name: !Sub '${Environment}-app-lg-${AWS::StackName}'
+
+  S3AccessLogGroupName:
+    Description: S3 access log group
+    Value: !Ref S3AccessLogGroup
+    Export:
+      Name: !Sub '${Environment}-s3-access-lg-${AWS::StackName}'
+
+  VPCFlowLogGroupName:
+    Description: VPC Flow Logs log group
+    Value: !Ref VPCFlowLogGroup
+    Export:
+      Name: !Sub '${Environment}-vpc-flow-lg-${AWS::StackName}'
+
+  # -------- CloudTrail --------
+  CloudTrailName:
+    Description: CloudTrail trail name
+    Value: !Ref ApplicationCloudTrail
+    Condition: IsProdOrStaging
+    Export:
+      Name: !Sub '${Environment}-cloudtrail-name-${AWS::StackName}'
+
+  CloudTrailLogGroupName:
+    Description: CloudTrail CloudWatch log group name
+    Value: !Ref CloudTrailLogGroup
+    Condition: IsProdOrStaging
+    Export:
+      Name: !Sub '${Environment}-cloudtrail-lg-${AWS::StackName}'
+
+  # -------- ALB / Target Group / Listener --------
+  ALBDNSName:
+    Description: ALB DNS name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${Environment}-alb-dns-${AWS::StackName}'
+
+  LoadBalancerArn:
+    Description: ALB ARN
+    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
+    Export:
+      Name: !Sub '${Environment}-alb-arn-${AWS::StackName}'
+
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref ApplicationTargetGroup
+    Export:
+      Name: !Sub '${Environment}-tg-arn-${AWS::StackName}'
+
+  ListenerArn:
+    Description: HTTP (80) Listener ARN
+    Value: !Ref ApplicationListener
+    Export:
+      Name: !Sub '${Environment}-listener-arn-${AWS::StackName}'
+
+  # -------- Launch Template / Auto Scaling --------
+  LaunchTemplateId:
+    Description: EC2 Launch Template ID
+    Value: !Ref ApplicationLaunchTemplate
+    Export:
+      Name: !Sub '${Environment}-lt-id-${AWS::StackName}'
+
+  ASGName:
+    Description: Auto Scaling Group name
+    Value: !Ref ApplicationAutoScalingGroup
+    Export:
+      Name: !Sub '${Environment}-asg-name-${AWS::StackName}'
+
+  # -------- Bastion (optional) --------
+  BastionInstanceId:
+    Description: Bastion EC2 instance ID
+    Value: !Ref BastionHost
+    Export:
+      Name: !Sub '${Environment}-bastion-id-${AWS::StackName}'
+
+  # -------- IAM (helpful for tests/audits) --------
+  EC2InstanceRoleName:
+    Description: EC2 instance role name
+    Value: !Ref EC2InstanceRole
+    Export:
+      Name: !Sub '${Environment}-ec2-role-${AWS::StackName}'
+
+  EC2InstanceProfileName:
+    Description: EC2 instance profile name
+    Value: !Ref EC2InstanceProfile
+    Export:
+      Name: !Sub '${Environment}-ec2-prof-${AWS::StackName}'
