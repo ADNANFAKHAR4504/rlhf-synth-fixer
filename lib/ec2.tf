@@ -1,3 +1,7 @@
+# Add random suffix for unique log group names
+resource "random_id" "log_suffix" {
+  byte_length = 4
+}
 # Use data source to lookup latest Amazon Linux 2 AMI in each region
 
 data "aws_ami" "bastion_primary" {
@@ -89,7 +93,7 @@ resource "aws_flow_log" "bastion_secondary_subnet" {
 
 resource "aws_cloudwatch_log_group" "bastion_primary_subnet" {
   provider = aws.primary
-  name     = "/aws/vpc/flowlogs/bastion-primary-subnet"
+  name     = "/aws/vpc/flowlogs/bastion-primary-subnet-${random_id.log_suffix.hex}"
   retention_in_days = 30
   tags = {
     Name = "${var.name_prefix}-${var.environment}-flowlogs-bastion-primary-subnet"
@@ -98,7 +102,7 @@ resource "aws_cloudwatch_log_group" "bastion_primary_subnet" {
 
 resource "aws_cloudwatch_log_group" "bastion_secondary_subnet" {
   provider = aws.secondary
-  name     = "/aws/vpc/flowlogs/bastion-secondary-subnet"
+  name     = "/aws/vpc/flowlogs/bastion-secondary-subnet-${random_id.log_suffix.hex}"
   retention_in_days = 30
   tags = {
     Name = "${var.name_prefix}-${var.environment}-flowlogs-bastion-secondary-subnet"

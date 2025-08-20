@@ -1,3 +1,7 @@
+# Add random suffix for unique resource names
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
 variable "name_prefix" {
   description = "Prefix for all resource names"
   type        = string
@@ -23,7 +27,7 @@ variable "environment" {
 # Buckets for encrypted data
 resource "aws_s3_bucket" "primary" {
   provider = aws.primary
-  bucket   = "${var.name_prefix}-${var.environment}-primary-s3-bucket"
+  bucket   = "${var.name_prefix}-${var.environment}-primary-s3-bucket-${random_id.bucket_suffix.hex}"
   tags = {
     Project     = "secure-env"
     Environment = var.environment
@@ -34,7 +38,7 @@ resource "aws_s3_bucket" "primary" {
 
 resource "aws_s3_bucket" "secondary" {
   provider = aws.secondary
-  bucket   = "${var.name_prefix}-${var.environment}-secondary-s3-bucket"
+  bucket   = "${var.name_prefix}-${var.environment}-secondary-s3-bucket-${random_id.bucket_suffix.hex}"
   tags = {
     Project     = "secure-env"
     Environment = var.environment
@@ -46,7 +50,7 @@ resource "aws_s3_bucket" "secondary" {
 # If you need a CloudTrail bucket, keep this:
 resource "aws_s3_bucket" "this" {
   provider = aws.primary
-  bucket   = "${var.name_prefix}-${var.environment}-s3-bucket"
+  bucket   = "${var.name_prefix}-${var.environment}-s3-bucket-${random_id.bucket_suffix.hex}"
   tags = {
     Project     = "secure-env"
     Environment = var.environment

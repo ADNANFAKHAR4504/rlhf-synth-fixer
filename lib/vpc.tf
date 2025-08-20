@@ -92,7 +92,7 @@ output "vpc_id_secondary" {
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs_primary" {
   provider = aws.primary
-  name     = "/aws/vpc/flowlogs/primary"
+  name     = "/aws/vpc/flowlogs/primary-${random_id.log_suffix.hex}"
   retention_in_days = 30
   tags = {
     Name = "${var.name_prefix}-${var.environment}-vpc-flowlogs-primary"
@@ -101,7 +101,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs_primary" {
 
 resource "aws_cloudwatch_log_group" "vpc_flow_logs_secondary" {
   provider = aws.secondary
-  name     = "/aws/vpc/flowlogs/secondary"
+  name     = "/aws/vpc/flowlogs/secondary-${random_id.log_suffix.hex}"
   retention_in_days = 30
   tags = {
     Name = "${var.name_prefix}-${var.environment}-vpc-flowlogs-secondary"
