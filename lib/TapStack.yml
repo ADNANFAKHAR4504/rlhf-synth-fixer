@@ -56,8 +56,16 @@ Parameters:
     Description: RDS master username
     NoEcho: true
 
+  CreateGuardDuty:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+  CreateDetector: !Equals [!Ref CreateGuardDuty, "true"]
 
 Mappings:
   RegionMap:
@@ -666,6 +674,7 @@ Resources:
 
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
+    Condition: CreateDetector
     Properties:
       Enable: true
       FindingPublishingFrequency: FIFTEEN_MINUTES
@@ -764,6 +773,7 @@ Outputs:
 
   GuardDutyDetectorId:
     Description: GuardDuty Detector ID
+    Condition: CreateDetector
     Value: !Ref GuardDutyDetector
     Export:
       Name: !Sub '${ProjectName}-${Environment}-guardduty-id'

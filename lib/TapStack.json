@@ -63,6 +63,14 @@
             "Default": "admin",
             "Description": "RDS master username",
             "NoEcho": true
+        },
+        "CreateGuardDuty": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
         }
     },
     "Conditions": {
@@ -76,6 +84,14 @@
                         ""
                     ]
                 }
+            ]
+        },
+        "CreateDetector": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateGuardDuty"
+                },
+                "true"
             ]
         }
     },
@@ -1201,6 +1217,7 @@
         },
         "GuardDutyDetector": {
             "Type": "AWS::GuardDuty::Detector",
+            "Condition": "CreateDetector",
             "Properties": {
                 "Enable": true,
                 "FindingPublishingFrequency": "FIFTEEN_MINUTES",
@@ -1403,6 +1420,7 @@
         },
         "GuardDutyDetectorId": {
             "Description": "GuardDuty Detector ID",
+            "Condition": "CreateDetector",
             "Value": {
                 "Ref": "GuardDutyDetector"
             },
