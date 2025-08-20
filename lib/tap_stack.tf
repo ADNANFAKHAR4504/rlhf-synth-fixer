@@ -27,6 +27,26 @@ resource "aws_kms_key" "tap_key" {
         }
         Action   = "kms:*"
         Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.us-west-2.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:us-west-2:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
       }
     ]
   })
@@ -249,7 +269,7 @@ resource "aws_security_group" "rds" {
 
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  name = "tap-ec2-role"
+  name = "tap-ec2-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -266,7 +286,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
-  name = "tap-ec2-policy"
+  name = "tap-ec2-policy-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -289,7 +309,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "tap-ec2-profile"
+  name = "tap-ec2-profile-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -357,7 +377,7 @@ resource "tls_private_key" "main" {
 }
 
 resource "aws_key_pair" "main" {
-  key_name   = "tap-key"
+  key_name   = "tap-key-${random_id.bucket_suffix.hex}"
   public_key = tls_private_key.main.public_key_openssh
 
   tags = {
@@ -367,7 +387,7 @@ resource "aws_key_pair" "main" {
 
 # Store private key in AWS Systems Manager Parameter Store
 resource "aws_ssm_parameter" "private_key" {
-  name  = "/tap/ec2/private-key"
+  name  = "/tap/ec2/private-key-${random_id.bucket_suffix.hex}"
   type  = "SecureString"
   value = tls_private_key.main.private_key_pem
 
@@ -378,7 +398,7 @@ resource "aws_ssm_parameter" "private_key" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "tap-db-subnet-group"
+  name       = "tap-db-subnet-group-${random_id.bucket_suffix.hex}"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
@@ -388,7 +408,7 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier     = "tap-database"
+  identifier     = "tap-database-${random_id.bucket_suffix.hex}"
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = "db.t3.micro"
@@ -425,7 +445,7 @@ resource "random_password" "db_password" {
 
 # Store DB password in AWS Systems Manager Parameter Store
 resource "aws_ssm_parameter" "db_password" {
-  name  = "/tap/rds/password"
+  name  = "/tap/rds/password-${random_id.bucket_suffix.hex}"
   type  = "SecureString"
   value = random_password.db_password.result
 
@@ -483,13 +503,13 @@ resource "aws_flow_log" "vpc" {
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/flowlogs"
+  name              = "/aws/vpc/flowlogs-${random_id.bucket_suffix.hex}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.tap_key.arn
 }
 
 resource "aws_iam_role" "flow_log" {
-  name = "tap-flow-log-role"
+  name = "tap-flow-log-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -506,7 +526,7 @@ resource "aws_iam_role" "flow_log" {
 }
 
 resource "aws_iam_role_policy" "flow_log" {
-  name = "tap-flow-log-policy"
+  name = "tap-flow-log-policy-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.flow_log.id
 
   policy = jsonencode({
@@ -584,7 +604,7 @@ resource "aws_route53_zone" "private" {
 }
 
 resource "aws_cloudwatch_log_group" "route53_dns" {
-  name              = "/aws/route53/tap.internal"
+  name              = "/aws/route53/tap-internal-${random_id.bucket_suffix.hex}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.tap_key.arn
 }
@@ -658,4 +678,9 @@ output "kms_key_id" {
 output "private_key_ssm_parameter" {
   description = "SSM parameter name for EC2 private key"
   value       = aws_ssm_parameter.private_key.name
+}
+
+output "db_password_ssm_parameter" {
+  description = "SSM parameter name for RDS password"
+  value       = aws_ssm_parameter.db_password.name
 }
