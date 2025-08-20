@@ -109,3 +109,16 @@
 - Removed the `region=region` parameter from the S3 bucket constructor
 - Region is now properly specified only through the provider configuration
 - Updated both the main code and documentation files
+
+### 9. **Duplicate AWS Provider URN Issue**
+
+**Problem**: The deployment was failing with `Duplicate resource URN 'urn:pulumi:TapStackpr1730::TapStack::pulumi:providers:aws::aws-us-east-1'` because multiple AWS providers were being created with the same name.
+
+**Fix**:
+
+- Updated all AWS provider names to be unique by including the resource type:
+  - S3 resources: `aws-s3-{region}`
+  - SNS resources: `aws-sns-{region}`
+  - CloudWatch resources: `aws-cloudwatch-{region}`
+  - CloudTrail resources: `aws-cloudtrail-{region}`
+- This ensures each provider has a unique URN and prevents conflicts
