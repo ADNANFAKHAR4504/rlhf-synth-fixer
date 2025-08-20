@@ -1192,7 +1192,7 @@ resource "aws_config_config_rule" "s3_bucket_public_access_prohibited" {
 
   source {
     owner             = "AWS"
-    source_identifier = "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
+    source_identifier = "S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED"
   }
 
   # Config rules require a configuration recorder to exist
