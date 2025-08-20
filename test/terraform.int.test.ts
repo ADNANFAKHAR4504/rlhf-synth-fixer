@@ -1,7 +1,7 @@
 // tests/integration/terraform.int.test.ts
 // Integration tests for deployed Terraform infrastructure
 
-import { DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeNetworkAclsCommand, DescribeRouteTablesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeNetworkAclsCommand, DescribeRouteTablesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcAttributeCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -72,23 +72,23 @@ describe('Terraform Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('VPC has DNS support and hostnames enabled', async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.vpc_id],
-        Filters: [
-          {
-            Name: 'enable-dns-support',
-            Values: ['true']
-          },
-          {
-            Name: 'enable-dns-hostnames', 
-            Values: ['true']
-          }
-        ]
+      // Check DNS support
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsSupport'
       });
       
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs).toHaveLength(1);
-      expect(response.Vpcs![0].VpcId).toBe(outputs.vpc_id);
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+      
+      // Check DNS hostnames
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: outputs.vpc_id,
+        Attribute: 'enableDnsHostnames'
+      });
+      
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
     }, 30000);
 
     test('VPC has correct tags', async () => {
