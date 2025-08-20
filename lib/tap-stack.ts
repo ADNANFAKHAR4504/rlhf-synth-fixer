@@ -5,7 +5,6 @@ import * as cloudwatchactions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
@@ -326,103 +325,8 @@ EOF
       displayName: `Tap App Alerts${environmentSuffix ? ` - ${environmentSuffix}` : ''}`,
     });
 
-    // Lambda function for failover automation
-    const failoverLambdaRole = new iam.Role(this, 'FailoverLambdaRole', {
-      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-      ],
-      inlinePolicies: {
-        Route53Access: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'route53:ChangeResourceRecordSets',
-                'route53:GetHealthCheck',
-                'route53:ListResourceRecordSets',
-              ],
-              resources: ['*'],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['rds:PromoteReadReplica', 'rds:DescribeDBInstances'],
-              resources: ['*'],
-            }),
-          ],
-        }),
-      },
-    });
-
-    const failoverLambda = new lambda.Function(this, 'FailoverLambda', {
-      runtime: lambda.Runtime.PYTHON_3_12,
-      handler: 'index.handler',
-      role: failoverLambdaRole,
-      timeout: cdk.Duration.minutes(5),
-      environment: {
-        HOSTED_ZONE_ID: 'Z1234567890', // Replace with your hosted zone ID
-        DOMAIN_NAME: domainName,
-        PRIMARY_REGION: primaryRegion,
-        SECONDARY_REGION: secondaryRegion,
-        CURRENT_REGION: currentRegion,
-        ENVIRONMENT_SUFFIX: environmentSuffix,
-      },
-      code: lambda.Code.fromInline(`
-import json
-import boto3
-import os
-
-def handler(event, context):
-    route53 = boto3.client('route53')
-    rds = boto3.client('rds')
-    
-    hosted_zone_id = os.environ['HOSTED_ZONE_ID']
-    domain_name = os.environ['DOMAIN_NAME']
-    current_region = os.environ['CURRENT_REGION']
-    secondary_region = os.environ['SECONDARY_REGION']
-    environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', '')
-    
-    try:
-        # Only execute failover logic in secondary region
-        if current_region == secondary_region:
-            print(f"Executing failover to {current_region}")
-            
-            # Promote read replica to primary (if applicable)
-            # This would need to be customized based on your RDS setup
-            
-            # Update Route 53 record to point to secondary region
-            # This is a simplified example - you'd need to implement proper record management
-            response = route53.change_resource_record_sets(
-                HostedZoneId=hosted_zone_id,
-                ChangeBatch={
-                    'Changes': [{
-                        'Action': 'UPSERT',
-                        'ResourceRecordSet': {
-                            'Name': domain_name,
-                            'Type': 'A',
-                            'SetIdentifier': 'Secondary',
-                            'Failover': 'SECONDARY',
-                            'TTL': 60,
-                            'ResourceRecords': [{'Value': '1.2.3.4'}]  # Replace with actual ALB IP
-                        }
-                    }]
-                }
-            )
-            
-            print(f"Route 53 update response: {response}")
-            
-        return {
-            'statusCode': 200,
-            'body': json.dumps('Failover completed successfully')
-        }
-    except Exception as e:
-        print(f"Error during failover: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps(f'Failover failed: {str(e)}')
-        }
-`),
-    });
+    // Note: Failover Lambda function removed to simplify deployment
+    // In a real multi-region setup, you would implement proper failover automation
 
     // Route 53 Hosted Zone (only create in primary region)
     let hostedZone: route53.IHostedZone | undefined;
@@ -430,15 +334,19 @@ def handler(event, context):
       hostedZone = new route53.HostedZone(this, 'HostedZone', {
         zoneName: domainName,
       });
+    } else {
+      // In secondary region, reference the existing hosted zone from primary region
+      // Note: This requires the primary region to be deployed first
+      hostedZone = route53.HostedZone.fromLookup(this, 'ExistingHostedZone', {
+        domainName: domainName,
+      });
     }
-    // Note: In secondary region, hosted zone lookup is skipped to avoid synthesis errors
-    // In a real deployment, you would need to ensure the hosted zone exists or use a different approach
 
     // Health Check (only in primary region)
     let healthCheck: route53.HealthCheck | undefined;
     if (isPrimaryRegion) {
       healthCheck = new route53.HealthCheck(this, 'HealthCheck', {
-        type: route53.HealthCheckType.HTTPS,
+        type: route53.HealthCheckType.HTTP, // Changed to HTTP since we're using port 80
         resourcePath: '/health',
         fqdn: alb.loadBalancerDnsName,
         port: 80,
@@ -447,16 +355,50 @@ def handler(event, context):
       });
     }
 
-    // Route 53 Records (only create in primary region where hosted zone exists)
+    // Route 53 Records with Failover
     if (hostedZone) {
-      new route53.ARecord(this, 'AliasRecord', {
-        zone: hostedZone,
-        target: route53.RecordTarget.fromAlias(
-          new route53targets.LoadBalancerTarget(alb)
-        ),
-        recordName: domainName,
-        ttl: cdk.Duration.seconds(60),
-      });
+      if (isPrimaryRegion) {
+        // Primary region record with health check
+        new route53.ARecord(this, 'PrimaryRecord', {
+          zone: hostedZone,
+          target: route53.RecordTarget.fromAlias(
+            new route53targets.LoadBalancerTarget(alb)
+          ),
+          recordName: domainName,
+          ttl: cdk.Duration.seconds(60),
+        });
+        
+        // Add health check to the record
+        if (healthCheck) {
+          new route53.CfnRecordSet(this, 'PrimaryRecordSet', {
+            hostedZoneId: hostedZone.hostedZoneId,
+            name: domainName,
+            type: 'A',
+            aliasTarget: {
+              dnsName: alb.loadBalancerDnsName,
+              hostedZoneId: alb.loadBalancerCanonicalHostedZoneId,
+              evaluateTargetHealth: true,
+            },
+            failover: 'PRIMARY',
+            healthCheckId: healthCheck.healthCheckId,
+            ttl: '60',
+          });
+        }
+      } else {
+        // Secondary region record (backup)
+        new route53.CfnRecordSet(this, 'SecondaryRecordSet', {
+          hostedZoneId: hostedZone.hostedZoneId,
+          name: domainName,
+          type: 'A',
+          aliasTarget: {
+            dnsName: alb.loadBalancerDnsName,
+            hostedZoneId: alb.loadBalancerCanonicalHostedZoneId,
+            evaluateTargetHealth: true,
+          },
+          failover: 'SECONDARY',
+          ttl: '60',
+        });
+      }
     }
 
     // CloudWatch Alarms
@@ -523,31 +465,9 @@ def handler(event, context):
       new cloudwatchactions.SnsAction(alertTopic)
     );
 
-    // If this is the secondary region, add Lambda action for failover
-    if (!isPrimaryRegion) {
-      const failoverAlarm = new cloudwatch.Alarm(this, 'FailoverAlarm', {
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/Route53',
-          metricName: 'HealthCheckStatus',
-          dimensionsMap: healthCheck
-            ? {
-                HealthCheckId: healthCheck.healthCheckId,
-              }
-            : {},
-          period: cdk.Duration.minutes(1),
-        }),
-        threshold: 1,
-        evaluationPeriods: 3,
-        comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
-        alarmDescription: 'Primary region health check failed',
-        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
-      });
-
-      failoverAlarm.addAlarmAction(
-        new cloudwatchactions.LambdaAction(failoverLambda)
-      );
-      failoverAlarm.addAlarmAction(new cloudwatchactions.SnsAction(alertTopic));
-    }
+    // Note: Failover alarm logic removed to avoid deployment issues
+    // In a real multi-region setup, you would need to properly configure
+    // cross-region health checks and failover mechanisms
 
     // Apply tags to all resources
     Object.entries(commonTags).forEach(([key, value]) => {
