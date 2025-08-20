@@ -489,7 +489,7 @@ resource "aws_wafv2_web_acl" "api_gateway_waf" {
 
 # Associate WAF with API Gateway
 resource "aws_wafv2_web_acl_association" "api_gateway_waf_association" {
-  resource_arn = "arn:aws:apigateway:${var.aws_region}:${data.aws_caller_identity.current.account_id}:apis/${aws_apigatewayv2_api.tap_api.id}/stages/${aws_apigatewayv2_stage.tap_api_stage.name}"
+  resource_arn = aws_apigatewayv2_api.tap_api.arn
   web_acl_arn  = aws_wafv2_web_acl.api_gateway_waf.arn
 }
 
