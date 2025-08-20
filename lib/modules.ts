@@ -24,12 +24,14 @@ import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 
 // KMS Module - Creates customer-managed KMS key
 export interface KmsModuleProps {
   project: string;
   environment: string;
   description: string;
+  accountId: string; // Add this
 }
 
 export class KmsModule extends Construct {
@@ -53,7 +55,7 @@ export class KmsModule extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
+              AWS: `arn:aws:iam::${props.accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
@@ -182,7 +184,7 @@ export class CloudTrailModule extends Construct {
         rule: [
           {
             applyServerSideEncryptionByDefault: {
-              kmsMasterKeyId: props.kmsKey.arn, // Changed from kmsKeyId to kmsMasterKeyId
+              kmsMasterKeyId: props.kmsKey.arn,
               sseAlgorithm: 'aws:kms',
             },
             bucketKeyEnabled: true,
@@ -198,6 +200,44 @@ export class CloudTrailModule extends Construct {
       blockPublicPolicy: true,
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
+    });
+    // **ADD THIS: Create bucket policy for CloudTrail**
+    new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
+      bucket: this.logsBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSCloudTrailAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.logsBucket.arn,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': `arn:aws:cloudtrail:*:*:trail/${props.project}-${props.environment}-trail`,
+              },
+            },
+          },
+          {
+            Sid: 'AWSCloudTrailWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logsBucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+                'AWS:SourceArn': `arn:aws:cloudtrail:*:*:trail/${props.project}-${props.environment}-trail`,
+              },
+            },
+          },
+        ],
+      }),
     });
 
     // Create CloudTrail
@@ -535,12 +575,10 @@ export class Ec2Module extends Construct {
       vpcSecurityGroupIds: props.securityGroupIds,
       iamInstanceProfile: props.instanceProfile.name,
       keyName: props.keyName,
-      userData: Buffer.from(
-        `#!/bin/bash
+      userData: `#!/bin/bash
 yum update -y
 yum install -y amazon-cloudwatch-agent
-`
-      ).toString('base64'),
+`,
       tags: {
         Name: `${props.project}-${props.environment}-instance`,
         Project: props.project,

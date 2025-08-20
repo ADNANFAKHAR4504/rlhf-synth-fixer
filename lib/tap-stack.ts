@@ -71,6 +71,7 @@ export class TapStack extends TerraformStack {
       project,
       environment: environmentSuffix,
       description: `KMS key for ${project} ${environmentSuffix} environment`,
+      accountId: current.accountId, // Add this
     });
 
     // Create S3 bucket for application data
