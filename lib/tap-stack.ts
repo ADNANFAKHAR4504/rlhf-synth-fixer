@@ -5,44 +5,15 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 // Environment-specific configuration interface
-interface EnvironmentConfig {
+export interface EnvironmentConfig {
   environment: string;
   vpcCidr: string;
   instanceType: ec2.InstanceType;
-  dbInstanceClass: rds.InstanceClass;
+  dbInstanceClass: ec2.InstanceType;
   dbAllocatedStorage: number;
   customAmiId?: string;
   bucketVersioning: boolean;
 }
-
-// Environment configurations
-const environmentConfigs: Record<string, EnvironmentConfig> = {
-  development: {
-    environment: 'Development',
-    vpcCidr: '10.0.0.0/16',
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-    dbInstanceClass: rds.InstanceClass.BURSTABLE3,
-    dbAllocatedStorage: 20,
-    bucketVersioning: false,
-  },
-  staging: {
-    environment: 'Staging',
-    vpcCidr: '10.1.0.0/16',
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
-    dbInstanceClass: rds.InstanceClass.BURSTABLE3,
-    dbAllocatedStorage: 50,
-    bucketVersioning: true,
-  },
-  production: {
-    environment: 'Production',
-    vpcCidr: '10.2.0.0/16',
-    instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
-    dbInstanceClass: rds.InstanceClass.BURSTABLE3,
-    dbAllocatedStorage: 100,
-    customAmiId: 'ami-0abcdef1234567890', // Custom production AMI
-    bucketVersioning: true,
-  },
-};
 
 // ? Import your stacks here
 // import { MyStack } from './my-stack';
@@ -52,11 +23,14 @@ interface TapStackProps extends cdk.StackProps {
 }
 
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props: TapStackProps & { config: EnvironmentConfig }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props: TapStackProps & { config: EnvironmentConfig }
+  ) {
     super(scope, id, props);
 
     // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
@@ -72,7 +46,7 @@ export class TapStack extends cdk.Stack {
 
     // VPC with public and private subnets
     const vpc = new ec2.Vpc(this, 'VPC', {
-      vpcName: `${envPrefix}-webapp-vpc`,
+      vpcName: `${envPrefix}-webapp-vpc-${environmentSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr(config.vpcCidr),
       maxAzs: 2,
       subnetConfiguration: [
@@ -96,7 +70,7 @@ export class TapStack extends cdk.Stack {
 
     // Security Group for Web Servers
     const webSecurityGroup = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
-      securityGroupName: `${envPrefix}-web-sg`,
+      securityGroupName: `${envPrefix}-web-sg-${environmentSuffix}`,
       vpc,
       description: `Security group for ${config.environment} web servers`,
       allowAllOutbound: true,
@@ -121,12 +95,16 @@ export class TapStack extends cdk.Stack {
     );
 
     // Security Group for Database
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      securityGroupName: `${envPrefix}-db-sg`,
-      vpc,
-      description: `Security group for ${config.environment} database`,
-      allowAllOutbound: false,
-    });
+    const dbSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        securityGroupName: `${envPrefix}-db-sg`,
+        vpc,
+        description: `Security group for ${config.environment} database`,
+        allowAllOutbound: false,
+      }
+    );
 
     dbSecurityGroup.addIngressRule(
       webSecurityGroup,
@@ -134,19 +112,15 @@ export class TapStack extends cdk.Stack {
       'Allow MySQL access from web servers'
     );
 
-    // Key Pair for EC2 instances (you'll need to create this manually or import existing)
-    const keyPair = ec2.KeyPair.fromKeyPairName(
-      this,
-      'KeyPair',
-      `${envPrefix}-webapp-keypair`
-    );
+    // Create Key Pair for EC2 instances
+    const keyPair = new ec2.KeyPair(this, 'KeyPair', {
+      keyPairName: `${envPrefix}-keypair-${environmentSuffix}`,
+    });
 
     // AMI Selection - use custom AMI if specified, otherwise use Amazon Linux 2
     const machineImage = config.customAmiId
       ? ec2.MachineImage.genericLinux({ 'us-east-1': config.customAmiId })
-      : ec2.MachineImage.latestAmazonLinux2({
-          generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-        });
+      : ec2.MachineImage.latestAmazonLinux2();
 
     // User Data Script for Web Server Setup
     const userData = ec2.UserData.forLinux();
@@ -160,36 +134,48 @@ export class TapStack extends cdk.Stack {
     );
 
     // Launch Template for Web Servers
-    const launchTemplate = new ec2.LaunchTemplate(this, 'WebServerLaunchTemplate', {
-      launchTemplateName: `${envPrefix}-webapp-template`,
-      instanceType: config.instanceType,
-      machineImage,
-      securityGroup: webSecurityGroup,
-      keyPair,
-      userData,
-      role: this.createEC2Role(),
-    });
+    const launchTemplate = new ec2.LaunchTemplate(
+      this,
+      'WebServerLaunchTemplate',
+      {
+        launchTemplateName: `${envPrefix}-webapp-template-${environmentSuffix}`,
+        instanceType: config.instanceType,
+        machineImage,
+        securityGroup: webSecurityGroup,
+        keyPair,
+        userData,
+        role: this.createEC2Role(),
+      }
+    );
 
     // Auto Scaling Group
-    const autoScalingGroup = new cdk.aws_autoscaling.AutoScalingGroup(this, 'WebServerASG', {
-      autoScalingGroupName: `${envPrefix}-webapp-asg`,
-      vpc,
-      launchTemplate,
-      minCapacity: config.environment === 'Production' ? 2 : 1,
-      maxCapacity: config.environment === 'Production' ? 6 : 3,
-      desiredCapacity: config.environment === 'Production' ? 2 : 1,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-    });
+    const autoScalingGroup = new cdk.aws_autoscaling.AutoScalingGroup(
+      this,
+      'WebServerASG',
+      {
+        autoScalingGroupName: `${envPrefix}-webapp-asg-${environmentSuffix}`,
+        vpc,
+        launchTemplate,
+        minCapacity: config.environment === 'Production' ? 2 : 1,
+        maxCapacity: config.environment === 'Production' ? 6 : 3,
+        desiredCapacity: config.environment === 'Production' ? 2 : 1,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      }
+    );
 
     // Application Load Balancer
-    const alb = new cdk.aws_elasticloadbalancingv2.ApplicationLoadBalancer(this, 'WebAppALB', {
-      loadBalancerName: `${envPrefix}-webapp-alb`,
-      vpc,
-      internetFacing: true,
-      securityGroup: webSecurityGroup,
-    });
+    const alb = new cdk.aws_elasticloadbalancingv2.ApplicationLoadBalancer(
+      this,
+      'WebAppALB',
+      {
+        loadBalancerName: `${envPrefix}-alb-${environmentSuffix}`,
+        vpc,
+        internetFacing: true,
+        securityGroup: webSecurityGroup,
+      }
+    );
 
     const listener = alb.addListener('WebAppListener', {
       port: 80,
@@ -197,16 +183,18 @@ export class TapStack extends cdk.Stack {
     });
 
     listener.addTargets('WebAppTargets', {
-      targetGroupName: `${envPrefix}-webapp-targets`,
+      targetGroupName: `${envPrefix}-targets-${environmentSuffix}`,
       port: 80,
       targets: [autoScalingGroup],
-      healthCheckPath: '/',
-      healthCheckIntervalSecs: 30,
+      healthCheck: {
+        path: '/',
+        interval: cdk.Duration.seconds(30),
+      },
     });
 
     // RDS Subnet Group
     const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
-      subnetGroupName: `${envPrefix}-db-subnet-group`,
+      subnetGroupName: `${envPrefix}-db-subnet-${environmentSuffix}`,
       description: `Database subnet group for ${config.environment}`,
       vpc,
       vpcSubnets: {
@@ -216,7 +204,7 @@ export class TapStack extends cdk.Stack {
 
     // RDS Database Instance
     const database = new rds.DatabaseInstance(this, 'Database', {
-      instanceIdentifier: `${envPrefix}-webapp-db`,
+      instanceIdentifier: `${envPrefix}-db-${environmentSuffix}`,
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
@@ -228,19 +216,20 @@ export class TapStack extends cdk.Stack {
       securityGroups: [dbSecurityGroup],
       databaseName: 'webappdb',
       credentials: rds.Credentials.fromGeneratedSecret('admin', {
-        secretName: `${envPrefix}-webapp-db-credentials`,
+        secretName: `${envPrefix}-db-creds-${environmentSuffix}`,
       }),
-      backupRetention: config.environment === 'Production' ? cdk.Duration.days(7) : cdk.Duration.days(1),
+      backupRetention:
+        config.environment === 'Production'
+          ? cdk.Duration.days(7)
+          : cdk.Duration.days(1),
       deleteAutomatedBackups: config.environment !== 'Production',
       deletionProtection: config.environment === 'Production',
-      removalPolicy: config.environment === 'Production' 
-        ? cdk.RemovalPolicy.RETAIN 
-        : cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // S3 Bucket for application assets
     const assetsBucket = new s3.Bucket(this, 'AssetsBucket', {
-      bucketName: `${envPrefix}-webapp-assets-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `tap-${environmentSuffix}-assets-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       versioned: config.bucketVersioning,
       publicReadAccess: false,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -250,19 +239,21 @@ export class TapStack extends cdk.Stack {
           id: 'DeleteIncompleteMultipartUploads',
           abortIncompleteMultipartUploadAfter: cdk.Duration.days(1),
         },
-        ...(config.environment !== 'Production' ? [{
-          id: 'DeleteOldVersions',
-          noncurrentVersionExpiration: cdk.Duration.days(30),
-        }] : []),
+        ...(config.environment !== 'Production'
+          ? [
+              {
+                id: 'DeleteOldVersions',
+                noncurrentVersionExpiration: cdk.Duration.days(30),
+              },
+            ]
+          : []),
       ],
-      removalPolicy: config.environment === 'Production' 
-        ? cdk.RemovalPolicy.RETAIN 
-        : cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // S3 Bucket for logs
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
-      bucketName: `${envPrefix}-webapp-logs-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `tap-${environmentSuffix}-logs-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       versioned: false,
       publicReadAccess: false,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -270,7 +261,9 @@ export class TapStack extends cdk.Stack {
       lifecycleRules: [
         {
           id: 'DeleteOldLogs',
-          expiration: cdk.Duration.days(config.environment === 'Production' ? 90 : 30),
+          expiration: cdk.Duration.days(
+            config.environment === 'Production' ? 90 : 30
+          ),
         },
       ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -279,9 +272,10 @@ export class TapStack extends cdk.Stack {
     // CloudWatch Log Group
     const logGroup = new cdk.aws_logs.LogGroup(this, 'WebAppLogGroup', {
       logGroupName: `/aws/webapp/${envPrefix}`,
-      retention: config.environment === 'Production' 
-        ? cdk.aws_logs.RetentionDays.ONE_MONTH 
-        : cdk.aws_logs.RetentionDays.ONE_WEEK,
+      retention:
+        config.environment === 'Production'
+          ? cdk.aws_logs.RetentionDays.ONE_MONTH
+          : cdk.aws_logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -289,19 +283,36 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
       description: `Load Balancer DNS for ${config.environment}`,
-      exportName: `${envPrefix}-webapp-alb-dns`,
     });
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
       description: `Database endpoint for ${config.environment}`,
-      exportName: `${envPrefix}-webapp-db-endpoint`,
     });
 
     new cdk.CfnOutput(this, 'AssetsBucketName', {
       value: assetsBucket.bucketName,
       description: `Assets bucket name for ${config.environment}`,
-      exportName: `${envPrefix}-webapp-assets-bucket`,
+    });
+
+    new cdk.CfnOutput(this, 'LogsBucketName', {
+      value: logsBucket.bucketName,
+      description: `Logs bucket name for ${config.environment}`,
+    });
+
+    new cdk.CfnOutput(this, 'VPCId', {
+      value: vpc.vpcId,
+      description: `VPC ID for ${config.environment}`,
+    });
+
+    new cdk.CfnOutput(this, 'KeyPairName', {
+      value: keyPair.keyPairName,
+      description: `Key pair name for ${config.environment}`,
+    });
+
+    new cdk.CfnOutput(this, 'LogGroupName', {
+      value: logGroup.logGroupName,
+      description: `CloudWatch log group name for ${config.environment}`,
     });
   }
 
@@ -310,21 +321,23 @@ export class TapStack extends cdk.Stack {
       roleName: `${this.stackName}-ec2-role`,
       assumedBy: new cdk.aws_iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+        cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
     // Add custom policy for S3 access
-    role.addToPolicy(new cdk.aws_iam.PolicyStatement({
-      effect: cdk.aws_iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:PutObject',
-        's3:DeleteObject',
-      ],
-      resources: [`arn:aws:s3:::*webapp-assets-*/*`],
-    }));
+    role.addToPolicy(
+      new cdk.aws_iam.PolicyStatement({
+        effect: cdk.aws_iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+        resources: ['arn:aws:s3:::*webapp-assets-*/*'],
+      })
+    );
 
     return role;
   }
