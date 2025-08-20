@@ -8,6 +8,7 @@ Metadata:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentSuffix
+          - LatestAmiId
 
 Parameters:
   EnvironmentSuffix:
@@ -17,22 +18,10 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c02fb55956c7d316
-    us-west-1:
-      AMI: ami-0d53d72369335a9d6
-    us-west-2:
-      AMI: ami-06b21ccaeff8cd686
-    eu-west-1:
-      AMI: ami-04b70fa74e45c3917
-    eu-central-1:
-      AMI: ami-0ab1a82de7ca5889c
-    ap-southeast-1:
-      AMI: ami-0df7a207adb9748c7
-    ap-northeast-1:
-      AMI: ami-0d52744d6551d851e
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+    Description: 'Latest Amazon Linux 2023 AMI ID from Systems Manager Parameter Store'
 
 Resources:
   # VPC Configuration
@@ -249,9 +238,92 @@ Resources:
       Roles:
         - !Ref EC2Role
 
+  # IAM Role for S3 Cleanup Lambda
+  S3CleanupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3CleanupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Resource:
+                  - !Sub 'arn:aws:s3:::secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
+                  - !Sub 'arn:aws:s3:::logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*'
+
+  # Lambda Function to Empty S3 Buckets
+  S3CleanupFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'S3Cleanup-${EnvironmentSuffix}'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt S3CleanupRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import cfnresponse
+          
+          def handler(event, context):
+              try:
+                  s3 = boto3.client('s3')
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  
+                  if event['RequestType'] == 'Delete':
+                      # List and delete all object versions
+                      paginator = s3.get_paginator('list_object_versions')
+                      for page in paginator.paginate(Bucket=bucket_name):
+                          delete_objects = []
+                          
+                          # Add all versions to delete list
+                          for obj in page.get('Versions', []):
+                              delete_objects.append({
+                                  'Key': obj['Key'],
+                                  'VersionId': obj['VersionId']
+                              })
+                          
+                          # Add all delete markers to delete list
+                          for marker in page.get('DeleteMarkers', []):
+                              delete_objects.append({
+                                  'Key': marker['Key'],
+                                  'VersionId': marker['VersionId']
+                              })
+                          
+                          # Delete objects in batches
+                          if delete_objects:
+                              s3.delete_objects(
+                                  Bucket=bucket_name,
+                                  Delete={'Objects': delete_objects}
+                              )
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {e}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
   # S3 Bucket with Encryption and Versioning
   SecureS3Bucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub 'secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
@@ -271,8 +343,16 @@ Resources:
         DestinationBucketName: !Ref LoggingBucket
         LogFilePrefix: access-logs/
 
+  # Custom Resource to Empty Secure S3 Bucket
+  EmptySecureS3Bucket:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt S3CleanupFunction.Arn
+      BucketName: !Ref SecureS3Bucket
+
   LoggingBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub 'logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
       BucketEncryption:
@@ -284,6 +364,13 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+
+  # Custom Resource to Empty Logging S3 Bucket
+  EmptyLoggingS3Bucket:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt S3CleanupFunction.Arn
+      BucketName: !Ref LoggingBucket
 
   LoggingBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -351,6 +438,7 @@ Resources:
   # RDS Instance with Automated Backups
   SecureRDSInstance:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
     DependsOn: RDSSecret
     Properties:
       DBInstanceIdentifier: !Sub 'secure-db-${EnvironmentSuffix}'
@@ -375,6 +463,7 @@ Resources:
         - general
         - slowquery
       DeletionProtection: false
+      DeleteAutomatedBackups: true
 
   # Secrets Manager for RDS Password
   RDSSecret:
@@ -614,7 +703,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: !Ref LatestAmiId
       InstanceType: t3.micro
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:

@@ -9,7 +9,8 @@
                         "default": "Environment Configuration"
                     },
                     "Parameters": [
-                        "EnvironmentSuffix"
+                        "EnvironmentSuffix",
+                        "LatestAmiId"
                     ]
                 }
             ]
@@ -22,31 +23,11 @@
             "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
             "AllowedPattern": "^[a-zA-Z0-9]+$",
             "ConstraintDescription": "Must contain only alphanumeric characters"
-        }
-    },
-    "Mappings": {
-        "RegionMap": {
-            "us-east-1": {
-                "AMI": "ami-0c02fb55956c7d316"
-            },
-            "us-west-1": {
-                "AMI": "ami-0d53d72369335a9d6"
-            },
-            "us-west-2": {
-                "AMI": "ami-06b21ccaeff8cd686"
-            },
-            "eu-west-1": {
-                "AMI": "ami-04b70fa74e45c3917"
-            },
-            "eu-central-1": {
-                "AMI": "ami-0ab1a82de7ca5889c"
-            },
-            "ap-southeast-1": {
-                "AMI": "ami-0df7a207adb9748c7"
-            },
-            "ap-northeast-1": {
-                "AMI": "ami-0d52744d6551d851e"
-            }
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64",
+            "Description": "Latest Amazon Linux 2023 AMI ID from Systems Manager Parameter Store"
         }
     },
     "Resources": {
@@ -433,8 +414,82 @@
                 ]
             }
         },
+        "S3CleanupRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3CleanupPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:DeleteObject",
+                                        "s3:DeleteObjectVersion",
+                                        "s3:ListBucket",
+                                        "s3:ListBucketVersions"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}/*"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3CleanupFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "S3Cleanup-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "S3CleanupRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "Code": {
+                    "ZipFile": "import boto3\nimport json\nimport cfnresponse\n\ndef handler(event, context):\n    try:\n        s3 = boto3.client('s3')\n        bucket_name = event['ResourceProperties']['BucketName']\n        \n        if event['RequestType'] == 'Delete':\n            # List and delete all object versions\n            paginator = s3.get_paginator('list_object_versions')\n            for page in paginator.paginate(Bucket=bucket_name):\n                delete_objects = []\n                \n                # Add all versions to delete list\n                for obj in page.get('Versions', []):\n                    delete_objects.append({\n                        'Key': obj['Key'],\n                        'VersionId': obj['VersionId']\n                    })\n                \n                # Add all delete markers to delete list\n                for marker in page.get('DeleteMarkers', []):\n                    delete_objects.append({\n                        'Key': marker['Key'],\n                        'VersionId': marker['VersionId']\n                    })\n                \n                # Delete objects in batches\n                if delete_objects:\n                    s3.delete_objects(\n                        Bucket=bucket_name,\n                        Delete={'Objects': delete_objects}\n                    )\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n    except Exception as e:\n        print(f\"Error: {e}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})\n"
+                }
+            }
+        },
         "SecureS3Bucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -466,8 +521,23 @@
                 }
             }
         },
+        "EmptySecureS3Bucket": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "S3CleanupFunction",
+                        "Arn"
+                    ]
+                },
+                "BucketName": {
+                    "Ref": "SecureS3Bucket"
+                }
+            }
+        },
         "LoggingBucket": {
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "logging-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -486,6 +556,20 @@
                     "BlockPublicPolicy": true,
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
+                }
+            }
+        },
+        "EmptyLoggingS3Bucket": {
+            "Type": "AWS::CloudFormation::CustomResource",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "S3CleanupFunction",
+                        "Arn"
+                    ]
+                },
+                "BucketName": {
+                    "Ref": "LoggingBucket"
                 }
             }
         },
@@ -617,6 +701,7 @@
         },
         "SecureRDSInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
             "DependsOn": "RDSSecret",
             "Properties": {
                 "DBInstanceIdentifier": {
@@ -650,7 +735,8 @@
                     "general",
                     "slowquery"
                 ],
-                "DeletionProtection": false
+                "DeletionProtection": false,
+                "DeleteAutomatedBackups": true
             }
         },
         "RDSSecret": {
@@ -1031,13 +1117,7 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AMI"
-                    ]
+                    "Ref": "LatestAmiId"
                 },
                 "InstanceType": "t3.micro",
                 "SubnetId": {

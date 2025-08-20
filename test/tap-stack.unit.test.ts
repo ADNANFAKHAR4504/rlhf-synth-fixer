@@ -308,7 +308,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(instance).toBeDefined();
       expect(instance.Type).toBe('AWS::EC2::Instance');
       expect(instance.Properties.InstanceType).toBe('t3.micro');
-      expect(instance.Properties.ImageId).toEqual({'Fn::FindInMap': ['RegionMap', {'Ref': 'AWS::Region'}, 'AMI']});
+      expect(instance.Properties.ImageId).toEqual({'Ref': 'LatestAmiId'});
     });
   });
 
