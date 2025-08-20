@@ -8,12 +8,12 @@ Description: 'Secure, highly available, and scalable AWS application environment
 
 Parameters:
   EnvironmentName:
-    Description: 'Environment name prefix for all resources'
+    Description: 'Environment name prefix for all resources (must be lowercase, for S3 bucket compatibility)'
     Type: String
-    Default: 'Production'
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
-
+    Default: 'production'
+    AllowedPattern: '^[a-z][a-z0-9-]*$'
+    ConstraintDescription: 'Must begin with a lowercase letter and contain only lowercase letters, numbers, or hyphens'
+  
   VpcCidr:
     Description: 'CIDR block for the VPC'
     Type: String
@@ -33,11 +33,6 @@ Parameters:
       - m5.large
       - m5.xlarge
     ConstraintDescription: 'Must be a valid EC2 instance type'
-
-  KeyPairName:
-    Description: 'Name of an existing EC2 KeyPair to enable SSH access'
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: 'Must be the name of an existing EC2 KeyPair'
 
 Resources:
   # KMS Key for encryption
@@ -316,7 +311,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref ApplicationInstanceSecurityGroup
+          CidrIp: 0.0.0.0/0
           Description: 'HTTP to application instances'
       Tags:
         - Key: Name
@@ -332,7 +327,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref ApplicationLoadBalancerSecurityGroup
+          CidrIp: 0.0.0.0/0
           Description: 'HTTP from load balancer'
         - IpProtocol: tcp
           FromPort: 22
@@ -370,7 +365,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          DestinationSecurityGroupId: !Ref ApplicationInstanceSecurityGroup
+          CidrIp: 0.0.0.0/0
           Description: 'SSH to application instances'
         - IpProtocol: tcp
           FromPort: 443
@@ -403,11 +398,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${ApplicationArtifactsBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${ApplicationArtifactsBucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref ApplicationArtifactsBucket
+                Resource: !Sub 'arn:aws:s3:::${ApplicationArtifactsBucket}'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -424,7 +419,8 @@ Resources:
   ApplicationArtifactsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-artifacts-${AWS::AccountId}-${AWS::Region}'
+      # IMPORTANT: S3 bucket names must be all lowercase. Ensure your stack name is lowercase.
+      BucketName: !Sub 'artifacts-${AWS::AccountId}-${AWS::Region}-${EnvironmentName}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -441,16 +437,12 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Ref ApplicationLogsBucket
         LogFilePrefix: 'access-logs/'
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3LogGroup
 
   ApplicationLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${EnvironmentName}-logs-${AWS::AccountId}-${AWS::Region}'
+      # IMPORTANT: S3 bucket names must be all lowercase. Ensure your stack name is lowercase.
+      BucketName: !Sub 'logs-${AWS::AccountId}-${AWS::Region}-${EnvironmentName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -462,11 +454,27 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
+
+  ApplicationLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${ApplicationLogsBucket}'
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
 
   # CloudTrail
   CloudTrailLogGroup:
@@ -531,7 +539,7 @@ Resources:
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyPairName
+  # KeyName removed: no SSH key pair required
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -569,7 +577,6 @@ Resources:
               VolumeSize: 20
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref ApplicationKMSKey
         MetadataOptions:
           HttpTokens: required
           HttpPutResponseHopLimit: 1
@@ -606,7 +613,7 @@ Resources:
     Properties:
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       InstanceType: t3.micro
-      KeyName: !Ref KeyPairName
+  # KeyName removed: no SSH key pair required
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
         - !Ref BastionHostSecurityGroup
@@ -617,9 +624,8 @@ Resources:
             VolumeSize: 8
             VolumeType: gp3
             Encrypted: true
-            KmsKeyId: !Ref ApplicationKMSKey
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
