@@ -715,19 +715,21 @@ EOF
       `${environmentSuffix}-alb-logs-bucket-policy`,
       {
         bucket: albLogsBucket.id,
-        policy: albLogsBucket.bucket.apply(bucketName => JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                AWS: 'arn:aws:iam::718504428378:root', // ALB service account for ap-south-1
+        policy: albLogsBucket.bucket.apply(bucketName =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  AWS: 'arn:aws:iam::718504428378:root', // ALB service account for ap-south-1
+                },
+                Action: 's3:PutObject',
+                Resource: `arn:aws:s3:::${bucketName}/*`,
               },
-              Action: 's3:PutObject',
-              Resource: `arn:aws:s3:::${bucketName}/*`,
-            },
-          ],
-        })),
+            ],
+          })
+        ),
       },
       { provider, parent: this }
     );
@@ -801,7 +803,15 @@ EOF
         defaultCacheBehavior: {
           targetOriginId: `alb-origin-${environmentSuffix}`,
           viewerProtocolPolicy: 'redirect-to-https', // Clients always use HTTPS
-          allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'PATCH', 'POST', 'DELETE'],
+          allowedMethods: [
+            'GET',
+            'HEAD',
+            'OPTIONS',
+            'PUT',
+            'PATCH',
+            'POST',
+            'DELETE',
+          ],
           cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
           forwardedValues: {
             queryString: true,
@@ -1180,7 +1190,7 @@ EOF
       vpcId: this.vpcId,
       rdsEndpoint: this.rdsEndpoint,
       autoScalingGroupName: this.autoScalingGroupName,
-      cloudFrontDomain: this.cloudFrontDomain
+      cloudFrontDomain: this.cloudFrontDomain,
     });
   }
 }

@@ -47,3 +47,4 @@ export const albDnsName = stack.albDnsName;
 export const vpcId = stack.vpcId;
 export const rdsEndpoint = stack.rdsEndpoint;
 export const autoScalingGroupName = stack.autoScalingGroupName;
+export const cloudFrontDomain = stack.cloudFrontDomain;

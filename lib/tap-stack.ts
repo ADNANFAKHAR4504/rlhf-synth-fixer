@@ -53,6 +53,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly cloudFrontDomain: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -101,6 +102,7 @@ export class TapStack extends pulumi.ComponentResource {
     this.rdsEndpoint = scalableWebAppInfrastructure.rdsEndpoint;
     this.autoScalingGroupName =
       scalableWebAppInfrastructure.autoScalingGroupName;
+    this.cloudFrontDomain = scalableWebAppInfrastructure.cloudFrontDomain;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -109,6 +111,7 @@ export class TapStack extends pulumi.ComponentResource {
       vpcId: this.vpcId,
       rdsEndpoint: this.rdsEndpoint,
       autoScalingGroupName: this.autoScalingGroupName,
+      cloudFrontDomain: this.cloudFrontDomain,
     });
   }
 }
