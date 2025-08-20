@@ -1,590 +1,570 @@
-### Below is the Model response
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'IaC - AWS Nova Model Breaking - Multi-Region, Multi-Environment Infrastructure'
+Description: 'Fully automated CI/CD pipeline with CodePipeline, CodeBuild, Lambda, and S3 integration'
 
-# ============================================================================
-# PARAMETERS SECTION
-# ============================================================================
 Parameters:
-  Environment:
-    Type: String
-    Default: development
-    AllowedValues:
-      - development
-      - testing
-      - production
-    Description: 'Target environment for deployment'
-    
   ProjectName:
     Type: String
-    Default: 'IaC-AWS-Nova-Model-Breaking'
-    Description: 'Project name for resource tagging'
+    Default: 'my-cicd-project'
+    Description: 'Name of the project - used for naming resources'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
 
-# ============================================================================
-# MAPPINGS SECTION - Region and Environment Specific Values
-# ============================================================================
-Mappings:
-  # Region-specific AMI mappings
-  RegionMap:
-    us-west-2:
-      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI
-      AvailabilityZone1: us-west-2a
-      AvailabilityZone2: us-west-2b
-    us-east-1:
-      AMI: ami-0abcdef1234567890  # Amazon Linux 2 AMI
-      AvailabilityZone1: us-east-1a
-      AvailabilityZone2: us-east-1b
-  
-  # Environment-specific instance configurations
-  EnvironmentMap:
-    development:
-      InstanceType: t3.micro
-      MinSize: 1
-      MaxSize: 2
-      DBInstanceClass: db.t3.micro
-      DBAllocatedStorage: 20
-    testing:
-      InstanceType: t3.small
-      MinSize: 1
-      MaxSize: 3
-      DBInstanceClass: db.t3.small
-      DBAllocatedStorage: 50
-    production:
-      InstanceType: t3.medium
-      MinSize: 2
-      MaxSize: 10
-      DBInstanceClass: db.t3.medium
-      DBAllocatedStorage: 100
+  SourceBucketName:
+    Type: String
+    Default: 'source-code-bucket'
+    Description: 'S3 bucket name for source code storage'
+    AllowedPattern: '^[a-z0-9-]+$'
 
-# ============================================================================
-# CONDITIONS SECTION - Environment-based Logic
-# ============================================================================
-Conditions:
-  IsProduction: !Equals [!Ref Environment, 'production']
-  IsTesting: !Equals [!Ref Environment, 'testing']
-  IsDevelopment: !Equals [!Ref Environment, 'development']
-  IsProductionOrTesting: !Or [!Condition IsProduction, !Condition IsTesting]
+  ArtifactsBucketName:
+    Type: String
+    Default: 'build-artifacts-bucket'
+    Description: 'S3 bucket name for build artifacts'
+    AllowedPattern: '^[a-z0-9-]+$'
 
-# ============================================================================
-# RESOURCES SECTION
-# ============================================================================
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for pipeline notifications'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
 Resources:
+  # ============================================================================
+  # S3 BUCKETS
+  # ============================================================================
   
-  # ========================================
-  # IAM RESOURCES
-  # ========================================
-  
-  # EC2 Instance Role
-  EC2InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub 'EC2Role-${Environment}-${AWS::Region}'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
-      Policies:
-        - PolicyName: S3AccessPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource: !Sub '${S3Bucket}/*'
-      Tags:
-        - Key: Name
-          Value: !Sub 'EC2Role-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-
-  # EC2 Instance Profile
-  EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      InstanceProfileName: !Sub 'EC2Profile-${Environment}-${AWS::Region}'
-      Roles:
-        - !Ref EC2InstanceRole
-
-  # ========================================
-  # VPC AND NETWORKING RESOURCES
-  # ========================================
-  
-  # VPC
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'VPC-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-
-  # Internet Gateway
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-    Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub 'IGW-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Attach Internet Gateway to VPC
-  AttachGateway:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-
-  # Public Subnet 1
-  PublicSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'PublicSubnet1-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Public Subnet 2
-  PublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'PublicSubnet2-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Private Subnet 1
-  PrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone1]
-      Tags:
-        - Key: Name
-          Value: !Sub 'PrivateSubnet1-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Private Subnet 2
-  PrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AvailabilityZone2]
-      Tags:
-        - Key: Name
-          Value: !Sub 'PrivateSubnet2-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Route Table for Public Subnets
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'PublicRouteTable-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Public Route
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  # Associate Public Subnets with Route Table
-  PublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
-
-  # ========================================
-  # SECURITY GROUPS
-  # ========================================
-  
-  # Web Server Security Group
-  WebServerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub 'WebServerSG-${Environment}-${AWS::Region}'
-      GroupDescription: 'Security group for web servers'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTP access from anywhere'
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTPS access from anywhere'
-        - !If
-          - IsProduction
-          - IpProtocol: tcp
-            FromPort: 22
-            ToPort: 22
-            CidrIp: 10.0.0.0/16
-            Description: 'SSH access from VPC only (Production)'
-          - IpProtocol: tcp
-            FromPort: 22
-            ToPort: 22
-            CidrIp: 0.0.0.0/0
-            Description: 'SSH access from anywhere (Non-Production)'
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: 'All outbound traffic'
-      Tags:
-        - Key: Name
-          Value: !Sub 'WebServerSG-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Database Security Group
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub 'DatabaseSG-${Environment}-${AWS::Region}'
-      GroupDescription: 'Security group for RDS database'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: 'MySQL access from web servers'
-      Tags:
-        - Key: Name
-          Value: !Sub 'DatabaseSG-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # ========================================
-  # EC2 INSTANCES
-  # ========================================
-  
-  # Web Server Instance
-  WebServerInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-      InstanceType: !FindInMap [EnvironmentMap, !Ref Environment, InstanceType]
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      SecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-      SubnetId: !Ref PublicSubnet1
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-          echo "<h1>Hello from ${Environment} in ${AWS::Region}</h1>" > /var/www/html/index.html
-      Tags:
-        - Key: Name
-          Value: !Sub 'WebServer-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-
-  # Elastic IP for Web Server (Production only)
-  WebServerEIP:
-    Type: AWS::EC2::EIP
-    Condition: IsProduction
-    Properties:
-      InstanceId: !Ref WebServerInstance
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'WebServerEIP-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # ========================================
-  # S3 RESOURCES
-  # ========================================
-  
-  # S3 Bucket
-  S3Bucket:
+  # Source code bucket - where application code is uploaded
+  SourceCodeBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'app-bucket-${Environment}-${AWS::Region}-${AWS::AccountId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
+      BucketName: !Sub '${SourceBucketName}-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      NotificationConfiguration:
+        CloudWatchConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            CloudWatchConfiguration:
+              LogGroupName: !Ref S3LogGroup
+
+  # Artifacts bucket - for storing build artifacts and temporary files
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ArtifactsBucketName}-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
-        Status: !If [IsProduction, Enabled, Suspended]
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
       LifecycleConfiguration:
         Rules:
-          - Id: DeleteIncompleteMultipartUploads
+          - Id: DeleteOldArtifacts
             Status: Enabled
-            AbortIncompleteMultipartUpload:
-              DaysAfterInitiation: 7
-          - !If
-            - IsProduction
-            - Id: TransitionToIA
-              Status: Enabled
-              Transitions:
-                - TransitionInDays: 30
-                  StorageClass: STANDARD_IA
-                - TransitionInDays: 90
-                  StorageClass: GLACIER
-            - !Ref 'AWS::NoValue'
-      Tags:
-        - Key: Name
-          Value: !Sub 'AppBucket-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
+            ExpirationInDays: 30
 
-  # S3 Bucket Policy
-  S3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
+  # ============================================================================
+  # CLOUDWATCH LOGS
+  # ============================================================================
+  
+  # Log group for CodeBuild logs
+  CodeBuildLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      Bucket: !Ref S3Bucket
+      LogGroupName: !Sub '/aws/codebuild/${ProjectName}'
+      RetentionInDays: 14
+
+  # Log group for Lambda function logs
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ProjectName}-validation'
+      RetentionInDays: 14
+
+  # Log group for S3 events
+  S3LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/s3/${ProjectName}'
+      RetentionInDays: 7
+
+  # Log group for CodePipeline
+  PipelineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codepipeline/${ProjectName}'
+      RetentionInDays: 14
+
+  # ============================================================================
+  # IAM ROLES AND POLICIES
+  # ============================================================================
+  
+  # CodePipeline Service Role
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-codepipeline-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # S3 permissions for source and artifacts
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketVersioning
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - !Sub '${SourceCodeBucket}/*'
+                  - !Sub '${ArtifactsBucket}/*'
+                  - !GetAtt SourceCodeBucket.Arn
+                  - !GetAtt ArtifactsBucket.Arn
+              # CodeBuild permissions
+              - Effect: Allow
+                Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Resource: !GetAtt CodeBuildProject.Arn
+              # Lambda permissions
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt ValidationLambda.Arn
+              # CloudWatch Logs permissions
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codepipeline/*'
+
+  # CodeBuild Service Role
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-codebuild-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # CloudWatch Logs permissions
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*'
+              # S3 permissions for artifacts
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                Resource:
+                  - !Sub '${SourceCodeBucket}/*'
+                  - !Sub '${ArtifactsBucket}/*'
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaValidationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # CodePipeline permissions to signal success/failure
+              - Effect: Allow
+                Action:
+                  - codepipeline:PutJobSuccessResult
+                  - codepipeline:PutJobFailureResult
+                Resource: '*'
+              # CloudWatch Logs permissions
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*'
+              # S3 permissions to read artifacts
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub '${ArtifactsBucket}/*'
+
+  # ============================================================================
+  # LAMBDA FUNCTION
+  # ============================================================================
+  
+  # Validation Lambda Function
+  ValidationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-validation-function'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      Environment:
+        Variables:
+          PROJECT_NAME: !Ref ProjectName
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import logging
+          import os
+          
+          # Configure logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          
+          def lambda_handler(event, context):
+              """
+              Lambda function to validate deployment
+              This function acts as a quality gate in the CI/CD pipeline
+              """
+              
+              # Initialize CodePipeline client
+              codepipeline = boto3.client('codepipeline')
+              
+              try:
+                  # Extract job details from the event
+                  job_id = event['CodePipeline.job']['id']
+                  input_artifacts = event['CodePipeline.job']['data']['inputArtifacts']
+                  
+                  logger.info(f"Starting validation for job: {job_id}")
+                  logger.info(f"Input artifacts: {input_artifacts}")
+                  
+                  # Perform validation checks
+                  validation_result = perform_validation_checks(input_artifacts)
+                  
+                  if validation_result['success']:
+                      logger.info("Validation successful")
+                      codepipeline.put_job_success_result(jobId=job_id)
+                      return {
+                          'statusCode': 200,
+                          'body': json.dumps('Validation successful')
+                      }
+                  else:
+                      logger.error(f"Validation failed: {validation_result['message']}")
+                      codepipeline.put_job_failure_result(
+                          jobId=job_id,
+                          failureDetails={'message': validation_result['message']}
+                      )
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps(f"Validation failed: {validation_result['message']}")
+                      }
+                      
+              except Exception as e:
+                  logger.error(f"Error in validation function: {str(e)}")
+                  codepipeline.put_job_failure_result(
+                      jobId=job_id,
+                      failureDetails={'message': f'Validation error: {str(e)}'}
+                  )
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps(f'Error: {str(e)}')
+                  }
+          
+          def perform_validation_checks(input_artifacts):
+              """
+              Perform actual validation checks
+              This is where you would implement your specific validation logic
+              """
+              try:
+                  # Example validation checks
+                  project_name = os.environ.get('PROJECT_NAME', 'unknown')
+                  
+                  # Check 1: Verify artifacts exist
+                  if not input_artifacts:
+                      return {
+                          'success': False,
+                          'message': 'No input artifacts found'
+                      }
+                  
+                  # Check 2: Basic environment validation
+                  logger.info(f"Validating deployment for project: {project_name}")
+                  
+                  # Check 3: Add your custom validation logic here
+                  # For example:
+                  # - Verify configuration files
+                  # - Check environment variables
+                  # - Validate deployment targets
+                  # - Run smoke tests
+                  
+                  logger.info("All validation checks passed")
+                  return {
+                      'success': True,
+                      'message': 'All validation checks passed'
+                  }
+                  
+              except Exception as e:
+                  return {
+                      'success': False,
+                      'message': f'Validation check failed: {str(e)}'
+                  }
+
+  # ============================================================================
+  # CODEBUILD PROJECT
+  # ============================================================================
+  
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${ProjectName}-build'
+      Description: 'Build project for CI/CD pipeline'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        EnvironmentVariables:
+          - Name: PROJECT_NAME
+            Value: !Ref ProjectName
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo "Pre-build phase started on `date`"
+                - echo "Project Name: $PROJECT_NAME"
+                - echo "AWS Region: $AWS_DEFAULT_REGION"
+                - echo "AWS Account ID: $AWS_ACCOUNT_ID"
+            build:
+              commands:
+                - echo "Build phase started on `date`"
+                - echo "Compiling the source code..."
+                # Add your build commands here
+                # For example:
+                # - npm install (for Node.js projects)
+                # - mvn compile (for Java projects)
+                # - pip install -r requirements.txt (for Python projects)
+                - echo "Running tests..."
+                # Add your test commands here
+                # For example:
+                # - npm test
+                # - mvn test
+                # - python -m pytest
+                - echo "Packaging application..."
+                # Add your packaging commands here
+            post_build:
+              commands:
+                - echo "Post-build phase started on `date`"
+                - echo "Build completed successfully"
+          artifacts:
+            files:
+              - '**/*'
+            name: !Sub '${ProjectName}-$(date +%Y-%m-%d)'
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref CodeBuildLogGroup
+
+  # ============================================================================
+  # SNS TOPIC FOR NOTIFICATIONS
+  # ============================================================================
+  
+  PipelineNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-pipeline-notifications'
+      DisplayName: 'CI/CD Pipeline Notifications'
+
+  PipelineNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref PipelineNotificationTopic
+      Endpoint: !Ref NotificationEmail
+
+  # ============================================================================
+  # CODEPIPELINE
+  # ============================================================================
+  
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub '${ProjectName}-pipeline'
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactsBucket
+      Stages:
+        # Source Stage
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: S3
+                Version: '1'
+              Configuration:
+                S3Bucket: !Ref SourceCodeBucket
+                S3ObjectKey: source.zip
+                PollForSourceChanges: true
+              OutputArtifacts:
+                - Name: SourceOutput
+        
+        # Build Stage
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+        
+        # Validation Stage
+        - Name: Validation
+          Actions:
+            - Name: ValidationAction
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: '1'
+              Configuration:
+                FunctionName: !Ref ValidationLambda
+              InputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+
+  # ============================================================================
+  # CLOUDWATCH EVENTS FOR PIPELINE MONITORING
+  # ============================================================================
+  
+  PipelineEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-pipeline-events'
+      Description: 'Capture pipeline state changes'
+      EventPattern:
+        source:
+          - aws.codepipeline
+        detail-type:
+          - CodePipeline Pipeline Execution State Change
+          - CodePipeline Stage Execution State Change
+        detail:
+          pipeline:
+            - !Ref CodePipeline
+      State: ENABLED
+      Targets:
+        - Arn: !Ref PipelineNotificationTopic
+          Id: PipelineNotificationTarget
+
+  # Permission for EventBridge to publish to SNS
+  PipelineEventRulePermission:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref PipelineNotificationTopic
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub '${S3Bucket}/*'
-              - !Ref S3Bucket
-            Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
-
-  # ========================================
-  # RDS RESOURCES
-  # ========================================
-  
-  # DB Subnet Group
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupName: !Sub 'db-subnet-group-${Environment}-${AWS::Region}'
-      DBSubnetGroupDescription: 'Subnet group for RDS database'
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub 'DBSubnetGroup-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # DB Parameter Group
-  DBParameterGroup:
-    Type: AWS::RDS::DBParameterGroup
-    Properties:
-      DBParameterGroupName: !Sub 'db-params-${Environment}-${AWS::Region}'
-      Description: 'Parameter group for MySQL database'
-      Family: mysql8.0
-      Parameters:
-        innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}'
-      Tags:
-        - Key: Name
-          Value: !Sub 'DBParameterGroup-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # RDS Database Instance
-  DatabaseInstance:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: !If [IsProduction, Snapshot, Delete]
-    Properties:
-      DBInstanceIdentifier: !Sub 'database-${Environment}-${AWS::Region}'
-      DBInstanceClass: !FindInMap [EnvironmentMap, !Ref Environment, DBInstanceClass]
-      Engine: mysql
-      EngineVersion: '8.0.35'
-      AllocatedStorage: !FindInMap [EnvironmentMap, !Ref Environment, DBAllocatedStorage]
-      StorageType: gp2
-      StorageEncrypted: !If [IsProduction, true, false]
-      MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:rds-password-${Environment}:SecretString:password}}'
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      DBParameterGroupName: !Ref DBParameterGroup
-      BackupRetentionPeriod: !If [IsProduction, 30, 7]
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      MultiAZ: !If [IsProduction, true, false]
-      PubliclyAccessible: false
-      DeletionProtection: !If [IsProduction, true, false]
-      Tags:
-        - Key: Name
-          Value: !Sub 'Database-${Environment}-${AWS::Region}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref PipelineNotificationTopic
 
 # ============================================================================
-# OUTPUTS SECTION
+# OUTPUTS
 # ============================================================================
+
 Outputs:
-  VPCId:
-    Description: 'VPC ID'
-    Value: !Ref VPC
+  PipelineName:
+    Description: 'Name of the created CodePipeline'
+    Value: !Ref CodePipeline
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub '${AWS::StackName}-PipelineName'
 
-  WebServerInstanceId:
-    Description: 'Web Server Instance ID'
-    Value: !Ref WebServerInstance
+  SourceBucketName:
+    Description: 'Name of the S3 bucket for source code'
+    Value: !Ref SourceCodeBucket
     Export:
-      Name: !Sub '${AWS::StackName}-WebServer-ID'
+      Name: !Sub '${AWS::StackName}-SourceBucket'
 
-  WebServerPublicIP:
-    Description: 'Web Server Public IP'
-    Value: !GetAtt WebServerInstance.PublicIp
+  ArtifactsBucketName:
+    Description: 'Name of the S3 bucket for build artifacts'
+    Value: !Ref ArtifactsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-WebServer-PublicIP'
+      Name: !Sub '${AWS::StackName}-ArtifactsBucket'
 
-  WebServerElasticIP:
-    Condition: IsProduction
-    Description: 'Web Server Elastic IP (Production only)'
-    Value: !Ref WebServerEIP
+  CodeBuildProjectName:
+    Description: 'Name of the CodeBuild project'
+    Value: !Ref CodeBuildProject
     Export:
-      Name: !Sub '${AWS::StackName}-WebServer-EIP'
+      Name: !Sub '${AWS::StackName}-CodeBuildProject'
 
-  S3BucketName:
-    Description: 'S3 Bucket Name'
-    Value: !Ref S3Bucket
+  ValidationLambdaName:
+    Description: 'Name of the validation Lambda function'
+    Value: !Ref ValidationLambda
     Export:
-      Name: !Sub '${AWS::StackName}-S3-Bucket'
+      Name: !Sub '${AWS::StackName}-ValidationLambda'
 
-  DatabaseEndpoint:
-    Description: 'RDS Database Endpoint'
-    Value: !GetAtt DatabaseInstance.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-Database-Endpoint'
+  PipelineConsoleURL:
+    Description: 'URL to view the pipeline in AWS Console'
+    Value: !Sub 'https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${CodePipeline}/view'
 
-  DatabasePort:
-    Description: 'RDS Database Port'
-    Value: !GetAtt DatabaseInstance.Endpoint.Port
-    Export:
-      Name: !Sub '${AWS::StackName}-Database-Port'
-
-
-Key Features Implemented
-1. Naming Convention Compliance
-All resources follow the <Component>-<Environment>-<Region> pattern
-Dynamic naming using CloudFormation functions like !Sub
-2. Multi-Region Support
-RegionMap mapping handles region-specific values (AMIs, AZs)
-Template works seamlessly in both us-west-2 and us-east-1
-3. Multi-Environment Logic
-Environment-specific configurations through EnvironmentMap
-Conditional resource creation and configuration
-Different security postures per environment
-4. Security Preservation
-All security configurations are parameterized but preserved
-IAM roles, policies, and security groups maintain original permissions
-S3 bucket policies and RDS security settings are intact
-5. Production-Specific Features
-Elastic IP only in production
-Enhanced backup retention for RDS
-Storage encryption and deletion protection
-Multi-AZ deployment for high availability
-Deployment Instructions
-Prerequisites
-# Ensure AWS CLI is configured
-aws configure list
-
-# Validate template syntax
-aws cloudformation validate-template --template-body file://template.yaml
-Deployment Commands
-Development Environment:
-
-aws cloudformation deploy \
-  --template-file template.yaml \
-  --stack-name iac-nova-dev-us-west-2 \
-  --parameter-overrides Environment=development \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-west-2
-Testing Environment:
-
-aws cloudformation deploy \
-  --template-file template.yaml \
-  --stack-name iac-nova-test-us-east-1 \
-  --parameter-overrides Environment=testing \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
-Production Environment:
-
-aws cloudformation deploy \
-  --template-file template.yaml \
-  --stack-name iac-nova-prod-us-west-2 \
-  --parameter-overrides Environment=production \
-  --capabilities CAPABILITY_NAMED_IAM \
-  --region us-west-2
-Migration Checklist
-✅ Format Conversion: JSON to YAML with proper formatting
-✅ Functional Equivalence: All original functionality preserved
-✅ Multi-Region Support: Works in us-west-2 and us-east-1
-✅ Multi-Environment Logic: Development, testing, production support
-✅ Naming Convention: <Component>-<Environment>-<Region> pattern
-✅ Security Preservation: All security configurations maintained
-✅ Resource Coverage: IAM, EC2, S3, RDS resources included
-✅ Deployment Ready: Templates ready for immediate deployment
-Next Steps
-Provide your original JSON templates - I'll convert them following this exact pattern
-Review security configurations - Ensure all original security settings are captured
-Test deployment - Validate in development environment first
-Integration testing - Verify existing test scripts work without modification
-Would you like me to convert your specific JSON templates using this framework? Please share your original CloudFormation JSON files, and I'll provide the exact YAML conversions following all your requirements.
-```
+  SourceBucketConsoleURL:
+    Description: 'URL to view the source bucket in AWS Console'
+    Value: !Sub 'https://console.aws.amazon.com/s3/buckets/${SourceCodeBucket}'
