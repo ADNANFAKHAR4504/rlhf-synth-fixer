@@ -1,7 +1,7 @@
 {
   "po_id": "trainr914",
-  "platform": "CloudFormation",
-  "language": "YAML",
+  "platform": "cfn",
+  "language": "yaml",
   "task_type": "Security Configuration as Code",
   "region": "us-east-1",
   "team": "synth",
