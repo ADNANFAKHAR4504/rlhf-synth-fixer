@@ -121,36 +121,6 @@ resource "aws_kms_key" "main" {
           "kms:DescribeKey"
         ]
         Resource = "*"
-      },
-      {
-        Sid    = "Allow ELB Service for Access Logs"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::797873946194:root"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow Delivery Logs Service"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
       }
     ]
   })
@@ -364,10 +334,9 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_assets" {
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.main.arn
-      sse_algorithm     = "aws:kms"
+      sse_algorithm = "AES256"
     }
-    bucket_key_enabled = true
+    bucket_key_enabled = false
   }
 }
 
@@ -447,23 +416,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.webapp_assets.arn}/alb-access-logs/*"
-      },
-      {
-        Effect = "Allow"
-        Principal = {
           AWS = "arn:aws:iam::797873946194:root"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.webapp_assets.arn
-      },
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.webapp_assets.arn
