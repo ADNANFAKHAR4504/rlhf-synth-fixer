@@ -2,19 +2,29 @@
 # S3 Bucket with AES-256 Encryption
 ########################
 
+locals {
+  # Use ENVIRONMENT_SUFFIX from pipeline as PR/env isolation
+  env_suffix = var.environment_suffix != "" ? var.environment_suffix : var.environment
+  bucket_name_full = "${var.bucket_name}-${local.env_suffix}"
+  s3_name_tag = "secure-s3-${local.env_suffix}"
+}
+
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
   tags = {
-    Name        = "secure-vpc-${var.environment}"
-    Environment = var.environment
+    Name        = "secure-vpc-${local.env_suffix}"
+    Environment = local.env_suffix
     ManagedBy   = "terraform"
     Project     = "secure-env"
   }
 }
 
 resource "aws_s3_bucket" "secure_prod" {
-  bucket = "${var.bucket_name}-${var.environment}"
-  tags   = merge(var.bucket_tags, { Environment = var.environment, Name = "secure-s3-${var.environment}" })
+  bucket = local.bucket_name_full
+  tags   = merge(var.bucket_tags, {
+    Environment = local.env_suffix,
+    Name        = local.s3_name_tag
+  })
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "secure_prod_encryption" {
@@ -63,7 +73,7 @@ output "bucket_region" {
 ########################
 
 resource "aws_iam_role" "ec2_role" {
-  name = "secure-ec2-role-${var.environment}"
+  name = "secure-ec2-role-${local.env_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -78,11 +88,11 @@ resource "aws_iam_role" "ec2_role" {
     ]
   })
 
-  tags = merge(var.bucket_tags, { Environment = var.environment })
+  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
-  name        = "secure-cloudwatch-logs-policy-${var.environment}"
+  name        = "secure-cloudwatch-logs-policy-${local.env_suffix}"
   description = "Allow EC2 to write logs to CloudWatch"
 
   policy = jsonencode({
@@ -100,11 +110,11 @@ resource "aws_iam_policy" "cloudwatch_logs_policy" {
     ]
   })
 
-  tags = merge(var.bucket_tags, { Environment = var.environment })
+  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
 resource "aws_iam_policy" "s3_access_policy" {
-  name        = "secure-s3-access-policy-${var.environment}"
+  name        = "secure-s3-access-policy-${local.env_suffix}"
   description = "Allow EC2 to access S3 buckets"
 
   policy = jsonencode({
@@ -124,7 +134,7 @@ resource "aws_iam_policy" "s3_access_policy" {
     ]
   })
 
-  tags = merge(var.bucket_tags, { Environment = var.environment })
+  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
 resource "aws_iam_role_policy_attachment" "cloudwatch_logs_attachment" {
@@ -143,10 +153,10 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "secure-ec2-profile-${var.environment}"
+  name = "secure-ec2-profile-${local.env_suffix}"
   role = aws_iam_role.ec2_role.name
 
-  tags = merge(var.bucket_tags, { Environment = var.environment })
+  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
 output "ec2_role_name" {
@@ -198,6 +208,12 @@ variable "environment" {
   description = "Deployment environment (e.g., dev, prod)"
   type        = string
   default     = "prod"
+}
+
+variable "environment_suffix" {
+  description = "Suffix for PR or ephemeral environment, set by pipeline"
+  type        = string
+  default     = ""
 }
 
 ########################
@@ -261,7 +277,7 @@ resource "aws_network_acl" "secure_prod" {
     to_port    = 0
   }
 
-  tags = merge(var.bucket_tags, { Environment = var.environment })
+  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
 output "network_acl_id" {
@@ -278,9 +294,9 @@ resource "random_password" "rds_password" {
 }
 
 resource "aws_secretsmanager_secret" "rds_password" {
-  name        = "secure-rds-password-${var.environment}"
+  name        = "secure-rds-password-${local.env_suffix}"
   description = "RDS instance password for secure production environment"
-  tags        = merge(var.bucket_tags, { Environment = var.environment })
+  tags        = merge(var.bucket_tags, { Environment = local.env_suffix })
 }
 
 resource "aws_secretsmanager_secret_version" "rds_password_version" {
@@ -301,7 +317,7 @@ output "rds_secret_name" {
 ########################
 
 resource "aws_cloudwatch_dashboard" "secure_prod" {
-  dashboard_name = "secure-dashboard-${var.environment}"
+  dashboard_name = "secure-dashboard-${local.env_suffix}"
   dashboard_body = jsonencode({
     widgets = [
       {
@@ -374,4 +390,4 @@ output "vpc_id" {
 
 output "vpc_cidr_block" {
   value = aws_vpc.main.cidr_block
-} 
+}
