@@ -93,6 +93,36 @@ describe("Terraform Infrastructure - Main Stack (tap_stack.tf)", () => {
     expect(content).toMatch(/source\s*=\s*"\.\/modules\/logging"/);
   });
 
+  test("tap_stack.tf declares EU West 1 infrastructure modules", () => {
+    const content = fs.readFileSync(TAP_STACK_PATH, "utf8");
+    expect(content).toMatch(/module\s+"vpc_eu_west_1"\s*\{/);
+    expect(content).toMatch(/module\s+"iam_eu_west_1"\s*\{/);
+    expect(content).toMatch(/module\s+"compute_eu_west_1"\s*\{/);
+    expect(content).toMatch(/module\s+"database_eu_west_1"\s*\{/);
+    expect(content).toMatch(/module\s+"logging_eu_west_1"\s*\{/);
+  });
+
+  test("tap_stack.tf declares AP Southeast 1 infrastructure modules", () => {
+    const content = fs.readFileSync(TAP_STACK_PATH, "utf8");
+    expect(content).toMatch(/module\s+"vpc_ap_southeast_1"\s*\{/);
+    expect(content).toMatch(/module\s+"iam_ap_southeast_1"\s*\{/);
+    expect(content).toMatch(/module\s+"compute_ap_southeast_1"\s*\{/);
+    expect(content).toMatch(/module\s+"database_ap_southeast_1"\s*\{/);
+    expect(content).toMatch(/module\s+"logging_ap_southeast_1"\s*\{/);
+  });
+
+  test("tap_stack.tf declares VPC peering module", () => {
+    const content = fs.readFileSync(TAP_STACK_PATH, "utf8");
+    expect(content).toMatch(/module\s+"vpc_peering"\s*\{/);
+    expect(content).toMatch(/source\s*=\s*"\.\/modules\/vpc-peering"/);
+  });
+
+  test("tap_stack.tf declares Route 53 module", () => {
+    const content = fs.readFileSync(TAP_STACK_PATH, "utf8");
+    expect(content).toMatch(/module\s+"route53"\s*\{/);
+    expect(content).toMatch(/source\s*=\s*"\.\/modules\/route53"/);
+  });
+
   test("tap_stack.tf has comprehensive outputs section", () => {
     const content = fs.readFileSync(TAP_STACK_PATH, "utf8");
     expect(content).toMatch(/# =============================================================================/);
@@ -453,5 +483,73 @@ describe("Terraform Infrastructure - Best Practices", () => {
     expect(content).toMatch(/output\s+"load_balancer_dns_name"/);
     expect(content).toMatch(/output\s+"database_endpoint"/);
     expect(content).toMatch(/output\s+"infrastructure_summary"/);
+  });
+});
+
+describe("Terraform Infrastructure - VPC Peering Module", () => {
+  const VPC_PEERING_MODULE_PATH = path.resolve(__dirname, "../lib/modules/vpc-peering");
+
+  test("VPC peering module files exist", () => {
+    expect(fs.existsSync(path.join(VPC_PEERING_MODULE_PATH, "main.tf"))).toBe(true);
+    expect(fs.existsSync(path.join(VPC_PEERING_MODULE_PATH, "variables.tf"))).toBe(true);
+    expect(fs.existsSync(path.join(VPC_PEERING_MODULE_PATH, "outputs.tf"))).toBe(true);
+    expect(fs.existsSync(path.join(VPC_PEERING_MODULE_PATH, "versions.tf"))).toBe(true);
+  });
+
+  test("VPC peering module variables are properly defined", () => {
+    const variablesContent = fs.readFileSync(path.join(VPC_PEERING_MODULE_PATH, "variables.tf"), "utf8");
+    expect(variablesContent).toMatch(/variable\s+"vpc_us_east_1_id"/);
+    expect(variablesContent).toMatch(/variable\s+"vpc_eu_west_1_id"/);
+    expect(variablesContent).toMatch(/variable\s+"vpc_ap_southeast_1_id"/);
+    expect(variablesContent).toMatch(/variable\s+"environment"/);
+    expect(variablesContent).toMatch(/variable\s+"common_tags"/);
+  });
+
+  test("VPC peering module creates peering connections", () => {
+    const mainContent = fs.readFileSync(path.join(VPC_PEERING_MODULE_PATH, "main.tf"), "utf8");
+    expect(mainContent).toMatch(/resource\s+"aws_vpc_peering_connection"/);
+    expect(mainContent).toMatch(/resource\s+"aws_vpc_peering_connection_accepter"/);
+  });
+
+  test("VPC peering module creates peering connections and accepters", () => {
+    const mainContent = fs.readFileSync(path.join(VPC_PEERING_MODULE_PATH, "main.tf"), "utf8");
+    expect(mainContent).toMatch(/resource\s+"aws_vpc_peering_connection"/);
+    expect(mainContent).toMatch(/resource\s+"aws_vpc_peering_connection_accepter"/);
+  });
+});
+
+describe("Terraform Infrastructure - Route 53 Module", () => {
+  const ROUTE53_MODULE_PATH = path.resolve(__dirname, "../lib/modules/route53");
+
+  test("Route 53 module files exist", () => {
+    expect(fs.existsSync(path.join(ROUTE53_MODULE_PATH, "main.tf"))).toBe(true);
+    expect(fs.existsSync(path.join(ROUTE53_MODULE_PATH, "variables.tf"))).toBe(true);
+    expect(fs.existsSync(path.join(ROUTE53_MODULE_PATH, "outputs.tf"))).toBe(true);
+    expect(fs.existsSync(path.join(ROUTE53_MODULE_PATH, "versions.tf"))).toBe(true);
+  });
+
+  test("Route 53 module variables are properly defined", () => {
+    const variablesContent = fs.readFileSync(path.join(ROUTE53_MODULE_PATH, "variables.tf"), "utf8");
+    expect(variablesContent).toMatch(/variable\s+"domain_name"/);
+    expect(variablesContent).toMatch(/variable\s+"environment"/);
+    expect(variablesContent).toMatch(/variable\s+"common_tags"/);
+    expect(variablesContent).toMatch(/variable\s+"us_east_1_lb_dns"/);
+    expect(variablesContent).toMatch(/variable\s+"eu_west_1_lb_dns"/);
+    expect(variablesContent).toMatch(/variable\s+"ap_southeast_1_lb_dns"/);
+  });
+
+  test("Route 53 module creates hosted zone", () => {
+    const mainContent = fs.readFileSync(path.join(ROUTE53_MODULE_PATH, "main.tf"), "utf8");
+    expect(mainContent).toMatch(/resource\s+"aws_route53_zone"/);
+  });
+
+  test("Route 53 module creates health checks", () => {
+    const mainContent = fs.readFileSync(path.join(ROUTE53_MODULE_PATH, "main.tf"), "utf8");
+    expect(mainContent).toMatch(/resource\s+"aws_route53_health_check"/);
+  });
+
+  test("Route 53 module creates DNS records", () => {
+    const mainContent = fs.readFileSync(path.join(ROUTE53_MODULE_PATH, "main.tf"), "utf8");
+    expect(mainContent).toMatch(/resource\s+"aws_route53_record"/);
   });
 });

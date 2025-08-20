@@ -111,6 +111,184 @@ module "logging_us_east_1" {
   common_tags = local.common_tags
 }
 
+# EU West 1 Infrastructure
+module "vpc_eu_west_1" {
+  source = "./modules/vpc"
+  providers = {
+    aws = aws.eu_west_1
+  }
+
+  vpc_cidr    = local.regions.eu_west_1.cidr
+  region      = local.regions.eu_west_1.name
+  environment = local.environment
+  common_tags = local.common_tags
+}
+
+module "iam_eu_west_1" {
+  source = "./modules/iam"
+  providers = {
+    aws = aws.eu_west_1
+  }
+
+  region      = local.regions.eu_west_1.name
+  environment = local.environment
+  common_tags = local.common_tags
+}
+
+module "compute_eu_west_1" {
+  source = "./modules/compute"
+  providers = {
+    aws = aws.eu_west_1
+  }
+
+  environment           = local.environment
+  region                = local.regions.eu_west_1.name
+  vpc_id                = module.vpc_eu_west_1.vpc_id
+  subnet_ids            = module.vpc_eu_west_1.private_subnet_ids
+  public_subnet_ids     = module.vpc_eu_west_1.public_subnet_ids
+  security_group_id     = module.vpc_eu_west_1.web_security_group_id
+  instance_profile_name = module.iam_eu_west_1.ec2_instance_profile_name
+  common_tags           = local.common_tags
+}
+
+module "database_eu_west_1" {
+  source = "./modules/database"
+  providers = {
+    aws = aws.eu_west_1
+  }
+
+  region      = local.regions.eu_west_1.name
+  environment = local.environment
+  common_tags = local.common_tags
+
+  # Database configuration - Read replica
+  is_primary                 = false
+  private_subnet_ids         = module.vpc_eu_west_1.private_subnet_ids
+  database_security_group_id = module.vpc_eu_west_1.database_security_group_id
+  source_db_identifier       = null
+}
+
+module "logging_eu_west_1" {
+  source = "./modules/logging"
+  providers = {
+    aws = aws.eu_west_1
+  }
+
+  region      = local.regions.eu_west_1.name
+  environment = local.environment
+  common_tags = local.common_tags
+}
+
+# AP Southeast 1 Infrastructure
+module "vpc_ap_southeast_1" {
+  source = "./modules/vpc"
+  providers = {
+    aws = aws.ap_southeast_1
+  }
+
+  vpc_cidr    = local.regions.ap_southeast_1.cidr
+  region      = local.regions.ap_southeast_1.name
+  environment = local.environment
+  common_tags = local.common_tags
+}
+
+module "iam_ap_southeast_1" {
+  source = "./modules/iam"
+  providers = {
+    aws = aws.ap_southeast_1
+  }
+
+  region      = local.regions.ap_southeast_1.name
+  environment = local.environment
+  common_tags = local.common_tags
+}
+
+module "compute_ap_southeast_1" {
+  source = "./modules/compute"
+  providers = {
+    aws = aws.ap_southeast_1
+  }
+
+  environment           = local.environment
+  region                = local.regions.ap_southeast_1.name
+  vpc_id                = module.vpc_ap_southeast_1.vpc_id
+  subnet_ids            = module.vpc_ap_southeast_1.private_subnet_ids
+  public_subnet_ids     = module.vpc_ap_southeast_1.public_subnet_ids
+  security_group_id     = module.vpc_ap_southeast_1.web_security_group_id
+  instance_profile_name = module.iam_ap_southeast_1.ec2_instance_profile_name
+  common_tags           = local.common_tags
+}
+
+module "database_ap_southeast_1" {
+  source = "./modules/database"
+  providers = {
+    aws = aws.ap_southeast_1
+  }
+
+  region      = local.regions.ap_southeast_1.name
+  environment = local.environment
+  common_tags = local.common_tags
+
+  # Database configuration - Read replica
+  is_primary                 = false
+  private_subnet_ids         = module.vpc_ap_southeast_1.private_subnet_ids
+  database_security_group_id = module.vpc_ap_southeast_1.database_security_group_id
+  source_db_identifier       = null
+}
+
+module "logging_ap_southeast_1" {
+  source = "./modules/logging"
+  providers = {
+    aws = aws.ap_southeast_1
+  }
+
+  region      = local.regions.ap_southeast_1.name
+  environment = local.environment
+  common_tags = local.common_tags
+}
+
+# VPC Peering Connections
+module "vpc_peering" {
+  source = "./modules/vpc-peering"
+  providers = {
+    aws.us_east_1      = aws.us_east_1
+    aws.eu_west_1      = aws.eu_west_1
+    aws.ap_southeast_1 = aws.ap_southeast_1
+  }
+
+  vpc_us_east_1_id      = module.vpc_us_east_1.vpc_id
+  vpc_eu_west_1_id      = module.vpc_eu_west_1.vpc_id
+  vpc_ap_southeast_1_id = module.vpc_ap_southeast_1.vpc_id
+
+  vpc_us_east_1_cidr      = local.regions.us_east_1.cidr
+  vpc_eu_west_1_cidr      = local.regions.eu_west_1.cidr
+  vpc_ap_southeast_1_cidr = local.regions.ap_southeast_1.cidr
+
+  environment = local.environment
+  common_tags = local.common_tags
+}
+
+# Route 53 Multi-Regional DNS - Commented out for now due to zone ID issues
+# module "route53" {
+#   source = "./modules/route53"
+#   providers = {
+#     aws.us_east_1      = aws.us_east_1
+#     aws.eu_west_1      = aws.eu_west_1
+#     aws.ap_southeast_1 = aws.ap_southeast_1
+#   }
+#   domain_name = "myapp.com" # Replace with your actual domain
+#   environment = local.environment
+#   common_tags = local.common_tags
+#   # Load balancer endpoints
+#   us_east_1_lb_dns      = module.compute_us_east_1.load_balancer_dns_name
+#   eu_west_1_lb_dns      = module.compute_eu_west_1.load_balancer_dns_name
+#   ap_southeast_1_lb_dns = module.compute_ap_southeast_1.load_balancer_dns_name
+#   # Health check configurations
+#   us_east_1_region      = local.regions.us_east_1.name
+#   eu_west_1_region      = local.regions.eu_west_1.name
+#   ap_southeast_1_region = local.regions.ap_southeast_1.name
+# }
+
 # =============================================================================
 # OUTPUTS
 # =============================================================================
@@ -372,18 +550,105 @@ output "common_tags" {
 }
 
 # Summary Outputs
+# Multi-Regional Infrastructure Outputs
+output "eu_west_1_vpc_id" {
+  description = "VPC ID for EU West 1"
+  value       = module.vpc_eu_west_1.vpc_id
+}
+
+output "ap_southeast_1_vpc_id" {
+  description = "VPC ID for AP Southeast 1"
+  value       = module.vpc_ap_southeast_1.vpc_id
+}
+
+output "eu_west_1_load_balancer_dns" {
+  description = "Load balancer DNS name for EU West 1"
+  value       = module.compute_eu_west_1.load_balancer_dns_name
+}
+
+output "ap_southeast_1_load_balancer_dns" {
+  description = "Load balancer DNS name for AP Southeast 1"
+  value       = module.compute_ap_southeast_1.load_balancer_dns_name
+}
+
+output "eu_west_1_database_endpoint" {
+  description = "Database endpoint for EU West 1 read replica"
+  value       = module.database_eu_west_1.database_endpoint
+}
+
+output "ap_southeast_1_database_endpoint" {
+  description = "Database endpoint for AP Southeast 1 read replica"
+  value       = module.database_ap_southeast_1.database_endpoint
+}
+
+# VPC Peering Outputs
+output "vpc_peering_connections" {
+  description = "All VPC peering connection IDs"
+  value       = module.vpc_peering.all_peering_connections
+}
+
+# Route 53 Outputs - Disabled for now
+# output "route53_hosted_zone_id" {
+#   description = "Route 53 hosted zone ID"
+#   value       = module.route53.hosted_zone_id
+# }
+# 
+# output "route53_name_servers" {
+#   description = "Route 53 name servers"
+#   value       = module.route53.hosted_zone_name_servers
+# }
+# 
+# output "route53_primary_dns" {
+#   description = "Primary DNS record"
+#   value       = module.route53.primary_dns_record
+# }
+# 
+# output "route53_regional_dns" {
+#   description = "Regional DNS records"
+#   value       = module.route53.regional_dns_records
+# }
+
 output "infrastructure_summary" {
   description = "Summary of the deployed infrastructure"
   value = {
-    environment       = local.environment
-    region            = local.regions.us_east_1.name
-    vpc_id            = module.vpc_us_east_1.vpc_id
-    vpc_cidr          = module.vpc_us_east_1.vpc_cidr_block
-    public_subnets    = length(module.vpc_us_east_1.public_subnet_ids)
-    private_subnets   = length(module.vpc_us_east_1.private_subnet_ids)
-    load_balancer_dns = module.compute_us_east_1.load_balancer_dns_name
-    database_endpoint = module.database_us_east_1.database_endpoint
-    autoscaling_group = module.compute_us_east_1.autoscaling_group_name
-    dashboard_name    = module.logging_us_east_1.dashboard_name
+    environment = local.environment
+    regions = {
+      us_east_1 = {
+        region            = local.regions.us_east_1.name
+        vpc_id            = module.vpc_us_east_1.vpc_id
+        vpc_cidr          = module.vpc_us_east_1.vpc_cidr_block
+        load_balancer_dns = module.compute_us_east_1.load_balancer_dns_name
+        database_endpoint = module.database_us_east_1.database_endpoint
+        autoscaling_group = module.compute_us_east_1.autoscaling_group_name
+      }
+      eu_west_1 = {
+        region            = local.regions.eu_west_1.name
+        vpc_id            = module.vpc_eu_west_1.vpc_id
+        vpc_cidr          = module.vpc_eu_west_1.vpc_cidr_block
+        load_balancer_dns = module.compute_eu_west_1.load_balancer_dns_name
+        database_endpoint = module.database_eu_west_1.database_endpoint
+        autoscaling_group = module.compute_eu_west_1.autoscaling_group_name
+      }
+      ap_southeast_1 = {
+        region            = local.regions.ap_southeast_1.name
+        vpc_id            = module.vpc_ap_southeast_1.vpc_id
+        vpc_cidr          = module.vpc_ap_southeast_1.vpc_cidr_block
+        load_balancer_dns = module.compute_ap_southeast_1.load_balancer_dns_name
+        database_endpoint = module.database_ap_southeast_1.database_endpoint
+        autoscaling_group = module.compute_ap_southeast_1.autoscaling_group_name
+      }
+    }
+    vpc_peering = module.vpc_peering.all_peering_connections
+    route53 = {
+      hosted_zone_id = "disabled"
+      domain_name    = "myapp.com"
+      primary_dns    = "disabled"
+      regional_dns = {
+        ap_southeast_1 = "disabled"
+        eu_west_1      = "disabled"
+        us_east_1      = "disabled"
+      }
+    }
+    dashboard_name = module.logging_us_east_1.dashboard_name
   }
 }

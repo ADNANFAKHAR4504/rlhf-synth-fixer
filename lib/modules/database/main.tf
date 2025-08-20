@@ -79,7 +79,7 @@ resource "aws_db_instance" "main" {
 }
 
 resource "aws_db_instance" "read_replica" {
-  count = var.is_primary ? 0 : 1
+  count = var.is_primary ? 0 : (var.source_db_identifier != null ? 1 : 0)
 
   identifier = "${var.environment}-postgres-replica-${var.region}"
 

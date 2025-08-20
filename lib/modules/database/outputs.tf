@@ -35,17 +35,17 @@ output "database_identifier" {
 
 output "read_replica_id" {
   description = "ID of the read replica database instance"
-  value       = var.is_primary ? null : aws_db_instance.read_replica[0].id
+  value       = var.is_primary ? null : (length(aws_db_instance.read_replica) > 0 ? aws_db_instance.read_replica[0].id : null)
 }
 
 output "read_replica_endpoint" {
   description = "Endpoint of the read replica database instance"
-  value       = var.is_primary ? null : aws_db_instance.read_replica[0].endpoint
+  value       = var.is_primary ? null : (length(aws_db_instance.read_replica) > 0 ? aws_db_instance.read_replica[0].endpoint : null)
 }
 
 output "read_replica_identifier" {
   description = "Identifier of the read replica database instance"
-  value       = var.is_primary ? null : aws_db_instance.read_replica[0].identifier
+  value       = var.is_primary ? null : (length(aws_db_instance.read_replica) > 0 ? aws_db_instance.read_replica[0].identifier : null)
 }
 
 output "subnet_group_id" {
