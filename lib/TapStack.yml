@@ -52,6 +52,17 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
             Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-data-${Environment}'
@@ -284,7 +295,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/s3/${ProjectName}-${Environment}'
       RetentionInDays: 30
-      KmsKeyId: !GetAtt DataEncryptionKey.Arn
+      KmsKeyId: !Ref DataEncryptionKey
 
   # CloudWatch Log Group for CloudTrail
   CloudTrailLogGroup:
@@ -292,7 +303,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${ProjectName}-${Environment}'
       RetentionInDays: 90
-      KmsKeyId: !GetAtt DataEncryptionKey.Arn
+      KmsKeyId: !Ref DataEncryptionKey
 
   # IAM Role for CloudTrail
   CloudTrailRole:
