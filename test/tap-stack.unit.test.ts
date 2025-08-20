@@ -109,6 +109,16 @@ describe('TapStack CloudFormation Template (Unit)', () => {
       expect(eip.Properties.Domain).toBe('vpc');
     });
 
+    test('VPCGatewayAttachment should depend on VPC and InternetGateway', () => {
+      const attachment = template.Resources.VPCGatewayAttachment;
+      expect(attachment.DependsOn).toEqual(['VPC', 'InternetGateway']);
+    });
+
+    test('NatGateway should depend on VPCGatewayAttachment', () => {
+      const natGateway = template.Resources.NatGateway;
+      expect(natGateway.DependsOn).toBe('VPCGatewayAttachment');
+    });
+
     test('should configure routes: public via IGW, private via NAT', () => {
       const publicRoute = template.Resources.PublicRoute.Properties;
       expect(publicRoute.DestinationCidrBlock).toBe('0.0.0.0/0');
@@ -163,6 +173,11 @@ describe('TapStack CloudFormation Template (Unit)', () => {
       expect(ingress[0].IpProtocol).toBe('-1');
       expect(ingress[0].SourceSecurityGroupId).toEqual({ Ref: 'PublicSecurityGroup' });
     });
+
+    test('PrivateSecurityGroup should depend on PublicSecurityGroup', () => {
+      const privateSG = template.Resources.PrivateSecurityGroup;
+      expect(privateSG.DependsOn).toBe('PublicSecurityGroup');
+    });
   });
 
   describe('S3 Bucket Security', () => {
@@ -216,6 +231,16 @@ describe('TapStack CloudFormation Template (Unit)', () => {
       expect(instanceProfile.Properties.Roles).toEqual([
         { Ref: 'PrivateInstanceRole' }
       ]);
+    });
+
+    test('PrivateInstanceRole should depend on ArtifactsBucket', () => {
+      const role = template.Resources.PrivateInstanceRole;
+      expect(role.DependsOn).toBe('ArtifactsBucket');
+    });
+
+    test('PrivateInstanceProfile should depend on PrivateInstanceRole', () => {
+      const instanceProfile = template.Resources.PrivateInstanceProfile;
+      expect(instanceProfile.DependsOn).toBe('PrivateInstanceRole');
     });
   });
 
