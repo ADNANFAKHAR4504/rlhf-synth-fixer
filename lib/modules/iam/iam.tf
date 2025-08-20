@@ -1,10 +1,10 @@
 resource "aws_iam_instance_profile" "ec2" {
-  name_prefix = "${var.project_name}-ec2-instance-profile"
+  name_prefix = "${lower(substr(var.project_name, 0, 20))}-ec2-instance-profile"
   role = aws_iam_role.ec2.name
 }
 
 resource "aws_iam_role" "ec2" {
-  name_prefix = "${var.project_name}-ec2-role"
+  name_prefix = "${lower(substr(var.project_name, 0, 20))}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -39,7 +39,7 @@ resource "aws_iam_user_login_profile" "main" {
 }
 
 resource "aws_iam_policy" "mfa_enforcement" {
-  name_prefix = "${var.project_name}-mfa-enforcement-policy"
+  name_prefix = "${lower(substr(var.project_name, 0, 20))}-mfa-enforcement-policy"
   description = "Enforce MFA for all IAM users"
 
   policy = jsonencode({
@@ -134,7 +134,7 @@ resource "aws_iam_role" "flow_log" {
 }
 
 resource "aws_iam_policy" "flow_log" {
-  name_prefix = "${var.project_name}-flow-log-policy"
+  name_prefix = "${lower(substr(var.project_name, 0, 20))}-flow-log-policy"
   description = "Allow VPC Flow Logs to publish to CloudWatch Logs"
 
   policy = jsonencode({
@@ -158,4 +158,30 @@ resource "aws_iam_policy" "flow_log" {
 resource "aws_iam_role_policy_attachment" "flow_log" {
   role       = aws_iam_role.flow_log.name
   policy_arn = aws_iam_policy.flow_log.arn
+}
+
+resource "aws_iam_policy" "s3_access" {
+  name_prefix = "${lower(substr(var.project_name, 0, 20))}-s3-access-policy"
+  description = "Allow access to S3 buckets"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket",
+        ]
+        Effect   = "Allow"
+        Resource = [
+          "arn:aws:s3:::*",
+        ]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "s3_access" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = aws_iam_policy.s3_access.arn
 }
