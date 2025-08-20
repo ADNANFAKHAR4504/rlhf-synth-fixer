@@ -707,8 +707,9 @@ resource "aws_iam_role_policy_attachment" "config" {
 }
 
 resource "aws_iam_role_policy" "config_s3" {
-  name = "${var.project_name}-config-s3-policy"
-  role = aws_iam_role.config.id
+  count = var.use_existing_config_resources ? 0 : 1
+  name  = "${var.project_name}-config-s3-policy"
+  role  = aws_iam_role.config.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -719,7 +720,7 @@ resource "aws_iam_role_policy" "config_s3" {
           "s3:GetBucketAcl",
           "s3:ListBucket"
         ]
-        Resource = aws_s3_bucket.config.arn
+        Resource = aws_s3_bucket.config[0].arn
       },
       {
         Effect = "Allow"
@@ -727,7 +728,7 @@ resource "aws_iam_role_policy" "config_s3" {
           "s3:GetObject",
           "s3:PutObject"
         ]
-        Resource = "${aws_s3_bucket.config.arn}/*"
+        Resource = "${aws_s3_bucket.config[0].arn}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
@@ -1031,7 +1032,11 @@ resource "aws_db_instance" "main" {
 # AWS Config - Requirement 8: Monitor resource compliance
 ########################
 
+# Note: AWS doesn't provide data sources for Config resources
+# We handle existing resources by making creation conditional
+
 resource "aws_s3_bucket" "config" {
+  count         = var.use_existing_config_resources ? 0 : 1
   bucket        = "${var.project_name}-config-${random_string.bucket_suffix.result}"
   force_destroy = var.s3_force_destroy
 
@@ -1041,7 +1046,8 @@ resource "aws_s3_bucket" "config" {
 }
 
 resource "aws_s3_bucket_public_access_block" "config" {
-  bucket = aws_s3_bucket.config.id
+  count  = var.use_existing_config_resources ? 0 : 1
+  bucket = aws_s3_bucket.config[0].id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -1050,7 +1056,8 @@ resource "aws_s3_bucket_public_access_block" "config" {
 }
 
 resource "aws_s3_bucket_versioning" "config" {
-  bucket = aws_s3_bucket.config.id
+  count  = var.use_existing_config_resources ? 0 : 1
+  bucket = aws_s3_bucket.config[0].id
 
   versioning_configuration {
     status = "Enabled"
@@ -1058,7 +1065,8 @@ resource "aws_s3_bucket_versioning" "config" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
-  bucket = aws_s3_bucket.config.id
+  count  = var.use_existing_config_resources ? 0 : 1
+  bucket = aws_s3_bucket.config[0].id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -1068,7 +1076,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
 }
 
 resource "aws_s3_bucket_policy" "config" {
-  bucket = aws_s3_bucket.config.id
+  count  = var.use_existing_config_resources ? 0 : 1
+  bucket = aws_s3_bucket.config[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -1080,7 +1089,7 @@ resource "aws_s3_bucket_policy" "config" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.config.arn
+        Resource = aws_s3_bucket.config[0].arn
         Condition = {
           StringEquals = {
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -1094,7 +1103,7 @@ resource "aws_s3_bucket_policy" "config" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:ListBucket"
-        Resource = aws_s3_bucket.config.arn
+        Resource = aws_s3_bucket.config[0].arn
         Condition = {
           StringEquals = {
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -1108,7 +1117,7 @@ resource "aws_s3_bucket_policy" "config" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.config.arn}/*"
+        Resource = "${aws_s3_bucket.config[0].arn}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"      = "bucket-owner-full-control"
@@ -1122,8 +1131,8 @@ resource "aws_s3_bucket_policy" "config" {
         Principal = "*"
         Action    = "s3:*"
         Resource = [
-          aws_s3_bucket.config.arn,
-          "${aws_s3_bucket.config.arn}/*"
+          aws_s3_bucket.config[0].arn,
+          "${aws_s3_bucket.config[0].arn}/*"
         ]
         Condition = {
           Bool = {
@@ -1136,9 +1145,11 @@ resource "aws_s3_bucket_policy" "config" {
 }
 
 # Requirement 8: Monitor resource compliance with AWS Config
+# Only create new AWS Config resources if not using existing ones
 resource "aws_config_delivery_channel" "main" {
+  count          = var.use_existing_config_resources ? 0 : 1
   name           = "${var.project_name}-config-delivery-channel"
-  s3_bucket_name = aws_s3_bucket.config.bucket
+  s3_bucket_name = aws_s3_bucket.config[0].bucket
 
   snapshot_delivery_properties {
     delivery_frequency = var.config_delivery_frequency
@@ -1146,6 +1157,7 @@ resource "aws_config_delivery_channel" "main" {
 }
 
 resource "aws_config_configuration_recorder" "main" {
+  count    = var.use_existing_config_resources ? 0 : 1
   name     = "${var.project_name}-config-recorder"
   role_arn = aws_iam_role.config.arn
 
@@ -1155,43 +1167,62 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count      = var.use_existing_config_resources ? 0 : 1
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.main]
 }
 
+# Local values to reference Config resources (existing or newly created)
+locals {
+  config_delivery_channel_name = var.use_existing_config_resources ? "default" : (
+    length(aws_config_delivery_channel.main) > 0 ? aws_config_delivery_channel.main[0].name : ""
+  )
+  
+  config_configuration_recorder_name = var.use_existing_config_resources ? "default" : (
+    length(aws_config_configuration_recorder.main) > 0 ? aws_config_configuration_recorder.main[0].name : ""
+  )
+}
+
 # Config rules for compliance monitoring
+# These rules can be created regardless of whether we use existing Config resources
 resource "aws_config_config_rule" "s3_bucket_public_access_prohibited" {
-  name = "s3-bucket-public-access-prohibited"
+  count = var.enable_config_rules ? 1 : 0
+  name  = "${var.project_name}-s3-bucket-public-access-prohibited"
 
   source {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
+  # Config rules require a configuration recorder to exist
+  # We can't use conditional depends_on, so we'll rely on the Config service validation
 }
 
 resource "aws_config_config_rule" "encrypted_volumes" {
-  name = "encrypted-volumes"
+  count = var.enable_config_rules ? 1 : 0
+  name  = "${var.project_name}-encrypted-volumes"
 
   source {
     owner             = "AWS"
     source_identifier = "ENCRYPTED_VOLUMES"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
+  # Config rules require a configuration recorder to exist
+  # We can't use conditional depends_on, so we'll rely on the Config service validation
 }
 
 resource "aws_config_config_rule" "rds_storage_encrypted" {
-  name = "rds-storage-encrypted"
+  count = var.enable_config_rules ? 1 : 0
+  name  = "${var.project_name}-rds-storage-encrypted"
 
   source {
     owner             = "AWS"
     source_identifier = "RDS_STORAGE_ENCRYPTED"
   }
 
-  depends_on = [aws_config_configuration_recorder.main]
+  # Config rules require a configuration recorder to exist
+  # We can't use conditional depends_on, so we'll rely on the Config service validation
 }
 
 ########################

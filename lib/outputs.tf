@@ -94,12 +94,12 @@ output "cloudtrail_bucket_arn" {
 
 output "config_bucket_id" {
   description = "ID of the AWS Config S3 bucket"
-  value       = aws_s3_bucket.config.id
+  value       = var.use_existing_config_resources ? null : aws_s3_bucket.config[0].id
 }
 
 output "config_bucket_arn" {
   description = "ARN of the AWS Config S3 bucket"
-  value       = aws_s3_bucket.config.arn
+  value       = var.use_existing_config_resources ? null : aws_s3_bucket.config[0].arn
 }
 
 output "cloudfront_logs_bucket_id" {
@@ -186,21 +186,21 @@ output "rds_subnet_group_name" {
 
 output "config_recorder_name" {
   description = "Name of the AWS Config configuration recorder"
-  value       = aws_config_configuration_recorder.main.name
+  value       = local.config_configuration_recorder_name
 }
 
 output "config_delivery_channel_name" {
   description = "Name of the AWS Config delivery channel"
-  value       = aws_config_delivery_channel.main.name
+  value       = local.config_delivery_channel_name
 }
 
 output "config_rules" {
   description = "Names of AWS Config rules"
-  value = [
-    aws_config_config_rule.s3_bucket_public_access_prohibited.name,
-    aws_config_config_rule.encrypted_volumes.name,
-    aws_config_config_rule.rds_storage_encrypted.name
-  ]
+  value = var.enable_config_rules ? [
+    aws_config_config_rule.s3_bucket_public_access_prohibited[0].name,
+    aws_config_config_rule.encrypted_volumes[0].name,
+    aws_config_config_rule.rds_storage_encrypted[0].name
+  ] : []
 }
 
 ########################
@@ -409,10 +409,10 @@ output "infrastructure_summary" {
     vpc_cidr                   = var.vpc_cidr
     public_subnets             = length(var.public_subnet_cidrs)
     private_subnets            = length(var.private_subnet_cidrs)
-    s3_buckets_created         = length(var.s3_bucket_names) + 3 # main buckets + cloudtrail + config + cloudfront logs
+    s3_buckets_created         = length(var.s3_bucket_names) + (var.use_existing_config_resources ? 2 : 3) # main buckets + cloudtrail + (optional config) + cloudfront logs
     rds_encrypted              = true
     cloudtrail_multi_region    = var.cloudtrail_is_multi_region_trail
-    config_enabled             = true
+    config_enabled             = var.use_existing_config_resources || length(aws_config_configuration_recorder.main) > 0
     flow_logs_enabled          = true
     cloudfront_waf_enabled     = true
     session_manager_enabled    = var.enable_session_manager

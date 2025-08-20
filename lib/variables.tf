@@ -161,6 +161,18 @@ variable "config_delivery_frequency" {
   }
 }
 
+variable "use_existing_config_resources" {
+  description = "Skip creating AWS Config delivery channel and configuration recorder (use when existing Config resources already exist in the account/region)"
+  type        = bool
+  default     = true
+}
+
+variable "enable_config_rules" {
+  description = "Enable AWS Config rules for compliance monitoring"
+  type        = bool
+  default     = true
+}
+
 ########################
 # Common Tags
 ########################
