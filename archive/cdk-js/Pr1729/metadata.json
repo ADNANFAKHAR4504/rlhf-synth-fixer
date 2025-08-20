@@ -21,7 +21,7 @@
     "S3",
     "KMS",
     "IAM",
-    "CloudTrail", 
+    "CloudTrail",
     "CloudWatch",
     "EC2",
     "RDS",
@@ -30,5 +30,11 @@
     "WAFv2",
     "Systems Manager",
     "CloudWatch Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
