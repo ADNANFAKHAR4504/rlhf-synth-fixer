@@ -53,6 +53,14 @@ Parameters:
     MaxValue: 20
     Description: Maximum number of instances in Auto Scaling Group
 
+  UseExistingConfig:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: If 'true', do not create AWS Config recorder and delivery channel (use existing ones).
+
 Conditions:
   HasKeyPair:
     Fn::Not:
@@ -69,6 +77,11 @@ Conditions:
         - Ref: Environment
         - staging
 
+  CreateConfigResources:
+    Fn::Equals:
+      - Ref: UseExistingConfig
+      - 'false'
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -82,7 +95,7 @@ Mappings:
 
 Resources:
   # KMS Key for encryption
-  ApplicationKMSKey:
+  SecureAppApplicationKMSKey:
     Type: AWS::KMS::Key
     Properties:
       Description: !Sub 'KMS Key for application data encryption - ${AWS::StackName}'
@@ -122,20 +135,34 @@ Resources:
             Condition:
               StringEquals:
                 kms:ViaService: !Sub 'ec2.${AWS::Region}.amazonaws.com'
+          - Sid: AllowAWSConfigUseOfKey
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub 's3.${AWS::Region}.amazonaws.com'
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Name
           Value: !Sub '${Environment}-application-kms-key'
 
-  ApplicationKMSKeyAlias:
+  SecureAppApplicationKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub 'alias/${Environment}-application-key-${AWS::StackName}'
-      TargetKeyId: !Ref ApplicationKMSKey
+      TargetKeyId: !Ref SecureAppApplicationKMSKey
 
   # VPC and Network Infrastructure
-  ApplicationVPC:
+  SecureAppVPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCidr
@@ -148,7 +175,7 @@ Resources:
           Value: !Ref Environment
 
   # Internet Gateway
-  InternetGateway:
+  SecureAppInternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
@@ -157,17 +184,17 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  InternetGatewayAttachment:
+  SecureAppInternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref ApplicationVPC
+      InternetGatewayId: !Ref SecureAppInternetGateway
+      VpcId: !Ref SecureAppVPC
 
   # Public Subnets
-  PublicSubnet1:
+  SecureAppPublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 4, 8]]
       MapPublicIpOnLaunch: true
@@ -177,10 +204,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  PublicSubnet2:
+  SecureAppPublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 4, 8]]
       MapPublicIpOnLaunch: true
@@ -191,10 +218,10 @@ Resources:
           Value: !Ref Environment
 
   # Private Subnets
-  PrivateSubnet1:
+  SecureAppPrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 4, 8]]
       Tags:
@@ -203,10 +230,10 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  PrivateSubnet2:
+  SecureAppPrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 4, 8]]
       Tags:
@@ -216,9 +243,9 @@ Resources:
           Value: !Ref Environment
 
   # NAT Gateways
-  NatGateway1EIP:
+  SecureAppNatGateway1EIP:
     Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
+    DependsOn: SecureAppInternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
@@ -227,9 +254,9 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  NatGateway2EIP:
+  SecureAppNatGateway2EIP:
     Type: AWS::EC2::EIP
-    DependsOn: InternetGatewayAttachment
+    DependsOn: SecureAppInternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
@@ -238,22 +265,22 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  NatGateway1:
+  SecureAppNatGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NatGateway1EIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
+      AllocationId: !GetAtt SecureAppNatGateway1EIP.AllocationId
+      SubnetId: !Ref SecureAppPublicSubnet1
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-nat-gateway-1-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
-  NatGateway2:
+  SecureAppNatGateway2:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NatGateway2EIP.AllocationId
-      SubnetId: !Ref PublicSubnet2
+      AllocationId: !GetAtt SecureAppNatGateway2EIP.AllocationId
+      SubnetId: !Ref SecureAppPublicSubnet2
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-nat-gateway-2-${AWS::StackName}'
@@ -261,131 +288,131 @@ Resources:
           Value: !Ref Environment
 
   # Route Tables
-  PublicRouteTable:
+  SecureAppPublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-public-routes-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
-  DefaultPublicRoute:
+  SecureAppDefaultPublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
+    DependsOn: SecureAppInternetGatewayAttachment
     Properties:
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref SecureAppPublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+      GatewayId: !Ref SecureAppInternetGateway
 
-  PublicSubnet1RouteTableAssociation:
+  SecureAppPublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref SecureAppPublicRouteTable
+      SubnetId: !Ref SecureAppPublicSubnet1
 
-  PublicSubnet2RouteTableAssociation:
+  SecureAppPublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref SecureAppPublicRouteTable
+      SubnetId: !Ref SecureAppPublicSubnet2
 
-  PrivateRouteTable1:
+  SecureAppPrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-routes-1-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
-  DefaultPrivateRoute1:
+  SecureAppDefaultPrivateRoute1:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
+      RouteTableId: !Ref SecureAppPrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway1
+      NatGatewayId: !Ref SecureAppNatGateway1
 
-  PrivateSubnet1RouteTableAssociation:
+  SecureAppPrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable1
-      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref SecureAppPrivateRouteTable1
+      SubnetId: !Ref SecureAppPrivateSubnet1
 
-  PrivateRouteTable2:
+  SecureAppPrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-routes-2-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
-  DefaultPrivateRoute2:
+  SecureAppDefaultPrivateRoute2:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable2
+      RouteTableId: !Ref SecureAppPrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway2
+      NatGatewayId: !Ref SecureAppNatGateway2
 
-  PrivateSubnet2RouteTableAssociation:
+  SecureAppPrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable2
-      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref SecureAppPrivateRouteTable2
+      SubnetId: !Ref SecureAppPrivateSubnet2
 
   # Network ACLs
-  PrivateNetworkAcl:
+  SecureAppPrivateNetworkAcl:
     Type: AWS::EC2::NetworkAcl
     Properties:
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-nacl-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
 
-  PrivateInboundRule:
+  SecureAppPrivateInboundRule:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
+      NetworkAclId: !Ref SecureAppPrivateNetworkAcl
       RuleNumber: 100
       Protocol: -1
       RuleAction: allow
       CidrBlock: !Ref VpcCidr
 
-  PrivateOutboundRule:
+  SecureAppPrivateOutboundRule:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
+      NetworkAclId: !Ref SecureAppPrivateNetworkAcl
       RuleNumber: 100
       Protocol: -1
       Egress: true
       RuleAction: allow
       CidrBlock: 0.0.0.0/0
 
-  PrivateSubnet1NetworkAclAssociation:
+  SecureAppPrivateSubnet1NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
-      SubnetId: !Ref PrivateSubnet1
-      NetworkAclId: !Ref PrivateNetworkAcl
+      SubnetId: !Ref SecureAppPrivateSubnet1
+      NetworkAclId: !Ref SecureAppPrivateNetworkAcl
 
-  PrivateSubnet2NetworkAclAssociation:
+  SecureAppPrivateSubnet2NetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
-      SubnetId: !Ref PrivateSubnet2
-      NetworkAclId: !Ref PrivateNetworkAcl
+      SubnetId: !Ref SecureAppPrivateSubnet2
+      NetworkAclId: !Ref SecureAppPrivateNetworkAcl
 
   # Security Groups
-  LoadBalancerSecurityGroup:
+  SecureAppLoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${Environment}-albsg-${AWS::StackName}'
       GroupDescription: Security group for Application Load Balancer
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -416,20 +443,20 @@ Resources:
           Value:
             Ref: Environment
 
-  ApplicationSecurityGroup:
+  SecureAppApplicationSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName:
         Fn::Sub: '${Environment}-appsg-${AWS::StackName}'
       GroupDescription: Security group for application servers
       VpcId:
-        Ref: ApplicationVPC
+        Ref: SecureAppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId:
-            Ref: LoadBalancerSecurityGroup
+            Ref: SecureAppLoadBalancerSecurityGroup
           Description: HTTP from load balancer
       SecurityGroupEgress:
         - IpProtocol: tcp
@@ -448,12 +475,12 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  BastionSecurityGroup:
+  SecureAppBastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${Environment}-bsg-${AWS::StackName}'
       GroupDescription: Security group for bastion host
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -464,7 +491,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          DestinationSecurityGroupId: !Ref ApplicationSecurityGroup
+          DestinationSecurityGroupId: !Ref SecureAppApplicationSecurityGroup
           Description: SSH to application servers
       Tags:
         - Key: Name
@@ -473,7 +500,7 @@ Resources:
           Value: !Ref Environment
 
   # IAM Roles and Policies
-  EC2InstanceRole:
+  SecureAppEC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${Environment}-ec2role-${AWS::StackName}'
@@ -508,13 +535,13 @@ Resources:
                   - kms:ReEncrypt*
                   - kms:GenerateDataKey
                   - kms:GenerateDataKeyWithoutPlaintext
-                Resource: !GetAtt ApplicationKMSKey.Arn
+                Resource: !GetAtt SecureAppApplicationKMSKey.Arn
               - Effect: Allow
                 Action:
                   - kms:CreateGrant
                   - kms:ListGrants
                   - kms:RevokeGrant
-                Resource: !GetAtt ApplicationKMSKey.Arn
+                Resource: !GetAtt SecureAppApplicationKMSKey.Arn
                 Condition:
                   Bool:
                     kms:GrantIsForAWSResource: 'true'
@@ -522,15 +549,15 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  EC2InstanceProfile:
+  SecureAppEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub '${Environment}-ec2prof-${AWS::StackName}'
       Roles:
-        - !Ref EC2InstanceRole
+        - !Ref SecureAppEC2InstanceRole
 
   # S3 Bucket for application artifacts
-  ApplicationS3Bucket:
+  SecureAppApplicationS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub '${Environment}-app-artifacts-${AWS::AccountId}-${AWS::Region}'
@@ -540,7 +567,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref ApplicationKMSKey
+              KMSMasterKeyID: !Ref SecureAppApplicationKMSKey
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -549,7 +576,7 @@ Resources:
         RestrictPublicBuckets: true
       LoggingConfiguration:
         DestinationBucketName:
-          Ref: LoggingS3Bucket
+          Ref: SecureAppLoggingS3Bucket
         LogFilePrefix: access-logs/
       Tags:
         - Key: Environment
@@ -558,7 +585,7 @@ Resources:
           Value: !Sub '${Environment}-app-artifacts-${AWS::StackName}'
 
   # S3 Bucket for logging
-  LoggingS3Bucket:
+  SecureAppLoggingS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub '${Environment}-log-${AWS::AccountId}-${AWS::Region}'
@@ -566,7 +593,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref ApplicationKMSKey
+              KMSMasterKeyID: !Ref SecureAppApplicationKMSKey
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -589,11 +616,11 @@ Resources:
         - Key: Name
           Value: !Sub '${Environment}-logs-${AWS::StackName}'
 
-  LoggingS3BucketPolicy:
+  SecureAppLoggingS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket:
-        Ref: LoggingS3Bucket
+        Ref: SecureAppLoggingS3Bucket
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -603,13 +630,13 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource:
-              'Fn::GetAtt': ['LoggingS3Bucket', 'Arn']
+              'Fn::GetAtt': ['SecureAppLoggingS3Bucket', 'Arn']
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${LoggingS3Bucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
+            Resource: !Sub '${SecureAppLoggingS3Bucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -621,7 +648,7 @@ Resources:
             Action:
               - s3:PutObject
             Resource:
-              'Fn::Sub': '${LoggingS3Bucket.Arn}/alb-access-logs/*'
+              'Fn::Sub': '${SecureAppLoggingS3Bucket.Arn}/alb-access-logs/*'
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -633,10 +660,26 @@ Resources:
             Action:
               - s3:GetBucketAcl
             Resource:
-              'Fn::GetAtt': ['LoggingS3Bucket', 'Arn']
+              'Fn::GetAtt': ['SecureAppLoggingS3Bucket', 'Arn']
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource:
+              'Fn::GetAtt': ['SecureAppLoggingS3Bucket', 'Arn']
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${SecureAppLoggingS3Bucket.Arn}/config/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
 
   # CloudTrail
-  CloudTrailRole:
+  SecureAppCloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${Environment}-cloudtrail-role-${AWS::StackName}'
@@ -657,36 +700,36 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudTrailLogGroup}:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${SecureAppCloudTrailLogGroup}:*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
 
-  CloudTrailLogGroup:
+  SecureAppCloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${Environment}-${AWS::StackName}'
       RetentionInDays: 90
 
-  ApplicationCloudTrail:
+  SecureAppApplicationCloudTrail:
     Type: AWS::CloudTrail::Trail
     Condition: IsProdOrStaging
     Properties:
       TrailName:
         'Fn::Sub': '${Environment}-cloudtrail-${AWS::StackName}'
       S3BucketName:
-        'Ref': LoggingS3Bucket
+        'Ref': SecureAppLoggingS3Bucket
       S3KeyPrefix: cloudtrail-logs/
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       IsLogging: true
       CloudWatchLogsLogGroupArn:
-        'Fn::GetAtt': ['CloudTrailLogGroup', 'Arn']
+        'Fn::GetAtt': ['SecureAppCloudTrailLogGroup', 'Arn']
       CloudWatchLogsRoleArn:
-        'Fn::GetAtt': ['CloudTrailRole', 'Arn']
+        'Fn::GetAtt': ['SecureAppCloudTrailRole', 'Arn']
       KMSKeyId: 
-        'Ref': 'ApplicationKMSKey'
+        'Ref': 'SecureAppApplicationKMSKey'
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
@@ -701,7 +744,7 @@ Resources:
           Value: !Sub '${Environment}-cloudtrail-${AWS::StackName}'
 
   # VPC Flow Logs
-  VPCFlowLogRole:
+  SecureAppVPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${Environment}-vpc-flow-log-role-${AWS::StackName}'
@@ -729,42 +772,139 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  VPCFlowLogGroup:
+  SecureAppVPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
       RetentionInDays: 30
 
-  VPCFlowLog:
+  SecureAppVPCFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
       ResourceType: VPC
-      ResourceId: !Ref ApplicationVPC
+      ResourceId: !Ref SecureAppVPC
       TrafficType: ALL
       LogDestinationType: cloud-watch-logs
       LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
-      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
+      DeliverLogsPermissionArn: !GetAtt SecureAppVPCFlowLogRole.Arn
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Name
           Value: !Sub '${Environment}-vpc-flow-log-${AWS::StackName}'
 
+  # AWS WAFv2 WebACL
+  SecureAppWAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${Environment}-web-acl-${AWS::StackName}'
+      Description: Web ACL for ALB
+      DefaultAction:
+        Allow: {}
+      Scope: REGIONAL
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${Environment}-web-acl-metric-${AWS::StackName}'
+        SampledRequestsEnabled: true
+      Rules:
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${Environment}-aws-common-${AWS::StackName}'
+            SampledRequestsEnabled: true
+        - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${Environment}-aws-badinputs-${AWS::StackName}'
+            SampledRequestsEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Name
+          Value: !Sub '${Environment}-web-acl-${AWS::StackName}'
+
+  SecureAppWAFWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref SecureAppApplicationLoadBalancer
+      WebACLArn: !GetAtt SecureAppWAFWebACL.Arn
+
+  # AWS GuardDuty
+  SecureAppGuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+
+  # AWS Config
+  SecureAppConfigRole:
+    Type: AWS::IAM::Role
+    Condition: CreateConfigResources
+    Properties:
+      RoleName: !Sub '${Environment}-config-role-${AWS::StackName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  SecureAppConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateConfigResources
+    Properties:
+      Name: !Sub '${Environment}-config-recorder-${AWS::StackName}'
+      RoleARN: !GetAtt SecureAppConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  SecureAppConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    DependsOn: SecureAppConfigRecorder
+    Condition: CreateConfigResources
+    Properties:
+      Name: !Sub '${Environment}-config-channel-${AWS::StackName}'
+      S3BucketName: !Ref SecureAppLoggingS3Bucket
+      S3KeyPrefix: config
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: One_Hour
+
   # CloudWatch Log Groups
-  ApplicationLogGroup:
+  SecureAppApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/ec2/${Environment}-${AWS::StackName}/application'
       RetentionInDays: 30
 
-  S3AccessLogGroup:
+  SecureAppS3AccessLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/s3/${Environment}-${AWS::StackName}/access'
       RetentionInDays: 90
 
   # Launch Template
-  ApplicationLaunchTemplate:
+  SecureAppApplicationLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: !Sub '${Environment}-tmpl-${AWS::StackName}'
@@ -777,9 +917,9 @@ Resources:
             - Ref: KeyPairName
             - Ref: AWS::NoValue
         IamInstanceProfile:
-          Arn: !GetAtt EC2InstanceProfile.Arn
+          Arn: !GetAtt SecureAppEC2InstanceProfile.Arn
         SecurityGroupIds:
-          - !Ref ApplicationSecurityGroup
+          - !Ref SecureAppApplicationSecurityGroup
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -795,12 +935,12 @@ Resources:
                     "collect_list": [
                       {
                         "file_path": "/var/log/messages",
-                        "log_group_name": "${ApplicationLogGroup}",
+                        "log_group_name": "${SecureAppApplicationLogGroup}",
                         "log_stream_name": "{instance_id}/messages"
                       },
                       {
                         "file_path": "/var/log/secure",
-                        "log_group_name": "${ApplicationLogGroup}",
+                        "log_group_name": "${SecureAppApplicationLogGroup}",
                         "log_stream_name": "{instance_id}/secure"
                       }
                     ]
@@ -851,17 +991,17 @@ Resources:
                 Value: !Ref Environment
 
   # Application Load Balancer
-  ApplicationLoadBalancer:
+  SecureAppApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub '${Environment}-alb-${AWS::StackName}'
       Scheme: internet-facing
       Type: application
       SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
+        - !Ref SecureAppLoadBalancerSecurityGroup
       Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+        - !Ref SecureAppPublicSubnet1
+        - !Ref SecureAppPublicSubnet2
       LoadBalancerAttributes:
         - Key: deletion_protection.enabled
           Value: 'false'
@@ -871,13 +1011,13 @@ Resources:
         - Key: Name
           Value: !Sub '${Environment}-alb-${AWS::StackName}'
 
-  ApplicationTargetGroup:
+  SecureAppApplicationTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub '${Environment}-app-tg-${AWS::StackName}'
       Port: 80
       Protocol: HTTP
-      VpcId: !Ref ApplicationVPC
+      VpcId: !Ref SecureAppVPC
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /health
       HealthCheckProtocol: HTTP
@@ -891,32 +1031,32 @@ Resources:
         - Key: Name
           Value: !Sub '${Environment}-app-tg-${AWS::StackName}'
 
-  ApplicationListener:
+  SecureAppApplicationListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ApplicationTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
+          TargetGroupArn: !Ref SecureAppApplicationTargetGroup
+      LoadBalancerArn: !Ref SecureAppApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
 
   # Auto Scaling Group
-  ApplicationAutoScalingGroup:
+  SecureAppApplicationAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: !Sub '${Environment}-app-asg-${AWS::StackName}'
       VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+        - !Ref SecureAppPrivateSubnet1
+        - !Ref SecureAppPrivateSubnet2
       LaunchTemplate:
-        LaunchTemplateId: !Ref ApplicationLaunchTemplate
-        Version: !GetAtt ApplicationLaunchTemplate.LatestVersionNumber
+        LaunchTemplateId: !Ref SecureAppApplicationLaunchTemplate
+        Version: !GetAtt SecureAppApplicationLaunchTemplate.LatestVersionNumber
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
       DesiredCapacity: !Ref MinSize
       TargetGroupARNs:
-        - !Ref ApplicationTargetGroup
+        - !Ref SecureAppApplicationTargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       Tags:
@@ -929,7 +1069,7 @@ Resources:
           PropagateAtLaunch: true
 
   # Bastion Host
-  BastionHost:
+  SecureAppBastionHost:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
@@ -940,16 +1080,16 @@ Resources:
           - Ref: KeyPairName
           - Ref: AWS::NoValue
       SecurityGroupIds:
-        - !Ref BastionSecurityGroup
-      SubnetId: !Ref PublicSubnet1
-      IamInstanceProfile: !Ref EC2InstanceProfile
+        - !Ref SecureAppBastionSecurityGroup
+      SubnetId: !Ref SecureAppPublicSubnet1
+      IamInstanceProfile: !Ref SecureAppEC2InstanceProfile
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
             VolumeSize: 8
             VolumeType: gp3
             Encrypted: true
-            KmsKeyId: !Ref ApplicationKMSKey
+            KmsKeyId: !Ref SecureAppApplicationKMSKey
             DeleteOnTermination: true
       UserData:
         Fn::Base64: |
@@ -965,139 +1105,139 @@ Resources:
 Outputs:
   VPCId:
     Description: VPC ID
-    Value: !Ref ApplicationVPC
+    Value: !Ref SecureAppVPC
     Export:
       Name: !Sub '${Environment}-vpc-id-${AWS::StackName}'
 
   PublicSubnets:
     Description: Public subnet IDs
-    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Value: !Join [',', [!Ref SecureAppPublicSubnet1, !Ref SecureAppPublicSubnet2]]
     Export:
       Name: !Sub '${Environment}-public-subnets-${AWS::StackName}'
 
   PrivateSubnetIds:
     Description: Comma-separated private subnet IDs
-    Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Value: !Join [",", [!Ref SecureAppPrivateSubnet1, !Ref SecureAppPrivateSubnet2]]
     Export:
       Name: !Sub '${Environment}-private-subnets-${AWS::StackName}'
 
   InternetGatewayId:
     Description: Internet Gateway ID
-    Value: !Ref InternetGateway
+    Value: !Ref SecureAppInternetGateway
     Export:
       Name: !Sub '${Environment}-igw-${AWS::StackName}'
 
   PublicRouteTableId:
     Description: Public Route Table ID
-    Value: !Ref PublicRouteTable
+    Value: !Ref SecureAppPublicRouteTable
     Export:
       Name: !Sub '${Environment}-public-rt-${AWS::StackName}'
 
   PrivateRouteTableIds:
     Description: Comma-separated Private Route Table IDs
-    Value: !Join [",", [!Ref PrivateRouteTable1, !Ref PrivateRouteTable2]]
+    Value: !Join [",", [!Ref SecureAppPrivateRouteTable1, !Ref SecureAppPrivateRouteTable2]]
     Export:
       Name: !Sub '${Environment}-private-rts-${AWS::StackName}'
 
   NatGatewayIds:
     Description: Comma-separated NAT Gateway IDs
-    Value: !Join [",", [!Ref NatGateway1, !Ref NatGateway2]]
+    Value: !Join [",", [!Ref SecureAppNatGateway1, !Ref SecureAppNatGateway2]]
     Export:
       Name: !Sub '${Environment}-nat-gws-${AWS::StackName}'
 
   # -------- Security Groups --------
   AlbSGId:
     Description: ALB Security Group ID
-    Value: !Ref LoadBalancerSecurityGroup
+    Value: !Ref SecureAppLoadBalancerSecurityGroup
     Export:
       Name: !Sub '${Environment}-alb-sg-${AWS::StackName}'
 
   AppSGId:
     Description: Application Security Group ID
-    Value: !Ref ApplicationSecurityGroup
+    Value: !Ref SecureAppApplicationSecurityGroup
     Export:
       Name: !Sub '${Environment}-app-sg-${AWS::StackName}'
 
   BastionSGId:
     Description: Bastion Security Group ID
-    Value: !Ref BastionSecurityGroup
+    Value: !Ref SecureAppBastionSecurityGroup
     Export:
       Name: !Sub '${Environment}-bastion-sg-${AWS::StackName}'
 
   # -------- KMS --------
   KmsKeyId:
     Description: Application KMS Key ID
-    Value: !Ref ApplicationKMSKey
+    Value: !Ref SecureAppApplicationKMSKey
     Export:
       Name: !Sub '${Environment}-kms-key-id-${AWS::StackName}'
 
   KmsKeyArn:
     Description: Application KMS Key ARN
-    Value: !GetAtt ApplicationKMSKey.Arn
+    Value: !GetAtt SecureAppApplicationKMSKey.Arn
     Export:
       Name: !Sub '${Environment}-kms-key-arn-${AWS::StackName}'
 
   KmsAliasName:
     Description: KMS Alias name
-    Value: !Ref ApplicationKMSKeyAlias
+    Value: !Ref SecureAppApplicationKMSKeyAlias
     Export:
       Name: !Sub '${Environment}-kms-alias-${AWS::StackName}'
 
   # -------- S3 --------
   ApplicationS3BucketName:
     Description: Application artifacts bucket name
-    Value: !Ref ApplicationS3Bucket
+    Value: !Ref SecureAppApplicationS3Bucket
     Export:
       Name: !Sub '${Environment}-app-bucket-${AWS::StackName}'
 
   ApplicationS3BucketArn:
     Description: Application artifacts bucket ARN
-    Value: !GetAtt ApplicationS3Bucket.Arn
+    Value: !GetAtt SecureAppApplicationS3Bucket.Arn
     Export:
       Name: !Sub '${Environment}-app-bucket-arn-${AWS::StackName}'
 
   LoggingS3BucketName:
     Description: Central logging bucket name
-    Value: !Ref LoggingS3Bucket
+    Value: !Ref SecureAppLoggingS3Bucket
     Export:
       Name: !Sub '${Environment}-log-bucket-${AWS::StackName}'
 
   LoggingS3BucketArn:
     Description: Central logging bucket ARN
-    Value: !GetAtt LoggingS3Bucket.Arn
+    Value: !GetAtt SecureAppLoggingS3Bucket.Arn
     Export:
       Name: !Sub '${Environment}-log-bucket-arn-${AWS::StackName}'
 
   # -------- CloudWatch Logs --------
   ApplicationLogGroupName:
     Description: EC2/agent application log group
-    Value: !Ref ApplicationLogGroup
+    Value: !Ref SecureAppApplicationLogGroup
     Export:
       Name: !Sub '${Environment}-app-lg-${AWS::StackName}'
 
   S3AccessLogGroupName:
     Description: S3 access log group
-    Value: !Ref S3AccessLogGroup
+    Value: !Ref SecureAppS3AccessLogGroup
     Export:
       Name: !Sub '${Environment}-s3-access-lg-${AWS::StackName}'
 
   VPCFlowLogGroupName:
     Description: VPC Flow Logs log group
-    Value: !Ref VPCFlowLogGroup
+    Value: !Ref SecureAppVPCFlowLogGroup
     Export:
       Name: !Sub '${Environment}-vpc-flow-lg-${AWS::StackName}'
 
   # -------- CloudTrail --------
   CloudTrailName:
     Description: CloudTrail trail name
-    Value: !Ref ApplicationCloudTrail
+    Value: !Ref SecureAppApplicationCloudTrail
     Condition: IsProdOrStaging
     Export:
       Name: !Sub '${Environment}-cloudtrail-name-${AWS::StackName}'
 
   CloudTrailLogGroupName:
     Description: CloudTrail CloudWatch log group name
-    Value: !Ref CloudTrailLogGroup
+    Value: !Ref SecureAppCloudTrailLogGroup
     Condition: IsProdOrStaging
     Export:
       Name: !Sub '${Environment}-cloudtrail-lg-${AWS::StackName}'
@@ -1105,60 +1245,88 @@ Outputs:
   # -------- ALB / Target Group / Listener --------
   ALBDNSName:
     Description: ALB DNS name
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Value: !GetAtt SecureAppApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${Environment}-alb-dns-${AWS::StackName}'
 
   LoadBalancerArn:
     Description: ALB ARN
-    Value: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
+    Value: !GetAtt SecureAppApplicationLoadBalancer.LoadBalancerArn
     Export:
       Name: !Sub '${Environment}-alb-arn-${AWS::StackName}'
 
+  # -------- WAF / GuardDuty / AWS Config --------
+  WAFWebACLArn:
+    Description: WAFv2 WebACL ARN
+    Value: !GetAtt SecureAppWAFWebACL.Arn
+    Export:
+      Name: !Sub '${Environment}-waf-web-acl-arn-${AWS::StackName}'
+
+  GuardDutyDetectorId:
+    Description: GuardDuty Detector ID
+    Value: !Ref SecureAppGuardDutyDetector
+    Export:
+      Name: !Sub '${Environment}-guardduty-detector-${AWS::StackName}'
+
+  ConfigRecorderName:
+    Description: AWS Config Recorder name
+    Value: !Ref SecureAppConfigRecorder
+    Condition: CreateConfigResources
+    Export:
+      Name: !Sub '${Environment}-config-recorder-${AWS::StackName}'
+
+  ConfigDeliveryChannelName:
+    Description: AWS Config Delivery Channel name
+    Value: !Ref SecureAppConfigDeliveryChannel
+    Condition: CreateConfigResources
+    Export:
+      Name: !Sub '${Environment}-config-channel-${AWS::StackName}'
+
   TargetGroupArn:
     Description: Target Group ARN
-    Value: !Ref ApplicationTargetGroup
+    Value: !Ref SecureAppApplicationTargetGroup
     Export:
       Name: !Sub '${Environment}-tg-arn-${AWS::StackName}'
 
   ListenerArn:
     Description: HTTP (80) Listener ARN
-    Value: !Ref ApplicationListener
+    Value: !Ref SecureAppApplicationListener
     Export:
       Name: !Sub '${Environment}-listener-arn-${AWS::StackName}'
 
   # -------- Launch Template / Auto Scaling --------
   LaunchTemplateId:
     Description: EC2 Launch Template ID
-    Value: !Ref ApplicationLaunchTemplate
+    Value: !Ref SecureAppApplicationLaunchTemplate
     Export:
       Name: !Sub '${Environment}-lt-id-${AWS::StackName}'
 
   ASGName:
     Description: Auto Scaling Group name
-    Value: !Ref ApplicationAutoScalingGroup
+    Value: !Ref SecureAppApplicationAutoScalingGroup
     Export:
       Name: !Sub '${Environment}-asg-name-${AWS::StackName}'
 
   # -------- Bastion (optional) --------
   BastionInstanceId:
     Description: Bastion EC2 instance ID
-    Value: !Ref BastionHost
+    Value: !Ref SecureAppBastionHost
     Export:
       Name: !Sub '${Environment}-bastion-id-${AWS::StackName}'
 
   # -------- IAM (helpful for tests/audits) --------
   EC2InstanceRoleName:
     Description: EC2 instance role name
-    Value: !Ref EC2InstanceRole
+    Value: !Ref SecureAppEC2InstanceRole
     Export:
       Name: !Sub '${Environment}-ec2-role-${AWS::StackName}'
 
   EC2InstanceProfileName:
     Description: EC2 instance profile name
-    Value: !Ref EC2InstanceProfile
+    Value: !Ref SecureAppEC2InstanceProfile
     Export:
       Name: !Sub '${Environment}-ec2-prof-${AWS::StackName}'
+
 ```
 
 ## Key Features and Security Controls

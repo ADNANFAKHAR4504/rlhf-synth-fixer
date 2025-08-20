@@ -49,6 +49,15 @@
             "MinValue": 2,
             "MaxValue": 20,
             "Description": "Maximum number of instances in Auto Scaling Group"
+        },
+        "UseExistingConfig": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "If 'true', do not create AWS Config recorder and delivery channel (use existing ones)."
         }
     },
     "Conditions": {
@@ -83,6 +92,14 @@
                     ]
                 }
             ]
+        },
+        "CreateConfigResources": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingConfig"
+                },
+                "false"
+            ]
         }
     },
     "Mappings": {
@@ -102,7 +119,7 @@
         }
     },
     "Resources": {
-        "ApplicationKMSKey": {
+        "SecureAppApplicationKMSKey": {
             "Type": "AWS::KMS::Key",
             "Properties": {
                 "Description": {
@@ -163,6 +180,28 @@
                                     }
                                 }
                             }
+                        },
+                        {
+                            "Sid": "AllowAWSConfigUseOfKey",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
                         }
                     ]
                 },
@@ -182,18 +221,18 @@
                 ]
             }
         },
-        "ApplicationKMSKeyAlias": {
+        "SecureAppApplicationKMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
                     "Fn::Sub": "alias/${Environment}-application-key-${AWS::StackName}"
                 },
                 "TargetKeyId": {
-                    "Ref": "ApplicationKMSKey"
+                    "Ref": "SecureAppApplicationKMSKey"
                 }
             }
         },
-        "ApplicationVPC": {
+        "SecureAppVPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
                 "CidrBlock": {
@@ -217,7 +256,7 @@
                 ]
             }
         },
-        "InternetGateway": {
+        "SecureAppInternetGateway": {
             "Type": "AWS::EC2::InternetGateway",
             "Properties": {
                 "Tags": [
@@ -236,22 +275,22 @@
                 ]
             }
         },
-        "InternetGatewayAttachment": {
+        "SecureAppInternetGatewayAttachment": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
             "Properties": {
                 "InternetGatewayId": {
-                    "Ref": "InternetGateway"
+                    "Ref": "SecureAppInternetGateway"
                 },
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 }
             }
         },
-        "PublicSubnet1": {
+        "SecureAppPublicSubnet1": {
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -292,11 +331,11 @@
                 ]
             }
         },
-        "PublicSubnet2": {
+        "SecureAppPublicSubnet2": {
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -337,11 +376,11 @@
                 ]
             }
         },
-        "PrivateSubnet1": {
+        "SecureAppPrivateSubnet1": {
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -381,11 +420,11 @@
                 ]
             }
         },
-        "PrivateSubnet2": {
+        "SecureAppPrivateSubnet2": {
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
@@ -425,9 +464,9 @@
                 ]
             }
         },
-        "NatGateway1EIP": {
+        "SecureAppNatGateway1EIP": {
             "Type": "AWS::EC2::EIP",
-            "DependsOn": "InternetGatewayAttachment",
+            "DependsOn": "SecureAppInternetGatewayAttachment",
             "Properties": {
                 "Domain": "vpc",
                 "Tags": [
@@ -446,9 +485,9 @@
                 ]
             }
         },
-        "NatGateway2EIP": {
+        "SecureAppNatGateway2EIP": {
             "Type": "AWS::EC2::EIP",
-            "DependsOn": "InternetGatewayAttachment",
+            "DependsOn": "SecureAppInternetGatewayAttachment",
             "Properties": {
                 "Domain": "vpc",
                 "Tags": [
@@ -467,17 +506,17 @@
                 ]
             }
         },
-        "NatGateway1": {
+        "SecureAppNatGateway1": {
             "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
-                        "NatGateway1EIP",
+                        "SecureAppNatGateway1EIP",
                         "AllocationId"
                     ]
                 },
                 "SubnetId": {
-                    "Ref": "PublicSubnet1"
+                    "Ref": "SecureAppPublicSubnet1"
                 },
                 "Tags": [
                     {
@@ -495,17 +534,17 @@
                 ]
             }
         },
-        "NatGateway2": {
+        "SecureAppNatGateway2": {
             "Type": "AWS::EC2::NatGateway",
             "Properties": {
                 "AllocationId": {
                     "Fn::GetAtt": [
-                        "NatGateway2EIP",
+                        "SecureAppNatGateway2EIP",
                         "AllocationId"
                     ]
                 },
                 "SubnetId": {
-                    "Ref": "PublicSubnet2"
+                    "Ref": "SecureAppPublicSubnet2"
                 },
                 "Tags": [
                     {
@@ -523,11 +562,11 @@
                 ]
             }
         },
-        "PublicRouteTable": {
+        "SecureAppPublicRouteTable": {
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "Tags": [
                     {
@@ -545,46 +584,46 @@
                 ]
             }
         },
-        "DefaultPublicRoute": {
+        "SecureAppDefaultPublicRoute": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "InternetGatewayAttachment",
+            "DependsOn": "SecureAppInternetGatewayAttachment",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PublicRouteTable"
+                    "Ref": "SecureAppPublicRouteTable"
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "GatewayId": {
-                    "Ref": "InternetGateway"
+                    "Ref": "SecureAppInternetGateway"
                 }
             }
         },
-        "PublicSubnet1RouteTableAssociation": {
+        "SecureAppPublicSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PublicRouteTable"
+                    "Ref": "SecureAppPublicRouteTable"
                 },
                 "SubnetId": {
-                    "Ref": "PublicSubnet1"
+                    "Ref": "SecureAppPublicSubnet1"
                 }
             }
         },
-        "PublicSubnet2RouteTableAssociation": {
+        "SecureAppPublicSubnet2RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PublicRouteTable"
+                    "Ref": "SecureAppPublicRouteTable"
                 },
                 "SubnetId": {
-                    "Ref": "PublicSubnet2"
+                    "Ref": "SecureAppPublicSubnet2"
                 }
             }
         },
-        "PrivateRouteTable1": {
+        "SecureAppPrivateRouteTable1": {
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "Tags": [
                     {
@@ -602,34 +641,34 @@
                 ]
             }
         },
-        "DefaultPrivateRoute1": {
+        "SecureAppDefaultPrivateRoute1": {
             "Type": "AWS::EC2::Route",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable1"
+                    "Ref": "SecureAppPrivateRouteTable1"
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
-                    "Ref": "NatGateway1"
+                    "Ref": "SecureAppNatGateway1"
                 }
             }
         },
-        "PrivateSubnet1RouteTableAssociation": {
+        "SecureAppPrivateSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable1"
+                    "Ref": "SecureAppPrivateRouteTable1"
                 },
                 "SubnetId": {
-                    "Ref": "PrivateSubnet1"
+                    "Ref": "SecureAppPrivateSubnet1"
                 }
             }
         },
-        "PrivateRouteTable2": {
+        "SecureAppPrivateRouteTable2": {
             "Type": "AWS::EC2::RouteTable",
             "Properties": {
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "Tags": [
                     {
@@ -647,34 +686,34 @@
                 ]
             }
         },
-        "DefaultPrivateRoute2": {
+        "SecureAppDefaultPrivateRoute2": {
             "Type": "AWS::EC2::Route",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable2"
+                    "Ref": "SecureAppPrivateRouteTable2"
                 },
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
-                    "Ref": "NatGateway2"
+                    "Ref": "SecureAppNatGateway2"
                 }
             }
         },
-        "PrivateSubnet2RouteTableAssociation": {
+        "SecureAppPrivateSubnet2RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable2"
+                    "Ref": "SecureAppPrivateRouteTable2"
                 },
                 "SubnetId": {
-                    "Ref": "PrivateSubnet2"
+                    "Ref": "SecureAppPrivateSubnet2"
                 }
             }
         },
-        "PrivateNetworkAcl": {
+        "SecureAppPrivateNetworkAcl": {
             "Type": "AWS::EC2::NetworkAcl",
             "Properties": {
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "Tags": [
                     {
@@ -692,11 +731,11 @@
                 ]
             }
         },
-        "PrivateInboundRule": {
+        "SecureAppPrivateInboundRule": {
             "Type": "AWS::EC2::NetworkAclEntry",
             "Properties": {
                 "NetworkAclId": {
-                    "Ref": "PrivateNetworkAcl"
+                    "Ref": "SecureAppPrivateNetworkAcl"
                 },
                 "RuleNumber": 100,
                 "Protocol": -1,
@@ -706,11 +745,11 @@
                 }
             }
         },
-        "PrivateOutboundRule": {
+        "SecureAppPrivateOutboundRule": {
             "Type": "AWS::EC2::NetworkAclEntry",
             "Properties": {
                 "NetworkAclId": {
-                    "Ref": "PrivateNetworkAcl"
+                    "Ref": "SecureAppPrivateNetworkAcl"
                 },
                 "RuleNumber": 100,
                 "Protocol": -1,
@@ -719,29 +758,29 @@
                 "CidrBlock": "0.0.0.0/0"
             }
         },
-        "PrivateSubnet1NetworkAclAssociation": {
+        "SecureAppPrivateSubnet1NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
             "Properties": {
                 "SubnetId": {
-                    "Ref": "PrivateSubnet1"
+                    "Ref": "SecureAppPrivateSubnet1"
                 },
                 "NetworkAclId": {
-                    "Ref": "PrivateNetworkAcl"
+                    "Ref": "SecureAppPrivateNetworkAcl"
                 }
             }
         },
-        "PrivateSubnet2NetworkAclAssociation": {
+        "SecureAppPrivateSubnet2NetworkAclAssociation": {
             "Type": "AWS::EC2::SubnetNetworkAclAssociation",
             "Properties": {
                 "SubnetId": {
-                    "Ref": "PrivateSubnet2"
+                    "Ref": "SecureAppPrivateSubnet2"
                 },
                 "NetworkAclId": {
-                    "Ref": "PrivateNetworkAcl"
+                    "Ref": "SecureAppPrivateNetworkAcl"
                 }
             }
         },
-        "LoadBalancerSecurityGroup": {
+        "SecureAppLoadBalancerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
@@ -749,7 +788,7 @@
                 },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -799,7 +838,7 @@
                 ]
             }
         },
-        "ApplicationSecurityGroup": {
+        "SecureAppApplicationSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
@@ -807,7 +846,7 @@
                 },
                 "GroupDescription": "Security group for application servers",
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -815,7 +854,7 @@
                         "FromPort": 80,
                         "ToPort": 80,
                         "SourceSecurityGroupId": {
-                            "Ref": "LoadBalancerSecurityGroup"
+                            "Ref": "SecureAppLoadBalancerSecurityGroup"
                         },
                         "Description": "HTTP from load balancer"
                     }
@@ -852,7 +891,7 @@
                 ]
             }
         },
-        "BastionSecurityGroup": {
+        "SecureAppBastionSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
@@ -860,7 +899,7 @@
                 },
                 "GroupDescription": "Security group for bastion host",
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "SecurityGroupIngress": [
                     {
@@ -877,7 +916,7 @@
                         "FromPort": 22,
                         "ToPort": 22,
                         "DestinationSecurityGroupId": {
-                            "Ref": "ApplicationSecurityGroup"
+                            "Ref": "SecureAppApplicationSecurityGroup"
                         },
                         "Description": "SSH to application servers"
                     }
@@ -898,7 +937,7 @@
                 ]
             }
         },
-        "EC2InstanceRole": {
+        "SecureAppEC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
@@ -956,7 +995,7 @@
                                     ],
                                     "Resource": {
                                         "Fn::GetAtt": [
-                                            "ApplicationKMSKey",
+                                            "SecureAppApplicationKMSKey",
                                             "Arn"
                                         ]
                                     }
@@ -970,7 +1009,7 @@
                                     ],
                                     "Resource": {
                                         "Fn::GetAtt": [
-                                            "ApplicationKMSKey",
+                                            "SecureAppApplicationKMSKey",
                                             "Arn"
                                         ]
                                     },
@@ -994,7 +1033,7 @@
                 ]
             }
         },
-        "EC2InstanceProfile": {
+        "SecureAppEC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "InstanceProfileName": {
@@ -1002,12 +1041,12 @@
                 },
                 "Roles": [
                     {
-                        "Ref": "EC2InstanceRole"
+                        "Ref": "SecureAppEC2InstanceRole"
                     }
                 ]
             }
         },
-        "ApplicationS3Bucket": {
+        "SecureAppApplicationS3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
@@ -1022,7 +1061,7 @@
                             "ServerSideEncryptionByDefault": {
                                 "SSEAlgorithm": "aws:kms",
                                 "KMSMasterKeyID": {
-                                    "Ref": "ApplicationKMSKey"
+                                    "Ref": "SecureAppApplicationKMSKey"
                                 }
                             },
                             "BucketKeyEnabled": true
@@ -1037,7 +1076,7 @@
                 },
                 "LoggingConfiguration": {
                     "DestinationBucketName": {
-                        "Ref": "LoggingS3Bucket"
+                        "Ref": "SecureAppLoggingS3Bucket"
                     },
                     "LogFilePrefix": "access-logs/"
                 },
@@ -1057,7 +1096,7 @@
                 ]
             }
         },
-        "LoggingS3Bucket": {
+        "SecureAppLoggingS3Bucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
@@ -1069,7 +1108,7 @@
                             "ServerSideEncryptionByDefault": {
                                 "SSEAlgorithm": "aws:kms",
                                 "KMSMasterKeyID": {
-                                    "Ref": "ApplicationKMSKey"
+                                    "Ref": "SecureAppApplicationKMSKey"
                                 }
                             },
                             "BucketKeyEnabled": true
@@ -1117,11 +1156,11 @@
                 ]
             }
         },
-        "LoggingS3BucketPolicy": {
+        "SecureAppLoggingS3BucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
             "Properties": {
                 "Bucket": {
-                    "Ref": "LoggingS3Bucket"
+                    "Ref": "SecureAppLoggingS3Bucket"
                 },
                 "PolicyDocument": {
                     "Version": "2012-10-17",
@@ -1135,7 +1174,7 @@
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
                                 "Fn::GetAtt": [
-                                    "LoggingS3Bucket",
+                                    "SecureAppLoggingS3Bucket",
                                     "Arn"
                                 ]
                             }
@@ -1148,7 +1187,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${LoggingS3Bucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "${SecureAppLoggingS3Bucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1170,7 +1209,7 @@
                                 "s3:PutObject"
                             ],
                             "Resource": {
-                                "Fn::Sub": "${LoggingS3Bucket.Arn}/alb-access-logs/*"
+                                "Fn::Sub": "${SecureAppLoggingS3Bucket.Arn}/alb-access-logs/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1193,16 +1232,46 @@
                             ],
                             "Resource": {
                                 "Fn::GetAtt": [
-                                    "LoggingS3Bucket",
+                                    "SecureAppLoggingS3Bucket",
                                     "Arn"
                                 ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketPermissionsCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "SecureAppLoggingS3Bucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSConfigBucketDelivery",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${SecureAppLoggingS3Bucket.Arn}/config/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
                             }
                         }
                     ]
                 }
             }
         },
-        "CloudTrailRole": {
+        "SecureAppCloudTrailRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
@@ -1234,7 +1303,7 @@
                                         "logs:PutLogEvents"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CloudTrailLogGroup}:*"
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${SecureAppCloudTrailLogGroup}:*"
                                     }
                                 }
                             ]
@@ -1251,7 +1320,7 @@
                 ]
             }
         },
-        "CloudTrailLogGroup": {
+        "SecureAppCloudTrailLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
@@ -1260,7 +1329,7 @@
                 "RetentionInDays": 90
             }
         },
-        "ApplicationCloudTrail": {
+        "SecureAppApplicationCloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
             "Condition": "IsProdOrStaging",
             "Properties": {
@@ -1268,7 +1337,7 @@
                     "Fn::Sub": "${Environment}-cloudtrail-${AWS::StackName}"
                 },
                 "S3BucketName": {
-                    "Ref": "LoggingS3Bucket"
+                    "Ref": "SecureAppLoggingS3Bucket"
                 },
                 "S3KeyPrefix": "cloudtrail-logs/",
                 "IncludeGlobalServiceEvents": true,
@@ -1277,18 +1346,18 @@
                 "IsLogging": true,
                 "CloudWatchLogsLogGroupArn": {
                     "Fn::GetAtt": [
-                        "CloudTrailLogGroup",
+                        "SecureAppCloudTrailLogGroup",
                         "Arn"
                     ]
                 },
                 "CloudWatchLogsRoleArn": {
                     "Fn::GetAtt": [
-                        "CloudTrailRole",
+                        "SecureAppCloudTrailRole",
                         "Arn"
                     ]
                 },
                 "KMSKeyId": {
-                    "Ref": "ApplicationKMSKey"
+                    "Ref": "SecureAppApplicationKMSKey"
                 },
                 "EventSelectors": [
                     {
@@ -1322,7 +1391,7 @@
                 ]
             }
         },
-        "VPCFlowLogRole": {
+        "SecureAppVPCFlowLogRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
@@ -1371,7 +1440,7 @@
                 ]
             }
         },
-        "VPCFlowLogGroup": {
+        "SecureAppVPCFlowLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
@@ -1380,12 +1449,12 @@
                 "RetentionInDays": 30
             }
         },
-        "VPCFlowLog": {
+        "SecureAppVPCFlowLog": {
             "Type": "AWS::EC2::FlowLog",
             "Properties": {
                 "ResourceType": "VPC",
                 "ResourceId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "TrafficType": "ALL",
                 "LogDestinationType": "cloud-watch-logs",
@@ -1394,7 +1463,7 @@
                 },
                 "DeliverLogsPermissionArn": {
                     "Fn::GetAtt": [
-                        "VPCFlowLogRole",
+                        "SecureAppVPCFlowLogRole",
                         "Arn"
                     ]
                 },
@@ -1414,7 +1483,172 @@
                 ]
             }
         },
-        "ApplicationLogGroup": {
+        "SecureAppWAFWebACL": {
+            "Type": "AWS::WAFv2::WebACL",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-web-acl-${AWS::StackName}"
+                },
+                "Description": "Web ACL for ALB",
+                "DefaultAction": {
+                    "Allow": {}
+                },
+                "Scope": "REGIONAL",
+                "VisibilityConfig": {
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": {
+                        "Fn::Sub": "${Environment}-web-acl-metric-${AWS::StackName}"
+                    },
+                    "SampledRequestsEnabled": true
+                },
+                "Rules": [
+                    {
+                        "Name": "AWS-AWSManagedRulesCommonRuleSet",
+                        "Priority": 1,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesCommonRuleSet"
+                            }
+                        },
+                        "VisibilityConfig": {
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": {
+                                "Fn::Sub": "${Environment}-aws-common-${AWS::StackName}"
+                            },
+                            "SampledRequestsEnabled": true
+                        }
+                    },
+                    {
+                        "Name": "AWS-AWSManagedRulesKnownBadInputsRuleSet",
+                        "Priority": 2,
+                        "OverrideAction": {
+                            "None": {}
+                        },
+                        "Statement": {
+                            "ManagedRuleGroupStatement": {
+                                "VendorName": "AWS",
+                                "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+                            }
+                        },
+                        "VisibilityConfig": {
+                            "CloudWatchMetricsEnabled": true,
+                            "MetricName": {
+                                "Fn::Sub": "${Environment}-aws-badinputs-${AWS::StackName}"
+                            },
+                            "SampledRequestsEnabled": true
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-web-acl-${AWS::StackName}"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureAppWAFWebACLAssociation": {
+            "Type": "AWS::WAFv2::WebACLAssociation",
+            "Properties": {
+                "ResourceArn": {
+                    "Ref": "SecureAppApplicationLoadBalancer"
+                },
+                "WebACLArn": {
+                    "Fn::GetAtt": [
+                        "SecureAppWAFWebACL",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "SecureAppGuardDutyDetector": {
+            "Type": "AWS::GuardDuty::Detector",
+            "Properties": {
+                "Enable": true,
+                "FindingPublishingFrequency": "FIFTEEN_MINUTES"
+            }
+        },
+        "SecureAppConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "CreateConfigResources",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${Environment}-config-role-${AWS::StackName}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecureAppConfigRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "CreateConfigResources",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-config-recorder-${AWS::StackName}"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "SecureAppConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "SecureAppConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "DependsOn": "SecureAppConfigRecorder",
+            "Condition": "CreateConfigResources",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-config-channel-${AWS::StackName}"
+                },
+                "S3BucketName": {
+                    "Ref": "SecureAppLoggingS3Bucket"
+                },
+                "S3KeyPrefix": "config",
+                "ConfigSnapshotDeliveryProperties": {
+                    "DeliveryFrequency": "One_Hour"
+                }
+            }
+        },
+        "SecureAppApplicationLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
@@ -1423,7 +1657,7 @@
                 "RetentionInDays": 30
             }
         },
-        "S3AccessLogGroup": {
+        "SecureAppS3AccessLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
@@ -1432,7 +1666,7 @@
                 "RetentionInDays": 90
             }
         },
-        "ApplicationLaunchTemplate": {
+        "SecureAppApplicationLaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": {
@@ -1465,19 +1699,19 @@
                     "IamInstanceProfile": {
                         "Arn": {
                             "Fn::GetAtt": [
-                                "EC2InstanceProfile",
+                                "SecureAppEC2InstanceProfile",
                                 "Arn"
                             ]
                         }
                     },
                     "SecurityGroupIds": [
                         {
-                            "Ref": "ApplicationSecurityGroup"
+                            "Ref": "SecureAppApplicationSecurityGroup"
                         }
                     ],
                     "UserData": {
                         "Fn::Base64": {
-                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"${ApplicationLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/messages\"\n          },\n          {\n            \"file_path\": \"/var/log/secure\",\n            \"log_group_name\": \"${ApplicationLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/secure\"\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"CWAgent\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_iowait\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\"],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n"
+                            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n\n# Configure CloudWatch agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"${SecureAppApplicationLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/messages\"\n          },\n          {\n            \"file_path\": \"/var/log/secure\",\n            \"log_group_name\": \"${SecureAppApplicationLogGroup}\",\n            \"log_stream_name\": \"{instance_id}/secure\"\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"CWAgent\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\"cpu_usage_idle\", \"cpu_usage_iowait\", \"cpu_usage_user\", \"cpu_usage_system\"],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\"used_percent\"],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\"*\"]\n      },\n      \"mem\": {\n        \"measurement\": [\"mem_used_percent\"],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s\n"
                         }
                     },
                     "BlockDeviceMappings": [
@@ -1518,7 +1752,7 @@
                 }
             }
         },
-        "ApplicationLoadBalancer": {
+        "SecureAppApplicationLoadBalancer": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
@@ -1528,15 +1762,15 @@
                 "Type": "application",
                 "SecurityGroups": [
                     {
-                        "Ref": "LoadBalancerSecurityGroup"
+                        "Ref": "SecureAppLoadBalancerSecurityGroup"
                     }
                 ],
                 "Subnets": [
                     {
-                        "Ref": "PublicSubnet1"
+                        "Ref": "SecureAppPublicSubnet1"
                     },
                     {
-                        "Ref": "PublicSubnet2"
+                        "Ref": "SecureAppPublicSubnet2"
                     }
                 ],
                 "LoadBalancerAttributes": [
@@ -1561,7 +1795,7 @@
                 ]
             }
         },
-        "ApplicationTargetGroup": {
+        "SecureAppApplicationTargetGroup": {
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
@@ -1570,7 +1804,7 @@
                 "Port": 80,
                 "Protocol": "HTTP",
                 "VpcId": {
-                    "Ref": "ApplicationVPC"
+                    "Ref": "SecureAppVPC"
                 },
                 "HealthCheckIntervalSeconds": 30,
                 "HealthCheckPath": "/health",
@@ -1595,25 +1829,25 @@
                 ]
             }
         },
-        "ApplicationListener": {
+        "SecureAppApplicationListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
             "Properties": {
                 "DefaultActions": [
                     {
                         "Type": "forward",
                         "TargetGroupArn": {
-                            "Ref": "ApplicationTargetGroup"
+                            "Ref": "SecureAppApplicationTargetGroup"
                         }
                     }
                 ],
                 "LoadBalancerArn": {
-                    "Ref": "ApplicationLoadBalancer"
+                    "Ref": "SecureAppApplicationLoadBalancer"
                 },
                 "Port": 80,
                 "Protocol": "HTTP"
             }
         },
-        "ApplicationAutoScalingGroup": {
+        "SecureAppApplicationAutoScalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
                 "AutoScalingGroupName": {
@@ -1621,19 +1855,19 @@
                 },
                 "VPCZoneIdentifier": [
                     {
-                        "Ref": "PrivateSubnet1"
+                        "Ref": "SecureAppPrivateSubnet1"
                     },
                     {
-                        "Ref": "PrivateSubnet2"
+                        "Ref": "SecureAppPrivateSubnet2"
                     }
                 ],
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
-                        "Ref": "ApplicationLaunchTemplate"
+                        "Ref": "SecureAppApplicationLaunchTemplate"
                     },
                     "Version": {
                         "Fn::GetAtt": [
-                            "ApplicationLaunchTemplate",
+                            "SecureAppApplicationLaunchTemplate",
                             "LatestVersionNumber"
                         ]
                     }
@@ -1649,7 +1883,7 @@
                 },
                 "TargetGroupARNs": [
                     {
-                        "Ref": "ApplicationTargetGroup"
+                        "Ref": "SecureAppApplicationTargetGroup"
                     }
                 ],
                 "HealthCheckType": "ELB",
@@ -1672,7 +1906,7 @@
                 ]
             }
         },
-        "BastionHost": {
+        "SecureAppBastionHost": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": {
@@ -1698,14 +1932,14 @@
                 },
                 "SecurityGroupIds": [
                     {
-                        "Ref": "BastionSecurityGroup"
+                        "Ref": "SecureAppBastionSecurityGroup"
                     }
                 ],
                 "SubnetId": {
-                    "Ref": "PublicSubnet1"
+                    "Ref": "SecureAppPublicSubnet1"
                 },
                 "IamInstanceProfile": {
-                    "Ref": "EC2InstanceProfile"
+                    "Ref": "SecureAppEC2InstanceProfile"
                 },
                 "BlockDeviceMappings": [
                     {
@@ -1715,7 +1949,7 @@
                             "VolumeType": "gp3",
                             "Encrypted": true,
                             "KmsKeyId": {
-                                "Ref": "ApplicationKMSKey"
+                                "Ref": "SecureAppApplicationKMSKey"
                             },
                             "DeleteOnTermination": true
                         }
@@ -1745,7 +1979,7 @@
         "VPCId": {
             "Description": "VPC ID",
             "Value": {
-                "Ref": "ApplicationVPC"
+                "Ref": "SecureAppVPC"
             },
             "Export": {
                 "Name": {
@@ -1760,10 +1994,10 @@
                     ",",
                     [
                         {
-                            "Ref": "PublicSubnet1"
+                            "Ref": "SecureAppPublicSubnet1"
                         },
                         {
-                            "Ref": "PublicSubnet2"
+                            "Ref": "SecureAppPublicSubnet2"
                         }
                     ]
                 ]
@@ -1781,10 +2015,10 @@
                     ",",
                     [
                         {
-                            "Ref": "PrivateSubnet1"
+                            "Ref": "SecureAppPrivateSubnet1"
                         },
                         {
-                            "Ref": "PrivateSubnet2"
+                            "Ref": "SecureAppPrivateSubnet2"
                         }
                     ]
                 ]
@@ -1798,7 +2032,7 @@
         "InternetGatewayId": {
             "Description": "Internet Gateway ID",
             "Value": {
-                "Ref": "InternetGateway"
+                "Ref": "SecureAppInternetGateway"
             },
             "Export": {
                 "Name": {
@@ -1809,7 +2043,7 @@
         "PublicRouteTableId": {
             "Description": "Public Route Table ID",
             "Value": {
-                "Ref": "PublicRouteTable"
+                "Ref": "SecureAppPublicRouteTable"
             },
             "Export": {
                 "Name": {
@@ -1824,10 +2058,10 @@
                     ",",
                     [
                         {
-                            "Ref": "PrivateRouteTable1"
+                            "Ref": "SecureAppPrivateRouteTable1"
                         },
                         {
-                            "Ref": "PrivateRouteTable2"
+                            "Ref": "SecureAppPrivateRouteTable2"
                         }
                     ]
                 ]
@@ -1845,10 +2079,10 @@
                     ",",
                     [
                         {
-                            "Ref": "NatGateway1"
+                            "Ref": "SecureAppNatGateway1"
                         },
                         {
-                            "Ref": "NatGateway2"
+                            "Ref": "SecureAppNatGateway2"
                         }
                     ]
                 ]
@@ -1862,7 +2096,7 @@
         "AlbSGId": {
             "Description": "ALB Security Group ID",
             "Value": {
-                "Ref": "LoadBalancerSecurityGroup"
+                "Ref": "SecureAppLoadBalancerSecurityGroup"
             },
             "Export": {
                 "Name": {
@@ -1873,7 +2107,7 @@
         "AppSGId": {
             "Description": "Application Security Group ID",
             "Value": {
-                "Ref": "ApplicationSecurityGroup"
+                "Ref": "SecureAppApplicationSecurityGroup"
             },
             "Export": {
                 "Name": {
@@ -1884,7 +2118,7 @@
         "BastionSGId": {
             "Description": "Bastion Security Group ID",
             "Value": {
-                "Ref": "BastionSecurityGroup"
+                "Ref": "SecureAppBastionSecurityGroup"
             },
             "Export": {
                 "Name": {
@@ -1895,7 +2129,7 @@
         "KmsKeyId": {
             "Description": "Application KMS Key ID",
             "Value": {
-                "Ref": "ApplicationKMSKey"
+                "Ref": "SecureAppApplicationKMSKey"
             },
             "Export": {
                 "Name": {
@@ -1907,7 +2141,7 @@
             "Description": "Application KMS Key ARN",
             "Value": {
                 "Fn::GetAtt": [
-                    "ApplicationKMSKey",
+                    "SecureAppApplicationKMSKey",
                     "Arn"
                 ]
             },
@@ -1920,7 +2154,7 @@
         "KmsAliasName": {
             "Description": "KMS Alias name",
             "Value": {
-                "Ref": "ApplicationKMSKeyAlias"
+                "Ref": "SecureAppApplicationKMSKeyAlias"
             },
             "Export": {
                 "Name": {
@@ -1931,7 +2165,7 @@
         "ApplicationS3BucketName": {
             "Description": "Application artifacts bucket name",
             "Value": {
-                "Ref": "ApplicationS3Bucket"
+                "Ref": "SecureAppApplicationS3Bucket"
             },
             "Export": {
                 "Name": {
@@ -1943,7 +2177,7 @@
             "Description": "Application artifacts bucket ARN",
             "Value": {
                 "Fn::GetAtt": [
-                    "ApplicationS3Bucket",
+                    "SecureAppApplicationS3Bucket",
                     "Arn"
                 ]
             },
@@ -1956,7 +2190,7 @@
         "LoggingS3BucketName": {
             "Description": "Central logging bucket name",
             "Value": {
-                "Ref": "LoggingS3Bucket"
+                "Ref": "SecureAppLoggingS3Bucket"
             },
             "Export": {
                 "Name": {
@@ -1968,7 +2202,7 @@
             "Description": "Central logging bucket ARN",
             "Value": {
                 "Fn::GetAtt": [
-                    "LoggingS3Bucket",
+                    "SecureAppLoggingS3Bucket",
                     "Arn"
                 ]
             },
@@ -1981,7 +2215,7 @@
         "ApplicationLogGroupName": {
             "Description": "EC2/agent application log group",
             "Value": {
-                "Ref": "ApplicationLogGroup"
+                "Ref": "SecureAppApplicationLogGroup"
             },
             "Export": {
                 "Name": {
@@ -1992,7 +2226,7 @@
         "S3AccessLogGroupName": {
             "Description": "S3 access log group",
             "Value": {
-                "Ref": "S3AccessLogGroup"
+                "Ref": "SecureAppS3AccessLogGroup"
             },
             "Export": {
                 "Name": {
@@ -2003,7 +2237,7 @@
         "VPCFlowLogGroupName": {
             "Description": "VPC Flow Logs log group",
             "Value": {
-                "Ref": "VPCFlowLogGroup"
+                "Ref": "SecureAppVPCFlowLogGroup"
             },
             "Export": {
                 "Name": {
@@ -2014,7 +2248,7 @@
         "CloudTrailName": {
             "Description": "CloudTrail trail name",
             "Value": {
-                "Ref": "ApplicationCloudTrail"
+                "Ref": "SecureAppApplicationCloudTrail"
             },
             "Condition": "IsProdOrStaging",
             "Export": {
@@ -2026,7 +2260,7 @@
         "CloudTrailLogGroupName": {
             "Description": "CloudTrail CloudWatch log group name",
             "Value": {
-                "Ref": "CloudTrailLogGroup"
+                "Ref": "SecureAppCloudTrailLogGroup"
             },
             "Condition": "IsProdOrStaging",
             "Export": {
@@ -2039,7 +2273,7 @@
             "Description": "ALB DNS name",
             "Value": {
                 "Fn::GetAtt": [
-                    "ApplicationLoadBalancer",
+                    "SecureAppApplicationLoadBalancer",
                     "DNSName"
                 ]
             },
@@ -2053,7 +2287,7 @@
             "Description": "ALB ARN",
             "Value": {
                 "Fn::GetAtt": [
-                    "ApplicationLoadBalancer",
+                    "SecureAppApplicationLoadBalancer",
                     "LoadBalancerArn"
                 ]
             },
@@ -2063,10 +2297,59 @@
                 }
             }
         },
+        "WAFWebACLArn": {
+            "Description": "WAFv2 WebACL ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecureAppWAFWebACL",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-waf-web-acl-arn-${AWS::StackName}"
+                }
+            }
+        },
+        "GuardDutyDetectorId": {
+            "Description": "GuardDuty Detector ID",
+            "Value": {
+                "Ref": "SecureAppGuardDutyDetector"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-guardduty-detector-${AWS::StackName}"
+                }
+            }
+        },
+        "ConfigRecorderName": {
+            "Description": "AWS Config Recorder name",
+            "Value": {
+                "Ref": "SecureAppConfigRecorder"
+            },
+            "Condition": "CreateConfigResources",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-config-recorder-${AWS::StackName}"
+                }
+            }
+        },
+        "ConfigDeliveryChannelName": {
+            "Description": "AWS Config Delivery Channel name",
+            "Value": {
+                "Ref": "SecureAppConfigDeliveryChannel"
+            },
+            "Condition": "CreateConfigResources",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-config-channel-${AWS::StackName}"
+                }
+            }
+        },
         "TargetGroupArn": {
             "Description": "Target Group ARN",
             "Value": {
-                "Ref": "ApplicationTargetGroup"
+                "Ref": "SecureAppApplicationTargetGroup"
             },
             "Export": {
                 "Name": {
@@ -2077,7 +2360,7 @@
         "ListenerArn": {
             "Description": "HTTP (80) Listener ARN",
             "Value": {
-                "Ref": "ApplicationListener"
+                "Ref": "SecureAppApplicationListener"
             },
             "Export": {
                 "Name": {
@@ -2088,7 +2371,7 @@
         "LaunchTemplateId": {
             "Description": "EC2 Launch Template ID",
             "Value": {
-                "Ref": "ApplicationLaunchTemplate"
+                "Ref": "SecureAppApplicationLaunchTemplate"
             },
             "Export": {
                 "Name": {
@@ -2099,7 +2382,7 @@
         "ASGName": {
             "Description": "Auto Scaling Group name",
             "Value": {
-                "Ref": "ApplicationAutoScalingGroup"
+                "Ref": "SecureAppApplicationAutoScalingGroup"
             },
             "Export": {
                 "Name": {
@@ -2110,7 +2393,7 @@
         "BastionInstanceId": {
             "Description": "Bastion EC2 instance ID",
             "Value": {
-                "Ref": "BastionHost"
+                "Ref": "SecureAppBastionHost"
             },
             "Export": {
                 "Name": {
@@ -2121,7 +2404,7 @@
         "EC2InstanceRoleName": {
             "Description": "EC2 instance role name",
             "Value": {
-                "Ref": "EC2InstanceRole"
+                "Ref": "SecureAppEC2InstanceRole"
             },
             "Export": {
                 "Name": {
@@ -2132,7 +2415,7 @@
         "EC2InstanceProfileName": {
             "Description": "EC2 instance profile name",
             "Value": {
-                "Ref": "EC2InstanceProfile"
+                "Ref": "SecureAppEC2InstanceProfile"
             },
             "Export": {
                 "Name": {
