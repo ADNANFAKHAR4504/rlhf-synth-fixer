@@ -90,6 +90,11 @@ resource "aws_s3_bucket" "frontend_bucket" {
   bucket        = "${var.frontend_bucket_name}-${data.aws_caller_identity.current.account_id}"
   force_destroy = true
 
+  # Force recreation to ensure public access block settings are properly applied
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = {
     Name        = "Frontend Assets Bucket"
     Environment = var.environment
@@ -354,8 +359,6 @@ resource "aws_cognito_user_pool_client" "tap_user_pool_client" {
 # S3 bucket policy to allow public read access for website hosting
 resource "aws_s3_bucket_policy" "frontend_bucket_policy" {
   bucket = aws_s3_bucket.frontend_bucket.id
-
-  depends_on = [aws_s3_bucket_public_access_block.frontend_bucket_pab]
 
   policy = jsonencode({
     Version = "2012-10-17"
