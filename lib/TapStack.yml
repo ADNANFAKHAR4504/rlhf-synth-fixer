@@ -1236,7 +1236,7 @@ Resources:
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       IsLogging: true
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       EventSelectors:
         - ReadWriteType: 'All'
