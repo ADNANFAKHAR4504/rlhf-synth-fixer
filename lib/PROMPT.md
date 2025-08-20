@@ -1,42 +1,22 @@
-You are a Principal Cloud Security Architect. Generate Terraform HCL for a secure AWS environment in us-east-1 for a data-sensitive app.
+Hey there,
 
-Hard Limits
+I need your help writing Terraform HCL for a secure AWS environment in us-east-1. This setup is for a data-sensitive app, so it needs to be locked down but still scalable. There are a couple of constraints we have to follow:
 
-Maximum total lines (all files): 913.
+Only two files: provider.tf and tap_stack.tf.
 
-Exactly two files: provider.tf and tap_stack.tf.
+No extra modules or helper files.
 
-No extra files, modules, or prose. Only Terraform code.
+Max total size is 913 lines across both files.
 
-Minimize lines: compact blocks, minimal comments, no blank-line padding.
+Keep things compact: minimal comments, compact blocks, and no extra whitespace.
 
-Line-Budget Rules (enforce)
+Providers
 
-Keep comments to section headers only (≤6 words each).
+Terraform + AWS provider pinned to stable versions.
 
-Prefer locals, for_each, count, dynamic blocks, and data.aws_iam_policy_document to avoid repetition.
+Region fixed to us-east-1.
 
-Collapse attributes to single lines where readable.
-
-Use short, consistent names. Avoid long descriptions.
-
-Inline Lambda code must be minimal (short handler; no libs).
-
-No duplicated policy JSON—compose with multiple statements in one data document and reuse across roles.
-
-Avoid output descriptions; just value.
-
-File 1 — provider.tf
-
-Pin Terraform + AWS provider (stable versions).
-
-Region us-east-1.
-
-(Optional) commented S3 backend scaffold (≤6 lines).
-
-File 2 — tap_stack.tf
-
-Implement everything else, compactly.
+Optionally, add a short S3 backend scaffold in provider.tf (commented out, ≤6 lines).
 
 Variables
 
@@ -46,99 +26,105 @@ environment_name (string)
 
 notification_email (string)
 
-allowed_ssh_cidrs (list(string), default [])
+allowed_ssh_cidrs (list of strings, default [])
 
 instance_type (string, default "t3.micro")
 
 enable_vpc_flow_logs (bool, default true)
 
-tags (map(string), default {})
+tags (map, default {})
 
-Add validation only where short (e.g., email regex skipped to save lines).
+Use only short validations (skip email regex to save lines).
 
 Locals
 
-common_tags map: Project, Environment, ManagedBy="Terraform", merged with var.tags.
+common_tags that include Project, Environment, and ManagedBy="Terraform", merged with var.tags.
 
-Small helpers: AZ list via data.aws_availability_zones, cidrsubnet() loops for subnets, names, ARNs.
+Small helpers for AZs, subnet CIDRs (cidrsubnet()), resource names, and ARNs.
 
-VPC (HA, compact)
+Networking (High Availability)
 
-aws_vpc with DNS hostnames/support.
+A VPC with DNS enabled.
 
-4 subnets: 2 public, 2 private across 2 AZs using for_each.
+4 subnets (2 public, 2 private) across 2 AZs, created with for_each.
 
-aws_internet_gateway.
+Internet Gateway.
 
-NAT per AZ (2) with EIPs; routes via for_each.
+NAT gateways (2, one per AZ) with EIPs and routing handled via for_each.
 
-Route tables + associations using maps and for_each.
+Route tables and associations via maps.
 
-No public IPs on private subnets.
+Private subnets should not auto-assign public IPs.
 
-EC2 (private only)
+Compute (Private EC2 Only)
 
-aws_launch_template using var.instance_type, latest AL2 via data.aws_ssm_parameter (/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 or AL2).
+Launch Template using var.instance_type.
 
-Instance profile/role for SSM only (minimal perms).
+Use Amazon Linux 2023 (or latest AL2) from SSM.
 
-aws_autoscaling_group (desired/min/max=1/1/2) in private subnets, health check EC2.
+Instance profile/role with only SSM permissions.
 
-Security group: SSH allowed only from var.allowed_ssh_cidrs; if empty, no SSH rule (use count).
+Auto Scaling Group in private subnets: min=1, max=2, desired=1.
 
-Egress 0.0.0.0/0 allowed (comment: required for updates/SSM).
+Security Group: allow SSH only from var.allowed_ssh_cidrs. If empty, no SSH rule.
 
-S3 (encrypted + versioned)
+Outbound egress open to 0.0.0.0/0 (needed for updates/SSM).
 
-Logging bucket (separate): SSE-S3, versioning, public-access-block; lifecycle prevent_destroy=true.
+Storage (S3)
 
-Data bucket: SSE-S3, versioning, public-access-block; access logging → logging bucket; bucket policy enforcing TLS.
+Logging bucket: SSE-S3, versioning, public access block, prevent_destroy.
+
+Data bucket: SSE-S3, versioning, public access block. Enable access logging to the logging bucket. Add TLS-only bucket policy.
 
 Centralized Logging
 
-CloudTrail → logging bucket + CloudWatch Logs (log group with retention ~90d). Minimal role/policy docs via data.aws_iam_policy_document.
+CloudTrail sending logs to the logging bucket and CloudWatch Logs (log group with ~90d retention).
 
-VPC Flow Logs (if enabled): to CW Logs with minimal role.
+Minimal IAM role/policy using data.aws_iam_policy_document.
 
-CloudWatch Alarm (unauthorized)
+VPC Flow Logs (if enabled) to CloudWatch Logs, with minimal IAM role.
 
-Metric filter on CloudTrail log group for UnauthorizedOperation and AccessDenied*.
+Monitoring & Alerts
 
-Alarm >=1 in 5m.
+CloudWatch metric filter on the CloudTrail log group for UnauthorizedOperation and AccessDenied\*.
 
-SNS topic + email subscription (var.notification_email).
+Alarm triggers if ≥1 event in 5 minutes.
 
-Lambda Auto-Remediation (SG)
+SNS topic with email subscription (using var.notification_email).
 
-Tiny inline function (Python or Node) that:
+Auto-Remediation Lambda
 
-Detects SG rules allowing 0.0.0.0/0 on 22/3389.
+Tiny inline Lambda function (Python or Node).
 
-Removes offending ingress; logs actions.
+Function checks for SG rules that allow 0.0.0.0/0 on ports 22 or 3389.
 
-EventBridge rule on CloudTrail events: AuthorizeSecurityGroupIngress, RevokeSecurityGroupIngress, UpdateSecurityGroupRuleDescriptions*.
+If found, removes the rule and logs the action.
 
-Role with least privileges: ec2:Describe*, AuthorizeSecurityGroupIngress, RevokeSecurityGroupIngress limited to target SG; log write.
+Triggered by EventBridge rules on CloudTrail events for security group changes.
 
-IAM (least privilege)
+IAM role for Lambda with only the permissions it needs: ec2:Describe\*, AuthorizeSecurityGroupIngress, RevokeSecurityGroupIngress, and logging.
 
-Compose policies with data.aws_iam_policy_document and reuse.
+IAM (Least Privilege)
 
-Deny public S3 via bucket policy + public access block.
+Use data.aws_iam_policy_document to compose minimal inline policies and reuse them.
 
-Minimal trust policies for EC2/Lambda/CloudTrail.
+Deny public S3 access via bucket policy and public access block.
 
-Outputs (compact)
+Minimal trust policies for EC2, Lambda, and CloudTrail roles.
+
+Outputs
+
+Keep outputs short and compact (just the values):
 
 VPC ID
 
-Public/private subnet IDs
+Public and private subnet IDs
 
-NAT GW IDs
+NAT Gateway IDs
 
-ASG name
+Auto Scaling Group name
 
-Data/logging bucket names
+Data and logging bucket names
 
 CloudTrail name
 
@@ -146,27 +132,26 @@ Log group ARNs
 
 SNS topic ARN
 
-Lambda name/ARN
+Lambda name and ARN
 
-Additional Compression Tips (apply)
+Acceptance Criteria
 
-Reuse tag map: tags = local.common_tags.
+VPC with 2 public + 2 private subnets across 2 AZs.
 
-Prefer for_each with small maps to create multiple like-resources (subnets, RTs, NATs).
+EC2 runs only in private subnets.
 
-Keep heredocs short; no comments inside heredocs.
+SSH restricted to allowed CIDRs.
 
-No overly verbose description/name_prefix strings.
+Encrypted + versioned S3 buckets.
 
-Use depends_on only when necessary (e.g., Trail → buckets).
+CloudTrail and Flow Logs enabled.
 
-Acceptance
+CloudWatch alarm for unauthorized activity.
 
-Must satisfy: IAM least-privilege; encrypted + versioned S3; CloudWatch alarm on unauthorized; Lambda SG remediation; EC2 only in private subnets; VPC with 2 public + 2 private across 2 AZs; SSH restricted to allowed CIDRs; central logging.
+Auto-remediation Lambda for SG misconfigurations.
 
-Must pass terraform init/validate/plan with placeholder inputs.
+IAM roles least-privilege only.
 
-Stay within 913 total lines across both files.
+Must pass terraform init, terraform validate, and terraform plan.
 
-Pro Tip 🚀
-Use for_each with small local maps for AZ-indexed resources (subnets, RT/assoc, NAT) and data.aws_iam_policy_document to keep policies short and reusable. Keep Lambda to ~25–35 lines.
+Stay within the 913 line budget
