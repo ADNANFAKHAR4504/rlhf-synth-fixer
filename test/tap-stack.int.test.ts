@@ -53,7 +53,7 @@ describe('Secure Financial App Stack Unit Tests', () => {
   test('should have a valid CloudFormation format version and description', () => {
     expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     expect(template.Description).toContain(
-      'Secure AWS infrastructure for FinancialApp - V3 with SSM Session Manager Access (No Keys)'
+      'Secure AWS infrastructure for FinancialApp with SSM Session Manager Access (No Keys)'
     );
   });
 

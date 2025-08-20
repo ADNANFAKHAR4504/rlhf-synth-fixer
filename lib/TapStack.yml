@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure AWS infrastructure for FinancialApp - V3 with SSM Session Manager Access (No Keys)'
+Description: 'Secure AWS infrastructure for FinancialApp with SSM Session Manager Access (No Keys)'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -1224,9 +1224,7 @@ Resources:
                 Action:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
-                Resource: 
-                  - !GetAtt CloudTrailLogGroup.Arn
-                  - !Sub '${CloudTrailLogGroup}:*'
+                Resource: !GetAtt CloudTrailLogGroup.Arn
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
