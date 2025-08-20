@@ -1,0 +1,636 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Test environment with VPC, EC2, and monitoring - following AWS best practices",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentName",
+                        "KeyPairName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Networking"
+                    },
+                    "Parameters": [
+                        "AllowedCidr",
+                        "LatestAmiId"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentName": {
+            "Description": "Environment name prefix for resource naming",
+            "Type": "String",
+            "Default": "TestEnv",
+            "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters and hyphens"
+        },
+        "KeyPairName": {
+            "Description": "EC2 Key Pair for SSH access (optional)",
+            "Type": "String",
+            "Default": ""
+        },
+        "LatestAmiId": {
+            "Description": "Latest Amazon Linux 2 AMI ID",
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        },
+        "AllowedCidr": {
+            "Description": "CIDR allowed to access the instance (defaults to anywhere)",
+            "Type": "String",
+            "Default": "0.0.0.0/0"
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-VPC"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "TestEnvironment"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-IGW"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Subnet"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Subnet"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "NatGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-EIP"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "NatGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-Gateway"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Routes"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Routes"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet"
+                }
+            }
+        },
+        "WebSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-Web-SG"
+                },
+                "GroupDescription": "Security group for web servers allowing HTTP and SSH",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": {
+                            "Ref": "AllowedCidr"
+                        },
+                        "Description": "Allow HTTP"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "AllowedCidr"
+                        },
+                        "Description": "Allow SSH"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Web-SG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-Role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-EC2-Role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-Profile"
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "EC2LogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/${EnvironmentName}"
+                },
+                "RetentionInDays": 14,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-EC2-Logs"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    }
+                ]
+            }
+        },
+        "WebServer": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
+                "InstanceType": "t2.micro",
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyPair",
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "IamInstanceProfile": {
+                    "Ref": "EC2InstanceProfile"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "WebSecurityGroup"
+                    }
+                ],
+                "SubnetId": {
+                    "Ref": "PublicSubnet"
+                },
+                "Monitoring": true,
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y awslogs httpd\n\n# Configure CloudWatch Logs Agent\ncat > /etc/awslogs/awslogs.conf << EOF\n[general]\nstate_file = /var/lib/awslogs/agent-state\n\n[/var/log/messages]\nfile = /var/log/messages\nlog_group_name = ${EC2LogGroup}\nlog_stream_name = {instance_id}/var/log/messages\ndatetime_format = %b %d %H:%M:%S\n\n[/var/log/httpd/access_log]\nfile = /var/log/httpd/access_log\nlog_group_name = ${EC2LogGroup}\nlog_stream_name = {instance_id}/var/log/httpd/access_log\ndatetime_format = [%d/%b/%Y:%H:%M:%S %z]\n\n[/var/log/httpd/error_log]\nfile = /var/log/httpd/error_log\nlog_group_name = ${EC2LogGroup}\nlog_stream_name = {instance_id}/var/log/httpd/error_log\ndatetime_format = [%a %b %d %H:%M:%S %Y]\nEOF\n\n# Set region for awslogs\nsed -i 's/region = us-east-1/region = ${AWS::Region}/g' /etc/awslogs/awscli.conf\n\n# Start services\nsystemctl start awslogsd\nsystemctl enable awslogsd\nsystemctl start httpd\nsystemctl enable httpd\n\n# Create a simple index page\necho \"<h1>Test Environment Web Server</h1>\" > /var/www/html/index.html\necho \"<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>\" >> /var/www/html/index.html\necho \"<p>Region: ${AWS::Region}</p>\" >> /var/www/html/index.html\n"
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-WebServer"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Test"
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": "DevOpsTeam"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "TestEnvironment"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "ID of the VPC",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPC-ID"
+                }
+            }
+        },
+        "PublicSubnetId": {
+            "Description": "ID of the public subnet",
+            "Value": {
+                "Ref": "PublicSubnet"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Public-Subnet-ID"
+                }
+            }
+        },
+        "PrivateSubnetId": {
+            "Description": "ID of the private subnet",
+            "Value": {
+                "Ref": "PrivateSubnet"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Private-Subnet-ID"
+                }
+            }
+        },
+        "WebServerInstanceId": {
+            "Description": "Instance ID of the web server",
+            "Value": {
+                "Ref": "WebServer"
+            }
+        },
+        "WebServerPublicIP": {
+            "Description": "Public IP address of the web server",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebServer",
+                    "PublicIp"
+                ]
+            }
+        },
+        "WebServerPublicDNS": {
+            "Description": "Public DNS name of the web server",
+            "Value": {
+                "Fn::GetAtt": [
+                    "WebServer",
+                    "PublicDnsName"
+                ]
+            }
+        },
+        "WebURL": {
+            "Description": "URL of the web server",
+            "Value": {
+                "Fn::Sub": "http://${WebServer.PublicIp}"
+            }
+        },
+        "SecurityGroupId": {
+            "Description": "ID of the web security group",
+            "Value": {
+                "Ref": "WebSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-Web-SG-ID"
+                }
+            }
+        },
+        "NATGatewayId": {
+            "Description": "ID of the NAT Gateway",
+            "Value": {
+                "Ref": "NatGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-NAT-Gateway-ID"
+                }
+            }
+        },
+        "CloudWatchLogGroup": {
+            "Description": "CloudWatch Log Group for EC2 instance",
+            "Value": {
+                "Ref": "EC2LogGroup"
+            }
+        }
+    }
+}
