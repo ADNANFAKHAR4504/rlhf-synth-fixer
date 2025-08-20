@@ -1,3 +1,14 @@
+# CloudFormation Infrastructure Solution
+
+This solution implements the infrastructure requirements using AWS CloudFormation.
+
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Highly available and resilient web application infrastructure deployed across multiple 
@@ -24,17 +35,12 @@ Parameters:
       - staging
       - prod
 
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: ID of the existing VPC where resources will be deployed
-
-  SubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: List of at least two subnet IDs in different Availability Zones
-
-  DBSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: List of at least two private subnet IDs for RDS deployment
+  VpcCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: CIDR block for the VPC
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
+    ConstraintDescription: Must be a valid IPv4 CIDR block
 
   InstanceType:
     Type: String
@@ -57,15 +63,6 @@ Parameters:
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters
 
-  DBMasterPassword:
-    Type: String
-    Description: Master password for RDS database
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '^[a-zA-Z0-9]*$'
-    ConstraintDescription: Must contain only alphanumeric characters and be 8-41 characters long
-
   ProjectTag:
     Type: String
     Description: Project tag for resource identification
@@ -80,19 +77,148 @@ Parameters:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0abcdef1234567890  # Amazon Linux 2 AMI (replace with current AMI ID)
+      AMI: ami-0ad253013fad0a42a # Amazon Linux 2 AMI for us-east-1
     us-west-2:
-      AMI: ami-0abcdef1234567890  # Amazon Linux 2 AMI (replace with current AMI ID)
+      AMI: ami-0e0d5cba8c90ba8c5 # Amazon Linux 2 AMI for us-west-2
 
 # Resources section
 Resources:
+  # VPC Infrastructure
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AppName}-${Environment}-VPC'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AppName}-${Environment}-IGW'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+
+  # Attach Internet Gateway to VPC
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 4, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AppName}-${Environment}-PublicSubnet1'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 4, 8]]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AppName}-${Environment}-PublicSubnet2'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+
+  # Private Subnets for Database
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 4, 8]]
+      Tags:
+        - Key: Name
+          Value: !Sub '${AppName}-${Environment}-PrivateSubnet1'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 4, 8]]
+      Tags:
+        - Key: Name
+          Value: !Sub '${AppName}-${Environment}-PrivateSubnet2'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+
+  # Route Table for Public Subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AppName}-${Environment}-PublicRouteTable'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+
+  # Route to Internet Gateway
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  # Associate Public Subnets with Route Table
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
   # Security Group for Web Servers
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${AppName}-${Environment}-WebServer-SG'
       GroupDescription: Security group for web servers allowing HTTP traffic from ALB
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -118,7 +244,7 @@ Resources:
     Properties:
       GroupName: !Sub '${AppName}-${Environment}-ALB-SG'
       GroupDescription: Security group for Application Load Balancer
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -144,7 +270,7 @@ Resources:
     Properties:
       GroupName: !Sub '${AppName}-${Environment}-Database-SG'
       GroupDescription: Security group for RDS database
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
@@ -163,7 +289,6 @@ Resources:
   WebServerRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AppName}-${Environment}-WebServer-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -183,7 +308,6 @@ Resources:
   WebServerInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${AppName}-${Environment}-WebServer-Profile'
       Roles:
         - !Ref WebServerRole
 
@@ -193,7 +317,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${AppName}-${Environment}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: ami-0abcdef1234567890  # Replace with current Amazon Linux 2 AMI ID
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Name: !Ref WebServerInstanceProfile
@@ -206,7 +330,7 @@ Resources:
             yum install -y httpd
             systemctl start httpd
             systemctl enable httpd
-            
+
             # Create a simple Hello World page
             cat > /var/www/html/index.html << EOF
             <!DOCTYPE html>
@@ -236,7 +360,7 @@ Resources:
             </body>
             </html>
             EOF
-            
+
             # Install CloudWatch agent
             yum install -y amazon-cloudwatch-agent
         TagSpecifications:
@@ -258,7 +382,9 @@ Resources:
       Scheme: internet-facing
       SecurityGroups:
         - !Ref LoadBalancerSecurityGroup
-      Subnets: !Ref SubnetIds
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
       Tags:
         - Key: Name
           Value: !Sub '${AppName}-${Environment}-ALB'
@@ -274,7 +400,7 @@ Resources:
       Name: !Sub '${AppName}-${Environment}-TG'
       Port: 80
       Protocol: HTTP
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       HealthCheckEnabled: true
       HealthCheckPath: /
       HealthCheckProtocol: HTTP
@@ -313,7 +439,9 @@ Resources:
       MinSize: 2
       MaxSize: 4
       DesiredCapacity: 2
-      VPCZoneIdentifier: !Ref SubnetIds
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
       TargetGroupARNs:
         - !Ref WebServerTargetGroup
       HealthCheckType: ELB
@@ -395,13 +523,34 @@ Resources:
         - !Ref ScaleDownPolicy
       TreatMissingData: notBreaching
 
+  # Secrets Manager secret for database password
+  DatabasePasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AppName}-${Environment}-db-password'
+      Description: 'Auto-generated master password for RDS database'
+      GenerateSecretString:
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+        ExcludePunctuation: false
+        IncludeSpace: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${AppName}-${Environment}-DatabasePassword'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+
   # DB Subnet Group for RDS
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupName: !Sub '${AppName}-${Environment}-db-subnet-group'
       DBSubnetGroupDescription: Subnet group for RDS database
-      SubnetIds: !Ref DBSubnetIds
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       Tags:
         - Key: Name
           Value: !Sub '${AppName}-${Environment}-DBSubnetGroup'
@@ -417,21 +566,21 @@ Resources:
       DBInstanceIdentifier: !Sub '${AppName}-${Environment}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.4.6'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
       MultiAZ: true
       DBName: webapp
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabasePasswordSecret}:SecretString}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      DeletionProtection: false  # Set to true for production
+      DeletionProtection: false # Set to true for production
       Tags:
         - Key: Name
           Value: !Sub '${AppName}-${Environment}-Database'
@@ -495,3 +644,24 @@ Outputs:
     Value: !Ref LowCPUAlarm
     Export:
       Name: !Sub '${AppName}-${Environment}-LowCPU-Alarm'
+
+```
+
+## Key Features
+
+- Infrastructure as Code using CloudFormation YAML
+- Parameterized configuration for flexibility
+- Resource outputs for integration
+- Environment suffix support for multi-environment deployments
+
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+```

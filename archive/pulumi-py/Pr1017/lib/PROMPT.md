@@ -1,5 +1,5 @@
 ---
-## 📝 Automated Cloud Environment Setup on AWS
+## Automated Cloud Environment Setup on AWS
 ---
 
 ### Objective

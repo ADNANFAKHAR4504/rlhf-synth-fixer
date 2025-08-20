@@ -1,3 +1,4 @@
+```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: AWS CloudFormation template to set up a VPC, subnets, route tables, NAT Gateway, and EC2 instances.
 
@@ -219,3 +220,4 @@ Outputs:
     Value: !Ref privateInstance
     Export:
       Name: !Sub ${AWS::StackName}-PrivateInstanceId
+```
