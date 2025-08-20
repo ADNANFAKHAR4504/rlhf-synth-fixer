@@ -1,3 +1,6 @@
+## Ideal Response
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Test environment with VPC, EC2, and monitoring - following AWS best practices'
 
@@ -424,3 +427,4 @@ Outputs:
   CloudWatchLogGroup:
     Description: 'CloudWatch Log Group for EC2 instance'
     Value: !Ref EC2LogGroup
+```
