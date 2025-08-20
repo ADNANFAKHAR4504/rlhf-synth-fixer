@@ -583,7 +583,10 @@ resource "aws_iam_role_policy" "cloudwatch_logs" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.name_prefix}-*",
+          "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.name_prefix}-*"
+        ]
       }
     ]
   })
@@ -626,13 +629,43 @@ resource "aws_iam_role_policy" "automation_policy" {
         Effect = "Allow"
         Action = [
           "ec2:DescribeInstances",
-          "ec2:DescribeInstanceStatus",
+          "ec2:DescribeInstanceStatus"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Environment" = var.environment
+            "aws:ResourceTag/Project"     = var.project_name
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "autoscaling:DescribeAutoScalingGroups",
-          "autoscaling:UpdateAutoScalingGroup",
+          "autoscaling:UpdateAutoScalingGroup"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Environment" = var.environment
+            "aws:ResourceTag/Project"     = var.project_name
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "elbv2:DescribeLoadBalancers",
           "elbv2:DescribeTargetHealth"
         ]
         Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Environment" = var.environment
+            "aws:ResourceTag/Project"     = var.project_name
+          }
+        }
       }
     ]
   })

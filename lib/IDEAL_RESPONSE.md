@@ -42,9 +42,12 @@ This Terraform configuration creates a comprehensive, production-ready, multi-re
 
 ### Security
 - Security groups with least privilege access
-- IAM roles and policies for resource access
+- IAM roles and policies with enhanced scoping:
+  - CloudWatch logs permissions scoped to project-specific log groups
+  - Automation policies with resource tag constraints for environment isolation
+  - S3 bucket-specific permissions (no wildcard access)
 - S3 replication roles for cross-region sync
-- Automation roles for CI/CD integration
+- Automation roles for CI/CD integration with external ID protection
 
 ---
 
@@ -766,7 +769,10 @@ resource "aws_iam_role_policy" "cloudwatch_logs" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${var.primary_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.name_prefix}-*",
+          "arn:aws:logs:${var.secondary_region}:${data.aws_caller_identity.current.account_id}:log-group:${local.name_prefix}-*"
+        ]
       }
     ]
   })
@@ -809,13 +815,43 @@ resource "aws_iam_role_policy" "automation_policy" {
         Effect = "Allow"
         Action = [
           "ec2:DescribeInstances",
-          "ec2:DescribeInstanceStatus",
+          "ec2:DescribeInstanceStatus"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Environment" = var.environment
+            "aws:ResourceTag/Project"     = var.project_name
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "autoscaling:DescribeAutoScalingGroups",
-          "autoscaling:UpdateAutoScalingGroup",
+          "autoscaling:UpdateAutoScalingGroup"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Environment" = var.environment
+            "aws:ResourceTag/Project"     = var.project_name
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "elbv2:DescribeLoadBalancers",
           "elbv2:DescribeTargetHealth"
         ]
         Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Environment" = var.environment
+            "aws:ResourceTag/Project"     = var.project_name
+          }
+        }
       }
     ]
   })
@@ -833,6 +869,8 @@ resource "aws_s3_bucket" "primary" {
   provider = aws.primary
   bucket   = "${local.name_prefix}-storage-primary-${random_id.bucket_suffix.hex}"
 
+  force_destroy = true
+
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-storage-primary"
     Region = var.primary_region
@@ -843,6 +881,8 @@ resource "aws_s3_bucket" "primary" {
 resource "aws_s3_bucket" "secondary" {
   provider = aws.secondary
   bucket   = "${local.name_prefix}-storage-secondary-${random_id.bucket_suffix.hex}"
+
+  force_destroy = true
 
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-storage-secondary"
@@ -976,8 +1016,11 @@ resource "aws_iam_role_policy" "replication_policy" {
 
 # S3 Cross-Region Replication Configuration
 resource "aws_s3_bucket_replication_configuration" "replication" {
-  provider   = aws.primary
-  depends_on = [aws_s3_bucket_versioning.primary]
+  provider = aws.primary
+  depends_on = [
+    aws_s3_bucket_versioning.primary,
+    aws_s3_bucket_versioning.secondary
+  ]
 
   role   = aws_iam_role.replication_role.arn
   bucket = aws_s3_bucket.primary.id
@@ -1253,7 +1296,7 @@ resource "aws_autoscaling_group" "secondary" {
 - **Locals**: Define consistent naming, tagging, and environment-specific configurations
 - **Networking**: Complete VPC setup with public/private subnets, NAT gateways, and routing
 - **Security**: Security groups with least privilege access between ALBs and EC2 instances
-- **IAM**: Roles and policies for EC2 instances, S3 access, CloudWatch logging, and automation
+- **IAM**: Enhanced roles and policies with least privilege access - EC2 instances with project-scoped CloudWatch permissions, bucket-specific S3 access, and automation roles with resource tag constraints
 - **S3**: Cross-region replication setup with encryption and access controls
 - **Load Balancing**: Application Load Balancers with health checks and target groups
 - **Compute**: Launch templates and Auto Scaling Groups with environment-specific sizing
@@ -1857,9 +1900,13 @@ terraform apply \
 ### Security
 - Private subnets for application instances
 - Security groups with least privilege access
-- IAM roles with minimal required permissions
+- Enhanced IAM policies with resource-level security:
+  - CloudWatch logs scoped to project-specific log groups (no wildcard access)
+  - Automation roles with environment and project tag constraints
+  - S3 bucket-specific permissions (no wildcard access)
 - S3 bucket public access blocking
 - Encryption at rest for S3 storage
+- External ID protection for cross-account automation roles
 
 ### Scalability
 - Environment-specific auto scaling configurations
