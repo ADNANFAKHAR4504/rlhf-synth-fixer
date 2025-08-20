@@ -92,7 +92,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(itemsTable).add('Purpose', 'data-storage');
     cdk.Tags.of(itemsTable).add('Compliance', 'encryption-at-rest');
 
-            // Separate S3 bucket for access logs
+    // Separate S3 bucket for access logs
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
       bucketName: `tap-logs-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
@@ -114,7 +114,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-            // S3 Bucket for file uploads
+    // S3 Bucket for file uploads
     const filesBucket = new s3.Bucket(this, 'FilesBucket', {
       bucketName: `tap-files-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
@@ -137,7 +137,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(filesBucket).add('Compliance', 'encryption-at-rest');
 
     // CloudWatch Log Groups for Lambda functions
-            // Using AWS default encryption
+    // Using AWS default encryption
     const createItemLogGroup = new logs.LogGroup(this, 'CreateItemLogGroup', {
       logGroupName: '/aws/lambda/tap-create-item',
       retention: logs.RetentionDays.ONE_WEEK,
@@ -156,7 +156,7 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-            // IAM Role for Lambda functions
+    // IAM Role for Lambda functions
     const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
@@ -345,7 +345,7 @@ export class TapStack extends cdk.Stack {
       logGroup: uploadFileLogGroup,
     });
 
-            // API Gateway with CORS configuration
+    // API Gateway with CORS configuration
     const api = new apigateway.RestApi(this, 'TapApi', {
       restApiName: 'TAP Serverless API',
       description: 'Secure serverless web application API',
@@ -379,7 +379,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-            // Request validator for API
+    // Request validator for API
     const actualRequestValidator = new apigateway.RequestValidator(
       this,
       'ActualRequestValidator',
@@ -390,7 +390,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-            // Request validation models
+    // Request validation models
     const createItemModel = api.addModel('CreateItemModel', {
       contentType: 'application/json',
       modelName: 'CreateItemModel',

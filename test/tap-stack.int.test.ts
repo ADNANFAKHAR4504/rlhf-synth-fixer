@@ -9,12 +9,35 @@
 // These tests are designed for CI/CD pipelines and will be skipped locally
 // unless AWS credentials are properly configured.
 
-import { ApiGatewayV2Client, GetApisCommand } from '@aws-sdk/client-apigatewayv2';
-import { DescribeTableCommand, DynamoDBClient, ListTablesCommand } from '@aws-sdk/client-dynamodb';
-import { DescribeKeyCommand, KMSClient, ListKeysCommand } from '@aws-sdk/client-kms';
-import { GetFunctionCommand, LambdaClient, ListFunctionsCommand } from '@aws-sdk/client-lambda';
-import { GetBucketEncryptionCommand, ListBucketsCommand, S3Client } from '@aws-sdk/client-s3';
-import { DescribeSecretCommand, ListSecretsCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import {
+  ApiGatewayV2Client,
+  GetApisCommand,
+} from '@aws-sdk/client-apigatewayv2';
+import {
+  DescribeTableCommand,
+  DynamoDBClient,
+  ListTablesCommand,
+} from '@aws-sdk/client-dynamodb';
+import {
+  DescribeKeyCommand,
+  KMSClient,
+  ListKeysCommand,
+} from '@aws-sdk/client-kms';
+import {
+  GetFunctionCommand,
+  LambdaClient,
+  ListFunctionsCommand,
+} from '@aws-sdk/client-lambda';
+import {
+  GetBucketEncryptionCommand,
+  ListBucketsCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeSecretCommand,
+  ListSecretsCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -22,12 +45,17 @@ const region = process.env.AWS_REGION || 'us-west-2';
 
 // Validate that we're in the correct region for our infrastructure
 if (region !== 'us-west-2') {
-        console.warn(`Warning: Tests running in region ${region}, but infrastructure is configured for us-west-2`);
-  console.warn('   Some tests may fail if infrastructure is not deployed in this region');
+  console.warn(
+    `Warning: Tests running in region ${region}, but infrastructure is configured for us-west-2`
+  );
+  console.warn(
+    '   Some tests may fail if infrastructure is not deployed in this region'
+  );
 }
 
 // Check if we have AWS credentials for integration testing
-const hasAwsCredentials = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
+const hasAwsCredentials =
+  process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
 
 // AWS SDK clients for integration testing
 const dynamoClient = new DynamoDBClient({ region });
@@ -41,20 +69,30 @@ describe('TAP Stack Integration Tests', () => {
   // Skip all tests if no AWS credentials are available
   beforeAll(() => {
     if (!hasAwsCredentials) {
-      console.log('AWS credentials not found. Integration tests will be skipped.');
-      console.log('   These tests require AWS credentials and deployed infrastructure.');
+      console.log(
+        'AWS credentials not found. Integration tests will be skipped.'
+      );
+      console.log(
+        '   These tests require AWS credentials and deployed infrastructure.'
+      );
       console.log('   They are designed for CI/CD environments.');
       return;
     }
-    
+
     // Check if we're in the correct region
     if (region !== 'us-west-2') {
-      console.warn(` WARNING: Tests running in region ${region}, but infrastructure is configured for us-west-2`);
-      console.warn('   This will cause most tests to fail unless infrastructure is deployed in this region');
+      console.warn(
+        ` WARNING: Tests running in region ${region}, but infrastructure is configured for us-west-2`
+      );
+      console.warn(
+        '   This will cause most tests to fail unless infrastructure is deployed in this region'
+      );
       console.warn('   To fix this, either:');
       console.warn('   1. Set AWS_REGION=us-west-2 before running tests');
       console.warn('   2. Deploy infrastructure to the current region');
-      console.warn('   3. Update infrastructure configuration for the current region');
+      console.warn(
+        '   3. Update infrastructure configuration for the current region'
+      );
     }
   });
 
@@ -67,14 +105,18 @@ describe('TAP Stack Integration Tests', () => {
       expect(process.env.NODE_ENV).toBeDefined();
       expect(typeof process.env.NODE_ENV).toBe('string');
       expect(process.env.AWS_REGION).toBeDefined();
-      
+
       // Validate region - warn if not us-west-2 but don't fail the test
       const currentRegion = process.env.AWS_REGION;
       if (currentRegion !== 'us-west-2') {
-        console.warn(`Test running in ${currentRegion}, infrastructure configured for us-west-2`);
-        console.warn('   Some integration tests may fail if infrastructure is not deployed in this region');
+        console.warn(
+          `Test running in ${currentRegion}, infrastructure configured for us-west-2`
+        );
+        console.warn(
+          '   Some integration tests may fail if infrastructure is not deployed in this region'
+        );
       }
-      
+
       // Test passes regardless of region - the actual infrastructure tests will handle region-specific failures
       expect(currentRegion).toBeDefined();
     });
@@ -88,13 +130,16 @@ describe('TAP Stack Integration Tests', () => {
     test('should have AWS credentials configured', () => {
       // Verify AWS credentials are available for integration testing
       // Note: In local development, these may not be set
-      const hasCredentials = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
-      
+      const hasCredentials =
+        process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY;
+
       if (!hasCredentials) {
         console.log('AWS credentials not configured in local environment');
         console.log('   This is normal for local development');
-        console.log('   Credentials will be required for actual integration testing');
-        
+        console.log(
+          '   Credentials will be required for actual integration testing'
+        );
+
         // Test passes - credentials are optional in local dev
         expect(true).toBe(true);
       } else {
@@ -108,14 +153,18 @@ describe('TAP Stack Integration Tests', () => {
     test('should be in correct region for infrastructure', () => {
       // This test will pass but provide guidance if region is wrong
       const currentRegion = process.env.AWS_REGION;
-      
+
       if (currentRegion === 'us-west-2') {
         console.log('Tests running in correct region (us-west-2)');
         expect(currentRegion).toBe('us-west-2');
       } else {
-        console.warn(`Tests running in ${currentRegion}, but infrastructure configured for us-west-2`);
-        console.warn('   Infrastructure tests will likely fail unless resources are deployed in this region');
-        
+        console.warn(
+          `Tests running in ${currentRegion}, but infrastructure configured for us-west-2`
+        );
+        console.warn(
+          '   Infrastructure tests will likely fail unless resources are deployed in this region'
+        );
+
         // Test still passes - we're just providing guidance
         expect(currentRegion).toBeDefined();
       }
@@ -130,39 +179,47 @@ describe('TAP Stack Integration Tests', () => {
       }
 
       const tableName = `tap-items-table`;
-      
+
       try {
         // List all tables to verify access
         const listCommand = new ListTablesCommand({});
         const listResult = await dynamoClient.send(listCommand);
-        
+
         expect(listResult.TableNames).toBeDefined();
         expect(Array.isArray(listResult.TableNames)).toBe(true);
-        
+
         // Verify our specific table exists
         const tableExists = listResult.TableNames?.includes(tableName);
-        
+
         if (!tableExists) {
-          console.warn(`DynamoDB table '${tableName}' not found in region ${region}`);
-          console.warn('   This may indicate the infrastructure is not deployed or deployed in a different region');
+          console.warn(
+            `DynamoDB table '${tableName}' not found in region ${region}`
+          );
+          console.warn(
+            '   This may indicate the infrastructure is not deployed or deployed in a different region'
+          );
           console.warn('   Expected table name pattern: tap-items-table');
-          console.warn('   Available tables:', listResult.TableNames?.join(', ') || 'none');
-          
+          console.warn(
+            '   Available tables:',
+            listResult.TableNames?.join(', ') || 'none'
+          );
+
           // Skip the detailed table validation if table doesn't exist
           return;
         }
-        
+
         expect(tableExists).toBe(true);
-        
+
         // Get table details to verify encryption
-        const describeCommand = new DescribeTableCommand({ TableName: tableName });
+        const describeCommand = new DescribeTableCommand({
+          TableName: tableName,
+        });
         const tableDetails = await dynamoClient.send(describeCommand);
-        
+
         expect(tableDetails.Table).toBeDefined();
         expect(tableDetails.Table?.TableName).toBe(tableName);
         expect(tableDetails.Table?.SSEDescription).toBeDefined();
         expect(tableDetails.Table?.SSEDescription?.SSEType).toBe('KMS');
-        
       } catch (error) {
         throw new Error(`DynamoDB integration test failed: ${error}`);
       }
@@ -175,22 +232,27 @@ describe('TAP Stack Integration Tests', () => {
       }
 
       const tableName = `tap-items-table`;
-      
+
       try {
-        const describeCommand = new DescribeTableCommand({ TableName: tableName });
+        const describeCommand = new DescribeTableCommand({
+          TableName: tableName,
+        });
         const tableDetails = await dynamoClient.send(describeCommand);
-        
+
         // Verify encryption is enabled
         expect(tableDetails.Table?.SSEDescription?.Status).toBe('ENABLED');
         expect(tableDetails.Table?.SSEDescription?.SSEType).toBe('KMS');
-        expect(tableDetails.Table?.SSEDescription?.KMSMasterKeyArn).toBeDefined();
-        
+        expect(
+          tableDetails.Table?.SSEDescription?.KMSMasterKeyArn
+        ).toBeDefined();
+
         // Note: Point-in-time recovery status is not directly accessible via DescribeTable
         // It's configured at the table level but requires additional API calls to verify
-        
+
         // Verify billing mode is PAY_PER_REQUEST
-        expect(tableDetails.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-        
+        expect(tableDetails.Table?.BillingModeSummary?.BillingMode).toBe(
+          'PAY_PER_REQUEST'
+        );
       } catch (error) {
         throw new Error(`DynamoDB encryption test failed: ${error}`);
       }
@@ -208,28 +270,36 @@ describe('TAP Stack Integration Tests', () => {
         // List all buckets to verify access
         const listCommand = new ListBucketsCommand({});
         const listResult = await s3Client.send(listCommand);
-        
+
         expect(listResult.Buckets).toBeDefined();
         expect(Array.isArray(listResult.Buckets)).toBe(true);
-        
+
         // Find our specific bucket
         const bucketName = `tap-files-bucket-${process.env.AWS_ACCOUNT_ID || 'test'}-${region}`;
-        const bucketExists = listResult.Buckets?.some(bucket => 
+        const bucketExists = listResult.Buckets?.some(bucket =>
           bucket.Name?.includes('tap-files-bucket')
         );
-        
+
         if (!bucketExists) {
-          console.warn(`S3 bucket with pattern 'tap-files-bucket' not found in region ${region}`);
-          console.warn('   This may indicate the infrastructure is not deployed or deployed in a different region');
-          console.warn('   Expected bucket name pattern: tap-files-bucket-{account}-{region}');
-          console.warn('   Available buckets:', listResult.Buckets?.map(b => b.Name).join(', ') || 'none');
-          
+          console.warn(
+            `S3 bucket with pattern 'tap-files-bucket' not found in region ${region}`
+          );
+          console.warn(
+            '   This may indicate the infrastructure is not deployed or deployed in a different region'
+          );
+          console.warn(
+            '   Expected bucket name pattern: tap-files-bucket-{account}-{region}'
+          );
+          console.warn(
+            '   Available buckets:',
+            listResult.Buckets?.map(b => b.Name).join(', ') || 'none'
+          );
+
           // Skip the detailed bucket validation if bucket doesn't exist
           return;
         }
-        
+
         expect(bucketExists).toBe(true);
-        
       } catch (error) {
         throw new Error(`S3 integration test failed: ${error}`);
       }
@@ -243,20 +313,34 @@ describe('TAP Stack Integration Tests', () => {
 
       try {
         const bucketName = `tap-files-bucket-${process.env.AWS_ACCOUNT_ID || 'test'}-${region}`;
-        
+
         // Get bucket encryption configuration
-        const encryptionCommand = new GetBucketEncryptionCommand({ Bucket: bucketName });
+        const encryptionCommand = new GetBucketEncryptionCommand({
+          Bucket: bucketName,
+        });
         const encryptionResult = await s3Client.send(encryptionCommand);
-        
-        expect(encryptionResult.ServerSideEncryptionConfiguration).toBeDefined();
-        expect(encryptionResult.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
-        expect(encryptionResult.ServerSideEncryptionConfiguration?.Rules?.length).toBeGreaterThan(0);
-        
-        const encryptionRule = encryptionResult.ServerSideEncryptionConfiguration?.Rules?.[0];
-        expect(encryptionRule?.ApplyServerSideEncryptionByDefault).toBeDefined();
-        expect(encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-        expect(encryptionRule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBeDefined();
-        
+
+        expect(
+          encryptionResult.ServerSideEncryptionConfiguration
+        ).toBeDefined();
+        expect(
+          encryptionResult.ServerSideEncryptionConfiguration?.Rules
+        ).toBeDefined();
+        expect(
+          encryptionResult.ServerSideEncryptionConfiguration?.Rules?.length
+        ).toBeGreaterThan(0);
+
+        const encryptionRule =
+          encryptionResult.ServerSideEncryptionConfiguration?.Rules?.[0];
+        expect(
+          encryptionRule?.ApplyServerSideEncryptionByDefault
+        ).toBeDefined();
+        expect(
+          encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+        ).toBe('aws:kms');
+        expect(
+          encryptionRule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID
+        ).toBeDefined();
       } catch (error) {
         throw new Error(`S3 encryption test failed: ${error}`);
       }
@@ -274,14 +358,13 @@ describe('TAP Stack Integration Tests', () => {
         // List all KMS keys to verify access
         const listCommand = new ListKeysCommand({});
         const listResult = await kmsClient.send(listCommand);
-        
+
         expect(listResult.Keys).toBeDefined();
         expect(Array.isArray(listResult.Keys)).toBe(true);
-        
+
         // Find our specific key (look for alias)
         const keyAlias = 'alias/tap-app-key';
         // Note: We can't directly search by alias in ListKeys, but we can verify access
-        
       } catch (error) {
         throw new Error(`KMS integration test failed: ${error}`);
       }
@@ -298,20 +381,21 @@ describe('TAP Stack Integration Tests', () => {
         // For now, we'll verify KMS access is working
         const listCommand = new ListKeysCommand({});
         const listResult = await kmsClient.send(listCommand);
-        
+
         expect(listResult.Keys).toBeDefined();
         expect(listResult.Keys?.length).toBeGreaterThan(0);
-        
+
         // Verify we can describe at least one key
         if (listResult.Keys && listResult.Keys.length > 0) {
           const firstKey = listResult.Keys[0];
-          const describeCommand = new DescribeKeyCommand({ KeyId: firstKey.KeyId! });
+          const describeCommand = new DescribeKeyCommand({
+            KeyId: firstKey.KeyId!,
+          });
           const keyDetails = await kmsClient.send(describeCommand);
-          
+
           expect(keyDetails.KeyMetadata).toBeDefined();
           expect(keyDetails.KeyMetadata?.KeyId).toBe(firstKey.KeyId);
         }
-        
       } catch (error) {
         throw new Error(`KMS configuration test failed: ${error}`);
       }
@@ -329,28 +413,34 @@ describe('TAP Stack Integration Tests', () => {
         // List all secrets to verify access
         const listCommand = new ListSecretsCommand({});
         const listResult = await secretsClient.send(listCommand);
-        
+
         expect(listResult.SecretList).toBeDefined();
         expect(Array.isArray(listResult.SecretList)).toBe(true);
-        
+
         // Find our specific secret
         const secretName = 'tap-app/secrets';
-        const secretExists = listResult.SecretList?.some(secret => 
-          secret.Name === secretName
+        const secretExists = listResult.SecretList?.some(
+          secret => secret.Name === secretName
         );
-        
+
         if (!secretExists) {
-          console.warn(`Secrets Manager secret '${secretName}' not found in region ${region}`);
-          console.warn('   This may indicate the infrastructure is not deployed or deployed in a different region');
+          console.warn(
+            `Secrets Manager secret '${secretName}' not found in region ${region}`
+          );
+          console.warn(
+            '   This may indicate the infrastructure is not deployed or deployed in a different region'
+          );
           console.warn('   Expected secret name: tap-app/secrets');
-          console.warn('   Available secrets:', listResult.SecretList?.map(s => s.Name).join(', ') || 'none');
-          
+          console.warn(
+            '   Available secrets:',
+            listResult.SecretList?.map(s => s.Name).join(', ') || 'none'
+          );
+
           // Skip the detailed secret validation if secret doesn't exist
           return;
         }
-        
+
         expect(secretExists).toBe(true);
-        
       } catch (error) {
         throw new Error(`Secrets Manager integration test failed: ${error}`);
       }
@@ -358,21 +448,26 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should have Secrets Manager secret with proper configuration', async () => {
       if (!hasAwsCredentials) {
-        console.log('Skipping Secrets Manager configuration test - no AWS credentials');
+        console.log(
+          'Skipping Secrets Manager configuration test - no AWS credentials'
+        );
         return;
       }
 
       try {
         const secretName = 'tap-app/secrets';
-        
+
         // Get secret details
-        const describeCommand = new DescribeSecretCommand({ SecretId: secretName });
+        const describeCommand = new DescribeSecretCommand({
+          SecretId: secretName,
+        });
         const secretDetails = await secretsClient.send(describeCommand);
-        
+
         expect(secretDetails.Name).toBe(secretName);
-        expect(secretDetails.Description).toBe('Application secrets for TAP serverless app');
+        expect(secretDetails.Description).toBe(
+          'Application secrets for TAP serverless app'
+        );
         expect(secretDetails.KmsKeyId).toBeDefined(); // Should be encrypted with KMS
-        
       } catch (error) {
         throw new Error(`Secrets Manager configuration test failed: ${error}`);
       }
@@ -390,32 +485,42 @@ describe('TAP Stack Integration Tests', () => {
         // List all Lambda functions to verify access
         const listCommand = new ListFunctionsCommand({});
         const listResult = await lambdaClient.send(listCommand);
-        
+
         expect(listResult.Functions).toBeDefined();
         expect(Array.isArray(listResult.Functions)).toBe(true);
-        
+
         // Verify our specific functions exist
         const expectedFunctions = [
           'tap-create-item',
-          'tap-get-items', 
-          'tap-upload-file'
+          'tap-get-items',
+          'tap-upload-file',
         ];
-        
-        const functionNames = listResult.Functions?.map(fn => fn.FunctionName) || [];
-        
+
+        const functionNames =
+          listResult.Functions?.map(fn => fn.FunctionName) || [];
+
         expectedFunctions.forEach(expectedName => {
           const functionExists = functionNames.includes(expectedName);
-          
+
           if (!functionExists) {
-            console.warn(`Lambda function '${expectedName}' not found in region ${region}`);
-            console.warn('   This may indicate the infrastructure is not deployed or deployed in a different region');
-            console.warn('   Expected function names:', expectedFunctions.join(', '));
-            console.warn('   Available functions:', functionNames.join(', ') || 'none');
+            console.warn(
+              `Lambda function '${expectedName}' not found in region ${region}`
+            );
+            console.warn(
+              '   This may indicate the infrastructure is not deployed or deployed in a different region'
+            );
+            console.warn(
+              '   Expected function names:',
+              expectedFunctions.join(', ')
+            );
+            console.warn(
+              '   Available functions:',
+              functionNames.join(', ') || 'none'
+            );
           }
-          
+
           expect(functionExists).toBe(true);
         });
-        
       } catch (error) {
         throw new Error(`Lambda integration test failed: ${error}`);
       }
@@ -429,25 +534,29 @@ describe('TAP Stack Integration Tests', () => {
 
       try {
         const functionName = 'tap-create-item';
-        
+
         // Get function details
-        const getCommand = new GetFunctionCommand({ FunctionName: functionName });
+        const getCommand = new GetFunctionCommand({
+          FunctionName: functionName,
+        });
         const functionDetails = await lambdaClient.send(getCommand);
-        
+
         expect(functionDetails.Configuration).toBeDefined();
         expect(functionDetails.Configuration?.FunctionName).toBe(functionName);
         expect(functionDetails.Configuration?.Runtime).toBe('nodejs18.x');
         expect(functionDetails.Configuration?.Timeout).toBe(30);
-        
+
         // Verify environment variables
         expect(functionDetails.Configuration?.Environment).toBeDefined();
-        expect(functionDetails.Configuration?.Environment?.Variables).toBeDefined();
-        
-        const envVars = functionDetails.Configuration?.Environment?.Variables || {};
+        expect(
+          functionDetails.Configuration?.Environment?.Variables
+        ).toBeDefined();
+
+        const envVars =
+          functionDetails.Configuration?.Environment?.Variables || {};
         expect(envVars.TABLE_NAME).toBeDefined();
         expect(envVars.KMS_KEY_ID).toBeDefined();
         expect(envVars.SECRET_ARN).toBeDefined();
-        
       } catch (error) {
         throw new Error(`Lambda configuration test failed: ${error}`);
       }
@@ -465,28 +574,32 @@ describe('TAP Stack Integration Tests', () => {
         // List all APIs to verify access
         const listCommand = new GetApisCommand({});
         const listResult = await apiGatewayClient.send(listCommand);
-        
+
         expect(listResult.Items).toBeDefined();
         expect(Array.isArray(listResult.Items)).toBe(true);
-        
+
         // Find our specific API
         const apiName = 'TAP Serverless API';
-        const apiExists = listResult.Items?.some(api => 
-          api.Name === apiName
-        );
-        
+        const apiExists = listResult.Items?.some(api => api.Name === apiName);
+
         if (!apiExists) {
-          console.warn(`API Gateway '${apiName}' not found in region ${region}`);
-          console.warn('   This may indicate the infrastructure is not deployed or deployed in a different region');
+          console.warn(
+            `API Gateway '${apiName}' not found in region ${region}`
+          );
+          console.warn(
+            '   This may indicate the infrastructure is not deployed or deployed in a different region'
+          );
           console.warn('   Expected API name: TAP Serverless API');
-          console.warn('   Available APIs:', listResult.Items?.map(api => api.Name).join(', ') || 'none');
-          
+          console.warn(
+            '   Available APIs:',
+            listResult.Items?.map(api => api.Name).join(', ') || 'none'
+          );
+
           // Skip the detailed API validation if API doesn't exist
           return;
         }
-        
+
         expect(apiExists).toBe(true);
-        
       } catch (error) {
         throw new Error(`API Gateway integration test failed: ${error}`);
       }
@@ -506,30 +619,29 @@ describe('TAP Stack Integration Tests', () => {
         const dynamoListCommand = new ListTablesCommand({});
         const dynamoResult = await dynamoClient.send(dynamoListCommand);
         expect(dynamoResult.TableNames).toBeDefined();
-        
+
         // Verify S3 access
         const s3ListCommand = new ListBucketsCommand({});
         const s3Result = await s3Client.send(s3ListCommand);
         expect(s3Result.Buckets).toBeDefined();
-        
+
         // Verify Lambda access
         const lambdaListCommand = new ListFunctionsCommand({});
         const lambdaResult = await lambdaClient.send(lambdaListCommand);
         expect(lambdaResult.Functions).toBeDefined();
-        
+
         // Verify KMS access
         const kmsListCommand = new ListKeysCommand({});
         const kmsResult = await kmsClient.send(kmsListCommand);
         expect(kmsResult.Keys).toBeDefined();
-        
+
         // Verify Secrets Manager access
         const secretsListCommand = new ListSecretsCommand({});
         const secretsResult = await secretsClient.send(secretsListCommand);
         expect(secretsResult.SecretList).toBeDefined();
-        
+
         // If we get here, all services are accessible
         expect(true).toBe(true);
-        
       } catch (error) {
         throw new Error(`End-to-end integration test failed: ${error}`);
       }
@@ -537,7 +649,9 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should have TAP infrastructure deployed', async () => {
       if (!hasAwsCredentials) {
-        console.log('Skipping infrastructure deployment check - no AWS credentials');
+        console.log(
+          'Skipping infrastructure deployment check - no AWS credentials'
+        );
         return;
       }
 
@@ -550,7 +664,9 @@ describe('TAP Stack Integration Tests', () => {
         try {
           const listCommand = new ListTablesCommand({});
           const listResult = await dynamoClient.send(listCommand);
-          const tableExists = listResult.TableNames?.some(name => name.includes('tap-items-table'));
+          const tableExists = listResult.TableNames?.some(name =>
+            name.includes('tap-items-table')
+          );
           if (!tableExists) {
             infrastructureDeployed = false;
             missingResources.push('DynamoDB table (tap-items-table)');
@@ -564,7 +680,9 @@ describe('TAP Stack Integration Tests', () => {
         try {
           const listCommand = new ListBucketsCommand({});
           const listResult = await s3Client.send(listCommand);
-          const bucketExists = listResult.Buckets?.some(bucket => bucket.Name?.includes('tap-files-bucket'));
+          const bucketExists = listResult.Buckets?.some(bucket =>
+            bucket.Name?.includes('tap-files-bucket')
+          );
           if (!bucketExists) {
             infrastructureDeployed = false;
             missingResources.push('S3 bucket (tap-files-bucket)');
@@ -578,13 +696,20 @@ describe('TAP Stack Integration Tests', () => {
         try {
           const listCommand = new ListFunctionsCommand({});
           const listResult = await lambdaClient.send(listCommand);
-          const expectedFunctions = ['tap-create-item', 'tap-get-items', 'tap-upload-file'];
-          const missingFunctions = expectedFunctions.filter(expected => 
-            !listResult.Functions?.some(fn => fn.FunctionName === expected)
+          const expectedFunctions = [
+            'tap-create-item',
+            'tap-get-items',
+            'tap-upload-file',
+          ];
+          const missingFunctions = expectedFunctions.filter(
+            expected =>
+              !listResult.Functions?.some(fn => fn.FunctionName === expected)
           );
           if (missingFunctions.length > 0) {
             infrastructureDeployed = false;
-            missingResources.push(`Lambda functions (${missingFunctions.join(', ')})`);
+            missingResources.push(
+              `Lambda functions (${missingFunctions.join(', ')})`
+            );
           }
         } catch (error) {
           infrastructureDeployed = false;
@@ -595,7 +720,9 @@ describe('TAP Stack Integration Tests', () => {
         try {
           const listCommand = new ListSecretsCommand({});
           const listResult = await secretsClient.send(listCommand);
-          const secretExists = listResult.SecretList?.some(secret => secret.Name === 'tap-app/secrets');
+          const secretExists = listResult.SecretList?.some(
+            secret => secret.Name === 'tap-app/secrets'
+          );
           if (!secretExists) {
             infrastructureDeployed = false;
             missingResources.push('Secrets Manager secret (tap-app/secrets)');
@@ -609,7 +736,9 @@ describe('TAP Stack Integration Tests', () => {
         try {
           const listCommand = new GetApisCommand({});
           const listResult = await apiGatewayClient.send(listCommand);
-          const apiExists = listResult.Items?.some(api => api.Name === 'TAP Serverless API');
+          const apiExists = listResult.Items?.some(
+            api => api.Name === 'TAP Serverless API'
+          );
           if (!apiExists) {
             infrastructureDeployed = false;
             missingResources.push('API Gateway (TAP Serverless API)');
@@ -620,20 +749,23 @@ describe('TAP Stack Integration Tests', () => {
         }
 
         if (!infrastructureDeployed) {
-          console.error('TAP infrastructure is NOT deployed in the current region');
+          console.error(
+            'TAP infrastructure is NOT deployed in the current region'
+          );
           console.error('   Missing resources:', missingResources.join(', '));
           console.error('   To deploy infrastructure:');
-          console.error('   1. Ensure you are in the correct region (us-west-2)');
+          console.error(
+            '   1. Ensure you are in the correct region (us-west-2)'
+          );
           console.error('   2. Run: npm run cdk:deploy');
           console.error('   3. Wait for deployment to complete');
           console.error('   4. Run tests again');
-          
+
           // Test fails if infrastructure is not deployed
           expect(infrastructureDeployed).toBe(true);
         } else {
           console.log('TAP infrastructure is deployed and accessible');
         }
-        
       } catch (error) {
         console.error('Error checking infrastructure deployment:', error);
         expect(false).toBe(true); // Force test failure
