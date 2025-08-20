@@ -649,7 +649,7 @@ Resources:
       ResourceId: !Ref VPC
       ResourceType: VPC
       TrafficType: ALL
-      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}'
+      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-vpc-flow-logs-delivery'
