@@ -349,11 +349,11 @@ output "cloudtrail_bucket_name" {
 }
 
 output "cloudtrail_arn" {
-  value = var.create_cloudtrail ? aws_cloudtrail.main[0].arn : null
+  value = var.create_cloudtrail ? aws_cloudtrail.main[0].arn : ""
 }
 
 output "cloudtrail_log_group" {
-  value = var.create_cloudtrail ? aws_cloudwatch_log_group.cloudtrail[0].name : null
+  value = var.create_cloudtrail ? aws_cloudwatch_log_group.cloudtrail[0].name : ""
 }
 
 output "security_alerts_topic_arn" {

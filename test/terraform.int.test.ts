@@ -69,11 +69,11 @@ function val<T = string>(obj: Record<string, TfOutput>, key: string): T {
   return obj[key].value as T;
 }
 
-function valOptional<T = string>(obj: Record<string, TfOutput>, key: string): T | null {
+function valOptional<T = string>(obj: Record<string, TfOutput>, key: string): T {
   if (!obj[key]) {
     throw new Error(`Missing expected output key: ${key}`);
   }
-  return obj[key].value as T | null;
+  return obj[key].value as T;
 }
 
 // --- Globals set in beforeAll ---
@@ -81,8 +81,8 @@ let region = "us-west-2";
 let appBucket = "";
 let trailBucket = "";
 let kmsKeyArn = "";
-let cloudTrailArn: string | null = null;
-let cloudTrailLogGroupName: string | null = null;
+let cloudTrailArn = "";
+let cloudTrailLogGroupName = "";
 let snsTopicArn = "";
 
 // AWS clients (initialized after region known)
@@ -227,7 +227,7 @@ describe("Integration: S3 (CloudTrail logs bucket)", () => {
 
 describe("Integration: CloudWatch Logs (CloudTrail log group)", () => {
   it("log group exists and is KMS-encrypted", async () => {
-    if (!cloudTrailLogGroupName) {
+    if (!cloudTrailLogGroupName || cloudTrailLogGroupName === "") {
       console.log("Skipping CloudWatch log group test - create_cloudtrail is false");
       return;
     }
@@ -243,7 +243,7 @@ describe("Integration: CloudWatch Logs (CloudTrail log group)", () => {
   });
 
   it("log group has appropriate retention period", async () => {
-    if (!cloudTrailLogGroupName) {
+    if (!cloudTrailLogGroupName || cloudTrailLogGroupName === "") {
       console.log("Skipping CloudWatch log group retention test - create_cloudtrail is false");
       return;
     }
@@ -259,7 +259,7 @@ describe("Integration: CloudWatch Logs (CloudTrail log group)", () => {
 
 describe("Integration: CloudTrail (logs to S3 + CloudWatch)", () => {
   it("trail exists and is healthy", async () => {
-    if (!cloudTrailArn) {
+    if (!cloudTrailArn || cloudTrailArn === "") {
       console.log("Skipping CloudTrail test - create_cloudtrail is false");
       return;
     }
@@ -280,7 +280,7 @@ describe("Integration: CloudTrail (logs to S3 + CloudWatch)", () => {
   });
 
   it("trail logging is enabled", async () => {
-    if (!cloudTrailArn) {
+    if (!cloudTrailArn || cloudTrailArn === "") {
       console.log("Skipping CloudTrail logging test - create_cloudtrail is false");
       return;
     }
@@ -291,7 +291,7 @@ describe("Integration: CloudTrail (logs to S3 + CloudWatch)", () => {
 
 describe("Integration: CloudWatch Alarm (unauthorized API requests)", () => {
   it("has an alarm based on UnauthorizedAPIRequests metric", async () => {
-    if (!cloudTrailArn) {
+    if (!cloudTrailArn || cloudTrailArn === "") {
       console.log("Skipping CloudWatch alarm test - create_cloudtrail is false");
       return;
     }
