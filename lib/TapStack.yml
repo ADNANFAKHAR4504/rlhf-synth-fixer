@@ -26,6 +26,7 @@ Parameters:
   StackNameLower:
     Type: String
     Description: 'Lowercase version of the stack name for use in S3 bucket names.'
+    Default: !Sub 'tapstack${EnvironmentSuffix}'
     AllowedPattern: '^[a-z0-9\-]+$'
     ConstraintDescription: 'Must be lowercase letters, numbers, and hyphens only.'
 
