@@ -103,16 +103,8 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'Ec2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromManagedPolicyName(
-          this,
-          'CloudWatchAgentServerPolicy',
-          'CloudWatchAgentServerPolicy'
-        ),
-        iam.ManagedPolicy.fromManagedPolicyName(
-          this,
-          'AmazonSSMManagedInstanceCore',
-          'AmazonSSMManagedInstanceCore'
-        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
       ],
       inlinePolicies: {
         RDSAccess: new iam.PolicyDocument({
@@ -338,11 +330,7 @@ EOF
     const failoverLambdaRole = new iam.Role(this, 'FailoverLambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromManagedPolicyName(
-          this,
-          'AWSLambdaBasicExecutionRole',
-          'AWSLambdaBasicExecutionRole'
-        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
       ],
       inlinePolicies: {
         Route53Access: new iam.PolicyDocument({
