@@ -8,6 +8,4 @@ We’ve got a few Lambda functions, but they really don’t need wide access. Ro
 
 For the database, we want high availability. Multi-AZ RDS (MySQL or Aurora) is fine, but single AZ isn’t an option.
 
-And finally, VPC flow logs should be landing somewhere we can inspect (thinking S3).
-
 The goal is a CloudFormation template (YAML) we can drop into dev/staging/prod. It should have parameters for stuff like environment suffix, instance type, etc. And please include Outputs for things we might want to plug into other stacks (like bucket names or DB endpoint).
