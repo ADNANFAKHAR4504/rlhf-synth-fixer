@@ -8,8 +8,9 @@ It orchestrates the instantiation of other resource-specific components
 and manages environment-specific configurations.
 """
 
-from typing import Any, Dict, Optional
 import os
+from typing import Any, Dict, Optional
+
 import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
@@ -113,7 +114,6 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
   bucket = aws.s3.Bucket(
     f"{project_name}-{environment}-storage-{region}",
     bucket=f"{project_name}-{environment}-storage-{region}",
-    region=region,
     tags=tags,
     opts=ResourceOptions(
       provider=aws.Provider(f"aws-{region}", region=region)
