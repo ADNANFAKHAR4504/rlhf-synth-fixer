@@ -1,4 +1,6 @@
-```javascript bin/tap.mjs
+### bin/tap.mjs
+
+```javascript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -27,7 +29,9 @@ new TapStack(app, stackName, {
 });
 ```
 
-```javascript lib/tap-stack.mjs
+### lib/tap-stack.mjs
+
+```javascript
 import * as cdk from 'aws-cdk-lib';
 import { HighAvailableStack } from './high-available.mjs';
 
@@ -66,7 +70,9 @@ class TapStack extends cdk.Stack {
 export { TapStack };
 ```
 
-```javascript lib/high-available.mjs
+### lib/high-available.mjs
+
+```javascript
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -557,6 +563,6 @@ export class HighAvailableStack extends cdk.Stack {
       value: 'DEPLOYED',
       description: `High-availability web architecture deployment status - ${environmentSuffix}`,
     });
-  }
+ # }
 }
 ```
