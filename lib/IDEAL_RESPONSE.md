@@ -219,7 +219,7 @@ Service = "lambda.amazonaws.com"
 
 # IAM Policy for Lambda execution
 
-resource "aws*iam_policy" "lambda_exec_policy" {
+resource "aws_iam_policy" "lambda_exec_policy" {
 name = var.iam_policy_name
 policy = jsonencode({
 Version = "2012-10-17"
@@ -231,7 +231,7 @@ Action = [
 "logs:PutLogEvents"
 ]
 Effect = "Allow"
-Resource = "arn:aws:logs:*:\_:\*"
+Resource = "arn:aws:logs:_:_:\*"
 },
 {
 Action = [
@@ -336,7 +336,7 @@ action = "lambda:InvokeFunction"
 function_name = aws_lambda_function.tap_lambda.function_name
 principal = "apigateway.amazonaws.com"
 
-source*arn = "${aws_apigatewayv2_api.tap_api.execution_arn}/*/\_"
+source_arn = "${aws_apigatewayv2_api.tap_api.execution_arn}/_/_"
 }
 
 # CloudFront Origin Access Control for S3
@@ -367,17 +367,17 @@ allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
 cached_methods = ["GET", "HEAD"]
 target_origin_id = "S3-${aws_s3_bucket.frontend_bucket.id}"
 
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
+forwarded_values {
+query_string = false
+cookies {
+forward = "none"
+}
+}
 
-    viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
+viewer_protocol_policy = "redirect-to-https"
+min_ttl = 0
+default_ttl = 3600
+max_ttl = 86400
 
 }
 
@@ -398,19 +398,19 @@ Owner = var.owner
 }
 }
 
-# CloudFront Distribution for API Gateway (with WAF protection)
+# CloudFront Distribution for API Gateway
 
 resource "aws_cloudfront_distribution" "api_distribution" {
 origin {
 domain_name = replace(aws_apigatewayv2_api.tap_api.api_endpoint, "https://", "")
 origin_id = "API-Gateway-${aws_apigatewayv2_api.tap_api.id}"
 
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "https-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
+custom_origin_config {
+http_port = 80
+https_port = 443
+origin_protocol_policy = "https-only"
+origin_ssl_protocols = ["TLSv1.2"]
+}
 
 }
 
@@ -423,18 +423,18 @@ allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
 cached_methods = ["GET", "HEAD"]
 target_origin_id = "API-Gateway-${aws_apigatewayv2_api.tap_api.id}"
 
-    forwarded_values {
-      query_string = true
-      headers      = ["*"]
-      cookies {
-        forward = "all"
-      }
-    }
+forwarded_values {
+query_string = true
+headers = ["*"]
+cookies {
+forward = "all"
+}
+}
 
-    viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 0  # No caching for API calls
-    max_ttl                = 0
+viewer_protocol_policy = "redirect-to-https"
+min_ttl = 0
+default_ttl = 0 # No caching for API calls
+max_ttl = 0
 
 }
 
@@ -479,87 +479,6 @@ StringEquals = {
 }
 ]
 })
-}
-
-# WAF Web ACL for CloudFront and API Gateway Protection
-
-resource "aws_wafv2_web_acl" "api_gateway_waf" {
-name = "tap-api-protection-waf"
-scope = "CLOUDFRONT" # Changed to CLOUDFRONT for global protection
-
-default_action {
-allow {}
-}
-
-rule {
-name = "RateLimitRule"
-priority = 1
-
-    statement {
-      rate_based_statement {
-        limit          = 2000
-        aggregate_key_type = "IP"
-      }
-    }
-
-    action {
-      block {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                 = "RateLimitRule"
-      sampled_requests_enabled    = true
-    }
-
-}
-
-rule {
-name = "AWSManagedRulesCommonRuleSet"
-priority = 2
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                 = "AWSManagedRulesCommonRuleSet"
-      sampled_requests_enabled    = true
-    }
-
-}
-
-visibility_config {
-cloudwatch_metrics_enabled = true
-metric_name = "tapAPIProtectionWAF"
-sampled_requests_enabled = true
-}
-
-tags = {
-Name = "TAP API Protection WAF"
-Environment = var.environment
-Owner = var.owner
-}
-}
-
-# Associate WAF with CloudFront Distributions (Production-recommended approach)
-
-resource "aws_wafv2_web_acl_association" "frontend_cloudfront_waf_association" {
-resource_arn = aws_cloudfront_distribution.frontend_distribution.arn
-web_acl_arn = aws_wafv2_web_acl.api_gateway_waf.arn
-}
-
-resource "aws_wafv2_web_acl_association" "api_cloudfront_waf_association" {
-resource_arn = aws_cloudfront_distribution.api_distribution.arn
-web_acl_arn = aws_wafv2_web_acl.api_gateway_waf.arn
 }
 
 # Cognito User Pool
@@ -626,7 +545,7 @@ value = aws_cloudfront_distribution.frontend_distribution.domain_name
 }
 
 output "protected_api_endpoint" {
-description = "The WAF-protected API endpoint through CloudFront."
+description = "The API endpoint through CloudFront."
 value = "https://${aws_cloudfront_distribution.api_distribution.domain_name}"
 }
 

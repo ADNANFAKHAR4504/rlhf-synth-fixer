@@ -43,7 +43,7 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
 
     test('should create the correct number of resources', () => {
       const resourceCount = plan.planned_values.root_module.resources.length;
-      expect(resourceCount).toBe(25); // Updated count for CloudFront + WAF approach
+      expect(resourceCount).toBe(22); // Updated count without WAF resources
     });
 
     test('S3 bucket should have versioning and encryption enabled', () => {
@@ -185,43 +185,6 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
       expect(passwordPolicy.require_uppercase).toBe(true);
     });
 
-    test('WAF should be configured with CLOUDFRONT scope and rate limiting', () => {
-      const wafWebAcl = plan.planned_values.root_module.resources.find(
-        (r: any) =>
-          r.type === 'aws_wafv2_web_acl' && r.name === 'api_gateway_waf'
-      );
-      expect(wafWebAcl.values.scope).toBe('CLOUDFRONT');
-
-      const rateLimitRule = wafWebAcl.values.rule.find(
-        (rule: any) => rule.name === 'RateLimitRule'
-      );
-      expect(rateLimitRule.statement[0].rate_based_statement[0].limit).toBe(
-        2000
-      );
-
-      const managedRulesRule = wafWebAcl.values.rule.find(
-        (rule: any) => rule.name === 'AWSManagedRulesCommonRuleSet'
-      );
-      expect(managedRulesRule).toBeDefined();
-    });
-
-    test('WAF should be associated with both CloudFront distributions', () => {
-      const frontendWafAssociation =
-        plan.planned_values.root_module.resources.find(
-          (r: any) =>
-            r.type === 'aws_wafv2_web_acl_association' &&
-            r.name === 'frontend_cloudfront_waf_association'
-        );
-      const apiWafAssociation = plan.planned_values.root_module.resources.find(
-        (r: any) =>
-          r.type === 'aws_wafv2_web_acl_association' &&
-          r.name === 'api_cloudfront_waf_association'
-      );
-
-      expect(frontendWafAssociation).toBeDefined();
-      expect(apiWafAssociation).toBeDefined();
-    });
-
     test('All resources should have proper tagging', () => {
       const taggedResources = [
         'aws_s3_bucket.frontend_bucket',
@@ -231,7 +194,6 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
         'aws_cloudfront_distribution.frontend_distribution',
         'aws_cloudfront_distribution.api_distribution',
         'aws_cognito_user_pool.tap_user_pool',
-        'aws_wafv2_web_acl.api_gateway_waf',
       ];
 
       taggedResources.forEach(resourcePath => {

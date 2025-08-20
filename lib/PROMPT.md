@@ -3,19 +3,12 @@ We're moving this serverless stack into Terraform HCL instead of CloudFormation.
 The setup should cover:
 
 Front-end served out of S3 with CloudFront in front of it, enforcing HTTPS.
-API Gateway as the entry point for the backend, protected with AWS WAF through CloudFront (production-recommended approach for API Gateway v2).
+API Gateway as the entry point for the backend, with CloudFront distribution for global access.
 Lambda functions for backend logic, triggered by API Gateway. They need environment variables so we can swap configs between dev, staging, and prod.
 DynamoDB as the data store, on-demand capacity mode.
 Cognito user pools securing all public API endpoints.
 IAM roles/policies for Lambda should be least privilege — only DynamoDB and CloudWatch logs. Keep them inline in the code, no external JSON files.
 Logging has to be wired into CloudWatch Logs, broken down by environment (dev/staging/prod).
 All resources need Name, Environment, and Owner tags.
-
-WAF Protection Strategy:
-
-- Use CloudFront + WAF for API Gateway v2 (API Gateway v2 has limitations with direct WAF association)
-- WAF scope should be CLOUDFRONT for global protection
-- Include rate limiting (2000 requests per IP) and AWS Managed Rules
-- Route API traffic through CloudFront with WAF protection for enterprise-grade security
 
 The output should be just one Terraform file with everything in it — valid, deployable with terraform apply, and no extra explanations.
