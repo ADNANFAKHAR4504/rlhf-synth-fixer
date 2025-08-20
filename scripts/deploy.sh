@@ -82,7 +82,7 @@ elif [ "$PLATFORM" = "tf" ]; then
     echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
     # Create a new plan and deploy
     terraform plan -out=tfplan || echo "Plan creation failed, attempting direct apply..."
-    terraform apply -refresh-only -auto-approve -lock=true -lock-timeout=300s tfplan || terraform apply -refresh-only -auto-approve -lock=true -lock-timeout=300s || echo "Deployment failed"
+    terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan || terraform apply -auto-approve -lock=true -lock-timeout=300s || echo "Deployment failed"
   fi
   
   cd ..
