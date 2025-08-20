@@ -5,5 +5,42 @@
   "turn_type": "single",
   "po_id": "trainr859",
   "team": "synth",
-  "startedAt": "2025-08-15T11:59:23+05:30"
+  "startedAt": "2025-08-15T11:59:23+05:30",
+  "subtask": "secure_aws_infrastructure_implementation",
+  "subject_labels": [
+    "aws_security_best_practices",
+    "terraform_infrastructure",
+    "vpc_networking",
+    "iam_least_privilege",
+    "encryption_at_rest",
+    "cloudtrail_logging",
+    "s3_security",
+    "rds_encryption",
+    "session_manager",
+    "secrets_manager",
+    "aws_config_compliance",
+    "cloudfront_ddos_protection",
+    "vpc_flow_logs",
+    "mfa_requirements",
+    "parameter_store",
+    "cloudwatch_monitoring"
+  ],
+  "training_quality": "high",
+  "aws_services": [
+    "vpc",
+    "ec2",
+    "s3",
+    "rds",
+    "iam",
+    "cloudtrail",
+    "cloudwatch",
+    "aws_config",
+    "systems_manager",
+    "secrets_manager",
+    "lambda",
+    "cloudfront",
+    "waf",
+    "sns",
+    "kms"
+  ]
 }
