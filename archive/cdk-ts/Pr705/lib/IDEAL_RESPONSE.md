@@ -1,8 +1,247 @@
-# IDEAL RESPONSE - Enhanced Multi-Environment AWS CDK Infrastructure with EventBridge Scheduler
+# CDK TypeScript Infrastructure Code
 
-## Infrastructure Implementation
 
-### Core Stack Implementation (`lib/tap-stack.ts`)
+## route53-stack.ts
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import { Construct } from 'constructs';
+
+export interface Route53StackProps extends cdk.StackProps {
+  domainName: string;
+  applicationName: string;
+  environment: 'production' | 'development';
+  loadBalancers: { [region: string]: elbv2.IApplicationLoadBalancer };
+  primaryRegion: string;
+}
+
+export class Route53Stack extends cdk.Stack {
+  public readonly hostedZone: route53.IHostedZone;
+
+  constructor(scope: Construct, id: string, props: Route53StackProps) {
+    super(scope, id, props);
+
+    const {
+      domainName,
+      applicationName,
+      environment,
+      loadBalancers,
+      primaryRegion,
+    } = props;
+
+    // Create or import hosted zone
+    this.hostedZone = new route53.HostedZone(this, 'HostedZone', {
+      zoneName: domainName,
+    });
+
+    // Create health checks and failover records
+    Object.entries(loadBalancers).forEach(([region, loadBalancer]) => {
+      const isPrimary = region === primaryRegion;
+
+      // Create A record with weighted routing (failover not directly supported)
+      new route53.ARecord(this, `ARecord${region}`, {
+        zone: this.hostedZone,
+        recordName: `${environment}.${domainName}`,
+        target: route53.RecordTarget.fromAlias(
+          new route53targets.LoadBalancerTarget(loadBalancer)
+        ),
+        weight: isPrimary ? 100 : 50,
+        setIdentifier: region,
+      });
+
+      // Create health check for each region
+      new route53.CfnHealthCheck(this, `HealthCheck${region}`, {
+        healthCheckConfig: {
+          type: 'HTTP',
+          resourcePath: '/',
+          fullyQualifiedDomainName: loadBalancer.loadBalancerDnsName,
+          requestInterval: 30,
+          failureThreshold: 3,
+        },
+        healthCheckTags: [
+          {
+            key: 'Name',
+            value: `${applicationName}-${environment}-${region}-healthcheck`,
+          },
+          {
+            key: 'Environment',
+            value: environment,
+          },
+          {
+            key: 'Region',
+            value: region,
+          },
+        ],
+      });
+    });
+
+    // Store hosted zone ID in Parameter Store
+    new ssm.StringParameter(this, 'HostedZoneIdParameter', {
+      parameterName: `/${applicationName}/${environment}/route53/hosted-zone-id`,
+      stringValue: this.hostedZone.hostedZoneId,
+      description: `Route53 Hosted Zone ID for ${applicationName} ${environment}`,
+    });
+
+    // Tags
+    cdk.Tags.of(this).add('Environment', environment);
+    cdk.Tags.of(this).add('Application', applicationName);
+
+    // Output
+    new cdk.CfnOutput(this, 'HostedZoneId', {
+      value: this.hostedZone.hostedZoneId,
+      description: 'Route53 Hosted Zone ID',
+      exportName: `${id}-HostedZoneId`,
+    });
+
+    new cdk.CfnOutput(this, 'NameServers', {
+      value: cdk.Fn.join(',', this.hostedZone.hostedZoneNameServers || []),
+      description: 'Route53 Name Servers',
+      exportName: `${id}-NameServers`,
+    });
+  }
+}
+```
+
+
+## s3-replication-stack.ts
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
+import { Construct } from 'constructs';
+
+export interface S3ReplicationStackProps extends cdk.StackProps {
+  environment: 'production' | 'development';
+  applicationName: string;
+  isPrimaryRegion: boolean;
+  replicationRegions: string[];
+}
+
+export class S3ReplicationStack extends cdk.Stack {
+  public readonly bucket: s3.Bucket;
+
+  constructor(scope: Construct, id: string, props: S3ReplicationStackProps) {
+    super(scope, id, props);
+
+    const {
+      environment,
+      applicationName,
+      isPrimaryRegion,
+      replicationRegions,
+    } = props;
+
+    // Create replication role
+    const replicationRole = new iam.Role(this, 'ReplicationRole', {
+      assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
+      inlinePolicies: {
+        ReplicationPolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                's3:GetObjectVersionForReplication',
+                's3:GetObjectVersionAcl',
+                's3:GetObjectVersionTagging',
+              ],
+              resources: [
+                `arn:aws:s3:::${applicationName}-${environment}-content-*/*`,
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                's3:ReplicateObject',
+                's3:ReplicateDelete',
+                's3:ReplicateTags',
+              ],
+              resources: replicationRegions.map(
+                region =>
+                  `arn:aws:s3:::${applicationName}-${environment}-content-${region}/*`
+              ),
+            }),
+          ],
+        }),
+      },
+    });
+
+    // Create S3 bucket with replication configuration
+    this.bucket = new s3.Bucket(this, 'ContentBucket', {
+      bucketName: `${applicationName}-${environment}-content-${this.region}`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      versioned: true,
+      publicReadAccess: false,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      lifecycleRules: [
+        {
+          id: 'DeleteIncompleteMultipartUploads',
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
+        },
+        {
+          id: 'TransitionToIA',
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
+            },
+            {
+              storageClass: s3.StorageClass.GLACIER,
+              transitionAfter: cdk.Duration.days(90),
+            },
+          ],
+        },
+      ],
+    });
+
+    // Add replication rules if this is the primary region
+    if (isPrimaryRegion && replicationRegions.length > 0) {
+      const cfnBucket = this.bucket.node.defaultChild as s3.CfnBucket;
+      cfnBucket.replicationConfiguration = {
+        role: replicationRole.roleArn,
+        rules: replicationRegions.map(region => ({
+          id: `ReplicateTo${region}`,
+          status: 'Enabled',
+          prefix: '',
+          destination: {
+            bucket: `arn:aws:s3:::${applicationName}-${environment}-content-${region}`,
+            storageClass: 'STANDARD',
+          },
+        })),
+      };
+    }
+
+    // Store bucket name in Parameter Store
+    new ssm.StringParameter(this, 'BucketNameParameter', {
+      parameterName: `/${applicationName}/${environment}/${this.region}/s3-bucket-name`,
+      stringValue: this.bucket.bucketName,
+      description: `S3 bucket name for ${applicationName} ${environment} in ${this.region}`,
+    });
+
+    // Tags
+    cdk.Tags.of(this).add('Environment', environment);
+    cdk.Tags.of(this).add('Application', applicationName);
+    cdk.Tags.of(this).add('Region', this.region!);
+
+    // Output
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: this.bucket.bucketName,
+      description: 'S3 Bucket Name',
+      exportName: `${id}-BucketName`,
+    });
+  }
+}
+```
+
+
+## tap-stack.ts
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -13,9 +252,10 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+// Events imports removed - not used in current implementation
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as scheduler from 'aws-cdk-lib/aws-scheduler';
-import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
+// import * as vpclattice from 'aws-cdk-lib/aws-vpclattice'; // Commented out - VPC Lattice not compatible with internet-facing ALB
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -26,7 +266,7 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    // Environment configuration with suffix support
+    // Get environment suffix from props, context, or use 'dev' as default
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
@@ -38,14 +278,14 @@ export class TapStack extends cdk.Stack {
     const envShort = environmentSuffix;
     const region = this.region;
 
-    // VPC with environment-specific CIDR and optimized for cost
+    // Create VPC with public subnets only - simplified for account limits
     const vpc = new ec2.Vpc(this, 'VPC', {
       vpcName: `${applicationName}-${envShort}-vpc-${region}`,
       ipAddresses: ec2.IpAddresses.cidr(
         environment === 'production' ? '10.0.0.0/16' : '10.1.0.0/16'
       ),
-      maxAzs: 2,
-      natGateways: 0, // Cost optimization - no NAT gateways
+      maxAzs: 2, // ALB requires at least 2 AZs
+      natGateways: 0, // No NAT gateways to avoid EIP limits
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -55,34 +295,39 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // IAM role for EC2 instances with SSM and CloudWatch permissions
+    // Create IAM role for EC2 instances
     const ec2Role = new iam.Role(this, 'EC2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
-    // Security groups with proper isolation
+    // Create security group for EC2 instances
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc: vpc,
       description: 'Security group for EC2 instances',
       allowAllOutbound: true,
     });
 
+    // Create security group for ALB
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc: vpc,
       description: 'Security group for Application Load Balancer',
       allowAllOutbound: false,
     });
 
-    // Ingress rules for ALB
     albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
       'Allow HTTP traffic'
     );
+
     albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(443),
@@ -96,7 +341,7 @@ export class TapStack extends cdk.Stack {
       'Allow traffic from ALB'
     );
 
-    // User data for EC2 instances
+    // User data script for EC2 instances
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       'yum update -y',
@@ -108,7 +353,7 @@ export class TapStack extends cdk.Stack {
       'systemctl start amazon-cloudwatch-agent'
     );
 
-    // Launch template for Auto Scaling
+    // Create Launch Template
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
       launchTemplateName: `${applicationName}-${envShort}-lt`,
       instanceType: ec2.InstanceType.of(
@@ -121,7 +366,7 @@ export class TapStack extends cdk.Stack {
       securityGroup: ec2SecurityGroup,
     });
 
-    // Application Load Balancer
+    // Create Application Load Balancer
     const loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'ALB', {
       vpc: vpc,
       internetFacing: true,
@@ -129,7 +374,7 @@ export class TapStack extends cdk.Stack {
       securityGroup: albSecurityGroup,
     });
 
-    // Auto Scaling Group with environment-specific capacity
+    // Create Auto Scaling Group
     const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'ASG', {
       vpc: vpc,
       launchTemplate: launchTemplate,
@@ -137,11 +382,11 @@ export class TapStack extends cdk.Stack {
       maxCapacity: environment === 'production' ? 6 : 3,
       desiredCapacity: environment === 'production' ? 2 : 1,
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC,
+        subnetType: ec2.SubnetType.PUBLIC, // Use public subnets instead
       },
     });
 
-    // Target Group with health checks
+    // Create Target Group
     const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
       vpc: vpc,
       port: 80,
@@ -159,14 +404,14 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // ALB Listener
+    // Create Listener
     loadBalancer.addListener('Listener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultTargetGroups: [targetGroup],
     });
 
-    // CloudWatch Alarms for monitoring
+    // Create CloudWatch Alarms
     new cloudwatch.Alarm(this, 'CPUAlarm', {
       metric: new cloudwatch.Metric({
         namespace: 'AWS/EC2',
@@ -181,7 +426,7 @@ export class TapStack extends cdk.Stack {
       alarmDescription: `High CPU utilization for ${environment} in ${region}`,
     });
 
-    // Auto-scaling policies
+    // Create scaling policies
     autoScalingGroup.scaleOnCpuUtilization('ScaleUp', {
       targetUtilizationPercent: 70,
     });
@@ -190,7 +435,7 @@ export class TapStack extends cdk.Stack {
       targetUtilizationPercent: 30,
     });
 
-    // S3 bucket with security and lifecycle management
+    // Create S3 bucket for static content
     const contentBucket = new s3.Bucket(this, 'ContentBucket', {
       bucketName: `${applicationName}-${envShort}-content-${region}-${this.account}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -221,9 +466,9 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // === EventBridge Scheduler Integration ===
+    // === NEW: Amazon EventBridge Scheduler Integration ===
 
-    // IAM role for EventBridge Scheduler
+    // Create IAM role for EventBridge Scheduler
     const schedulerRole = new iam.Role(this, 'SchedulerRole', {
       assumedBy: new iam.ServicePrincipal('scheduler.amazonaws.com'),
       inlinePolicies: {
@@ -263,14 +508,17 @@ import os
 def handler(event, context):
     print(f"Maintenance task executed at {context.aws_request_id}")
     
-    # Perform maintenance tasks based on task type
+    # Perform maintenance tasks like cleanup, health checks, etc.
     task_type = event.get('task_type', 'general')
     
     if task_type == 'backup':
+        # Simulate backup operation
         print("Performing scheduled backup operations")
     elif task_type == 'scaling':
+        # Simulate scaling operation
         print("Performing scheduled scaling operations")
     elif task_type == 'cleanup':
+        # Simulate cleanup operation
         print("Performing scheduled cleanup operations")
     
     return {
@@ -285,10 +533,10 @@ def handler(event, context):
       }
     );
 
-    // Grant permissions to maintenance function
+    // Grant permissions to the maintenance function
     contentBucket.grantReadWrite(maintenanceFunction);
 
-    // Backup schedule with environment-specific intervals
+    // Create EventBridge Scheduler for automated backup operations
     new scheduler.CfnSchedule(this, 'BackupSchedule', {
       name: `${applicationName}-${envShort}-backup-schedule`,
       description: 'Automated backup schedule for infrastructure maintenance',
@@ -315,7 +563,7 @@ def handler(event, context):
       state: 'ENABLED',
     });
 
-    // Peak-hour scaling schedule
+    // Create EventBridge Scheduler for scaling events
     new scheduler.CfnSchedule(this, 'ScalingSchedule', {
       name: `${applicationName}-${envShort}-scaling-schedule`,
       description: 'Automated scaling schedule for peak hours',
@@ -347,7 +595,101 @@ def handler(event, context):
       action: 'lambda:InvokeFunction',
     });
 
-    // Systems Manager Parameter Store for configuration
+    // === NEW: Amazon VPC Lattice Integration ===
+    // NOTE: VPC Lattice components are commented out as they don't support internet-facing ALBs
+    // To enable VPC Lattice, the ALB would need to be internal or use instance targets directly
+
+    /*
+    // Create VPC Lattice Service Network
+    const serviceNetwork = new vpclattice.CfnServiceNetwork(
+      this,
+      'ServiceNetwork',
+      {
+        name: `${applicationName}-${envShort}-service-network`,
+        authType: 'AWS_IAM',
+      }
+    );
+
+    // Associate VPC with Service Network
+    new vpclattice.CfnServiceNetworkVpcAssociation(this, 'VPCAssociation', {
+      serviceNetworkIdentifier: serviceNetwork.ref,
+      vpcIdentifier: vpc.vpcId,
+    });
+
+    // Create VPC Lattice Service for the web application
+    const webService = new vpclattice.CfnService(this, 'WebService', {
+      name: `${applicationName}-${envShort}-web-service`,
+      authType: 'AWS_IAM',
+    });
+
+    // Associate Service with Service Network
+    new vpclattice.CfnServiceNetworkServiceAssociation(
+      this,
+      'ServiceAssociation',
+      {
+        serviceNetworkIdentifier: serviceNetwork.ref,
+        serviceIdentifier: webService.ref,
+      }
+    );
+
+    // Create Target Group for VPC Lattice - would need INSTANCE type targets
+    const latticeTargetGroup = new vpclattice.CfnTargetGroup(
+      this,
+      'LatticeTargetGroup',
+      {
+        name: `${applicationName}-${envShort}-tg`,
+        type: 'INSTANCE',
+        targets: [], // Would need to add instances from ASG
+        config: {
+          vpcIdentifier: vpc.vpcId,
+          port: 80,
+          protocol: 'HTTP',
+          healthCheck: {
+            enabled: true,
+            path: '/',
+            protocol: 'HTTP',
+            healthCheckIntervalSeconds: 30,
+            healthCheckTimeoutSeconds: 5,
+            healthyThresholdCount: 2,
+            unhealthyThresholdCount: 2,
+          },
+        },
+      }
+    );
+
+    // Create Listener for VPC Lattice Service
+    new vpclattice.CfnListener(this, 'LatticeListener', {
+      serviceIdentifier: webService.ref,
+      protocol: 'HTTP',
+      port: 80,
+      defaultAction: {
+        forward: {
+          targetGroups: [
+            {
+              targetGroupIdentifier: latticeTargetGroup.ref,
+              weight: 100,
+            },
+          ],
+        },
+      },
+    });
+
+    // Create IAM policy for VPC Lattice access
+    const latticeAccessPolicy = new iam.Policy(this, 'LatticeAccessPolicy', {
+      statements: [
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: ['vpc-lattice:*'],
+          resources: ['*'],
+        }),
+      ],
+    });
+
+    // Attach VPC Lattice policy to EC2 role
+    ec2Role.attachInlinePolicy(latticeAccessPolicy);
+    */
+
+    // Store configuration in Systems Manager Parameter Store
     new ssm.StringParameter(this, 'VPCIdParameter', {
       parameterName: `/${applicationName}/${environment}/${region}/vpc-id`,
       stringValue: vpc.vpcId,
@@ -366,13 +708,35 @@ def handler(event, context):
       description: `S3 bucket name for ${applicationName} ${environment} in ${region}`,
     });
 
+    // Store VPC Lattice Service Network ID (commented out as VPC Lattice is disabled)
+    /*
+    new ssm.StringParameter(this, 'ServiceNetworkParameter', {
+      parameterName: `/${applicationName}/${environment}/${region}/service-network-id`,
+      stringValue: serviceNetwork.ref,
+      description: `VPC Lattice Service Network ID for ${applicationName} ${environment} in ${region}`,
+    });
+    */
+
+    // Store EventBridge Scheduler ARN
     new ssm.StringParameter(this, 'SchedulerRoleParameter', {
       parameterName: `/${applicationName}/${environment}/${region}/scheduler-role-arn`,
       stringValue: schedulerRole.roleArn,
       description: `EventBridge Scheduler role ARN for ${applicationName} ${environment} in ${region}`,
     });
 
-    // Bedrock Agent role for AI workloads
+    // EKS Ultra Scale preparation for future container workloads (only in production)
+    // Note: EKS cluster commented out to avoid kubectlLayer dependency issues
+    // Uncomment and configure kubectlLayer when needed for production deployment
+    if (environment === 'production') {
+      // Store placeholder EKS cluster info in Parameter Store
+      new ssm.StringParameter(this, 'EKSClusterParameter', {
+        parameterName: `/${applicationName}/${environment}/${region}/eks-cluster-name`,
+        stringValue: 'eks-cluster-placeholder',
+        description: `EKS Cluster name placeholder for ${applicationName} ${environment} in ${region}`,
+      });
+    }
+
+    // Amazon Bedrock AgentCore IAM role preparation
     const bedrockAgentRole = new iam.Role(this, 'BedrockAgentRole', {
       assumedBy: new iam.ServicePrincipal('bedrock.amazonaws.com'),
       inlinePolicies: {
@@ -396,22 +760,14 @@ def handler(event, context):
       },
     });
 
+    // Store Bedrock Agent role in Parameter Store
     new ssm.StringParameter(this, 'BedrockAgentRoleParameter', {
       parameterName: `/${applicationName}/${environment}/${region}/bedrock-agent-role-arn`,
       stringValue: bedrockAgentRole.roleArn,
       description: `Bedrock Agent role ARN for ${applicationName} ${environment} in ${region}`,
     });
 
-    // EKS placeholder for future container workloads
-    if (environment === 'production') {
-      new ssm.StringParameter(this, 'EKSClusterParameter', {
-        parameterName: `/${applicationName}/${environment}/${region}/eks-cluster-name`,
-        stringValue: 'eks-cluster-placeholder',
-        description: `EKS Cluster name placeholder for ${applicationName} ${environment} in ${region}`,
-      });
-    }
-
-    // Resource tagging
+    // Tags
     cdk.Tags.of(this).add('Environment', environment);
     cdk.Tags.of(this).add('Application', applicationName);
     cdk.Tags.of(this).add('Region', region || 'unknown');
@@ -419,7 +775,7 @@ def handler(event, context):
     cdk.Tags.of(this).add('Scheduler', 'EventBridge');
     cdk.Tags.of(this).add('EnhancedFeatures', 'EventBridgeScheduler');
 
-    // Stack outputs
+    // Outputs
     new cdk.CfnOutput(this, 'VPCId', {
       value: vpc.vpcId,
       description: 'VPC ID',
@@ -437,6 +793,21 @@ def handler(event, context):
       description: 'S3 Bucket Name',
       exportName: `${id}-BucketName`,
     });
+
+    // VPC Lattice outputs (commented out as VPC Lattice is disabled)
+    /*
+    new cdk.CfnOutput(this, 'ServiceNetworkId', {
+      value: serviceNetwork.ref,
+      description: 'VPC Lattice Service Network ID',
+      exportName: `${id}-ServiceNetworkId`,
+    });
+
+    new cdk.CfnOutput(this, 'ServiceId', {
+      value: webService.ref,
+      description: 'VPC Lattice Service ID',
+      exportName: `${id}-ServiceId`,
+    });
+    */
 
     new cdk.CfnOutput(this, 'MaintenanceFunctionName', {
       value: maintenanceFunction.functionName,
@@ -456,106 +827,3 @@ def handler(event, context):
   }
 }
 ```
-
-## Key Features and Improvements
-
-### 1. **Multi-Environment Support**
-- Dynamic environment configuration based on `environmentSuffix`
-- Environment-specific resource sizing (production vs development)
-- Conditional feature enablement based on environment
-
-### 2. **EventBridge Scheduler Integration**
-- Automated backup schedules with flexible time windows
-- Peak-hour scaling schedules for workday mornings
-- Lambda-based maintenance task handler
-- Environment-specific schedule configurations
-
-### 3. **Enhanced Security**
-- IAM roles with least privilege access
-- Security groups with proper ingress/egress rules
-- S3 bucket with SSL enforcement and public access blocking
-- SSM Parameter Store for secure configuration management
-
-### 4. **Cost Optimization**
-- No NAT gateways (using public subnets only)
-- T3.micro instances for cost efficiency
-- S3 lifecycle policies for automatic data archival
-- Auto-scaling based on CPU utilization
-
-### 5. **Monitoring and Observability**
-- CloudWatch alarms for CPU utilization
-- CloudWatch agent on EC2 instances
-- Health checks on target groups
-- Comprehensive tagging strategy
-
-### 6. **Automation and Maintenance**
-- Automated backup schedules via EventBridge
-- Scheduled scaling for peak hours
-- Lambda function for maintenance tasks
-- Auto-delete objects in S3 for cleanup
-
-### 7. **Future-Ready Architecture**
-- Bedrock Agent role for AI workloads
-- EKS cluster placeholder for container migration
-- SSM parameters for centralized configuration
-- Modular design for easy extension
-
-## Testing Coverage
-
-### Unit Tests (100% Coverage)
-- VPC and networking configuration
-- Security groups and IAM roles
-- EC2 and Auto Scaling setup
-- Load balancer and target groups
-- S3 bucket configuration
-- CloudWatch alarms
-- EventBridge Scheduler components
-- SSM parameters
-- Stack outputs and tagging
-
-### Integration Tests
-- End-to-end infrastructure validation
-- AWS service connectivity
-- EventBridge Scheduler deployment
-- Lambda function execution
-- SSM parameter retrieval
-- Resource interconnections
-
-## Deployment Commands
-
-```bash
-# Set environment suffix
-export ENVIRONMENT_SUFFIX="synthtrainr6"
-
-# Bootstrap CDK (first time only)
-npm run cdk:bootstrap
-
-# Deploy infrastructure
-npm run cdk:deploy
-
-# Run tests
-npm run test:unit
-npm run test:integration
-
-# Destroy infrastructure
-npm run cdk:destroy
-```
-
-## Architecture Benefits
-
-1. **Scalability**: Auto-scaling groups handle traffic spikes automatically
-2. **Reliability**: Multi-AZ deployment with health checks
-3. **Security**: Defense in depth with IAM, security groups, and encryption
-4. **Cost-Effective**: Optimized for AWS free tier and minimal resource usage
-5. **Maintainable**: Clear separation of concerns and comprehensive testing
-6. **Observable**: Built-in monitoring and logging capabilities
-7. **Automated**: Scheduled tasks reduce manual intervention
-
-## VPC Lattice Note
-
-VPC Lattice components are commented out in the implementation due to limitations with internet-facing ALBs. To enable VPC Lattice:
-1. Change ALB to internal-facing
-2. Use INSTANCE type targets instead of ALB
-3. Configure service mesh networking appropriately
-
-This architecture provides a robust, scalable, and cost-effective foundation for multi-environment AWS deployments with modern automation capabilities through EventBridge Scheduler.

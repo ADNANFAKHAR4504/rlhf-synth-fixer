@@ -14,6 +14,6 @@ A Route Table configured to direct internet-bound traffic from the public subnet
 
 Associate the public subnet with the route table to ensure internet connectivity.
 
-✅ Use AWS default naming conventions where possible.
-✅ The template should be error-free and deployable via the AWS CloudFormation Console.
-✅ Output only valid cloud-setup.yaml YAML content without additional commentary.
+Use AWS default naming conventions where possible.
+The template should be error-free and deployable via the AWS CloudFormation Console.
+Output only valid cloud-setup.yaml YAML content without additional commentary.

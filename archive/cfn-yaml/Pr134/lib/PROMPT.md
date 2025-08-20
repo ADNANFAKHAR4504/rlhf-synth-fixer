@@ -6,27 +6,27 @@ You are an expert **AWS Infrastructure Engineer specializing in CloudFormation a
 
 1. **Region:** All resources must be deployed in **`us-east-1`**.
 2. **VPC:**
-   - Create a VPC with a valid CIDR block for typical workloads.
-   - Follow AWS best practices for tagging, internet accessibility, and subnet segmentation.
+- Create a VPC with a valid CIDR block for typical workloads.
+- Follow AWS best practices for tagging, internet accessibility, and subnet segmentation.
 3. **Subnets:**
-   - Create **two public subnets**, each in a **different Availability Zone** for high availability.
+- Create **two public subnets**, each in a **different Availability Zone** for high availability.
 4. **Internet Gateway:**
-   - Attach an Internet Gateway to the VPC to enable internet access for the public subnets.
+- Attach an Internet Gateway to the VPC to enable internet access for the public subnets.
 5. **Route Tables:**
-   - Configure route tables so that **each public subnet routes `0.0.0.0/0` traffic to the Internet Gateway**.
+- Configure route tables so that **each public subnet routes `0.0.0.0/0` traffic to the Internet Gateway**.
 6. **Naming Convention:**
-   - Enforce consistent naming:
-     ```
-     {Environment}-{ResourceType}-{UniqueIdentifier}
-     ```
-     where:
-     - `{Environment}` is provided as a **stack parameter** during deployment.
-     - `{ResourceType}` identifies the resource (e.g., VPC, Subnet, IGW).
-     - `{UniqueIdentifier}` ensures uniqueness.
+- Enforce consistent naming:
+```
+{Environment}-{ResourceType}-{UniqueIdentifier}
+```
+where:
+- `{Environment}` is provided as a **stack parameter** during deployment.
+- `{ResourceType}` identifies the resource (e.g., VPC, Subnet, IGW).
+- `{UniqueIdentifier}` ensures uniqueness.
 7. **Validation:**
-   - Template should pass `cfn-lint` validation and deploy successfully.
-   - All resource dependencies must be handled correctly within the stack.
-   - Tag all resources with the `Environment` parameter.
+- Template should pass `cfn-lint` validation and deploy successfully.
+- All resource dependencies must be handled correctly within the stack.
+- Tag all resources with the `Environment` parameter.
 
 **Constraints:**
 
@@ -38,10 +38,10 @@ You are an expert **AWS Infrastructure Engineer specializing in CloudFormation a
 
 * A **clean, production-ready `vpc-setup.yaml` CloudFormation YAML template** fulfilling all the above requirements.
 * The file should be directly deployable using:
-  ```
-  aws cloudformation create-stack --stack-name <name> --template-body file://vpc-setup.yaml --parameters ParameterKey=Environment,ParameterValue=Production
-  ```
-* Include a **short explanation (3–5 bullet points)** describing how the template fulfills the requirements.
+```
+aws cloudformation create-stack --stack-name <name> --template-body file://vpc-setup.yaml --parameters ParameterKey=Environment,ParameterValue=Production
+```
+* Include a **short explanation (35 bullet points)** describing how the template fulfills the requirements.
 
 **Optional Advanced Considerations:**
 

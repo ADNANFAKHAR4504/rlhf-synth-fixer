@@ -2,8 +2,8 @@ You are asked to implement a CDK for Terraform (CDKTF) TypeScript project that s
 
 PROJECT STRUCTURE & RULES
 1. Create exactly two TypeScript files under `lib/`:
-   - `lib/modules.ts` — contains **all** reusable module classes (no other file should define classes or components).
-   - `lib/tap-stack.ts` — the root stack which composes/instantiates the module classes from `lib/modules.ts`, wires outputs and variables, and contains no module class definitions.
+- `lib/modules.ts` contains **all** reusable module classes (no other file should define classes or components).
+- `lib/tap-stack.ts` the root stack which composes/instantiates the module classes from `lib/modules.ts`, wires outputs and variables, and contains no module class definitions.
 2. The code must be TypeScript for CDKTF and compile with `strict: true`. Use CDKTF constructs and the official AWS provider.
 3. Do not create any other application-level files that contain resource code or classes (helper functions are allowed inside these two files only).
 4. Make the implementation production-grade: typed inputs, default values, input validation where appropriate, clear names and tags.
@@ -23,13 +23,13 @@ INFRA REQUIREMENTS (exact)
 
 MODULAR DESIGN & NAMES
 - In `lib/modules.ts` implement modular classes. At minimum include (but not limited to) these classes:
-  - `VpcModule` — creates VPC, subnet, route table, internet gateway, and necessary associations.
-  - `S3Module` — creates versioned S3 bucket and related lifecycle rules if applicable.
-  - `IamModule` — creates IAM role, IAM policy allowing `s3:GetObject`, `s3:PutObject`, `s3:ListBucket` on the S3 bucket, and an instance profile.
-  - `SecurityModule` — creates security group allowing SSH ingress from `ssh_cidr` variable and egress as required.
-  - `Ec2Module` — launches the EC2 instance, attaches the IAM instance profile, attaches the security group, places it in the subnet, and looks up the Amazon Linux 2 AMI dynamically.
+- `VpcModule` creates VPC, subnet, route table, internet gateway, and necessary associations.
+- `S3Module` creates versioned S3 bucket and related lifecycle rules if applicable.
+- `IamModule` creates IAM role, IAM policy allowing `s3:GetObject`, `s3:PutObject`, `s3:ListBucket` on the S3 bucket, and an instance profile.
+- `SecurityModule` creates security group allowing SSH ingress from `ssh_cidr` variable and egress as required.
+- `Ec2Module` launches the EC2 instance, attaches the IAM instance profile, attaches the security group, places it in the subnet, and looks up the Amazon Linux 2 AMI dynamically.
 - Each module class should receive typed constructor arguments (interfaces) to accept variables and return whatever is needed by consumers (IDs, ARNs, bucket name, instance public IP).
-- Keep dependencies explicit — e.g., `Ec2Module` should accept the subnet id, security group id, IAM instance profile name, S3 bucket arn/name (if needed), and tagging map.
+- Keep dependencies explicit e.g., `Ec2Module` should accept the subnet id, security group id, IAM instance profile name, S3 bucket arn/name (if needed), and tagging map.
 
 VARIABLES & OVERRIDES
 - All sensible defaults must be provided, but every default should be overridable via typed input variables at the root `tap-stack.ts` level. Provide clear variable names and descriptions.

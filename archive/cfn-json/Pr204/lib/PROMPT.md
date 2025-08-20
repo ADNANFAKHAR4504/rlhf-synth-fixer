@@ -3,7 +3,7 @@
 
 ---
 
-### 🧩 **Requirements Overview**:
+### **Requirements Overview**:
 
 You are setting up infrastructure for a **web application** that must meet **enterprise-grade cloud architecture standards**.
 
@@ -22,8 +22,8 @@ You are setting up infrastructure for a **web application** that must meet **ent
 
 * Configure **security groups** to:
 
-  * **Block all incoming traffic by default**.
-  * Allow **only HTTP (port 80)** and **HTTPS (port 443)** from the public internet.
+* **Block all incoming traffic by default**.
+* Allow **only HTTP (port 80)** and **HTTPS (port 443)** from the public internet.
 
 #### 4. **Storage (S3 Logs)**:
 
@@ -35,19 +35,19 @@ You are setting up infrastructure for a **web application** that must meet **ent
 
 ---
 
-### 🔐 **Compliance & Naming Constraints**:
+### **Compliance & Naming Constraints**:
 
 * Resources must be deployed in **`us-east-1`**.
 * **Resource names** must follow this pattern:
-  `AppResource-<Stage>-<RandomId>`
+`AppResource-<Stage>-<RandomId>`
 * Use **IAM roles** to securely access AWS services.
 * Ensure **high availability** through **multi-AZ** deployments.
 * Enable **CloudWatch monitoring** on all EC2 instances.
-* Avoid exposing unnecessary ports — **only 80 & 443** should be public.
+* Avoid exposing unnecessary ports **only 80 & 443** should be public.
 
 ---
 
-### 📦 **Expected Output**:
+### **Expected Output**:
 
 A **CloudFormation template in valid JSON format** that:
 
