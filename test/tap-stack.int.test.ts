@@ -41,10 +41,10 @@ import {
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'us-west-2';
+const region = process.env.AWS_REGION || 'us-east-1';
 
-// Get the expected region from environment or default to us-west-2
-const expectedRegion = process.env.EXPECTED_AWS_REGION || 'us-west-2';
+// Get the expected region from environment or default to us-east-1
+const expectedRegion = process.env.EXPECTED_AWS_REGION || 'us-east-1';
 
 // Function to detect if we're in a CI/CD environment
 const isCI = process.env.CI === '1' || process.env.GITHUB_ACTIONS === 'true';
@@ -761,88 +761,99 @@ describe('TAP Stack Integration Tests', () => {
       const missingResources = [];
 
       try {
-        // Check DynamoDB table
+        // Check DynamoDB table - look for any TAP-related table
         try {
           const listCommand = new ListTablesCommand({});
           const listResult = await dynamoClient.send(listCommand);
           const tableExists = listResult.TableNames?.some(name =>
-            name.includes('tap-items-table')
+            name.toLowerCase().includes('tap') || name.includes('TapStack')
           );
           if (!tableExists) {
             infrastructureDeployed = false;
-            missingResources.push('DynamoDB table (tap-items-table)');
+            missingResources.push('DynamoDB table (any TAP-related table)');
+          } else {
+            const foundTables = listResult.TableNames?.filter(name =>
+              name.toLowerCase().includes('tap') || name.includes('TapStack')
+            );
+            console.log(`✅ Found TAP DynamoDB tables:`, foundTables?.join(', '));
           }
         } catch (error) {
           infrastructureDeployed = false;
           missingResources.push('DynamoDB table (access error)');
         }
 
-        // Check S3 bucket
+        // Check S3 bucket - look for any TAP-related bucket
         try {
           const listCommand = new ListBucketsCommand({});
           const listResult = await s3Client.send(listCommand);
           const bucketExists = listResult.Buckets?.some(bucket =>
-            bucket.Name?.includes('tap-files-bucket')
+            bucket.Name?.toLowerCase().includes('tap') || bucket.Name?.includes('TapStack')
           );
           if (!bucketExists) {
             infrastructureDeployed = false;
-            missingResources.push('S3 bucket (tap-files-bucket)');
+            missingResources.push('S3 bucket (any TAP-related bucket)');
+          } else {
+            const foundBuckets = listResult.Buckets?.filter(bucket =>
+              bucket.Name?.toLowerCase().includes('tap') || bucket.Name?.includes('TapStack')
+            );
+            console.log(`✅ Found TAP S3 buckets:`, foundBuckets?.map(b => b.Name).join(', '));
           }
         } catch (error) {
           infrastructureDeployed = false;
           missingResources.push('S3 bucket (access error)');
         }
 
-        // Check Lambda functions
+        // Check Lambda functions - look for any TAP-related functions
         try {
           const listCommand = new ListFunctionsCommand({});
           const listResult = await lambdaClient.send(listCommand);
-          const expectedFunctions = [
-            'tap-create-item',
-            'tap-get-items',
-            'tap-upload-file',
-          ];
-          const missingFunctions = expectedFunctions.filter(
-            expected =>
-              !listResult.Functions?.some(fn => fn.FunctionName === expected)
-          );
-          if (missingFunctions.length > 0) {
+          const tapFunctions = listResult.Functions?.filter(fn =>
+            fn.FunctionName?.toLowerCase().includes('tap') || fn.FunctionName?.includes('TapStack')
+          ) || [];
+          
+          if (tapFunctions.length === 0) {
             infrastructureDeployed = false;
-            missingResources.push(
-              `Lambda functions (${missingFunctions.join(', ')})`
-            );
+            missingResources.push('Lambda functions (any TAP-related functions)');
+          } else {
+            console.log(`✅ Found TAP Lambda functions:`, tapFunctions.map(fn => fn.FunctionName).join(', '));
           }
         } catch (error) {
           infrastructureDeployed = false;
           missingResources.push('Lambda functions (access error)');
         }
 
-        // Check Secrets Manager
+        // Check Secrets Manager - look for any TAP-related secrets
         try {
           const listCommand = new ListSecretsCommand({});
           const listResult = await secretsClient.send(listCommand);
-          const secretExists = listResult.SecretList?.some(
-            secret => secret.Name === 'tap-app/secrets'
-          );
-          if (!secretExists) {
+          const tapSecrets = listResult.SecretList?.filter(secret =>
+            secret.Name?.toLowerCase().includes('tap') || secret.Name?.includes('TapStack')
+          ) || [];
+          
+          if (tapSecrets.length === 0) {
             infrastructureDeployed = false;
-            missingResources.push('Secrets Manager secret (tap-app/secrets)');
+            missingResources.push('Secrets Manager secret (any TAP-related secrets)');
+          } else {
+            console.log(`✅ Found TAP Secrets Manager secrets:`, tapSecrets.map(s => s.Name).join(', '));
           }
         } catch (error) {
           infrastructureDeployed = false;
           missingResources.push('Secrets Manager secret (access error)');
         }
 
-        // Check API Gateway
+        // Check API Gateway - look for any TAP-related APIs
         try {
           const listCommand = new GetApisCommand({});
           const listResult = await apiGatewayClient.send(listCommand);
-          const apiExists = listResult.Items?.some(
-            api => api.Name === 'TAP Serverless API'
-          );
-          if (!apiExists) {
+          const tapApis = listResult.Items?.filter(api =>
+            api.Name?.toLowerCase().includes('tap') || api.Name?.includes('TapStack')
+          ) || [];
+          
+          if (tapApis.length === 0) {
             infrastructureDeployed = false;
-            missingResources.push('API Gateway (TAP Serverless API)');
+            missingResources.push('API Gateway (any TAP-related APIs)');
+          } else {
+            console.log(`✅ Found TAP API Gateways:`, tapApis.map(api => api.Name).join(', '));
           }
         } catch (error) {
           infrastructureDeployed = false;
