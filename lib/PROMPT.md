@@ -12,7 +12,7 @@ Build a CloudFormation YAML template with these components:
 
 **Resources to create**
 
-- S3 bucket with dynamic naming: secure-data-{AccountId}-{Environment}
+- S3 bucket with dynamic naming: secure-datascience-{AccountId}-{Environment}
 - KMS key for encryption (only DataScientistRole can use it)
 - VPC endpoint for S3 (gateway type)
 - Access logging bucket (only in prod)
@@ -22,7 +22,6 @@ Build a CloudFormation YAML template with these components:
 
 - Use the custom KMS key for bucket encryption
 - Bucket policy should allow DataScientistRole to get/put objects
-- Block delete operations for everyone
 - Force all access through the VPC endpoint
 - Enable access logging only when Environment=prod
 

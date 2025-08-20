@@ -209,6 +209,7 @@ Resources:
   # Custom KMS key for S3 bucket encryption
   S3EncryptionKey:
     Type: AWS::KMS::Key
+    DependsOn: DataScientistRole
     Properties:
       Description: !Sub 'KMS key for secure S3 bucket encryption - ${EnvironmentSuffix}'
       KeyPolicy:
@@ -226,7 +227,7 @@ Resources:
           - Sid: Allow DataScientist Role
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/DataScientistRole-${EnvironmentSuffix}'
+              AWS: !GetAtt DataScientistRole.Arn
             Action:
               - kms:Encrypt
               - kms:Decrypt
