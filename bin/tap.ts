@@ -53,3 +53,7 @@ export const targetGroupName = stack.targetGroupName;
 export const albLogsBucketName = stack.albLogsBucketName;
 export const secretName = stack.secretName;
 export const vpcFlowLogsGroupName = stack.vpcFlowLogsGroupName;
+export const secretsKmsKeyId = stack.secretsKmsKeyId;
+export const rdsKmsKeyId = stack.rdsKmsKeyId;
+export const ec2RoleName = stack.ec2RoleName;
+export const rdsSubnetGroupName = stack.rdsSubnetGroupName;

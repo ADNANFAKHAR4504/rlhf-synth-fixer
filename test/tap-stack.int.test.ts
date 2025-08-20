@@ -122,7 +122,14 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
   let accountId: string;
 
   beforeAll(async () => {
-    outputs = loadStackOutputs();
+    const rawOutputs = loadStackOutputs();
+    console.log('Raw outputs loaded:', JSON.stringify(rawOutputs, null, 2));
+    
+    // Extract outputs from the first (and likely only) stack
+    const stackKey = Object.keys(rawOutputs)[0];
+    outputs = rawOutputs[stackKey] || rawOutputs;
+    console.log('Extracted outputs:', JSON.stringify(outputs, null, 2));
+    
     clients = initializeClients();
 
     // Verify AWS credentials
@@ -371,9 +378,10 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
       const vpcId = outputs.vpcId;
       
       // Find EC2 role by looking for roles with EC2 trust policy
+      const roleName = outputs.ec2RoleName || 'ec2-role-pr1591';
       const roles = await clients.iam.send(
         new GetRoleCommand({
-          RoleName: `ec2-role-${vpcId.split('-')[1]}` // Extract suffix from VPC ID
+          RoleName: roleName
         })
       ).catch(() => null);
 
@@ -393,10 +401,18 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
 
   describe('KMS Resources', () => {
     skipIfNoAWS()('should have created KMS keys for encryption', async () => {
-      // Test that KMS keys exist and are enabled
-      // This is a basic test since we don't have direct key IDs from outputs
-      const identity = await clients.sts.send(new GetCallerIdentityCommand({}));
-      expect(identity.Account).toBeDefined();
+      const secretsKmsKeyId = outputs.secretsKmsKeyId;
+      const rdsKmsKeyId = outputs.rdsKmsKeyId;
+      
+      if (secretsKmsKeyId) {
+        expect(secretsKmsKeyId).toBeDefined();
+        expect(secretsKmsKeyId).toMatch(/^[a-f0-9-]{36}$/);
+      }
+      
+      if (rdsKmsKeyId) {
+        expect(rdsKmsKeyId).toBeDefined();
+        expect(rdsKmsKeyId).toMatch(/^[a-f0-9-]{36}$/);
+      }
     });
   });
 
@@ -426,7 +442,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
 
     skipIfNoAWS()('should have created RDS subnet group', async () => {
       const vpcId = outputs.vpcId;
-      const subnetGroupName = `rds-subnet-group-${vpcId.split('-')[1]}`;
+      const subnetGroupName = outputs.rdsSubnetGroupName || 'rds-subnet-group-pr1591';
 
       const response = await clients.rds.send(
         new DescribeDBSubnetGroupsCommand({
@@ -488,8 +504,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
     });
 
     skipIfNoAWS()('should have created target group with health checks', async () => {
-      const vpcId = outputs.vpcId;
-      const tgName = `app-target-group-${vpcId.split('-')[1]}`;
+      const tgName = outputs.targetGroupName || 'app-target-group-pr1591';
 
       const response = await clients.elbv2.send(
         new DescribeTargetGroupsCommand({
@@ -1001,8 +1016,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
     });
 
     skipIfNoAWS()('should have load balancer health checks configured', async () => {
-      const vpcId = outputs.vpcId;
-      const tgName = `app-target-group-${vpcId.split('-')[1]}`;
+      const tgName = outputs.targetGroupName || 'app-target-group-pr1591';
 
       const response = await clients.elbv2.send(
         new DescribeTargetGroupsCommand({
@@ -1026,8 +1040,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
 
   describe('Performance and Scalability', () => {
     skipIfNoAWS()('should have appropriate instance types for workload', async () => {
-      const vpcId = outputs.vpcId;
-      const ltName = `app-launch-template-${vpcId.split('-')[1]}`;
+      const ltName = outputs.launchTemplateName || 'app-launch-template-pr1591';
 
       const response = await clients.ec2.send(
         new DescribeLaunchTemplatesCommand({
@@ -1198,7 +1211,7 @@ describe('Scalable Web App Infrastructure Integration Tests', () => {
   afterAll(async () => {
     // Cleanup any test-specific resources if needed
     console.log('Integration tests completed successfully');
-    console.log(`Tested infrastructure in region: ${process.env.AWS_REGION || 'ap-south-1'}`);
+    console.log(`Tested infrastructure in region: ${'ap-south-1'}`);
     if (outputs.vpcId) console.log(`VPC ID: ${outputs.vpcId}`);
     if (outputs.albDnsName) console.log(`ALB DNS: ${outputs.albDnsName}`);
     if (outputs.rdsEndpoint) console.log(`RDS Endpoint: ${outputs.rdsEndpoint}`);

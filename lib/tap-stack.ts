@@ -59,6 +59,10 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly albLogsBucketName: pulumi.Output<string>;
   public readonly secretName: pulumi.Output<string>;
   public readonly vpcFlowLogsGroupName: pulumi.Output<string>;
+  public readonly secretsKmsKeyId: pulumi.Output<string>;
+  public readonly rdsKmsKeyId: pulumi.Output<string>;
+  public readonly ec2RoleName: pulumi.Output<string>;
+  public readonly rdsSubnetGroupName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -114,6 +118,10 @@ export class TapStack extends pulumi.ComponentResource {
     this.secretName = scalableWebAppInfrastructure.secretName;
     this.vpcFlowLogsGroupName =
       scalableWebAppInfrastructure.vpcFlowLogsGroupName;
+    this.secretsKmsKeyId = scalableWebAppInfrastructure.secretsKmsKeyId;
+    this.rdsKmsKeyId = scalableWebAppInfrastructure.rdsKmsKeyId;
+    this.ec2RoleName = scalableWebAppInfrastructure.ec2RoleName;
+    this.rdsSubnetGroupName = scalableWebAppInfrastructure.rdsSubnetGroupName;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -128,6 +136,10 @@ export class TapStack extends pulumi.ComponentResource {
       albLogsBucketName: this.albLogsBucketName,
       secretName: this.secretName,
       vpcFlowLogsGroupName: this.vpcFlowLogsGroupName,
+      secretsKmsKeyId: this.secretsKmsKeyId,
+      rdsKmsKeyId: this.rdsKmsKeyId,
+      ec2RoleName: this.ec2RoleName,
+      rdsSubnetGroupName: this.rdsSubnetGroupName,
     });
   }
 }

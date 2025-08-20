@@ -18,6 +18,10 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
   public readonly albLogsBucketName: pulumi.Output<string>;
   public readonly secretName: pulumi.Output<string>;
   public readonly vpcFlowLogsGroupName: pulumi.Output<string>;
+  public readonly secretsKmsKeyId: pulumi.Output<string>;
+  public readonly rdsKmsKeyId: pulumi.Output<string>;
+  public readonly ec2RoleName: pulumi.Output<string>;
+  public readonly rdsSubnetGroupName: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -1339,6 +1343,10 @@ EOF
     this.albLogsBucketName = albLogsBucket.bucket;
     this.secretName = dbSecret.name;
     this.vpcFlowLogsGroupName = vpcFlowLogsGroup.name;
+    this.secretsKmsKeyId = secretsKmsKey.id;
+    this.rdsKmsKeyId = rdsKmsKey.id;
+    this.ec2RoleName = ec2Role.name;
+    this.rdsSubnetGroupName = rdsSubnetGroup.name;
 
     // Register outputs
     this.registerOutputs({
@@ -1352,6 +1360,10 @@ EOF
       albLogsBucketName: this.albLogsBucketName,
       secretName: this.secretName,
       vpcFlowLogsGroupName: this.vpcFlowLogsGroupName,
+      secretsKmsKeyId: this.secretsKmsKeyId,
+      rdsKmsKeyId: this.rdsKmsKeyId,
+      ec2RoleName: this.ec2RoleName,
+      rdsSubnetGroupName: this.rdsSubnetGroupName,
     });
   }
 }
