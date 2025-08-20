@@ -1052,6 +1052,104 @@
                 }
             }
         },
+        "CorpALBAccessLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "corp-alb-logs-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "corp-alb-access-logs-lifecycle",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "AbortIncompleteMultipartUpload": {
+                                "DaysAfterInitiation": 7
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "corp-alb-logs-bucket-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "Project"
+                        }
+                    }
+                ]
+            }
+        },
+        "CorpALBAccessLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CorpALBAccessLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AWSALBAccessLogsWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "arn:aws:iam::797873946194:root"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CorpALBAccessLogsBucket.Arn}/alb-access-logs/*"
+                            }
+                        },
+                        {
+                            "Sid": "AWSALBAccessLogsAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "delivery.logs.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "CorpALBAccessLogsBucket",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "CorpCloudTrailBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
@@ -1499,7 +1597,7 @@
                     {
                         "Key": "access_logs.s3.bucket",
                         "Value": {
-                            "Ref": "CorpCloudTrailBucket"
+                            "Ref": "CorpALBAccessLogsBucket"
                         }
                     },
                     {
