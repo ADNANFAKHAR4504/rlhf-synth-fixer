@@ -1,5 +1,3 @@
-# Ensure account ID is available for bucket policy
-data "aws_caller_identity" "current" {}
 # Add random suffix for unique resource names
 resource "random_id" "bucket_suffix" {
   byte_length = 4
