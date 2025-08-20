@@ -1,6 +1,6 @@
 resource "aws_iam_instance_profile" "ec2" {
   name_prefix = "${lower(substr(var.project_name, 0, 20))}-ec2-instance-profile"
-  role = aws_iam_role.ec2.name
+  role        = aws_iam_role.ec2.name
 }
 
 resource "aws_iam_role" "ec2" {
@@ -27,14 +27,18 @@ resource "aws_iam_role" "ec2" {
 }
 
 
+resource "random_pet" "suffix" {
+  length = 2
+}
+
 resource "aws_iam_user" "main" {
   count = length(var.iam_users)
-  name = var.iam_users[count.index]
+  name  = "${var.iam_users[count.index]}-${random_pet.suffix.id}"
 }
 
 resource "aws_iam_user_login_profile" "main" {
-  count    = length(var.iam_users)
-  user     = aws_iam_user.main[count.index].name
+  count                   = length(var.iam_users)
+  user                    = aws_iam_user.main[count.index].name
   password_reset_required = true
 }
 
@@ -89,8 +93,8 @@ resource "aws_iam_policy" "mfa_enforcement" {
         Resource = "arn:aws:iam::*:user/$${aws:username}"
       },
       {
-        Sid      = "BlockMostAccessUnlessSignedInWithMFA"
-        Effect   = "Deny"
+        Sid    = "BlockMostAccessUnlessSignedInWithMFA"
+        Effect = "Deny"
         NotAction = [
           "iam:CreateVirtualMFADevice",
           "iam:EnableMFADevice",
@@ -172,7 +176,7 @@ resource "aws_iam_policy" "s3_access" {
           "s3:GetObject",
           "s3:ListBucket",
         ]
-        Effect   = "Allow"
+        Effect = "Allow"
         Resource = [
           "arn:aws:s3:::*",
         ]

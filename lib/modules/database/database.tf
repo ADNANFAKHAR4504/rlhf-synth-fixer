@@ -1,6 +1,6 @@
 resource "aws_db_subnet_group" "main" {
   name_prefix = "${lower(substr(var.project_name, 0, 20))}-db-subnet-group"
-  subnet_ids = var.private_subnet_ids
+  subnet_ids  = var.private_subnet_ids
 
   tags = {
     Name        = "${var.project_name}-db-subnet-group"
@@ -12,7 +12,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "main" {
   allocated_storage      = 20
   engine                 = "mysql"
-  engine_version         = "8.0.35"
+  engine_version         = "8.0.33"
   instance_class         = "db.t3.micro"
   db_name                = "${var.project_name}db"
   username               = var.db_username

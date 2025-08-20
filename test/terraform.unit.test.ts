@@ -4,22 +4,28 @@ import * as path from 'path';
 const TF_PATH = path.resolve(__dirname, '../lib/tap_stack.tf');
 const NETWORKING_PATH = path.resolve(
   __dirname,
-  '../lib/modules/networking/main.tf'
+  '../lib/modules/networking/networking.tf'
 );
 const SECURITY_PATH = path.resolve(
   __dirname,
-  '../lib/modules/security/main.tf'
+  '../lib/modules/security/security.tf'
 );
-const COMPUTE_PATH = path.resolve(__dirname, '../lib/modules/compute/main.tf');
+const COMPUTE_PATH = path.resolve(
+  __dirname,
+  '../lib/modules/compute/compute.tf'
+);
 const DATABASE_PATH = path.resolve(
   __dirname,
-  '../lib/modules/database/main.tf'
+  '../lib/modules/database/database.tf'
 );
-const STORAGE_PATH = path.resolve(__dirname, '../lib/modules/storage/main.tf');
-const IAM_PATH = path.resolve(__dirname, '../lib/modules/iam/main.tf');
+const STORAGE_PATH = path.resolve(
+  __dirname,
+  '../lib/modules/storage/storage.tf'
+);
+const IAM_PATH = path.resolve(__dirname, '../lib/modules/iam/iam.tf');
 const MONITORING_PATH = path.resolve(
   __dirname,
-  '../lib/modules/monitoring/main.tf'
+  '../lib/modules/monitoring/monitoring.tf'
 );
 
 describe('Terraform Core Infrastructure (static checks)', () => {
