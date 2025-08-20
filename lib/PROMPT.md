@@ -1,111 +1,96 @@
 ---
 ---
 
-You are an expert AWS infrastructure architect and Terraform developer specializing in secure, production-ready cloud environments. Create a comprehensive Terraform configuration that establishes a secure AWS infrastructure with proper resource connectivity and security isolation.
+Hey there!
 
-## Project Requirements
+I need your help designing a secure and production-ready AWS environment using Terraform. Think of yourself as the lead architect on this—your expertise in building robust infrastructure is exactly what we need.
 
-**Project Details:**
+**Project:** IaC - AWS Nova Model Breaking
+**Author:** ngwakoleslieelijah
+**Tool:** Terraform (HCL)
+**Region:** Let's stick strictly to `us-east-1` for this one.
 
-- Project Name: "IaC - AWS Nova Model Breaking"
-- Author: ngwakoleslieelijah
-- Created: 2025-08-14 21:08:49 UTC
-- Infrastructure as Code Tool: Terraform (HCL)
-- Target Region: us-east-1 (strictly enforced)
+---
 
-## Core Infrastructure Components & Connectivity
+### What We're Building
 
-Design and implement the following interconnected infrastructure:
+Our goal is to create a well-structured and secure foundation for our application. Here’s a breakdown of the key components and how they should connect.
 
-### 1. Network Foundation
+#### **1. The Network Foundation**
 
-- **VPC**: Deploy a secure VPC (10.0.0.0/16) in us-east-1 with DNS resolution enabled
-- **Subnets**: Create public (10.0.1.0/24, 10.0.2.0/24) and private subnets (10.0.10.0/24, 10.0.20.0/24) across multiple AZs
-- **NAT Gateway**: Enable outbound internet access for private resources
-- **Route Tables**: Configure appropriate routing for public/private subnet isolation
+First, let's lay the groundwork with a solid network setup.
 
-### 2. Security Layer Architecture
+- **VPC:** We'll need a VPC in `us-east-1` with the CIDR block `10.0.0.0/16`. Make sure DNS resolution is turned on.
+- **Subnets:** Let's create two public subnets (`10.0.1.0/24`, `10.0.2.0/24`) and two private subnets (`10.0.10.0/24`, `10.0.20.0/24`) spread across different availability zones for high availability.
+- **Internet Access:** Set up a NAT Gateway so our private resources can reach the internet for updates and other outbound traffic.
+- **Routing:** Configure the route tables to ensure traffic flows correctly and our private subnets stay private.
 
-- **EC2 Security Group**: Allow HTTPS (443) and HTTP (80) from internet, SSH (22) ONLY from VPC CIDR (10.0.0.0/16) - NEVER from 0.0.0.0/0
-- **RDS Security Group**: Allow MySQL/PostgreSQL (3306/5432) ONLY from EC2 security group - create security group reference dependency
-- **VPC Endpoint Security Group**: Allow HTTPS (443) from VPC CIDR for S3 VPC endpoint access
-- **ALB Security Group**: Allow HTTP/HTTPS from internet, outbound to EC2 security group only
+#### **2. The Security Layer**
 
-### 3. Compute & Application Tier
+Security is a top priority. Let's lock things down with a few key security groups.
 
-- **EC2 Instances**: Deploy in private subnets with EC2 security group attached
-- **Application Load Balancer**: Deploy in public subnets with ALB security group
-- **Auto Scaling Group**: Connect EC2 instances to ALB target groups
-- **IAM Instance Profile**: Attach role with least-privilege S3 access via VPC endpoint
+- **EC2 Instances:** Allow web traffic (HTTP/HTTPS on ports 80/443) from the internet. For SSH (port 22), please restrict access to our VPC's CIDR (`10.0.0.0/16`) only. **Under no circumstances should SSH be open to the world (0.0.0.0/0).**
+- **RDS Database:** The database should only accept connections from our EC2 instances. Let's use a security group rule to reference the EC2 security group directly.
+- **S3 VPC Endpoint:** We'll need a security group that allows HTTPS traffic from within the VPC so our services can communicate securely with S3.
+- **Application Load Balancer (ALB):** This will be our front door, so let it accept HTTP/HTTPS traffic from the internet and route it to our EC2 instances.
 
-### 4. Database Layer
+#### **3. The Compute and Application Layer**
 
-- **RDS Instance**: Deploy MySQL/PostgreSQL in private subnets using RDS security group
-- **DB Subnet Group**: Span private subnets across multiple AZs
-- **Encryption**: Enable encryption at rest using customer-managed KMS keys
-- **Security**: Connect RDS to EC2 security group via security group rules (no direct CIDR access)
+This is where our application will live.
 
-### 5. Storage & Data Management
+- **EC2 Instances:** Launch our instances in the private subnets and attach the EC2 security group we defined earlier.
+- **Load Balancer:** Place the ALB in the public subnets to distribute incoming traffic.
+- **Auto Scaling:** Let's set up an Auto Scaling Group to automatically adjust the number of EC2 instances based on traffic, and connect it to the ALB's target groups.
+- **IAM Role:** Create an IAM instance profile with the minimum necessary permissions for S3 access.
 
-- **S3 Data Bucket**: Enable server-side encryption (KMS), versioning, block all public access
-- **S3 Logs Bucket**: Same security posture for application/access logs
-- **VPC S3 Endpoint**: Route S3 traffic through private network, not internet
-- **Bucket Policies**: Restrict access to VPC endpoint only (deny direct internet access)
+#### **4. The Database Layer**
 
-### 6. Identity & Access Management
+Our data needs a secure home.
 
-- **IAM Users**: Require MFA for console access, enforce MFA policy attachment
-- **IAM Roles**: Create application roles with least-privilege policies for S3/RDS access
-- **CloudTrail**: Log all IAM actions and API calls for security auditing
-- **IAM Policies**: Use condition keys to enforce MFA and resource-specific access
+- **RDS Instance:** Deploy a MySQL or PostgreSQL database in the private subnets, using the RDS security group.
+- **Subnet Group:** Create a DB subnet group that spans our private subnets for redundancy.
+- **Encryption:** It's crucial that we enable encryption at rest using a customer-managed KMS key.
 
-### 7. Network Security & Monitoring
+#### **5. Storage and Data**
 
-- **VPC Flow Logs**: Enable comprehensive network traffic logging
-- **CloudWatch**: Monitor security group changes and unauthorized access attempts
-- **AWS Config**: Ensure continuous compliance with security group rules
+Let's set up our S3 buckets with security in mind.
 
-## Critical Security Requirements
+- **S3 Buckets:** We'll need two buckets: one for data and one for logs. For both, please enable KMS encryption and versioning, and make sure to block all public access.
+- **VPC Endpoint for S3:** To keep traffic off the public internet, let's route all S3 communication through a VPC endpoint.
+- **Bucket Policies:** Add policies that restrict access to only come from our VPC endpoint.
 
-1. **SSH Restriction**: Absolutely NO security group should allow SSH (port 22) from 0.0.0.0/0 - use VPC CIDR or specific IP ranges only
-2. **Resource Connectivity**: EC2 → RDS via security group references (not CIDR blocks)
-3. **S3 Isolation**: All S3 access must flow through VPC endpoints, never public internet
-4. **Encryption Everywhere**: S3 (KMS), RDS (at-rest), EBS volumes (at-rest)
-5. **MFA Enforcement**: IAM users must have MFA enabled and policies must check MFA presence
-6. **Least Privilege**: IAM policies should grant minimum required permissions with resource-specific ARNs
+#### **6. Identity and Access (IAM)**
 
-## Terraform Structure Requirements
+Managing who can do what is critical.
 
-Organize the code using these modules:
+- **IAM Users:** Let's require multi-factor authentication (MFA) for all users who need console access.
+- **IAM Roles:** Create specific roles for our applications with least-privilege policies for accessing S3 and RDS.
+- **Auditing:** Turn on CloudTrail to log all IAM and API activity.
 
-- `modules/networking/` - VPC, subnets, routing, NAT gateway
-- `modules/security/` - Security groups with proper ingress/egress rules
-- `modules/compute/` - EC2, ALB, Auto Scaling with connectivity to other tiers
-- `modules/database/` - RDS with encryption and security group connectivity
-- `modules/storage/` - S3 buckets, VPC endpoints, bucket policies
-- `modules/iam/` - Users, roles, policies with MFA requirements
-- `modules/monitoring/` - CloudTrail, CloudWatch, VPC Flow Logs
+#### **7. Monitoring and Network Security**
 
-## Deliverables
+Finally, let's make sure we can keep an eye on things.
 
-Provide complete Terraform configuration including:
+- **VPC Flow Logs:** Enable these to get detailed logs of all network traffic.
+- **CloudWatch:** Set up monitoring for any changes to our security groups or suspicious access attempts.
+- **AWS Config:** Use this to continuously check that our security rules remain compliant.
 
-1. **Root Configuration**: main.tf, variables.tf, outputs.tf, terraform.tfvars
-2. **Module Structure**: All 7 modules with proper input/output connections
-3. **Security Validation**: Ensure no security group allows SSH from 0.0.0.0/0
-4. **Resource Dependencies**: Proper depends_on and resource references for connectivity
-5. **Compliance Checks**: Configuration that passes AWS Config security rules
-6. **Documentation**: README.md with deployment instructions and architecture diagram
+---
 
-## Success Criteria
+### How to Structure the Code
 
-The infrastructure must:
+To keep things organized and reusable, let's structure our Terraform code into modules:
 
-- Deploy successfully in us-east-1 without security violations
-- Pass AWS Config compliance checks for security groups and S3 configuration
-- Demonstrate proper resource connectivity (EC2 ↔ RDS, EC2 ↔ S3 via VPC endpoint)
-- Enforce MFA for all IAM user operations
-- Maintain complete audit trail via CloudTrail
-- Block all unauthorized network access paths
+- `modules/networking/`
+- `modules/security/`
+- `modules/compute/`
+- `modules/database/`
+- `modules/storage/`
+- `modules/iam/`
+- `modules/monitoring/`
 
-Focus on creating secure, interconnected resources that follow AWS Well-Architected Framework security pillar principles while maintaining operational efficiency through proper Terraform module design.
+### What I'll Need from You
+
+Please provide the complete Terraform configuration, including the root `tap_stack.tf`, `vars.tf`, etc., as well as the seven modules. A `README.md` with deployment instructions would be fantastic too.
+
+Thanks for your help with this. Let's build something great!
