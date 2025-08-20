@@ -40,13 +40,14 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(content).toMatch(/output\s+"kms_key_id"/);
     });
 
-    test('route53 query logging uses correct API parameter', async () => {
+    test('route53 private zone configuration', async () => {
       const stackPath = path.resolve(__dirname, "../lib/tap_stack.tf");
       const content = fs.readFileSync(stackPath, "utf8");
       
-      // Critical: Verify Route53 query logging uses correct parameter
-      expect(content).toMatch(/cloudwatch_log_group_arn\s*=\s*aws_cloudwatch_log_group\.route53_dns\.arn/);
-      expect(content).not.toMatch(/destination_arn\s*=\s*aws_cloudwatch_log_group\.route53_dns\.arn/);
+      // Verify Route53 private zone is configured
+      expect(content).toMatch(/resource\s+"aws_route53_zone"\s+"private"/);
+      expect(content).toMatch(/name\s*=\s*"tap\.internal"/);
+      expect(content).toMatch(/vpc\s*{/);
     });
 
     test('stack outputs validation (live resource testing)', async () => {

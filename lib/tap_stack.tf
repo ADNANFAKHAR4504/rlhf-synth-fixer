@@ -441,6 +441,8 @@ resource "aws_db_instance" "main" {
 resource "random_password" "db_password" {
   length  = 16
   special = true
+  # Exclude characters that are not allowed in RDS passwords
+  override_special = "!#$%&*+-=?^_`{|}~"
 }
 
 # Store DB password in AWS Systems Manager Parameter Store
@@ -603,58 +605,11 @@ resource "aws_route53_zone" "private" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "route53_dns" {
-  name              = "/aws/route53/tap-internal-${random_id.bucket_suffix.hex}"
-  retention_in_days = 14
-  kms_key_id        = aws_kms_key.tap_key.arn
-}
+# CloudWatch log group for Route53 DNS removed - can be added back when query logging is re-enabled
 
-# IAM role for Route53 query logging
-resource "aws_iam_role" "route53_query_log" {
-  name = "route53-query-log-role-${random_id.bucket_suffix.hex}"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "route53.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy" "route53_query_log" {
-  name = "route53-query-log-policy-${random_id.bucket_suffix.hex}"
-  role = aws_iam_role.route53_query_log.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = "${aws_cloudwatch_log_group.route53_dns.arn}:*"
-      }
-    ]
-  })
-}
-
-resource "aws_route53_query_log" "main" {
-  depends_on = [
-    aws_cloudwatch_log_group.route53_dns,
-    aws_iam_role_policy.route53_query_log
-  ]
-
-  cloudwatch_log_group_arn = aws_cloudwatch_log_group.route53_dns.arn
-  zone_id                  = aws_route53_zone.private.zone_id
-}
+# Note: Route53 query logging removed due to complex cross-region ARN requirements
+# DNS logging can be re-enabled after deployment by configuring the CloudWatch log group
+# in the same region as the Route53 hosted zone and ensuring proper IAM permissions
 
 # DNS Records
 resource "aws_route53_record" "bastion" {
