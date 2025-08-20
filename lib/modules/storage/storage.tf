@@ -56,23 +56,6 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_policy" "data" {
-  bucket = aws_s3_bucket.data.id
-  policy = data.aws_iam_policy_document.s3_data.json
-}
-
-data "aws_iam_policy_document" "s3_data" {
-  statement {
-    sid = "AllowAllS3ActionsForCiUser"
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/iac-rlhf-github"]
-    }
-    actions   = ["s3:*"]
-    resources = [aws_s3_bucket.data.arn, "${aws_s3_bucket.data.arn}/*"]
-  }
-}
-
 data "aws_caller_identity" "current" {}
 
 resource "aws_vpc_endpoint" "s3" {
