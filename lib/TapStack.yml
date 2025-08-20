@@ -407,7 +407,7 @@ Resources:
                   - kms:Decrypt
                   - kms:GenerateDataKey
                   - kms:DescribeKey
-                Resource: !GetAtt KMSKey.Arn
+                Resource: "*"
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -461,7 +461,6 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      KmsKeyId: !Ref KMSKey
       MultiAZ: true
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
@@ -484,7 +483,7 @@ Resources:
     Properties:
       Name: !Sub "${ResourceNamePrefix}DBCredentials"
       Description: "Database credentials for the web application"
-      KmsKeyId: !Ref KMSKey
+
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: "password"
@@ -627,7 +626,6 @@ Resources:
               VolumeType: gp3
               VolumeSize: 20
               Encrypted: true
-              KmsKeyId: !Ref KMSKey
               DeleteOnTermination: true
         TagSpecifications:
           - ResourceType: instance
@@ -819,9 +817,6 @@ Resources:
               - kms:GenerateDataKeyWithoutPlainText
               - kms:ReEncrypt*
             Resource: "*"
-            Condition:
-              StringEquals:
-                "kms:ViaService": !Sub "ec2.${AWS::Region}.amazonaws.com"
           - Sid: Allow Auto Scaling Service
             Effect: Allow
             Principal:
@@ -850,9 +845,6 @@ Resources:
               - kms:GenerateDataKeyWithoutPlainText
               - kms:ReEncrypt*
             Resource: "*"
-            Condition:
-              StringEquals:
-                "kms:ViaService": !Sub "rds.${AWS::Region}.amazonaws.com"
           - Sid: Allow Secrets Manager Service
             Effect: Allow
             Principal:
@@ -866,9 +858,6 @@ Resources:
               - kms:GenerateDataKeyWithoutPlainText
               - kms:ReEncrypt*
             Resource: "*"
-            Condition:
-              StringEquals:
-                "kms:ViaService": !Sub "secretsmanager.${AWS::Region}.amazonaws.com"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-KMS-Key"
