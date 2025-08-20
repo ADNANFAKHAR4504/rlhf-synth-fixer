@@ -51,7 +51,10 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: us-west-2a
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: 'AWS::Region'
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -63,7 +66,10 @@ Resources:
     Properties:
       VpcId: !Ref SecureVPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: us-west-2b
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs 
+          Ref: 'AWS::Region'
       Tags:
         - Key: Name
           Value: !Sub 'private-subnet-${EnvironmentSuffix}'
@@ -223,11 +229,7 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3LogGroup
+      # S3 notifications removed - not valid configuration
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
         LogFilePrefix: access-logs/
@@ -245,6 +247,29 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LoggingBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${LoggingBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
 
   # RDS Subnet Group
   DBSubnetGroup:
@@ -265,7 +290,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'secure-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.39'
       MasterUsername: admin
       MasterUserPassword: !Sub '{{resolve:secretsmanager:rds-password-${EnvironmentSuffix}:SecretString:password}}'
       AllocatedStorage: 20
@@ -283,7 +308,7 @@ Resources:
         - error
         - general
         - slow-query
-      DeletionProtection: true
+      DeletionProtection: false
 
   # Secrets Manager for RDS Password
   RDSSecret:
@@ -375,6 +400,7 @@ Resources:
 
   SecureCloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: LoggingBucketPolicy
     Properties:
       TrailName: !Sub 'secure-trail-${EnvironmentSuffix}'
       S3BucketName: !Ref LoggingBucket
@@ -434,7 +460,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRolePolicy
+        - arn:aws:iam::aws:policy/service-role/ConfigRole
       Policies:
         - PolicyName: ConfigS3Policy
           PolicyDocument:
@@ -492,7 +518,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI in us-west-2
+      ImageId: ami-06b21ccaeff8cd686 # Amazon Linux 2023 AMI in us-west-2
       InstanceType: t3.micro
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:
