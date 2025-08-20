@@ -215,14 +215,14 @@ resource "aws_network_acl" "secure_prod" {
   }
 
   # Deny all other inbound traffic
-  ingress {
-    protocol   = "-1"
-    rule_no    = 120
-    action     = "deny"
-    cidr_block = "0.0.0.0/0"
-    from_port  = 0
-    to_port    = 65535
-  }
+    ingress {
+      protocol   = "-1"
+      rule_no    = 120
+      action     = "deny"
+      cidr_block = "0.0.0.0/0"
+      from_port  = 0
+      to_port    = 0
+    }
 
   # Allow outbound HTTPS (443)
   egress {
@@ -245,14 +245,14 @@ resource "aws_network_acl" "secure_prod" {
   }
 
   # Deny all other outbound traffic
-  egress {
-    protocol   = "-1"
-    rule_no    = 120
-    action     = "deny"
-    cidr_block = "0.0.0.0/0"
-    from_port  = 0
-    to_port    = 65535
-  }
+    egress {
+      protocol   = "-1"
+      rule_no    = 120
+      action     = "deny"
+      cidr_block = "0.0.0.0/0"
+      from_port  = 0
+      to_port    = 0
+    }
 
   tags = merge(var.bucket_tags, { Environment = var.environment })
 }
