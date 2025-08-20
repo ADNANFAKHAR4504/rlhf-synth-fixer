@@ -39,7 +39,7 @@ describe('TapStack', () => {
     });
 
     test('should have output for deployment completion', () => {
-      template.hasOutput(`SecurityDeploymentComplete${stackSuffix}`, {
+      template.hasOutput(`SecurityDeploymentComplete${stackSuffix.replace(/-/g, '')}`, {
         Value: 'SUCCESS',
         Description: 'Indicates successful deployment of all security stacks',
       });
@@ -86,8 +86,12 @@ describe('SecurityKmsStack', () => {
   let stack;
   let template;
   const environmentSuffix = 'test';
+  const region = 'us-west-2';
+  const stackSuffix = `${environmentSuffix}-${region}`;
 
   beforeEach(() => {
+    // Set AWS_REGION for testing
+    process.env.AWS_REGION = region;
     app = new cdk.App();
     stack = new SecurityKmsStack(app, 'TestKmsStack', { environmentSuffix });
     template = Template.fromStack(stack);
@@ -162,28 +166,28 @@ describe('SecurityKmsStack', () => {
 
   describe('Outputs', () => {
     test('should export encryption key ID', () => {
-      template.hasOutput(`EncryptionKeyId${environmentSuffix}`, {
+      template.hasOutput(`EncryptionKeyId${stackSuffix.replace(/-/g, '')}`, {
         Description: 'KMS Encryption Key ID',
         Export: {
-          Name: `SecurityStack-EncryptionKeyId-${environmentSuffix}`,
+          Name: `SecurityStack-EncryptionKeyId-${stackSuffix}`,
         },
       });
     });
 
     test('should export encryption key ARN', () => {
-      template.hasOutput(`EncryptionKeyArn${environmentSuffix}`, {
+      template.hasOutput(`EncryptionKeyArn${stackSuffix.replace(/-/g, '')}`, {
         Description: 'KMS Encryption Key ARN',
         Export: {
-          Name: `SecurityStack-EncryptionKeyArn-${environmentSuffix}`,
+          Name: `SecurityStack-EncryptionKeyArn-${stackSuffix}`,
         },
       });
     });
 
     test('should export signing key ID', () => {
-      template.hasOutput(`SigningKeyId${environmentSuffix}`, {
+      template.hasOutput(`SigningKeyId${stackSuffix.replace(/-/g, '')}`, {
         Description: 'KMS Signing Key ID',
         Export: {
-          Name: `SecurityStack-SigningKeyId-${environmentSuffix}`,
+          Name: `SecurityStack-SigningKeyId-${stackSuffix}`,
         },
       });
     });
@@ -207,9 +211,13 @@ describe('SecurityIamStack', () => {
   let stack;
   let template;
   const environmentSuffix = 'test';
+  const region = 'us-west-2';
+  const stackSuffix = `${environmentSuffix}-${region}`;
   const encryptionKeyArn = 'arn:aws:kms:us-west-2:123456789012:key/test-key';
 
   beforeEach(() => {
+    // Set AWS_REGION for testing
+    process.env.AWS_REGION = region;
     app = new cdk.App();
     stack = new SecurityIamStack(app, 'TestIamStack', { 
       environmentSuffix,
@@ -370,19 +378,19 @@ describe('SecurityIamStack', () => {
 
   describe('Outputs', () => {
     test('should export security audit role ARN', () => {
-      template.hasOutput(`SecurityAuditRoleArn${environmentSuffix}`, {
+      template.hasOutput(`SecurityAuditRoleArn${stackSuffix.replace(/-/g, '')}`, {
         Description: 'Security Audit Role ARN',
         Export: {
-          Name: `SecurityStack-AuditRoleArn-${environmentSuffix}`,
+          Name: `SecurityStack-AuditRoleArn-${stackSuffix}`,
         },
       });
     });
 
     test('should export security monitoring role ARN', () => {
-      template.hasOutput(`SecurityMonitoringRoleArn${environmentSuffix}`, {
+      template.hasOutput(`SecurityMonitoringRoleArn${stackSuffix.replace(/-/g, '')}`, {
         Description: 'Security Monitoring Role ARN',
         Export: {
-          Name: `SecurityStack-MonitoringRoleArn-${environmentSuffix}`,
+          Name: `SecurityStack-MonitoringRoleArn-${stackSuffix}`,
         },
       });
     });
@@ -394,9 +402,13 @@ describe('SecurityConfigStack', () => {
   let stack;
   let template;
   const environmentSuffix = 'test';
+  const region = 'us-west-2';
+  const stackSuffix = `${environmentSuffix}-${region}`;
   const encryptionKeyArn = 'arn:aws:kms:us-west-2:123456789012:key/test-key';
 
   beforeEach(() => {
+    // Set AWS_REGION for testing
+    process.env.AWS_REGION = region;
     app = new cdk.App();
     stack = new SecurityConfigStack(app, 'TestConfigStack', { 
       environmentSuffix,
@@ -494,19 +506,19 @@ describe('SecurityConfigStack', () => {
 
   describe('Outputs', () => {
     test('should export config bucket name', () => {
-      template.hasOutput(`ConfigBucketName${environmentSuffix}`, {
+      template.hasOutput(`ConfigBucketName${stackSuffix.replace(/-/g, '')}`, {
         Description: 'Config S3 Bucket Name',
         Export: {
-          Name: `SecurityStack-ConfigBucket-${environmentSuffix}`,
+          Name: `SecurityStack-ConfigBucket-${stackSuffix}`,
         },
       });
     });
 
     test('should export compliance topic ARN', () => {
-      template.hasOutput(`ComplianceTopicArn${environmentSuffix}`, {
+      template.hasOutput(`ComplianceTopicArn${stackSuffix.replace(/-/g, '')}`, {
         Description: 'Compliance SNS Topic ARN',
         Export: {
-          Name: `SecurityStack-ComplianceTopic-${environmentSuffix}`,
+          Name: `SecurityStack-ComplianceTopic-${stackSuffix}`,
         },
       });
     });
@@ -518,9 +530,13 @@ describe('SecurityMonitoringStack', () => {
   let stack;
   let template;
   const environmentSuffix = 'test';
+  const region = 'us-west-2';
+  const stackSuffix = `${environmentSuffix}-${region}`;
   const encryptionKeyArn = 'arn:aws:kms:us-west-2:123456789012:key/test-key';
 
   beforeEach(() => {
+    // Set AWS_REGION for testing
+    process.env.AWS_REGION = region;
     app = new cdk.App();
     stack = new SecurityMonitoringStack(app, 'TestMonitoringStack', { 
       environmentSuffix,
@@ -578,7 +594,7 @@ describe('SecurityMonitoringStack', () => {
 
     test('should create CloudTrail with proper configuration', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        TrailName: `SecurityTrail${environmentSuffix}`,
+        TrailName: `SecurityTrailV2${environmentSuffix}`,
         IncludeGlobalServiceEvents: true,
         IsMultiRegionTrail: false,
         EnableLogFileValidation: true,
@@ -684,28 +700,28 @@ describe('SecurityMonitoringStack', () => {
 
   describe('Outputs', () => {
     test('should export CloudTrail bucket name', () => {
-      template.hasOutput(`CloudTrailBucketName${environmentSuffix}`, {
+      template.hasOutput(`CloudTrailBucketName${stackSuffix.replace(/-/g, '')}`, {
         Description: 'CloudTrail S3 Bucket Name',
         Export: {
-          Name: `SecurityStack-CloudTrailBucket-${environmentSuffix}`,
+          Name: `SecurityStack-CloudTrailBucket-${stackSuffix}`,
         },
       });
     });
 
     test('should export security alerts topic ARN', () => {
-      template.hasOutput(`SecurityAlertsTopicArn${environmentSuffix}`, {
+      template.hasOutput(`SecurityAlertsTopicArn${stackSuffix.replace(/-/g, '')}`, {
         Description: 'Security Alerts SNS Topic ARN',
         Export: {
-          Name: `SecurityStack-SecurityAlerts-${environmentSuffix}`,
+          Name: `SecurityStack-SecurityAlerts-${stackSuffix}`,
         },
       });
     });
 
     test('should export VPC ID', () => {
-      template.hasOutput(`SecurityVPCId${environmentSuffix}`, {
+      template.hasOutput(`SecurityVPCId${stackSuffix.replace(/-/g, '')}`, {
         Description: 'Security VPC ID',
         Export: {
-          Name: `SecurityStack-VPCId-${environmentSuffix}`,
+          Name: `SecurityStack-VPCId-${stackSuffix}`,
         },
       });
     });
