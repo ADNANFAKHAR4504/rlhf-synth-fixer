@@ -48,10 +48,6 @@ Resources:
               - kms:GenerateDataKeyWithoutPlaintext
               - kms:DescribeKey
             Resource: "*"
-            Condition:
-              StringEquals:
-                "kms:EncryptionContext:aws:cloudtrail:arn":
-                  !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Project}-cloudtrail"
           - Sid: AllowS3Service
             Effect: Allow
             Principal:
@@ -506,20 +502,27 @@ Resources:
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
+        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Sid: AllowCloudTrailWrite
+            Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}/AWSLogs/${AWS::AccountId}/*'
+            Resource: !Sub "arn:aws:s3:::${CloudTrailBucket}/*"
             Condition:
               StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
-          - Effect: Allow
+                "s3:x-amz-acl": "bucket-owner-full-control"
+
+          - Sid: AllowCloudTrailBucketACL
+            Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Sub 'arn:aws:s3:::${CloudTrailBucket}'
+            Action:
+              - s3:GetBucketAcl
+              - s3:GetBucketLocation
+            Resource: !Sub "arn:aws:s3:::${CloudTrailBucket}"
+
 
   # DB Subnet Group
   DatabaseSubnetGroup:
@@ -757,7 +760,7 @@ Resources:
           Value: !Ref Environment
         - Key: Project
           Value: !Ref Project
-  
+          
   # VPC Flow Logs Role
   VPCFlowLogsRole:
     Type: AWS::IAM::Role
