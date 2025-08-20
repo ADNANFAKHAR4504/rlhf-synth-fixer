@@ -1,6 +1,6 @@
 import fs from 'fs';
 import * as cdk from 'aws-cdk-lib';
-import { TapStack } from '../lib/tap-stack';
+import { TapStack } from '../lib/tapstack';
 
 const outputsPath = 'cfn-outputs/flat-outputs.json';
 const outputsRaw = fs.existsSync(outputsPath)

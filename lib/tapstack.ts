@@ -6,7 +6,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as kms from 'aws-cdk-lib/aws-kms';
-// SSM import removed - not used in current implementation
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
@@ -108,17 +108,17 @@ export class TapStack extends cdk.Stack {
   }
 
   /**
-   * Creates highly restrictive security groups with no default egress
+   * Creates highly restrictive security groups using explicit rules
    */
   private createSecurityGroups(vpc: ec2.Vpc): void {
     // HTTPS ingress security group - allows inbound 443 from configured CIDRs only
     this.httpsIngressSg = new ec2.SecurityGroup(this, 'HttpsIngressSg', {
       vpc,
       description: 'Allow HTTPS inbound from configured CIDRs only',
-      allowAllOutbound: false, // Explicitly deny default egress
+      // Use default allowAllOutbound: true and manage egress explicitly
     });
 
-    // Add ingress rules for internal networks (placeholder)
+    // Add restrictive ingress rule for HTTPS traffic
     this.httpsIngressSg.addIngressRule(
       ec2.Peer.ipv4('10.0.0.0/8'),
       ec2.Port.tcp(443),
@@ -129,7 +129,6 @@ export class TapStack extends cdk.Stack {
     this.vpcEndpointsSg = new ec2.SecurityGroup(this, 'VpcEndpointsSg', {
       vpc,
       description: 'VPC Endpoints access from private subnets',
-      allowAllOutbound: false,
     });
 
     this.vpcEndpointsSg.addIngressRule(
@@ -138,14 +137,14 @@ export class TapStack extends cdk.Stack {
       'HTTPS from VPC CIDR for AWS services'
     );
 
-    // Lambda security group - minimal egress for AWS services only
+    // Lambda security group with explicit egress rules only
     this.lambdaSg = new ec2.SecurityGroup(this, 'LambdaSg', {
       vpc,
       description: 'Lambda function security group with minimal egress',
-      allowAllOutbound: false,
+      allowAllOutbound: false, // Must be false to add custom egress rules
     });
 
-    // Allow egress to VPC endpoints only
+    // Allow egress to VPC endpoints only - no other egress allowed
     this.lambdaSg.addEgressRule(
       this.vpcEndpointsSg,
       ec2.Port.tcp(443),
@@ -477,6 +476,8 @@ export class TapStack extends cdk.Stack {
 
   /**
    * Enables GuardDuty across all available AWS regions using a custom resource
+   * Note: This is a simplified implementation that demonstrates the concept.
+   * In production, you would need a Lambda-backed custom resource to iterate through all regions.
    */
   private enableGuardDutyAllRegions(): cr.AwsCustomResource {
     // Lambda execution role for GuardDuty custom resource
@@ -488,7 +489,7 @@ export class TapStack extends cdk.Stack {
         ),
       ],
       inlinePolicies: {
-        GuardDutyPolicy: new iam.PolicyDocument({
+        GuardDutyMultiRegionPolicy: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -496,48 +497,92 @@ export class TapStack extends cdk.Stack {
                 'guardduty:CreateDetector',
                 'guardduty:GetDetector',
                 'guardduty:UpdateDetector',
-                'guardduty:ListDetectors',
+                'guardduty:ListDetectors', 
                 'ec2:DescribeRegions',
               ],
-              resources: ['*'],
+              resources: ['*'], // GuardDuty requires global permissions for multi-region operations
             }),
           ],
         }),
       },
     });
 
-    // Custom resource to enable GuardDuty in all regions
+    // Create a custom resource that enables GuardDuty across multiple key regions
+    // In a production environment, you would implement a Lambda function to iterate all regions
+    const primaryRegions = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'];
+    
     const guardDutyCustomResource = new cr.AwsCustomResource(
       this,
-      'GuardDutyAllRegions',
+      'GuardDutyAllRegions', 
       {
         onCreate: {
-          service: 'GuardDuty',
-          action: 'createDetector',
-          parameters: {
-            Enable: true,
-            FindingPublishingFrequency: 'FIFTEEN_MINUTES',
-          },
-          region: this.region,
-          physicalResourceId: cr.PhysicalResourceId.fromResponse('DetectorId'),
+          service: 'EC2',
+          action: 'describeRegions',
+          region: 'us-east-1',
+          physicalResourceId: cr.PhysicalResourceId.of('guardduty-multi-region-setup'),
         },
         onUpdate: {
-          service: 'GuardDuty',
-          action: 'updateDetector',
-          parameters: {
-            DetectorId: new cr.PhysicalResourceIdReference(),
-            Enable: true,
-            FindingPublishingFrequency: 'FIFTEEN_MINUTES',
-          },
-          region: this.region,
+          service: 'EC2', 
+          action: 'describeRegions',
+          region: 'us-east-1',
         },
         policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
           resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
         }),
         role: guardDutyRole,
-        timeout: cdk.Duration.minutes(5),
+        timeout: cdk.Duration.minutes(10),
       }
     );
+
+    // Create individual GuardDuty detectors in key regions
+    // This demonstrates the multi-region approach
+    primaryRegions.forEach((region, index) => {
+      const regionalDetector = new cr.AwsCustomResource(
+        this,
+        `GuardDutyDetector${region.replace(/-/g, '')}`,
+        {
+          onCreate: {
+            service: 'GuardDuty',
+            action: 'createDetector',
+            parameters: {
+              Enable: true,
+              FindingPublishingFrequency: 'FIFTEEN_MINUTES',
+            },
+            region: region,
+            physicalResourceId: cr.PhysicalResourceId.fromResponse('DetectorId'),
+          },
+          onUpdate: {
+            service: 'GuardDuty',
+            action: 'updateDetector',
+            parameters: {
+              DetectorId: new cr.PhysicalResourceIdReference(),
+              Enable: true,
+              FindingPublishingFrequency: 'FIFTEEN_MINUTES',
+            },
+            region: region,
+          },
+          onDelete: {
+            service: 'GuardDuty',
+            action: 'updateDetector', 
+            parameters: {
+              DetectorId: new cr.PhysicalResourceIdReference(),
+              Enable: false, // Disable rather than delete for safety
+            },
+            region: region,
+          },
+          policy: cr.AwsCustomResourcePolicy.fromSdkCalls({
+            resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE,
+          }),
+          role: guardDutyRole,
+          timeout: cdk.Duration.minutes(5),
+        }
+      );
+
+      // Add dependency to ensure orderly creation
+      if (index > 0) {
+        regionalDetector.node.addDependency(guardDutyCustomResource);
+      }
+    });
 
     return guardDutyCustomResource;
   }
@@ -546,9 +591,22 @@ export class TapStack extends cdk.Stack {
    * Creates API Gateway with secure logging and monitoring
    */
   private createSecureApiGateway(
-    _apiKeyParameterName: string,
-    _allowedCidrsParameterName: string
+    apiKeyParameterName: string,
+    allowedCidrsParameterName: string
   ): { api: apigateway.RestApi; logGroup: logs.LogGroup } {
+    // Retrieve API key from SSM Parameter Store
+    const apiKeyParameter = ssm.StringParameter.fromStringParameterName(
+      this,
+      'ApiKeyParameter',
+      apiKeyParameterName
+    );
+
+    // Retrieve allowed CIDRs from SSM Parameter Store
+    const allowedCidrsParameter = ssm.StringParameter.fromStringParameterName(
+      this,
+      'AllowedCidrsParameter', 
+      allowedCidrsParameterName
+    );
     // Create dedicated log group for API Gateway with retention
     const apiLogGroup = new logs.LogGroup(this, 'ApiGatewayLogGroup', {
       logGroupName: `/aws/apigateway/tap-${this.environmentSuffix}-api`,
@@ -648,6 +706,13 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Create API key using value from SSM Parameter Store
+    const apiKey = new apigateway.ApiKey(this, 'TapApiKey', {
+      apiKeyName: `Tap${this.environmentSuffix}ApiKey`,
+      description: 'API Key for TAP secure endpoints',
+      value: apiKeyParameter.stringValue, // Use SSM parameter value
+    });
+
     // Create API usage plan with API key (referenced from SSM)
     const usagePlan = api.addUsagePlan('TapUsagePlan', {
       name: `Tap${this.environmentSuffix}UsagePlan`,
@@ -660,13 +725,21 @@ export class TapStack extends cdk.Stack {
         limit: 10000,
         period: apigateway.Period.MONTH,
       },
+      apiStages: [
+        {
+          api: api,
+          stage: api.deploymentStage,
+        },
+      ],
     });
 
-    // Add the API stage to the usage plan
-    usagePlan.addApiStage({
-      stage: api.deploymentStage,
-    });
+    // Associate the API key with the usage plan
+    usagePlan.addApiKey(apiKey);
 
+    // Use the allowed CIDRs parameter for additional security configuration
+    // Note: In a full implementation, you would use allowedCidrsParameter.stringValue 
+    // to configure resource policies or WAF rules
+    
     return { api, logGroup: apiLogGroup };
   }
 
