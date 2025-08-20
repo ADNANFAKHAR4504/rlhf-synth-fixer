@@ -1,5 +1,5 @@
 resource "aws_db_subnet_group" "main" {
-  name_prefix = "${var.project_name}-db-subnet-group"
+  name_prefix = "${lower(substr(var.project_name, 0, 20))}-db-subnet-group"
   subnet_ids = var.private_subnet_ids
 
   tags = {

@@ -117,7 +117,7 @@ resource "aws_iam_user_policy_attachment" "mfa_enforcement" {
 }
 
 resource "aws_iam_role" "flow_log" {
-  name_prefix = "${var.project_name}-flow-log-role"
+  name_prefix = "${lower(substr(var.project_name, 0, 20))}-flow-log-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
