@@ -1017,10 +1017,8 @@
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": "alias/aws/s3"
-                            },
-                            "BucketKeyEnabled": true
+                                "SSEAlgorithm": "AES256"
+                            }
                         }
                     ]
                 },
@@ -1196,7 +1194,6 @@
                 "IsMultiRegionTrail": true,
                 "IsLogging": true,
                 "EnableLogFileValidation": true,
-                "KMSKeyId": "alias/aws/s3",
                 "EventSelectors": [
                     {
                         "ReadWriteType": "All",

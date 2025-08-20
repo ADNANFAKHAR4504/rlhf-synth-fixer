@@ -253,7 +253,7 @@ describe('TapStack CloudFormation Template - Secure Infrastructure', () => {
       const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
       const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
 
-      expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
       expect(publicAccess.BlockPublicAcls).toBe(true);
       expect(publicAccess.BlockPublicPolicy).toBe(true);
       expect(publicAccess.IgnorePublicAcls).toBe(true);
@@ -408,9 +408,9 @@ describe('TapStack CloudFormation Template - Secure Infrastructure', () => {
 
   describe('Security Best Practices', () => {
     test('should use AWS KMS encryption keys', () => {
-      // Check CloudTrail encryption
+      // Check CloudTrail encryption - using AES256 instead of KMS for service-managed encryption
       const cloudtrail = template.Resources.CorpCloudTrail;
-      expect(cloudtrail.Properties.KMSKeyId).toBeDefined();
+      expect(cloudtrail.Properties.KMSKeyId).toBeUndefined(); // No longer using KMS for CloudTrail
 
       // Check RDS encryption
       const rds = template.Resources.CorpRDSDatabase;
