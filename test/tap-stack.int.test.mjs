@@ -25,7 +25,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Load the deployment outputs
-const outputsPath = path.join(import.meta.dirname || __dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+const outputsPath = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'cfn-outputs', 'flat-outputs.json');
 let outputs = {};
 
 if (fs.existsSync(outputsPath)) {
