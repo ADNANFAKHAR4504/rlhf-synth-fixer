@@ -1,1 +1,1 @@
-TF+HCL
+cfn+yaml
