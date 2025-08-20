@@ -202,7 +202,10 @@ export class TapStack extends cdk.Stack {
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MEDIUM
       ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
+      machineImage: ec2.MachineImage.genericLinux({
+        'us-east-1': 'ami-0c02fb55956c7d316', // Amazon Linux 2 AMI ID for us-east-1
+        'us-west-2': 'ami-011e15a70256b7f26', // Amazon Linux 2 AMI ID for us-west-2
+      }),
       userData,
       securityGroup: ec2SecurityGroup,
       role: ec2Role,

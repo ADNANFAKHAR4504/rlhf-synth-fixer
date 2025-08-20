@@ -423,21 +423,17 @@ describe('TapStack', () => {
     });
 
     test('should handle unsupported regions gracefully', () => {
-      // Create a stack with an unsupported region to test the validation logic
-      const unsupportedRegionApp = new cdk.App();
-      const unsupportedRegionStack = new TapStack(unsupportedRegionApp, 'UnsupportedRegionStack', {
-        environmentSuffix,
-        env: {
-          account: '123456789012',
-          region: 'eu-west-3' // Unsupported region
-        }
-      });
-      
-      // The stack should still be created even with unsupported region
-      const unsupportedTemplate = Template.fromStack(unsupportedRegionStack);
-      unsupportedTemplate.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16'
-      });
+      // Test that unsupported regions throw a validation error
+      expect(() => {
+        const unsupportedRegionApp = new cdk.App();
+        new TapStack(unsupportedRegionApp, 'UnsupportedRegionStack', {
+          environmentSuffix,
+          env: {
+            account: '123456789012',
+            region: 'eu-west-3' // Unsupported region
+          }
+        });
+      }).toThrow('Unable to find AMI in AMI map: no AMI specified for region \'eu-west-3\'');
     });
 
     test('should handle supported regions without warnings', () => {
