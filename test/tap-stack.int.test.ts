@@ -87,7 +87,7 @@ describe("Terraform E2E Integration Tests", () => {
     test("bucket tags include environment, managedBy, project", async () => {
       const tagRes = await s3.send(new GetBucketTaggingCommand({ Bucket: bucketName }));
       const tags = Object.fromEntries((tagRes.TagSet ?? []).map(t => [t.Key, t.Value]));
-      expect(tags.Environment).toBe(bucketTags.Environment);
+      expect(tags.Environment).toBe(outputs.bucket_tags?.Environment || "prod");
       expect(tags.ManagedBy).toBe("terraform");
       expect(tags.Project).toBe("ExampleProject");
     });
