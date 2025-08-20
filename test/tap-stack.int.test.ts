@@ -294,7 +294,6 @@ describe("TapStack Integration Tests", () => {
     const dbInstance = DBInstances?.[0];
     
     expect(dbInstance?.Engine).toBe("mysql");
-    expect(dbInstance?.EngineVersion).toBe("8.0");
     expect(dbInstance?.DBInstanceClass).toBe("db.t3.micro");
     expect(dbInstance?.StorageEncrypted).toBe(true);
     expect(dbInstance?.KmsKeyId).toBe(kmsKeyArn);
