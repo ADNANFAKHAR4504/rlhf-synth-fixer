@@ -18,7 +18,7 @@
             "Description": "CIDR block for public subnet in AZ2"
         },
         "InstanceType": {
-            "Type": "String", 
+            "Type": "String",
             "Default": "t3.micro",
             "AllowedValues": [
                 "t2.micro",
@@ -184,33 +184,29 @@
                 }
             }
         },
-        "AppLogBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketName": {
-                    "Fn::Sub": "app-log-${AWS::Region}-${AWS::AccountId}"
-                },
-                "LifecycleConfiguration": {
-                    "Rules": [
-                        {
-                            "Id": "TransitionLogsToGlacier",
-                            "Status": "Enabled",
-                            "Transitions": [
-                                {
-                                    "StorageClass": "GLACIER",
-                                    "TransitionInDays": 30
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "Tags": [
+        "AppLogBucket": null,
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+            "LifecycleConfiguration": {
+                "Rules": [
                     {
-                        "Key": "Name",
-                        "Value": "AppLogBucket"
+                        "Id": "TransitionLogsToGlacier",
+                        "Status": "Enabled",
+                        "Transitions": [
+                            {
+                                "StorageClass": "GLACIER",
+                                "TransitionInDays": 30
+                            }
+                        ]
                     }
                 ]
-            }
+            },
+            "Tags": [
+                {
+                    "Key": "Name",
+                    "Value": "AppLogBucket"
+                }
+            ]
         },
         "InstanceSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
@@ -271,7 +267,7 @@
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "CidrIp": "10.0.0.0/16"
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ],
                 "Tags": [

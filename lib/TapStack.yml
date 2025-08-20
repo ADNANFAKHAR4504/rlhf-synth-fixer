@@ -111,19 +111,18 @@ Resources:
 
   ### S3 Bucket for Logs ###
   AppLogBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'app-log-${AWS::Region}-${AWS::AccountId}'
-      LifecycleConfiguration:
-        Rules:
-          - Id: TransitionLogsToGlacier
-            Status: Enabled
-            Transitions:
-              - StorageClass: GLACIER
-                TransitionInDays: 30
-      Tags:
-        - Key: Name
-          Value: AppLogBucket
+  Type: AWS::S3::Bucket
+  Properties:
+    LifecycleConfiguration:
+      Rules:
+        - Id: TransitionLogsToGlacier
+          Status: Enabled
+          Transitions:
+            - StorageClass: GLACIER
+              TransitionInDays: 30
+    Tags:
+      - Key: Name
+        Value: AppLogBucket
 
   ### Security Group ###
   InstanceSecurityGroup:
