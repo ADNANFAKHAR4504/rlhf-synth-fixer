@@ -184,29 +184,30 @@
                 }
             }
         },
-        "AppLogBucket": null,
-        "Type": "AWS::S3::Bucket",
-        "Properties": {
-            "LifecycleConfiguration": {
-                "Rules": [
+        "AppLogBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "TransitionLogsToGlacier",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "StorageClass": "GLACIER",
+                                    "TransitionInDays": 30
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
                     {
-                        "Id": "TransitionLogsToGlacier",
-                        "Status": "Enabled",
-                        "Transitions": [
-                            {
-                                "StorageClass": "GLACIER",
-                                "TransitionInDays": 30
-                            }
-                        ]
+                        "Key": "Name",
+                        "Value": "AppLogBucket"
                     }
                 ]
-            },
-            "Tags": [
-                {
-                    "Key": "Name",
-                    "Value": "AppLogBucket"
-                }
-            ]
+            }
         },
         "InstanceSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
