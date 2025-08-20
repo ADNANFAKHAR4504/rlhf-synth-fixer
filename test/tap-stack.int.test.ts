@@ -5,9 +5,15 @@ import path from 'path';
 // Read deployment outputs from deploy stage
 let outputs: any = {};
 try {
+  // First try to load from test folder (for local testing)
+  const testOutputsPath = path.join(process.cwd(), 'test', 'cfn-outputs', 'flat-outputs.json');
+  // Then try to load from root cfn-outputs folder (for CI/CD)
   const deployOutputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
   
-  if (fs.existsSync(deployOutputsPath)) {
+  if (fs.existsSync(testOutputsPath)) {
+    outputs = JSON.parse(fs.readFileSync(testOutputsPath, 'utf8'));
+    console.log('Deployment outputs loaded successfully from test folder');
+  } else if (fs.existsSync(deployOutputsPath)) {
     outputs = JSON.parse(fs.readFileSync(deployOutputsPath, 'utf8'));
     console.log('Deployment outputs loaded successfully from deploy stage');
   } else {
