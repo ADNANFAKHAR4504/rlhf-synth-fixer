@@ -5,7 +5,10 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchactions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
@@ -22,7 +25,8 @@ export class TapStack extends cdk.Stack {
 
     // Configuration
     const domainName = (this.node.tryGetContext('domainName') as string) || '';
-    const hostedZoneId = (this.node.tryGetContext('hostedZoneId') as string) || '';
+    const hostedZoneId =
+      (this.node.tryGetContext('hostedZoneId') as string) || '';
     const primaryRegion = 'us-east-2';
     const secondaryRegion = 'us-west-2';
     const currentRegion = this.region;
@@ -104,8 +108,12 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'Ec2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
       inlinePolicies: {
         RDSAccess: new iam.PolicyDocument({
@@ -219,7 +227,6 @@ EOF
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
-
       }
     );
 
@@ -325,16 +332,19 @@ EOF
       displayName: `Tap App Alerts${environmentSuffix ? ` - ${environmentSuffix}` : ''}`,
     });
 
-    // Note: Failover Lambda function removed to simplify deployment
-    // In a real multi-region setup, you would implement proper failover automation
+    // Note: Lambda-based failover logic will be added after hosted zone creation
 
     // Route 53 Hosted Zone (use context when provided, otherwise skip DNS)
     let hostedZone: route53.IHostedZone | undefined;
     if (domainName && hostedZoneId) {
-      hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
-        hostedZoneId,
-        zoneName: domainName,
-      });
+      hostedZone = route53.HostedZone.fromHostedZoneAttributes(
+        this,
+        'HostedZone',
+        {
+          hostedZoneId,
+          zoneName: domainName,
+        }
+      );
     }
 
     // Health Check (only in primary region and when DNS is configured)
@@ -350,7 +360,7 @@ EOF
       });
     }
 
-        // Route 53 Records (only in primary region and when DNS is configured)
+    // Route 53 Records (only in primary region and when DNS is configured)
     if (hostedZone && isPrimaryRegion && domainName) {
       // Primary region record with health check
       new route53.ARecord(this, 'PrimaryRecord', {
@@ -361,7 +371,7 @@ EOF
         recordName: domainName,
         ttl: cdk.Duration.seconds(60),
       });
-      
+
       // Add health check to the record
       if (healthCheck) {
         new route53.CfnRecordSet(this, 'PrimaryRecordSet', {
@@ -444,9 +454,177 @@ EOF
       new cloudwatchactions.SnsAction(alertTopic)
     );
 
-    // Note: Failover alarm logic removed to avoid deployment issues
-    // In a real multi-region setup, you would need to properly configure
-    // cross-region health checks and failover mechanisms
+    // Lambda-based Failover Logic (only in primary region and when DNS is configured)
+    if (isPrimaryRegion && hostedZone && domainName) {
+      // IAM Role for Failover Lambda
+      const failoverLambdaRole = new iam.Role(this, 'FailoverLambdaRole', {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaBasicExecutionRole'
+          ),
+        ],
+        inlinePolicies: {
+          Route53Access: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'route53:ChangeResourceRecordSets',
+                  'route53:GetChange',
+                  'route53:ListResourceRecordSets',
+                ],
+                resources: ['*'],
+              }),
+            ],
+          }),
+        },
+      });
+
+      // Failover Lambda Function
+      const failoverLambda = new lambda.Function(this, 'FailoverLambda', {
+        runtime: lambda.Runtime.PYTHON_3_12,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
+import json
+import boto3
+import os
+
+def handler(event, context):
+    """Lambda function to handle failover between regions"""
+    
+    # Parse the event
+    alarm_name = event.get('detail', {}).get('alarmName', '')
+    alarm_state = event.get('detail', {}).get('state', {}).get('value', '')
+    
+    print(f"Processing alarm: {alarm_name} with state: {alarm_state}")
+    
+    # Only process if alarm is in ALARM state
+    if alarm_state != 'ALARM':
+        print(f"Alarm {alarm_name} is not in ALARM state, skipping")
+        return {
+            'statusCode': 200,
+            'body': json.dumps(f'Alarm {alarm_name} is not in ALARM state')
+        }
+    
+    # Get configuration from environment variables
+    hosted_zone_id = os.environ.get('HOSTED_ZONE_ID')
+    domain_name = os.environ.get('DOMAIN_NAME')
+    secondary_alb_dns = os.environ.get('SECONDARY_ALB_DNS')
+    secondary_region = os.environ.get('SECONDARY_REGION', 'us-west-2')
+    
+    if not all([hosted_zone_id, domain_name, secondary_alb_dns]):
+        print("Missing required environment variables")
+        return {
+            'statusCode': 400,
+            'body': json.dumps('Missing required environment variables')
+        }
+    
+    try:
+        # Create Route 53 client
+        route53_client = boto3.client('route53')
+        
+        # Create failover record pointing to secondary region
+        change_batch = {
+            'Changes': [
+                {
+                    'Action': 'UPSERT',
+                    'ResourceRecordSet': {
+                        'Name': domain_name,
+                        'Type': 'A',
+                        'TTL': 60,
+                        'AliasTarget': {
+                            'HostedZoneId': 'Z35SXDOTRQ7R7Y',  # ALB hosted zone ID for us-west-2
+                            'DNSName': secondary_alb_dns,
+                            'EvaluateTargetHealth': True
+                        }
+                    }
+                }
+            ]
+        }
+        
+        # Submit the change
+        response = route53_client.change_resource_record_sets(
+            HostedZoneId=hosted_zone_id,
+            ChangeBatch=change_batch
+        )
+        
+        change_id = response['ChangeInfo']['Id']
+        print(f"Route 53 change submitted: {change_id}")
+        
+        # Wait for change to be propagated
+        waiter = route53_client.get_waiter('resource_record_sets_changed')
+        waiter.wait(
+            Id=change_id,
+            WaiterConfig={'Delay': 30, 'MaxAttempts': 20}
+        )
+        
+        print(f"Failover completed successfully to {secondary_region}")
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps({
+                'message': f'Failover completed to {secondary_region}',
+                'changeId': change_id,
+                'alarmName': alarm_name
+            })
+        }
+        
+    except Exception as e:
+        print(f"Error during failover: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps(f'Error during failover: {str(e)}')
+        }
+`),
+        timeout: cdk.Duration.minutes(5),
+        environment: {
+          HOSTED_ZONE_ID: hostedZone.hostedZoneId,
+          DOMAIN_NAME: domainName,
+          SECONDARY_ALB_DNS: `TapSta-Appli-${secondaryRegion.toLowerCase()}-${environmentSuffix}.${secondaryRegion}.elb.amazonaws.com`,
+          SECONDARY_REGION: secondaryRegion,
+        },
+        role: failoverLambdaRole,
+      });
+
+      // CloudWatch Alarm for Failover (only in primary region)
+      const failoverAlarm = new cloudwatch.Alarm(this, 'FailoverAlarm', {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/ApplicationELB',
+          metricName: 'HealthyHostCount',
+          dimensionsMap: {
+            TargetGroup: targetGroup.targetGroupFullName,
+            LoadBalancer: alb.loadBalancerFullName,
+          },
+          period: cdk.Duration.minutes(1),
+        }),
+        threshold: 1,
+        evaluationPeriods: 2,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.LESS_THAN_OR_EQUAL_TO_THRESHOLD,
+        alarmDescription:
+          'Trigger failover when healthy hosts drop below threshold',
+        treatMissingData: cloudwatch.TreatMissingData.BREACHING,
+      });
+
+      // Add SNS action to failover alarm
+      failoverAlarm.addAlarmAction(new cloudwatchactions.SnsAction(alertTopic));
+
+      // EventBridge Rule to trigger Lambda on alarm
+      new events.Rule(this, 'FailoverRule', {
+        eventPattern: {
+          source: ['aws.cloudwatch'],
+          detailType: ['CloudWatch Alarm State Change'],
+          detail: {
+            alarmName: [failoverAlarm.alarmName],
+            state: {
+              value: ['ALARM'],
+            },
+          },
+        },
+        targets: [new targets.LambdaFunction(failoverLambda)],
+      });
+    }
 
     // Apply tags to all resources
     Object.entries(commonTags).forEach(([key, value]) => {
@@ -484,5 +662,4 @@ EOF
     });
   }
 }
-
 ```
