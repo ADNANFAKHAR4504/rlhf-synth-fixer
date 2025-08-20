@@ -25,7 +25,15 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.ProjectName).toBeDefined();
       expect(template.Parameters.Environment).toBeDefined();
       expect(template.Parameters.DBUsername).toBeDefined();
-      expect(template.Parameters.DBPassword).toBeDefined();
+      // Secrets are now provided via Secrets Manager dynamic reference (DBMasterSecret),
+      // so there is no DBPassword parameter anymore.
+      expect(template.Parameters.DBPassword).toBeUndefined();
+
+      // New parameters for optional reuse/conditional creation
+      expect(template.Parameters.UseExistingCloudTrail).toBeDefined();
+      expect(template.Parameters.ExistingCloudTrailArn).toBeDefined();
+      expect(template.Parameters.UseExistingCloudFrontWebACL).toBeDefined();
+      expect(template.Parameters.ExistingCloudFrontWebACLArn).toBeDefined();
     });
   });
 

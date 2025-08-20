@@ -34,11 +34,32 @@ Parameters:
     Type: String
     Description: 'ARN of the existing CloudTrail to use when UseExistingCloudTrail is true'
     Default: ''
+
+  UseExistingCloudFrontWebACL:
+    Type: String
+    Description: 'Set to true to attach an existing CloudFront WebACL and skip creating a new one'
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+
+  ExistingCloudFrontWebACLArn:
+    Type: String
+    Description: 'ARN of an existing CloudFront WebACL (CLOUDFRONT scope). Required when UseExistingCloudFrontWebACL is true.'
+    Default: ''
+
+  EnableConfig:
+    Type: String
+    Description: 'Set to true to provision AWS Config resources; set to false to skip in accounts without required permissions.'
+    AllowedValues: ['true', 'false']
+    Default: 'false'
   
 # (no Mappings required)
 
 Conditions:
   CreateCloudTrail: !Equals [ !Ref UseExistingCloudTrail, 'false' ]
+  CreateCloudFrontWebACL: !And [ !Equals [ !Ref UseExistingCloudFrontWebACL, 'false' ], !Equals [ !Ref AWS::Region, 'us-east-1' ] ]
+  HasExistingCloudFrontWebACL: !And [ !Equals [ !Ref UseExistingCloudFrontWebACL, 'true' ], !Not [ !Equals [ !Ref ExistingCloudFrontWebACLArn, '' ] ] ]
+  UseAnyWebACL: !Or [ { Condition: CreateCloudFrontWebACL }, { Condition: HasExistingCloudFrontWebACL } ]
+  CreateConfig: !Equals [ !Ref EnableConfig, 'true' ]
 
 Resources:
   # ============================================================================
@@ -113,39 +134,17 @@ Resources:
               Values:
                 - 'arn:aws:s3:::*/*'
 
-  # Config Service Role
-  ConfigRole:
-    Type: AWS::IAM::Role
+  # Config Service-Linked Role (preferred for AWS Config)
+  ConfigServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
+    Condition: CreateConfig
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
-      Policies:
-        - PolicyName: ConfigBucketDeliveryRolePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketAcl
-                  - s3:ListBucket
-                Resource: !GetAtt ConfigBucket.Arn
-              - Effect: Allow
-                Action: s3:PutObject
-                Resource: !Sub '${ConfigBucket.Arn}/*'
-                Condition:
-                  StringEquals:
-                    's3:x-amz-acl': bucket-owner-full-control
+      AWSServiceName: config.amazonaws.com
 
   # Config S3 Bucket
   ConfigBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateConfig
     Properties:
       BucketName: !Sub 's3-${ProjectName}-${Environment}-config-${AWS::AccountId}'
       BucketEncryption:
@@ -161,16 +160,44 @@ Resources:
   # Config Delivery Channel
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: CreateConfig
     Properties:
       Name: !Sub 'delivery-${ProjectName}-${Environment}'
       S3BucketName: !Ref ConfigBucket
 
+  # Allow AWS Config to deliver to the S3 bucket
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateConfig
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ConfigBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
   # Config Configuration Recorder
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateConfig
+    DependsOn: ConfigServiceLinkedRole
     Properties:
       Name: !Sub 'recorder-${ProjectName}-${Environment}'
-      RoleARN: !GetAtt ConfigRole.Arn
+      RoleARN: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -178,6 +205,7 @@ Resources:
   # Config Rule - S3 Bucket Public Read Prohibited
   ConfigRuleS3PublicRead:
     Type: AWS::Config::ConfigRule
+    Condition: CreateConfig
     DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName: !Sub 'rule-${ProjectName}-${Environment}-s3-public-read-prohibited'
@@ -523,6 +551,7 @@ Resources:
   # WAF Web ACL
   WebACL:
     Type: AWS::WAFv2::WebACL
+    Condition: CreateCloudFrontWebACL
     Properties:
       Name: !Sub 'waf-${ProjectName}-${Environment}'
       Scope: CLOUDFRONT
@@ -588,7 +617,7 @@ Resources:
         Enabled: true
         HttpVersion: http2
         PriceClass: PriceClass_100
-        WebACLId: !GetAtt WebACL.Arn
+        WebACLId: !If [ UseAnyWebACL, !If [ CreateCloudFrontWebACL, !GetAtt WebACL.Arn, !Ref ExistingCloudFrontWebACLArn ], !Ref 'AWS::NoValue' ]
         ViewerCertificate:
           CloudFrontDefaultCertificate: true
       Tags:
@@ -689,7 +718,7 @@ Outputs:
 
   WebACLArn:
     Description: 'WAF Web ACL ARN'
-    Value: !GetAtt WebACL.Arn
+    Value: !If [ UseAnyWebACL, !If [ CreateCloudFrontWebACL, !GetAtt WebACL.Arn, !Ref ExistingCloudFrontWebACLArn ], '' ]
     Export:
       Name: !Sub '${AWS::StackName}-WebACL-ARN'
 

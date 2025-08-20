@@ -25,18 +25,103 @@
             "Default": "admin",
             "NoEcho": true
         },
-        "DBPassword": {
+        "UseExistingCloudTrail": {
             "Type": "String",
-            "Description": "Database master password",
-            "MinLength": 8,
-            "MaxLength": 41,
-            "NoEcho": true,
-            "Default": "TempPassword123!"
+            "Description": "Set to true to use an existing CloudTrail and skip creating a new trail and its bucket",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "false"
+        },
+        "ExistingCloudTrailArn": {
+            "Type": "String",
+            "Description": "ARN of the existing CloudTrail to use when UseExistingCloudTrail is true",
+            "Default": ""
+        },
+        "UseExistingCloudFrontWebACL": {
+            "Type": "String",
+            "Description": "Set to true to attach an existing CloudFront WebACL and skip creating a new one",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Default": "false"
+        },
+        "ExistingCloudFrontWebACLArn": {
+            "Type": "String",
+            "Description": "ARN of an existing CloudFront WebACL (CLOUDFRONT scope). Required when UseExistingCloudFrontWebACL is true.",
+            "Default": ""
+        }
+    },
+    "Conditions": {
+        "CreateCloudTrail": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingCloudTrail"
+                },
+                "false"
+            ]
+        },
+        "CreateCloudFrontWebACL": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "UseExistingCloudFrontWebACL"
+                        },
+                        "false"
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "us-east-1"
+                    ]
+                }
+            ]
+        },
+        "HasExistingCloudFrontWebACL": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "UseExistingCloudFrontWebACL"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "ExistingCloudFrontWebACLArn"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "UseAnyWebACL": {
+            "Fn::Or": [
+                {
+                    "Condition": "CreateCloudFrontWebACL"
+                },
+                {
+                    "Condition": "HasExistingCloudFrontWebACL"
+                }
+            ]
         }
     },
     "Resources": {
         "CloudTrailBucket": {
             "Type": "AWS::S3::Bucket",
+            "Condition": "CreateCloudTrail",
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "s3-${ProjectName}-${Environment}-cloudtrail-${AWS::AccountId}"
@@ -72,6 +157,7 @@
         },
         "CloudTrailBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
+            "Condition": "CreateCloudTrail",
             "Properties": {
                 "Bucket": {
                     "Ref": "CloudTrailBucket"
@@ -115,6 +201,7 @@
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "Condition": "CreateCloudTrail",
             "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
                 "TrailName": {
@@ -633,13 +720,14 @@
         "DatabaseInstance": {
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "rds-${ProjectName}-${Environment}"
                 },
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
-                "EngineVersion": "8.0",
+                "EngineVersion": "8.0.42",
                 "AllocatedStorage": 20,
                 "StorageType": "gp3",
                 "StorageEncrypted": true,
@@ -647,7 +735,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}::SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {
@@ -687,15 +775,6 @@
                         "ToPort": 443,
                         "CidrIp": "0.0.0.0/0",
                         "Description": "HTTPS outbound"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 3306,
-                        "ToPort": 3306,
-                        "DestinationSecurityGroupId": {
-                            "Ref": "DatabaseSecurityGroup"
-                        },
-                        "Description": "MySQL to database"
                     }
                 ],
                 "Tags": [
@@ -811,6 +890,7 @@
         },
         "WebACL": {
             "Type": "AWS::WAFv2::WebACL",
+            "Condition": "CreateCloudFrontWebACL",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "waf-${ProjectName}-${Environment}"
@@ -857,9 +937,9 @@
             }
         },
         "OriginAccessIdentity": {
-            "Type": "AWS::CloudFront::OriginAccessIdentity",
+            "Type": "AWS::CloudFront::CloudFrontOriginAccessIdentity",
             "Properties": {
-                "OriginAccessIdentityConfig": {
+                "CloudFrontOriginAccessIdentityConfig": {
                     "Comment": {
                         "Fn::Sub": "OAI for ${ProjectName}-${Environment}"
                     }
@@ -916,9 +996,25 @@
                     "HttpVersion": "http2",
                     "PriceClass": "PriceClass_100",
                     "WebACLId": {
-                        "Fn::GetAtt": [
-                            "WebACL",
-                            "Arn"
+                        "Fn::If": [
+                            "UseAnyWebACL",
+                            {
+                                "Fn::If": [
+                                    "CreateCloudFrontWebACL",
+                                    {
+                                        "Fn::GetAtt": [
+                                            "WebACL",
+                                            "Arn"
+                                        ]
+                                    },
+                                    {
+                                        "Ref": "ExistingCloudFrontWebACLArn"
+                                    }
+                                ]
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
                         ]
                     },
                     "ViewerCertificate": {
@@ -948,8 +1044,11 @@
                             "Sid": "AllowCloudFrontAccess",
                             "Effect": "Allow",
                             "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}"
+                                "CanonicalUser": {
+                                    "Fn::GetAtt": [
+                                        "OriginAccessIdentity",
+                                        "S3CanonicalUserId"
+                                    ]
                                 }
                             },
                             "Action": "s3:GetObject",
@@ -958,6 +1057,21 @@
                             }
                         }
                     ]
+                }
+            }
+        },
+        "DBMasterSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "secret-${ProjectName}-${Environment}-db-master"
+                },
+                "Description": "RDS master user password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": "{}",
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludePunctuation": true
                 }
             }
         }
@@ -1085,9 +1199,23 @@
         "WebACLArn": {
             "Description": "WAF Web ACL ARN",
             "Value": {
-                "Fn::GetAtt": [
-                    "WebACL",
-                    "Arn"
+                "Fn::If": [
+                    "UseAnyWebACL",
+                    {
+                        "Fn::If": [
+                            "CreateCloudFrontWebACL",
+                            {
+                                "Fn::GetAtt": [
+                                    "WebACL",
+                                    "Arn"
+                                ]
+                            },
+                            {
+                                "Ref": "ExistingCloudFrontWebACLArn"
+                            }
+                        ]
+                    },
+                    ""
                 ]
             },
             "Export": {
@@ -1099,9 +1227,17 @@
         "CloudTrailArn": {
             "Description": "CloudTrail ARN",
             "Value": {
-                "Fn::GetAtt": [
-                    "CloudTrail",
-                    "Arn"
+                "Fn::If": [
+                    "CreateCloudTrail",
+                    {
+                        "Fn::GetAtt": [
+                            "CloudTrail",
+                            "Arn"
+                        ]
+                    },
+                    {
+                        "Ref": "ExistingCloudTrailArn"
+                    }
                 ]
             },
             "Export": {
