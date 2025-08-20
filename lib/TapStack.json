@@ -10,13 +10,18 @@
     },
     "ApplicationName": {
       "Type": "String",
-      "Default": "SecureApp",
-      "Description": "Name of the application for resource naming"
+      "Default": "secureapp",
+      "Description": "Name of the application for resource naming (lowercase only)",
+      "AllowedPattern": "^[a-z0-9-]+$"
     },
     "Environment": {
       "Type": "String",
       "Default": "prod",
-      "AllowedValues": ["dev", "staging", "prod"],
+      "AllowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ],
       "Description": "Environment type"
     }
   },
@@ -30,11 +35,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-vpc"}
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-${Environment}-vpc"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"}
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -69,7 +78,9 @@
                     "logs:DescribeLogGroups",
                     "logs:DescribeLogStreams"
                   ],
-                  "Resource": {"Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"}
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                  }
                 }
               ]
             }
@@ -80,7 +91,9 @@
     "VPCFlowLogsGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/aws/vpc/flowlogs/${ApplicationName}-${Environment}"},
+        "LogGroupName": {
+          "Fn::Sub": "/aws/vpc/flowlogs/${ApplicationName}-${Environment}"
+        },
         "RetentionInDays": 30
       }
     },
@@ -88,31 +101,46 @@
       "Type": "AWS::EC2::FlowLog",
       "Properties": {
         "ResourceType": "VPC",
-        "ResourceId": {"Ref": "SecureVPC"},
+        "ResourceId": {
+          "Ref": "SecureVPC"
+        },
         "TrafficType": "ALL",
         "LogDestinationType": "cloud-watch-logs",
-        "LogGroupName": {"Ref": "VPCFlowLogsGroup"},
-        "DeliverLogsPermissionArn": {"Fn::GetAtt": ["VPCFlowLogsRole", "Arn"]}
+        "LogGroupName": {
+          "Ref": "VPCFlowLogsGroup"
+        },
+        "DeliverLogsPermissionArn": {
+          "Fn::GetAtt": [
+            "VPCFlowLogsRole",
+            "Arn"
+          ]
+        }
       }
     },
     "ApplicationSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Security group with restricted inbound and outbound access",
-        "VpcId": {"Ref": "SecureVPC"},
+        "VpcId": {
+          "Ref": "SecureVPC"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 443,
             "ToPort": 443,
-            "CidrIp": {"Ref": "AllowedIPRange"},
+            "CidrIp": {
+              "Ref": "AllowedIPRange"
+            },
             "Description": "HTTPS access from allowed IP range"
           },
           {
             "IpProtocol": "tcp",
             "FromPort": 80,
             "ToPort": 80,
-            "CidrIp": {"Ref": "AllowedIPRange"},
+            "CidrIp": {
+              "Ref": "AllowedIPRange"
+            },
             "Description": "HTTP access from allowed IP range"
           }
         ],
@@ -121,120 +149,43 @@
             "IpProtocol": "tcp",
             "FromPort": 443,
             "ToPort": 443,
-            "CidrIp": {"Ref": "AllowedIPRange"},
+            "CidrIp": {
+              "Ref": "AllowedIPRange"
+            },
             "Description": "HTTPS outbound to allowed IP range"
           },
           {
             "IpProtocol": "tcp",
             "FromPort": 80,
             "ToPort": 80,
-            "CidrIp": {"Ref": "AllowedIPRange"},
+            "CidrIp": {
+              "Ref": "AllowedIPRange"
+            },
             "Description": "HTTP outbound to allowed IP range"
           }
         ],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-sg"}
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-${Environment}-sg"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"}
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
-      }
-    },
-    "SecureS3Bucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {"Fn::Sub": "${ApplicationName}-${Environment}-secure-bucket-${AWS::AccountId}"},
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
-              },
-              "BucketKeyEnabled": true
-            }
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        },
-        "VersioningConfiguration": {
-          "Status": "Enabled"
-        },
-        "LoggingConfiguration": {
-          "DestinationBucketName": {"Ref": "S3AccessLogsBucket"},
-          "LogFilePrefix": "access-logs/"
-        },
-        "NotificationConfiguration": {
-          "CloudWatchConfigurations": [
-            {
-              "Event": "s3:ObjectCreated:*",
-              "CloudWatchConfiguration": {
-                "LogGroupName": {"Ref": "S3CloudWatchLogGroup"}
-              }
-            }
-          ]
-        },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-secure-bucket"}
-          },
-          {
-            "Key": "Environment",
-            "Value": {"Ref": "Environment"}
-          }
-        ]
-      }
-    },
-    "SecureS3BucketPolicy": {
-      "Type": "AWS::S3::BucketPolicy",
-      "Properties": {
-        "Bucket": {"Ref": "SecureS3Bucket"},
-        "PolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Sid": "DenyInsecureConnections",
-              "Effect": "Deny",
-              "Principal": "*",
-              "Action": "s3:*",
-              "Resource": [
-                {"Fn::Sub": "${SecureS3Bucket}/*"},
-                {"Ref": "SecureS3Bucket"}
-              ],
-              "Condition": {
-                "Bool": {
-                  "aws:SecureTransport": "false"
-                }
-              }
-            },
-            {
-              "Sid": "DenyUnencryptedObjectUploads",
-              "Effect": "Deny",
-              "Principal": "*",
-              "Action": "s3:PutObject",
-              "Resource": {"Fn::Sub": "${SecureS3Bucket}/*"},
-              "Condition": {
-                "StringNotEquals": {
-                  "s3:x-amz-server-side-encryption": "AES256"
-                }
-              }
-            }
-          ]
-        }
       }
     },
     "S3AccessLogsBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {"Fn::Sub": "${ApplicationName}-${Environment}-access-logs-${AWS::AccountId}"},
+        "BucketName": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-access-logs-${AWS::AccountId}"
+        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -258,27 +209,167 @@
               "ExpirationInDays": 90
             }
           ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-${Environment}-access-logs"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "SecureS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-secure-bucket-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              },
+              "BucketKeyEnabled": true
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LoggingConfiguration": {
+          "DestinationBucketName": {
+            "Ref": "S3AccessLogsBucket"
+          },
+          "LogFilePrefix": "access-logs/"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-${Environment}-secure-bucket"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          }
+        ]
+      }
+    },
+    "SecureS3BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "SecureS3Bucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "DenyInsecureConnections",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
+                },
+                {
+                  "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "DenyUnencryptedObjectUploads",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:x-amz-server-side-encryption": "AES256"
+                }
+              }
+            },
+            {
+              "Sid": "AWSCloudTrailAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
+              }
+            },
+            {
+              "Sid": "AWSCloudTrailWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/cloudtrail-logs/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            }
+          ]
         }
       }
     },
     "S3CloudWatchLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/aws/s3/${ApplicationName}-${Environment}"},
+        "LogGroupName": {
+          "Fn::Sub": "/aws/s3/${ApplicationName}-${Environment}"
+        },
         "RetentionInDays": 30
       }
     },
     "ApplicationLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/aws/application/${ApplicationName}-${Environment}"},
+        "LogGroupName": {
+          "Fn::Sub": "/aws/application/${ApplicationName}-${Environment}"
+        },
         "RetentionInDays": 30
       }
     },
     "ApplicationRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "${ApplicationName}-${Environment}-application-role"},
+        "RoleName": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-application-role"
+        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -310,14 +401,21 @@
                     "s3:PutObject",
                     "s3:DeleteObject"
                   ],
-                  "Resource": {"Fn::Sub": "${SecureS3Bucket}/*"}
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
+                  }
                 },
                 {
                   "Effect": "Allow",
                   "Action": [
                     "s3:ListBucket"
                   ],
-                  "Resource": {"Ref": "SecureS3Bucket"}
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "SecureS3Bucket",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
@@ -334,8 +432,15 @@
                     "logs:PutLogEvents"
                   ],
                   "Resource": [
-                    {"Fn::GetAtt": ["ApplicationLogGroup", "Arn"]},
-                    {"Fn::Sub": "${ApplicationLogGroup.Arn}:*"}
+                    {
+                      "Fn::GetAtt": [
+                        "ApplicationLogGroup",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${ApplicationLogGroup.Arn}:*"
+                    }
                   ]
                 }
               ]
@@ -345,11 +450,15 @@
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "${ApplicationName}-${Environment}-role"}
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-${Environment}-role"
+            }
           },
           {
             "Key": "Environment",
-            "Value": {"Ref": "Environment"}
+            "Value": {
+              "Ref": "Environment"
+            }
           }
         ]
       }
@@ -358,14 +467,18 @@
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
         "Roles": [
-          {"Ref": "ApplicationRole"}
+          {
+            "Ref": "ApplicationRole"
+          }
         ]
       }
     },
     "S3BucketSizeAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": {"Fn::Sub": "${ApplicationName}-${Environment}-s3-bucket-size"},
+        "AlarmName": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-s3-bucket-size"
+        },
         "AlarmDescription": "Monitor S3 bucket size",
         "MetricName": "BucketSizeBytes",
         "Namespace": "AWS/S3",
@@ -377,7 +490,9 @@
         "Dimensions": [
           {
             "Name": "BucketName",
-            "Value": {"Ref": "SecureS3Bucket"}
+            "Value": {
+              "Ref": "SecureS3Bucket"
+            }
           },
           {
             "Name": "StorageType",
@@ -389,7 +504,9 @@
     "CloudTrailLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
-        "LogGroupName": {"Fn::Sub": "/aws/cloudtrail/${ApplicationName}-${Environment}"},
+        "LogGroupName": {
+          "Fn::Sub": "/aws/cloudtrail/${ApplicationName}-${Environment}"
+        },
         "RetentionInDays": 90
       }
     },
@@ -420,7 +537,12 @@
                     "logs:CreateLogStream",
                     "logs:PutLogEvents"
                   ],
-                  "Resource": {"Fn::GetAtt": ["CloudTrailLogGroup", "Arn"]}
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CloudTrailLogGroup",
+                      "Arn"
+                    ]
+                  }
                 }
               ]
             }
@@ -430,15 +552,33 @@
     },
     "ApplicationCloudTrail": {
       "Type": "AWS::CloudTrail::Trail",
+      "DependsOn": [
+        "SecureS3BucketPolicy"
+      ],
       "Properties": {
-        "TrailName": {"Fn::Sub": "${ApplicationName}-${Environment}-cloudtrail"},
-        "S3BucketName": {"Ref": "SecureS3Bucket"},
+        "TrailName": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-cloudtrail"
+        },
+        "S3BucketName": {
+          "Ref": "SecureS3Bucket"
+        },
         "S3KeyPrefix": "cloudtrail-logs/",
+        "IsLogging": true,
         "IncludeGlobalServiceEvents": true,
         "IsMultiRegionTrail": true,
         "EnableLogFileValidation": true,
-        "CloudWatchLogsLogGroupArn": {"Fn::GetAtt": ["CloudTrailLogGroup", "Arn"]},
-        "CloudWatchLogsRoleArn": {"Fn::GetAtt": ["CloudTrailRole", "Arn"]},
+        "CloudWatchLogsLogGroupArn": {
+          "Fn::GetAtt": [
+            "CloudTrailLogGroup",
+            "Arn"
+          ]
+        },
+        "CloudWatchLogsRoleArn": {
+          "Fn::GetAtt": [
+            "CloudTrailRole",
+            "Arn"
+          ]
+        },
         "EventSelectors": [
           {
             "ReadWriteType": "All",
@@ -447,7 +587,9 @@
               {
                 "Type": "AWS::S3::Object",
                 "Values": [
-                  {"Fn::Sub": "${SecureS3Bucket}/*"}
+                  {
+                    "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
+                  }
                 ]
               }
             ]
@@ -459,37 +601,96 @@
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": {"Ref": "SecureVPC"},
+      "Value": {
+        "Ref": "SecureVPC"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${ApplicationName}-${Environment}-vpc-id"}
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-vpc-id"
+        }
       }
     },
     "SecurityGroupId": {
       "Description": "Security Group ID",
-      "Value": {"Ref": "ApplicationSecurityGroup"},
+      "Value": {
+        "Ref": "ApplicationSecurityGroup"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${ApplicationName}-${Environment}-sg-id"}
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-sg-id"
+        }
       }
     },
     "S3BucketName": {
       "Description": "Secure S3 Bucket Name",
-      "Value": {"Ref": "SecureS3Bucket"},
+      "Value": {
+        "Ref": "SecureS3Bucket"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${ApplicationName}-${Environment}-s3-bucket"}
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-s3-bucket"
+        }
+      }
+    },
+    "S3AccessLogsBucketName": {
+      "Description": "S3 Access Logs Bucket Name",
+      "Value": {
+        "Ref": "S3AccessLogsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-s3-access-logs-bucket"
+        }
       }
     },
     "ApplicationRoleArn": {
       "Description": "Application IAM Role ARN",
-      "Value": {"Fn::GetAtt": ["ApplicationRole", "Arn"]},
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationRole",
+          "Arn"
+        ]
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${ApplicationName}-${Environment}-role-arn"}
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-role-arn"
+        }
       }
     },
     "CloudWatchLogGroup": {
       "Description": "Application CloudWatch Log Group",
-      "Value": {"Ref": "ApplicationLogGroup"},
+      "Value": {
+        "Ref": "ApplicationLogGroup"
+      },
       "Export": {
-        "Name": {"Fn::Sub": "${ApplicationName}-${Environment}-log-group"}
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-log-group"
+        }
+      }
+    },
+    "VPCFlowLogsGroup": {
+      "Description": "VPC Flow Logs CloudWatch Log Group",
+      "Value": {
+        "Ref": "VPCFlowLogsGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-vpc-flowlogs-group"
+        }
+      }
+    },
+    "CloudTrailArn": {
+      "Description": "CloudTrail ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationCloudTrail",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-${Environment}-cloudtrail-arn"
+        }
       }
     }
   }

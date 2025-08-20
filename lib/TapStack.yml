@@ -10,8 +10,9 @@ Parameters:
 
   ApplicationName:
     Type: String
-    Default: 'SecureApp'
-    Description: 'Name of the application for resource naming'
+    Default: 'secureapp'
+    Description: 'Name of the application for resource naming (lowercase only)'
+    AllowedPattern: '^[a-z0-9-]+$'
 
   Environment:
     Type: String
@@ -108,6 +109,31 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # S3 Access Logs Bucket (created first to avoid circular dependency)
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ApplicationName}-${Environment}-access-logs-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub '${ApplicationName}-${Environment}-access-logs'
+        - Key: Environment
+          Value: !Ref Environment
+
   # S3 Bucket with enforced encryption
   SecureS3Bucket:
     Type: AWS::S3::Bucket
@@ -128,11 +154,6 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Ref S3AccessLogsBucket
         LogFilePrefix: 'access-logs/'
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3CloudWatchLogGroup
       Tags:
         - Key: Name
           Value: !Sub '${ApplicationName}-${Environment}-secure-bucket'
@@ -152,8 +173,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureS3Bucket}/*'
-              - !Ref SecureS3Bucket
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${SecureS3Bucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -161,30 +182,25 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub '${SecureS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'AES256'
-
-  # S3 Access Logs Bucket
-  S3AccessLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ApplicationName}-${Environment}-access-logs-${AWS::AccountId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/cloudtrail-logs/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
 
   # CloudWatch Log Groups for monitoring
   S3CloudWatchLogGroup:
@@ -225,11 +241,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${SecureS3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref SecureS3Bucket
+                Resource: !GetAtt SecureS3Bucket.Arn
         - PolicyName: CloudWatchLogsPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -303,10 +319,13 @@ Resources:
 
   ApplicationCloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - SecureS3BucketPolicy
     Properties:
       TrailName: !Sub '${ApplicationName}-${Environment}-cloudtrail'
       S3BucketName: !Ref SecureS3Bucket
       S3KeyPrefix: 'cloudtrail-logs/'
+      IsLogging: true
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
@@ -318,7 +337,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${SecureS3Bucket}/*'
+                - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
 
 Outputs:
   VPCId:
@@ -339,6 +358,12 @@ Outputs:
     Export:
       Name: !Sub '${ApplicationName}-${Environment}-s3-bucket'
 
+  S3AccessLogsBucketName:
+    Description: 'S3 Access Logs Bucket Name'
+    Value: !Ref S3AccessLogsBucket
+    Export:
+      Name: !Sub '${ApplicationName}-${Environment}-s3-access-logs-bucket'
+
   ApplicationRoleArn:
     Description: 'Application IAM Role ARN'
     Value: !GetAtt ApplicationRole.Arn
@@ -350,3 +375,15 @@ Outputs:
     Value: !Ref ApplicationLogGroup
     Export:
       Name: !Sub '${ApplicationName}-${Environment}-log-group'
+
+  VPCFlowLogsGroup:
+    Description: 'VPC Flow Logs CloudWatch Log Group'
+    Value: !Ref VPCFlowLogsGroup
+    Export:
+      Name: !Sub '${ApplicationName}-${Environment}-vpc-flowlogs-group'
+
+  CloudTrailArn:
+    Description: 'CloudTrail ARN'
+    Value: !GetAtt ApplicationCloudTrail.Arn
+    Export:
+      Name: !Sub '${ApplicationName}-${Environment}-cloudtrail-arn'

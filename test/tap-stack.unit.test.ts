@@ -43,7 +43,7 @@ describe('TapStack CloudFormation Template - Secure AWS Infrastructure', () => {
     test('ApplicationName parameter should have correct properties', () => {
       const param = template.Parameters.ApplicationName;
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('SecureApp');
+      expect(param.Default).toBe('secureapp');
     });
 
     test('Environment parameter should have allowed values', () => {
@@ -60,26 +60,32 @@ describe('TapStack CloudFormation Template - Secure AWS Infrastructure', () => {
         const bucket = template.Resources.SecureS3Bucket;
         expect(bucket).toBeDefined();
         expect(bucket.Type).toBe('AWS::S3::Bucket');
-        
+
         const encryption = bucket.Properties.BucketEncryption;
         expect(encryption).toBeDefined();
-        expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+        expect(
+          encryption.ServerSideEncryptionConfiguration[0]
+            .ServerSideEncryptionByDefault.SSEAlgorithm
+        ).toBe('AES256');
       });
 
       test('should have S3 bucket policy enforcing encryption', () => {
         const policy = template.Resources.SecureS3BucketPolicy;
         expect(policy).toBeDefined();
         expect(policy.Type).toBe('AWS::S3::BucketPolicy');
-        
+
         const statements = policy.Properties.PolicyDocument.Statement;
-        const encryptionStatement = statements.find((s: any) => s.Sid === 'DenyUnencryptedObjectUploads');
+        const encryptionStatement = statements.find(
+          (s: any) => s.Sid === 'DenyUnencryptedObjectUploads'
+        );
         expect(encryptionStatement).toBeDefined();
         expect(encryptionStatement.Effect).toBe('Deny');
       });
 
       test('should block public access on S3 buckets', () => {
         const bucket = template.Resources.SecureS3Bucket;
-        const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
+        const publicAccessBlock =
+          bucket.Properties.PublicAccessBlockConfiguration;
         expect(publicAccessBlock.BlockPublicAcls).toBe(true);
         expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
         expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
@@ -92,7 +98,7 @@ describe('TapStack CloudFormation Template - Secure AWS Infrastructure', () => {
         const role = template.Resources.ApplicationRole;
         expect(role).toBeDefined();
         expect(role.Type).toBe('AWS::IAM::Role');
-        
+
         const policies = role.Properties.Policies;
         expect(policies).toBeDefined();
         expect(Array.isArray(policies)).toBe(true);
@@ -100,13 +106,21 @@ describe('TapStack CloudFormation Template - Secure AWS Infrastructure', () => {
 
       test('IAM role should only have necessary S3 permissions', () => {
         const role = template.Resources.ApplicationRole;
-        const s3Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3AccessPolicy');
+        const s3Policy = role.Properties.Policies.find(
+          (p: any) => p.PolicyName === 'S3AccessPolicy'
+        );
         expect(s3Policy).toBeDefined();
-        
+
         const statements = s3Policy.PolicyDocument.Statement;
-        const s3Statement = statements.find((s: any) => s.Effect === 'Allow' && s.Action.includes('s3:GetObject'));
+        const s3Statement = statements.find(
+          (s: any) => s.Effect === 'Allow' && s.Action.includes('s3:GetObject')
+        );
         expect(s3Statement).toBeDefined();
-        expect(s3Statement.Action).toEqual(['s3:GetObject', 's3:PutObject', 's3:DeleteObject']);
+        expect(s3Statement.Action).toEqual([
+          's3:GetObject',
+          's3:PutObject',
+          's3:DeleteObject',
+        ]);
       });
     });
 
@@ -148,10 +162,10 @@ describe('TapStack CloudFormation Template - Secure AWS Infrastructure', () => {
         const sg = template.Resources.ApplicationSecurityGroup;
         expect(sg).toBeDefined();
         expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-        
+
         const ingress = sg.Properties.SecurityGroupIngress;
         expect(Array.isArray(ingress)).toBe(true);
-        
+
         // Check that ingress rules reference AllowedIPRange parameter
         const httpsRule = ingress.find((rule: any) => rule.FromPort === 443);
         expect(httpsRule).toBeDefined();
@@ -162,7 +176,7 @@ describe('TapStack CloudFormation Template - Secure AWS Infrastructure', () => {
         const sg = template.Resources.ApplicationSecurityGroup;
         const egress = sg.Properties.SecurityGroupEgress;
         expect(Array.isArray(egress)).toBe(true);
-        
+
         // Check that egress rules also reference AllowedIPRange parameter
         const httpsEgress = egress.find((rule: any) => rule.FromPort === 443);
         expect(httpsEgress).toBeDefined();
@@ -175,10 +189,10 @@ describe('TapStack CloudFormation Template - Secure AWS Infrastructure', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
         'VPCId',
-        'SecurityGroupId', 
+        'SecurityGroupId',
         'S3BucketName',
         'ApplicationRoleArn',
-        'CloudWatchLogGroup'
+        'CloudWatchLogGroup',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -221,7 +235,7 @@ describe('TapStack CloudFormation Template - Secure AWS Infrastructure', () => {
 
     test('should have comprehensive outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(5); // VPC, SG, S3, IAM Role, Log Group
+      expect(outputCount).toBe(8); // VPC, SG, S3, IAM Role, Log Group
     });
   });
 
@@ -235,7 +249,9 @@ describe('TapStack CloudFormation Template - Secure AWS Infrastructure', () => {
     test('IAM role should have descriptive name with environment', () => {
       const role = template.Resources.ApplicationRole;
       const roleName = role.Properties.RoleName;
-      expect(roleName['Fn::Sub']).toContain('${ApplicationName}-${Environment}');
+      expect(roleName['Fn::Sub']).toContain(
+        '${ApplicationName}-${Environment}'
+      );
     });
 
     test('CloudWatch log groups should have structured naming', () => {

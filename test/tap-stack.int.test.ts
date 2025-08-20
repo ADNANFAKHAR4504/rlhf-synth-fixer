@@ -82,7 +82,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(outputs.ApplicationRoleArn).toContain(':role/');
       
       // Log group should follow AWS naming pattern
-      expect(outputs.CloudWatchLogGroup).toStartWith('/aws/');
+      expect(outputs.CloudWatchLogGroup).toMatch(/^\/aws\//);
     });
   });
 
