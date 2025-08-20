@@ -42,7 +42,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as rds from 'aws-cdk-lib/aws-rds';
-import * as config from 'aws-cdk-lib/aws-config';
+
 import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
 
@@ -217,42 +217,7 @@ export class TapStack extends cdk.Stack {
 
     user.attachInlinePolicy(mfaPolicy);
 
-    // AWS Config rule to detect open SSH security groups
-    const configRole = new iam.Role(this, 'ConfigRole', {
-      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
-      ],
-    });
 
-    const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      bucketName: `aws-config-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true, // Automatically delete objects on bucket deletion
-    });
-
-    const configDeliveryChannel = new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
-      s3BucketName: configBucket.bucketName,
-    });
-
-    const configRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
-      roleArn: configRole.roleArn,
-      recordingGroup: {
-        allSupported: true,
-        includeGlobalResourceTypes: true,
-      },
-    });
-
-    // Ensure proper dependency order for cleanup
-    configDeliveryChannel.addDependency(configRecorder);
-
-    // Config rule to check for open SSH access
-    new config.ManagedRule(this, 'SSHRestrictedRule', {
-      identifier: 'INCOMING_SSH_DISABLED',
-      description: 'Checks whether security groups disallow unrestricted incoming SSH traffic',
-    });
 
     // Output important resource information
     new cdk.CfnOutput(this, 'VpcId', {
@@ -366,11 +331,7 @@ export class TapStack extends cdk.Stack {
 - Automated backups with proper cleanup configuration
 - No public accessibility
 
-### 📊 **Monitoring & Compliance**
-- AWS Config rules for security compliance
-- SSH restriction monitoring (INCOMING_SSH_DISABLED rule)
-- Centralized configuration recording
-- Proper dependency management for clean destruction
+
 
 ### 🧹 **Clean Destruction**
 - All resources configured with `removalPolicy: DESTROY`

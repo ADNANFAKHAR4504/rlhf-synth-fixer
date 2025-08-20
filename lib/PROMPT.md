@@ -18,6 +18,4 @@ VPC Flow Logs must be enabled to capture traffic in and out of interfaces.
 
 RDS instances should only accept connections from specific VPC security groups, not open to the world.
 
-
-
 End goal: when you run cdk deploy, the stack comes up cleanly and the whole environment follows security best practices out of the box.
