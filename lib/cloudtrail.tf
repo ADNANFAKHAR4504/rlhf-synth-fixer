@@ -16,6 +16,7 @@ resource "aws_cloudtrail" "main" {
     ManagedBy   = "terraform"
     Project     = "secure-env"
   }
+  depends_on = [aws_cloudwatch_log_group.cloudtrail]
 }
 
 resource "aws_cloudwatch_log_group" "cloudtrail" {
