@@ -1,9 +1,9 @@
-import typescriptEslint from '@typescript-eslint/eslint-plugin';
-import tsParser from '@typescript-eslint/parser';
-import prettierPlugin from 'eslint-plugin-prettier';
-import importPlugin from 'eslint-plugin-import';
+const typescriptEslint = require('@typescript-eslint/eslint-plugin');
+const tsParser = require('@typescript-eslint/parser');
+const prettierPlugin = require('eslint-plugin-prettier');
+const importPlugin = require('eslint-plugin-import');
 
-export default [
+module.exports = [
   // Separate configuration for templates folder (must come first)
   {
     files: ['templates/**/*.ts'],
@@ -113,7 +113,7 @@ export default [
       '**/*.js',
       '**/*.d.ts',
       '**/*.test.ts', // Exclude test files from linting
-      '.gen/**'
+      '.gen/**',
     ],
   },
 ];
