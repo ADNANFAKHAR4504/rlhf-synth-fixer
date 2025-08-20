@@ -1,4 +1,4 @@
-**Prompt – Performance-Optimized Serverless Infrastructure**
+**Prompt Performance-Optimized Serverless Infrastructure**
 
 > You are an **AWS Solutions Architect** specializing in **high-performance serverless systems**.
 > Create a **production-ready AWS CloudFormation YAML template** that provisions a **serverless application** in the **us-west-2** region using:

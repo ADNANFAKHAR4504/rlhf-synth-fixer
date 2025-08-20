@@ -1,3 +1,4 @@
+```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template to deploy a Lambda function and grant S3 permission to invoke it. # Updated description to match the unit test expectation
 
@@ -138,3 +139,4 @@ Outputs:
   Handler:
     Description: The handler of the Lambda function # Corrected description
     Value: !Ref LambdaHandler # Corrected to LambdaHandler parameter
+```

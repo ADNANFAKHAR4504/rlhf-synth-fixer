@@ -1,4 +1,4 @@
-You are an expert in AWS security and Pulumi with Python. Write a single Pulumi Python program named security_config.py that configures and enforces security controls across an existing AWS environment for the project “IaC - AWS Nova Model Breaking.”
+You are an expert in AWS security and Pulumi with Python. Write a single Pulumi Python program named security_config.py that configures and enforces security controls across an existing AWS environment for the project IaC - AWS Nova Model Breaking.
 
 Do not generate pulumi.yaml or any entrypoint; return only the full contents of security_config.py.
 
@@ -67,7 +67,7 @@ Ensure that Lambda function environment variables are encrypted with AWS KMS.
 
 Take a KMS key ARN from config; if not provided, use AWS-managed key for Lambda.
 
-Update each function’s configuration to enforce encryption helpers.
+Update each functions configuration to enforce encryption helpers.
 
 CloudFront + WAF
 
@@ -100,7 +100,7 @@ Retention configurable
 Configuration Conventions
 Use pulumi.Config() for all environment-specific inputs:
 
-env: environment suffix (e.g., dev, staging, prod) — default prod
+env: environment suffix (e.g., dev, staging, prod) default prod
 
 region: default region for resource creation where needed
 

@@ -1,4 +1,4 @@
-```
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-ready serverless infrastructure with S3, Lambda, and API Gateway'
 
@@ -358,5 +358,4 @@ Outputs:
     Value: !Ref 'AWS::Region'
     Export:
       Name: !Sub '${AWS::StackName}-Region'
-
 ```

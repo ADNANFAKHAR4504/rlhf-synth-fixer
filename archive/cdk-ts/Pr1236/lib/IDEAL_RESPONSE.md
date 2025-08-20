@@ -1,97 +1,9 @@
-# IDEAL_RESPONSE.md
+# AWS CDK TypeScript Infrastructure
 
-## 1. Folder/File Structure
+This solution provides AWS infrastructure using CDK TypeScript.
 
-```
-.
-├── bin/
-│   └── tap.ts
-├── lib/
-│   └── stacks/
-│       ├── compute-stack.ts
-│       ├── database-stack.ts
-│       ├── kms-stack.ts
-│       ├── core-stack.ts
-│       ├── monitoring-stack.ts
-│       ├── network-stack.ts
-│       └── storage-stack.ts
-├── test/
-│   ├── integration-test/
-│   │   ├── compute-stack.int.test.ts
-│   │   ├── database-stack.int.test.ts
-│   │   ├── kms-stack.int.test.ts
-│   │   ├── monitoring-stack.int.test.ts
-│   │   ├── network-stack.int.test.ts
-│   │   └── storage-stack.int.test.ts
-│   └── unit-test/
-│       ├── compute-stack.unit.test.ts
-│       ├── database-stack.unit.test.ts
-│       ├── kms-stack.unit.test.ts
-│       ├── monitoring-stack.unit.test.ts
-│       ├── network-stack.unit.test.ts
-│       └── storage-stack.unit.test.ts
-```
+## lib/stacks/compute-stack.ts
 
-## 2. Full Code Including Tests
-
----
-### bin/tap.ts
-```typescript
-#!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib';
-import 'source-map-support/register';
-import { ComputeStack } from '../lib/stacks/compute-stack';
-import { CoreStack } from '../lib/stacks/core-stack';
-import { DatabaseStack } from '../lib/stacks/database-stack';
-import { MonitoringStack } from '../lib/stacks/monitoring-stack';
-import { StorageStack } from '../lib/stacks/storage-stack';
-
-const app = new cdk.App();
-const env = {
-  account: process.env.CDK_DEFAULT_ACCOUNT,
-  region: 'us-east-2',
-};
-
-// CoreStack: VPC, KMS key, app SG (no instance role)
-const coreStack = new CoreStack(app, 'CoreStack', { env });
-
-// Storage (logs + app data bucket)
-const storageStack = new StorageStack(app, 'StorageStack', {
-  env,
-  dataKey: coreStack.dataKey,
-});
-
-// Database (RDS Multi-AZ) – needs VPC, KMS, App SG
-const databaseStack = new DatabaseStack(app, 'DatabaseStack', {
-  env,
-  vpc: coreStack.vpc,
-  dataKey: coreStack.dataKey,
-  appSecurityGroup: coreStack.appSecurityGroup,
-});
-
-// Compute (ALB + ASG + IAM role) – needs VPC, KMS key, app bucket, SG, role
-const computeStack = new ComputeStack(app, 'ComputeStack', {
-  env,
-  vpc: coreStack.vpc,
-  dataKey: coreStack.dataKey,
-  appBucket: storageStack.appBucket,
-  appSecurityGroup: coreStack.appSecurityGroup,
-  appInstanceRole: databaseStack.appInstanceRole,
-});
-// No addDependency needed; resource references are passed via props
-
-// Monitoring (CloudWatch alarms) – needs ALB/ASG/DB references
-const monitoringStack = new MonitoringStack(app, 'MonitoringStack', {
-  env,
-  alb: computeStack.alb,
-  asg: computeStack.asg,
-  dbInstance: databaseStack.dbInstance,
-});
-monitoringStack.addDependency(databaseStack);
-```
-
----
-### lib/stacks/compute-stack.ts
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
@@ -212,8 +124,8 @@ export class ComputeStack extends cdk.Stack {
 }
 ```
 
----
-### lib/stacks/core-stack.ts
+## lib/stacks/core-stack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -254,8 +166,8 @@ export class CoreStack extends cdk.Stack {
 }
 ```
 
----
-### lib/stacks/database-stack.ts
+## lib/stacks/database-stack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -338,8 +250,8 @@ export class DatabaseStack extends cdk.Stack {
 }
 ```
 
----
-### lib/stacks/kms-stack.ts
+## lib/stacks/kms-stack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -361,8 +273,8 @@ export class KmsStack extends cdk.Stack {
 }
 ```
 
----
-### lib/stacks/monitoring-stack.ts
+## lib/stacks/monitoring-stack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Duration } from 'aws-cdk-lib';
@@ -428,8 +340,8 @@ export class MonitoringStack extends cdk.Stack {
 }
 ```
 
----
-### lib/stacks/network-stack.ts
+## lib/stacks/network-stack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -462,8 +374,8 @@ export class NetworkStack extends cdk.Stack {
 }
 ```
 
----
-### lib/stacks/storage-stack.ts
+## lib/stacks/storage-stack.ts
+
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -512,334 +424,3 @@ export class StorageStack extends cdk.Stack {
 }
 ```
 
----
-### test/integration-test/compute-stack.int.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { ComputeStack } from '../../lib/stacks/compute-stack';
-import { KmsStack } from '../../lib/stacks/kms-stack';
-import { NetworkStack } from '../../lib/stacks/network-stack';
-import { StorageStack } from '../../lib/stacks/storage-stack';
-describe('ComputeStack Integration', () => {
-  it('provisions ALB, ASG, IAM, SG with valid dependencies', () => {
-    const app = new App();
-    const network = new NetworkStack(app, 'NetworkStack');
-    const kms = new KmsStack(app, 'KmsStack');
-    const storage = new StorageStack(app, 'StorageStack', {
-      dataKey: kms.dataKey,
-    });
-    const compute = new ComputeStack(app, 'ComputeStack', {
-      vpc: network.vpc,
-      dataKey: kms.dataKey,
-      appBucket: storage.appBucket,
-    });
-    expect(compute.alb).toBeDefined();
-    expect(compute.asg).toBeDefined();
-    expect(compute.instanceRole).toBeDefined();
-    expect(compute.appSecurityGroup).toBeDefined();
-  });
-  it('throws error if appBucket is missing', () => {
-    const app = new App();
-    const network = new NetworkStack(app, 'NetworkStack');
-    const kms = new KmsStack(app, 'KmsStack');
-    expect(
-      () =>
-        new ComputeStack(app, 'BadCompute', {
-          vpc: network.vpc,
-          dataKey: kms.dataKey,
-          // appBucket missing
-        } as any)
-    ).toThrow();
-  });
-});
-```
-
----
-### test/integration-test/database-stack.int.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { ComputeStack } from '../../lib/stacks/compute-stack';
-import { DatabaseStack } from '../../lib/stacks/database-stack';
-import { KmsStack } from '../../lib/stacks/kms-stack';
-import { NetworkStack } from '../../lib/stacks/network-stack';
-describe('DatabaseStack Integration', () => {
-	it('provisions RDS with valid SG and IAM role from ComputeStack', () => {
-		const app = new App();
-		const network = new NetworkStack(app, 'NetworkStack');
-		const kms = new KmsStack(app, 'KmsStack');
-		const compute = new ComputeStack(app, 'ComputeStack', {
-			vpc: network.vpc,
-			dataKey: kms.dataKey,
-			appBucket: { grantReadWrite: jest.fn() } as any,
-		});
-		const db = new DatabaseStack(app, 'DatabaseStack', {
-			vpc: network.vpc,
-			dataKey: kms.dataKey,
-			appSecurityGroup: compute.appSecurityGroup,
-			appInstanceRole: compute.instanceRole,
-		});
-		expect(db.dbInstance).toBeDefined();
-	});
-	it('throws error if appSecurityGroup is missing', () => {
-		const app = new App();
-		const network = new NetworkStack(app, 'NetworkStack');
-		const kms = new KmsStack(app, 'KmsStack');
-		expect(
-			() =>
-				new DatabaseStack(app, 'BadDb', {
-					vpc: network.vpc,
-					dataKey: kms.dataKey,
-					// appSecurityGroup missing
-					appInstanceRole: { grantPrincipal: jest.fn() } as any,
-				} as any)
-		).toThrow();
-	});
-});
-```
-
----
-### test/integration-test/kms-stack.int.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { KmsStack } from '../../lib/stacks/kms-stack';
-describe('KmsStack Integration', () => {
-	it('provisions a KMS key and can be used by other stacks', () => {
-		const app = new App();
-		const kms = new KmsStack(app, 'KmsStack');
-		expect(kms.dataKey).toBeDefined();
-	});
-});
-```
-
----
-### test/integration-test/monitoring-stack.int.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { ComputeStack } from '../../lib/stacks/compute-stack';
-import { DatabaseStack } from '../../lib/stacks/database-stack';
-import { KmsStack } from '../../lib/stacks/kms-stack';
-import { MonitoringStack } from '../../lib/stacks/monitoring-stack';
-import { NetworkStack } from '../../lib/stacks/network-stack';
-describe('MonitoringStack Integration', () => {
-	it('provisions alarms for ALB, ASG, and DB with valid dependencies', () => {
-		const app = new App();
-		const network = new NetworkStack(app, 'NetworkStack');
-		const kms = new KmsStack(app, 'KmsStack');
-		const compute = new ComputeStack(app, 'ComputeStack', {
-			vpc: network.vpc,
-			dataKey: kms.dataKey,
-			appBucket: { grantReadWrite: jest.fn() } as any,
-		});
-		const db = new DatabaseStack(app, 'DatabaseStack', {
-			vpc: network.vpc,
-			dataKey: kms.dataKey,
-			appSecurityGroup: compute.appSecurityGroup,
-			appInstanceRole: compute.instanceRole,
-		});
-		const monitoring = new MonitoringStack(app, 'MonitoringStack', {
-			alb: compute.alb,
-			asg: compute.asg,
-			dbInstance: db.dbInstance,
-		});
-		expect(monitoring).toBeDefined();
-	});
-	it('throws error if dbInstance is missing', () => {
-		const app = new App();
-		const network = new NetworkStack(app, 'NetworkStack');
-		const kms = new KmsStack(app, 'KmsStack');
-		const compute = new ComputeStack(app, 'ComputeStack', {
-			vpc: network.vpc,
-			dataKey: kms.dataKey,
-			appBucket: { grantReadWrite: jest.fn() } as any,
-		});
-		expect(
-			() =>
-				new MonitoringStack(app, 'BadMonitoring', {
-					alb: compute.alb,
-					asg: compute.asg,
-					// dbInstance missing
-				} as any)
-		).toThrow();
-	});
-});
-```
-
----
-### test/integration-test/network-stack.int.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { NetworkStack } from '../../lib/stacks/network-stack';
-describe('NetworkStack Integration', () => {
-	it('provisions a VPC with correct subnets and outputs', () => {
-		const app = new App();
-		const network = new NetworkStack(app, 'NetworkStack');
-		expect(network.vpc).toBeDefined();
-		expect(network.vpc.publicSubnets.length).toBeGreaterThan(0);
-		expect(network.vpc.privateSubnets.length).toBeGreaterThan(0);
-	});
-});
-```
-
----
-### test/integration-test/storage-stack.int.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { KmsStack } from '../../lib/stacks/kms-stack';
-import { StorageStack } from '../../lib/stacks/storage-stack';
-describe('StorageStack Integration', () => {
-	it('provisions appBucket and logsBucket with correct encryption and logging', () => {
-		const app = new App();
-		const kms = new KmsStack(app, 'KmsStack');
-		const storage = new StorageStack(app, 'StorageStack', {
-			dataKey: kms.dataKey,
-		});
-		expect(storage.appBucket).toBeDefined();
-		expect(storage.logsBucket).toBeDefined();
-		expect(storage.appBucket.encryptionKey).toBe(kms.dataKey);
-		// Logging configuration cannot be directly asserted from CDK object
-	});
-	it('throws error if dataKey is missing', () => {
-		const app = new App();
-		expect(() => new StorageStack(app, 'BadStorage', {} as any)).toThrow();
-	});
-});
-```
-
----
-### test/unit-test/compute-stack.unit.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { ComputeStack } from '../../lib/stacks/compute-stack';
-import { KmsStack } from '../../lib/stacks/kms-stack';
-import { NetworkStack } from '../../lib/stacks/network-stack';
-import { StorageStack } from '../../lib/stacks/storage-stack';
-describe('ComputeStack', () => {
-	it('should throw error if required props are missing', () => {
-		const app = new App();
-		expect(() => new ComputeStack(app, 'BadCompute', {} as any)).toThrow();
-	});
-	it('should create resources with valid props', () => {
-		const app = new App();
-		const network = new NetworkStack(app, 'NetworkStack');
-		const kms = new KmsStack(app, 'KmsStack');
-		const storage = new StorageStack(app, 'StorageStack', { dataKey: kms.dataKey });
-		const compute = new ComputeStack(app, 'ComputeStack', {
-			vpc: network.vpc,
-			dataKey: kms.dataKey,
-			appBucket: storage.appBucket,
-		});
-		expect(compute.alb).toBeDefined();
-		expect(compute.asg).toBeDefined();
-		expect(compute.instanceRole).toBeDefined();
-		expect(compute.appSecurityGroup).toBeDefined();
-	});
-});
-```
-
----
-### test/unit-test/database-stack.unit.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { DatabaseStack } from '../../lib/stacks/database-stack';
-import { KmsStack } from '../../lib/stacks/kms-stack';
-import { NetworkStack } from '../../lib/stacks/network-stack';
-import { SecurityGroup, Role } from 'aws-cdk-lib/aws-ec2';
-describe('DatabaseStack', () => {
-	it('should throw error if required props are missing', () => {
-		const app = new App();
-		expect(() => new DatabaseStack(app, 'BadDb', {} as any)).toThrow();
-	});
-	it('should create resources with valid props', () => {
-		const app = new App();
-		const network = new NetworkStack(app, 'NetworkStack');
-		const kms = new KmsStack(app, 'KmsStack');
-		const sg = new SecurityGroup(app, 'SG', { vpc: network.vpc });
-		const role = new Role(app, 'Role', { assumedBy: { addToPolicy: jest.fn() } as any });
-		const db = new DatabaseStack(app, 'DatabaseStack', {
-			vpc: network.vpc,
-			dataKey: kms.dataKey,
-			appSecurityGroup: sg,
-			appInstanceRole: role,
-		});
-		expect(db.dbInstance).toBeDefined();
-	});
-});
-```
-
----
-### test/unit-test/kms-stack.unit.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { KmsStack } from '../../lib/stacks/kms-stack';
-describe('KmsStack', () => {
-	it('should create a KMS key', () => {
-		const app = new App();
-		const kms = new KmsStack(app, 'KmsStack');
-		expect(kms.dataKey).toBeDefined();
-	});
-});
-```
-
----
-### test/unit-test/monitoring-stack.unit.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { MonitoringStack } from '../../lib/stacks/monitoring-stack';
-import { ApplicationLoadBalancer } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import { AutoScalingGroup } from 'aws-cdk-lib/aws-autoscaling';
-import { DatabaseInstance } from 'aws-cdk-lib/aws-rds';
-describe('MonitoringStack', () => {
-	it('should throw error if required props are missing', () => {
-		const app = new App();
-		expect(() => new MonitoringStack(app, 'BadMonitoring', {} as any)).toThrow();
-	});
-	it('should create resources with valid props', () => {
-		const app = new App();
-		const alb = { addListener: jest.fn() } as unknown as ApplicationLoadBalancer;
-		const asg = { scaleOnCpuUtilization: jest.fn() } as unknown as AutoScalingGroup;
-		const dbInstance = { instanceIdentifier: 'db' } as unknown as DatabaseInstance;
-		const monitoring = new MonitoringStack(app, 'MonitoringStack', {
-			alb,
-			asg,
-			dbInstance,
-		});
-		expect(monitoring).toBeDefined();
-	});
-});
-```
-
----
-### test/unit-test/network-stack.unit.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { NetworkStack } from '../../lib/stacks/network-stack';
-describe('NetworkStack', () => {
-	it('should create a VPC', () => {
-		const app = new App();
-		const network = new NetworkStack(app, 'NetworkStack');
-		expect(network.vpc).toBeDefined();
-	});
-});
-```
-
----
-### test/unit-test/storage-stack.unit.test.ts
-```typescript
-import { App } from 'aws-cdk-lib';
-import { StorageStack } from '../../lib/stacks/storage-stack';
-import { KmsStack } from '../../lib/stacks/kms-stack';
-describe('StorageStack', () => {
-	it('should throw error if required props are missing', () => {
-		const app = new App();
-		expect(() => new StorageStack(app, 'BadStorage', {} as any)).toThrow();
-	});
-	it('should create buckets with valid props', () => {
-		const app = new App();
-		const kms = new KmsStack(app, 'KmsStack');
-		const storage = new StorageStack(app, 'StorageStack', { dataKey: kms.dataKey });
-		expect(storage.appBucket).toBeDefined();
-		expect(storage.logsBucket).toBeDefined();
-		expect(storage.appBucket.encryptionKey).toBe(kms.dataKey);
-	});
-});
-```

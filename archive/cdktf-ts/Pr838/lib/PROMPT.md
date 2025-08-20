@@ -10,7 +10,7 @@ Create a CDK for Terraform (CDKTF) project using TypeScript or Python, implement
 - **VPC**: Includes both public and private subnets.
 - **Resource Naming**: All resources must be prefixed with prod-sec.
 - **Terraform Backend**: Use an existing remote backend for state management (e.g., S3 + DynamoDB) with encryption enabled.
-- **Project Name**: IaC – AWS Nova Model Breaking
+- **Project Name**: IaC AWS Nova Model Breaking
 
 ## Security and Compliance Requirements
 

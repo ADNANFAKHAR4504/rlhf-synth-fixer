@@ -2,7 +2,7 @@ You are AWS Architect tasked with implementing a **CI/CD pipeline on AWS using t
 
 ---
 
-### 📌 **Core Requirements:**
+### **Core Requirements:**
 
 1. **Infrastructure-as-Code:**
    - Use **AWS CDK (Python)** to define all infrastructure for the pipeline, environments, and supporting resources.
@@ -28,14 +28,14 @@ You are AWS Architect tasked with implementing a **CI/CD pipeline on AWS using t
 
 ---
 
-### 🔐 **Security & Configuration:**
+### **Security & Configuration:**
 
 - Define appropriate **IAM roles and policies** for CodePipeline, CodeBuild, and deployment targets.
 - The solution must be **fully automated**, **auditable**, and **repeatable** via `cdk deploy`.
 
 ---
 
-### 🌍 **Deployment Region & Tagging:**
+### **Deployment Region & Tagging:**
 
 - All infrastructure must be deployed in the **`us-west-2` region**.
 - Tag all AWS resources with:
@@ -43,7 +43,7 @@ You are AWS Architect tasked with implementing a **CI/CD pipeline on AWS using t
 
 ---
 
-### ✅ **Expected Output:**
+### **Expected Output:**
 
 Provide a complete **AWS CDK Python project** that:
 

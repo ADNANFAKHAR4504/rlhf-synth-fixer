@@ -1,6 +1,6 @@
 # CDK Secure Infrastructure Configuration (Python)
 
-## 🎯 Objective
+## Objective
 
 Set up a secure infrastructure configuration using **CDK with Python**, ensuring:
 
@@ -8,7 +8,7 @@ Set up a secure infrastructure configuration using **CDK with Python**, ensuring
 - **Encryption in transit** using valid **SSL/TLS certificates** for all endpoints
 - **IAM roles** that strictly follow the **principle of least privilege**
 
-## ✅ Requirements
+## Requirements
 
 1. **S3 Encryption at Rest**  
    - Use **AWS KMS** to encrypt all S3 buckets.
@@ -35,13 +35,13 @@ Set up a secure infrastructure configuration using **CDK with Python**, ensuring
    - Code should be clean, readable, and follow best practices
    - CDK configuration files (`__main__.py`, `CDK.yaml`, etc.) should be properly structured
 
-## 📦 Deliverables
+## Deliverables
 
 - Python source code implementing the CDK infrastructure
 - Unit test suite for validating encryption and IAM logic
 - Branch name: `secure-setup`
 
-## 🧪 Test Expectations
+## Test Expectations
 
 Ensure the following are programmatically tested:
 - S3 bucket default encryption is enabled with a KMS key

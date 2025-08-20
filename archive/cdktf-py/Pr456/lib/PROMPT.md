@@ -4,13 +4,13 @@
 
 ---
 
-### 📌 **Infrastructure Requirements**
+### **Infrastructure Requirements**
 
 #### 1. **Lambda Function**
 
 - Use a **Python runtime** (e.g., `python3.12`).
 - Define a **dummy handler** that logs the incoming request payload to **Amazon CloudWatch Logs**.
-- Do **not hardcode environment variables**—the function must **dynamically retrieve configuration data** (e.g., `API_KEY`) from **AWS Secrets Manager** during execution.
+- Do **not hardcode environment variables**the function must **dynamically retrieve configuration data** (e.g., `API_KEY`) from **AWS Secrets Manager** during execution.
 
 #### 2. **Secrets Manager**
 
@@ -27,8 +27,8 @@
 #### 4. **IAM Roles and Policies**
 
 - Define a **Lambda execution role** with:
-  - Permissions to log to CloudWatch.
-  - Permissions to retrieve the secret from Secrets Manager.
+- Permissions to log to CloudWatch.
+- Permissions to retrieve the secret from Secrets Manager.
 
 - Define an **IAM role or policy** to control who can access the API Gateway endpoint using signed IAM credentials.
 - Use **least privilege** access principles throughout.
@@ -39,7 +39,7 @@
 
 ---
 
-### ✅ **Expected Output**
+### **Expected Output**
 
 - Provide **complete, production-ready cdktf-py ** for provisioning all resources.
 - Include **comments and logical resource naming** for readability and maintainability.
