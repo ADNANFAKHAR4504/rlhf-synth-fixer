@@ -541,6 +541,9 @@ resource "aws_autoscaling_group" "main" {
   health_check_type         = "EC2"
   health_check_grace_period = 600 # Increased to 10 minutes for more reliable startup
 
+  # Do not block Terraform apply waiting for healthy capacity; continue and let ASG stabilize.
+  wait_for_capacity_timeout = "0"
+
   min_size         = 1
   max_size         = 2
   desired_capacity = 1
