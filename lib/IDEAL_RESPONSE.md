@@ -58,7 +58,7 @@ Metadata:
 Parameters:
   CompanyPrefix:
     Type: String
-    Default: 'prod'
+    Default: 'corp-sec'
     Description: 'Resource name prefix'
 
   UseExistingVPC:
@@ -516,6 +516,16 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
+          - Sid: DenyNonHttpsRequests
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ProdTrailBucket.Arn
+              - !Sub '${ProdTrailBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
             Principal:
@@ -893,4 +903,5 @@ Outputs:
   S3BucketCleanupFunctionName:
     Description: 'S3 Bucket Cleanup Lambda Function Name'
     Value: !Ref S3BucketCleanupFunction
+
 ```
