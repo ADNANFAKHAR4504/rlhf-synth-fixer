@@ -797,8 +797,11 @@ resource "aws_iam_role_policy" "replication_policy" {
 
 # S3 Cross-Region Replication Configuration
 resource "aws_s3_bucket_replication_configuration" "replication" {
-  provider   = aws.primary
-  depends_on = [aws_s3_bucket_versioning.primary]
+  provider = aws.primary
+  depends_on = [
+    aws_s3_bucket_versioning.primary,
+    aws_s3_bucket_versioning.secondary
+  ]
 
   role   = aws_iam_role.replication_role.arn
   bucket = aws_s3_bucket.primary.id

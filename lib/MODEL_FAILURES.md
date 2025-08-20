@@ -78,8 +78,14 @@
 
 ## Model Performance Analysis
 
+### 9. Critical: S3 Replication Configuration Dependency Issue
+- **Issue**: S3 replication configuration failed with "Destination bucket must have versioning enabled" error
+- **Root Cause**: Replication configuration was only depending on primary bucket versioning, not secondary
+- **Impact**: Cross-region replication setup blocked during terraform apply
+- **Fix**: Added `aws_s3_bucket_versioning.secondary` to depends_on for replication configuration
+
 **Severity Distribution:**
-- Critical Issues: 3 (would prevent deployment)
+- Critical Issues: 4 (would prevent deployment)
 - Major Issues: 3 (would break functionality)  
 - Moderate Issues: 2 (would impact usability)
 
