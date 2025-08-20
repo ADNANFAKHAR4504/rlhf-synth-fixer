@@ -1,4 +1,4 @@
-You are an advanced AWS engineer  and have to build secure, auditable, high-availability infrastructure via pure CloudFormation YAML, .
+You are an advanced AWS engineer and have to build secure, auditable, high-availability infrastructure via pure CloudFormation YAML, .
 
 Your task is to deliver a single or nested CloudFormation YAML stack that strictly implements the following 14 requirements for a production-grade, multi-tier app in us-east-1:
 
@@ -30,7 +30,7 @@ Enable and store VPC Flow Logs in an S3 bucket with versioning.
 
 Enable and configure AWS GuardDuty for active threat detection.
 
-✅ Constraints:
+Constraints:
 
 The solution must be in YAML, and pass aws cloudformation validate-template without error.
 
@@ -38,9 +38,9 @@ No external scripts, no TODOs, no placeholders. Use Parameters, Mappings, Output
 
 Each requirement must be fully implemented. No summaries or simplified resource definitions.
 
-Do not use macros or custom resources — only standard AWS resources.
+Do not use macros or custom resources only standard AWS resources.
 
 
 
- Note: The prompt mentions using the us-east-1 region, but I used us-east-2 for testing due to quota issues in us-east-1.
+Note: The prompt mentions using the us-east-1 region, but I used us-east-2 for testing due to quota issues in us-east-1.
 

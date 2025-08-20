@@ -6,20 +6,20 @@ You are an infrastructure engineer tasked with setting up a **production-ready A
 
 1. **Region:** All resources must be deployed in **`eu-west-1`**.
 2. **Naming Convention:** Use `prod-` as a prefix for all resource names, followed by the respective service name.
-3. **IAM Roles:** Follow the **least privilege principle** — only assign permissions necessary for each resource to function.
+3. **IAM Roles:** Follow the **least privilege principle** only assign permissions necessary for each resource to function.
 4. **Networking:**
-   - Create a **VPC** with at least **two public** and **two private subnets**.
-   - Subnets must span **multiple Availability Zones**.
+- Create a **VPC** with at least **two public** and **two private subnets**.
+- Subnets must span **multiple Availability Zones**.
 5. **S3 Buckets:** 
-   - Include **access logging** for all buckets.
+- Include **access logging** for all buckets.
 6. **RDS:**
-   - Use an RDS database instance of type `db.t3.micro`.
+- Use an RDS database instance of type `db.t3.micro`.
 7. **Application Load Balancer (ALB):**
-   - Configure it with an **SSL certificate from ACM**.
+- Configure it with an **SSL certificate from ACM**.
 8. **CloudWatch Monitoring:**
-   - Set up an alarm to detect **5xx errors** from the application.
+- Set up an alarm to detect **5xx errors** from the application.
 9. **Auto Scaling:**
-   - Enable **automatic scaling** for EC2 instances based on **CPU utilization** metrics.
+- Enable **automatic scaling** for EC2 instances based on **CPU utilization** metrics.
 
 ### Constraints:
 

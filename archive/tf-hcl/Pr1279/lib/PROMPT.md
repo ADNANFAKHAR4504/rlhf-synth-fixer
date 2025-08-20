@@ -1,5 +1,5 @@
 # Prompt
-# Terraform Infrastructure Task – High Availability & Disaster Recovery
+# Terraform Infrastructure Task High Availability & Disaster Recovery
 
 Objective:
 Design and implement a resilient infrastructure using Terraform (HCL)
@@ -29,7 +29,7 @@ Configure the alarm to trigger an SNS topic notification when thresholds are bre
 
 Resource Tagging:
 
-Tag all AWS resources according to your organization’s standard tagging policy.
+Tag all AWS resources according to your organizations standard tagging policy.
 
 Resource names must follow the corp- naming convention.
 

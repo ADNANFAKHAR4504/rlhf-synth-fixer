@@ -1,6 +1,6 @@
 You are an expert in building scalable, secure, and modular serverless infrastructure using Pulumi with Python. Please write the complete implementation of the TapStack class inside the tap_stack.py file. This stack is the main infrastructure component for a Pulumi-based project called "IaC - AWS Nova Model Breaking".
 
-Do not generate the tap.py entry point or pulumi.yaml — they already exist and load this TapStack as the main component.
+Do not generate the tap.py entry point or pulumi.yaml they already exist and load this TapStack as the main component.
 
 Infrastructure Objective
 Design and deploy a real-time, serverless architecture using AWS services for data processing and API routing. The system must be multi-region, secure, modular, and support automated testing, environment separation, and rollback strategies. All infrastructure must be defined inside the TapStack class in a single tap_stack.py file.

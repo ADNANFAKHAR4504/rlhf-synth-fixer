@@ -1,7 +1,7 @@
-📝 Objective
+Objective
 
 Design and implement a cost-effective serverless architecture using AWS Lambda and DynamoDB to handle scalable workloads efficiently and reliably.
-✅ Requirements
+Requirements
 
     AWS Lambda Function
 
