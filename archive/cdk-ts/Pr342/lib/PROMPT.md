@@ -42,9 +42,9 @@ Before writing code, provide a summary inside a `<thinking>` block. Describe the
 - **Event Source Mapping**: The Lambda function must be configured with an event source from the DynamoDB table's stream. Set a batch size for processing records
 - **Runtime**: Use the latest supported Node.js runtime
 - **Handler Code**: The Lambda function must:
-  - Process DynamoDB stream records
-  - Enrich data with metadata (processing timestamp, record ID, processing status)
-  - Store the enriched data as JSON files in the S3 bucket with a structured key pattern (e.g., `processed-data/year/month/day/record-id.json`)
+- Process DynamoDB stream records
+- Enrich data with metadata (processing timestamp, record ID, processing status)
+- Store the enriched data as JSON files in the S3 bucket with a structured key pattern (e.g., `processed-data/year/month/day/record-id.json`)
 
 #### S3 Bucket Configuration
 
@@ -58,9 +58,9 @@ Before writing code, provide a summary inside a `<thinking>` block. Describe the
 
 - **Audit DynamoDB Table**: Create a separate DynamoDB table for storing audit logs of failed processing events
 - **Table Schema**:
-  - Partition key: `auditId` (string)
-  - Sort key: `timestamp` (string)
-  - Global Secondary Index: `failure-type-index` for querying by failure type and timestamp
+- Partition key: `auditId` (string)
+- Sort key: `timestamp` (string)
+- Global Secondary Index: `failure-type-index` for querying by failure type and timestamp
 - **Audit Lambda Function**: Create a separate Lambda function to process DLQ messages and store audit records
 - **SQS Integration**: Configure the audit Lambda to be triggered by messages from the Dead-Letter Queue
 - **Audit Data Structure**: Store comprehensive failure information including request ID, function ARN, failure type, stream information, and complete DLQ message context
@@ -117,16 +117,16 @@ Before writing code, provide a summary inside a `<thinking>` block. Describe the
 
 The solution should demonstrate:
 
-1. ✅ Proper CDK TypeScript implementation with all necessary imports
-2. ✅ DynamoDB table with streams enabled and proper configuration
-3. ✅ Lambda function with event source mapping from DynamoDB stream
-4. ✅ Private S3 bucket with encryption, versioning, and public access blocked
-5. ✅ Lambda function processes data, enriches with metadata, and stores to S3
-6. ✅ IAM roles with least privilege permissions (separate roles for main and audit Lambdas)
-7. ✅ SQS Dead-Letter Queue with proper Lambda integration
-8. ✅ Audit DynamoDB table with proper schema and GSI for querying
-9. ✅ Audit Lambda function with SQS event source from DLQ
-10. ✅ Comprehensive audit records with failure context and DLQ message details
-11. ✅ CloudWatch Alarm for Lambda error monitoring
-12. ✅ Consistent naming convention across all resources
-13. ✅ Proper resource outputs for integration testing (DynamoDB, Lambda, S3, Audit resources)
+1. Proper CDK TypeScript implementation with all necessary imports
+2. DynamoDB table with streams enabled and proper configuration
+3. Lambda function with event source mapping from DynamoDB stream
+4. Private S3 bucket with encryption, versioning, and public access blocked
+5. Lambda function processes data, enriches with metadata, and stores to S3
+6. IAM roles with least privilege permissions (separate roles for main and audit Lambdas)
+7. SQS Dead-Letter Queue with proper Lambda integration
+8. Audit DynamoDB table with proper schema and GSI for querying
+9. Audit Lambda function with SQS event source from DLQ
+10. Comprehensive audit records with failure context and DLQ message details
+11. CloudWatch Alarm for Lambda error monitoring
+12. Consistent naming convention across all resources
+13. Proper resource outputs for integration testing (DynamoDB, Lambda, S3, Audit resources)

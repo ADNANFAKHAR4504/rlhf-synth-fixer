@@ -1,4 +1,4 @@
-```
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure and scalable web application infrastructure with VPC, ALB, Auto Scaling Group, and EC2 instances'
 
@@ -747,6 +747,4 @@ Outputs:
     Description: Security group ID for Application Load Balancer
     Value: !Ref ALBSecurityGroup
     Export:
-      Name: !Sub ${EnvironmentSuffix}-ALB-SECURITY-GROUP
-
-```
+      Name: !Sub ${EnvironmentSuffix}-ALB-SECURITY-GROUP```

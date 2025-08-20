@@ -1,10 +1,10 @@
 You are an expert DevOps engineer. Implement the following AWS infrastructure and CI/CD pipeline logic using Pulumi (Python). Only edit these three files:
 
-lib/tap_stack.py — infrastructure code for Pulumi stack
+lib/tap_stack.py infrastructure code for Pulumi stack
 
-tests/unit/test_tap_stack.py — Pulumi mocks-based unit tests
+tests/unit/test_tap_stack.py Pulumi mocks-based unit tests
 
-tests/integration/test_tap_stack.py — Pulumi mocks-based integration tests
+tests/integration/test_tap_stack.py Pulumi mocks-based integration tests
 
 Do not touch other files (including README or GitHub workflow files). If the pipeline configuration is needed, include it as a comment in lib/tap_stack.py.
 
@@ -113,7 +113,7 @@ Default replication region: us-west-2 (can be overridden)
 
 Commented GitHub Actions pipeline snippet showing:
 
-Lint → Test → Preview → Deploy → Notify → Rollback
+Lint Test Preview Deploy Notify Rollback
 
 Minimal imports; do not modify dependency files
 

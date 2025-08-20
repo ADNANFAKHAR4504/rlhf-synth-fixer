@@ -18,8 +18,8 @@ Create a **modular CDKTF configuration** to provision a **highly available**, **
 ### Networking
 
 - Create a **VPC** with:
-  - Public and private subnets
-  - At least **3 Availability Zones** in `us-east-1`
+- Public and private subnets
+- At least **3 Availability Zones** in `us-east-1`
 - Setup **NAT Gateway** for private subnet internet access (egress only)
 
 ---
@@ -34,8 +34,8 @@ Create a **modular CDKTF configuration** to provision a **highly available**, **
 ### Storage (S3)
 
 - Provision **S3 Buckets** with:
-  - **Server-side encryption** using **AWS KMS**
-  - **Lifecycle policies** (e.g., transition to Glacier, expire old versions)
+- **Server-side encryption** using **AWS KMS**
+- **Lifecycle policies** (e.g., transition to Glacier, expire old versions)
 
 ---
 
@@ -50,8 +50,8 @@ Create a **modular CDKTF configuration** to provision a **highly available**, **
 ### IAM & Access Control
 
 - Define **IAM Roles** and **Policies** with:
-  - **Least privilege** principle
-  - Access to **S3**, **CloudWatch logging**, etc.
+- **Least privilege** principle
+- Access to **S3**, **CloudWatch logging**, etc.
 - **No hardcoded credentials**
 
 ---
@@ -59,8 +59,8 @@ Create a **modular CDKTF configuration** to provision a **highly available**, **
 ### Monitoring & Logging (CloudWatch)
 
 - Integrate **CloudWatch** for:
-  - Real-time monitoring
-  - EC2 logs and metrics (standard + custom)
+- Real-time monitoring
+- EC2 logs and metrics (standard + custom)
 - Collect logs from EC2 instances in ASG
 
 ---
@@ -69,12 +69,12 @@ Create a **modular CDKTF configuration** to provision a **highly available**, **
 
 Use **separate CDKTF Constructs** for each major component:
 
-- `NetworkingConstruct` – VPC, Subnets, NAT Gateway
-- `SecurityConstruct` – Security Groups
-- `IamConstruct` – IAM Roles & Policies
-- `StorageConstruct` – S3, KMS, Lifecycle Rules
-- `ComputeConstruct` – EC2, ASG, Launch Templates
-- `MonitoringConstruct` – CloudWatch Alarms, Dashboards, Logs
+- `NetworkingConstruct` VPC, Subnets, NAT Gateway
+- `SecurityConstruct` Security Groups
+- `IamConstruct` IAM Roles & Policies
+- `StorageConstruct` S3, KMS, Lifecycle Rules
+- `ComputeConstruct` EC2, ASG, Launch Templates
+- `MonitoringConstruct` CloudWatch Alarms, Dashboards, Logs
 
 ---
 
@@ -84,9 +84,9 @@ Apply **consistent tagging** across all resources:
 
 ```ts
 {
-  Project: "MyProject",
-  Environment: "Dev",
-  Owner: "Akshat Jain"
+Project: "MyProject",
+Environment: "Dev",
+Owner: "Akshat Jain"
 }
 ```
 
@@ -96,11 +96,11 @@ Apply **consistent tagging** across all resources:
 
 - A main TypeScript file (e.g., `main.ts` or `stack.ts`) with the primary stack class
 - Separate TypeScript files for each construct: - networking-construct.ts
-  - security-construct.ts
-  - iam-construct.ts
-  - storage-construct.ts
-  - compute-construct.ts
-  - monitoring-construct.ts
+- security-construct.ts
+- iam-construct.ts
+- storage-construct.ts
+- compute-construct.ts
+- monitoring-construct.ts
 - Code should be clean, readable, and follow CDKTF TypeScript best practices.
 
 Each construct should expose reusable components and accept configuration via interfaces.

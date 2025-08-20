@@ -9,7 +9,7 @@
 > 5. Structure the CDK application into **logical constructs and stacks** for **scalability** and **clean code organization**.
 > 6. Enable **CloudWatch logging** and metrics for monitoring the Lambda executions.
 >
-> ✅ Deliverable: A complete AWS CDK  written in Python in single file that defines and deploys this infrastructure. The solution should:
+> Deliverable: A complete AWS CDK  written in Python in single file that defines and deploys this infrastructure. The solution should:
 >
 > * Avoid hardcoding secrets or sensitive data
 > * Be extendable to support additional microservices

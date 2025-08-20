@@ -30,7 +30,7 @@ HTTP (port 80) traffic must be redirected to HTTPS (port 443).
 TLS security policy must enforce TLS 1.2 or higher.
 Output Format
 The output must be a valid CloudFormation YAML template (or multiple templates if needed).
-Use YAML fenced code blocks for the template(s) — example:
+Use YAML fenced code blocks for the template(s) example:
 Example CloudFormation Resource
 Resources:
 MyExample:
