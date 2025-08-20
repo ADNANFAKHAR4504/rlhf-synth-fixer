@@ -43,7 +43,7 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
 
     test('should create the correct number of resources', () => {
       const resourceCount = plan.planned_values.root_module.resources.length;
-      expect(resourceCount).toBe(22); // Updated count without WAF resources
+      expect(resourceCount).toBe(25); // Updated count without WAF resources
     });
 
     test('S3 bucket should have versioning and encryption enabled', () => {

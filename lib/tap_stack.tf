@@ -497,82 +497,7 @@ resource "aws_cognito_user_pool_client" "tap_user_pool_client" {
   ]
 }
 
-# WAF Web ACL for CloudFront and API Gateway Protection
-resource "aws_wafv2_web_acl" "api_gateway_waf" {
-  name  = "tap-api-protection-waf"
-  scope = "CLOUDFRONT"  # Changed to CLOUDFRONT for global protection
 
-  default_action {
-    allow {}
-  }
-
-  rule {
-    name     = "RateLimitRule"
-    priority = 1
-
-    statement {
-      rate_based_statement {
-        limit          = 2000
-        aggregate_key_type = "IP"
-      }
-    }
-
-    action {
-      block {}
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                 = "RateLimitRule"
-      sampled_requests_enabled    = true
-    }
-  }
-
-  rule {
-    name     = "AWSManagedRulesCommonRuleSet"
-    priority = 2
-
-    override_action {
-      none {}
-    }
-
-    statement {
-      managed_rule_group_statement {
-        name        = "AWSManagedRulesCommonRuleSet"
-        vendor_name = "AWS"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                 = "AWSManagedRulesCommonRuleSet"
-      sampled_requests_enabled    = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                 = "tapAPIProtectionWAF"
-    sampled_requests_enabled    = true
-  }
-
-  tags = {
-    Name        = "TAP API Protection WAF"
-    Environment = var.environment
-    Owner       = var.owner
-  }
-}
-
-# Associate WAF with CloudFront Distributions (Production-recommended approach)
-resource "aws_wafv2_web_acl_association" "frontend_cloudfront_waf_association" {
-  resource_arn = aws_cloudfront_distribution.frontend_distribution.arn
-  web_acl_arn  = aws_wafv2_web_acl.api_gateway_waf.arn
-}
-
-resource "aws_wafv2_web_acl_association" "api_cloudfront_waf_association" {
-  resource_arn = aws_cloudfront_distribution.api_distribution.arn
-  web_acl_arn  = aws_wafv2_web_acl.api_gateway_waf.arn
-}
 
 output "dynamodb_table_name" {
   description = "The name of the DynamoDB table."
@@ -590,7 +515,7 @@ output "cloudfront_distribution_domain" {
 }
 
 output "protected_api_endpoint" {
-  description = "The WAF-protected API endpoint through CloudFront."
+  description = "The API endpoint through CloudFront."
   value       = "https://${aws_cloudfront_distribution.api_distribution.domain_name}"
 }
 
