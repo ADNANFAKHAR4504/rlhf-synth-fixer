@@ -415,11 +415,11 @@ resource "aws_iam_role_policy" "user_least_privilege" {
 
 # Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2" {
-  name = "${local.name_prefix}-ec2-profile-new"
+  name = "${local.name_prefix}-ec2-profile-tap"
   role = aws_iam_role.rds_access.name
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-ec2-profile-new"
+    Name = "${local.name_prefix}-ec2-profile-tap"
     Type = "InstanceProfile"
   })
 }
