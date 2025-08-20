@@ -1,6 +1,6 @@
 {
   "platform": "cdk",
-  "language": "js", 
+  "language": "js",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "trainr140",
@@ -9,7 +9,7 @@
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Security Configuration", 
+    "Security Configuration",
     "Access Control",
     "Database Management",
     "Monitoring Setup",
@@ -18,7 +18,7 @@
   "training_quality": 9,
   "aws_services": [
     "AWS KMS",
-    "AWS IAM", 
+    "AWS IAM",
     "AWS Config",
     "AWS CloudTrail",
     "AWS CloudWatch",
@@ -26,5 +26,11 @@
     "Amazon S3",
     "Amazon VPC",
     "AWS CloudWatch Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
