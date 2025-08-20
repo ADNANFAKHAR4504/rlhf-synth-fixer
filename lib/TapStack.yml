@@ -401,11 +401,11 @@ Resources:
     DependsOn: NatGateway
     Properties:
       VPCZoneIdentifier: [ !Ref PrivateSubnetA, !Ref PrivateSubnetB ]
-      MinSize: "2"
+      MinSize: "1"
       MaxSize: "4"
-      DesiredCapacity: "2"
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 600
+      DesiredCapacity: "1"
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 0
       TargetGroupARNs: [ !Ref TargetGroup ]
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
