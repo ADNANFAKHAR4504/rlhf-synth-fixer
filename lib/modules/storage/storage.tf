@@ -5,12 +5,8 @@ resource "aws_kms_key" "main" {
 }
 
 
-resource "random_pet" "suffix" {
-  length = 2
-}
-
 resource "aws_s3_bucket" "logs" {
-  bucket_prefix = "${lower(replace(var.project_name, "-", ""))}-logs-"
+  bucket = "${lower(substr(var.project_name, 0, 20))}-logs-bucket"
 
   tags = {
     Name        = "${var.project_name}-logs-bucket"

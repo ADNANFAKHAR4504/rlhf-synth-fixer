@@ -8,11 +8,6 @@ variable "flow_log_role_arn" {
   type        = string
 }
 
-variable "flow_log_destination_arn" {
-  description = "The ARN of the CloudWatch Log Group for VPC Flow Logs."
-  type        = string
-}
-
 variable "vpc_id" {
   description = "The ID of the VPC."
   type        = string

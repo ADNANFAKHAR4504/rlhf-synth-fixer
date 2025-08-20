@@ -30,11 +30,9 @@ module "storage" {
   source = "./modules/storage"
 
 
-  project_name            = var.project_name
-  environment             = var.environment
-  vpc_id                  = module.networking.vpc_id
-  private_route_table_ids = module.networking.private_route_table_ids
-  aws_region              = var.aws_region
+  project_name = var.project_name
+  environment  = var.environment
+  aws_region   = var.aws_region
 }
 
 module "database" {
@@ -66,10 +64,9 @@ module "compute" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  project_name             = var.project_name
-  flow_log_role_arn        = module.iam.flow_log_role_arn
-  flow_log_destination_arn = module.monitoring.flow_log_destination_arn
-  vpc_id                   = module.networking.vpc_id
+  project_name      = var.project_name
+  flow_log_role_arn = module.iam.flow_log_role_arn
+  vpc_id            = module.networking.vpc_id
 }
 
 output "vpc_id" {

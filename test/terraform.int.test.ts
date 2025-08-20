@@ -101,18 +101,20 @@ describe('LIVE: Core Infrastructure Verification', () => {
   });
 
   describe('Storage', () => {
-    const bucketName = outputs.s3_logs_bucket_name.value;
-
     test('S3 logs bucket is versioned', async () => {
       const versioning = await s3.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
+        new GetBucketVersioningCommand({
+          Bucket: outputs.s3_logs_bucket_name.value,
+        })
       );
       expect(versioning.Status).toBe('Enabled');
     });
 
     test('S3 logs bucket has public access blocked', async () => {
       const pab = await s3.send(
-        new GetPublicAccessBlockCommand({ Bucket: bucketName })
+        new GetPublicAccessBlockCommand({
+          Bucket: outputs.s3_logs_bucket_name.value,
+        })
       );
       expect(pab.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
       expect(pab.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
@@ -124,7 +126,7 @@ describe('LIVE: Core Infrastructure Verification', () => {
 
     test('S3 logs bucket ACLs are private', async () => {
       const acl = await s3.send(
-        new GetBucketAclCommand({ Bucket: bucketName })
+        new GetBucketAclCommand({ Bucket: outputs.s3_logs_bucket_name.value })
       );
       const hasPublic = (acl.Grants || []).some(
         g =>
