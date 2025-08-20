@@ -13,7 +13,7 @@ describe('TapStack', () => {
     app = new cdk.App({
       context: {
         domainName: 'testturing.com',
-        hostedZoneId: 'Z1234567890ABC',
+        // No hostedZoneId provided - will create new hosted zone
       },
     });
     // Force the stack to be in us-east-2 (primary region) for testing
@@ -237,6 +237,12 @@ describe('TapStack', () => {
   });
 
   describe('Route 53 Configuration', () => {
+    test('should create hosted zone when domain is provided', () => {
+      template.hasResourceProperties('AWS::Route53::HostedZone', {
+        Name: 'testturing.com.',
+      });
+    });
+
     test('should create health check when domain is provided', () => {
       template.hasResourceProperties('AWS::Route53::HealthCheck', {
         HealthCheckConfig: {
@@ -277,8 +283,10 @@ describe('TapStack', () => {
         Timeout: 300,
         Environment: {
           Variables: {
-            HOSTED_ZONE_ID: 'Z1234567890ABC',
             DOMAIN_NAME: 'testturing.com',
+            HOSTED_ZONE_ID: {
+              Ref: Match.stringLikeRegexp('HostedZone.*'),
+            },
             SECONDARY_ALB_DNS: `TapSta-Appli-us-west-2-${environmentSuffix}.us-west-2.elb.amazonaws.com`,
             SECONDARY_REGION: 'us-west-2',
           },

@@ -23,9 +23,9 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Configuration
-    const domainName = (this.node.tryGetContext('domainName') as string) || 'testturing.com';
+    const domainName = (this.node.tryGetContext('domainName') as string) || '';
     const hostedZoneId =
-      (this.node.tryGetContext('hostedZoneId') as string) || 'Z1234567890ABC';
+      (this.node.tryGetContext('hostedZoneId') as string) || '';
     const primaryRegion = 'us-east-2';
     const secondaryRegion = 'us-west-2';
     const currentRegion = this.region;
@@ -333,17 +333,25 @@ EOF
 
     // Note: Lambda-based failover logic will be added after hosted zone creation
 
-    // Route 53 Hosted Zone (use context when provided, otherwise skip DNS)
+    // Route 53 Hosted Zone (create new or use existing)
     let hostedZone: route53.IHostedZone | undefined;
-    if (domainName && hostedZoneId) {
-      hostedZone = route53.HostedZone.fromHostedZoneAttributes(
-        this,
-        'HostedZone',
-        {
-          hostedZoneId,
+    if (domainName) {
+      if (hostedZoneId) {
+        // Use existing hosted zone
+        hostedZone = route53.HostedZone.fromHostedZoneAttributes(
+          this,
+          'HostedZone',
+          {
+            hostedZoneId,
+            zoneName: domainName,
+          }
+        );
+      } else {
+        // Create new hosted zone
+        hostedZone = new route53.HostedZone(this, 'HostedZone', {
           zoneName: domainName,
-        }
-      );
+        });
+      }
     }
 
     // Health Check (only in primary region and when DNS is configured)
