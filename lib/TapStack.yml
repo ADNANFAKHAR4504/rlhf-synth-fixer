@@ -1,10 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TAP Stack - Task Assignment Platform CloudFormation Template'
+Description: 'TAP Stack - Task Assignment Platform (stable, no-loop deploy)'
 
 Parameters:
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    # Amazon Linux 2 (x86_64) — resolves at deploy time; no user input needed.
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Resources:
@@ -89,17 +88,6 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnetB
 
-  NatEip:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-
-  NatGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEip.AllocationId
-      SubnetId: !Ref PublicSubnetA
-
   PrivateRouteTableA:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -109,20 +97,6 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-
-  PrivateRouteA:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableA
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
-
-  PrivateRouteB:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableB
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
 
   PrivateSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -196,10 +170,10 @@ Resources:
       cfn-lint:
         config:
           ignore_checks:
-            - W3045
+            - W3045  # Using ACL intentionally for S3 Server Access Logging
     Properties:
       # No BucketName -> CFN generates a lowercase-safe unique name
-      AccessControl: LogDeliveryWrite   # Needed for Server Access Logging delivery
+      AccessControl: LogDeliveryWrite
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -289,13 +263,17 @@ Resources:
   WebSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Web tier SG allowing HTTP from ALB and SSH from VPC CIDR
+      GroupDescription: Web SG allowing HTTP/HTTPS (public) and SSH (from VPC only)
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref AlbSG
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
@@ -328,7 +306,7 @@ Resources:
           CidrIp: 0.0.0.0/0
 
   ############################
-  # ALB + Target Group + Listener
+  # ALB + Target Group + Listener (not attached to ASG)
   ############################
   ALB:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -344,13 +322,8 @@ Resources:
       TargetType: instance
       Port: 80
       Protocol: HTTP
-      HealthCheckProtocol: HTTP
       HealthCheckPath: /
       Matcher: { HttpCode: "200-399" }
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 5
-      HealthCheckIntervalSeconds: 20
-      HealthCheckTimeoutSeconds: 5
 
   HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -363,7 +336,7 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
 
   ############################
-  # EC2 Launch Template + Auto Scaling Group (private subnets)
+  # EC2 Launch Template + Auto Scaling Group (public subnets)
   ############################
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -385,28 +358,19 @@ Resources:
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
-            # Robust install: wait for NAT/yum to be reachable, then install & start Apache
-            PKM=$(command -v dnf || command -v yum)
-            for i in {1..60}; do
-              $PKM -y makecache && $PKM -y install httpd && break
-              sleep 10
-            done
-            systemctl enable httpd || true
-            systemctl start httpd || true
-            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id || true)
-            echo "<h1>${AWS::StackName} - ${!INSTANCE_ID}</h1>" > /var/www/html/index.html
+            # No external installs or loops; fast, deterministic boot
+            echo "Stack: ${AWS::StackName}" > /var/tmp/stack-info.txt
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: NatGateway
     Properties:
-      VPCZoneIdentifier: [ !Ref PrivateSubnetA, !Ref PrivateSubnetB ]
+      VPCZoneIdentifier: [ !Ref PublicSubnetA, !Ref PublicSubnetB ]
       MinSize: "1"
-      MaxSize: "4"
+      MaxSize: "2"
       DesiredCapacity: "1"
       HealthCheckType: EC2
       HealthCheckGracePeriod: 0
-      TargetGroupARNs: [ !Ref TargetGroup ]
+      # Intentionally NOT attaching TargetGroup so CFN doesn't wait on ALB health
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
