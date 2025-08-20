@@ -421,6 +421,10 @@ Resources:
                 Condition:
                   StringEquals:
                     'ec2:vpc': !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${CorpVPC}'
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt CorpLambdaDLQ.Arn
       Tags:
         - Key: Name
           Value: !Sub 'corp-lambda-execution-role-${EnvironmentSuffix}'

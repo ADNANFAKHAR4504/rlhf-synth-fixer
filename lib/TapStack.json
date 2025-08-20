@@ -820,6 +820,18 @@
                                             }
                                         }
                                     }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "CorpLambdaDLQ",
+                                            "Arn"
+                                        ]
+                                    }
                                 }
                             ]
                         }
