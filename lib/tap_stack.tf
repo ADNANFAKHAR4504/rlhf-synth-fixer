@@ -2,7 +2,7 @@
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
 }
 
 # Data sources for availability zones
@@ -592,8 +592,8 @@ resource "aws_cloudwatch_log_group" "route53_dns" {
 resource "aws_route53_query_log" "main" {
   depends_on = [aws_cloudwatch_log_group.route53_dns]
 
-  destination_arn = aws_cloudwatch_log_group.route53_dns.arn
-  zone_id         = aws_route53_zone.private.zone_id
+  cloudwatch_log_group_arn = aws_cloudwatch_log_group.route53_dns.arn
+  zone_id                  = aws_route53_zone.private.zone_id
 }
 
 # DNS Records
