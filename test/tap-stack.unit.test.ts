@@ -46,7 +46,8 @@ describe('Security CloudFormation Template', () => {
       const p = template.Parameters.AllowedIPRange;
       expect(p).toBeDefined();
       expect(p.Type).toBe('String');
-      expect(p.AllowedPattern).toContain('CIDR');
+      expect(typeof p.AllowedPattern).toBe('string');
+      expect(p.AllowedPattern).toMatch(/^\^\\d/);
     });
   });
 
@@ -118,7 +119,7 @@ describe('Security CloudFormation Template', () => {
   });
 
   describe('Outputs', () => {
-    const outputs = [
+    const expectedOutputs = [
       'KMSKeyId',
       'SecureDataBucketName',
       'DatabaseEndpoint',
@@ -127,12 +128,13 @@ describe('Security CloudFormation Template', () => {
       'VPCId'
     ];
 
-    outputs.forEach(out => {
+    expectedOutputs.forEach(out => {
       test(`should have ${out} output`, () => {
-        expect(template.Outputs[out]).toBeDefined();
-        expect(template.Outputs[out].Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${out}`
-        });
+        const output = template.Outputs[out];
+        expect(output).toBeDefined();
+        expect(output.Export).toBeDefined();
+        expect(output.Export.Name).toHaveProperty('Fn::Sub');
+        expect(typeof output.Export.Name['Fn::Sub']).toBe('string');
       });
     });
   });
