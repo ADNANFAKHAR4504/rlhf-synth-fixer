@@ -1,3 +1,8 @@
+# AWS CloudFormation Template - Secure Multi-AZ Production Environment
+
+Below is a comprehensive CloudFormation template that meets all your requirements for a secure, highly available, and scalable AWS application environment.
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, highly available, and scalable AWS application environment with multi-AZ deployment'
 
@@ -654,3 +659,40 @@ Outputs:
     Value: !GetAtt BastionHostInstance.PublicIp
     Export:
       Name: !Sub '${EnvironmentName}-Bastion-Public-IP'
+
+```
+
+## Key Features and Security Implementations
+
+### 🔒 **Security Best Practices**
+- **Encryption**: All data encrypted at rest using AWS KMS and in transit via HTTPS
+- **Least Privilege IAM**: Minimal permissions for all roles and policies
+- **Security Groups**: Restrictive rules with specific source/destination references
+- **Private Subnets**: Application instances isolated from direct internet access
+- **Bastion Host**: Secure SSH access through a hardened jump server
+
+### 🏗️ **High Availability Architecture**
+- **Multi-AZ Deployment**: Resources distributed across multiple availability zones
+- **Auto Scaling**: Automatic scaling based on demand (2-6 instances)
+- **NAT Gateways**: Redundant NAT gateways in each AZ for outbound connectivity
+- **Load Balancer Ready**: Security groups configured for ALB integration
+
+### 📊 **Comprehensive Logging**
+- **CloudTrail**: API call logging with file validation enabled
+- **VPC Flow Logs**: Network traffic monitoring
+- **CloudWatch Logs**: Application and system log aggregation
+- **S3 Access Logs**: Bucket access tracking
+
+### 🛡️ **Compliance Features**
+- **S3 Versioning**: Enabled on all buckets for data protection
+- **Public Access Block**: Prevents accidental public exposure
+- **IMDSv2**: Required for EC2 metadata service access
+- **EBS Encryption**: All volumes encrypted with customer-managed keys
+
+### 🔧 **Operational Excellence**
+- **Parameterized**: Reusable across environments
+- **Dynamic References**: Uses SSM parameters for AMI IDs
+- **Proper Tagging**: Consistent resource naming and tagging
+- **CloudWatch Agent**: Automated log collection setup
+
+This template creates a production-ready, secure, and highly available AWS environment that follows all AWS best practices and meets your specified requirements.
