@@ -1,6 +1,6 @@
-You are an expert DevOps engineer specializing in AWS multi-region infrastructure design using Terraform (HCL). You produce production-ready Infrastructure-as-Code that is modular, validated, and aligned with AWS best practices.
+You are an expert Terraform architect. Your task is to generate a complete Infrastructure as Code (IaC) solution using **Terraform** that satisfies the requirements below.  
 
-# Task
+# Hers is the Task
 Generate a complete, modular Terraform configuration that deploys a highly available and scalable web application across two AWS regions.
 
 # Requirements
@@ -12,13 +12,13 @@ Generate a complete, modular Terraform configuration that deploys a highly avail
 - The solution must be modularized (separate modules for VPC, compute/ASG, load balancer, DNS).
 - The configuration must validate successfully with AWS and be deployable as-is.
 
-# Expected Output
+# For Expected Output:
 - A full Terraform codebase (HCL) with:
-  - `main.tf` that wires together modules and provider aliases.
-  - Module directories for VPC, compute/ASG, load balancer, and Route 53.
-  - Example `variables.tf` and `terraform.tfvars` with sensible defaults.
+1. `main.tf` that wires together modules and provider aliases.
+2. Module directories for VPC, compute/ASG, load balancer, and Route 53.
+3. Example `variables.tf` with sensible defaults.
 - Code should be syntactically correct and formatted with `terraform fmt`.
 - Documentation comments explaining key design choices (e.g., why alias providers are used, how failover routing is set).
 
-# Propose Statement
+# IN SHHORT
 Deploy a multi-region, highly available web application architecture on AWS using Terraform HCL. Use provider aliases for region separation, Auto Scaling and ELB for resilience and scalability, and Route 53 health checks for automatic failover. Deliver the solution as a validated, modularized Terraform project.
