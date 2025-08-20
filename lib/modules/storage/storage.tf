@@ -29,16 +29,6 @@ resource "aws_s3_bucket" "logs" {
   }
 }
 
-resource "aws_s3_bucket" "access_logs" {
-  bucket = "${lower(substr(var.project_name, 0, 20))}-access-logs-bucket-${random_pet.suffix.id}"
-
-  tags = {
-    Name        = "${var.project_name}-access-logs-bucket"
-    Project     = var.project_name
-    Environment = var.environment
-  }
-}
-
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
@@ -66,72 +56,9 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_policy" "logs" {
-  bucket = aws_s3_bucket.logs.id
-  policy = data.aws_iam_policy_document.s3_logs.json
-}
-
-resource "aws_s3_bucket_policy" "access_logs" {
-  bucket = aws_s3_bucket.access_logs.id
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid      = "AllowAccountPrincipalsBucketAcl"
-        Effect   = "Allow"
-        Principal = { AWS = "*" }
-        Action   = ["s3:GetBucketAcl", "s3:PutBucketAcl", "s3:GetEncryptionConfiguration"]
-        Resource = aws_s3_bucket.access_logs.arn
-        Condition = {
-          StringEquals = {
-            "aws:PrincipalAccount" = data.aws_caller_identity.current.account_id
-          }
-        }
-      }
-    ]
-  })
-}
-
 resource "aws_s3_bucket_policy" "data" {
   bucket = aws_s3_bucket.data.id
   policy = data.aws_iam_policy_document.s3_data.json
-}
-
-data "aws_iam_policy_document" "s3_logs" {
-  statement {
-    sid = "AllowVPCAccess"
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-    actions   = ["s3:*"]
-    resources = [aws_s3_bucket.logs.arn, "${aws_s3_bucket.logs.arn}/*"]
-    condition {
-      test     = "StringEquals"
-      variable = "aws:sourceVpce"
-      values   = [aws_vpc_endpoint.s3.id]
-    }
-  }
-
-  statement {
-    sid = "AllowRootAdmin"
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
-    }
-    actions   = ["s3:*"]
-    resources = [aws_s3_bucket.logs.arn, "${aws_s3_bucket.logs.arn}/*"]
-  }
-
-  statement {
-    sid = "AllowAllS3ActionsForCiUser"
-    principals {
-      type        = "AWS"
-      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/iac-rlhf-github"]
-    }
-    actions   = ["s3:*"]
-    resources = [aws_s3_bucket.logs.arn, "${aws_s3_bucket.logs.arn}/*"]
-  }
 }
 
 data "aws_iam_policy_document" "s3_data" {
