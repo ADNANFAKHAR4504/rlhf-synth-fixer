@@ -407,7 +407,7 @@ Resources:
                   - kms:Decrypt
                   - kms:GenerateDataKey
                   - kms:DescribeKey
-                Resource: !Ref KMSKey
+                Resource: !GetAtt KMSKey.Arn
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -449,7 +449,15 @@ Resources:
       Engine: mysql
       EngineVersion: "8.0.42"
       MasterUsername: admin
-      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecret}:SecretString:password}}"
+      MasterUserPassword:
+        !Join [
+          "",
+          [
+            "{{resolve:secretsmanager:",
+            !Ref DBSecret,
+            ":SecretString:password}}",
+          ],
+        ]
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true

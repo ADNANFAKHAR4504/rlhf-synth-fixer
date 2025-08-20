@@ -222,7 +222,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have expected number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(11);
+      expect(outputCount).toBe(13);
     });
 
     test('should have substantial number of resources for HA architecture', () => {
