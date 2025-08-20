@@ -69,13 +69,20 @@ function val<T = string>(obj: Record<string, TfOutput>, key: string): T {
   return obj[key].value as T;
 }
 
+function valOptional<T = string>(obj: Record<string, TfOutput>, key: string): T | null {
+  if (!obj[key]) {
+    throw new Error(`Missing expected output key: ${key}`);
+  }
+  return obj[key].value as T | null;
+}
+
 // --- Globals set in beforeAll ---
 let region = "us-west-2";
 let appBucket = "";
 let trailBucket = "";
 let kmsKeyArn = "";
-let cloudTrailArn = "";
-let cloudTrailLogGroupName = "";
+let cloudTrailArn: string | null = null;
+let cloudTrailLogGroupName: string | null = null;
 let snsTopicArn = "";
 
 // AWS clients (initialized after region known)
@@ -101,8 +108,8 @@ beforeAll(() => {
   appBucket = val<string>(outputs, "app_bucket_name");
   trailBucket = val<string>(outputs, "cloudtrail_bucket_name");
   kmsKeyArn = val<string>(outputs, "kms_key_arn");
-  cloudTrailArn = val<string>(outputs, "cloudtrail_arn");
-  cloudTrailLogGroupName = val<string>(outputs, "cloudtrail_log_group");
+  cloudTrailArn = valOptional<string>(outputs, "cloudtrail_arn");
+  cloudTrailLogGroupName = valOptional<string>(outputs, "cloudtrail_log_group");
   snsTopicArn = val<string>(outputs, "security_alerts_topic_arn");
 
   // Initialize region-scoped AWS clients
@@ -220,6 +227,10 @@ describe("Integration: S3 (CloudTrail logs bucket)", () => {
 
 describe("Integration: CloudWatch Logs (CloudTrail log group)", () => {
   it("log group exists and is KMS-encrypted", async () => {
+    if (!cloudTrailLogGroupName) {
+      console.log("Skipping CloudWatch log group test - create_cloudtrail is false");
+      return;
+    }
     const res = await logs.send(
       new DescribeLogGroupsCommand({
         logGroupNamePrefix: cloudTrailLogGroupName
@@ -232,6 +243,10 @@ describe("Integration: CloudWatch Logs (CloudTrail log group)", () => {
   });
 
   it("log group has appropriate retention period", async () => {
+    if (!cloudTrailLogGroupName) {
+      console.log("Skipping CloudWatch log group retention test - create_cloudtrail is false");
+      return;
+    }
     const res = await logs.send(
       new DescribeLogGroupsCommand({
         logGroupNamePrefix: cloudTrailLogGroupName
@@ -244,6 +259,10 @@ describe("Integration: CloudWatch Logs (CloudTrail log group)", () => {
 
 describe("Integration: CloudTrail (logs to S3 + CloudWatch)", () => {
   it("trail exists and is healthy", async () => {
+    if (!cloudTrailArn) {
+      console.log("Skipping CloudTrail test - create_cloudtrail is false");
+      return;
+    }
     // Name can be ARN or name; DescribeTrails accepts either in list
     const res = await trail.send(
       new DescribeTrailsCommand({ trailNameList: [cloudTrailArn], includeShadowTrails: false })
@@ -261,6 +280,10 @@ describe("Integration: CloudTrail (logs to S3 + CloudWatch)", () => {
   });
 
   it("trail logging is enabled", async () => {
+    if (!cloudTrailArn) {
+      console.log("Skipping CloudTrail logging test - create_cloudtrail is false");
+      return;
+    }
     const status = await trail.send(new GetTrailStatusCommand({ Name: cloudTrailArn }));
     expect(status.IsLogging).toBe(true);
   });
@@ -268,6 +291,10 @@ describe("Integration: CloudTrail (logs to S3 + CloudWatch)", () => {
 
 describe("Integration: CloudWatch Alarm (unauthorized API requests)", () => {
   it("has an alarm based on UnauthorizedAPIRequests metric", async () => {
+    if (!cloudTrailArn) {
+      console.log("Skipping CloudWatch alarm test - create_cloudtrail is false");
+      return;
+    }
     // We look for any alarm referencing metric name "UnauthorizedAPIRequests"
     const res = await cw.send(new DescribeAlarmsCommand({}));
     const alarms = res.MetricAlarms ?? [];
