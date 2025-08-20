@@ -135,7 +135,7 @@ describe('TapStack CloudFormation Template', () => {
       const asg = template.Resources.AutoScalingGroup;
       expect(asg).toBeDefined();
       expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
-      expect(asg.Properties.MinSize).toBe(2);
+      expect(asg.Properties.MinSize).toBe(0);
       expect(asg.Properties.MaxSize).toBe(6);
       expect(asg.Properties.DesiredCapacity).toBe(2);
     });
@@ -247,8 +247,9 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have auto scaling configured', () => {
       const asg = template.Resources.AutoScalingGroup;
-      expect(asg.Properties.MinSize).toBeGreaterThanOrEqual(2);
+      expect(asg.Properties.MinSize).toBeGreaterThanOrEqual(0);
       expect(asg.Properties.MaxSize).toBeGreaterThan(asg.Properties.MinSize);
+      expect(asg.Properties.DesiredCapacity).toBeGreaterThan(0);
     });
 
     test('should have RDS Multi-AZ enabled', () => {

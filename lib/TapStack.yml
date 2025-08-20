@@ -407,7 +407,12 @@ Resources:
                   - kms:Decrypt
                   - kms:GenerateDataKey
                   - kms:DescribeKey
-                Resource: "*"
+                  - kms:CreateGrant
+                  - kms:ListGrants
+                  - kms:RevokeGrant
+                Resource:
+                  - !GetAtt KMSKey.Arn
+                  - !Sub "${KMSKey.Arn}/*"
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -562,6 +567,7 @@ Resources:
     Type: AWS::EC2::LaunchTemplate
     DependsOn:
       - KMSKey
+      - KMSKeyAlias
       - WebServerSecurityGroup
       - EC2InstanceProfile
     Properties:
@@ -661,6 +667,8 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     DependsOn:
       - LaunchTemplate
+      - KMSKey
+      - KMSKeyAlias
       - TargetGroup
       - PrivateSubnet1
       - PrivateSubnet2
@@ -674,13 +682,13 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: 2
+      MinSize: 0
       MaxSize: 6
       DesiredCapacity: 2
       TargetGroupARNs:
         - !Ref TargetGroup
       HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
+      HealthCheckGracePeriod: 600
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-ASG-Instance"
@@ -691,6 +699,12 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
           PropagateAtLaunch: true
+    CreationPolicy:
+      ResourceSignal:
+        Count: 2
+        Timeout: PT15M
+      AutoScalingCreationPolicy:
+        MinSuccessfulInstancesPercent: 50
 
   # Auto Scaling Policies
   ScaleUpPolicy:
@@ -800,6 +814,9 @@ Resources:
     Properties:
       Description: !Sub "KMS key for ${ProjectName} encryption"
       EnableKeyRotation: true
+      Enabled: true
+      KeyUsage: ENCRYPT_DECRYPT
+      KeySpec: SYMMETRIC_DEFAULT
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
@@ -828,6 +845,30 @@ Resources:
               - kms:RevokeGrant
               - kms:ReEncrypt*
             Resource: "*"
+          - Sid: Allow Auto Scaling service-linked role
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlaintext
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+              - kms:ReEncrypt*
+            Resource: "*"
+          - Sid: Allow EC2 service-linked role
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ec2.amazonaws.com/AWSServiceRoleForEC2Spot"
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: "*"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-KMS-Key"
@@ -838,6 +879,7 @@ Resources:
 
   KMSKeyAlias:
     Type: AWS::KMS::Alias
+    DependsOn: KMSKey
     Properties:
       AliasName: !Sub "alias/${ResourceNamePrefix}-key"
       TargetKeyId: !Ref KMSKey

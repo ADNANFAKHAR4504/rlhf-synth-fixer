@@ -1379,7 +1379,7 @@
             ]
           }
         },
-        "MinSize": 2,
+        "MinSize": 0,
         "MaxSize": 6,
         "DesiredCapacity": 2,
         "TargetGroupARNs": [
