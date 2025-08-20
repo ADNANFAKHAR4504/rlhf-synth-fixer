@@ -18,10 +18,15 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_secretsmanager_secret" "db_credentials" {
   name                     = "rds-credentials-${var.environment_suffix}"
   description              = "RDS database credentials"
-  recovery_window_in_days  = 0
+  recovery_window_in_days  = 7  # Allow 7 days for recovery instead of immediate deletion
   force_overwrite_replica_secret = true
 
   tags = var.common_tags
+
+  # Lifecycle rule to prevent accidental deletion in production
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "db_credentials" {
