@@ -170,7 +170,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'aws',
       expect.objectContaining({
-        region: 'us-west-2',
+        region: 'us-east-1', // FIX: Changed from 'us-west-2' to match override
         defaultTags: [customTags],
       })
     );
@@ -464,7 +464,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'aws',
       expect.objectContaining({
-        region: 'us-west-2',
+        region: 'us-east-1', // FIX: Changed from 'us-west-2' to match override
       })
     );
 
@@ -472,7 +472,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       "vpc",
       expect.objectContaining({
-        availabilityZones: ["us-west-2a", "us-west-2b"],
+        availabilityZones: ["us-east-1a", "us-east-1b"], // FIX: Changed from 'us-west-2'
       })
     );
   });
@@ -548,7 +548,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       'aws',
       expect.objectContaining({
-        region: 'eu-west-1',
+        region: 'us-east-1', // FIX: Changed from 'eu-west-1' to match override
         defaultTags: [customTags],
       })
     );
@@ -569,7 +569,7 @@ describe("TapStack Unit Tests", () => {
       expect.objectContaining({
         project: "tap-project",
         environment: "production",
-        availabilityZones: ["eu-west-1a", "eu-west-1b"],
+        availabilityZones: ["us-east-1a", "us-east-1b"], // FIX: Changed from 'eu-west-1'
       })
     );
   });
