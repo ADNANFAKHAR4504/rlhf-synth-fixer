@@ -35,5 +35,11 @@
     "AWS::SNS::Topic",
     "AWS::CloudWatch::Alarm",
     "AWS::Lambda::Permission"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
 }
