@@ -75,7 +75,7 @@ export class TapStack extends cdk.Stack {
         name: 'id',
         type: dynamodb.AttributeType.STRING,
       },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // On-demand capacity as required
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // On-demand capacity for cost optimization
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey: kmsKey,
       pointInTimeRecoverySpecification: {
@@ -92,7 +92,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(itemsTable).add('Purpose', 'data-storage');
     cdk.Tags.of(itemsTable).add('Compliance', 'encryption-at-rest');
 
-    // Separate S3 bucket for access logs (to avoid circular logging)
+            // Separate S3 bucket for access logs
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
       bucketName: `tap-logs-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
@@ -114,7 +114,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // S3 Bucket for file uploads with encryption
+            // S3 Bucket for file uploads
     const filesBucket = new s3.Bucket(this, 'FilesBucket', {
       bucketName: `tap-files-bucket-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
       encryption: s3.BucketEncryption.KMS,
@@ -137,7 +137,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(filesBucket).add('Compliance', 'encryption-at-rest');
 
     // CloudWatch Log Groups for Lambda functions
-    // Using AWS default encryption to avoid circular dependency with KMS key
+            // Using AWS default encryption
     const createItemLogGroup = new logs.LogGroup(this, 'CreateItemLogGroup', {
       logGroupName: '/aws/lambda/tap-create-item',
       retention: logs.RetentionDays.ONE_WEEK,
@@ -156,7 +156,7 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // IAM Role for Lambda functions with least privilege
+            // IAM Role for Lambda functions
     const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
@@ -184,7 +184,7 @@ export class TapStack extends cdk.Stack {
                 },
               },
             }),
-            // Item-level access for multi-tenant scenarios
+            // Item-level access control
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
@@ -251,7 +251,7 @@ export class TapStack extends cdk.Stack {
                 },
               },
             }),
-            // Separate policy for encryption operations (only when needed)
+            // Encryption operations policy
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ['kms:Encrypt'],
@@ -304,7 +304,7 @@ export class TapStack extends cdk.Stack {
       handler: 'create_item.handler',
       code: lambda.Code.fromAsset('lambda'),
       role: lambdaExecutionRole,
-      timeout: cdk.Duration.seconds(30), // Max 30 seconds as per constraints
+      timeout: cdk.Duration.seconds(30), // 30 second timeout for optimal performance
       environment: {
         TABLE_NAME: itemsTable.tableName,
         KMS_KEY_ID: kmsKey.keyId,
@@ -320,7 +320,7 @@ export class TapStack extends cdk.Stack {
       handler: 'get_item.handler',
       code: lambda.Code.fromAsset('lambda'),
       role: lambdaExecutionRole,
-      timeout: cdk.Duration.seconds(30), // Max 30 seconds as per constraints
+      timeout: cdk.Duration.seconds(30), // 30 second timeout for optimal performance
       environment: {
         TABLE_NAME: itemsTable.tableName,
         KMS_KEY_ID: kmsKey.keyId,
@@ -336,7 +336,7 @@ export class TapStack extends cdk.Stack {
       handler: 'upload_file.handler',
       code: lambda.Code.fromAsset('lambda'),
       role: lambdaExecutionRole,
-      timeout: cdk.Duration.seconds(30), // Max 30 seconds as per constraints
+      timeout: cdk.Duration.seconds(30), // 30 second timeout for optimal performance
       environment: {
         BUCKET_NAME: filesBucket.bucketName,
         KMS_KEY_ID: kmsKey.keyId,
@@ -345,22 +345,22 @@ export class TapStack extends cdk.Stack {
       logGroup: uploadFileLogGroup,
     });
 
-    // API Gateway with restricted CORS for production security
+            // API Gateway with CORS configuration
     const api = new apigateway.RestApi(this, 'TapApi', {
       restApiName: 'TAP Serverless API',
       description: 'Secure serverless web application API',
       apiKeySourceType: apigateway.ApiKeySourceType.HEADER,
       defaultCorsPreflightOptions: {
         allowOrigins: [
-          // Restrict to specific domains in production
+          // Production domains
           'https://yourdomain.com',
           'https://www.yourdomain.com',
-          // Allow localhost for development only
+          // Development domains
           ...(props?.environmentSuffix === 'dev'
             ? ['http://localhost:3000', 'http://localhost:8080']
             : []),
         ],
-        allowMethods: ['GET', 'POST', 'OPTIONS'], // Restrict to only needed methods
+        allowMethods: ['GET', 'POST', 'OPTIONS'], // Required HTTP methods
         allowHeaders: [
           'Content-Type',
           'X-Amz-Date',
@@ -368,7 +368,7 @@ export class TapStack extends cdk.Stack {
           'X-Api-Key',
           'X-Amz-Security-Token',
         ],
-        maxAge: cdk.Duration.seconds(3600), // Cache preflight for 1 hour
+        maxAge: cdk.Duration.seconds(3600), // Cache preflight response
       },
       cloudWatchRole: true,
       deployOptions: {
@@ -379,7 +379,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Create proper request validator for the actual API
+            // Request validator for API
     const actualRequestValidator = new apigateway.RequestValidator(
       this,
       'ActualRequestValidator',
@@ -390,7 +390,7 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Request models for validation
+            // Request validation models
     const createItemModel = api.addModel('CreateItemModel', {
       contentType: 'application/json',
       modelName: 'CreateItemModel',
@@ -425,7 +425,7 @@ export class TapStack extends cdk.Stack {
         requestModels: {
           'application/json': createItemModel,
         },
-        apiKeyRequired: props?.environmentSuffix !== 'dev', // Require API key in production
+        apiKeyRequired: props?.environmentSuffix !== 'dev', // API key required in production
       }
     );
 
@@ -435,13 +435,13 @@ export class TapStack extends cdk.Stack {
       new apigateway.LambdaIntegration(getItemsFunction),
       {
         requestValidator: actualRequestValidator,
-        // Add query parameter validation for GET requests
+        // Query parameter validation
         requestParameters: {
-          'method.request.querystring.limit': false, // Optional
-          'method.request.querystring.offset': false, // Optional
-          'method.request.querystring.environment': false, // Optional filter
+          'method.request.querystring.limit': false, // Optional limit
+          'method.request.querystring.offset': false, // Optional offset
+          'method.request.querystring.environment': false, // Optional environment filter
         },
-        apiKeyRequired: props?.environmentSuffix !== 'dev', // Require API key in production
+        apiKeyRequired: props?.environmentSuffix !== 'dev', // API key required in production
       }
     );
 
@@ -454,7 +454,7 @@ export class TapStack extends cdk.Stack {
       new apigateway.LambdaIntegration(uploadFileFunction),
       {
         requestValidator: actualRequestValidator,
-        apiKeyRequired: props?.environmentSuffix !== 'dev', // Require API key in production
+        apiKeyRequired: props?.environmentSuffix !== 'dev', // API key required in production
       }
     );
 
