@@ -112,7 +112,6 @@ Resources:
 
   PrivateRouteA:
     Type: AWS::EC2::Route
-    
     Properties:
       RouteTableId: !Ref PrivateRouteTableA
       DestinationCidrBlock: 0.0.0.0/0
@@ -120,7 +119,6 @@ Resources:
 
   PrivateRouteB:
     Type: AWS::EC2::Route
-    
     Properties:
       RouteTableId: !Ref PrivateRouteTableB
       DestinationCidrBlock: 0.0.0.0/0
@@ -346,8 +344,13 @@ Resources:
       TargetType: instance
       Port: 80
       Protocol: HTTP
+      HealthCheckProtocol: HTTP
       HealthCheckPath: /
       Matcher: { HttpCode: "200-399" }
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      HealthCheckIntervalSeconds: 20
+      HealthCheckTimeoutSeconds: 5
 
   HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -390,7 +393,7 @@ Resources:
             done
             systemctl enable httpd || true
             systemctl start httpd || true
-            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id || true)
             echo "<h1>${AWS::StackName} - ${!INSTANCE_ID}</h1>" > /var/www/html/index.html
 
   AutoScalingGroup:
