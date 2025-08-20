@@ -115,7 +115,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'ServerlessApp-${EnvironmentSuffix}-FileProcessor'
-      Runtime: python3.8
+      Runtime: python3.13
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       ReservedConcurrentExecutions: 10

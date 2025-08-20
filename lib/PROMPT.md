@@ -25,7 +25,7 @@ S3 Bucket
 
 Lambda Function
 
-- Provision a Lambda function with the Python 3.8 runtime.
+- Provision a Lambda function with the Python runtime.
 - Cost Control: Set the ReservedConcurrentExecutions property to 10.
 - IAM Role: Create a dedicated IAM role for the Lambda with a least-privilege policy granting permissions for s3:GetObject on the S3 bucket and writing logs to CloudWatch.
 
