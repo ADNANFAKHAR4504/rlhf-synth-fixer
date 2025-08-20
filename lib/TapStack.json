@@ -1209,6 +1209,31 @@
                     "Fn::Sub": "${EnvironmentName}-Bastion-Public-IP"
                 }
             }
+        },
+        "EC2InstanceRoleName": {
+            "Description": "EC2 instance role name",
+            "Value": {
+                "Ref": "EC2InstanceRole"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-Instance-Role-Name"
+                }
+            }
+        },
+        "CloudTrailArn": {
+            "Description": "CloudTrail trail ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationCloudTrail",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-CloudTrail-Arn"
+                }
+            }
         }
     }
 }

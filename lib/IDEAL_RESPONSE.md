@@ -675,6 +675,18 @@ Outputs:
     Value: !GetAtt BastionHostInstance.PublicIp
     Export:
       Name: !Sub '${EnvironmentName}-Bastion-Public-IP'
+
+  EC2InstanceRoleName:
+    Description: 'EC2 instance role name'
+    Value: !Ref EC2InstanceRole
+    Export:
+      Name: !Sub '${EnvironmentName}-EC2-Instance-Role-Name'
+
+  CloudTrailArn:
+    Description: 'CloudTrail trail ARN'
+    Value: !GetAtt ApplicationCloudTrail.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-CloudTrail-Arn'
 ```
 
 ## Key Features and Security Implementations
