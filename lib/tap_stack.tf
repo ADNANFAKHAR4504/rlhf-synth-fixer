@@ -656,7 +656,7 @@ resource "aws_route53_zone" "main" {
 resource "aws_route53_key_signing_key" "main" {
   hosted_zone_id             = aws_route53_zone.main.id
   key_management_service_arn = aws_kms_key.dnssec.arn
-  name                       = "${var.project_name}-ksk-${local.name_suffix}"
+  name                       = "${var.project_name}-ksk"
 }
 
 resource "aws_route53_hosted_zone_dnssec" "main" {
@@ -751,7 +751,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = aws_s3_bucket.cloudtrail.arn
         Condition = {
           StringEquals = {
-            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail"
+            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
           }
         }
       },
@@ -766,7 +766,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"  = "bucket-owner-full-control"
-            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail"
+            "aws:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-trail-${local.name_suffix}"
           }
         }
       }
