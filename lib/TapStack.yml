@@ -593,12 +593,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-Log-Group'
 
-  CloudTrailRoleArn:
-    Description: 'CloudTrail Role ARN'
-    Value: !GetAtt CloudTrailLogRole.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-CloudTrail-Role-ARN'
-
   CloudTrailName:
     Description: 'CloudTrail name'
     Value: !Ref SecurityCloudTrail
