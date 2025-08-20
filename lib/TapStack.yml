@@ -365,9 +365,9 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       VPCZoneIdentifier: [ !Ref PublicSubnetA, !Ref PublicSubnetB ]
-      MinSize: "1"
+      MinSize: "0"
       MaxSize: "2"
-      DesiredCapacity: "1"
+      DesiredCapacity: "0"
       HealthCheckType: EC2
       HealthCheckGracePeriod: 0
       # Intentionally NOT attaching TargetGroup so CFN doesn't wait on ALB health
