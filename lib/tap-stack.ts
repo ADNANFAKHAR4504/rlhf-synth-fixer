@@ -7,7 +7,6 @@ import {
   TerraformStack,
   TerraformOutput,
   TerraformVariable,
-  TerraformIterator,
 } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -134,21 +133,14 @@ export class TapStack extends TerraformStack {
       description: 'VPC ID for the secure infrastructure',
     });
 
-    // FIXED: Create iterators for subnet outputs
-    const publicSubnetIterator = TerraformIterator.fromList(
-      secureInfra.publicSubnets.map(subnet => subnet.id)
-    );
-    const privateSubnetIterator = TerraformIterator.fromList(
-      secureInfra.privateSubnets.map(subnet => subnet.id)
-    );
-    // FIXED: Use iterator values for subnet ID outputs
+    // Replace the iterator-based outputs with direct array mapping
     new TerraformOutput(this, 'public_subnet_ids', {
-      value: publicSubnetIterator.value,
+      value: secureInfra.publicSubnets.map(subnet => subnet.id),
       description: 'Public subnet IDs',
     });
 
     new TerraformOutput(this, 'private_subnet_ids', {
-      value: privateSubnetIterator.value,
+      value: secureInfra.privateSubnets.map(subnet => subnet.id),
       description:
         'Private subnet IDs where application resources are deployed',
     });

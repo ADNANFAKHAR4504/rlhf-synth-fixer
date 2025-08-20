@@ -1,5 +1,4 @@
 import { Construct } from 'constructs';
-import { TerraformIterator } from 'cdktf';
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
@@ -306,10 +305,8 @@ export class SecureModules extends Construct {
       targetPrefix: 'access-logs/',
     });
 
-    // FIXED: Create TerraformIterator for private subnet IDs
-    const privateSubnetIterator = TerraformIterator.fromList(
-      this.privateSubnets.map(subnet => subnet.id)
-    );
+    // FIXED: Use direct array of subnet IDs instead of TerraformIterator
+    const privateSubnetIds = this.privateSubnets.map(subnet => subnet.id);
 
     // Lambda Function - FIXED: Use direct array of subnet IDs
     this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
@@ -323,8 +320,8 @@ export class SecureModules extends Construct {
       memorySize: 128,
       kmsKeyArn: this.kmsKey.arn,
       vpcConfig: {
-        // FIXED: Use the iterator's value directly as an array
-        subnetIds: privateSubnetIterator.value,
+        // FIXED: Use the direct array of subnet IDs
+        subnetIds: privateSubnetIds,
         securityGroupIds: [lambdaSecurityGroup.id],
       },
       dependsOn: [this.lambdaLogGroup],
@@ -339,11 +336,11 @@ export class SecureModules extends Construct {
       },
     });
 
-    // DB Subnet Group for RDS - FIXED: Use the iterator's value directly
+    // DB Subnet Group for RDS - FIXED: Use direct array of subnet IDs
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       name: `${config.appName.toLowerCase()}-db-subnet-group`,
-      // FIXED: Use the iterator's value directly as an array
-      subnetIds: privateSubnetIterator.value,
+      // FIXED: Use the direct array of subnet IDs
+      subnetIds: privateSubnetIds,
       description: 'Subnet group for RDS instance',
       tags: {
         Name: `${config.appName}-DB-SubnetGroup`,
