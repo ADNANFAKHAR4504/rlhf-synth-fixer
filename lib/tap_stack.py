@@ -16,11 +16,20 @@ import pulumi_aws as aws
 from pulumi import ResourceOptions
 
 # Import CloudTrail configuration
-from .cloudtrail_config import (get_cloudtrail_name,
-                                get_existing_cloudtrail_name_pattern,
-                                should_skip_cloudtrail_creation,
-                                should_skip_iam_creation,
-                                should_use_existing_cloudtrail)
+try:
+    # Try relative import first (when used as a package)
+    from .cloudtrail_config import (get_cloudtrail_name,
+                                    get_existing_cloudtrail_name_pattern,
+                                    should_skip_cloudtrail_creation,
+                                    should_skip_iam_creation,
+                                    should_use_existing_cloudtrail)
+except ImportError:
+    # Fall back to absolute import (when run directly or in tests)
+    from cloudtrail_config import (get_cloudtrail_name,
+                                   get_existing_cloudtrail_name_pattern,
+                                   should_skip_cloudtrail_creation,
+                                   should_skip_iam_creation,
+                                   should_use_existing_cloudtrail)
 
 
 class TapStackArgs:
