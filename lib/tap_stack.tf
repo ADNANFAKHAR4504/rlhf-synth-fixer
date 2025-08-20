@@ -297,12 +297,8 @@ resource "aws_apigatewayv2_api" "tap_api" {
 # API Gateway Stage
 resource "aws_apigatewayv2_stage" "tap_api_stage" {
   api_id      = aws_apigatewayv2_api.tap_api.id
-  name        = "$default"
+  name        = "default"
   auto_deploy = true
-
-  lifecycle {
-    ignore_changes = [name]
-  }
 
   tags = {
     Name        = "TAP API Gateway Stage"
