@@ -459,18 +459,16 @@ resource "aws_autoscaling_group" "secure_prod_asg" {
     id      = aws_launch_template.secure_prod_lt.id
     version = "$Latest"
   }
-  tags = [
-    {
-      key                 = "Name"
-      value               = "secure-prod-asg-${local.env_suffix}"
-      propagate_at_launch = true
-    },
-    {
-      key                 = "Environment"
-      value               = local.env_suffix
-      propagate_at_launch = true
-    }
-  ]
+  tag {
+    key                 = "Name"
+    value               = "secure-prod-asg-${local.env_suffix}"
+    propagate_at_launch = true
+  }
+  tag {
+    key                 = "Environment"
+    value               = local.env_suffix
+    propagate_at_launch = true
+  }
 }
 
 # Example public subnets (add these if not present)
