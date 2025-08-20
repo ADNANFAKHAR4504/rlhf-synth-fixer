@@ -96,6 +96,8 @@ export class TapStack extends TerraformStack {
       project,
       environment: environmentSuffix,
       kmsKey: kmsModule.key,
+      accountId: current.accountId, // Add this
+      region: awsRegion, // Add this
     });
 
     // Create IAM role and instance profile for EC2

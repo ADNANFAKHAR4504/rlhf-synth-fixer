@@ -154,6 +154,8 @@ export interface CloudTrailModuleProps {
   project: string;
   environment: string;
   kmsKey: KmsKey;
+  accountId: string; // Add account ID
+  region: string; // Add region
 }
 
 export class CloudTrailModule extends Construct {
@@ -201,8 +203,9 @@ export class CloudTrailModule extends Construct {
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
     });
-    // **ADD THIS: Create bucket policy for CloudTrail**
-    new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
+
+    // **FIXED: Create proper bucket policy for CloudTrail**
+    const bucketPolicy = new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
       bucket: this.logsBucket.id,
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -217,7 +220,7 @@ export class CloudTrailModule extends Construct {
             Resource: this.logsBucket.arn,
             Condition: {
               StringEquals: {
-                'AWS:SourceArn': `arn:aws:cloudtrail:*:*:trail/${props.project}-${props.environment}-trail`,
+                'AWS:SourceArn': `arn:aws:cloudtrail:${props.region}:${props.accountId}:trail/${props.project}-${props.environment}-trail`,
               },
             },
           },
@@ -232,7 +235,21 @@ export class CloudTrailModule extends Construct {
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
-                'AWS:SourceArn': `arn:aws:cloudtrail:*:*:trail/${props.project}-${props.environment}-trail`,
+                'AWS:SourceArn': `arn:aws:cloudtrail:${props.region}:${props.accountId}:trail/${props.project}-${props.environment}-trail`,
+              },
+            },
+          },
+          {
+            Sid: 'AWSCloudTrailGetBucketLocation',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketLocation',
+            Resource: this.logsBucket.arn,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': `arn:aws:cloudtrail:${props.region}:${props.accountId}:trail/${props.project}-${props.environment}-trail`,
               },
             },
           },
@@ -240,7 +257,7 @@ export class CloudTrailModule extends Construct {
       }),
     });
 
-    // Create CloudTrail
+    // Create CloudTrail - ensure it depends on the bucket policy
     this.trail = new cloudtrail.Cloudtrail(this, 'cloudtrail', {
       name: `${props.project}-${props.environment}-trail`,
       s3BucketName: this.logsBucket.id,
@@ -265,6 +282,7 @@ export class CloudTrailModule extends Construct {
         Project: props.project,
         Environment: props.environment,
       },
+      dependsOn: [bucketPolicy], // Ensure bucket policy is created first
     });
   }
 }
