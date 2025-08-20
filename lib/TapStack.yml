@@ -145,7 +145,6 @@ Resources:
   # S3 Bucket with security best practices
   SecureS3Bucket:
     Type: AWS::S3::Bucket
-    DependsOn: S3AccessLogsBucket
     Properties:
       BucketName: !Sub 'project-${ProjectName}-secure-bucket-${AWS::AccountId}'
       BucketEncryption:
@@ -173,7 +172,6 @@ Resources:
 
   SecureS3BucketPolicy:
     Type: AWS::S3::BucketPolicy
-    DependsOn: SecureS3Bucket
     Properties:
       Bucket: !Ref SecureS3Bucket
       PolicyDocument:
@@ -222,7 +220,6 @@ Resources:
 
   S3AccessLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
-    DependsOn: S3AccessLogsBucket
     Properties:
       Bucket: !Ref S3AccessLogsBucket
       PolicyDocument:
@@ -294,9 +291,6 @@ Resources:
   # VPC Flow Logs
   VPCFlowLogs:
     Type: AWS::EC2::FlowLog
-    DependsOn: 
-      - VPCFlowLogGroup
-      - VPCFlowLogRole
     Properties:
       ResourceType: VPC
       ResourceId: !Ref ProjectVPC
@@ -391,7 +385,6 @@ Resources:
   # CloudWatch Metric Filter for unauthorized access attempts
   UnauthorizedAccessMetricFilter:
     Type: AWS::Logs::MetricFilter
-    DependsOn: VPCFlowLogGroup
     Properties:
       LogGroupName: !Ref VPCFlowLogGroup
       FilterPattern: '[version, account, eni, source, destination, srcport, destport="22", protocol="6", packets, bytes, windowstart, windowend, action="REJECT", flowlogstatus]'
@@ -404,9 +397,6 @@ Resources:
   # CloudWatch Alarm for unauthorized EC2 access attempts
   UnauthorizedAccessAlarm:
     Type: AWS::CloudWatch::Alarm
-    DependsOn:
-      - UnauthorizedAccessMetricFilter
-      - SecurityAlertsTopic
     Properties:
       AlarmName: !Sub 'project-${ProjectName}-unauthorized-ec2-access'
       AlarmDescription: 'Alarm for detecting unauthorized EC2 access attempts'
@@ -441,10 +431,6 @@ Resources:
   # CloudTrail for API monitoring
   SecurityCloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn:
-      - SecureS3Bucket
-      - SecureS3BucketPolicy
-      - S3EncryptionKey
     Properties:
       TrailName: !Sub 'project-${ProjectName}-security-trail'
       S3BucketName: !Ref SecureS3Bucket
@@ -491,7 +477,6 @@ Resources:
   # Metric Filter for failed console logins
   FailedLoginMetricFilter:
     Type: AWS::Logs::MetricFilter
-    DependsOn: CloudTrailLogGroup
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") || ($.sourceIPAddress != "AWS Internal") }'
@@ -504,9 +489,6 @@ Resources:
   # CloudWatch Alarm for failed authentication attempts
   FailedAuthAlarm:
     Type: AWS::CloudWatch::Alarm
-    DependsOn:
-      - FailedLoginMetricFilter
-      - SecurityAlertsTopic
     Properties:
       AlarmName: !Sub 'project-${ProjectName}-failed-auth-attempts'
       AlarmDescription: 'Alarm for detecting failed authentication attempts'
