@@ -45,6 +45,7 @@
         },
         "AdminEmail": {
             "Type": "String",
+            "Default": "admin@example.com",
             "Description": "Email address for security notifications",
             "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
             "ConstraintDescription": "Must be a valid email address"
@@ -209,6 +210,18 @@
                                 "kms:GenerateDataKey"
                             ],
                             "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudTrail to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey*",
+                                "kms:Decrypt"
+                            ],
+                            "Resource": "*"
                         }
                     ]
                 },
@@ -273,18 +286,6 @@
                     },
                     "LogFilePrefix": "access-logs/"
                 },
-                "NotificationConfiguration": {
-                    "CloudWatchConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "CloudWatchConfiguration": {
-                                "LogGroupName": {
-                                    "Ref": "S3LogGroup"
-                                }
-                            }
-                        }
-                    ]
-                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -299,6 +300,62 @@
                         }
                     }
                 ]
+            }
+        },
+        "SecureS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "SecureS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite2",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/cloudtrail-logs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
             }
         },
         "S3AccessLogsBucket": {
@@ -345,6 +402,35 @@
                         }
                     }
                 ]
+            }
+        },
+        "S3AccessLogsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "S3AccessLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowS3LoggingService",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logging.s3.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${S3AccessLogsBucket}/access-logs/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
             }
         },
         "S3LogGroup": {
@@ -396,9 +482,6 @@
         "VPCFlowLogRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "project-${ProjectName}-vpc-flowlog-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -487,9 +570,6 @@
         "EC2InstanceRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "project-${ProjectName}-ec2-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -519,7 +599,7 @@
                                         "s3:DeleteObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${SecureS3Bucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
                                     }
                                 },
                                 {
@@ -528,7 +608,7 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "SecureS3Bucket"
+                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}"
                                     }
                                 },
                                 {
@@ -587,9 +667,6 @@
         "EC2InstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": {
-                    "Fn::Sub": "project-${ProjectName}-ec2-profile"
-                },
                 "Roles": [
                     {
                         "Ref": "EC2InstanceRole"
@@ -717,6 +794,7 @@
         },
         "SecurityCloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "SecureS3BucketPolicy",
             "Properties": {
                 "TrailName": {
                     "Fn::Sub": "project-${ProjectName}-security-trail"
@@ -724,18 +802,12 @@
                 "S3BucketName": {
                     "Ref": "SecureS3Bucket"
                 },
-                "S3KeyPrefix": "cloudtrail-logs/",
                 "IncludeGlobalServiceEvents": true,
                 "IsMultiRegionTrail": true,
+                "IsLogging": true,
                 "EnableLogFileValidation": true,
-                "CloudWatchLogsLogGroupArn": {
-                    "Fn::Sub": "${CloudTrailLogGroup.Arn}:*"
-                },
-                "CloudWatchLogsRoleArn": {
-                    "Fn::GetAtt": [
-                        "CloudTrailLogRole",
-                        "Arn"
-                    ]
+                "KMSKeyId": {
+                    "Ref": "S3EncryptionKey"
                 },
                 "Tags": [
                     {
@@ -756,9 +828,6 @@
         "CloudTrailLogRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "project-${ProjectName}-cloudtrail-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
