@@ -2,6 +2,17 @@
 # S3 Bucket with AES-256 Encryption
 ########################
 
+# Add missing VPC resource for aws_network_acl
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+  tags = {
+    Name        = "secure-prod-vpc"
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Project     = "secure-env"
+  }
+}
+
 resource "aws_s3_bucket" "secure_prod" {
   bucket = "${var.bucket_name}-${var.environment}"
   tags   = merge(var.bucket_tags, { Environment = var.environment })
@@ -328,5 +339,5 @@ resource "aws_cloudwatch_dashboard" "secure_prod" {
       }
     ]
   })
-  tags = merge(var.bucket_tags, { Environment = var.environment })
+  # tags argument removed; not supported by aws_cloudwatch_dashboard
 }
