@@ -265,18 +265,6 @@ export class CloudTrailModule extends Construct {
       isMultiRegionTrail: true,
       enableLogFileValidation: true,
       kmsKeyId: props.kmsKey.arn,
-      eventSelector: [
-        {
-          readWriteType: 'All',
-          includeManagementEvents: true,
-          dataResource: [
-            {
-              type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/*'],
-            },
-          ],
-        },
-      ],
       tags: {
         Name: `${props.project}-${props.environment}-trail`,
         Project: props.project,
