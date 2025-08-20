@@ -68,6 +68,7 @@ function getLanguageChoices(platform: string) {
   if (platform === 'cdk') {
     return [
       { name: 'TypeScript', value: 'ts' },
+      { name: 'JavaScript', value: 'js' },
       { name: 'Python', value: 'py' },
     ];
   }
