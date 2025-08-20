@@ -623,7 +623,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${ApplicationLogsBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
+            Resource: !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -638,7 +638,7 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${ApplicationLogsBucket}/config-logs/AWSLogs/${AWS::AccountId}/*'
+            Resource: !Sub 'arn:aws:s3:::${ApplicationLogsBucket}/config-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
