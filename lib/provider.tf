@@ -77,6 +77,17 @@ variable "secondary_region" {
   default     = "us-west-2"
 }
 
+variable "automation_principal_arn" {
+  description = "ARN of the principal (user/role) allowed to assume the automation role. Leave empty to allow account root (less secure)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.automation_principal_arn == "" || can(regex("^arn:aws:iam::", var.automation_principal_arn))
+    error_message = "The automation_principal_arn must be a valid IAM ARN or empty string."
+  }
+}
+
 variable "vpc_cidr_primary" {
   description = "CIDR block for primary region VPC"
   type        = string

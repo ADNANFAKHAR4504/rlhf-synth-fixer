@@ -16,14 +16,7 @@ terraform {
   }
   
   # Backend configuration for state management
-  backend "s3" {
-    # Configure these values based on your setup
-    # bucket = "your-terraform-state-bucket"
-    # key    = "environments/${var.environment}/${var.primary_region}/terraform.tfstate"
-    # region = "us-east-1"
-    # encrypt = true
-    # dynamodb_table = "terraform-state-lock"
-  }
+  backend "s3" {}
 }
 
 # Primary region provider
@@ -37,7 +30,6 @@ provider "aws" {
       Project       = var.project_name
       ManagedBy     = "Terraform"
       Region        = var.primary_region
-      CreatedDate   = timestamp()
     }
   }
 }
@@ -53,7 +45,6 @@ provider "aws" {
       Project       = var.project_name
       ManagedBy     = "Terraform"
       Region        = var.secondary_region
-      CreatedDate   = timestamp()
     }
   }
 }
@@ -994,4 +985,5 @@ resource "aws_autoscaling_group" "primary" {
   
   min_size         = local.env_config.min_size
   max_size         = local.env_config.max_size
+}
 ```
