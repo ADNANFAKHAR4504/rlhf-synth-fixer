@@ -9,7 +9,7 @@
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Security Configuration", 
+    "Security Configuration",
     "IaC Optimization",
     "Access Control",
     "Monitoring Setup",
@@ -22,8 +22,16 @@
     "S3",
     "KMS",
     "IAM",
-    "CloudTrail",
     "CloudWatch",
-    "CloudWatch Logs"
-  ]
+    "CloudWatch Logs",
+    "Security Hub",
+    "Systems Manager",
+    "SSM Session Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
