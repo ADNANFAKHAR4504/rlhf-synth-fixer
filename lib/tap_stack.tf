@@ -57,7 +57,7 @@ resource "aws_kms_key" "tap_key" {
 }
 
 resource "aws_kms_alias" "tap_key_alias" {
-  name          = "alias/tap-stack-key"
+  name          = "alias/tap-stack-key-${random_id.bucket_suffix.hex}"
   target_key_id = aws_kms_key.tap_key.key_id
 }
 
@@ -609,11 +609,51 @@ resource "aws_cloudwatch_log_group" "route53_dns" {
   kms_key_id        = aws_kms_key.tap_key.arn
 }
 
-resource "aws_route53_query_log" "main" {
-  depends_on = [aws_cloudwatch_log_group.route53_dns]
+# IAM role for Route53 query logging
+resource "aws_iam_role" "route53_query_log" {
+  name = "route53-query-log-role-${random_id.bucket_suffix.hex}"
 
-  cloudwatch_log_group_arn = aws_cloudwatch_log_group.route53_dns.arn
-  zone_id                  = aws_route53_zone.private.zone_id
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "route53.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "route53_query_log" {
+  name = "route53-query-log-policy-${random_id.bucket_suffix.hex}"
+  role = aws_iam_role.route53_query_log.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.route53_dns.arn}:*"
+      }
+    ]
+  })
+}
+
+resource "aws_route53_query_log" "main" {
+  depends_on = [
+    aws_cloudwatch_log_group.route53_dns,
+    aws_iam_role_policy.route53_query_log
+  ]
+
+  destination_arn = aws_cloudwatch_log_group.route53_dns.arn
+  zone_id         = aws_route53_zone.private.zone_id
 }
 
 # DNS Records
