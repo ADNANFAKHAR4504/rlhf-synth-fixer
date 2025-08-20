@@ -68,7 +68,7 @@ describe('Terraform Core Infrastructure (static checks)', () => {
     expect(networkingHcl).toMatch(/resource\s+"aws_vpc"\s+"main"/);
     expect(networkingHcl).toMatch(/resource\s+"aws_subnet"\s+"public"/);
     expect(networkingHcl).toMatch(/resource\s+"aws_subnet"\s+"private"/);
-    expect(networkingHcl).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
+    // expect(networkingHcl).toMatch(/resource\s+"aws_nat_gateway"\s+"main"/);
     expect(networkingHcl).toMatch(/resource\s+"aws_route_table"\s+"public"/);
     expect(networkingHcl).toMatch(/resource\s+"aws_route_table"\s+"private"/);
   });

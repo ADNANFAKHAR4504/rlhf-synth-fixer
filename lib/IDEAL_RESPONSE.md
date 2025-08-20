@@ -1,4 +1,5 @@
 ```hcl
+
 # vars.tf
 
 variable "aws_region" {
@@ -86,7 +87,7 @@ variable "instance_type" {
   default     = "t2.micro"
 }
 
-# main.tf
+# tap_stack.tf
 
 module "networking" {
   source = "./modules/networking"
@@ -111,25 +112,18 @@ module "security" {
 module "iam" {
   source = "./modules/iam"
 
-  project_name       = var.project_name
-  environment        = var.environment
-  s3_data_bucket_arn = module.storage.s3_data_bucket_arn
-  iam_users          = ["testuser1", "testuser2"]
+  project_name = var.project_name
+  environment  = var.environment
+  iam_users    = ["testuser1", "testuser2"]
 }
 
 module "storage" {
   source = "./modules/storage"
 
-  providers = {
-    aws.us-west-2      = aws.us-west-2
-    aws.ap-northeast-1 = aws.ap-northeast-1
-  }
 
-  project_name            = var.project_name
-  environment             = var.environment
-  vpc_id                  = module.networking.vpc_id
-  private_route_table_ids = module.networking.private_route_table_ids
-  aws_region              = var.aws_region
+  project_name = var.project_name
+  environment  = var.environment
+  aws_region   = var.aws_region
 }
 
 module "database" {
@@ -161,14 +155,10 @@ module "compute" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  project_name             = var.project_name
-  cloudtrail_bucket_name   = module.storage.s3_data_bucket_name
-  flow_log_role_arn        = module.iam.flow_log_role_arn
-  flow_log_destination_arn = module.monitoring.flow_log_destination_arn
-  vpc_id                   = module.networking.vpc_id
+  project_name      = var.project_name
+  flow_log_role_arn = module.iam.flow_log_role_arn
+  vpc_id            = module.networking.vpc_id
 }
-
-# outputs
 
 output "vpc_id" {
   description = "The ID of the VPC"
@@ -205,11 +195,6 @@ output "rds_sg_id" {
   value       = module.security.rds_sg_id
 }
 
-output "vpc_endpoint_sg_id" {
-  description = "The ID of the VPC endpoint security group"
-  value       = module.security.vpc_endpoint_sg_id
-}
-
 output "kms_key_id" {
   description = "The ID of the KMS key"
   value       = module.storage.kms_key_id
@@ -218,21 +203,6 @@ output "kms_key_id" {
 output "kms_key_arn" {
   description = "The ARN of the KMS key"
   value       = module.storage.kms_key_arn
-}
-
-output "s3_data_bucket_name" {
-  description = "The name of the S3 data bucket"
-  value       = module.storage.s3_data_bucket_name
-}
-
-output "s3_data_bucket_arn" {
-  description = "The ARN of the S3 data bucket"
-  value       = module.storage.s3_data_bucket_arn
-}
-
-output "vpc_endpoint_s3_id" {
-  description = "The ID of the S3 VPC endpoint"
-  value       = module.storage.vpc_endpoint_s3_id
 }
 
 output "ec2_instance_profile_name" {
@@ -250,8 +220,8 @@ output "rds_endpoint" {
   value       = module.database.rds_endpoint
 }
 
-output "cloudtrail_arn" {
-  description = "The ARN of the CloudTrail"
-  value       = module.monitoring.cloudtrail_arn
+output "s3_logs_bucket_name" {
+  description = "The name of the S3 logs bucket"
+  value       = module.storage.s3_logs_bucket_name
 }
 ```

@@ -48,13 +48,12 @@ describe('LIVE: Core Infrastructure Verification', () => {
       const sgIds = [
         outputs.ec2_sg_id.value,
         outputs.rds_sg_id.value,
-        outputs.vpc_endpoint_sg_id.value,
         outputs.alb_sg_id.value,
       ];
       const sgs = await ec2.send(
         new DescribeSecurityGroupsCommand({ GroupIds: sgIds })
       );
-      expect(sgs.SecurityGroups?.length).toBe(4);
+      expect(sgs.SecurityGroups?.length).toBe(3);
     });
 
     test('SSH is not open to the world', async () => {
