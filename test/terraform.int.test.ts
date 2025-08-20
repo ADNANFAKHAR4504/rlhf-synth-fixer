@@ -18,12 +18,15 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf-8')
 );
 
-const apiEndpoint = outputs.api_endpoint.value;
-const s3BucketName = outputs.s3_bucket_name.value;
-const frontendBucketName = outputs.frontend_bucket_name.value;
-const dynamodbTableName = outputs.dynamodb_table_name.value;
-const cloudFrontDomain = outputs.cloudfront_distribution_domain.value;
-const cognitoUserPoolId = outputs.cognito_user_pool_id.value;
+// Debug: Log the outputs to see the structure
+console.log('Loaded outputs:', JSON.stringify(outputs, null, 2));
+
+const apiEndpoint = outputs.api_endpoint;
+const s3BucketName = outputs.s3_bucket_name;
+const frontendBucketName = outputs.frontend_bucket_name;
+const dynamodbTableName = outputs.dynamodb_table_name;
+const cloudFrontDomain = outputs.cloudfront_distribution_domain;
+const cognitoUserPoolId = outputs.cognito_user_pool_id;
 const region = process.env.AWS_REGION || 'us-east-1';
 
 const s3 = new S3Client({ region });
