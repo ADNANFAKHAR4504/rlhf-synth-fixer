@@ -129,13 +129,13 @@ resource "aws_s3_bucket_versioning" "frontend_bucket_versioning" {
   }
 }
 
-# Frontend bucket public access block (will be managed by CloudFront)
+# Frontend bucket public access block (allows public read access for website hosting)
 resource "aws_s3_bucket_public_access_block" "frontend_bucket_pab" {
   bucket                  = aws_s3_bucket.frontend_bucket.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
 }
 
 # S3 bucket for Lambda deployment packages
@@ -317,152 +317,6 @@ resource "aws_lambda_permission" "api_gw" {
   source_arn = "${aws_apigatewayv2_api.tap_api.execution_arn}/*/*"
 }
 
-# Outputs
-output "api_endpoint" {
-  description = "The invoke URL for the API Gateway endpoint."
-  value       = aws_apigatewayv2_api.tap_api.api_endpoint
-}
-
-output "s3_bucket_name" {
-  description = "The name of the S3 bucket for Lambda artifacts."
-  value       = aws_s3_bucket.lambda_bucket.bucket
-}
-
-# CloudFront Origin Access Control for S3
-resource "aws_cloudfront_origin_access_control" "frontend_oac" {
-  name                              = "frontend-oac"
-  description                       = "OAC for frontend S3 bucket"
-  origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
-
-# CloudFront Distribution for frontend
-resource "aws_cloudfront_distribution" "frontend_distribution" {
-  origin {
-    domain_name              = aws_s3_bucket.frontend_bucket.bucket_regional_domain_name
-    origin_access_control_id = aws_cloudfront_origin_access_control.frontend_oac.id
-    origin_id                = "S3-${aws_s3_bucket.frontend_bucket.id}"
-  }
-
-  enabled             = true
-  is_ipv6_enabled     = true
-  default_root_object = "index.html"
-
-  default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.frontend_bucket.id}"
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
-
-    viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-
-  tags = {
-    Name        = "Frontend CloudFront Distribution"
-    Environment = var.environment
-    Owner       = var.owner
-  }
-}
-
-# CloudFront Distribution for API Gateway (with WAF protection)
-resource "aws_cloudfront_distribution" "api_distribution" {
-  origin {
-    domain_name = replace(aws_apigatewayv2_api.tap_api.api_endpoint, "https://", "")
-    origin_id   = "API-Gateway-${aws_apigatewayv2_api.tap_api.id}"
-
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "https-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
-
-  enabled             = true
-  is_ipv6_enabled     = true
-  default_root_object = ""
-
-  default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "API-Gateway-${aws_apigatewayv2_api.tap_api.id}"
-
-    forwarded_values {
-      query_string = true
-      headers      = ["*"]
-      cookies {
-        forward = "all"
-      }
-    }
-
-    viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 0  # No caching for API calls
-    max_ttl                = 0
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-
-  tags = {
-    Name        = "API Gateway CloudFront Distribution"
-    Environment = var.environment
-    Owner       = var.owner
-  }
-}
-
-# S3 bucket policy to allow CloudFront access
-resource "aws_s3_bucket_policy" "frontend_bucket_policy" {
-  bucket = aws_s3_bucket.frontend_bucket.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "AllowCloudFrontServicePrincipal"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
-        Action   = "s3:GetObject"
-        Resource = "${aws_s3_bucket.frontend_bucket.arn}/*"
-        Condition = {
-          StringEquals = {
-            "AWS:SourceArn" = aws_cloudfront_distribution.frontend_distribution.arn
-          }
-        }
-      }
-    ]
-  })
-}
-
 # Cognito User Pool
 resource "aws_cognito_user_pool" "tap_user_pool" {
   name = var.cognito_user_pool_name
@@ -497,7 +351,34 @@ resource "aws_cognito_user_pool_client" "tap_user_pool_client" {
   ]
 }
 
+# S3 bucket policy to allow public read access for website hosting
+resource "aws_s3_bucket_policy" "frontend_bucket_policy" {
+  bucket = aws_s3_bucket.frontend_bucket.id
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.frontend_bucket.arn}/*"
+      }
+    ]
+  })
+}
+
+# Outputs
+output "api_endpoint" {
+  description = "The invoke URL for the API Gateway endpoint."
+  value       = aws_apigatewayv2_api.tap_api.api_endpoint
+}
+
+output "s3_bucket_name" {
+  description = "The name of the S3 bucket for Lambda artifacts."
+  value       = aws_s3_bucket.lambda_bucket.bucket
+}
 
 output "dynamodb_table_name" {
   description = "The name of the DynamoDB table."
@@ -509,14 +390,9 @@ output "frontend_bucket_name" {
   value       = aws_s3_bucket.frontend_bucket.bucket
 }
 
-output "cloudfront_distribution_domain" {
-  description = "The domain name of the CloudFront distribution."
-  value       = aws_cloudfront_distribution.frontend_distribution.domain_name
-}
-
-output "protected_api_endpoint" {
-  description = "The API endpoint through CloudFront."
-  value       = "https://${aws_cloudfront_distribution.api_distribution.domain_name}"
+output "frontend_website_endpoint" {
+  description = "The S3 website endpoint for the frontend."
+  value       = aws_s3_bucket_website_configuration.frontend_bucket_website.website_endpoint
 }
 
 output "cognito_user_pool_id" {

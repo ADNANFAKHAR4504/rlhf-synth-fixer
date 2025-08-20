@@ -43,7 +43,7 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
 
     test('should create the correct number of resources', () => {
       const resourceCount = plan.planned_values.root_module.resources.length;
-      expect(resourceCount).toBe(25); // Updated count without WAF resources
+      expect(resourceCount).toBe(22); // Updated count for simplified stack without CloudFront
     });
 
     test('S3 bucket should have versioning and encryption enabled', () => {
@@ -141,35 +141,19 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
       ).toBe('AES256');
     });
 
-    test('CloudFront distribution should enforce HTTPS', () => {
-      const cloudFrontDistribution =
+    test('Frontend S3 bucket should have website hosting enabled', () => {
+      const frontendBucketWebsite =
         plan.planned_values.root_module.resources.find(
           (r: any) =>
-            r.type === 'aws_cloudfront_distribution' &&
-            r.name === 'frontend_distribution'
+            r.type === 'aws_s3_bucket_website_configuration' &&
+            r.name === 'frontend_bucket_website'
         );
-      expect(
-        cloudFrontDistribution.values.default_cache_behavior[0]
-          .viewer_protocol_policy
-      ).toBe('redirect-to-https');
-    });
-
-    test('API CloudFront distribution should have no caching for API calls', () => {
-      const apiCloudFrontDistribution =
-        plan.planned_values.root_module.resources.find(
-          (r: any) =>
-            r.type === 'aws_cloudfront_distribution' &&
-            r.name === 'api_distribution'
-        );
-      expect(
-        apiCloudFrontDistribution.values.default_cache_behavior[0].default_ttl
-      ).toBe(0);
-      expect(
-        apiCloudFrontDistribution.values.default_cache_behavior[0].max_ttl
-      ).toBe(0);
-      expect(
-        apiCloudFrontDistribution.values.default_cache_behavior[0].min_ttl
-      ).toBe(0);
+      expect(frontendBucketWebsite.values.index_document[0].suffix).toBe(
+        'index.html'
+      );
+      expect(frontendBucketWebsite.values.error_document[0].key).toBe(
+        'error.html'
+      );
     });
 
     test('Cognito User Pool should have strong password policy', () => {
@@ -191,8 +175,6 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
         'aws_s3_bucket.lambda_bucket',
         'aws_dynamodb_table.tap_table',
         'aws_apigatewayv2_api.tap_api',
-        'aws_cloudfront_distribution.frontend_distribution',
-        'aws_cloudfront_distribution.api_distribution',
         'aws_cognito_user_pool.tap_user_pool',
       ];
 
