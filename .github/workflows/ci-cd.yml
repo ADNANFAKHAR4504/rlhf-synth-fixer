@@ -112,9 +112,6 @@ jobs:
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
-          GOPROXY: direct
-          GONOPROXY: github.com/cdktf/cdktf-provider-aws-go
-          GONOSUMDB: github.com/cdktf/cdktf-provider-aws-go
 
   deploy:
     name: Deploy
@@ -205,10 +202,6 @@ jobs:
 
       - name: Run Linting
         run: ./scripts/lint.sh
-        env:
-          GOPROXY: direct
-          GONOPROXY: github.com/cdktf/cdktf-provider-aws-go
-          GONOSUMDB: github.com/cdktf/cdktf-provider-aws-go
 
   unit-tests:
     name: Unit Testing
