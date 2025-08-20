@@ -14,68 +14,30 @@ const VARS_PATH = process.env.TF_VARS_PATH
   ? path.resolve(process.env.TF_VARS_PATH)
   : path.resolve(__dirname, "../lib/vars.tf");
 
-// Helper function to extract data source blocks
+// Helper function to extract data source blocks - SIMPLIFIED VERSION
 function extractDataSources(hcl: string): string[] {
   const results: string[] = [];
-  const lines = hcl.split('\n');
-  let inDataBlock = false;
-  let currentBlock = '';
-  let braceCount = 0;
-  
-  for (const line of lines) {
-    if (!inDataBlock && /^\s*data\s+"[^"]+"\s+"[^"]+"\s*\{/.test(line)) {
-      inDataBlock = true;
-      currentBlock = line;
-      braceCount = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
-    } else if (inDataBlock) {
-      currentBlock += '\n' + line;
-      braceCount += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
-      
-      if (braceCount === 0) {
-        results.push(currentBlock);
-        inDataBlock = false;
-        currentBlock = '';
-      }
-    }
+  // Use regex to find data blocks - more flexible approach
+  const dataRegex = /data\s+"[^"]+"\s+"[^"]+"\s*\{[^}]*(?:\{[^}]*\}[^}]*)*\}/gs;
+  const matches = hcl.match(dataRegex);
+  if (matches) {
+    results.push(...matches);
   }
-  
   return results;
 }
 
-// Helper function to extract module blocks
+// Helper function to extract module blocks - SIMPLIFIED VERSION
 function extractModuleBlocks(hcl: string): { [key: string]: string } {
-  // Remove multi-line commented blocks that contain module definitions
-  let cleanHcl = hcl.replace(/^#[\s\S]*?^#\s*\}/gm, '');
-  // Also remove single comment lines
-  cleanHcl = cleanHcl.replace(/^\s*#.*$/gm, '');
-  
   const modules: { [key: string]: string } = {};
-  const lines = cleanHcl.split('\n');
-  let inModuleBlock = false;
-  let currentModuleName = '';
-  let currentBlock = '';
-  let braceCount = 0;
   
-  for (const line of lines) {
-    if (!inModuleBlock && /^\s*module\s+"([^"]+)"\s*\{/.test(line)) {
-      const match = line.match(/module\s+"([^"]+)"/);
-      if (match) {
-        inModuleBlock = true;
-        currentModuleName = match[1];
-        currentBlock = line;
-        braceCount = (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
-      }
-    } else if (inModuleBlock) {
-      currentBlock += '\n' + line;
-      braceCount += (line.match(/\{/g) || []).length - (line.match(/\}/g) || []).length;
-      
-      if (braceCount === 0) {
-        modules[currentModuleName] = currentBlock;
-        inModuleBlock = false;
-        currentBlock = '';
-        currentModuleName = '';
-      }
-    }
+  // Use a more robust regex approach
+  const moduleRegex = /module\s+"([^"]+)"\s*\{[^}]*(?:\{[^}]*\}[^}]*)*\}/gs;
+  const matches = Array.from(hcl.matchAll(moduleRegex));
+  
+  for (const match of matches) {
+    const moduleName = match[1];
+    const moduleContent = match[0];
+    modules[moduleName] = moduleContent;
   }
   
   return modules;
@@ -98,10 +60,22 @@ describe("Terraform Multi-Region Infrastructure (static checks)", () => {
     } else {
       varsHcl = "";
     }
+
+    // Debug output to see what we're parsing
+    console.log("=== DEBUG: File content preview ===");
+    console.log("File length:", hcl.length);
+    console.log("First 500 chars:", hcl.substring(0, 500));
+    console.log("Module matches:", hcl.match(/module\s+"[^"]+"/g));
+    console.log("Data matches:", hcl.match(/data\s+"[^"]+"/g));
   });
 
   test("defines availability zone data sources for both regions", () => {
     const dataSources = extractDataSources(hcl);
+    
+    // Debug output
+    console.log("=== DEBUG: Data Sources ===");
+    console.log("Total data sources found:", dataSources.length);
+    console.log("Data sources:", dataSources);
     
     // Should have exactly 2 data sources for availability zones
     const azDataSources = dataSources.filter(ds => 
