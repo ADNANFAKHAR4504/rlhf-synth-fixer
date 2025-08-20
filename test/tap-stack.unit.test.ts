@@ -37,7 +37,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
     test('EnvironmentName parameter should have correct defaults', () => {
       const p = template.Parameters.EnvironmentName;
       expect(p.Type).toBe('String');
-      expect(p.Default).toBe('WebApp');
+      expect(p.Default).toBe('Dev');
     });
 
     test('InstanceType parameter should allow common sizes', () => {

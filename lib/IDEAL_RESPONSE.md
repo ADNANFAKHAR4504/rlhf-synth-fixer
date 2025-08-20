@@ -4,11 +4,12 @@ I'll create a comprehensive CloudFormation template for a web application enviro
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Web Application Environment with ALB, EC2 instances, and proper security configuration'
 
+# Parameters for flexibility and reusability
 Parameters:
   EnvironmentName:
     Description: An environment name that is prefixed to resource names
     Type: String
-    Default: WebApp
+    Default: Dev
 
   InstanceType:
     Description: EC2 instance type for web servers
@@ -23,11 +24,6 @@ Parameters:
       - t2.medium
     ConstraintDescription: Must be a valid EC2 instance type
 
-  KeyName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
-
   SSHLocation:
     Description: IP address range that can SSH to the EC2 instances
     Type: String
@@ -38,10 +34,12 @@ Parameters:
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
 
   # CertificateArn for HTTPS listener
-  CertificateArn:
-    Description: The ARN of the AWS Certificate Manager (ACM) certificate for HTTPS
-    Type: String
-    ConstraintDescription: Must be a valid ACM certificate ARN.
+#  CertificateArn:
+#    Description: The ARN of the AWS Certificate Manager (ACM) certificate for HTTPS
+#    Type: String
+#    ConstraintDescription: Must be a valid ACM certificate ARN.
+#    Default: arn:aws:acm:region:account:certificate/your-default-certificate-arn <--- Replace with your ACM certificate ARN
+
 
 # Mappings for AMI IDs by region (using Amazon Linux 2)
 Mappings:
@@ -213,7 +211,6 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [AWSRegionAMI, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyName
         IamInstanceProfile:
           Name: !Ref EC2InstanceProfile
         SecurityGroupIds:
@@ -297,32 +294,29 @@ Resources:
         - Key: Name
           Value: !Sub ${EnvironmentName}-TargetGroup
 
-  # HTTP Listener - updated to redirect all traffic to HTTPS
+  # HTTP Listener (forwards traffic to a target group)
   ALBHTTPListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            StatusCode: HTTP_301
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-
-  # HTTPS Listener - Uses the CertificateArn parameter for SSL certificate
-  ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref CertificateArn
+      Port: 80
+      Protocol: HTTP
+
+    # HTTPS Listener - uncomment to enable HTTPS listener(requires ACM certificate ARN)
+#  ALBHTTPSListener:
+#    Type: AWS::ElasticLoadBalancingV2::Listener
+#    Properties:
+#      DefaultActions:
+#        - Type: forward
+#          TargetGroupArn: !Ref ALBTargetGroup
+#      LoadBalancerArn: !Ref ApplicationLoadBalancer
+#      Port: 443
+#      Protocol: HTTPS
+#      Certificates:
+#        - CertificateArn: !Ref CertificateArn
 
 # Outputs for easy reference and integration with other stacks
 Outputs:

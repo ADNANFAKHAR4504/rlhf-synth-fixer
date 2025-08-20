@@ -21,12 +21,6 @@ Parameters:
       - t2.medium
     ConstraintDescription: Must be a valid EC2 instance type
 
-  KeyName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
-    Default:  my-default-keypair   # <-- your default key name here
-
   SSHLocation:
     Description: IP address range that can SSH to the EC2 instances
     Type: String
@@ -37,11 +31,11 @@ Parameters:
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
 
   # CertificateArn for HTTPS listener
-  CertificateArn:
-    Description: The ARN of the AWS Certificate Manager (ACM) certificate for HTTPS
-    Type: String
-    ConstraintDescription: Must be a valid ACM certificate ARN.
-    Default: arn:aws:acm:region:account:certificate/your-default-certificate-arn
+#  CertificateArn:
+#    Description: The ARN of the AWS Certificate Manager (ACM) certificate for HTTPS
+#    Type: String
+#    ConstraintDescription: Must be a valid ACM certificate ARN.
+#    Default: arn:aws:acm:region:account:certificate/your-default-certificate-arn <--- Replace with your ACM certificate ARN
 
 
 # Mappings for AMI IDs by region (using Amazon Linux 2)
@@ -214,7 +208,6 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [AWSRegionAMI, !Ref 'AWS::Region', AMI]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyName
         IamInstanceProfile:
           Name: !Ref EC2InstanceProfile
         SecurityGroupIds:
@@ -309,18 +302,18 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-    # HTTPS Listener (forwards traffic to a target group with SSL termination)
-  ALBHTTPSListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref CertificateArn
+    # HTTPS Listener - uncomment to enable HTTPS listener(requires ACM certificate ARN)
+#  ALBHTTPSListener:
+#    Type: AWS::ElasticLoadBalancingV2::Listener
+#    Properties:
+#      DefaultActions:
+#        - Type: forward
+#          TargetGroupArn: !Ref ALBTargetGroup
+#      LoadBalancerArn: !Ref ApplicationLoadBalancer
+#      Port: 443
+#      Protocol: HTTPS
+#      Certificates:
+#        - CertificateArn: !Ref CertificateArn
 
 # Outputs for easy reference and integration with other stacks
 Outputs:
