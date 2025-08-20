@@ -56,7 +56,9 @@ describe("Terraform stack: tap_stack.tf - comprehensive unit checks", () => {
 
   test("CloudWatch dashboard is present and tags argument is not used", () => {
     expect(content).toMatch(/resource\s+"aws_cloudwatch_dashboard"\s+"secure_prod"/);
-    expect(content).not.toMatch(/tags\s*=/);
+    // Only check the dashboard resource block for the absence of tags
+    const dashboardBlock = content.match(/resource\s+"aws_cloudwatch_dashboard"[\s\S]*?}/);
+    expect(dashboardBlock?.[0]).not.toMatch(/tags\s*=/);
   });
 
   test("All resources and variables use us-west-2 region where required", () => {
