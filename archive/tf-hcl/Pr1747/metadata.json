@@ -25,6 +25,13 @@
     "EC2",
     "RDS",
     "S3",
-    "KMS"
-  ]
+    "KMS",
+    "EIP"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
 }
