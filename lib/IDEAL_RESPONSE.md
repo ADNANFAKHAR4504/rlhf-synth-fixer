@@ -194,8 +194,8 @@ Resources:
                   - s3:ListBucket
                   - s3:GetBucketLocation
                 Resource:
-                  - !Sub 'arn:aws:s3:::secure-datascience-*-${EnvironmentSuffix}'
-                  - !Sub 'arn:aws:s3:::secure-datascience-*-${EnvironmentSuffix}/*'
+                  - !Sub 'arn:aws:s3:::secure-datascience-${AWS::AccountId}-${EnvironmentSuffix}'
+                  - !Sub 'arn:aws:s3:::secure-datascience-${AWS::AccountId}-${EnvironmentSuffix}/*'
       Tags:
         - Key: Name
           Value: !Sub 'data-scientist-role-${EnvironmentSuffix}'
@@ -209,7 +209,6 @@ Resources:
   # Custom KMS key for S3 bucket encryption
   S3EncryptionKey:
     Type: AWS::KMS::Key
-    DependsOn: DataScientistRole
     Properties:
       Description: !Sub 'KMS key for secure S3 bucket encryption - ${EnvironmentSuffix}'
       KeyPolicy:
@@ -529,15 +528,15 @@ Resources:
           - Sid: AllowDataScientistAccess
             Effect: Allow
             Principal:
-              AWS: !GetAtt DataScientistRole.Arn
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/DataScientistRole-${EnvironmentSuffix}'
             Action:
               - s3:GetObject
               - s3:PutObject
               - s3:ListBucket
               - s3:GetBucketLocation
             Resource:
-              - !GetAtt SecureS3Bucket.Arn
-              - !Sub '${SecureS3Bucket.Arn}/*'
+              - !Sub 'arn:aws:s3:::secure-datascience-${AWS::AccountId}-${EnvironmentSuffix}'
+              - !Sub 'arn:aws:s3:::secure-datascience-${AWS::AccountId}-${EnvironmentSuffix}/*'
             Condition:
               StringEquals:
                 'aws:SourceVpce': !Ref S3VPCEndpoint

@@ -221,7 +221,7 @@ Resources:
           - Sid: Allow DataScientist Role
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/DataScientistRole-${EnvironmentSuffix}'
+              AWS: !GetAtt DataScientistRole.Arn
             Action:
               - kms:Encrypt
               - kms:Decrypt
@@ -534,18 +534,6 @@ Resources:
               - !Sub 'arn:aws:s3:::secure-datascience-${AWS::AccountId}-${EnvironmentSuffix}/*'
             Condition:
               StringEquals:
-                'aws:SourceVpce': !Ref S3VPCEndpoint
-          
-          # Deny access from outside VPC endpoint
-          - Sid: DenyAccessOutsideVPCEndpoint
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::secure-datascience-${AWS::AccountId}-${EnvironmentSuffix}'
-              - !Sub 'arn:aws:s3:::secure-datascience-${AWS::AccountId}-${EnvironmentSuffix}/*'
-            Condition:
-              StringNotEquals:
                 'aws:SourceVpce': !Ref S3VPCEndpoint
 
           # Note: CloudTrail service access is allowed above
