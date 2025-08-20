@@ -64,6 +64,15 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // AWS Provider for CloudFront WAF (must be us-east-1)
+    const usEast1Provider = new aws.Provider(
+      `aws-provider-us-east-1-${environmentSuffix}`,
+      {
+        region: 'us-east-1',
+      },
+      { parent: this }
+    );
+
     // KMS Key for Secrets Manager
     const secretsKmsKey = new aws.kms.Key(
       `secrets-kms-key-${environmentSuffix}`,
@@ -944,11 +953,45 @@ EOF
       { provider, parent: this }
     );
 
+    // CloudFront WAF WebACL (must be in us-east-1)
+    const cfWebAcl = new aws.wafv2.WebAcl(
+      `cf-web-acl-${environmentSuffix}`,
+      {
+        scope: 'CLOUDFRONT',
+        defaultAction: { allow: {} },
+        rules: [
+          {
+            name: 'AWS-AWSManagedRulesCommonRuleSet',
+            priority: 0,
+            overrideAction: { none: {} },
+            statement: {
+              managedRuleGroupStatement: {
+                vendorName: 'AWS',
+                name: 'AWSManagedRulesCommonRuleSet',
+              },
+            },
+            visibilityConfig: {
+              cloudwatchMetricsEnabled: true,
+              metricName: `cfCommonRules-${environmentSuffix}`,
+              sampledRequestsEnabled: true,
+            },
+          },
+        ],
+        visibilityConfig: {
+          cloudwatchMetricsEnabled: true,
+          metricName: `cfWebAcl-${environmentSuffix}`,
+          sampledRequestsEnabled: true,
+        },
+      },
+      { provider: usEast1Provider, parent: this }
+    );
+
     // CloudFront in front of ALB
     const cfDistribution = new aws.cloudfront.Distribution(
       `cf-dist-${environmentSuffix}`,
       {
         enabled: true,
+        webAclId: cfWebAcl.arn,
         origins: [
           {
             originId: `alb-origin-${environmentSuffix}`,
