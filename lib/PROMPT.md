@@ -1,30 +1,33 @@
-You are an expert AWS Solutions Architect specializing in security and Infrastructure as Code (IaC). Your mission is to design a secure and compliant AWS infrastructure for our new `FinancialApp` by creating a comprehensive AWS CloudFormation template.
+I need your help drafting a Terraform configuration for a new, highly secure AWS infrastructure designed to host a critical financial application. Think of this as a foundational setup for a multi-account, multi-region environment (specifically `us-east-1` and `us-west-2`) where security and compliance are the top priorities.
 
-**Project Name:** `FinancialApp`
+Your task is to create a single, comprehensive Terraform configuration file named `tap_stack.tf`. This file should be self-contained, including all variable declarations, locals, resources, and outputs. Please build all resources directly without using any external modules, as we're starting this stack from scratch.
 
-**Scenario:** The infrastructure will be deployed in a multi-account AWS environment, typical for a financial institution with stringent security and compliance mandates. Assume the target deployment region is `us-east-1`. The CloudFormation stack must be capable of being deployed securely without manual post-deployment interventions.
+Here are the key security controls we need to bake into the infrastructure:
 
----
+1.  **VPC Foundation:**
+    * Deploy all compute resources, specifically EC2 instances, within a secure VPC to ensure network isolation.
 
-### Core Security and Architectural Requirements
+2.  **Default-Deny Network Access:**
+    * All security groups must block inbound traffic by default. Only create explicit `ingress` rules for necessary traffic, adhering to the principle of least privilege.
 
-Your CloudFormation template must provision and configure resources to meet the following non-negotiable security requirements:
+3.  **Data Encryption at Rest:**
+    * **S3 Buckets:** Ensure all S3 buckets are encrypted by default using AES-256.
+    * **RDS Databases:** Provision RDS database instances with storage encryption enabled, using a customer-managed AWS KMS key.
 
-1.  **VPC & Networking**: All compute resources must be deployed within a custom Virtual Private Cloud (VPC) to ensure network-level isolation.
-2.  **S3 Bucket Encryption**: All created Amazon S3 buckets must have server-side encryption enabled using the **AES-256** standard.
-3.  **IAM Role MFA Enforcement**: Create IAM roles with policies that explicitly require Multi-Factor Authentication (MFA) for critical actions, particularly any action that alters IAM policies or grants permissions (e.g., `iam:CreatePolicy`, `iam:PutRolePolicy`).
-4.  **API Gateway Logging**: Any API Gateway deployed must have access logging enabled for all its stages, directing logs to a dedicated CloudWatch Log Group.
-5.  **RDS Database Encryption**: Provision an Amazon RDS database instance and ensure its storage is encrypted using an AWS Key Management Service (KMS) key.
-6.  **Default Deny Security Groups**: All security groups must be configured with a default "deny all" for inbound traffic. You will then add explicit rules to allow only necessary traffic as defined within the template.
-7.  **Automated Patching & Compliance**: Implement AWS Systems Manager Patch Manager by defining a patch baseline and associating it with the EC2 instances to automate the detection of insecure configurations and vulnerabilities.
+4.  **Identity and Access Management (IAM):**
+    * Create IAM roles with policies that strictly enforce the use of Multi-Factor Authentication (MFA) for any critical actions, especially for making changes to IAM policies or accessing the AWS Management Console.
 
----
+5.  **Comprehensive Logging:**
+    * For any API Gateway stages you define, enable detailed access logging to monitor all requests and troubleshoot issues effectively.
 
-### Expected Output
+6.  **Vulnerability Management:**
+    * Set up AWS Systems Manager Patch Manager to automatically scan our EC2 instances for insecure configurations and vulnerabilities. This should include creating the necessary IAM roles and SSM associations.
 
-Your final output should be a single, complete CloudFormation template in YAML format.
+**Configuration Guidelines:**
 
-* The YAML file must be a valid CloudFormation template that can be deployed directly.
-* The code should be well-commented, explaining the purpose of key resources and security configurations.
-* Employ CloudFormation best practices, such as using parameters for customizable values (e.g., VPC CIDR, database passwords via Secrets Manager) and outputs for important resource IDs (e.g., VPC ID, S3 Bucket Name).
-* The resulting stack should create an operational, secure foundation ready for application deployment.
+* **Single File:** All code must be in `./tap_stack.tf`.
+* **Best Practices:** Follow AWS and Terraform best practices diligently. This means least-privilege IAM policies, encryption everywhere possible, secure security group rules, and consistent resource tagging (e.g., with `Project`, `Environment`, `Owner`).
+* **Outputs:** Define useful outputs that would be needed for a CI/CD pipeline or for testing, but be careful not to expose any secrets.
+* **Provider Setup:** Assume a standard `provider.tf` is in place. You just need to include the `variable "aws_region" {}` declaration in your `tap_stack.tf` file.
+
+The final output should be a clean, well-commented, and production-ready Terraform file that stands up this secure environment when `terraform apply` is run.
