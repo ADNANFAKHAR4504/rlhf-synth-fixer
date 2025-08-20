@@ -841,7 +841,7 @@
                             "Sid": "AWSLoadBalancerAccessLogs",
                             "Effect": "Allow",
                             "Principal": {
-                                "AWS": "arn:aws:iam::127311923021:root"
+                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
@@ -852,7 +852,7 @@
                             "Sid": "AWSLoadBalancerAccessLogsCheck",
                             "Effect": "Allow",
                             "Principal": {
-                                "AWS": "arn:aws:iam::127311923021:root"
+                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
                             },
                             "Action": "s3:GetBucketAcl",
                             "Resource": {
@@ -1406,7 +1406,7 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRolePolicy"
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
                 ]
             }
         },
