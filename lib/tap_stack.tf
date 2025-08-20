@@ -565,8 +565,7 @@ resource "aws_lb_listener" "secure_prod_listener" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = var.alb_certificate_arn # Provide this in variables
-
+  certificate_arn   = aws_acm_certificate.alb_cert.arn
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.secure_prod_tg.arn
@@ -575,7 +574,7 @@ resource "aws_lb_listener" "secure_prod_listener" {
 
 resource "aws_autoscaling_attachment" "asg_attach" {
   autoscaling_group_name = aws_autoscaling_group.secure_prod_asg.name
-  alb_target_group_arn   = aws_lb_target_group.secure_prod_tg.arn
+  lb_target_group_arn   = aws_lb_target_group.secure_prod_tg.arn
 }
 
 output "alb_target_group_arn" {
