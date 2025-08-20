@@ -12,6 +12,7 @@ This document captures issues encountered in generated infrastructure code and t
   - Storage type `gp2` instead of `gp3`.
   - Missing `UpdateReplacePolicy` alongside `DeletionPolicy`.
   - Master password passed via parameter (secret handling warning).
+- __Secrets Manager reference issue__: DatabaseInstance used incorrect syntax `{{resolve:secretsmanager:${DBMasterSecret}::SecretString:password}}` with double colon (::) which requires explicit version labels that don't exist for auto-generated secrets.
 - __Security group circular dependency__: Lambda SG egress targeted DB SG while DB SG ingress referenced Lambda SG.
 - __CloudFront OAI resource type mismatch__: Used `AWS::CloudFront::OriginAccessIdentity` (incorrect in region) and wrong S3 policy principal form.
 - __Integration tests brittle__: Failed when outputs file was missing or keys didn’t match deployed stack, causing CI failures.
@@ -34,6 +35,7 @@ This document captures issues encountered in generated infrastructure code and t
   - `StorageType: gp3`.
   - Added `UpdateReplacePolicy: Snapshot` alongside `DeletionPolicy: Snapshot`.
   - Replaced `DBPassword` parameter with Secrets Manager resource (`DBMasterSecret`) and dynamic reference `{{resolve:secretsmanager:...}}` for `MasterUserPassword`.
+- __Fixed Secrets Manager reference syntax__: Changed from `{{resolve:secretsmanager:${DBMasterSecret}::SecretString:password}}` to `{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}` (single colon) to work with auto-generated secrets without explicit version labels. Added `DependsOn: DBMasterSecret` to ensure proper timing.
 - __Broke SG circular dependency__: Removed Lambda SG egress targeting DB SG; DB SG retains ingress from Lambda SG.
 - __Fixed CloudFront OAI__:
   - Resource: `AWS::CloudFront::CloudFrontOriginAccessIdentity` with `CloudFrontOriginAccessIdentityConfig`.

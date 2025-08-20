@@ -351,6 +351,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
+    DependsOn: DBMasterSecret
     Properties:
       DBInstanceIdentifier: !Sub 'rds-${ProjectName}-${Environment}'
       DBInstanceClass: db.t3.micro
@@ -360,7 +361,7 @@ Resources:
       StorageType: gp3
       StorageEncrypted: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}::SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup

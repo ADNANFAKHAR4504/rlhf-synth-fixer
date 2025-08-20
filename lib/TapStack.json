@@ -603,6 +603,7 @@
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
             "UpdateReplacePolicy": "Snapshot",
+            "DependsOn": "DBMasterSecret",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "rds-${ProjectName}-${Environment}"
@@ -617,7 +618,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}::SecretString:password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {
