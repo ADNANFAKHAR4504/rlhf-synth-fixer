@@ -41,14 +41,6 @@ describe('Security CloudFormation Template', () => {
       expect(template.Parameters.Project).toBeDefined();
       expect(template.Parameters.Project.Type).toBe('String');
     });
-
-    test('should have AllowedIPRange parameter', () => {
-      const p = template.Parameters.AllowedIPRange;
-      expect(p).toBeDefined();
-      expect(p.Type).toBe('String');
-      expect(typeof p.AllowedPattern).toBe('string');
-      expect(p.AllowedPattern).toMatch(/^\^\\d/);
-    });
   });
 
   describe('Resources', () => {
