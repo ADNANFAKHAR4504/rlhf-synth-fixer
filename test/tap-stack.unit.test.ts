@@ -339,10 +339,13 @@ describe('TapStack CloudFormation Template - Secure Infrastructure', () => {
       expect(vpcConfig.SubnetIds).toEqual([{ Ref: 'CorpPrivateSubnet1' }, { Ref: 'CorpPrivateSubnet2' }]);
     });
 
-    test('Lambda should have KMS encryption', () => {
+    test('Lambda should use AWS-managed encryption', () => {
       const lambda = template.Resources.CorpLambdaFunction;
-      expect(lambda.Properties.KmsKeyArn).toBeDefined();
-      expect(lambda.Properties.KmsKeyArn['Fn::Sub']).toContain('alias/aws/lambda');
+      // Lambda uses AWS-managed encryption when KmsKeyArn is not specified
+      expect(lambda.Properties.KmsKeyArn).toBeUndefined();
+      // Verify Lambda still has environment variables which will be encrypted
+      expect(lambda.Properties.Environment).toBeDefined();
+      expect(lambda.Properties.Environment.Variables).toBeDefined();
     });
   });
 
@@ -416,9 +419,9 @@ describe('TapStack CloudFormation Template - Secure Infrastructure', () => {
       const rds = template.Resources.CorpRDSDatabase;
       expect(rds.Properties.KmsKeyId).toBeDefined();
 
-      // Check Lambda encryption
+      // Check Lambda encryption (uses AWS-managed encryption when no KMS key specified)
       const lambda = template.Resources.CorpLambdaFunction;
-      expect(lambda.Properties.KmsKeyArn).toBeDefined();
+      expect(lambda.Properties.KmsKeyArn).toBeUndefined(); // AWS-managed encryption
     });
 
     test('should follow naming convention with corp prefix', () => {

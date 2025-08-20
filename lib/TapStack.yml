@@ -845,7 +845,6 @@ Resources:
         SubnetIds:
           - !Ref CorpPrivateSubnet1
           - !Ref CorpPrivateSubnet2
-      KmsKeyArn: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/lambda'
       DeadLetterConfig:
         TargetArn: !GetAtt CorpLambdaDLQ.Arn
       TracingConfig:

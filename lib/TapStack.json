@@ -1636,9 +1636,6 @@
                         }
                     ]
                 },
-                "KmsKeyArn": {
-                    "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/lambda"
-                },
                 "DeadLetterConfig": {
                     "TargetArn": {
                         "Fn::GetAtt": [
