@@ -175,8 +175,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${SecureS3Bucket}/*'
-              - !Ref SecureS3Bucket
+              - !Sub '${SecureS3Bucket.Arn}/*'
+              - !GetAtt SecureS3Bucket.Arn
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'

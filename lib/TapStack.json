@@ -245,10 +245,13 @@
                             "Action": "s3:*",
                             "Resource": [
                                 {
-                                    "Fn::Sub": "${SecureS3Bucket}/*"
+                                    "Fn::Sub": "${SecureS3Bucket.Arn}/*"
                                 },
                                 {
-                                    "Ref": "SecureS3Bucket"
+                                    "Fn::GetAtt": [
+                                        "SecureS3Bucket",
+                                        "Arn"
+                                    ]
                                 }
                             ],
                             "Condition": {
