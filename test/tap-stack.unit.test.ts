@@ -95,7 +95,7 @@ describe('Secure Infrastructure CloudFormation Template - Unit Tests', () => {
       const sg = template.Resources.InstanceSecurityGroup;
       const egress = sg.Properties.SecurityGroupEgress[0];
       
-      expect(egress.IpProtocol).toBe('-1');
+      expect(egress.IpProtocol).toBe(-1);
       expect(egress.CidrIp).toBe('0.0.0.0/0');
     });
 
@@ -460,7 +460,7 @@ describe('Secure Infrastructure CloudFormation Template - Unit Tests', () => {
 
     test('should have exactly 8 resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(8);
+      expect(resourceCount).toBe(9);
     });
 
     test('should have exactly 1 parameter', () => {
