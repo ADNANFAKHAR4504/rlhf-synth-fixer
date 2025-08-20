@@ -441,6 +441,11 @@ Resources:
   # RDS Database
   Database:
     Type: AWS::RDS::DBInstance
+    DependsOn:
+      - DBSecret
+      - DBSubnetGroup
+      - DatabaseSecurityGroup
+      - KMSKey
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
@@ -461,6 +466,7 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
       MultiAZ: true
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
@@ -554,6 +560,10 @@ Resources:
   # Launch Template
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    DependsOn:
+      - KMSKey
+      - WebServerSecurityGroup
+      - EC2InstanceProfile
     Properties:
       LaunchTemplateName: !Sub "${ResourceNamePrefix}LaunchTemplate"
       LaunchTemplateData:
@@ -626,6 +636,7 @@ Resources:
               VolumeType: gp3
               VolumeSize: 20
               Encrypted: true
+              KmsKeyId: !Ref KMSKey
               DeleteOnTermination: true
         TagSpecifications:
           - ResourceType: instance
@@ -648,6 +659,13 @@ Resources:
   # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - LaunchTemplate
+      - TargetGroup
+      - PrivateSubnet1
+      - PrivateSubnet2
+      - NatGateway1
+      - NatGateway2
     Properties:
       AutoScalingGroupName: !Sub "${ResourceNamePrefix}ASG"
       VPCZoneIdentifier:
@@ -791,71 +809,23 @@ Resources:
               AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
             Resource: "*"
-          - Sid: Allow CloudFormation Service
+          - Sid: Allow AWS Services
             Effect: Allow
             Principal:
-              Service: cloudformation.amazonaws.com
+              Service:
+                - ec2.amazonaws.com
+                - autoscaling.amazonaws.com
+                - rds.amazonaws.com
+                - secretsmanager.amazonaws.com
             Action:
-              - kms:CreateGrant
               - kms:Decrypt
               - kms:DescribeKey
               - kms:Encrypt
               - kms:GenerateDataKey
-              - kms:GenerateDataKeyWithoutPlainText
-              - kms:ReEncrypt*
-            Resource: "*"
-          - Sid: Allow EC2 Service
-            Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action:
+              - kms:GenerateDataKeyWithoutPlaintext
               - kms:CreateGrant
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:GenerateDataKeyWithoutPlainText
-              - kms:ReEncrypt*
-            Resource: "*"
-          - Sid: Allow Auto Scaling Service
-            Effect: Allow
-            Principal:
-              Service: autoscaling.amazonaws.com
-            Action:
-              - kms:CreateGrant
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:GenerateDataKeyWithoutPlainText
-              - kms:ReEncrypt*
               - kms:ListGrants
               - kms:RevokeGrant
-            Resource: "*"
-          - Sid: Allow RDS Service
-            Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action:
-              - kms:CreateGrant
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:GenerateDataKeyWithoutPlainText
-              - kms:ReEncrypt*
-            Resource: "*"
-          - Sid: Allow Secrets Manager Service
-            Effect: Allow
-            Principal:
-              Service: secretsmanager.amazonaws.com
-            Action:
-              - kms:CreateGrant
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey
-              - kms:GenerateDataKeyWithoutPlainText
               - kms:ReEncrypt*
             Resource: "*"
       Tags:
