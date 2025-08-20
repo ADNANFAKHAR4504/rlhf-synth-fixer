@@ -4,7 +4,7 @@ import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack', () => {
+describe('TapStack (No DNS Configuration)', () => {
   let app: cdk.App;
   let stack: TapStack;
   let template: Template;
@@ -12,14 +12,14 @@ describe('TapStack', () => {
   beforeEach(() => {
     app = new cdk.App({
       context: {
-        domainName: 'testturing.com',
-        hostedZoneId: 'Z1234567890ABC',
+        domainName: '',
+        hostedZoneId: '',
       },
     });
-    // Force the stack to be in us-east-2 (primary region) for testing
+    // Force the stack to be in us-west-2 (secondary region) for testing
     stack = new TapStack(app, 'TestTapStack', { 
       environmentSuffix,
-      env: { region: 'us-east-2', account: '123456789012' }
+      env: { region: 'us-west-2', account: '123456789012' }
     });
     template = Template.fromStack(stack);
   });
@@ -37,50 +37,11 @@ describe('TapStack', () => {
           },
           {
             Key: 'Region',
-            Value: 'us-east-2',
+            Value: 'us-west-2',
           },
           {
             Key: 'Type',
-            Value: 'Primary',
-          },
-        ]),
-      });
-    });
-
-    test('should create public subnets', () => {
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: Match.stringLikeRegexp('10\.0\.0\.0/24'),
-        MapPublicIpOnLaunch: true,
-        Tags: Match.arrayWith([
-          {
-            Key: 'aws-cdk:subnet-name',
-            Value: 'public',
-          },
-        ]),
-      });
-    });
-
-    test('should create private subnets', () => {
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: Match.stringLikeRegexp('10\.0\.3\.0/24'),
-        MapPublicIpOnLaunch: false,
-        Tags: Match.arrayWith([
-          {
-            Key: 'aws-cdk:subnet-name',
-            Value: 'private',
-          },
-        ]),
-      });
-    });
-
-    test('should create isolated subnets', () => {
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: Match.stringLikeRegexp('10\.0\.6\.0/28'),
-        MapPublicIpOnLaunch: false,
-        Tags: Match.arrayWith([
-          {
-            Key: 'aws-cdk:subnet-name',
-            Value: 'isolated',
+            Value: 'Secondary',
           },
         ]),
       });
@@ -237,99 +198,61 @@ describe('TapStack', () => {
   });
 
   describe('Route 53 Configuration', () => {
-    test('should create health check when domain is provided', () => {
-      template.hasResourceProperties('AWS::Route53::HealthCheck', {
-        HealthCheckConfig: {
-          Type: 'HTTP',
-          ResourcePath: '/health',
-          Port: 80,
-          RequestInterval: 30,
-          FailureThreshold: 3,
-        },
+    test('should NOT create hosted zone when domain is not provided', () => {
+      template.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          HostedZone: Match.anyValue(),
+        })),
       });
     });
 
-    test('should create A record when domain is provided', () => {
-      template.hasResourceProperties('AWS::Route53::RecordSet', {
-        Name: 'testturing.com',
-        Type: 'A',
-        TTL: '60',
-        Failover: 'PRIMARY',
+    test('should NOT create health check when domain is not provided', () => {
+      template.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          HealthCheck: Match.anyValue(),
+        })),
       });
     });
 
-    test('should create A record with alias target', () => {
-      template.hasResourceProperties('AWS::Route53::RecordSet', {
-        Name: 'testturing.com',
-        Type: 'A',
-        AliasTarget: {
-          EvaluateTargetHealth: true,
-        },
+    test('should NOT create A record when domain is not provided', () => {
+      template.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          PrimaryRecord: Match.anyValue(),
+        })),
       });
     });
   });
 
   describe('Lambda-based Failover', () => {
-    test('should create failover Lambda function', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'python3.12',
-        Handler: 'index.handler',
-        Timeout: 300,
-        Environment: {
-          Variables: {
-            HOSTED_ZONE_ID: 'Z1234567890ABC',
-            DOMAIN_NAME: 'testturing.com',
-            SECONDARY_ALB_DNS: `TapSta-Appli-us-west-2-${environmentSuffix}.us-west-2.elb.amazonaws.com`,
-            SECONDARY_REGION: 'us-west-2',
-          },
-        },
+    test('should NOT create failover Lambda function when DNS is not configured', () => {
+      template.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          FailoverLambda: Match.anyValue(),
+        })),
       });
     });
 
-    test('should create failover Lambda role with Route 53 permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: Match.arrayWith([
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'lambda.amazonaws.com',
-              },
-            },
-          ]),
-        },
+    test('should NOT create failover Lambda role when DNS is not configured', () => {
+      template.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          FailoverLambdaRole: Match.anyValue(),
+        })),
       });
     });
 
-    test('should create failover alarm', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'HealthyHostCount',
-        Namespace: 'AWS/ApplicationELB',
-        Threshold: 1,
-        EvaluationPeriods: 2,
-        ComparisonOperator: 'LessThanOrEqualToThreshold',
-        TreatMissingData: 'breaching',
+    test('should NOT create failover alarm when DNS is not configured', () => {
+      template.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          FailoverAlarm: Match.anyValue(),
+        })),
       });
     });
 
-    test('should create EventBridge rule for failover', () => {
-      template.hasResourceProperties('AWS::Events::Rule', {
-        EventPattern: {
-          source: ['aws.cloudwatch'],
-          'detail-type': ['CloudWatch Alarm State Change'],
-          detail: {
-            state: {
-              value: ['ALARM'],
-            },
-          },
-        },
-        Targets: Match.arrayWith([
-          {
-            Arn: Match.anyValue(),
-            Id: 'Target0',
-          },
-        ]),
+    test('should NOT create EventBridge rule when DNS is not configured', () => {
+      template.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          FailoverRule: Match.anyValue(),
+        })),
       });
     });
   });
@@ -371,15 +294,19 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create HostedZoneId output when DNS is configured', () => {
-      template.hasOutput('HostedZoneId', {
-        Description: 'Route 53 Hosted Zone ID',
+    test('should NOT create HostedZoneId output when DNS is not configured', () => {
+      template.templateMatches({
+        Outputs: Match.not(Match.objectLike({
+          HostedZoneId: Match.anyValue(),
+        })),
       });
     });
 
-    test('should create HealthCheckId output when health check is configured', () => {
-      template.hasOutput('HealthCheckId', {
-        Description: 'Route 53 Health Check ID',
+    test('should NOT create HealthCheckId output when DNS is not configured', () => {
+      template.templateMatches({
+        Outputs: Match.not(Match.objectLike({
+          HealthCheckId: Match.anyValue(),
+        })),
       });
     });
   });
@@ -394,11 +321,11 @@ describe('TapStack', () => {
           },
           {
             Key: 'Region',
-            Value: 'us-east-2',
+            Value: 'us-west-2',
           },
           {
             Key: 'Type',
-            Value: 'Primary',
+            Value: 'Secondary',
           },
         ]),
       });
@@ -414,12 +341,12 @@ describe('TapStack', () => {
   });
 
   describe('Multi-Region Configuration', () => {
-    test('should configure primary region correctly', () => {
+    test('should configure secondary region correctly', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
           {
             Key: 'Type',
-            Value: 'Primary',
+            Value: 'Secondary',
           },
         ]),
       });

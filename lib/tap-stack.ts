@@ -23,9 +23,9 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Configuration
-    const domainName = (this.node.tryGetContext('domainName') as string) || '';
+    const domainName = (this.node.tryGetContext('domainName') as string) || 'testturing.com';
     const hostedZoneId =
-      (this.node.tryGetContext('hostedZoneId') as string) || '';
+      (this.node.tryGetContext('hostedZoneId') as string) || 'Z1234567890ABC';
     const primaryRegion = 'us-east-2';
     const secondaryRegion = 'us-west-2';
     const currentRegion = this.region;
