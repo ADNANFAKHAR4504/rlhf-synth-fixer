@@ -769,7 +769,7 @@ EOF
     );
 
     // S3 Bucket Versioning
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `${environmentSuffix}-alb-logs-bucket-versioning`,
       {
         bucket: albLogsBucket.id,
@@ -781,7 +781,7 @@ EOF
     );
 
     // S3 Bucket Server-Side Encryption
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `${environmentSuffix}-alb-logs-bucket-encryption`,
       {
         bucket: albLogsBucket.id,
@@ -811,7 +811,7 @@ EOF
     );
 
     // S3 Bucket Lifecycle Configuration
-    new aws.s3.BucketLifecycleConfigurationV2(
+    new aws.s3.BucketLifecycleConfiguration(
       `${environmentSuffix}-alb-logs-bucket-lifecycle`,
       {
         bucket: albLogsBucket.id,
@@ -944,45 +944,11 @@ EOF
       { provider, parent: this }
     );
 
-    // CloudFront WAF WebACL
-    const cfWebAcl = new aws.wafv2.WebAcl(
-      `cf-web-acl-${environmentSuffix}`,
-      {
-        scope: 'CLOUDFRONT',
-        defaultAction: { allow: {} },
-        rules: [
-          {
-            name: 'AWS-AWSManagedRulesCommonRuleSet',
-            priority: 0,
-            overrideAction: { none: {} },
-            statement: {
-              managedRuleGroupStatement: {
-                vendorName: 'AWS',
-                name: 'AWSManagedRulesCommonRuleSet',
-              },
-            },
-            visibilityConfig: {
-              cloudwatchMetricsEnabled: true,
-              metricName: `cfCommonRules-${environmentSuffix}`,
-              sampledRequestsEnabled: true,
-            },
-          },
-        ],
-        visibilityConfig: {
-          cloudwatchMetricsEnabled: true,
-          metricName: `cfWebAcl-${environmentSuffix}`,
-          sampledRequestsEnabled: true,
-        },
-      },
-      { provider, parent: this }
-    );
-
     // CloudFront in front of ALB
     const cfDistribution = new aws.cloudfront.Distribution(
       `cf-dist-${environmentSuffix}`,
       {
         enabled: true,
-        webAclId: cfWebAcl.arn,
         origins: [
           {
             originId: `alb-origin-${environmentSuffix}`,
