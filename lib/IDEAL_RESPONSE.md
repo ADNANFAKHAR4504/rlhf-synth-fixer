@@ -360,6 +360,145 @@ export ENVIRONMENT_SUFFIX=pr1730
 ./scripts/deploy.sh
 ```
 
+## Deployment Commands
+
+### Quick Start Commands
+
+```bash
+# 1. Bootstrap the infrastructure
+./scripts/bootstrap.sh
+
+# 2. Run unit tests
+./scripts/unit-tests.sh
+
+# 3. Run integration tests
+./scripts/integration-tests.sh
+
+# 4. Deploy infrastructure
+./scripts/deploy.sh
+```
+
+### Advanced Deployment Commands
+
+#### Standard Deployment
+
+```bash
+# Set environment variables
+export PULUMI_ENVIRONMENT=production
+export PULUMI_PROJECT_NAME=tap-system
+export PULUMI_NOTIFICATION_EMAIL=admin@example.com
+
+# Deploy with standard configuration
+pulumi stack select TapStackpr1730
+pulumi config set aws:region us-east-1
+pulumi preview
+pulumi up --yes
+```
+
+#### Deployment with Existing Resource Handling
+
+```bash
+# Handle existing resources gracefully
+export SKIP_IAM_CREATION=true
+export SKIP_CLOUDTRAIL_REGIONS=us-east-1
+
+# Deploy using the enhanced script
+./lib/deploy_with_existing_resources.sh
+```
+
+#### Multi-Region Deployment
+
+```bash
+# Deploy to specific regions
+export AWS_DEFAULT_REGION=us-east-1
+pulumi up --yes
+
+# Deploy to secondary region
+export AWS_DEFAULT_REGION=us-west-2
+pulumi up --yes
+```
+
+### Configuration Commands
+
+```bash
+# Set Pulumi configuration
+pulumi config set aws:region us-east-1
+pulumi config set tap-system:environment production
+pulumi config set tap-system:project-name tap-system
+pulumi config set tap-system:notification-email your-email@company.com
+
+# Optional: Set KMS key for S3 encryption
+pulumi config set tap-system:kms-key-id --secret arn:aws:kms:region:account:key/key-id
+
+# View current configuration
+pulumi config
+
+# Export configuration
+pulumi config --show-secrets
+```
+
+### Testing Commands
+
+```bash
+# Run all tests
+./scripts/test.sh
+
+# Run unit tests only
+./scripts/unit-tests.sh
+
+# Run integration tests only
+./scripts/integration-tests.sh
+
+# Run tests with coverage
+pytest tests/ --cov=lib --cov-report=html
+```
+
+### Debugging Commands
+
+```bash
+# Enable verbose logging
+export PULUMI_LOG_LEVEL=DEBUG
+
+# Preview changes
+pulumi preview --diff
+
+# Deploy with detailed output
+pulumi up --verbose=3
+
+# Check resource status
+pulumi stack --show-urns
+
+# View outputs
+pulumi stack output
+
+# Destroy resources (use with caution)
+pulumi destroy --yes
+```
+
+### CI/CD Commands
+
+```bash
+# GitHub Actions workflow commands
+# These are typically run automatically by CI/CD
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run linting
+flake8 lib/ tests/
+
+# Run type checking
+mypy lib/
+
+# Run security checks
+bandit -r lib/
+
+# Build and test
+./scripts/build.sh
+./scripts/test.sh
+./scripts/deploy.sh
+```
+
 ## Features
 
 ### ✅ **Multi-Region Deployment**
