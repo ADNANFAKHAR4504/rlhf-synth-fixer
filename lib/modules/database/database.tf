@@ -12,7 +12,6 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "main" {
   allocated_storage      = 20
   engine                 = "mysql"
-  engine_version         = "8.0.33"
   instance_class         = "db.t3.micro"
   db_name                = "${var.project_name}db"
   username               = var.db_username
