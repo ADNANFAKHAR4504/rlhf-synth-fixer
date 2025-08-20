@@ -15,14 +15,6 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
-  DBPassword:
-    Type: String
-    NoEcho: true
-    Description: 'Database administrator password'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-
 Resources:
   # KMS Key for encryption across all services
   MasterKMSKey:
@@ -41,7 +33,7 @@ Resources:
           - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:
-              Service: logs.us-west-2.amazonaws.com
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
             Action:
               - 'kms:Encrypt'
               - 'kms:Decrypt'
@@ -49,6 +41,20 @@ Resources:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
+          - Sid: Allow CloudTrail
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:EncryptionContext:aws:cloudtrail:arn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Environment}-security-trail'
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-master-kms-key'
@@ -71,25 +77,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-security-logs'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # CloudTrail for API logging
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      TrailName: !Sub '${Environment}-security-trail'
-      S3BucketName: !Ref CloudTrailBucket
-      S3KeyPrefix: 'cloudtrail-logs'
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: false
-      EnableLogFileValidation: true
-      KMSKeyId: !Ref MasterKMSKey
-      CloudWatchLogsLogGroupArn: !GetAtt SecurityLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-cloudtrail'
         - Key: Environment
           Value: !Ref Environment
 
@@ -122,35 +109,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # S3 Bucket for application data
-  ApplicationDataBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${Environment}-app-data-${AWS::AccountId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref MasterKMSKey
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref SecurityLogGroup
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-app-data-bucket'
-        - Key: Environment
-          Value: !Ref Environment
-
   # CloudTrail S3 Bucket Policy
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -174,134 +132,6 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-
-  # VPC for secure networking
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: '10.0.0.0/16'
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-vpc'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Private subnets for database
-  PrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: 'us-west-2a'
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-private-subnet-1'
-        - Key: Environment
-          Value: !Ref Environment
-
-  PrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: 'us-west-2b'
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-private-subnet-2'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # DB Subnet Group
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: 'Subnet group for RDS database'
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-db-subnet-group'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Security Group for RDS
-  DatabaseSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for RDS database'
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-database-sg'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Security Group for Application
-  ApplicationSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: 'Security group for application servers'
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-application-sg'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # RDS Instance with encryption
-  DatabaseInstance:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-database'
-      DBInstanceClass: 'db.t3.micro'
-      Engine: 'mysql'
-      EngineVersion: '8.0.35'
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      AllocatedStorage: 20
-      StorageType: 'gp2'
-      StorageEncrypted: true
-      KmsKeyId: !Ref MasterKMSKey
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      BackupRetentionPeriod: 7
-      MultiAZ: false
-      PubliclyAccessible: false
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
-      EnablePerformanceInsights: true
-      PerformanceInsightsKMSKeyId: !Ref MasterKMSKey
-      DeletionProtection: true
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-database'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # EBS Volume with encryption
-  EncryptedEBSVolume:
-    Type: AWS::EC2::Volume
-    Properties:
-      Size: 10
-      VolumeType: 'gp3'
-      Encrypted: true
-      KmsKeyId: !Ref MasterKMSKey
-      AvailabilityZone: 'us-west-2a'
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-encrypted-volume'
-        - Key: Environment
-          Value: !Ref Environment
 
   # IAM Role for CloudTrail CloudWatch Logs
   CloudTrailLogsRole:
@@ -331,6 +161,150 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # CloudTrail for API logging
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${Environment}-security-trail'
+      S3BucketName: !Ref CloudTrailBucket
+      S3KeyPrefix: 'cloudtrail-logs'
+      IsLogging: true
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: false
+      EnableLogFileValidation: true
+      KMSKeyId: !Ref MasterKMSKey
+      CloudWatchLogsLogGroupArn: !GetAtt SecurityLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-cloudtrail'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # S3 Bucket for application data
+  ApplicationDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-app-data-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref MasterKMSKey
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-app-data-bucket'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # VPC for secure networking
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Private subnets for database
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.1.0/24'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-1'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.2.0/24'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-2'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # DB Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-db-subnet-group'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Security Group for Application
+  ApplicationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for application servers'
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-application-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Security Group for RDS
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for RDS database'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-database-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Database Password Secret
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Environment}-database-password'
+      Description: 'Database administrator password'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      KmsKeyId: !Ref MasterKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-database-secret'
+        - Key: Environment
+          Value: !Ref Environment
+
   # IAM Role for RDS Enhanced Monitoring
   RDSEnhancedMonitoringRole:
     Type: AWS::IAM::Role
@@ -347,6 +321,56 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-rds-monitoring-role'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # RDS Instance with encryption
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${Environment}-database'
+      DBInstanceClass: 'db.t3.small'
+      Engine: 'mysql'
+      EngineVersion: '8.0.39'
+      MasterUsername: !Ref DBUsername
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        KmsKeyId: !Ref MasterKMSKey
+      AllocatedStorage: 20
+      StorageType: 'gp2'
+      StorageEncrypted: true
+      KmsKeyId: !Ref MasterKMSKey
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7
+      MultiAZ: false
+      PubliclyAccessible: false
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
+      EnablePerformanceInsights: true
+      PerformanceInsightsKMSKeyId: !Ref MasterKMSKey
+      DeletionProtection: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-database'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # EBS Volume with encryption
+  EncryptedEBSVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      Size: 10
+      VolumeType: 'gp3'
+      Encrypted: true
+      KmsKeyId: !Ref MasterKMSKey
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-encrypted-volume'
         - Key: Environment
           Value: !Ref Environment
 
@@ -371,11 +395,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${ApplicationDataBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${ApplicationDataBucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !GetAtt ApplicationDataBucket.Arn
+                Resource: !Sub 'arn:aws:s3:::${ApplicationDataBucket}'
         - PolicyName: ApplicationKMSPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -434,7 +458,7 @@ Resources:
                 Action:
                   - iam:ChangePassword
                   - iam:GetUser
-                Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${aws:username}'
+                Resource: 'arn:aws:iam::*:user/${aws:username}'
               - Sid: AllowManageOwnMFA
                 Effect: Allow
                 Action:
@@ -444,8 +468,8 @@ Resources:
                   - iam:EnableMFADevice
                   - iam:ResyncMFADevice
                 Resource:
-                  - !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/${aws:username}'
-                  - !Sub 'arn:aws:iam::${AWS::AccountId}:user/${aws:username}'
+                  - 'arn:aws:iam::*:mfa/${aws:username}'
+                  - 'arn:aws:iam::*:user/${aws:username}'
               - Sid: DenyAllExceptUnlessSignedInWithMFA
                 Effect: Deny
                 NotAction:
@@ -460,6 +484,18 @@ Resources:
                 Condition:
                   BoolIfExists:
                     'aws:MultiFactorAuthPresent': 'false'
+
+  # SNS Topic for alerts
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-security-alerts'
+      KmsMasterKeyId: !Ref MasterKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-security-alerts'
+        - Key: Environment
+          Value: !Ref Environment
 
   # CloudWatch Alarms for monitoring
   DatabaseCPUAlarm:
@@ -498,17 +534,59 @@ Resources:
       AlarmActions:
         - !Ref SNSTopic
 
-  # SNS Topic for alerts
-  SNSTopic:
-    Type: AWS::SNS::Topic
+  DatabaseReadLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
     Properties:
-      TopicName: !Sub '${Environment}-security-alerts'
-      KmsMasterKeyId: !Ref MasterKMSKey
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-security-alerts'
-        - Key: Environment
-          Value: !Ref Environment
+      AlarmName: !Sub '${Environment}-database-high-read-latency'
+      AlarmDescription: 'Database read latency is too high'
+      MetricName: ReadLatency
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0.2
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseInstance
+      AlarmActions:
+        - !Ref SNSTopic
+
+  DatabaseWriteLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-database-high-write-latency'
+      AlarmDescription: 'Database write latency is too high'
+      MetricName: WriteLatency
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0.2
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseInstance
+      AlarmActions:
+        - !Ref SNSTopic
+
+  DatabaseFreeStorageSpaceAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-database-low-free-storage'
+      AlarmDescription: 'Database free storage space is low'
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2000000000 # 2GB in bytes
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DatabaseInstance
+      AlarmActions:
+        - !Ref SNSTopic
 
   # CloudWatch Dashboard
   SecurityDashboard:
@@ -527,12 +605,31 @@ Resources:
               "properties": {
                 "metrics": [
                   [ "AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${DatabaseInstance}" ],
-                  [ ".", "DatabaseConnections", ".", "." ]
+                  [ ".", "DatabaseConnections", ".", "." ],
+                  [ ".", "ReadLatency", ".", "." ],
+                  [ ".", "WriteLatency", ".", "." ]
                 ],
                 "view": "timeSeries",
                 "stacked": false,
-                "region": "us-west-2",
-                "title": "RDS Metrics",
+                "region": "${AWS::Region}",
+                "title": "RDS Performance Metrics",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/RDS", "FreeStorageSpace", "DBInstanceIdentifier", "${DatabaseInstance}" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "RDS Storage",
                 "period": 300
               }
             },
@@ -544,7 +641,7 @@ Resources:
               "height": 6,
               "properties": {
                 "query": "SOURCE '${SecurityLogGroup}'\n| fields @timestamp, @message\n| sort @timestamp desc\n| limit 100",
-                "region": "us-west-2",
+                "region": "${AWS::Region}",
                 "title": "Security Logs",
                 "view": "table"
               }
@@ -594,3 +691,9 @@ Outputs:
     Value: !Ref SecurityLogGroup
     Export:
       Name: !Sub '${Environment}-security-log-group'
+
+  DatabaseSecretArn:
+    Description: 'Database password secret ARN'
+    Value: !Ref DatabaseSecret
+    Export:
+      Name: !Sub '${Environment}-database-secret-arn'

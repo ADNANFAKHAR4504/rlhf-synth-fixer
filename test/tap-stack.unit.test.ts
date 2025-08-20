@@ -19,16 +19,16 @@ describe('TapStack CloudFormation Template', () => {
       // Verify all security components are present
       const securityResources = [
         'MasterKMSKey',
-        'CloudTrail', 
+        'CloudTrail',
         'SecurityLogGroup',
         'ApplicationRole',
-        'CloudTrailLogsRole'
+        'CloudTrailLogsRole',
       ];
-      
+
       securityResources.forEach(resourceName => {
         expect(template.Resources[resourceName]).toBeDefined();
       });
-      
+
       expect(true).toBe(true);
     });
   });
@@ -60,20 +60,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.DBUsername).toBeDefined();
     });
 
-    test('should have DBPassword parameter', () => {
-      expect(template.Parameters.DBPassword).toBeDefined();
-    });
-
     test('Environment parameter should have correct properties', () => {
       const envParam = template.Parameters.Environment;
       expect(envParam.Type).toBe('String');
       expect(envParam.Default).toBe('production');
-      expect(envParam.Description).toBe('Environment name for resource tagging');
-    });
-
-    test('DBPassword parameter should have NoEcho enabled', () => {
-      const dbPasswordParam = template.Parameters.DBPassword;
-      expect(dbPasswordParam.NoEcho).toBe(true);
+      expect(envParam.Description).toBe(
+        'Environment name for resource tagging'
+      );
     });
   });
 
@@ -90,16 +83,18 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have DatabaseInstance resource', () => {
       expect(template.Resources.DatabaseInstance).toBeDefined();
-      expect(template.Resources.DatabaseInstance.Type).toBe('AWS::RDS::DBInstance');
+      expect(template.Resources.DatabaseInstance.Type).toBe(
+        'AWS::RDS::DBInstance'
+      );
     });
 
     test('should have S3 buckets with encryption', () => {
       expect(template.Resources.CloudTrailBucket).toBeDefined();
       expect(template.Resources.ApplicationDataBucket).toBeDefined();
-      
+
       const cloudTrailBucket = template.Resources.CloudTrailBucket;
       const appDataBucket = template.Resources.ApplicationDataBucket;
-      
+
       expect(cloudTrailBucket.Type).toBe('AWS::S3::Bucket');
       expect(appDataBucket.Type).toBe('AWS::S3::Bucket');
     });
@@ -113,7 +108,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have IAM roles with least privilege', () => {
       expect(template.Resources.ApplicationRole).toBeDefined();
       expect(template.Resources.CloudTrailLogsRole).toBeDefined();
-      
+
       const appRole = template.Resources.ApplicationRole;
       expect(appRole.Type).toBe('AWS::IAM::Role');
       expect(appRole.Properties.Policies).toBeDefined();
@@ -144,7 +139,7 @@ describe('TapStack CloudFormation Template', () => {
         'ApplicationDataBucket',
         'CloudTrailBucket',
         'ApplicationRoleArn',
-        'SecurityLogGroup'
+        'SecurityLogGroup',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -198,14 +193,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThan(10);
     });
 
-    test('should have three parameters', () => {
+    test('should have two parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(3);
+      expect(parameterCount).toBe(2);
     });
 
     test('should have seven outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(7);
+      expect(outputCount).toBe(8);
     });
   });
 
@@ -214,11 +209,15 @@ describe('TapStack CloudFormation Template', () => {
       const s3Resources = Object.values(template.Resources).filter(
         (resource: any) => resource.Type === 'AWS::S3::Bucket'
       );
-      
+
       s3Resources.forEach((bucket: any) => {
         expect(bucket.Properties.BucketEncryption).toBeDefined();
-        const encryption = bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0];
-        expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+        const encryption =
+          bucket.Properties.BucketEncryption
+            .ServerSideEncryptionConfiguration[0];
+        expect(encryption.ServerSideEncryptionByDefault.SSEAlgorithm).toBe(
+          'aws:kms'
+        );
       });
     });
 
@@ -226,9 +225,10 @@ describe('TapStack CloudFormation Template', () => {
       const s3Resources = Object.values(template.Resources).filter(
         (resource: any) => resource.Type === 'AWS::S3::Bucket'
       );
-      
+
       s3Resources.forEach((bucket: any) => {
-        const publicAccessBlock = bucket.Properties.PublicAccessBlockConfiguration;
+        const publicAccessBlock =
+          bucket.Properties.PublicAccessBlockConfiguration;
         expect(publicAccessBlock.BlockPublicAcls).toBe(true);
         expect(publicAccessBlock.BlockPublicPolicy).toBe(true);
         expect(publicAccessBlock.IgnorePublicAcls).toBe(true);
