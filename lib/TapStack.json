@@ -606,7 +606,7 @@
                 "EnableCloudwatchLogsExports": [
                     "error",
                     "general",
-                    "slow-query"
+                    "slowquery"
                 ],
                 "DeletionProtection": false
             }

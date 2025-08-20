@@ -380,7 +380,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
         // Check CloudWatch logs exports
         expect(dbInstance.EnabledCloudwatchLogsExports).toContain('error');
         expect(dbInstance.EnabledCloudwatchLogsExports).toContain('general');
-        expect(dbInstance.EnabledCloudwatchLogsExports).toContain('slow-query');
+        expect(dbInstance.EnabledCloudwatchLogsExports).toContain('slowquery');
       } catch (error: any) {
         if (error.name === 'DBInstanceNotFoundFault') {
           console.log('RDS instance does not exist yet');

@@ -352,7 +352,7 @@ Resources:
       EnableCloudwatchLogsExports:
         - error
         - general
-        - slow-query
+        - slowquery
       DeletionProtection: false
 
   # Secrets Manager for RDS Password

@@ -221,7 +221,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(props.PubliclyAccessible).toBe(false);
       expect(props.EnableCloudwatchLogsExports).toContain('error');
       expect(props.EnableCloudwatchLogsExports).toContain('general');
-      expect(props.EnableCloudwatchLogsExports).toContain('slow-query');
+      expect(props.EnableCloudwatchLogsExports).toContain('slowquery');
     });
 
     test('should have RDS Secret in Secrets Manager', () => {
