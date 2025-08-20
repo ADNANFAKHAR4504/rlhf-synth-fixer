@@ -201,7 +201,11 @@ export class EnvironmentConstruct extends Construct {
       vpc: this.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       instanceType: props.environmentConfig.instanceType,
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
+      // Using hardcoded AMI ID to avoid SSM permissions issue
+      // To find the latest AMI ID, use: aws ec2 describe-images --owners amazon --filters "Name=name,Values=al2023-ami-*" --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" --region us-west-2
+      machineImage: ec2.MachineImage.genericLinux({
+        'us-west-2': 'ami-0c2d3e23e757b5d84', // Amazon Linux 2023 AMI (replace with latest if needed)
+      }),
       role: props.sharedInstanceRole,
       securityGroup: environmentSecurityGroup,
       userData: userData,
