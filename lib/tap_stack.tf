@@ -1,4 +1,4 @@
-########################
+######################## 
 # Providers (primary + secondary)
 ########################
 # Keep your existing provider blocks if present; these defaults are safe.
