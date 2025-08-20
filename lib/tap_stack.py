@@ -121,10 +121,10 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
   )
 
   # Enable versioning
-  aws.s3.BucketVersioning(
+  aws.s3.BucketVersioningV2(
     f"{project_name}-{environment}-versioning-{region}",
     bucket=bucket.id,
-    versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+    versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
       status="Enabled"
     ),
     opts=ResourceOptions(
@@ -133,11 +133,11 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
   )
 
   # Configure server-side encryption
-  encryption_config = aws.s3.BucketServerSideEncryptionConfigurationArgs(
+  encryption_config = aws.s3.BucketServerSideEncryptionConfigurationV2Args(
     rules=[
-      aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+      aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
         apply_server_side_encryption_by_default=(
-          aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+          aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
             sse_algorithm="AES256" if not kms_key_id else "aws:kms",
             kms_master_key_id=kms_key_id if kms_key_id else None
           )
@@ -147,7 +147,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
     ]
   )
 
-  aws.s3.BucketServerSideEncryptionConfiguration(
+  aws.s3.BucketServerSideEncryptionConfigurationV2(
     f"{project_name}-{environment}-encryption-{region}",
     bucket=bucket.id,
     rules=encryption_config.rules,
@@ -157,7 +157,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
   )
 
   # Block public access
-  aws.s3.BucketPublicAccessBlock(
+  aws.s3.BucketPublicAccessBlockV2(
     f"{project_name}-{environment}-public-access-block-{region}",
     bucket=bucket.id,
     block_public_acls=True,
@@ -419,7 +419,7 @@ def create_cloudtrail(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) 
     ]
   )
 
-  aws.s3.BucketPolicy(
+  aws.s3.BucketPolicyV2(
     f"{project_name}-{environment}-cloudtrail-policy-{region}",
     bucket=bucket.id,
     policy=cloudtrail_policy.json,

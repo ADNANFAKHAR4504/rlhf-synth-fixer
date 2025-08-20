@@ -84,3 +84,28 @@
 - **SNS**: Topics for security notifications
 - **CloudWatch**: Alarms and metric filters for security monitoring
 - **CloudTrail**: Audit logging for compliance
+
+## Additional Fixes Applied
+
+### 7. **Pulumi AWS Provider Version Compatibility**
+
+**Problem**: The deployment was failing with `AttributeError: module 'pulumi_aws.s3' has no attribute 'BucketVersioning'` because the newer version of Pulumi AWS provider uses V2 resources.
+
+**Fix**:
+
+- Updated `BucketVersioning` to `BucketVersioningV2`
+- Updated `BucketServerSideEncryptionConfiguration` to `BucketServerSideEncryptionConfigurationV2`
+- Updated `BucketPublicAccessBlock` to `BucketPublicAccessBlockV2`
+- Updated `BucketPolicy` to `BucketPolicyV2`
+- Updated all corresponding argument classes to use V2 versions
+- Removed invalid `region` parameter from S3 bucket constructor
+
+### 8. **S3 Bucket Region Parameter Issue**
+
+**Problem**: The `aws.s3.Bucket` resource was receiving an invalid `region` parameter, causing `TypeError: Bucket._internal_init() got an unexpected keyword argument 'region'`.
+
+**Fix**:
+
+- Removed the `region=region` parameter from the S3 bucket constructor
+- Region is now properly specified only through the provider configuration
+- Updated both the main code and documentation files
