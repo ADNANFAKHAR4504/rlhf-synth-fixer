@@ -29,7 +29,7 @@ export class EnvironmentConstruct extends Construct {
 
     // Create VPC
     this.vpc = new ec2.Vpc(this, 'Vpc', {
-      cidr: props.environmentConfig.vpcCidr,
+      ipAddresses: ec2.IpAddresses.cidr(props.environmentConfig.vpcCidr),
       maxAzs: 2,
       subnetConfiguration: [
         {
@@ -78,16 +78,23 @@ export class EnvironmentConstruct extends Construct {
 
     new ec2.FlowLog(this, 'VpcFlowLog', {
       resourceType: ec2.FlowLogResourceType.fromVpc(this.vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogsLogGroup, flowLogsRole),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        flowLogsLogGroup,
+        flowLogsRole
+      ),
       trafficType: ec2.FlowLogTrafficType.ALL,
     });
 
     // Create environment-specific security group
-    const environmentSecurityGroup = new ec2.SecurityGroup(this, 'EnvironmentSecurityGroup', {
-      vpc: this.vpc,
-      description: `Security group for ${props.environmentConfig.name} environment`,
-      securityGroupName: `${props.environmentConfig.name}-sg-${this.environmentSuffix}`,
-    });
+    const environmentSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'EnvironmentSecurityGroup',
+      {
+        vpc: this.vpc,
+        description: `Security group for ${props.environmentConfig.name} environment`,
+        securityGroupName: `${props.environmentConfig.name}-sg-${this.environmentSuffix}`,
+      }
+    );
 
     // Add environment-specific rules
     environmentSecurityGroup.addIngressRule(
@@ -97,16 +104,24 @@ export class EnvironmentConstruct extends Construct {
     );
 
     // Associate shared security group with this VPC (using Security Group VPC Associations)
-    new ec2.CfnSecurityGroupVpcAssociation(this, 'SharedSecurityGroupAssociation', {
-      groupId: props.sharedSecurityGroup.securityGroupId,
-      vpcId: this.vpc.vpcId,
-    });
+    new ec2.CfnSecurityGroupVpcAssociation(
+      this,
+      'SharedSecurityGroupAssociation',
+      {
+        groupId: props.sharedSecurityGroup.securityGroupId,
+        vpcId: this.vpc.vpcId,
+      }
+    );
 
     // Create restrictive Network ACL
-    const restrictiveNetworkAcl = new ec2.NetworkAcl(this, 'RestrictiveNetworkAcl', {
-      vpc: this.vpc,
-      networkAclName: `${props.environmentConfig.name}-restrictive-nacl-${this.environmentSuffix}`,
-    });
+    const restrictiveNetworkAcl = new ec2.NetworkAcl(
+      this,
+      'RestrictiveNetworkAcl',
+      {
+        vpc: this.vpc,
+        networkAclName: `${props.environmentConfig.name}-restrictive-nacl-${this.environmentSuffix}`,
+      }
+    );
 
     // Add Network ACL rules
     restrictiveNetworkAcl.addEntry('AllowHttpInbound', {
@@ -162,10 +177,14 @@ export class EnvironmentConstruct extends Construct {
 
     // Associate Network ACL with private subnets
     this.vpc.privateSubnets.forEach((subnet, index) => {
-      new ec2.SubnetNetworkAclAssociation(this, `PrivateSubnetNaclAssociation${index}`, {
-        subnet: subnet,
-        networkAcl: restrictiveNetworkAcl,
-      });
+      new ec2.SubnetNetworkAclAssociation(
+        this,
+        `PrivateSubnetNaclAssociation${index}`,
+        {
+          subnet: subnet,
+          networkAcl: restrictiveNetworkAcl,
+        }
+      );
     });
 
     // Create EC2 instance for testing
@@ -173,7 +192,9 @@ export class EnvironmentConstruct extends Construct {
     userData.addCommands(
       'yum update -y',
       'yum install -y amazon-cloudwatch-agent',
-      'echo "Environment: ' + props.environmentConfig.name + '" > /home/ec2-user/environment.txt'
+      'echo "Environment: ' +
+        props.environmentConfig.name +
+        '" > /home/ec2-user/environment.txt'
     );
 
     const instance = new ec2.Instance(this, 'TestInstance', {
@@ -190,13 +211,16 @@ export class EnvironmentConstruct extends Construct {
     // Apply additional security configurations
     const cfnInstance = instance.node.defaultChild as ec2.CfnInstance;
     cfnInstance.addPropertyOverride('MetadataOptions.HttpTokens', 'required');
-    cfnInstance.addPropertyOverride('MetadataOptions.HttpPutResponseHopLimit', 1);
+    cfnInstance.addPropertyOverride(
+      'MetadataOptions.HttpPutResponseHopLimit',
+      1
+    );
     cfnInstance.addPropertyOverride('MetadataOptions.HttpEndpoint', 'enabled');
 
     // Store instance information
     this.instanceId = instance.instanceId;
     this.instancePrivateIp = instance.instancePrivateIp;
-    
+
     // Output instance information
     new cdk.CfnOutput(this, 'InstanceId', {
       value: instance.instanceId,

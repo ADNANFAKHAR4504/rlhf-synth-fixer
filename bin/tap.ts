@@ -6,7 +6,10 @@ import { TapStack } from '../lib/tap-stack';
 const app = new cdk.App();
 
 // Get environment suffix from context or environment variable
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || app.node.tryGetContext('environmentSuffix') || 'synthtrainr917';
+const environmentSuffix =
+  process.env.ENVIRONMENT_SUFFIX ||
+  app.node.tryGetContext('environmentSuffix') ||
+  'synthtrainr917';
 const stackName = `TapStack${environmentSuffix}`;
 
 const repositoryName = process.env.REPOSITORY || 'unknown';

@@ -418,7 +418,7 @@ describe('EnvironmentConstruct Unit Tests', () => {
     });
     
     const tempVpc = new ec2.Vpc(stack, 'TempVpc', {
-      cidr: '192.168.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('192.168.0.0/16'),
       maxAzs: 1
     });
     
