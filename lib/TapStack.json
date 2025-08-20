@@ -66,10 +66,6 @@
     },
     "VPCGatewayAttachment": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
-      "DependsOn": [
-        "VPC",
-        "InternetGateway"
-      ],
       "Properties": {
         "VpcId": {
           "Ref": "VPC"
@@ -411,7 +407,6 @@
     },
     "PrivateSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
-      "DependsOn": "PublicSecurityGroup",
       "Properties": {
         "GroupDescription": "Security group for resources in private subnets",
         "VpcId": {
@@ -476,7 +471,6 @@
     },
     "PrivateInstanceRole": {
       "Type": "AWS::IAM::Role",
-      "DependsOn": "ArtifactsBucket",
       "Properties": {
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -520,7 +514,6 @@
     },
     "PrivateInstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
-      "DependsOn": "PrivateInstanceRole",
       "Properties": {
         "Roles": [
           {

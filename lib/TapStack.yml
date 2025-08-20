@@ -46,9 +46,6 @@ Resources:
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
-    DependsOn:
-      - VPC
-      - InternetGateway
     Properties:
       VpcId: { Ref: VPC }
       InternetGatewayId: { Ref: InternetGateway }
@@ -236,7 +233,6 @@ Resources:
 
   PrivateSecurityGroup:
     Type: AWS::EC2::SecurityGroup
-    DependsOn: PublicSecurityGroup
     Properties:
       GroupDescription: "Security group for resources in private subnets"
       VpcId: { Ref: VPC }
@@ -274,7 +270,6 @@ Resources:
   # Least-privilege IAM role for EC2 instances in private subnets to read from the S3 bucket
   PrivateInstanceRole:
     Type: AWS::IAM::Role
-    DependsOn: ArtifactsBucket
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -302,7 +297,6 @@ Resources:
   # Instance Profile for the IAM role to be used by EC2 instances
   PrivateInstanceProfile:
     Type: AWS::IAM::InstanceProfile
-    DependsOn: PrivateInstanceRole
     Properties:
       Roles:
         - { Ref: PrivateInstanceRole }

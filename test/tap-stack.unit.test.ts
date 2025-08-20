@@ -109,9 +109,9 @@ describe('TapStack CloudFormation Template (Unit)', () => {
       expect(eip.Properties.Domain).toBe('vpc');
     });
 
-    test('VPCGatewayAttachment should depend on VPC and InternetGateway', () => {
+    test('VPCGatewayAttachment should not have explicit dependencies (implicit via Ref)', () => {
       const attachment = template.Resources.VPCGatewayAttachment;
-      expect(attachment.DependsOn).toEqual(['VPC', 'InternetGateway']);
+      expect(attachment.DependsOn).toBeUndefined();
     });
 
     test('NatGateway should depend on VPCGatewayAttachment', () => {
@@ -174,9 +174,9 @@ describe('TapStack CloudFormation Template (Unit)', () => {
       expect(ingress[0].SourceSecurityGroupId).toEqual({ Ref: 'PublicSecurityGroup' });
     });
 
-    test('PrivateSecurityGroup should depend on PublicSecurityGroup', () => {
+    test('PrivateSecurityGroup should not have explicit dependencies (implicit via Ref)', () => {
       const privateSG = template.Resources.PrivateSecurityGroup;
-      expect(privateSG.DependsOn).toBe('PublicSecurityGroup');
+      expect(privateSG.DependsOn).toBeUndefined();
     });
   });
 
@@ -233,14 +233,14 @@ describe('TapStack CloudFormation Template (Unit)', () => {
       ]);
     });
 
-    test('PrivateInstanceRole should depend on ArtifactsBucket', () => {
+    test('PrivateInstanceRole should not have explicit dependencies (implicit via Ref)', () => {
       const role = template.Resources.PrivateInstanceRole;
-      expect(role.DependsOn).toBe('ArtifactsBucket');
+      expect(role.DependsOn).toBeUndefined();
     });
 
-    test('PrivateInstanceProfile should depend on PrivateInstanceRole', () => {
+    test('PrivateInstanceProfile should not have explicit dependencies (implicit via Ref)', () => {
       const instanceProfile = template.Resources.PrivateInstanceProfile;
-      expect(instanceProfile.DependsOn).toBe('PrivateInstanceRole');
+      expect(instanceProfile.DependsOn).toBeUndefined();
     });
   });
 
