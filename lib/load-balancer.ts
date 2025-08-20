@@ -1,69 +1,101 @@
 import * as aws from '@pulumi/aws';
-import { commonTags, primaryRegion } from './config';
-import { primaryAlbSecurityGroup } from './security-groups';
-import { primaryPublicSubnet1, primaryPublicSubnet2, primaryVpc } from './vpc';
+import * as pulumi from '@pulumi/pulumi';
+import { getCommonTags, primaryRegion } from './config';
+import { VpcStack } from './vpc';
+import { SecurityGroupsStack } from './security-groups';
 
-const primaryProvider = new aws.Provider('primary-provider', {
-  region: primaryRegion,
-});
+export class LoadBalancerStack extends pulumi.ComponentResource {
+  public readonly applicationLoadBalancer: aws.lb.LoadBalancer;
+  public readonly targetGroup: aws.lb.TargetGroup;
+  public readonly albListener: aws.lb.Listener;
 
-// Application Load Balancer
-export const applicationLoadBalancer = new aws.lb.LoadBalancer(
-  'app-load-balancer',
-  {
-    name: 'app-load-balancer',
-    loadBalancerType: 'application',
-    subnets: [primaryPublicSubnet1.id, primaryPublicSubnet2.id],
-    securityGroups: [primaryAlbSecurityGroup.id],
-    enableDeletionProtection: false, // Set to true in production
-    tags: {
-      ...commonTags,
-      Name: 'Application Load Balancer',
+  constructor(
+    name: string,
+    args: {
+      environment: string;
+      tags: Record<string, string>;
+      vpcStack: VpcStack;
+      securityGroupsStack: SecurityGroupsStack;
     },
-  },
-  { provider: primaryProvider }
-);
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('tap:lb:LoadBalancerStack', name, {}, opts);
 
-// Target Group
-export const targetGroup = new aws.lb.TargetGroup(
-  'app-target-group',
-  {
-    name: 'app-target-group',
-    port: 8080,
-    protocol: 'HTTP',
-    vpcId: primaryVpc.id,
-    healthCheck: {
-      enabled: true,
-      healthyThreshold: 2,
-      interval: 30,
-      matcher: '200',
-      path: '/health',
-      port: 'traffic-port',
-      protocol: 'HTTP',
-      timeout: 5,
-      unhealthyThreshold: 2,
-    },
-    tags: {
-      ...commonTags,
-      Name: 'App Target Group',
-    },
-  },
-  { provider: primaryProvider }
-);
+    const commonTags = { ...getCommonTags(args.environment), ...args.tags };
 
-// ALB Listener
-export const albListener = new aws.lb.Listener(
-  'app-listener',
-  {
-    loadBalancerArn: applicationLoadBalancer.arn,
-    port: 80,
-    protocol: 'HTTP',
-    defaultActions: [
+    const primaryProvider = new aws.Provider(
+      `${args.environment}-primary-provider`,
+      { region: primaryRegion },
+      { parent: this }
+    );
+
+    // Application Load Balancer
+    this.applicationLoadBalancer = new aws.lb.LoadBalancer(
+      `${args.environment}-app-load-balancer`,
       {
-        type: 'forward',
-        targetGroupArn: targetGroup.arn,
+        name: `${args.environment}-app-load-balancer`,
+        loadBalancerType: 'application',
+        subnets: [
+          args.vpcStack.primaryPublicSubnet1.id,
+          args.vpcStack.primaryPublicSubnet2.id,
+        ],
+        securityGroups: [args.securityGroupsStack.primaryAlbSecurityGroup.id],
+        enableDeletionProtection: false, // Set to true in production
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Application-Load-Balancer`,
+        },
       },
-    ],
-  },
-  { provider: primaryProvider }
-);
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Target Group
+    this.targetGroup = new aws.lb.TargetGroup(
+      `${args.environment}-app-target-group`,
+      {
+        name: `${args.environment}-app-target-group`,
+        port: 8080,
+        protocol: 'HTTP',
+        vpcId: args.vpcStack.primaryVpc.id,
+        healthCheck: {
+          enabled: true,
+          healthyThreshold: 2,
+          interval: 30,
+          matcher: '200',
+          path: '/health',
+          port: 'traffic-port',
+          protocol: 'HTTP',
+          timeout: 5,
+          unhealthyThreshold: 2,
+        },
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-App-Target-Group`,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // ALB Listener
+    this.albListener = new aws.lb.Listener(
+      `${args.environment}-app-listener`,
+      {
+        loadBalancerArn: this.applicationLoadBalancer.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: this.targetGroup.arn,
+          },
+        ],
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    this.registerOutputs({
+      loadBalancerDnsName: this.applicationLoadBalancer.dnsName,
+      loadBalancerZoneId: this.applicationLoadBalancer.zoneId,
+    });
+  }
+}

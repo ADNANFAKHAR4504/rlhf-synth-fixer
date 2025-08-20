@@ -25,9 +25,10 @@ describe("TapStack Structure", () => {
     beforeAll(() => {
       stack = new TapStack("TestTapStackWithProps", {
         environmentSuffix: "prod",
-        stateBucket: "custom-state-bucket",
-        stateBucketRegion: "us-west-2",
-        awsRegion: "us-west-2",
+        tags: {
+          Environment: "prod",
+          Project: "test"
+        }
       });
     });
 
@@ -52,7 +53,7 @@ describe("TapStack Structure", () => {
 
   describe("with default values", () => {
     beforeAll(() => {
-      stack = new TapStack("TestTapStackDefault");
+      stack = new TapStack("TestTapStackDefault", {});
     });
 
     it("instantiates successfully", () => {

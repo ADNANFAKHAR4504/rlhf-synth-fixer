@@ -16,7 +16,7 @@ const config = new pulumi.Config();
 
 // Get the environment suffix from the Pulumi config, defaulting to 'dev'.
 // You can set this value using the command: `pulumi config set env <value>`
-const environmentSuffix = config.get('env') || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
@@ -35,10 +35,47 @@ const defaultTags = {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('pulumi-infra', {
+const stack = new TapStack('pulumi-infra', {
+  environmentSuffix,
   tags: defaultTags,
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export important resource information
+export const outputs = {
+  primaryRegion: stack.secureStack.kmsStack.primaryKmsKey.arn.apply(
+    () => 'ap-south-1'
+  ),
+  secondaryRegion: stack.secureStack.kmsStack.secondaryKmsKey.arn.apply(
+    () => 'eu-west-1'
+  ),
+
+  // VPC Information
+  primaryVpcId: stack.secureStack.vpcStack.primaryVpc.id,
+  primaryVpcCidr: stack.secureStack.vpcStack.primaryVpc.cidrBlock,
+  secondaryVpcId: stack.secureStack.vpcStack.secondaryVpc.id,
+  secondaryVpcCidr: stack.secureStack.vpcStack.secondaryVpc.cidrBlock,
+
+  // KMS Keys
+  primaryKmsKeyId: stack.secureStack.kmsStack.primaryKmsKey.keyId,
+  primaryKmsKeyArn: stack.secureStack.kmsStack.primaryKmsKey.arn,
+  secondaryKmsKeyId: stack.secureStack.kmsStack.secondaryKmsKey.keyId,
+  secondaryKmsKeyArn: stack.secureStack.kmsStack.secondaryKmsKey.arn,
+
+  // RDS Information
+  primaryDbEndpoint: stack.secureStack.rdsStack.primaryRdsInstance.endpoint,
+  primaryDbPort: stack.secureStack.rdsStack.primaryRdsInstance.port,
+  secondaryDbEndpoint:
+    stack.secureStack.rdsStack.secondaryRdsReadReplica.endpoint,
+  secondaryDbPort: stack.secureStack.rdsStack.secondaryRdsReadReplica.port,
+
+  // Load Balancer
+  loadBalancerDnsName:
+    stack.secureStack.loadBalancerStack.applicationLoadBalancer.dnsName,
+  loadBalancerZoneId:
+    stack.secureStack.loadBalancerStack.applicationLoadBalancer.zoneId,
+
+  // Auto Scaling Group
+  autoScalingGroupName:
+    stack.secureStack.autoScalingStack.autoScalingGroup.name,
+  autoScalingGroupArn: stack.secureStack.autoScalingStack.autoScalingGroup.arn,
+};

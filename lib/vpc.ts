@@ -1,204 +1,240 @@
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import {
-  commonTags,
+  getCommonTags,
   primaryRegion,
-  primaryVpcCidr,
   secondaryRegion,
+  primaryVpcCidr,
   secondaryVpcCidr,
 } from './config';
 
-// Primary region VPC
-const primaryProvider = new aws.Provider('primary-provider', {
-  region: primaryRegion,
-});
+export class VpcStack extends pulumi.ComponentResource {
+  public readonly primaryVpc: aws.ec2.Vpc;
+  public readonly primaryInternetGateway: aws.ec2.InternetGateway;
+  public readonly primaryPublicSubnet1: aws.ec2.Subnet;
+  public readonly primaryPublicSubnet2: aws.ec2.Subnet;
+  public readonly primaryPrivateSubnet1: aws.ec2.Subnet;
+  public readonly primaryPrivateSubnet2: aws.ec2.Subnet;
+  public readonly primaryPublicRouteTable: aws.ec2.RouteTable;
+  public readonly secondaryVpc: aws.ec2.Vpc;
+  public readonly secondaryInternetGateway: aws.ec2.InternetGateway;
+  public readonly secondaryPrivateSubnet1: aws.ec2.Subnet;
+  public readonly secondaryPrivateSubnet2: aws.ec2.Subnet;
 
-export const primaryVpc = new aws.ec2.Vpc(
-  'primary-vpc',
-  {
-    cidrBlock: primaryVpcCidr,
-    enableDnsHostnames: true,
-    enableDnsSupport: true,
-    tags: {
-      ...commonTags,
-      Name: 'Primary VPC',
-      Region: primaryRegion,
-    },
-  },
-  { provider: primaryProvider }
-);
+  constructor(
+    name: string,
+    args: { environment: string; tags: Record<string, string> },
+    opts?: pulumi.ComponentResourceOptions
+  ) {
+    super('tap:vpc:VpcStack', name, {}, opts);
 
-export const primaryInternetGateway = new aws.ec2.InternetGateway(
-  'primary-igw',
-  {
-    vpcId: primaryVpc.id,
-    tags: {
-      ...commonTags,
-      Name: 'Primary Internet Gateway',
-    },
-  },
-  { provider: primaryProvider }
-);
+    const commonTags = { ...getCommonTags(args.environment), ...args.tags };
 
-// Primary region subnets
-export const primaryPublicSubnet1 = new aws.ec2.Subnet(
-  'primary-public-subnet-1',
-  {
-    vpcId: primaryVpc.id,
-    cidrBlock: '10.0.1.0/24',
-    availabilityZone: `${primaryRegion}a`,
-    mapPublicIpOnLaunch: true,
-    tags: {
-      ...commonTags,
-      Name: 'Primary Public Subnet 1',
-      Type: 'Public',
-    },
-  },
-  { provider: primaryProvider }
-);
+    // Primary region VPC
+    const primaryProvider = new aws.Provider(
+      `${args.environment}-primary-provider`,
+      { region: primaryRegion },
+      { parent: this }
+    );
 
-export const primaryPublicSubnet2 = new aws.ec2.Subnet(
-  'primary-public-subnet-2',
-  {
-    vpcId: primaryVpc.id,
-    cidrBlock: '10.0.2.0/24',
-    availabilityZone: `${primaryRegion}b`,
-    mapPublicIpOnLaunch: true,
-    tags: {
-      ...commonTags,
-      Name: 'Primary Public Subnet 2',
-      Type: 'Public',
-    },
-  },
-  { provider: primaryProvider }
-);
-
-export const primaryPrivateSubnet1 = new aws.ec2.Subnet(
-  'primary-private-subnet-1',
-  {
-    vpcId: primaryVpc.id,
-    cidrBlock: '10.0.3.0/24',
-    availabilityZone: `${primaryRegion}a`,
-    tags: {
-      ...commonTags,
-      Name: 'Primary Private Subnet 1',
-      Type: 'Private',
-    },
-  },
-  { provider: primaryProvider }
-);
-
-export const primaryPrivateSubnet2 = new aws.ec2.Subnet(
-  'primary-private-subnet-2',
-  {
-    vpcId: primaryVpc.id,
-    cidrBlock: '10.0.4.0/24',
-    availabilityZone: `${primaryRegion}b`,
-    tags: {
-      ...commonTags,
-      Name: 'Primary Private Subnet 2',
-      Type: 'Private',
-    },
-  },
-  { provider: primaryProvider }
-);
-
-// Primary region route table
-export const primaryPublicRouteTable = new aws.ec2.RouteTable(
-  'primary-public-rt',
-  {
-    vpcId: primaryVpc.id,
-    routes: [
+    this.primaryVpc = new aws.ec2.Vpc(
+      `${args.environment}-primary-vpc`,
       {
-        cidrBlock: '0.0.0.0/0',
-        gatewayId: primaryInternetGateway.id,
+        cidrBlock: primaryVpcCidr,
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Primary-VPC`,
+          Region: primaryRegion,
+        },
       },
-    ],
-    tags: {
-      ...commonTags,
-      Name: 'Primary Public Route Table',
-    },
-  },
-  { provider: primaryProvider }
-);
+      { provider: primaryProvider, parent: this }
+    );
 
-// Associate public subnets with route table
-export const primaryPublicRtAssociation1 = new aws.ec2.RouteTableAssociation(
-  'primary-public-rta-1',
-  {
-    subnetId: primaryPublicSubnet1.id,
-    routeTableId: primaryPublicRouteTable.id,
-  },
-  { provider: primaryProvider }
-);
+    this.primaryInternetGateway = new aws.ec2.InternetGateway(
+      `${args.environment}-primary-igw`,
+      {
+        vpcId: this.primaryVpc.id,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Primary-Internet-Gateway`,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
 
-export const primaryPublicRtAssociation2 = new aws.ec2.RouteTableAssociation(
-  'primary-public-rta-2',
-  {
-    subnetId: primaryPublicSubnet2.id,
-    routeTableId: primaryPublicRouteTable.id,
-  },
-  { provider: primaryProvider }
-);
+    // Primary region subnets
+    this.primaryPublicSubnet1 = new aws.ec2.Subnet(
+      `${args.environment}-primary-public-subnet-1`,
+      {
+        vpcId: this.primaryVpc.id,
+        cidrBlock: '10.0.1.0/24',
+        availabilityZone: `${primaryRegion}a`,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Primary-Public-Subnet-1`,
+          Type: 'Public',
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
 
-// Secondary region VPC
-const secondaryProvider = new aws.Provider('secondary-provider', {
-  region: secondaryRegion,
-});
+    this.primaryPublicSubnet2 = new aws.ec2.Subnet(
+      `${args.environment}-primary-public-subnet-2`,
+      {
+        vpcId: this.primaryVpc.id,
+        cidrBlock: '10.0.2.0/24',
+        availabilityZone: `${primaryRegion}b`,
+        mapPublicIpOnLaunch: true,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Primary-Public-Subnet-2`,
+          Type: 'Public',
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
 
-export const secondaryVpc = new aws.ec2.Vpc(
-  'secondary-vpc',
-  {
-    cidrBlock: secondaryVpcCidr,
-    enableDnsHostnames: true,
-    enableDnsSupport: true,
-    tags: {
-      ...commonTags,
-      Name: 'Secondary VPC',
-      Region: secondaryRegion,
-    },
-  },
-  { provider: secondaryProvider }
-);
+    this.primaryPrivateSubnet1 = new aws.ec2.Subnet(
+      `${args.environment}-primary-private-subnet-1`,
+      {
+        vpcId: this.primaryVpc.id,
+        cidrBlock: '10.0.3.0/24',
+        availabilityZone: `${primaryRegion}a`,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Primary-Private-Subnet-1`,
+          Type: 'Private',
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
 
-export const secondaryInternetGateway = new aws.ec2.InternetGateway(
-  'secondary-igw',
-  {
-    vpcId: secondaryVpc.id,
-    tags: {
-      ...commonTags,
-      Name: 'Secondary Internet Gateway',
-    },
-  },
-  { provider: secondaryProvider }
-);
+    this.primaryPrivateSubnet2 = new aws.ec2.Subnet(
+      `${args.environment}-primary-private-subnet-2`,
+      {
+        vpcId: this.primaryVpc.id,
+        cidrBlock: '10.0.4.0/24',
+        availabilityZone: `${primaryRegion}b`,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Primary-Private-Subnet-2`,
+          Type: 'Private',
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
 
-// Secondary region subnets
-export const secondaryPrivateSubnet1 = new aws.ec2.Subnet(
-  'secondary-private-subnet-1',
-  {
-    vpcId: secondaryVpc.id,
-    cidrBlock: '10.1.1.0/24',
-    availabilityZone: `${secondaryRegion}a`,
-    tags: {
-      ...commonTags,
-      Name: 'Secondary Private Subnet 1',
-      Type: 'Private',
-    },
-  },
-  { provider: secondaryProvider }
-);
+    // Primary region route table
+    this.primaryPublicRouteTable = new aws.ec2.RouteTable(
+      `${args.environment}-primary-public-rt`,
+      {
+        vpcId: this.primaryVpc.id,
+        routes: [
+          {
+            cidrBlock: '0.0.0.0/0',
+            gatewayId: this.primaryInternetGateway.id,
+          },
+        ],
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Primary-Public-Route-Table`,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
 
-export const secondaryPrivateSubnet2 = new aws.ec2.Subnet(
-  'secondary-private-subnet-2',
-  {
-    vpcId: secondaryVpc.id,
-    cidrBlock: '10.1.2.0/24',
-    availabilityZone: `${secondaryRegion}b`,
-    tags: {
-      ...commonTags,
-      Name: 'Secondary Private Subnet 2',
-      Type: 'Private',
-    },
-  },
-  { provider: secondaryProvider }
-);
+    // Associate public subnets with route table
+    new aws.ec2.RouteTableAssociation(
+      `${args.environment}-primary-public-rta-1`,
+      {
+        subnetId: this.primaryPublicSubnet1.id,
+        routeTableId: this.primaryPublicRouteTable.id,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    new aws.ec2.RouteTableAssociation(
+      `${args.environment}-primary-public-rta-2`,
+      {
+        subnetId: this.primaryPublicSubnet2.id,
+        routeTableId: this.primaryPublicRouteTable.id,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Secondary region VPC
+    const secondaryProvider = new aws.Provider(
+      `${args.environment}-secondary-provider`,
+      { region: secondaryRegion },
+      { parent: this }
+    );
+
+    this.secondaryVpc = new aws.ec2.Vpc(
+      `${args.environment}-secondary-vpc`,
+      {
+        cidrBlock: secondaryVpcCidr,
+        enableDnsHostnames: true,
+        enableDnsSupport: true,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Secondary-VPC`,
+          Region: secondaryRegion,
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    this.secondaryInternetGateway = new aws.ec2.InternetGateway(
+      `${args.environment}-secondary-igw`,
+      {
+        vpcId: this.secondaryVpc.id,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Secondary-Internet-Gateway`,
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    // Secondary region subnets
+    this.secondaryPrivateSubnet1 = new aws.ec2.Subnet(
+      `${args.environment}-secondary-private-subnet-1`,
+      {
+        vpcId: this.secondaryVpc.id,
+        cidrBlock: '10.1.1.0/24',
+        availabilityZone: `${secondaryRegion}a`,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Secondary-Private-Subnet-1`,
+          Type: 'Private',
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    this.secondaryPrivateSubnet2 = new aws.ec2.Subnet(
+      `${args.environment}-secondary-private-subnet-2`,
+      {
+        vpcId: this.secondaryVpc.id,
+        cidrBlock: '10.1.2.0/24',
+        availabilityZone: `${secondaryRegion}b`,
+        tags: {
+          ...commonTags,
+          Name: `${args.environment}-Secondary-Private-Subnet-2`,
+          Type: 'Private',
+        },
+      },
+      { provider: secondaryProvider, parent: this }
+    );
+
+    this.registerOutputs({
+      primaryVpcId: this.primaryVpc.id,
+      primaryVpcCidr: this.primaryVpc.cidrBlock,
+      secondaryVpcId: this.secondaryVpc.id,
+      secondaryVpcCidr: this.secondaryVpc.cidrBlock,
+    });
+  }
+}
