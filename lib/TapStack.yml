@@ -2,6 +2,13 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure AWS Infrastructure with VPC, IAM, encryption, logging, and security best practices'
 
 Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
   Environment:
     Type: String
     Default: 'production'
@@ -19,16 +26,22 @@ Parameters:
 
   DBUsername:
     Type: String
-    Default: 'admin'
+    Default: 'corpdbadmin'
     Description: 'RDS Database username'
     NoEcho: true
+    MinLength: 4
+    MaxLength: 16
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
+    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
 
   DBPassword:
     Type: String
     Description: 'RDS Database password'
     NoEcho: true
-    MinLength: 8
+    MinLength: 12
     MaxLength: 128
+    AllowedPattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$'
+    ConstraintDescription: 'Password must contain at least 12 characters including uppercase, lowercase, number, and special character'
 
 Resources:
   # ===============================
@@ -42,7 +55,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: 'corp-vpc'
+          Value: !Sub 'corp-vpc-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -56,7 +69,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: 'corp-igw'
+          Value: !Sub 'corp-igw-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -76,11 +89,11 @@ Resources:
     Properties:
       VpcId: !Ref CorpVPC
       CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: 'us-west-2a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'corp-public-subnet-1'
+          Value: !Sub 'corp-public-subnet-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -93,11 +106,11 @@ Resources:
     Properties:
       VpcId: !Ref CorpVPC
       CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: 'us-west-2b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: 'corp-public-subnet-2'
+          Value: !Sub 'corp-public-subnet-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -111,10 +124,10 @@ Resources:
     Properties:
       VpcId: !Ref CorpVPC
       CidrBlock: '10.0.3.0/24'
-      AvailabilityZone: 'us-west-2a'
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: 'corp-private-subnet-1'
+          Value: !Sub 'corp-private-subnet-1-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -127,10 +140,10 @@ Resources:
     Properties:
       VpcId: !Ref CorpVPC
       CidrBlock: '10.0.4.0/24'
-      AvailabilityZone: 'us-west-2b'
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
-          Value: 'corp-private-subnet-2'
+          Value: !Sub 'corp-private-subnet-2-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -146,7 +159,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: 'corp-nat-eip'
+          Value: !Sub 'corp-nat-eip-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -161,7 +174,7 @@ Resources:
       SubnetId: !Ref CorpPublicSubnet1
       Tags:
         - Key: Name
-          Value: 'corp-nat-gateway'
+          Value: !Sub 'corp-nat-gateway-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -176,7 +189,7 @@ Resources:
       VpcId: !Ref CorpVPC
       Tags:
         - Key: Name
-          Value: 'corp-public-rt'
+          Value: !Sub 'corp-public-rt-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -190,7 +203,7 @@ Resources:
       VpcId: !Ref CorpVPC
       Tags:
         - Key: Name
-          Value: 'corp-private-rt'
+          Value: !Sub 'corp-private-rt-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -245,27 +258,39 @@ Resources:
   CorpWebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'corp-web-sg'
-      GroupDescription: 'Security group for web servers'
+      GroupName: !Sub 'corp-web-sg-${EnvironmentSuffix}'
+      GroupDescription: !Sub 'Security group for web servers - ${EnvironmentSuffix}'
       VpcId: !Ref CorpVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: '0.0.0.0/0'
-          Description: 'HTTP traffic'
+          Description: 'HTTP traffic from internet'
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS traffic'
+          Description: 'HTTPS traffic from internet'
       SecurityGroupEgress:
-        - IpProtocol: -1
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
           CidrIp: '0.0.0.0/0'
-          Description: 'All outbound traffic'
+          Description: 'HTTP outbound for package updates'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS outbound for secure connections'
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          DestinationSecurityGroupId: !Ref CorpDatabaseSecurityGroup
+          Description: 'MySQL outbound to database'
       Tags:
         - Key: Name
-          Value: 'corp-web-sg'
+          Value: !Sub 'corp-web-sg-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -276,18 +301,13 @@ Resources:
   CorpDatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'corp-db-sg'
-      GroupDescription: 'Security group for RDS database'
+      GroupName: !Sub 'corp-db-sg-${EnvironmentSuffix}'
+      GroupDescription: !Sub 'Security group for RDS database - ${EnvironmentSuffix}'
       VpcId: !Ref CorpVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref CorpWebSecurityGroup
-          Description: 'MySQL access from web servers'
+      SecurityGroupEgress: []
       Tags:
         - Key: Name
-          Value: 'corp-db-sg'
+          Value: !Sub 'corp-db-sg-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -298,8 +318,8 @@ Resources:
   CorpLambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: 'corp-lambda-sg'
-      GroupDescription: 'Security group for Lambda functions'
+      GroupName: !Sub 'corp-lambda-sg-${EnvironmentSuffix}'
+      GroupDescription: !Sub 'Security group for Lambda functions - ${EnvironmentSuffix}'
       VpcId: !Ref CorpVPC
       SecurityGroupEgress:
         - IpProtocol: tcp
@@ -307,9 +327,14 @@ Resources:
           ToPort: 443
           CidrIp: '0.0.0.0/0'
           Description: 'HTTPS outbound for AWS APIs'
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          DestinationSecurityGroupId: !Ref CorpDatabaseSecurityGroup
+          Description: 'MySQL access to database'
       Tags:
         - Key: Name
-          Value: 'corp-lambda-sg'
+          Value: !Sub 'corp-lambda-sg-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -317,13 +342,34 @@ Resources:
         - Key: Project
           Value: !Ref Project
 
+  # Security Group Rules (to avoid circular dependencies)
+  CorpDBSecurityGroupIngressFromWeb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CorpDatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref CorpWebSecurityGroup
+      Description: 'MySQL access from web servers'
+
+  CorpDBSecurityGroupIngressFromLambda:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref CorpDatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref CorpLambdaSecurityGroup
+      Description: 'MySQL access from Lambda functions'
+
   # ===============================
   # IAM Roles and Policies
   # ===============================
   CorpLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: 'corp-lambda-execution-role'
+      RoleName: !Sub 'corp-lambda-execution-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -331,10 +377,13 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                'aws:RequestedRegion': !Ref 'AWS::Region'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
       Policies:
-        - PolicyName: 'corp-lambda-minimal-policy'
+        - PolicyName: !Sub 'corp-lambda-minimal-policy-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -343,15 +392,24 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/corp-*'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
                   - kms:GenerateDataKey
-                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
+                Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/lambda'
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'ec2:vpc': !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:vpc/${CorpVPC}'
       Tags:
         - Key: Name
-          Value: 'corp-lambda-execution-role'
+          Value: !Sub 'corp-lambda-execution-role-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -362,7 +420,7 @@ Resources:
   CorpEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: 'corp-ec2-role'
+      RoleName: !Sub 'corp-ec2-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -370,8 +428,11 @@ Resources:
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                'aws:RequestedRegion': !Ref 'AWS::Region'
       Policies:
-        - PolicyName: 'corp-ec2-minimal-policy'
+        - PolicyName: !Sub 'corp-ec2-minimal-policy-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -380,14 +441,23 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/corp/ec2/*'
               - Effect: Allow
                 Action:
                   - cloudwatch:PutMetricData
                 Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace': 'Corp/EC2'
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/corp/${EnvironmentSuffix}/*'
       Tags:
         - Key: Name
-          Value: 'corp-ec2-role'
+          Value: !Sub 'corp-ec2-role-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -398,7 +468,7 @@ Resources:
   CorpEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: 'corp-ec2-instance-profile'
+      InstanceProfileName: !Sub 'corp-ec2-instance-profile-${EnvironmentSuffix}'
       Roles:
         - !Ref CorpEC2Role
 
@@ -406,8 +476,8 @@ Resources:
   CorpMFAPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: 'corp-enforce-mfa-policy'
-      Description: 'Policy to enforce MFA for all IAM users'
+      ManagedPolicyName: !Sub 'corp-enforce-mfa-policy-${EnvironmentSuffix}'
+      Description: !Sub 'Policy to enforce MFA for all IAM users - ${EnvironmentSuffix}'
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -423,7 +493,7 @@ Resources:
             Action:
               - iam:ChangePassword
               - iam:GetUser
-            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/${aws:username}'
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/*'
           - Sid: AllowManageOwnMFA
             Effect: Allow
             Action:
@@ -433,8 +503,8 @@ Resources:
               - iam:ListMFADevices
               - iam:ResyncMFADevice
             Resource:
-              - !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/${aws:username}'
-              - !Sub 'arn:aws:iam::${AWS::AccountId}:user/${aws:username}'
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/*'
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:user/*'
           - Sid: DenyAllExceptUnlessSignedInWithMFA
             Effect: Deny
             NotAction:
@@ -456,11 +526,12 @@ Resources:
   CorpCloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'corp-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'corp-cloudtrail-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
+              KMSMasterKeyID: alias/aws/s3
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -469,9 +540,17 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'corp-cloudtrail-lifecycle'
+            Status: Enabled
+            ExpirationInDays: 2555  # 7 years retention
+            NoncurrentVersionExpirationInDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
       Tags:
         - Key: Name
-          Value: 'corp-cloudtrail-bucket'
+          Value: !Sub 'corp-cloudtrail-bucket-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -501,14 +580,46 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
 
+  CorpCloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/corp/cloudtrail/${EnvironmentSuffix}'
+      RetentionInDays: 365
+      KmsKeyId: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/logs'
+
+  CorpCloudTrailLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'corp-cloudtrail-logs-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub 'corp-cloudtrail-logs-policy-${EnvironmentSuffix}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt CorpCloudTrailLogGroup.Arn
+
   CorpCloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: CorpCloudTrailBucketPolicy
     Properties:
-      TrailName: 'corp-cloudtrail'
+      TrailName: !Sub 'corp-cloudtrail-${EnvironmentSuffix}'
       S3BucketName: !Ref CorpCloudTrailBucket
+      CloudWatchLogsLogGroupArn: !GetAtt CorpCloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CorpCloudTrailLogRole.Arn
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
+      IsLogging: true
       EnableLogFileValidation: true
       KMSKeyId: alias/aws/s3
       EventSelectors:
@@ -518,9 +629,11 @@ Resources:
             - Type: 'AWS::S3::Object'
               Values:
                 - 'arn:aws:s3:::*/*'
+      InsightSelectors:
+        - InsightType: ApiCallRateInsight
       Tags:
         - Key: Name
-          Value: 'corp-cloudtrail'
+          Value: !Sub 'corp-cloudtrail-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -534,14 +647,14 @@ Resources:
   CorpDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: 'corp-db-subnet-group'
-      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      DBSubnetGroupName: !Sub 'corp-db-subnet-group-${EnvironmentSuffix}'
+      DBSubnetGroupDescription: !Sub 'Subnet group for RDS database - ${EnvironmentSuffix}'
       SubnetIds:
         - !Ref CorpPrivateSubnet1
         - !Ref CorpPrivateSubnet2
       Tags:
         - Key: Name
-          Value: 'corp-db-subnet-group'
+          Value: !Sub 'corp-db-subnet-group-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -551,13 +664,16 @@ Resources:
 
   CorpRDSDatabase:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
-      DBInstanceIdentifier: 'corp-database'
+      DBInstanceIdentifier: !Sub 'corp-database-${EnvironmentSuffix}'
       DBInstanceClass: 'db.t3.micro'
       Engine: 'mysql'
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       AllocatedStorage: 20
-      StorageType: 'gp2'
+      MaxAllocatedStorage: 100
+      StorageType: 'gp3'
       StorageEncrypted: true
       KmsKeyId: alias/aws/rds
       MasterUsername: !Ref DBUsername
@@ -566,17 +682,23 @@ Resources:
         - !Ref CorpDatabaseSecurityGroup
       DBSubnetGroupName: !Ref CorpDBSubnetGroup
       MultiAZ: true
-      BackupRetentionPeriod: 7
-      DeletionProtection: true
+      BackupRetentionPeriod: 30
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      DeletionProtection: false
       EnableCloudwatchLogsExports:
         - error
         - general
         - slow-query
       MonitoringInterval: 60
-      MonitoringRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role'
+      MonitoringRoleArn: !GetAtt CorpRDSMonitoringRole.Arn
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
       Tags:
         - Key: Name
-          Value: 'corp-database'
+          Value: !Sub 'corp-database-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -588,7 +710,7 @@ Resources:
   CorpRDSMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: 'rds-monitoring-role'
+      RoleName: !Sub 'corp-rds-monitoring-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -596,8 +718,20 @@ Resources:
             Principal:
               Service: monitoring.rds.amazonaws.com
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                'aws:RequestedRegion': !Ref 'AWS::Region'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Tags:
+        - Key: Name
+          Value: !Sub 'corp-rds-monitoring-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
 
   # ===============================
   # Application Load Balancer
@@ -605,7 +739,7 @@ Resources:
   CorpApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: 'corp-alb'
+      Name: !Sub 'corp-alb-${EnvironmentSuffix}'
       Type: 'application'
       Scheme: 'internet-facing'
       SecurityGroups:
@@ -613,9 +747,18 @@ Resources:
       Subnets:
         - !Ref CorpPublicSubnet1
         - !Ref CorpPublicSubnet2
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: 'false'
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref CorpCloudTrailBucket
+        - Key: access_logs.s3.prefix
+          Value: 'alb-access-logs'
       Tags:
         - Key: Name
-          Value: 'corp-alb'
+          Value: !Sub 'corp-alb-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -626,7 +769,7 @@ Resources:
   CorpTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: 'corp-target-group'
+      Name: !Sub 'corp-target-group-${EnvironmentSuffix}'
       Port: 80
       Protocol: 'HTTP'
       VpcId: !Ref CorpVPC
@@ -637,9 +780,14 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+        - Key: stickiness.enabled
+          Value: 'false'
       Tags:
         - Key: Name
-          Value: 'corp-target-group'
+          Value: !Sub 'corp-target-group-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -663,18 +811,26 @@ Resources:
   CorpLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: 'corp-lambda-function'
-      Runtime: 'python3.9'
+      FunctionName: !Sub 'corp-lambda-function-${EnvironmentSuffix}'
+      Runtime: 'python3.11'
       Handler: 'index.lambda_handler'
       Role: !GetAtt CorpLambdaExecutionRole.Arn
       Code:
         ZipFile: |
           import json
+          import os
           def lambda_handler(event, context):
+              env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'unknown')
               return {
                   'statusCode': 200,
-                  'body': json.dumps('Hello from Lambda!')
+                  'body': json.dumps({
+                      'message': f'Hello from Lambda in {env_suffix} environment!',
+                      'requestId': context.aws_request_id
+                  })
               }
+      Environment:
+        Variables:
+          ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
       VpcConfig:
         SecurityGroupIds:
           - !Ref CorpLambdaSecurityGroup
@@ -682,9 +838,13 @@ Resources:
           - !Ref CorpPrivateSubnet1
           - !Ref CorpPrivateSubnet2
       KmsKeyArn: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/lambda'
+      DeadLetterConfig:
+        TargetArn: !GetAtt CorpLambdaDLQ.Arn
+      TracingConfig:
+        Mode: Active
       Tags:
         - Key: Name
-          Value: 'corp-lambda-function'
+          Value: !Sub 'corp-lambda-function-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -695,17 +855,33 @@ Resources:
   # ===============================
   # CloudWatch Log Groups
   # ===============================
+  CorpLambdaDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'corp-lambda-dlq-${EnvironmentSuffix}'
+      KmsMasterKeyId: alias/aws/sqs
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Name
+          Value: !Sub 'corp-lambda-dlq-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref Project
+
   CorpVPCFlowLogsGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: '/corp/vpc/flowlogs'
-      RetentionInDays: 30
+      LogGroupName: !Sub '/corp/vpc/flowlogs/${EnvironmentSuffix}'
+      RetentionInDays: 90
       KmsKeyId: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/logs'
 
   CorpVPCFlowLogsRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: 'corp-vpc-flowlogs-role'
+      RoleName: !Sub 'corp-vpc-flowlogs-role-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -713,8 +889,11 @@ Resources:
             Principal:
               Service: vpc-flow-logs.amazonaws.com
             Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                'aws:RequestedRegion': !Ref 'AWS::Region'
       Policies:
-        - PolicyName: 'corp-flowlogs-policy'
+        - PolicyName: !Sub 'corp-flowlogs-policy-${EnvironmentSuffix}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -725,7 +904,7 @@ Resources:
                   - logs:PutLogEvents
                   - logs:DescribeLogGroups
                   - logs:DescribeLogStreams
-                Resource: '*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/corp/vpc/flowlogs/${EnvironmentSuffix}*'
 
   CorpVPCFlowLogs:
     Type: AWS::EC2::FlowLog
@@ -736,9 +915,11 @@ Resources:
       LogDestinationType: 'cloud-watch-logs'
       LogGroupName: !Ref CorpVPCFlowLogsGroup
       DeliverLogsPermissionArn: !GetAtt CorpVPCFlowLogsRole.Arn
+      MaxAggregationInterval: 600
+      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}'
       Tags:
         - Key: Name
-          Value: 'corp-vpc-flowlogs'
+          Value: !Sub 'corp-vpc-flowlogs-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -751,40 +932,52 @@ Outputs:
     Description: 'VPC ID'
     Value: !Ref CorpVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
+      Name: !Sub 'TapStack${EnvironmentSuffix}-VPC-ID'
 
   PublicSubnet1Id:
     Description: 'Public Subnet 1 ID'
     Value: !Ref CorpPublicSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+      Name: !Sub 'TapStack${EnvironmentSuffix}-PublicSubnet1-ID'
 
   PublicSubnet2Id:
     Description: 'Public Subnet 2 ID'
     Value: !Ref CorpPublicSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+      Name: !Sub 'TapStack${EnvironmentSuffix}-PublicSubnet2-ID'
 
   PrivateSubnet1Id:
     Description: 'Private Subnet 1 ID'
     Value: !Ref CorpPrivateSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+      Name: !Sub 'TapStack${EnvironmentSuffix}-PrivateSubnet1-ID'
 
   PrivateSubnet2Id:
     Description: 'Private Subnet 2 ID'
     Value: !Ref CorpPrivateSubnet2
     Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+      Name: !Sub 'TapStack${EnvironmentSuffix}-PrivateSubnet2-ID'
 
   LoadBalancerDNS:
     Description: 'Application Load Balancer DNS Name'
     Value: !GetAtt CorpApplicationLoadBalancer.DNSName
     Export:
-      Name: !Sub '${AWS::StackName}-ALB-DNS'
+      Name: !Sub 'TapStack${EnvironmentSuffix}-ALB-DNS'
 
   DatabaseEndpoint:
     Description: 'RDS Database Endpoint'
     Value: !GetAtt CorpRDSDatabase.Endpoint.Address
     Export:
-      Name: !Sub '${AWS::StackName}-DB-Endpoint'
+      Name: !Sub 'TapStack${EnvironmentSuffix}-DB-Endpoint'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref 'AWS::StackName'
+    Export:
+      Name: !Sub 'TapStack${EnvironmentSuffix}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub 'TapStack${EnvironmentSuffix}-EnvironmentSuffix'
