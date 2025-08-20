@@ -68,7 +68,7 @@ describe('TAP Stack CloudFormation Template - Unit Tests', () => {
       expect(kmsKey).toBeDefined();
       expect(kmsKey.Type).toBe('AWS::KMS::Key');
       expect(kmsKey.Properties.KeyPolicy).toBeDefined();
-      expect(kmsKey.Properties.KeyPolicy.Statement).toHaveLength(3);
+      expect(kmsKey.Properties.KeyPolicy.Statement).toHaveLength(4);
     });
 
     test('KMS key should have service access policies', () => {
@@ -78,6 +78,7 @@ describe('TAP Stack CloudFormation Template - Unit Tests', () => {
       expect(sids).toContain('Enable IAM User Permissions');
       expect(sids).toContain('Allow CloudTrail to encrypt logs');
       expect(sids).toContain('Allow S3 service to use the key');
+      expect(sids).toContain('Allow CloudWatch Logs');
     });
 
     test('should have KMS key alias', () => {

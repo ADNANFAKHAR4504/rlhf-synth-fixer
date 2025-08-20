@@ -1,12 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import {
-  DynamoDBClient,
-  PutItemCommand,
-  GetItemCommand,
-  DeleteItemCommand,
-  DescribeTableCommand
-} from '@aws-sdk/client-dynamodb';
+  IAMClient,
+  GetRoleCommand
+} from '@aws-sdk/client-iam';
 import {
   S3Client,
   PutObjectCommand,
@@ -49,14 +46,12 @@ function loadOutputs() {
   
   // Return mock outputs for testing without deployment
   return {
-    TurnAroundPromptTableName: `TAP-${environmentSuffix}-TurnAroundPrompts-123456789012`,
-    TurnAroundPromptTableArn: `arn:aws:dynamodb:us-west-2:123456789012:table/TAP-${environmentSuffix}-TurnAroundPrompts-123456789012`,
     KMSKeyId: '12345678-1234-1234-1234-123456789012',
     KMSKeyArn: 'arn:aws:kms:us-west-2:123456789012:key/12345678-1234-1234-1234-123456789012',
-    DataBucketName: `tap-${environmentSuffix}-data-123456789012-us-west-2`,
-    SecurityGroupId: 'sg-123456789012',
-    CloudTrailArn: `arn:aws:cloudtrail:us-west-2:123456789012:trail/TAP-${environmentSuffix}-audit-trail-123456789012`,
-    LogGroupName: `/aws/tap/${environmentSuffix}/audit-logs`
+    SecureDataBucketName: `myapp-secure-data-prod-123456789012`,
+    WebServerSecurityGroupId: 'sg-123456789012',
+    WebServerRoleArn: 'arn:aws:iam::123456789012:role/myapp-web-prod-role',
+    CloudTrailArn: `arn:aws:cloudtrail:us-west-2:123456789012:trail/myapp-security-audit-prod`
   };
 }
 
@@ -68,7 +63,7 @@ function createClients() {
   const config = { region };
   
   return {
-    dynamodb: new DynamoDBClient(config),
+    iam: new IAMClient(config),
     s3: new S3Client(config),
     kms: new KMSClient(config),
     cloudtrail: new CloudTrailClient(config),
@@ -94,139 +89,36 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
   describe('Core Infrastructure Validation', () => {
     test('should have all required outputs available', () => {
       expect(outputs).toBeDefined();
-      expect(outputs.TurnAroundPromptTableName).toBeDefined();
-      expect(outputs.TurnAroundPromptTableArn).toBeDefined();
+      expect(outputs.KMSKeyId).toBeDefined();
+      expect(outputs.KMSKeyArn).toBeDefined();
+      expect(outputs.SecureDataBucketName).toBeDefined();
+      expect(outputs.WebServerRoleArn).toBeDefined();
+      expect(outputs.CloudTrailArn).toBeDefined();
     });
 
-    test('should have environment suffix in resource names', () => {
-      const tableName = outputs.TurnAroundPromptTableName;
-      expect(tableName).toContain('TAP-');
-      expect(tableName).toContain('-TurnAroundPrompts-');
+    test('should have proper resource naming with account ID', () => {
+      const bucketName = outputs.SecureDataBucketName;
+      expect(bucketName).toContain('myapp-secure-data-prod');
+      expect(bucketName).toMatch(/-\d{12}$/);
     });
 
-    test('should have unique account-based naming', () => {
-      const tableName = outputs.TurnAroundPromptTableName;
-      expect(tableName).toMatch(/-\d{12}$/);
+    test('should have proper IAM role naming', () => {
+      const roleArn = outputs.WebServerRoleArn;
+      expect(roleArn).toContain('myapp-web-prod-role');
+      expect(roleArn).toMatch(/arn:aws:iam::\d{12}:role\//);
     });
-  });
-
-  describe('DynamoDB Table Integration', () => {
-    test('should be able to describe DynamoDB table', async () => {
-      if (!hasAwsCredentials() || !outputs.TurnAroundPromptTableName) {
-        console.log('Skipping AWS integration test - no credentials or table name');
-        return;
-      }
-
-      try {
-        const command = new DescribeTableCommand({
-          TableName: outputs.TurnAroundPromptTableName
-        });
-        const response = await clients.dynamodb.send(command);
-        
-        expect(response.Table).toBeDefined();
-        expect(response.Table?.TableStatus).toBe('ACTIVE');
-        expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-      } catch (error: any) {
-        if (error.name === 'ResourceNotFoundException') {
-          console.log('Table not found - this is expected in test environment');
-        } else {
-          throw error;
-        }
-      }
-    }, 30000);
-
-    test('should have proper table attributes and indexes', async () => {
-      if (!hasAwsCredentials() || !outputs.TurnAroundPromptTableName) {
-        console.log('Skipping AWS integration test - no credentials');
-        return;
-      }
-
-      try {
-        const command = new DescribeTableCommand({
-          TableName: outputs.TurnAroundPromptTableName
-        });
-        const response = await clients.dynamodb.send(command);
-        
-        if (response.Table) {
-          // Check key schema
-          expect(response.Table.KeySchema).toHaveLength(1);
-          expect(response.Table.KeySchema?.[0].AttributeName).toBe('id');
-          
-          // Check GSI
-          expect(response.Table.GlobalSecondaryIndexes).toHaveLength(1);
-          expect(response.Table.GlobalSecondaryIndexes?.[0].IndexName).toBe('UserIndex');
-          
-          // Check streams
-          expect(response.Table.StreamSpecification?.StreamEnabled).toBe(true);
-          
-          // Check encryption
-          expect(response.Table.SSEDescription).toBeDefined();
-        }
-      } catch (error: any) {
-        if (error.name !== 'ResourceNotFoundException') {
-          throw error;
-        }
-      }
-    }, 30000);
-
-    test('should support CRUD operations', async () => {
-      if (!hasAwsCredentials() || !outputs.TurnAroundPromptTableName) {
-        console.log('Skipping AWS CRUD test - no credentials');
-        return;
-      }
-
-      try {
-        // Create item
-        const putCommand = new PutItemCommand({
-          TableName: outputs.TurnAroundPromptTableName,
-          Item: {
-            id: { S: testData.uniqueId },
-            userId: { S: testData.userId },
-            timestamp: { N: testData.timestamp.toString() },
-            message: { S: testData.testMessage }
-          }
-        });
-        await clients.dynamodb.send(putCommand);
-
-        // Read item
-        const getCommand = new GetItemCommand({
-          TableName: outputs.TurnAroundPromptTableName,
-          Key: {
-            id: { S: testData.uniqueId }
-          }
-        });
-        const getResponse = await clients.dynamodb.send(getCommand);
-        
-        expect(getResponse.Item).toBeDefined();
-        expect(getResponse.Item?.id.S).toBe(testData.uniqueId);
-        expect(getResponse.Item?.userId.S).toBe(testData.userId);
-
-        // Clean up
-        const deleteCommand = new DeleteItemCommand({
-          TableName: outputs.TurnAroundPromptTableName,
-          Key: {
-            id: { S: testData.uniqueId }
-          }
-        });
-        await clients.dynamodb.send(deleteCommand);
-      } catch (error: any) {
-        if (error.name !== 'ResourceNotFoundException') {
-          throw error;
-        }
-      }
-    }, 30000);
   });
 
   describe('S3 Security Integration', () => {
     test('should be able to access secure S3 bucket', async () => {
-      if (!hasAwsCredentials() || !outputs.DataBucketName) {
+      if (!hasAwsCredentials() || !outputs.SecureDataBucketName) {
         console.log('Skipping S3 test - no credentials or bucket name');
         return;
       }
 
       try {
         const command = new HeadBucketCommand({
-          Bucket: outputs.DataBucketName
+          Bucket: outputs.SecureDataBucketName
         });
         await clients.s3.send(command);
         
@@ -242,7 +134,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
     }, 30000);
 
     test('should support encrypted object storage', async () => {
-      if (!hasAwsCredentials() || !outputs.DataBucketName) {
+      if (!hasAwsCredentials() || !outputs.SecureDataBucketName) {
         console.log('Skipping S3 encryption test - no credentials');
         return;
       }
@@ -252,7 +144,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         
         // Put encrypted object
         const putCommand = new PutObjectCommand({
-          Bucket: outputs.DataBucketName,
+          Bucket: outputs.SecureDataBucketName,
           Key: testKey,
           Body: testData.testMessage,
           ServerSideEncryption: 'aws:kms',
@@ -262,7 +154,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
 
         // Get object to verify encryption
         const getCommand = new GetObjectCommand({
-          Bucket: outputs.DataBucketName,
+          Bucket: outputs.SecureDataBucketName,
           Key: testKey
         });
         const response = await clients.s3.send(getCommand);
@@ -398,23 +290,8 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
       }
 
       try {
-        // 1. Store data in DynamoDB with encryption
-        if (outputs.TurnAroundPromptTableName) {
-          const putCommand = new PutItemCommand({
-            TableName: outputs.TurnAroundPromptTableName,
-            Item: {
-              id: { S: `e2e-${testData.uniqueId}` },
-              userId: { S: testData.userId },
-              timestamp: { N: testData.timestamp.toString() },
-              workflow: { S: 'end-to-end-test' },
-              status: { S: 'completed' }
-            }
-          });
-          await clients.dynamodb.send(putCommand);
-        }
-
-        // 2. Store related data in S3 with KMS encryption
-        if (outputs.DataBucketName && outputs.KMSKeyId) {
+        // 1. Store secure data in S3 with KMS encryption
+        if (outputs.SecureDataBucketName && outputs.KMSKeyId) {
           const s3Key = `e2e-test/${testData.uniqueId}/workflow-data.json`;
           const workflowData = {
             workflowId: `e2e-${testData.uniqueId}`,
@@ -425,7 +302,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
           };
 
           const putObjectCommand = new PutObjectCommand({
-            Bucket: outputs.DataBucketName,
+            Bucket: outputs.SecureDataBucketName,
             Key: s3Key,
             Body: JSON.stringify(workflowData),
             ServerSideEncryption: 'aws:kms',
@@ -435,21 +312,10 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
           await clients.s3.send(putObjectCommand);
         }
 
-        // 3. Verify data integrity and encryption
-        if (outputs.TurnAroundPromptTableName) {
-          const getCommand = new GetItemCommand({
-            TableName: outputs.TurnAroundPromptTableName,
-            Key: {
-              id: { S: `e2e-${testData.uniqueId}` }
-            }
-          });
-          const ddbResponse = await clients.dynamodb.send(getCommand);
-          expect(ddbResponse.Item?.workflow.S).toBe('end-to-end-test');
-        }
-
-        if (outputs.DataBucketName) {
+        // 2. Verify data integrity and encryption
+        if (outputs.SecureDataBucketName) {
           const getObjectCommand = new GetObjectCommand({
-            Bucket: outputs.DataBucketName,
+            Bucket: outputs.SecureDataBucketName,
             Key: `e2e-test/${testData.uniqueId}/workflow-data.json`
           });
           const s3Response = await clients.s3.send(getObjectCommand);
@@ -457,17 +323,6 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
           
           const retrievedData = JSON.parse(await s3Response.Body?.transformToString() || '{}');
           expect(retrievedData.workflowId).toBe(`e2e-${testData.uniqueId}`);
-        }
-
-        // 4. Clean up test data
-        if (outputs.TurnAroundPromptTableName) {
-          const deleteCommand = new DeleteItemCommand({
-            TableName: outputs.TurnAroundPromptTableName,
-            Key: {
-              id: { S: `e2e-${testData.uniqueId}` }
-            }
-          });
-          await clients.dynamodb.send(deleteCommand);
         }
 
         expect(true).toBe(true); // Test completed successfully
@@ -494,18 +349,18 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         securityChecks.hasEncryption = true;
       }
 
-      // Check access logging (S3 bucket for CloudTrail)
-      if (outputs.CloudTrailBucketName) {
+      // Check access logging (CloudTrail)
+      if (outputs.CloudTrailArn) {
         securityChecks.hasAccessLogging = true;
       }
 
       // Check network security (Security Group)
-      if (outputs.SecurityGroupId) {
+      if (outputs.WebServerSecurityGroupId) {
         securityChecks.hasNetworkSecurity = true;
       }
 
-      // Check IAM controls (Service Role)
-      if (outputs.ServiceRoleArn) {
+      // Check IAM controls (WebServer Role)
+      if (outputs.WebServerRoleArn) {
         securityChecks.hasIAMControls = true;
       }
 
@@ -514,10 +369,11 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         securityChecks.hasAuditTrail = true;
       }
 
-      // Validate that all security controls are in place
+      // Validate that critical security controls are in place
       expect(securityChecks.hasEncryption).toBe(true);
-      expect(securityChecks.hasNetworkSecurity).toBe(true);
+      expect(securityChecks.hasIAMControls).toBe(true);
       expect(securityChecks.hasAuditTrail).toBe(true);
+      // Network security is conditional based on VPC ID parameter
       
       console.log('Security compliance validation completed:', securityChecks);
     });
