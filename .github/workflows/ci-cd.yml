@@ -6,9 +6,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [setup-cdktf-go]
+    branches: [main]
   pull_request:
-    branches: [setup-cdktf-go]
+    branches: [main]
     types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
 
