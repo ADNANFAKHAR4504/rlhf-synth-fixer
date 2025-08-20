@@ -21,6 +21,11 @@ elif [ "$LANGUAGE" = "go" ]; then
     echo "✅ Go project detected, running go fmt and go vet..."
     if [ -d "lib" ]; then
         cd lib
+        # Ensure module deps and go.sum are present
+        if [ -f go.mod ]; then
+            echo "Running go mod tidy to populate go.sum and fetch deps"
+            go mod tidy
+        fi
         UNFORMATTED=$(gofmt -l . || true)
         if [ -n "$UNFORMATTED" ]; then
             echo "❌ The following files are not gofmt formatted:" 
