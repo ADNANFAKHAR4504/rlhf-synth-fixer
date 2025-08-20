@@ -6,7 +6,7 @@ Parameters:
   EnvironmentName:
     Description: An environment name that is prefixed to resource names
     Type: String
-    Default: WebApp
+    Default: Dev
 
   InstanceType:
     Description: EC2 instance type for web servers
@@ -25,6 +25,7 @@ Parameters:
     Description: Name of an existing EC2 KeyPair to enable SSH access
     Type: AWS::EC2::KeyPair::KeyName
     ConstraintDescription: Must be the name of an existing EC2 KeyPair
+    Default:  my-default-keypair   # <-- your default key name here
 
   SSHLocation:
     Description: IP address range that can SSH to the EC2 instances
@@ -40,6 +41,7 @@ Parameters:
     Description: The ARN of the AWS Certificate Manager (ACM) certificate for HTTPS
     Type: String
     ConstraintDescription: Must be a valid ACM certificate ARN.
+    Default: arn:aws:acm:region:account:certificate/your-default-certificate-arn
 
 
 # Mappings for AMI IDs by region (using Amazon Linux 2)
