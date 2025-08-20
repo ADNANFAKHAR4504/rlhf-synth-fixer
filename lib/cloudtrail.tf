@@ -4,13 +4,6 @@
 
 data "aws_caller_identity" "current" {}
 
-# You may need a variable for region if not already present
-# variable "aws_region" {
-#   description = "AWS region"
-#   type        = string
-#   default     = "us-east-1"
-# }
-
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   provider = aws.primary
   name              = "/aws/cloudtrail/${var.name_prefix}-${var.environment}"
@@ -21,10 +14,6 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
     ManagedBy   = "terraform"
     Project     = "secure-env"
   }
-}
-
-locals {
-  log_group_arn = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/cloudtrail/${var.name_prefix}-${var.environment}"
 }
 
 resource "aws_iam_role" "cloudtrail_logs" {
@@ -58,7 +47,7 @@ resource "aws_iam_role_policy" "cloudtrail_logs" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = local.log_group_arn
+        Resource = aws_cloudwatch_log_group.cloudtrail.arn
       }
     ]
   })
@@ -71,7 +60,7 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_log_file_validation    = true
-  cloud_watch_logs_group_arn    = local.log_group_arn
+  cloud_watch_logs_group_arn    = aws_cloudwatch_log_group.cloudtrail.arn
   cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_logs.arn
   tags = {
     Name        = "${var.name_prefix}-${var.environment}-cloudtrail"
