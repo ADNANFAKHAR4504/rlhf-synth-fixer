@@ -382,6 +382,24 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
+    test('should export Bastion Host Public IP', () => {
+      template.hasOutput('BastionHostPublicIp', {
+        Description: 'Bastion Host Public IP Address',
+        Export: {
+          Name: `${environmentSuffix}-BastionHostPublicIp`
+        }
+      });
+    });
+
+    test('should export Private Instance ID', () => {
+      template.hasOutput('PrivateInstanceId', {
+        Description: 'Private Instance ID',
+        Export: {
+          Name: `${environmentSuffix}-PrivateInstanceId`
+        }
+      });
+    });
+
     test('should export S3 Bucket Name', () => {
       template.hasOutput('SecureStorageBucketName', {
         Description: 'Secure Storage S3 Bucket Name',
