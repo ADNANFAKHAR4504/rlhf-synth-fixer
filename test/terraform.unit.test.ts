@@ -1,21 +1,36 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const STACK_PATH = path.resolve(__dirname, '../lib/tap_stack.tf');
+const LIB_DIR = path.resolve(__dirname, '../lib');
 const PROVIDER_PATH = path.resolve(__dirname, '../lib/provider.tf');
 
 describe('Terraform Unit Tests', () => {
   let stackContent: string;
   let providerContent: string;
+  let tapStackOnly: string;
 
   beforeAll(() => {
-    stackContent = fs.readFileSync(STACK_PATH, 'utf8');
+    // Recursively read all .tf files under lib/ and concatenate contents
+    const readAllTf = (dir: string): string[] => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const contents: string[] = [];
+      for (const e of entries) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) contents.push(...readAllTf(full));
+        else if (e.isFile() && full.endsWith('.tf')) contents.push(fs.readFileSync(full, 'utf8'));
+      }
+      return contents;
+    };
+
+    stackContent = readAllTf(LIB_DIR).join('\n');
     providerContent = fs.readFileSync(PROVIDER_PATH, 'utf8');
+    const TAP_STACK_PATH = path.resolve(__dirname, '../lib/tap_stack.tf');
+    tapStackOnly = fs.readFileSync(TAP_STACK_PATH, 'utf8');
   });
 
   describe('File Structure', () => {
-    test('tap_stack.tf exists', () => {
-      expect(fs.existsSync(STACK_PATH)).toBe(true);
+    test('lib directory exists', () => {
+      expect(fs.existsSync(LIB_DIR)).toBe(true);
     });
 
     test('provider.tf exists', () => {
@@ -23,7 +38,7 @@ describe('Terraform Unit Tests', () => {
     });
 
     test('does NOT declare provider in tap_stack.tf', () => {
-      expect(stackContent).not.toMatch(/\bprovider\s+"aws"\s*{/);
+      expect(tapStackOnly).not.toMatch(/\bprovider\s+"aws"\s*{/);
     });
   });
 
@@ -189,16 +204,26 @@ describe('Terraform Unit Tests', () => {
   describe('EC2 Configuration', () => {
     test('creates launch template', () => {
       expect(stackContent).toMatch(/resource\s+"aws_launch_template"\s+"main"/);
-      expect(stackContent).toMatch(
-        /image_id\s*=\s*data\.aws_ssm_parameter\.al2023_ami\.value/
+      // Accept either direct image_id reference or module input ami_id being set from the SSM parameter
+      const amiPattern = new RegExp(
+        '(image_id\\s*=\\s*data\\.aws_ssm_parameter\\.al2023_ami\\.value)' +
+          '|' +
+          '(ami_id\\s*=\\s*data\\.aws_ssm_parameter\\.al2023_ami\\.value)'
       );
+      expect(stackContent).toMatch(amiPattern);
       expect(stackContent).toMatch(/instance_type\s*=\s*var\.instance_type/);
     });
 
     test('configures IAM instance profile', () => {
-      expect(stackContent).toMatch(
-        /iam_instance_profile\s*{\s*name\s*=\s*aws_iam_instance_profile\.ec2\.name/
+      // Accept inline resource reference, module output, or module input variable
+      const pattern = new RegExp(
+        '(iam_instance_profile\\s*{\\s*name\\s*=\\s*aws_iam_instance_profile\\.ec2\\.name)' +
+          '|' +
+          '(iam_instance_profile\\s*{\\s*name\\s*=\\s*module\\.iam\\.ec2_instance_profile_name)' +
+          '|' +
+          '(iam_instance_profile\\s*{\\s*name\\s*=\\s*var\\.ec2_instance_profile_name)'
       );
+      expect(stackContent).toMatch(pattern);
     });
 
     test('includes user data for SSM', () => {
@@ -361,9 +386,15 @@ describe('Terraform Unit Tests', () => {
     });
 
     test('uses private subnets for EC2', () => {
-      expect(stackContent).toMatch(
-        /vpc_zone_identifier\s*=\s*\[for subnet in aws_subnet\.private : subnet\.id\]/
+      // Accept inline comprehension, module output reference, or module input variable used within compute module
+      const pattern = new RegExp(
+        '(vpc_zone_identifier\\s*=\\s*\\[for subnet in aws_subnet\\.private : subnet\\.id\\])' +
+          '|' +
+          '(vpc_zone_identifier\\s*=\\s*module\\.network\\.private_subnet_ids)' +
+          '|' +
+          '(vpc_zone_identifier\\s*=\\s*var\\.private_subnet_ids)'
       );
+      expect(stackContent).toMatch(pattern);
     });
 
     test('enables CloudTrail logging', () => {

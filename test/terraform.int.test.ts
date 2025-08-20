@@ -22,15 +22,36 @@ function setupTestEnvironment(): void {
     }
   });
 
+  // Ensure modules directory is available for relative module sources like "./modules/..."
+  const srcModulesDir = path.join(LIB_DIR, 'modules');
+  const dstModulesDir = path.join(TEST_DIR, 'modules');
+  if (fs.existsSync(srcModulesDir)) {
+    // Recursively copy modules directory
+    const copyRecursive = (src: string, dst: string) => {
+      if (!fs.existsSync(dst)) fs.mkdirSync(dst, { recursive: true });
+      const entries = fs.readdirSync(src, { withFileTypes: true });
+      for (const entry of entries) {
+        const s = path.join(src, entry.name);
+        const d = path.join(dst, entry.name);
+        if (entry.isDirectory()) {
+          copyRecursive(s, d);
+        } else if (entry.isFile()) {
+          fs.copyFileSync(s, d);
+        }
+      }
+    };
+    copyRecursive(srcModulesDir, dstModulesDir);
+  }
+
   // Initialize with local backend and format files
   try {
-    execSync('terraform init', {
+    execSync('terraform init -backend=false -reconfigure', {
       cwd: TEST_DIR,
       stdio: 'pipe',
       timeout: 30000,
     });
-    // Format the copied files
-    execSync('terraform fmt', {
+    // Format the copied files (including modules) to satisfy fmt checks
+    execSync('terraform fmt -recursive', {
       cwd: TEST_DIR,
       stdio: 'pipe',
       timeout: 10000,
@@ -142,8 +163,9 @@ describe('Terraform Integration Tests', () => {
         }
 
         // Check that resource names contain environment suffix pattern
-        const resourceNames = Object.values(outputs) as string[];
-        const hasEnvironmentSuffixPattern = resourceNames.some(name => 
+        // Ignore URL-like values (e.g., API endpoints) that won't match naming patterns
+        const resourceNames = (Object.values(outputs) as string[]).filter(v => typeof v === 'string' && !/^https?:\/\//.test(v));
+        const hasEnvironmentSuffixPattern = resourceNames.some(name =>
           name.includes('-') && /-(dev|test|prod|pr\d+)-/.test(name)
         );
         
@@ -162,11 +184,12 @@ describe('Terraform Integration Tests', () => {
         expect(fs.existsSync(tapStackPath)).toBe(true);
 
         const terraformConfig = fs.readFileSync(tapStackPath, 'utf8');
-        
-        // Check for essential resource definitions
-        expect(terraformConfig).toMatch(/resource\s+"aws_vpc"/);
-        expect(terraformConfig).toMatch(/resource\s+"aws_subnet"/);
-        expect(terraformConfig).toMatch(/resource\s+"aws_s3_bucket"/);
+        // Check for essential module definitions after modularization
+        expect(terraformConfig).toMatch(/module\s+"network"/);
+        expect(terraformConfig).toMatch(/module\s+"s3"/);
+        expect(terraformConfig).toMatch(/module\s+"iam"/);
+        expect(terraformConfig).toMatch(/module\s+"logging"/);
+        expect(terraformConfig).toMatch(/module\s+"compute"/);
         
         // Check for variable usage (environment suffix)
         expect(terraformConfig).toMatch(/var\.environment_suffix/);

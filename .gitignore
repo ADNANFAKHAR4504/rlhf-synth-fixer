@@ -7,6 +7,7 @@
 /cli/*.js
 *.d.ts
 !/test/setup.js
+/lib/.terraform.lock.hcl
 
 # Dependencies
 node_modules/
@@ -57,7 +58,7 @@ coverage/
 # Temporary folders
 tmp/
 temp/
-
+test/provider-local.tf
 # Python virtual environments and packages
 python/
 __pycache__/
