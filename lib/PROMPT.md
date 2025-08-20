@@ -1,1 +1,20 @@
-Please design an AWS CDK stack that establishes a strong, security-first foundation for a new application. You’re acting as an AWS professional, and the stack should be clean, deployable, and opinionated toward best practices. The goal is to have a secure environment for the application we intenf to deploy. The stack must be deployable in us-west-2 and us-east-2 and support both dev and prod environments. The resources should be named according to the pattern 'prod-<resource_name>' for production and 'dev-<resource_name>' for development environments. The critical security requirements include; All IAM roles must include explicit trust policies for allowed principals. All EBS volumes and RDS instances must be encrypted using AWS KMS. You have to ensure public S3 buckets have policies restricting public 'PUT' actions. You have to implement MFA for all IAM users and ensure access keys are rotated regularly (Every 90 days). You should use AWS WAF for Load Balancer protection against web threats. You should sssign read-only S3 permissions to EC2 instance profiles. You ensure CloudTrail logs are securely stored and encrypted. Allow message reception by SNS only from authorised AWS services. Take care to ensure security groups must strictly limit inbound connections to SSH from specified IPs. GuardDuty should be enabled across all regions. The expected output is a CDK stack with the class name TapStack and a file named tap-stack.ts
+# Security-Focused AWS Infrastructure
+
+Need to build a secure AWS setup for our new application. Security is the top priority here.
+
+Requirements:
+- IAM roles need proper trust policies
+- Encrypt everything - EBS volumes and RDS with KMS
+- S3 buckets need policies to block public PUT actions
+- MFA required for all IAM users, rotate access keys every 90 days
+- WAF protection for load balancers
+- EC2 instances get read-only S3 access
+- CloudTrail logs encrypted and stored securely
+- SNS only accepts messages from authorized AWS services
+- Security groups locked down - SSH only from specific IPs
+- GuardDuty enabled globally
+- Minimal ingress traffic, SSH restricted to known IPs
+- Deploy in us-west-2 and us-east-2
+- Resource naming: prod-<name> for production, dev-<name> for dev
+
+Create a CDK stack called TapStack in tap-stack.ts
