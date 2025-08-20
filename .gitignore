@@ -5,7 +5,7 @@
 /cli/*.js
 *.d.ts
 !/test/setup.js
-
+/lib/.terraform.lock.hcl
 # Dependencies
 node_modules/
 
