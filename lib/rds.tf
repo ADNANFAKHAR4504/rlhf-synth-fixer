@@ -16,8 +16,10 @@ resource "aws_db_subnet_group" "main" {
 
 # Secrets Manager secret for RDS credentials
 resource "aws_secretsmanager_secret" "db_credentials" {
-  name        = "rds-credentials-${var.environment_suffix}"
-  description = "RDS database credentials"
+  name                     = "rds-credentials-${var.environment_suffix}"
+  description              = "RDS database credentials"
+  recovery_window_in_days  = 0
+  force_overwrite_replica_secret = true
 
   tags = var.common_tags
 }
