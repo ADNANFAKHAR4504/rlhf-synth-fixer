@@ -1,14 +1,14 @@
 Insert here the prompt that made the model fail.You are tasked with creating a secure, scalable, and modular AWS infrastructure using the AWS Cloud Development Kit (CDK) with Python. Use the following specifications:
 
-📁 Folder Structure
+Folder Structure
 bash
 Copy
 Edit
 project-root/
-├── tap.py            # Entry point for CDK app (like app.py)
+├── tap.py # Entry point for CDK app (like app.py)
 └── lib/
-    └── tap_stack.py  # CDK Stack definition
-🌐 Environment
+└── tap_stack.py # CDK Stack definition
+Environment
 Region: us-east-1
 
 Cloud Provider: AWS
@@ -17,7 +17,7 @@ Language: Python (AWS CDK)
 
 Framework: AWS CDK v2
 
-🔐 Infrastructure Requirements
+Infrastructure Requirements
 Within your tap_stack.py, implement the following resources:
 
 VPC & Networking
@@ -86,20 +86,20 @@ Enforce role-based access control (RBAC)
 
 Ensure resources (like RDS, EC2, S3) use KMS encryption
 
-⚙️ Constraints
+Constraints
 Use snake_case for all logical ID/resource names.
 
 Use modular and reusable constructs if applicable.
 
 Code must reside in:
 
-tap.py – for initializing the CDK app.
+tap.py for initializing the CDK app.
 
-lib/tap_stack.py – for defining the full stack.
+lib/tap_stack.py for defining the full stack.
 
 Must be able to deploy the stack using cdk deploy successfully.
 
-📦 Expected Output
+Expected Output
 A fully working AWS CDK (Python) project that can be deployed using:
 
 bash

@@ -495,3 +495,4 @@ Outputs:
     Value: !GetAtt CloudTrail.Arn
     Export:
       Name: !Sub "${AWS::StackName}-CloudTrailArn"
+```

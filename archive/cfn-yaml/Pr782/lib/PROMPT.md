@@ -7,10 +7,10 @@ You are tasked with building a secure, highly available AWS infrastructure as co
 1. Create a Virtual Private Cloud (VPC) with an IPv4 CIDR block of **10.0.0.0/16**.
 
 2. Define three subnets within this VPC:
-   - One **public subnet**
-   - Two **private subnets**
-   
-   Each subnet must be placed in **different Availability Zones** to ensure redundancy and high availability.
+- One **public subnet**
+- Two **private subnets**
+
+Each subnet must be placed in **different Availability Zones** to ensure redundancy and high availability.
 
 3. Attach an **Internet Gateway** to the VPC and associate the **public subnet** with a route table that directs internet traffic to this Internet Gateway.
 
@@ -20,20 +20,20 @@ You are tasked with building a secure, highly available AWS infrastructure as co
 
 6. Include an **S3 bucket** with **server-side encryption enabled** using AWS-managed encryption keys to protect stored data.
 
-7. Ensure **all AWS resources** are tagged with the key-value pair:  
-   `Environment: Production`  
-   to enforce organizational tagging standards.
+7. Ensure **all AWS resources** are tagged with the key-value pair: 
+`Environment: Production` 
+to enforce organizational tagging standards.
 
 8. Define an **IAM role** with **ReadOnlyAccess** permissions scoped to EC2 services. This role permits EC2 instances to interact with AWS resources securely without excessive privileges.
 
 9. Use **parameterized inputs** for:
-   - Amazon Machine Images (AMI) IDs 
-   - EC2 instance types  
-   This approach will enable easy reuse of the CloudFormation template across different AWS regions.
+- Amazon Machine Images (AMI) IDs 
+- EC2 instance types 
+This approach will enable easy reuse of the CloudFormation template across different AWS regions.
 
 10. The CloudFormation stack must produce outputs for at least:
-    - The **VPC ID**
-    - The **Public Subnet ID**
+- The **VPC ID**
+- The **Public Subnet ID**
 
 11. Deploy an **Application Load Balancer (ALB)** in the **public subnet** that distributes traffic to EC2 instances in the **private subnets**.
 
@@ -60,6 +60,6 @@ A fully functional AWS CloudFormation YAML template that:
 
 ---
 
-This prompt defines the problem statement, constraints, environment, and expected output clearly and precisely, aligned with Claude’s Sonnet best prompt practices to guide your model effectively.
+This prompt defines the problem statement, constraints, environment, and expected output clearly and precisely, aligned with Claudes Sonnet best prompt practices to guide your model effectively.
 
 ---
