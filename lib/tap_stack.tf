@@ -729,20 +729,6 @@ resource "aws_acm_certificate" "alb_cert" {
   }
 }
 
-# For ALB listener
-resource "aws_lb_listener" "secure_prod_listener" {
-  load_balancer_arn = aws_lb.secure_prod_alb.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate.alb_cert.arn # <-- uses newly created cert!
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.secure_prod_tg.arn
-  }
-}
-
 output "alb_certificate_arn" {
   value = aws_acm_certificate.alb_cert.arn
 }
