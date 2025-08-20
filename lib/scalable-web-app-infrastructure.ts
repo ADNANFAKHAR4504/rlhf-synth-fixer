@@ -13,6 +13,11 @@ export class ScalableWebAppInfrastructure extends pulumi.ComponentResource {
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly autoScalingGroupName: pulumi.Output<string>;
   public readonly cloudFrontDomain: pulumi.Output<string>;
+  public readonly launchTemplateName: pulumi.Output<string>;
+  public readonly targetGroupName: pulumi.Output<string>;
+  public readonly albLogsBucketName: pulumi.Output<string>;
+  public readonly secretName: pulumi.Output<string>;
+  public readonly vpcFlowLogsGroupName: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -1329,6 +1334,11 @@ EOF
     this.rdsEndpoint = rdsInstance.endpoint;
     this.autoScalingGroupName = autoScalingGroup.name;
     this.cloudFrontDomain = cfDistribution.domainName;
+    this.launchTemplateName = launchTemplate.name;
+    this.targetGroupName = targetGroup.name;
+    this.albLogsBucketName = albLogsBucket.bucket;
+    this.secretName = dbSecret.name;
+    this.vpcFlowLogsGroupName = vpcFlowLogsGroup.name;
 
     // Register outputs
     this.registerOutputs({
@@ -1337,6 +1347,11 @@ EOF
       rdsEndpoint: this.rdsEndpoint,
       autoScalingGroupName: this.autoScalingGroupName,
       cloudFrontDomain: this.cloudFrontDomain,
+      launchTemplateName: this.launchTemplateName,
+      targetGroupName: this.targetGroupName,
+      albLogsBucketName: this.albLogsBucketName,
+      secretName: this.secretName,
+      vpcFlowLogsGroupName: this.vpcFlowLogsGroupName,
     });
   }
 }
