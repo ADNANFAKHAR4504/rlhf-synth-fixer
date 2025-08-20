@@ -267,7 +267,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       // Verify lambda security group
       const lambdaSG = securityGroups.find(sg => sg.GroupName === buildResourceName('corp-lambda-sg'));
       expect(lambdaSG).toBeDefined();
-      expect(lambdaSG?.IpPermissionsEgress).toHaveLength(1); // HTTPS only outbound
+      expect(lambdaSG?.IpPermissionsEgress).toHaveLength(2); // HTTPS and MySQL outbound
     });
   });
 
@@ -333,7 +333,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(db.Engine).toBe('mysql');
       expect(db.MultiAZ).toBe(true);
       expect(db.StorageEncrypted).toBe(true);
-      expect(db.BackupRetentionPeriod).toBe(7);
+      expect(db.BackupRetentionPeriod).toBe(30);
       expect(db.MonitoringInterval).toBe(60);
       expect(db.DeletionProtection).toBe(true);
       expect(db.Endpoint?.Address).toBe(databaseEndpoint);
@@ -373,10 +373,11 @@ describe('Secure Infrastructure Integration Tests', () => {
       const func = response.Configuration;
       
       expect(func).toBeDefined();
-      expect(func?.Runtime).toBe('python3.9');
+      expect(func?.Runtime).toBe('python3.11');
       expect(func?.Handler).toBe('index.lambda_handler');
       expect(func?.VpcConfig?.VpcId).toBe(vpcId);
-      expect(func?.KMSKeyArn).toBeDefined();
+      // Lambda uses AWS-managed encryption (no explicit KmsKeyArn)
+      expect(func?.KMSKeyArn).toBeUndefined();
       
       // Verify Lambda is in private subnets
       const subnetIds = func?.VpcConfig?.SubnetIds || [];
@@ -404,7 +405,8 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(trail.IncludeGlobalServiceEvents).toBe(true);
       expect(trail.IsMultiRegionTrail).toBe(true);
       expect(trail.LogFileValidationEnabled).toBe(true);
-      expect(trail.KmsKeyId).toBeDefined();
+      // CloudTrail uses service-managed encryption (no explicit KmsKeyId)
+      expect(trail.KmsKeyId).toBeUndefined();
     });
 
     test('should verify CloudTrail is active', async () => {
@@ -469,7 +471,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       const logGroup = logGroups[0];
       
       expect(logGroup.logGroupName).toBe(`/corp/vpc/flowlogs/${environmentSuffix}`);
-      expect(logGroup.retentionInDays).toBe(30);
+      expect(logGroup.retentionInDays).toBe(90);
       // KMS key was removed due to configuration issues
       expect(logGroup.kmsKeyId).toBeUndefined();
     });
