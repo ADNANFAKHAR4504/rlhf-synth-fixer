@@ -117,7 +117,7 @@ describe('TapStack CloudFormation Template (YAML)', () => {
       expect(httpFromAlb).toBeDefined();
       expect(httpFromAlb.SourceSecurityGroupId).toEqual({"Ref": "ALBSecurityGroup"});
       expect(ssh).toBeDefined();
-      expect(ssh.CidrIp).toEqual( 'SSHLocation');
+      expect(ssh.CidrIp).toEqual( {"Ref": "SSHLocation"});
     });
   });
 
@@ -131,7 +131,15 @@ describe('TapStack CloudFormation Template (YAML)', () => {
     test('should define launch template with UserData that installs httpd', () => {
       const lt = template.Resources.WebServerLaunchTemplate;
       expect(lt.Type).toBe('AWS::EC2::LaunchTemplate');
-      const userData = lt.Properties.LaunchTemplateData.UserData['Fn::Base64'];
+      const userDataBase64 = lt.Properties.LaunchTemplateData.UserData['Fn::Base64'];
+      const userData =
+        typeof userDataBase64 === 'string'
+          ? userDataBase64
+          : userDataBase64 && typeof userDataBase64 === 'object' && 'Fn::Sub' in userDataBase64
+            ? userDataBase64['Fn::Sub']
+            : '';
+
+      expect(typeof userData).toBe('string');
       expect(userData).toContain('yum install -y httpd');
       expect(userData).toContain('systemctl start httpd');
     });
