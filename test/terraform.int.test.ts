@@ -198,7 +198,9 @@ tags = {
           'aws_s3_bucket.primary',
           'aws_s3_bucket.secondary',
           'aws_s3_bucket.logging',
-          'aws_s3_bucket_replication_configuration.primary',
+          // Replication configuration is created inside module.s3_replication as "this"
+          // Match by type to be resilient to module resource name changes
+          'aws_s3_bucket_replication_configuration',
           'aws_dynamodb_table.primary',
           'aws_dynamodb_table.secondary',
         ];
