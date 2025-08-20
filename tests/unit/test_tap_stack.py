@@ -13,14 +13,14 @@ class MockConfig:
   def __init__(self, config_dict=None):
     self.config_dict = config_dict or {}
   
-    def get(self, key):
-      return self.config_dict.get(key)
+    def get(self, _key):
+      return self.config_dict.get(_key)
   
-    def get_secret(self, key):
-      return self.config_dict.get(key)
+    def get_secret(self, _key):
+      return self.config_dict.get(_key)
   
-    def require_secret(self, key):
-      return self.config_dict.get(key, "test-secret")
+    def require_secret(self, _key):
+      return self.config_dict.get(_key, "test-secret")
 
 class MockOutput:
   def __init__(self, value):
