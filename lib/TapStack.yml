@@ -331,7 +331,7 @@ Resources:
     UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-database'
-      DBInstanceClass: 'db.t3.small'
+      DBInstanceClass: 'db.m5.large'
       Engine: 'mysql'
       EngineVersion: '8.0.39'
       MasterUsername: !Ref DBUsername
