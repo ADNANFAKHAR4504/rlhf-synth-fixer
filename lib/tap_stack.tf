@@ -57,7 +57,7 @@ variable "rds_engine" {
 variable "rds_engine_version" {
   description = "RDS engine version"
   type        = string
-  default     = "15.4"
+  default     = "15.14"
 }
 
 variable "rds_instance_class" {
@@ -157,6 +157,8 @@ data "aws_ssm_parameter" "amazon_linux_2023_ami" {
 data "aws_availability_zones" "available" {
   state = "available"
 }
+
+
 
 # Create VPC if not provided
 resource "aws_vpc" "main" {
