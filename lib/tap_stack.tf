@@ -476,7 +476,7 @@ resource "aws_db_instance" "main" {
   storage_encrypted     = true
   
   db_name  = "tapdb"
-  username = random_pet.rds_username.id
+  username = random_password.rds_username.id
   password = random_password.rds_password.result
   
   vpc_security_group_ids = [aws_security_group.rds.id]
@@ -501,7 +501,7 @@ resource "aws_db_instance" "main" {
 
 # S3 Bucket
 resource "aws_s3_bucket" "main" {
-  bucket = "${local.name_prefix}-secure-bucket-${random_pet.rds_username.id}"
+  bucket = "${local.name_prefix}-secure-bucket-${random_password.rds_username.id}"
   
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-secure-bucket"
@@ -545,7 +545,7 @@ resource "aws_s3_bucket_versioning" "main" {
 
 # CloudTrail S3 Bucket
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${local.name_prefix}-cloudtrail-logs-${random_pet.rds_username.id}"
+  bucket = "${local.name_prefix}-cloudtrail-logs-${random_password.rds_username.id}"
   
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-cloudtrail-bucket"
@@ -633,7 +633,7 @@ resource "aws_cloudtrail" "main" {
 resource "aws_ssm_parameter" "rds_username" {
   name  = "/${var.project_name}/${var.environment}/rds/username"
   type  = "SecureString"
-  value = random_pet.rds_username.id
+  value = random_password.rds_username.id
   
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-username-param"
