@@ -339,7 +339,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       expect(content).not.toMatch(/\$\${[^}]*\$\{/); // No nested interpolation issues
       expect(content).not.toMatch(/"\s*\+\s*"/); // No string concatenation issues
       
-      console.log(`✅ Syntax validation: ${resourceBlocks?.length} resources, ${dataBlocks?.length} data sources, ${variableBlocks?.length} variables, ${outputBlocks?.length} outputs`);
+      console.log(`PASS Syntax validation: ${resourceBlocks?.length} resources, ${dataBlocks?.length} data sources, ${variableBlocks?.length} variables, ${outputBlocks?.length} outputs`);
     });
 
     test("resource dependency logic validation", () => {
@@ -363,7 +363,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       // Validate that instances use generated key pair
       expect(content).toMatch(/key_name\s*=\s*aws_key_pair\.main\.key_name/);
       
-      console.log('✅ Resource dependency logic validated');
+      console.log('PASS Resource dependency logic validated');
     });
 
     test("network architecture logic validation", () => {
@@ -386,7 +386,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       const privateInstanceMatch = content.match(/resource\s+"aws_instance"\s+"private"[\s\S]*?subnet_id\s*=\s*aws_subnet\.private\[count\.index\]\.id/);
       expect(privateInstanceMatch).toBeTruthy();
       
-      console.log('✅ Network architecture logic validated');
+      console.log('PASS Network architecture logic validated');
     });
 
     test("security group rules logic validation", () => {
@@ -406,7 +406,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       const rdsPortMatch = content.match(/from_port\s*=\s*3306[\s\S]*?to_port\s*=\s*3306/);
       expect(rdsPortMatch).toBeTruthy();
       
-      console.log('✅ Security group rules logic validated');
+      console.log('PASS Security group rules logic validated');
     });
 
     test("encryption and security logic validation", () => {
@@ -428,7 +428,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       // KMS key must have rotation enabled
       expect(content).toMatch(/enable_key_rotation\s*=\s*true/);
       
-      console.log('✅ Encryption and security logic validated');
+      console.log('PASS Encryption and security logic validated');
     });
 
     test("resource naming consistency logic", () => {
@@ -453,7 +453,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       // Validate consistent naming prefix
       expect(content).toMatch(/Name\s*=\s*"tap-/);
       
-      console.log('✅ Resource naming consistency logic validated');
+      console.log('PASS Resource naming consistency logic validated');
     });
 
     test("high availability architecture logic", () => {
@@ -473,7 +473,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       expect(content).toMatch(/resource\s+"aws_nat_gateway"[\s\S]*?count\s*=\s*2/);
       expect(content).toMatch(/resource\s+"aws_instance"\s+"private"[\s\S]*?count\s*=\s*2/);
       
-      console.log('✅ High availability architecture logic validated');
+      console.log('PASS High availability architecture logic validated');
     });
 
     test("monitoring and logging logic validation", () => {
@@ -493,7 +493,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       // IAM role for VPC Flow Logs
       expect(content).toMatch(/iam_role_arn\s*=\s*aws_iam_role\.flow_log\.arn/);
       
-      console.log('✅ Monitoring and logging logic validated');
+      console.log('PASS Monitoring and logging logic validated');
     });
 
     test("configuration drift prevention", () => {
@@ -512,7 +512,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       expect(content).not.toMatch(/us-west-2[abc]/);
       expect(content).toMatch(/data\.aws_availability_zones\.available/);
       
-      console.log('✅ Configuration drift prevention validated');
+      console.log('PASS Configuration drift prevention validated');
     });
 
     test("terraform state management validation", () => {
@@ -527,7 +527,7 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
       // Backend configuration should be external (not in code)
       expect(providerContent).not.toMatch(/backend\s+"s3"/);
       
-      console.log('✅ Terraform state management validated');
+      console.log('PASS Terraform state management validated');
     });
   });
 

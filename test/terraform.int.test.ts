@@ -65,7 +65,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
       const outputFile = outputPaths.find(p => fs.existsSync(p));
       
       if (outputFile) {
-        console.log(`✅ LIVE INFRASTRUCTURE TESTING: Found output file: ${outputFile}`);
+        console.log(`LIVE INFRASTRUCTURE TESTING: Found output file: ${outputFile}`);
         let outputs: any;
         
         // Parse different output file formats
@@ -81,7 +81,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
           outputs = JSON.parse(fs.readFileSync(outputFile, "utf8"));
         }
         
-        console.log('📊 Available outputs:', Object.keys(outputs));
+        console.log('Available outputs:', Object.keys(outputs));
         
         // CRITICAL: Live infrastructure property validation
         expect(outputs).toHaveProperty('vpc_id');
@@ -91,11 +91,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
         expect(outputs).toHaveProperty('kms_key_id');
         
         // Live AWS resource validation
-        console.log('🔍 Validating live AWS resources...');
+        console.log('Validating live AWS resources...');
         
         // VPC validation - must be real AWS VPC ID
         expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]{8}([a-f0-9]{9})?$/);
-        console.log(`✅ VPC validated: ${outputs.vpc_id}`);
+        console.log(`VPC validated: ${outputs.vpc_id}`);
         
         // Bastion public IP - must be valid public IP
         expect(outputs.bastion_public_ip).toMatch(/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/);
@@ -104,7 +104,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
         expect(bastionIP).not.toMatch(/^10\./); // Not 10.0.0.0/8
         expect(bastionIP).not.toMatch(/^192\.168\./); // Not 192.168.0.0/16
         expect(bastionIP).not.toMatch(/^172\.(1[6-9]|2[0-9]|3[0-1])\./); // Not 172.16.0.0/12
-        console.log(`✅ Bastion public IP validated: ${bastionIP}`);
+        console.log(`Bastion public IP validated: ${bastionIP}`);
         
         // Private instance IPs validation
         let privateIPs: string[] = [];
@@ -123,25 +123,25 @@ describe('Turn Around Prompt API Integration Tests', () => {
           // Must be valid private IP in our VPC range (10.0.0.0/16)
           expect(ip).toMatch(/^10\.0\.(1[0-9]|2[0-9])\.([1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])$/);
         });
-        console.log(`✅ Private IPs validated: ${privateIPs.join(', ')}`);
+        console.log(`PASS Private IPs validated: ${privateIPs.join(', ')}`);
         
         // S3 bucket validation - must be real bucket name with our pattern
         expect(outputs.s3_bucket_name).toMatch(/^tap-stack-bucket-[a-f0-9]{16}$/);
-        console.log(`✅ S3 bucket validated: ${outputs.s3_bucket_name}`);
+        console.log(`PASS S3 bucket validated: ${outputs.s3_bucket_name}`);
         
         // KMS key validation - must be real KMS key ID
         expect(outputs.kms_key_id).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
-        console.log(`✅ KMS key validated: ${outputs.kms_key_id}`);
+        console.log(`PASS KMS key validated: ${outputs.kms_key_id}`);
         
         // SSM Parameters validation (if present)
         if (outputs.private_key_ssm_parameter) {
           expect(outputs.private_key_ssm_parameter).toMatch(/^\/tap\/ec2\/private-key-[a-f0-9]{16}$/);
-          console.log(`✅ Private key SSM parameter: ${outputs.private_key_ssm_parameter}`);
+          console.log(`PASS Private key SSM parameter: ${outputs.private_key_ssm_parameter}`);
         }
         
         if (outputs.db_password_ssm_parameter) {
           expect(outputs.db_password_ssm_parameter).toMatch(/^\/tap\/rds\/password-[a-f0-9]{16}$/);
-          console.log(`✅ DB password SSM parameter: ${outputs.db_password_ssm_parameter}`);
+          console.log(`PASS DB password SSM parameter: ${outputs.db_password_ssm_parameter}`);
         }
         
         // Advanced validation: Resource relationships
@@ -156,25 +156,14 @@ describe('Turn Around Prompt API Integration Tests', () => {
           expect(outputs.db_password_ssm_parameter).toContain(bucketSuffix);
         }
         
-        console.log('✅ LIVE INFRASTRUCTURE VALIDATION COMPLETED SUCCESSFULLY');
+        console.log('PASS LIVE INFRASTRUCTURE VALIDATION COMPLETED SUCCESSFULLY');
         
       } else {
-        console.warn('⚠️  No stack output files found. Live resource validation skipped.');
-        console.warn('📋 For complete integration testing, deploy the stack first using:');
-        console.warn('   terraform apply && terraform output -json > cfn-outputs/flat-outputs.json');
-        
-        // Fallback: Validate infrastructure configuration is ready for deployment
-        const stackPath = path.resolve(__dirname, "../lib/tap_stack.tf");
-        const content = fs.readFileSync(stackPath, "utf8");
-        
-        // Ensure outputs are configured for live testing
-        expect(content).toMatch(/output\s+"vpc_id"/);
-        expect(content).toMatch(/output\s+"bastion_public_ip"/);
-        expect(content).toMatch(/output\s+"private_instance_ips"/);
-        expect(content).toMatch(/output\s+"s3_bucket_name"/);
-        expect(content).toMatch(/output\s+"kms_key_id"/);
-        
-        console.log('✅ Infrastructure outputs configured correctly for live testing');
+        // CRITICAL: Integration tests MUST validate live infrastructure
+        // File-based fallbacks are not acceptable for integration testing
+        throw new Error('INTEGRATION TEST FAILURE: No stack output files found. ' +
+                       'Integration tests require live infrastructure deployment. ' +
+                       'Deploy stack first: terraform apply && terraform output -json > cfn-outputs/flat-outputs.json');
       }
     });
 
@@ -320,7 +309,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
     });
 
     test('end-to-end live environment deployment flow', async () => {
-      console.log('🚀 Starting end-to-end live environment validation...');
+      console.log(' Starting end-to-end live environment validation...');
       
       // Check for multiple deployment output formats to ensure comprehensive testing
       const outputPaths = [
@@ -333,12 +322,12 @@ describe('Turn Around Prompt API Integration Tests', () => {
       const availableOutputs = outputPaths.filter(p => fs.existsSync(p));
       
       if (availableOutputs.length > 0) {
-        console.log(`📋 Found ${availableOutputs.length} output file(s) for end-to-end testing:`);
+        console.log(` Found ${availableOutputs.length} output file(s) for end-to-end testing:`);
         availableOutputs.forEach(file => console.log(`   - ${file}`));
         
         // Test with the primary output file (prioritize cfn-outputs/flat-outputs.json)
         const primaryOutput = availableOutputs.find(p => p.includes('cfn-outputs/flat-outputs.json')) || availableOutputs[0];
-        console.log(`🎯 Using primary output file: ${primaryOutput}`);
+        console.log(` Using primary output file: ${primaryOutput}`);
         
         let outputs: any;
         if (primaryOutput.endsWith('.tfstate')) {
@@ -357,7 +346,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
         console.log('🔄 Phase 1: Infrastructure provisioning validation');
         expect(outputs.vpc_id).toBeTruthy();
         expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]+$/);
-        console.log(`   ✅ VPC provisioned: ${outputs.vpc_id}`);
+        console.log(`   PASS VPC provisioned: ${outputs.vpc_id}`);
         
         // Phase 2: Network architecture validation
         console.log('🔄 Phase 2: Network architecture validation');
@@ -372,34 +361,34 @@ describe('Turn Around Prompt API Integration Tests', () => {
         
         // Bastion should be on public network
         expect(bastionIP).not.toMatch(/^10\.0\./);
-        console.log(`   ✅ Bastion host accessible via public IP: ${bastionIP}`);
+        console.log(`   PASS Bastion host accessible via public IP: ${bastionIP}`);
         
         // Private instances should be on private network
         privateIPs.forEach((ip: string) => {
           expect(ip).toMatch(/^10\.0\./);
         });
-        console.log(`   ✅ Private instances isolated: ${privateIPs.join(', ')}`);
+        console.log(`   PASS Private instances isolated: ${privateIPs.join(', ')}`);
         
         // Phase 3: Security and encryption validation
         console.log('🔄 Phase 3: Security and encryption validation');
         expect(outputs.kms_key_id).toBeTruthy();
         expect(outputs.kms_key_id).toMatch(/^[a-f0-9-]+$/);
-        console.log(`   ✅ KMS encryption enabled: ${outputs.kms_key_id}`);
+        console.log(`   PASS KMS encryption enabled: ${outputs.kms_key_id}`);
         
         expect(outputs.s3_bucket_name).toBeTruthy();
         expect(outputs.s3_bucket_name).toMatch(/^tap-stack-bucket-[a-f0-9]+$/);
-        console.log(`   ✅ S3 bucket with encryption: ${outputs.s3_bucket_name}`);
+        console.log(`   PASS S3 bucket with encryption: ${outputs.s3_bucket_name}`);
         
         // Phase 4: Secrets management validation
         console.log('🔄 Phase 4: Secrets management validation');
         if (outputs.private_key_ssm_parameter) {
           expect(outputs.private_key_ssm_parameter).toMatch(/^\/tap\/ec2\/private-key/);
-          console.log(`   ✅ SSH key stored securely: ${outputs.private_key_ssm_parameter}`);
+          console.log(`   PASS SSH key stored securely: ${outputs.private_key_ssm_parameter}`);
         }
         
         if (outputs.db_password_ssm_parameter) {
           expect(outputs.db_password_ssm_parameter).toMatch(/^\/tap\/rds\/password/);
-          console.log(`   ✅ DB password stored securely: ${outputs.db_password_ssm_parameter}`);
+          console.log(`   PASS DB password stored securely: ${outputs.db_password_ssm_parameter}`);
         }
         
         // Phase 5: Resource consistency validation
@@ -413,21 +402,21 @@ describe('Turn Around Prompt API Integration Tests', () => {
         if (outputs.db_password_ssm_parameter) {
           expect(outputs.db_password_ssm_parameter).toContain(resourceSuffix);
         }
-        console.log(`   ✅ Resource naming consistency verified with suffix: ${resourceSuffix}`);
+        console.log(`   PASS Resource naming consistency verified with suffix: ${resourceSuffix}`);
         
         // Phase 6: High availability validation
         console.log('🔄 Phase 6: High availability validation');
         expect(privateIPs.length).toBeGreaterThanOrEqual(2);
-        console.log(`   ✅ Multi-AZ deployment: ${privateIPs.length} private instances`);
+        console.log(`   PASS Multi-AZ deployment: ${privateIPs.length} private instances`);
         
         // Private IPs should be in different subnets (different third octets)
         const subnets = privateIPs.map((ip: string) => ip.split('.')[2]);
         const uniqueSubnets = [...new Set(subnets)];
         expect(uniqueSubnets.length).toBeGreaterThan(1);
-        console.log(`   ✅ Multi-subnet deployment: ${uniqueSubnets.length} subnets used`);
+        console.log(`   PASS Multi-subnet deployment: ${uniqueSubnets.length} subnets used`);
         
-        console.log('🎉 END-TO-END LIVE ENVIRONMENT VALIDATION COMPLETED SUCCESSFULLY');
-        console.log('✅ All infrastructure components deployed and validated:');
+        console.log(' END-TO-END LIVE ENVIRONMENT VALIDATION COMPLETED SUCCESSFULLY');
+        console.log('PASS All infrastructure components deployed and validated:');
         console.log('   - Network segmentation working correctly');
         console.log('   - Security and encryption properly configured');
         console.log('   - High availability architecture verified');
@@ -435,23 +424,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
         console.log('   - Secrets management operational');
         
       } else {
-        console.warn('⚠️  No deployment output files found for end-to-end testing.');
-        console.warn('📋 To enable comprehensive end-to-end validation:');
-        console.warn('   1. Deploy the infrastructure: terraform apply');
-        console.warn('   2. Export outputs: terraform output -json > cfn-outputs/flat-outputs.json');
-        console.warn('   3. Re-run integration tests for live validation');
-        
-        // Validate that infrastructure is configured for proper e2e testing
-        const stackPath = path.resolve(__dirname, "../lib/tap_stack.tf");
-        const content = fs.readFileSync(stackPath, "utf8");
-        
-        // Ensure all required outputs are present for e2e testing
-        const requiredOutputs = ['vpc_id', 'bastion_public_ip', 'private_instance_ips', 's3_bucket_name', 'kms_key_id'];
-        requiredOutputs.forEach(output => {
-          expect(content).toMatch(new RegExp(`output\\s+"${output}"`));
-        });
-        
-        console.log('✅ Infrastructure configured correctly for end-to-end testing');
+        // CRITICAL: End-to-end tests MUST validate live infrastructure
+        // File-based fallbacks violate integration testing requirements
+        throw new Error('END-TO-END TEST FAILURE: No deployment output files found. ' +
+                       'Integration tests require actual deployed infrastructure. ' +
+                       'Deploy infrastructure first: terraform apply && terraform output -json > cfn-outputs/flat-outputs.json');
       }
     });
   });
