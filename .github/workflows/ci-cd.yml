@@ -131,7 +131,6 @@ jobs:
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
-          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
