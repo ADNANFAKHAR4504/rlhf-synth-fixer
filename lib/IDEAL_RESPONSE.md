@@ -66,7 +66,7 @@ class TapStack extends cdk.Stack {
 export { TapStack };
 ```
 
-```javascript lib/high-avaliable.mjs
+```javascript lib/high-available.mjs
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
