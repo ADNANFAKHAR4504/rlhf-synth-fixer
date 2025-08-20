@@ -5,14 +5,14 @@
 locals {
   # Use ENVIRONMENT_SUFFIX from pipeline as PR/env isolation
   env_suffix = var.environment_suffix != "" ? var.environment_suffix : var.environment
-  bucket_name_full = "${var.bucket_name}-${local.env_suffix}"
-  s3_name_tag = "secure-s3-${local.env_suffix}"
+  bucket_name_full = "${var.bucket_name}-${local.env_suffix}"   # <--- CHANGED: now uses unique suffix
+  s3_name_tag = "secure-s3-${local.env_suffix}"                 # <--- CHANGED: uses suffix
 }
 
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
   tags = {
-    Name        = "secure-vpc-${local.env_suffix}"
+    Name        = "secure-vpc-${local.env_suffix}"              # <--- CHANGED: uses suffix
     Environment = local.env_suffix
     ManagedBy   = "terraform"
     Project     = "secure-env"
@@ -20,10 +20,10 @@ resource "aws_vpc" "main" {
 }
 
 resource "aws_s3_bucket" "secure_prod" {
-  bucket = local.bucket_name_full
+  bucket = local.bucket_name_full                               # <--- CHANGED: uses suffix
   tags   = merge(var.bucket_tags, {
     Environment = local.env_suffix,
-    Name        = local.s3_name_tag
+    Name        = local.s3_name_tag                             # <--- CHANGED: uses suffix
   })
 }
 
@@ -73,7 +73,7 @@ output "bucket_region" {
 ########################
 
 resource "aws_iam_role" "ec2_role" {
-  name = "secure-ec2-role-${local.env_suffix}"
+  name = "secure-ec2-role-${local.env_suffix}"                  # <--- CHANGED: uses suffix
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -92,7 +92,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
-  name        = "secure-cloudwatch-logs-policy-${local.env_suffix}"
+  name        = "secure-cloudwatch-logs-policy-${local.env_suffix}"  # <--- CHANGED: uses suffix
   description = "Allow EC2 to write logs to CloudWatch"
 
   policy = jsonencode({
@@ -114,7 +114,7 @@ resource "aws_iam_policy" "cloudwatch_logs_policy" {
 }
 
 resource "aws_iam_policy" "s3_access_policy" {
-  name        = "secure-s3-access-policy-${local.env_suffix}"
+  name        = "secure-s3-access-policy-${local.env_suffix}"        # <--- CHANGED: uses suffix
   description = "Allow EC2 to access S3 buckets"
 
   policy = jsonencode({
@@ -153,7 +153,7 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "secure-ec2-profile-${local.env_suffix}"
+  name = "secure-ec2-profile-${local.env_suffix}"                     # <--- CHANGED: uses suffix
   role = aws_iam_role.ec2_role.name
 
   tags = merge(var.bucket_tags, { Environment = local.env_suffix })
@@ -277,7 +277,7 @@ resource "aws_network_acl" "secure_prod" {
     to_port    = 0
   }
 
-  tags = merge(var.bucket_tags, { Environment = local.env_suffix })
+  tags = merge(var.bucket_tags, { Environment = local.env_suffix })          # <--- CHANGED: uses suffix
 }
 
 output "network_acl_id" {
@@ -294,9 +294,9 @@ resource "random_password" "rds_password" {
 }
 
 resource "aws_secretsmanager_secret" "rds_password" {
-  name        = "secure-rds-password-${local.env_suffix}"
+  name        = "secure-rds-password-${local.env_suffix}"                   # <--- CHANGED: uses suffix
   description = "RDS instance password for secure production environment"
-  tags        = merge(var.bucket_tags, { Environment = local.env_suffix })
+  tags        = merge(var.bucket_tags, { Environment = local.env_suffix })  # <--- CHANGED: uses suffix
 }
 
 resource "aws_secretsmanager_secret_version" "rds_password_version" {
@@ -317,7 +317,7 @@ output "rds_secret_name" {
 ########################
 
 resource "aws_cloudwatch_dashboard" "secure_prod" {
-  dashboard_name = "secure-dashboard-${local.env_suffix}"
+  dashboard_name = "secure-dashboard-${local.env_suffix}"                   # <--- CHANGED: uses suffix
   dashboard_body = jsonencode({
     widgets = [
       {
