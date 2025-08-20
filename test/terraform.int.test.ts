@@ -432,6 +432,21 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(sshRule).toBeDefined();
       expect(sshRule?.IpProtocol).toBe('tcp');
       
+      // Check that SSH is restricted to trusted IP ranges (not 0.0.0.0/0)
+      const cidrBlocks = sshRule?.IpRanges?.map(r => r.CidrIp) || [];
+      const defaultTrustedRanges = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'];
+      expect(cidrBlocks.length).toBeGreaterThan(0);
+      
+      // Verify that all CIDR blocks are from trusted ranges (not the open internet)
+      cidrBlocks.forEach(cidr => {
+        expect(cidr).not.toBe('0.0.0.0/0');
+        // Should be either one of the default private ranges or a custom trusted range
+        const isPrivateRange = defaultTrustedRanges.some(range => 
+          cidr === range || cidr?.startsWith('10.') || cidr?.startsWith('172.') || cidr?.startsWith('192.168.')
+        );
+        expect(isPrivateRange).toBe(true);
+      });
+      
       // Ensure no HTTP/HTTPS rules
       const httpRule = sg.IpPermissions?.find(rule => 
         rule.FromPort === 80 && rule.ToPort === 80
@@ -542,16 +557,29 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(httpsRule?.PortRange?.To).toBe(443);
       expect(httpsRule?.RuleAction).toBe('allow');
       
-      // Check for SSH rule (rule 120)
-      const sshRule = ingressRules.find(rule => rule.RuleNumber === 120);
-      expect(sshRule).toBeDefined();
-      expect(sshRule?.Protocol).toBe('6'); // TCP
-      expect(sshRule?.PortRange?.From).toBe(22);
-      expect(sshRule?.PortRange?.To).toBe(22);
-      expect(sshRule?.RuleAction).toBe('allow');
+      // Check for SSH rules (starting from rule 120)
+      const sshRules = ingressRules.filter(rule => 
+        rule.Protocol === '6' && 
+        rule.PortRange?.From === 22 && 
+        rule.PortRange?.To === 22 &&
+        rule.RuleAction === 'allow'
+      );
+      expect(sshRules.length).toBeGreaterThanOrEqual(1); // Should have at least one SSH rule
       
-      // Check for ephemeral ports rule (rule 130)
-      const ephemeralRule = ingressRules.find(rule => rule.RuleNumber === 130);
+      // Verify SSH rules use trusted IP ranges (not 0.0.0.0/0)
+      sshRules.forEach(sshRule => {
+        expect(sshRule.CidrBlock).toBeDefined();
+        expect(sshRule.CidrBlock).not.toBe('0.0.0.0/0');
+        // Should be private IP ranges (10.x, 172.16-31.x, 192.168.x)
+        const isPrivateRange = 
+          sshRule.CidrBlock?.startsWith('10.') ||
+          sshRule.CidrBlock?.startsWith('172.') ||
+          sshRule.CidrBlock?.startsWith('192.168.');
+        expect(isPrivateRange).toBe(true);
+      });
+      
+      // Check for ephemeral ports rule (rule 140 - updated from 130)
+      const ephemeralRule = ingressRules.find(rule => rule.RuleNumber === 140);
       expect(ephemeralRule).toBeDefined();
       expect(ephemeralRule?.Protocol).toBe('6'); // TCP
       expect(ephemeralRule?.PortRange?.From).toBe(1024);

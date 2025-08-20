@@ -47,7 +47,11 @@ variable "private_subnet_cidr" {
 variable "trusted_ip_ranges" {
   description = "Trusted IP ranges for SSH access"
   type        = list(string)
-  default     = ["0.0.0.0/0"] # Note: In production, restrict this to specific IP ranges
+  default     = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"] # Restrict to private networks by default
+  validation {
+    condition = length(var.trusted_ip_ranges) > 0
+    error_message = "At least one trusted IP range must be specified for SSH access."
+  }
 }
 
 # Data sources
@@ -258,15 +262,28 @@ resource "aws_network_acl" "main" {
     protocol   = "tcp"
     rule_no    = 120
     action     = "allow"
-    cidr_block = "0.0.0.0/0"
+    cidr_block = var.trusted_ip_ranges[0] # Use first trusted IP range for Network ACL
     from_port  = 22
     to_port    = 22
+  }
+
+  # SSH from additional trusted IP ranges (if they exist)
+  dynamic "ingress" {
+    for_each = length(var.trusted_ip_ranges) > 1 ? slice(var.trusted_ip_ranges, 1, length(var.trusted_ip_ranges)) : []
+    content {
+      protocol   = "tcp"
+      rule_no    = 120 + ingress.key + 1
+      action     = "allow"
+      cidr_block = ingress.value
+      from_port  = 22
+      to_port    = 22
+    }
   }
 
   # Ephemeral ports
   ingress {
     protocol   = "tcp"
-    rule_no    = 130
+    rule_no    = 140 # Increased to allow space for multiple SSH rules
     action     = "allow"
     cidr_block = "0.0.0.0/0"
     from_port  = 1024

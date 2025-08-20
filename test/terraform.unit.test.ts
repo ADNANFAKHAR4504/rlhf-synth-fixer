@@ -41,6 +41,13 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/variable\s+"trusted_ip_ranges"\s*{/);
     });
 
+    test("trusted_ip_ranges variable has secure defaults and validation", () => {
+      expect(stackContent).toMatch(/variable\s+"trusted_ip_ranges"\s*{[\s\S]*?default\s*=\s*\["10\.0\.0\.0\/8",\s*"172\.16\.0\.0\/12",\s*"192\.168\.0\.0\/16"\]/);
+      expect(stackContent).toMatch(/validation\s*{/);
+      expect(stackContent).toMatch(/condition\s*=\s*length\(var\.trusted_ip_ranges\)\s*>\s*0/);
+      expect(stackContent).toMatch(/error_message\s*=\s*"At least one trusted IP range must be specified for SSH access\."/);
+    });
+
     test("uses data source for availability zones", () => {
       expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"available"\s*{/);
       expect(stackContent).toMatch(/state\s*=\s*"available"/);
@@ -161,11 +168,14 @@ describe("Terraform Infrastructure Unit Tests", () => {
       // Check HTTPS ingress rule
       expect(stackContent).toMatch(/ingress\s*{[\s\S]*?protocol\s*=\s*"tcp"[\s\S]*?rule_no\s*=\s*110[\s\S]*?action\s*=\s*"allow"[\s\S]*?from_port\s*=\s*443[\s\S]*?to_port\s*=\s*443/);
       
-      // Check SSH ingress rule
-      expect(stackContent).toMatch(/ingress\s*{[\s\S]*?protocol\s*=\s*"tcp"[\s\S]*?rule_no\s*=\s*120[\s\S]*?action\s*=\s*"allow"[\s\S]*?from_port\s*=\s*22[\s\S]*?to_port\s*=\s*22/);
+      // Check SSH ingress rule for first trusted IP range
+      expect(stackContent).toMatch(/ingress\s*{[\s\S]*?protocol\s*=\s*"tcp"[\s\S]*?rule_no\s*=\s*120[\s\S]*?action\s*=\s*"allow"[\s\S]*?cidr_block\s*=\s*var\.trusted_ip_ranges\[0\][\s\S]*?from_port\s*=\s*22[\s\S]*?to_port\s*=\s*22/);
       
-      // Check ephemeral ports rule
-      expect(stackContent).toMatch(/ingress\s*{[\s\S]*?protocol\s*=\s*"tcp"[\s\S]*?rule_no\s*=\s*130[\s\S]*?action\s*=\s*"allow"[\s\S]*?from_port\s*=\s*1024[\s\S]*?to_port\s*=\s*65535/);
+      // Check for dynamic SSH rules for additional trusted IP ranges
+      expect(stackContent).toMatch(/dynamic\s+"ingress"\s*{[\s\S]*?for_each\s*=\s*length\(var\.trusted_ip_ranges\)\s*>\s*1\s*\?\s*slice\(var\.trusted_ip_ranges,\s*1,\s*length\(var\.trusted_ip_ranges\)\)\s*:\s*\[\]/);
+      
+      // Check ephemeral ports rule (rule number updated to 140)
+      expect(stackContent).toMatch(/ingress\s*{[\s\S]*?protocol\s*=\s*"tcp"[\s\S]*?rule_no\s*=\s*140[\s\S]*?action\s*=\s*"allow"[\s\S]*?from_port\s*=\s*1024[\s\S]*?to_port\s*=\s*65535/);
       
       // Check egress rule
       expect(stackContent).toMatch(/egress\s*{[\s\S]*?protocol\s*=\s*"-1"[\s\S]*?rule_no\s*=\s*100[\s\S]*?action\s*=\s*"allow"/);
@@ -325,7 +335,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/rule_no\s*=\s*100/); // HTTP
       expect(stackContent).toMatch(/rule_no\s*=\s*110/); // HTTPS
       expect(stackContent).toMatch(/rule_no\s*=\s*120/); // SSH
-      expect(stackContent).toMatch(/rule_no\s*=\s*130/); // Ephemeral
+      expect(stackContent).toMatch(/rule_no\s*=\s*140/); // Ephemeral (updated from 130)
     });
 
     test("subnets are properly segregated", () => {
