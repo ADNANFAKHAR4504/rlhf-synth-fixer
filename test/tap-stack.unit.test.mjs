@@ -11,10 +11,17 @@ describe('TapStack', () => {
   let stack;
   let template;
   const environmentSuffix = 'test';
+  const region = 'us-west-2';
+  const stackSuffix = `${environmentSuffix}-${region}`;
 
   beforeEach(() => {
+    // Set AWS_REGION for testing
+    process.env.AWS_REGION = region;
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    stack = new TapStack(app, 'TestTapStack', { 
+      environmentSuffix,
+      env: { region }
+    });
     template = Template.fromStack(stack);
   });
 
@@ -32,7 +39,7 @@ describe('TapStack', () => {
     });
 
     test('should have output for deployment completion', () => {
-      template.hasOutput('SecurityDeploymentCompletetest', {
+      template.hasOutput(`SecurityDeploymentComplete${stackSuffix}`, {
         Value: 'SUCCESS',
         Description: 'Indicates successful deployment of all security stacks',
       });
@@ -44,20 +51,20 @@ describe('TapStack', () => {
       const app = new cdk.App();
       
       // Create KMS Stack
-      const kmsStack = new SecurityKmsStack(app, `SecurityKmsStack${environmentSuffix}`, {
+      const kmsStack = new SecurityKmsStack(app, `SecurityKmsStack${stackSuffix}`, {
         environmentSuffix,
       });
       expect(kmsStack).toBeDefined();
       
       // Create IAM Stack
-      const iamStack = new SecurityIamStack(app, `SecurityIamStack${environmentSuffix}`, {
+      const iamStack = new SecurityIamStack(app, `SecurityIamStack${stackSuffix}`, {
         environmentSuffix,
         encryptionKeyArn: 'arn:aws:kms:us-west-2:123456789012:key/test-key',
       });
       expect(iamStack).toBeDefined();
       
       // Create Config Stack
-      const configStack = new SecurityConfigStack(app, `SecurityConfigStack${environmentSuffix}`, {
+      const configStack = new SecurityConfigStack(app, `SecurityConfigStack${stackSuffix}`, {
         environmentSuffix,
         encryptionKeyArn: 'arn:aws:kms:us-west-2:123456789012:key/test-key',
         serviceRoleArn: 'arn:aws:iam::123456789012:role/test-role',
@@ -65,7 +72,7 @@ describe('TapStack', () => {
       expect(configStack).toBeDefined();
       
       // Create Monitoring Stack
-      const monitoringStack = new SecurityMonitoringStack(app, `SecurityMonitoringStack${environmentSuffix}`, {
+      const monitoringStack = new SecurityMonitoringStack(app, `SecurityMonitoringStack${stackSuffix}`, {
         environmentSuffix,
         encryptionKeyArn: 'arn:aws:kms:us-west-2:123456789012:key/test-key',
       });
