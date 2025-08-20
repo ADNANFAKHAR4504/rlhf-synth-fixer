@@ -284,7 +284,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/s3/${ProjectName}-${Environment}'
       RetentionInDays: 30
-      KmsKeyId: !Ref DataEncryptionKey
+      KmsKeyId: !GetAtt DataEncryptionKey.Arn
 
   # CloudWatch Log Group for CloudTrail
   CloudTrailLogGroup:
@@ -292,7 +292,7 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${ProjectName}-${Environment}'
       RetentionInDays: 90
-      KmsKeyId: !Ref DataEncryptionKey
+      KmsKeyId: !GetAtt DataEncryptionKey.Arn
 
   # IAM Role for CloudTrail
   CloudTrailRole:
