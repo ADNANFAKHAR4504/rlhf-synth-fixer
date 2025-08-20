@@ -267,7 +267,6 @@ def create_security_group_alarm(region: str, sns_topic: aws.sns.Topic, tags: Dic
     alarm = aws.cloudwatch.MetricAlarm(
         f"{project_name}-{environment}-sg-changes-alarm-{region}",
         name=f"{project_name}-{environment}-sg-changes-{region}",
-        description=f"Alarm for security group changes in {region}",
         metric_name=f"SecurityGroupChanges-{region}",
         namespace=f"{project_name}/{environment}",
         statistic="Sum",
@@ -279,7 +278,7 @@ def create_security_group_alarm(region: str, sns_topic: aws.sns.Topic, tags: Dic
         treat_missing_data="notBreaching",
         tags=tags,
         opts=pulumi.ResourceOptions(
-            provider=aws.Provider(f"aws-{region}", region=region),
+            provider=aws.Provider(f"aws-cloudwatch-alarm-{region}", region=region),
             depends_on=[metric_filter]
         )
     )

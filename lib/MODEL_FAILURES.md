@@ -164,3 +164,13 @@
 - Updated `topic_arn=topic.arn` to `topic=topic.arn` in the SNS TopicSubscription resource
 - The Pulumi AWS provider expects the parameter to be named `topic`, not `topic_arn`
 - This aligns with the correct Pulumi resource API
+
+### 13. **CloudWatch MetricAlarm Parameter Issue**
+
+**Problem**: The deployment was failing with `TypeError: MetricAlarm._internal_init() got an unexpected keyword argument 'description'` because the CloudWatch MetricAlarm resource doesn't accept a `description` parameter.
+
+**Fix**:
+
+- Removed the `description` parameter from the CloudWatch MetricAlarm resource
+- The alarm name already provides sufficient identification
+- This aligns with the correct Pulumi CloudWatch MetricAlarm API
