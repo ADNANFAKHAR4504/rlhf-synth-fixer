@@ -1,6 +1,5 @@
 // test/tap-stack.int.test.ts
 import fs from 'fs';
-import path from 'path';
 
 import {
   AutoScalingClient,
@@ -82,15 +81,9 @@ const cloudtrail = new CloudTrailClient({ region });
 const logs = new CloudWatchLogsClient({ region });
 
 // Load outputs (flat map: key -> value)
-const outputsPath = path.resolve('cfn-outputs', 'flat-outputs.json');
-if (!fs.existsSync(outputsPath)) {
-  throw new Error(
-    `flat-outputs.json not found at ${outputsPath}. Make sure you exported stack outputs.`
-  );
-}
-
-type OutputMap = Record<string, string>;
-let outputs: OutputMap = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
 // Helper to read outputs with multiple possible keys
 function getOut(...keys: string[]): string | undefined {
