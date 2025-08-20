@@ -71,6 +71,15 @@
                 "true",
                 "false"
             ]
+        },
+        "EnableCloudTrail": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to true to enable CloudTrail, false to skip it."
         }
     },
     "Conditions": {
@@ -90,6 +99,14 @@
             "Fn::Equals": [
                 {
                     "Ref": "CreateGuardDuty"
+                },
+                "true"
+            ]
+        },
+        "CreateCloudTrail": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableCloudTrail"
                 },
                 "true"
             ]
@@ -1192,6 +1209,7 @@
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "Condition": "CreateCloudTrail",
             "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
                 "TrailName": {
@@ -1406,6 +1424,7 @@
         },
         "CloudTrailArn": {
             "Description": "CloudTrail ARN",
+            "Condition": "CreateCloudTrail",
             "Value": {
                 "Fn::GetAtt": [
                     "CloudTrail",

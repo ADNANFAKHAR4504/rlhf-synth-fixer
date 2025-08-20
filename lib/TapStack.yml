@@ -63,9 +63,18 @@ Parameters:
       - "true"
       - "false"
 
+  EnableCloudTrail:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: "Set to true to enable CloudTrail, false to skip it."
+
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
   CreateDetector: !Equals [!Ref CreateGuardDuty, "true"]
+  CreateCloudTrail: !Equals [!Ref EnableCloudTrail, "true"]
 
 Mappings:
   RegionMap:
@@ -659,6 +668,7 @@ Resources:
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: CreateCloudTrail
     DependsOn: CloudTrailBucketPolicy
     Properties:
       TrailName: !Sub '${ProjectName}-${Environment}-cloudtrail'
@@ -767,6 +777,7 @@ Outputs:
 
   CloudTrailArn:
     Description: CloudTrail ARN
+    Condition: CreateCloudTrail
     Value: !GetAtt CloudTrail.Arn
     Export:
       Name: !Sub '${ProjectName}-${Environment}-cloudtrail-arn'
