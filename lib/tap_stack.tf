@@ -91,6 +91,18 @@ variable "log_retention_days" {
   default     = 30
 }
 
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateway for private subnets"
+  type        = bool
+  default     = true
+}
+
+variable "single_nat_gateway" {
+  description = "Use a single NAT Gateway for all private subnets (cost optimization)"
+  type        = bool
+  default     = false
+}
+
 # Data Sources
 data "aws_ami" "amazon_linux" {
   most_recent = true
@@ -183,25 +195,25 @@ resource "aws_subnet" "database" {
 
 # NAT Gateways
 resource "aws_eip" "nat" {
-  count  = length(var.availability_zones)
+  count  = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
   domain = "vpc"
 
   depends_on = [aws_internet_gateway.main]
 
   tags = {
-    Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
+    Name = "${local.name_prefix}-nat-eip-${var.single_nat_gateway ? "single" : count.index + 1}"
   }
 }
 
 resource "aws_nat_gateway" "main" {
-  count         = length(var.availability_zones)
+  count         = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
   allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
+  subnet_id     = var.single_nat_gateway ? aws_subnet.public[0].id : aws_subnet.public[count.index].id
 
   depends_on = [aws_internet_gateway.main]
 
   tags = {
-    Name = "${local.name_prefix}-nat-gateway-${count.index + 1}"
+    Name = "${local.name_prefix}-nat-gateway-${var.single_nat_gateway ? "single" : count.index + 1}"
   }
 }
 
@@ -220,16 +232,16 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table" "private" {
-  count  = length(var.availability_zones)
+  count  = var.enable_nat_gateway ? (var.single_nat_gateway ? 1 : length(var.availability_zones)) : 0
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+    nat_gateway_id = var.single_nat_gateway ? aws_nat_gateway.main[0].id : aws_nat_gateway.main[count.index].id
   }
 
   tags = {
-    Name = "${local.name_prefix}-private-rt-${count.index + 1}"
+    Name = "${local.name_prefix}-private-rt-${var.single_nat_gateway ? "single" : count.index + 1}"
   }
 }
 
@@ -251,7 +263,7 @@ resource "aws_route_table_association" "public" {
 resource "aws_route_table_association" "private" {
   count          = length(aws_subnet.private)
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
+  route_table_id = var.single_nat_gateway ? aws_route_table.private[0].id : aws_route_table.private[count.index].id
 }
 
 resource "aws_route_table_association" "database" {
