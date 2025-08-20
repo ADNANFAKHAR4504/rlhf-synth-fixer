@@ -60,6 +60,17 @@ describe('TapStack CloudFormation Template', () => {
     test('should have BranchName parameter', () => {
       expect(template.Parameters.BranchName).toBeDefined();
     });
+
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    });
+
+    test('EnvironmentSuffix parameter should have correct properties', () => {
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('');
+      expect(param.Description).toBe('Environment suffix for resource naming to avoid conflicts');
+    });
   });
 
   describe('Resources', () => {
@@ -114,6 +125,24 @@ describe('TapStack CloudFormation Template', () => {
     test('should have prodCodeBuildLogGroup resource', () => {
       expect(template.Resources.prodCodeBuildLogGroup).toBeDefined();
     });
+
+    test('should have PipelineArtifactLogGroup resource', () => {
+      expect(template.Resources.PipelineArtifactLogGroup).toBeDefined();
+    });
+
+    test('PipelineArtifactLogGroup should be a CloudWatch Log Group', () => {
+      const logGroup = template.Resources.PipelineArtifactLogGroup;
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+    });
+
+    test('should have PipelineDashboard resource', () => {
+      expect(template.Resources.PipelineDashboard).toBeDefined();
+    });
+
+    test('PipelineDashboard should be a CloudWatch Dashboard', () => {
+      const dashboard = template.Resources.PipelineDashboard;
+      expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+    });
   });
 
   describe('Outputs', () => {
@@ -123,6 +152,8 @@ describe('TapStack CloudFormation Template', () => {
         'PipelineUrl',
         'CodeBuildProjectName',
         'ArtifactsBucketName',
+        'CodeBuildLogGroup',
+        'DashboardUrl',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -167,6 +198,26 @@ describe('TapStack CloudFormation Template', () => {
         'Fn::Sub': '${AWS::StackName}-ArtifactsBucket',
       });
     });
+
+    test('CodeBuildLogGroup output should be correct', () => {
+      const output = template.Outputs.CodeBuildLogGroup;
+      expect(output.Description).toBe('CloudWatch Log Group for CodeBuild');
+      expect(output.Value).toEqual({ Ref: 'prodCodeBuildLogGroup' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-CodeBuildLogGroup',
+      });
+    });
+
+    test('DashboardUrl output should be correct', () => {
+      const output = template.Outputs.DashboardUrl;
+      expect(output.Description).toBe('URL of the CloudWatch Dashboard');
+      expect(output.Value).toEqual({
+        'Fn::Sub': 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${PipelineDashboard}',
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-DashboardUrl',
+      });
+    });
   });
 
   describe('Template Validation', () => {
@@ -183,19 +234,19 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly eight resources', () => {
+    test('should have exactly ten resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(8);
+      expect(resourceCount).toBe(10);
     });
 
-    test('should have exactly four parameters', () => {
+    test('should have exactly five parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
+      expect(parameterCount).toBe(5);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have exactly six outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(6);
     });
   });
 
@@ -206,7 +257,9 @@ describe('TapStack CloudFormation Template', () => {
         'PipelineName': 'PipelineName',
         'PipelineUrl': 'PipelineUrl',
         'CodeBuildProjectName': 'CodeBuildProject',
-        'ArtifactsBucketName': 'ArtifactsBucket'
+        'ArtifactsBucketName': 'ArtifactsBucket',
+        'CodeBuildLogGroup': 'CodeBuildLogGroup',
+        'DashboardUrl': 'DashboardUrl'
       };
 
       Object.keys(template.Outputs).forEach(outputKey => {
@@ -222,7 +275,7 @@ describe('TapStack CloudFormation Template', () => {
       const bucket = template.Resources.prodPipelineArtifactStore;
       const bucketName = bucket.Properties.BucketName;
       expect(bucketName).toEqual({
-        'Fn::Sub': 'prod-pipeline-artifacts-${AWS::AccountId}-${AWS::Region}',
+        'Fn::Sub': 'prod${EnvironmentSuffix}-pipeline-artifacts-${AWS::AccountId}-${AWS::Region}',
       });
     });
   });

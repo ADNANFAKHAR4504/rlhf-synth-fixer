@@ -338,29 +338,29 @@ Outputs:
 
 ## Key Features and Best Practices Implemented
 
-### 🔧 **Pipeline Architecture**
+### **Pipeline Architecture**
 - **Three-stage pipeline**: Source → Build → Deploy
 - **Automatic triggering** via CloudWatch Events on CodeCommit changes
 - **Artifact management** with versioned S3 bucket storage
 
-### 🛡️ **Security & IAM Best Practices**
+### **Security & IAM Best Practices**
 - **Least-privilege IAM roles** for each service
 - **Encrypted artifact storage** with AES-256
 - **Public access blocked** on S3 bucket
 - **Resource-specific permissions** rather than wildcards where possible
 
-### 🏗️ **Build Stage Features**
+### **Build Stage Features**
 - **Multi-phase build process**: install → pre_build → build → post_build
 - **Linting and unit testing** in pre_build phase
 - **Configurable runtime environment** (Node.js 14)
 - **Build timeout protection** (15 minutes)
 
-### 📦 **Deployment Integration**
+### **Deployment Integration**
 - **Direct Elastic Beanstalk deployment** from pipeline
 - **Automatic application version creation**
 - **Environment-specific configuration** via parameters
 
-### 📊 **Monitoring & Maintenance**
+### **Monitoring & Maintenance**
 - **CloudWatch logging** for build processes
 - **Artifact lifecycle management** (30-day retention)
 - **Log retention policies** (14 days for build logs)
