@@ -1,0 +1,45 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291622",
+  "team": "2",
+  "startedAt": "2025-08-19T17:33:35.297Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Serverless Architecture",
+    "Event-Driven Systems",
+    "API Gateway Integration",
+    "Security Configuration",
+    "Monitoring Setup",
+    "DNS Management",
+    "Certificate Management"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS::S3::Bucket",
+    "AWS::Lambda::Function",
+    "AWS::IAM::Role",
+    "AWS::ApiGateway::RestApi",
+    "AWS::ApiGateway::Resource",
+    "AWS::ApiGateway::Method",
+    "AWS::ApiGateway::Deployment",
+    "AWS::ApiGateway::DomainName",
+    "AWS::ApiGateway::BasePathMapping",
+    "AWS::Route53::HostedZone",
+    "AWS::Route53::RecordSet",
+    "AWS::CertificateManager::Certificate",
+    "AWS::Events::Rule",
+    "AWS::SNS::Topic",
+    "AWS::CloudWatch::Alarm",
+    "AWS::Lambda::Permission"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
