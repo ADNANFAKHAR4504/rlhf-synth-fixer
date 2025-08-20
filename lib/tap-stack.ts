@@ -943,7 +943,7 @@ def lambda_handler(event, context):
     tags: { [key: string]: string },
     provider: aws.Provider
   ): void {
-    const regionCode = region === 'us-east-1' ? 'use1' : 'usw2';
+    const regionCode = region === 'us-east-1' ? 'e1' : 'w2'; // **SHORTENED to 2 chars**
 
     const alb = new aws.lb.LoadBalancer(
       `alb-${region}`,
@@ -957,11 +957,11 @@ def lambda_handler(event, context):
       { parent: this, provider }
     );
 
-    // **FIX**: Use namePrefix instead of name to allow create-before-replace
+    // **FIX**: Use very short namePrefix (max 6 characters)
     const targetGroup = new aws.lb.TargetGroup(
       `tg-${region}`,
       {
-        namePrefix: `nova-tg-${regionCode}-`, // **CHANGED from name to namePrefix**
+        namePrefix: `tg-${regionCode}-`, // **SHORTENED: "tg-e1-" (5 chars) or "tg-w2-" (5 chars)**
         port: 80,
         protocol: 'HTTP',
         vpcId: vpc.id,
@@ -981,7 +981,6 @@ def lambda_handler(event, context):
       {
         parent: this,
         provider,
-        // **FIX**: Enable create-before-replace to avoid deletion conflicts
         deleteBeforeReplace: false,
       }
     );
@@ -1006,7 +1005,6 @@ def lambda_handler(event, context):
       }
     );
 
-    // ASG attachment with proper dependencies
     new aws.autoscaling.Attachment(
       `asg-attachment-${region}`,
       {
@@ -1020,7 +1018,6 @@ def lambda_handler(event, context):
       }
     );
 
-    // WAF association
     new aws.wafv2.WebAclAssociation(
       `waf-association-${region}`,
       {
