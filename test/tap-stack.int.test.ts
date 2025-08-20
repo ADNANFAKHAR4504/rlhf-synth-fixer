@@ -31,15 +31,30 @@ describe("Terraform E2E Integration Tests", () => {
   let bucketRegion: string;
   let testRegion: string;
 
+  // Additional outputs for direct resource lookup
+  let vpcId: string;
+  let naclId: string;
+  let ec2RoleName: string;
+  let rdsSecretName: string;
+  let cloudwatchDashboardName: string;
+
   beforeAll(() => {
     outputs = loadOutputs();
     bucketName = outputs.bucket_name?.value || outputs.bucket_name;
-    bucketTags = typeof outputs.bucket_tags?.value === "object" ? outputs.bucket_tags.value : JSON.parse(outputs.bucket_tags?.value || "{}");
+    bucketTags = typeof outputs.bucket_tags?.value === "object"
+      ? outputs.bucket_tags.value
+      : JSON.parse(outputs.bucket_tags?.value || "{}");
     environment = bucketTags.Environment || "prod";
     bucketRegion = outputs.bucket_region?.value || outputs.bucket_region || "us-east-1";
     testRegion = outputs.aws_region?.value || outputs.aws_region || bucketRegion;
-  });
 
+    // Load resource ids/names from outputs
+    vpcId = outputs.vpc_id?.value || outputs.vpc_id;
+    naclId = outputs.network_acl_id?.value || outputs.network_acl_id;
+    ec2RoleName = outputs.ec2_role_name?.value || outputs.ec2_role_name;
+    rdsSecretName = outputs.rds_secret_name?.value || outputs.rds_secret_name;
+    cloudwatchDashboardName = outputs.cloudwatch_dashboard_name?.value || outputs.cloudwatch_dashboard_name;
+  });
 
   describe("S3 Bucket", () => {
     let s3: S3Client;
@@ -72,50 +87,66 @@ describe("Terraform E2E Integration Tests", () => {
     });
   });
 
-
   describe("Secrets Manager", () => {
     let secrets: SecretsManagerClient;
     beforeAll(() => {
       secrets = new SecretsManagerClient({ region: testRegion });
     });
+
     test("RDS secret exists", async () => {
-      const secretName = `secure-rds-password-${environment}`;
+      const secretName = rdsSecretName || `secure-rds-password-${environment}`;
       const res = await secrets.send(new DescribeSecretCommand({ SecretId: secretName }));
       expect(res.Name).toBe(secretName);
       expect(res.Description).toMatch(/RDS instance password/);
     });
   });
 
-
   describe("VPC", () => {
     let ec2: EC2Client;
     beforeAll(() => {
       ec2 = new EC2Client({ region: testRegion });
     });
+
     test("VPC exists", async () => {
-      const vpcs = await ec2.send(new DescribeVpcsCommand({ Filters: [{ Name: "tag:Name", Values: ["secure-prod-vpc"] }] }));
-      expect(vpcs.Vpcs?.length).toBeGreaterThan(0);
-      const vpc = vpcs.Vpcs && vpcs.Vpcs[0];
-      expect(vpc).toBeDefined();
-      expect(vpc?.CidrBlock).toBe("10.0.0.0/16");
-      expect(vpc?.Tags?.some(t => t.Key === "ManagedBy" && t.Value === "terraform")).toBe(true);
+      // Prefer to use vpcId from outputs if available
+      if (vpcId) {
+        const vpcs = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+        expect(vpcs.Vpcs?.length).toBe(1);
+        const vpc = vpcs.Vpcs?.[0];
+        expect(vpc).toBeDefined();
+        expect(vpc?.CidrBlock).toBe("10.0.0.0/16");
+        expect(vpc?.Tags?.some(t => t.Key === "ManagedBy" && t.Value === "terraform")).toBe(true);
+      } else {
+        // Fallback to tag search if output not set
+        const vpcs = await ec2.send(new DescribeVpcsCommand({ Filters: [{ Name: "tag:Name", Values: ["secure-prod-vpc"] }] }));
+        expect(vpcs.Vpcs?.length).toBeGreaterThan(0);
+        const vpc = vpcs.Vpcs && vpcs.Vpcs[0];
+        expect(vpc).toBeDefined();
+        expect(vpc?.CidrBlock).toBe("10.0.0.0/16");
+        expect(vpc?.Tags?.some(t => t.Key === "ManagedBy" && t.Value === "terraform")).toBe(true);
+      }
     });
   });
-
 
   describe("Network ACL", () => {
     let ec2: EC2Client;
     beforeAll(() => {
       ec2 = new EC2Client({ region: testRegion });
     });
+
     test("NACL exists and has correct rules", async () => {
-      const nacls = await ec2.send(new DescribeNetworkAclsCommand({}));
-      // Find by tag or VPC ID
-      const prodNacl = nacls.NetworkAcls?.find(nacl =>
-        nacl.Tags?.some(t => t.Key === "Environment" && t.Value === environment)
-      );
-      expect(prodNacl).toBeTruthy();
-      const ingressRules = prodNacl?.Entries?.filter(e => e.Egress === false) || [];
+      let nacl;
+      if (naclId) {
+        const nacls = await ec2.send(new DescribeNetworkAclsCommand({ NetworkAclIds: [naclId] }));
+        nacl = nacls.NetworkAcls?.[0];
+      } else {
+        const nacls = await ec2.send(new DescribeNetworkAclsCommand({}));
+        nacl = nacls.NetworkAcls?.find(nacl =>
+          nacl.Tags?.some(t => t.Key === "Environment" && t.Value === environment)
+        );
+      }
+      expect(nacl).toBeTruthy();
+      const ingressRules = nacl?.Entries?.filter(e => e.Egress === false) || [];
       console.log("NACL ingress rules:", ingressRules);
       expect(ingressRules.some(
         e => e.RuleAction === "allow" &&
@@ -128,18 +159,19 @@ describe("Terraform E2E Integration Tests", () => {
           (Number(e.Protocol) === 6) &&
           e.PortRange?.From === 22
       )).toBe(true);
+
       expect(ingressRules.some(e => e.RuleAction === "deny")).toBe(true);
     });
   });
-
 
   describe("IAM Role and Policies", () => {
     let iam: IAMClient;
     beforeAll(() => {
       iam = new IAMClient({ region: testRegion });
     });
+
     test("EC2 role exists, policies attached", async () => {
-      const roleName = `secure-ec2-role-${environment}`;
+      const roleName = ec2RoleName || `secure-ec2-role-${environment}`;
       const roleRes = await iam.send(new GetRoleCommand({ RoleName: roleName }));
       expect(roleRes.Role).toBeDefined();
       expect(roleRes.Role?.RoleName).toBe(roleName);
@@ -156,14 +188,14 @@ describe("Terraform E2E Integration Tests", () => {
     });
   });
 
-
   describe("CloudWatch Dashboard", () => {
     let cw: CloudWatchClient;
     beforeAll(() => {
       cw = new CloudWatchClient({ region: testRegion });
     });
+
     test("dashboard exists", async () => {
-      const dashboardName = `secure-dashboard-${environment}`;
+      const dashboardName = cloudwatchDashboardName || `secure-dashboard-${environment}`;
       const res = await cw.send(new GetDashboardCommand({ DashboardName: dashboardName }));
       expect(res.DashboardName).toBe(dashboardName);
       expect(res.DashboardBody).toBeDefined();

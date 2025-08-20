@@ -2,7 +2,6 @@
 # S3 Bucket with AES-256 Encryption
 ########################
 
-# Add missing VPC resource for aws_network_acl
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
   tags = {
@@ -38,7 +37,6 @@ resource "aws_s3_bucket_public_access_block" "secure_prod_pab" {
 
 resource "aws_s3_bucket_versioning" "secure_prod_versioning" {
   bucket = aws_s3_bucket.secure_prod.id
-
   versioning_configuration {
     status = "Enabled"
   }
@@ -48,8 +46,16 @@ output "bucket_name" {
   value = aws_s3_bucket.secure_prod.bucket
 }
 
+output "bucket_id" {
+  value = aws_s3_bucket.secure_prod.id
+}
+
 output "bucket_tags" {
   value = aws_s3_bucket.secure_prod.tags
+}
+
+output "bucket_region" {
+  value = var.bucket_region
 }
 
 ########################
@@ -75,7 +81,6 @@ resource "aws_iam_role" "ec2_role" {
   tags = merge(var.bucket_tags, { Environment = var.environment })
 }
 
-# Policy for EC2 to write to CloudWatch Logs
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
   name        = "secure-cloudwatch-logs-policy-${var.environment}"
   description = "Allow EC2 to write logs to CloudWatch"
@@ -98,7 +103,6 @@ resource "aws_iam_policy" "cloudwatch_logs_policy" {
   tags = merge(var.bucket_tags, { Environment = var.environment })
 }
 
-# Policy for EC2 to access S3 buckets
 resource "aws_iam_policy" "s3_access_policy" {
   name        = "secure-s3-access-policy-${var.environment}"
   description = "Allow EC2 to access S3 buckets"
@@ -123,7 +127,6 @@ resource "aws_iam_policy" "s3_access_policy" {
   tags = merge(var.bucket_tags, { Environment = var.environment })
 }
 
-# Attach policies to EC2 role
 resource "aws_iam_role_policy_attachment" "cloudwatch_logs_attachment" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = aws_iam_policy.cloudwatch_logs_policy.arn
@@ -139,12 +142,27 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "secure-ec2-profile-${var.environment}"
   role = aws_iam_role.ec2_role.name
 
   tags = merge(var.bucket_tags, { Environment = var.environment })
+}
+
+output "ec2_role_name" {
+  value = aws_iam_role.ec2_role.name
+}
+
+output "ec2_profile_name" {
+  value = aws_iam_instance_profile.ec2_profile.name
+}
+
+output "cloudwatch_logs_policy_name" {
+  value = aws_iam_policy.cloudwatch_logs_policy.name
+}
+
+output "s3_access_policy_name" {
+  value = aws_iam_policy.s3_access_policy.name
 }
 
 ########################
@@ -183,18 +201,12 @@ variable "environment" {
 }
 
 ########################
-# S3 Bucket
-########################
-
-
-########################
 # Network ACLs (NACLs) - Only allow TCP ports 443 and 22
 ########################
 
 resource "aws_network_acl" "secure_prod" {
   vpc_id = aws_vpc.main.id
 
-  # Allow inbound HTTPS (443)
   ingress {
     protocol   = "tcp"
     rule_no    = 100
@@ -204,7 +216,6 @@ resource "aws_network_acl" "secure_prod" {
     to_port    = 443
   }
 
-  # Allow inbound SSH (22)
   ingress {
     protocol   = "tcp"
     rule_no    = 110
@@ -214,17 +225,15 @@ resource "aws_network_acl" "secure_prod" {
     to_port    = 22
   }
 
-  # Deny all other inbound traffic
-    ingress {
-      protocol   = "-1"
-      rule_no    = 120
-      action     = "deny"
-      cidr_block = "0.0.0.0/0"
-      from_port  = 0
-      to_port    = 0
-    }
+  ingress {
+    protocol   = "-1"
+    rule_no    = 120
+    action     = "deny"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
 
-  # Allow outbound HTTPS (443)
   egress {
     protocol   = "tcp"
     rule_no    = 100
@@ -234,7 +243,6 @@ resource "aws_network_acl" "secure_prod" {
     to_port    = 443
   }
 
-  # Allow outbound SSH (22)
   egress {
     protocol   = "tcp"
     rule_no    = 110
@@ -244,17 +252,20 @@ resource "aws_network_acl" "secure_prod" {
     to_port    = 22
   }
 
-  # Deny all other outbound traffic
-    egress {
-      protocol   = "-1"
-      rule_no    = 120
-      action     = "deny"
-      cidr_block = "0.0.0.0/0"
-      from_port  = 0
-      to_port    = 0
-    }
+  egress {
+    protocol   = "-1"
+    rule_no    = 120
+    action     = "deny"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
 
   tags = merge(var.bucket_tags, { Environment = var.environment })
+}
+
+output "network_acl_id" {
+  value = aws_network_acl.secure_prod.id
 }
 
 ########################
@@ -279,6 +290,10 @@ resource "aws_secretsmanager_secret_version" "rds_password_version" {
     password = random_password.rds_password.result,
     port     = 3306
   })
+}
+
+output "rds_secret_name" {
+  value = aws_secretsmanager_secret.rds_password.name
 }
 
 ########################
@@ -339,5 +354,24 @@ resource "aws_cloudwatch_dashboard" "secure_prod" {
       }
     ]
   })
-  # tags argument removed; not supported by aws_cloudwatch_dashboard
+}
+
+output "cloudwatch_dashboard_name" {
+  value = aws_cloudwatch_dashboard.secure_prod.dashboard_name
+}
+
+output "cloudwatch_dashboard_body" {
+  value = aws_cloudwatch_dashboard.secure_prod.dashboard_body
+}
+
+########################
+# VPC Output
+########################
+
+output "vpc_id" {
+  value = aws_vpc.main.id
+}
+
+output "vpc_cidr_block" {
+  value = aws_vpc.main.cidr_block
 }
