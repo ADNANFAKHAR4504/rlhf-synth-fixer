@@ -928,7 +928,7 @@ Resources:
       LogGroupName: !Ref CorpVPCFlowLogsGroup
       DeliverLogsPermissionArn: !GetAtt CorpVPCFlowLogsRole.Arn
       MaxAggregationInterval: 600
-      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action} ${flowlogstatus}'
+      LogFormat: '${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}'
       Tags:
         - Key: Name
           Value: !Sub 'corp-vpc-flowlogs-${EnvironmentSuffix}'
