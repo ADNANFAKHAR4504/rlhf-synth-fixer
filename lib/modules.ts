@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { Fn } from 'cdktf';
+import { Fn, TerraformIterator } from 'cdktf';
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
@@ -59,12 +59,11 @@ export class SecureModules extends Construct {
     super(scope, id);
 
     // KMS Key for encryption at rest - centralized key management
-    // This key will be used across all services (S3, RDS, Lambda, EBS) for consistent encryption
     this.kmsKey = new KmsKey(this, 'kms-key', {
       description: `${config.appName} encryption key for all services`,
       keyUsage: 'ENCRYPT_DECRYPT',
-      deletionWindowInDays: 7, // Allow recovery if accidentally deleted
-      enableKeyRotation: true, // Automatic annual key rotation for security
+      deletionWindowInDays: 7,
+      enableKeyRotation: true,
       policy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -100,10 +99,9 @@ export class SecureModules extends Construct {
     });
 
     // VPC - isolated network environment
-    // All resources will be deployed within this VPC for network security
     this.vpc = new Vpc(this, 'vpc', {
       cidrBlock: config.vpcCidr,
-      enableDnsHostnames: true, // Required for RDS and other services
+      enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
         Name: `${config.appName}-VPC`,
@@ -118,7 +116,7 @@ export class SecureModules extends Construct {
       },
     });
 
-    // Public Subnets - for resources that need internet access (like NAT gateways)
+    // Public Subnets - for resources that need internet access
     this.publicSubnets = config.publicSubnetCidrs.map((cidr, index) => {
       return new Subnet(this, `public-subnet-${index}`, {
         vpcId: this.vpc.id,
@@ -132,8 +130,7 @@ export class SecureModules extends Construct {
       });
     });
 
-    // Private Subnets - for application resources (Lambda, RDS, etc.)
-    // These subnets don't have direct internet access for security
+    // Private Subnets - for application resources
     this.privateSubnets = config.privateSubnetCidrs.map((cidr, index) => {
       return new Subnet(this, `private-subnet-${index}`, {
         vpcId: this.vpc.id,
@@ -170,7 +167,6 @@ export class SecureModules extends Construct {
     });
 
     // Lambda execution role with least privilege principle
-    // Only includes necessary permissions for CloudWatch logging and VPC access
     this.lambdaRole = new IamRole(this, 'lambda-role', {
       name: `${config.appName}-Lambda-ExecutionRole`,
       assumeRolePolicy: JSON.stringify({
@@ -198,23 +194,20 @@ export class SecureModules extends Construct {
         Version: '2012-10-17',
         Statement: [
           {
-            // CloudWatch Logs permissions - specific to this function's log group
             Effect: 'Allow',
             Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
             Resource: `arn:aws:logs:${config.region}:*:log-group:/aws/lambda/${config.appName}-*`,
           },
           {
-            // VPC permissions - required for Lambda in VPC
             Effect: 'Allow',
             Action: [
               'ec2:CreateNetworkInterface',
               'ec2:DescribeNetworkInterfaces',
               'ec2:DeleteNetworkInterface',
             ],
-            Resource: '*', // VPC permissions require wildcard
+            Resource: '*',
           },
           {
-            // KMS permissions for decryption
             Effect: 'Allow',
             Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
             Resource: this.kmsKey.arn,
@@ -229,17 +222,17 @@ export class SecureModules extends Construct {
       role: this.lambdaRole.name,
     });
 
-    // CloudWatch Log Group for Lambda - encrypted and with retention
+    // CloudWatch Log Group for Lambda
     this.lambdaLogGroup = new CloudwatchLogGroup(this, 'lambda-log-group', {
       name: `/aws/lambda/${config.appName}-Function`,
-      retentionInDays: 14, // Cost optimization - adjust based on compliance needs
-      kmsKeyId: this.kmsKey.arn, // Encrypt logs at rest
+      retentionInDays: 14,
+      kmsKeyId: this.kmsKey.arn,
       tags: {
         Name: `${config.appName}-Lambda-LogGroup`,
       },
     });
 
-    // Security Group for Lambda - restrictive outbound rules
+    // Security Group for Lambda
     const lambdaSecurityGroup = new SecurityGroup(this, 'lambda-sg', {
       name: `${config.appName}-Lambda-SG`,
       description: 'Security group for Lambda function',
@@ -262,13 +255,13 @@ export class SecureModules extends Construct {
 
     // S3 Bucket with comprehensive security settings
     this.s3Bucket = new S3Bucket(this, 's3-bucket', {
-      bucket: `${config.appName.toLowerCase()}-secure-bucket-${Date.now()}`, // Unique name
+      bucket: `${config.appName.toLowerCase()}-secure-bucket-${Date.now()}`,
       tags: {
         Name: `${config.appName}-S3-Bucket`,
       },
     });
 
-    // S3 Bucket encryption - using our KMS key
+    // S3 Bucket encryption
     new S3BucketServerSideEncryptionConfigurationA(this, 's3-encryption', {
       bucket: this.s3Bucket.id,
       rule: [
@@ -277,12 +270,12 @@ export class SecureModules extends Construct {
             sseAlgorithm: 'aws:kms',
             kmsMasterKeyId: this.kmsKey.arn,
           },
-          bucketKeyEnabled: true, // Cost optimization for KMS
+          bucketKeyEnabled: true,
         },
       ],
     });
 
-    // S3 Bucket versioning - for data protection
+    // S3 Bucket versioning
     new S3BucketVersioningA(this, 's3-versioning', {
       bucket: this.s3Bucket.id,
       versioningConfiguration: {
@@ -290,7 +283,7 @@ export class SecureModules extends Construct {
       },
     });
 
-    // S3 Public Access Block - prevent accidental public exposure
+    // S3 Public Access Block
     new S3BucketPublicAccessBlock(this, 's3-public-access-block', {
       bucket: this.s3Bucket.id,
       blockPublicAcls: true,
@@ -299,7 +292,7 @@ export class SecureModules extends Construct {
       restrictPublicBuckets: true,
     });
 
-    // S3 Access Logging - audit trail for bucket access
+    // S3 Access Logging
     const loggingBucket = new S3Bucket(this, 's3-logging-bucket', {
       bucket: `${config.appName.toLowerCase()}-access-logs-${Date.now()}`,
       tags: {
@@ -313,22 +306,26 @@ export class SecureModules extends Construct {
       targetPrefix: 'access-logs/',
     });
 
-    // Lambda Function - deployed in private subnet
+    // FIXED: Extract subnet IDs and use Fn.tolist for proper token handling
+    const privateSubnetIds = this.privateSubnets.map(subnet => subnet.id);
+
+    // Lambda Function - FIXED: Use Fn.tolist for proper list handling
     this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
       functionName: `${config.appName}-Function`,
       role: this.lambdaRole.arn,
       handler: 'index.handler',
       runtime: 'nodejs18.x',
-      filename: 'lambda.zip', // You'll need to create this
-      sourceCodeHash: 'placeholder', // Will be updated with actual code
+      filename: 'lambda.zip',
+      sourceCodeHash: 'placeholder',
       timeout: 30,
       memorySize: 128,
-      kmsKeyArn: this.kmsKey.arn, // Encrypt environment variables
+      kmsKeyArn: this.kmsKey.arn,
       vpcConfig: {
-        subnetIds: this.privateSubnets.map(subnet => subnet.id),
+        // FIXED: Use Fn.tolist to convert IResolvable to string[]
+        subnetIds: Fn.tolist(privateSubnetIds),
         securityGroupIds: [lambdaSecurityGroup.id],
       },
-      dependsOn: [this.lambdaLogGroup], // Ensure log group exists first
+      dependsOn: [this.lambdaLogGroup],
       environment: {
         variables: {
           S3_BUCKET: this.s3Bucket.id,
@@ -340,17 +337,18 @@ export class SecureModules extends Construct {
       },
     });
 
-    // DB Subnet Group for RDS - spans multiple AZs for high availability
+    // DB Subnet Group for RDS - FIXED: Use Fn.tolist for proper list handling
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       name: `${config.appName.toLowerCase()}-db-subnet-group`,
-      subnetIds: Fn.tolist(this.privateSubnets.map(subnet => subnet.id)),
+      // FIXED: Use Fn.tolist to convert IResolvable to string[]
+      subnetIds: Fn.tolist(privateSubnetIds),
       description: 'Subnet group for RDS instance',
       tags: {
         Name: `${config.appName}-DB-SubnetGroup`,
       },
     });
 
-    // Security Group for RDS - only allow access from Lambda
+    // Security Group for RDS
     const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
       name: `${config.appName}-RDS-SG`,
       description: 'Security group for RDS instance',
@@ -376,22 +374,22 @@ export class SecureModules extends Construct {
       identifier: `${config.appName.toLowerCase()}-database`,
       engine: 'mysql',
       engineVersion: '8.0',
-      instanceClass: 'db.t3.micro', // Adjust based on needs
+      instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageType: 'gp2',
       storageEncrypted: true,
-      kmsKeyId: this.kmsKey.arn, // Encrypt RDS storage
+      kmsKeyId: this.kmsKey.arn,
       dbName: 'myappdb',
       username: 'admin',
-      password: 'ChangeMe123!', // Use AWS Secrets Manager in production
+      password: 'ChangeMe123!',
       vpcSecurityGroupIds: [rdsSecurityGroup.id],
       dbSubnetGroupName: dbSubnetGroup.name,
-      backupRetentionPeriod: 7, // 7 days of automated backups
-      backupWindow: '03:00-04:00', // UTC
-      maintenanceWindow: 'sun:04:00-sun:05:00', // UTC
+      backupRetentionPeriod: 7,
+      backupWindow: '03:00-04:00',
+      maintenanceWindow: 'sun:04:00-sun:05:00',
       skipFinalSnapshot: false,
       finalSnapshotIdentifier: `${config.appName.toLowerCase()}-final-snapshot`,
-      deletionProtection: true, // Prevent accidental deletion
+      deletionProtection: true,
       tags: {
         Name: `${config.appName}-RDS-Instance`,
       },
@@ -403,7 +401,7 @@ export class SecureModules extends Construct {
       size: 10,
       type: 'gp3',
       encrypted: true,
-      kmsKeyId: this.kmsKey.keyId, // Encrypt EBS volume
+      kmsKeyId: this.kmsKey.keyId,
       tags: {
         Name: `${config.appName}-EBS-Volume`,
       },

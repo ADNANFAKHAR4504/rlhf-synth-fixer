@@ -134,15 +134,19 @@ export class TapStack extends TerraformStack {
       description: 'VPC ID for the secure infrastructure',
     });
 
+    // FIXED: Extract subnet IDs for outputs
+    const publicSubnetIds = secureInfra.publicSubnets.map(subnet => subnet.id);
+    const privateSubnetIds = secureInfra.privateSubnets.map(subnet => subnet.id);
+
+    // FIXED: Use Fn.tolist for subnet ID outputs
     new TerraformOutput(this, 'public_subnet_ids', {
-      value: Fn.tolist(secureInfra.publicSubnets.map(subnet => subnet.id)),
+      value: Fn.tolist(publicSubnetIds),
       description: 'Public subnet IDs',
     });
 
     new TerraformOutput(this, 'private_subnet_ids', {
-      value: Fn.tolist(secureInfra.privateSubnets.map(subnet => subnet.id)),
-      description:
-        'Private subnet IDs where application resources are deployed',
+      value: Fn.tolist(privateSubnetIds),
+      description: 'Private subnet IDs where application resources are deployed',
     });
 
     // Security Information
