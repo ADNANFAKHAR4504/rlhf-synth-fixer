@@ -5,6 +5,15 @@ variable "ec2_instance_type" {
   default     = "t3.micro"
 }
 
+# Generate a secure password if none is provided
+resource "random_password" "db" {
+  length           = 16
+  special          = false
+  min_lower        = 1
+  min_upper        = 1
+  min_numeric      = 1
+}
+
 # Placeholder DynamoDB table for unit-test content checks (count=0 to avoid resource creation)
 resource "aws_dynamodb_table" "primary" {
   count        = 0
@@ -52,6 +61,7 @@ variable "db_password" {
   description = "Database password"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "allowed_cidr_blocks" {
@@ -320,7 +330,7 @@ module "data" {
   secondary_private_subnet_id = module.network_xregion.secondary_private_subnet_id
   primary_security_group_id   = module.network_xregion.primary_security_group_id
   secondary_security_group_id = module.network_xregion.secondary_security_group_id
-  db_password                 = var.db_password
+  db_password                 = var.db_password != "" ? var.db_password : random_password.db.result
   resource_suffix             = random_string.resource_suffix.result
   tags                        = { Environment = "production" }
 }
