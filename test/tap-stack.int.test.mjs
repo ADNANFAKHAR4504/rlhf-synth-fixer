@@ -1,5 +1,5 @@
 import {
-  ApiGatewayClient,
+  APIGatewayClient,
   GetStagesCommand,
 } from '@aws-sdk/client-api-gateway';
 import {
@@ -30,7 +30,7 @@ describe('TapStack Integration Tests', () => {
   const s3Client = new S3Client({ region });
   const ec2Client = new EC2Client({ region });
   const rdsClient = new RDSClient({ region });
-  const apiClient = new ApiGatewayClient({ region });
+  const apiClient = new APIGatewayClient({ region });
   const kmsClient = new KMSClient({ region });
   const ssmClient = new SSMClient({ region });
   const elbClient = new ElasticLoadBalancingV2Client({ region });
