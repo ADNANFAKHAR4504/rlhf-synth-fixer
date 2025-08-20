@@ -24,5 +24,11 @@
     "AWS IAM",
     "CloudWatch Logs",
     "S3 Event Notifications"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
