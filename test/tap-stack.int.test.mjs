@@ -21,16 +21,12 @@ import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import * as fs from 'fs';
-import * as path from 'path';
+import fs from 'fs';
 
-// Load the deployment outputs
-const outputsPath = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'cfn-outputs', 'flat-outputs.json');
-let outputs = {};
-
-if (fs.existsSync(outputsPath)) {
-  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-}
+// Load deployment outputs
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
 // AWS clients
 const ec2Client = new EC2Client({ region: 'us-east-1' });
