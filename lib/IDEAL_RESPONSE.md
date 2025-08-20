@@ -1,6 +1,43 @@
 # Ideal Terraform Multi-Region Infrastructure Solution
 
-This solution implements a production-ready, highly available multi-region AWS infrastructures using Terraform with proper environment isolation and best practices.
+This solution implements a ```hcl
+# Primary RDS Instance
+resource "aws_db_instance" "primary" {
+  provider = aws.primary
+  
+  identifier     = "mysql-primary-${var.environment_suffix}"
+  engine         = "mysql"
+  engine_version = "8.0.35"
+  instance_class = var.db_instance_class
+  
+  multi_az                     = true
+  storage_encrypted            = true
+  backup_retention_period      = 7
+  monitoring_interval         = 60
+  performance_insights_enabled = true
+  publicly_accessible         = false
+  deletion_protection         = false  # For testing environments
+  skip_final_snapshot         = true   # For testing environments
+}
+
+# Secondary RDS Instance
+resource "aws_db_instance" "secondary" {
+  provider = aws.secondary
+  
+  identifier     = "mysql-secondary-${var.environment_suffix}"
+  engine         = "mysql"
+  engine_version = "8.0.35"
+  instance_class = var.db_instance_class
+  
+  multi_az                     = true
+  storage_encrypted            = true
+  backup_retention_period      = 7
+  monitoring_interval         = 60
+  performance_insights_enabled = true
+  publicly_accessible         = false
+  deletion_protection         = false  # For testing environments
+  skip_final_snapshot         = true   # For testing environments
+}```highly available multi-region AWS infrastructures using Terraform with proper environment isolation and best practices.
 
 ## Project Structure
 
@@ -98,6 +135,24 @@ resource "aws_db_instance" "primary" {
   publicly_accessible          = false
   deletion_protection          = false  # For testing environments
   skip_final_snapshot          = true   # For testing environments
+}
+
+resource "aws_db_instance" "secondary" {
+  provider = aws.secondary
+  
+  identifier     = "mysql-secondary-${var.environment_suffix}"
+  engine         = "mysql"
+  engine_version = "8.0.35"
+  instance_class = var.db_instance_class
+  
+  multi_az                     = true
+  storage_encrypted            = true
+  backup_retention_period      = 7
+  monitoring_interval         = 60
+  performance_insights_enabled = true
+  publicly_accessible         = false
+  deletion_protection         = false  # For testing environments
+  skip_final_snapshot         = true   # For testing environments
 }
 ```
 

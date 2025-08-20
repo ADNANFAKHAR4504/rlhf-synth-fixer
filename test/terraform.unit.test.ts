@@ -347,7 +347,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
           /resource\s+"aws_db_instance"\s+"secondary"/
         );
         expect(stackContent).toMatch(
-          /identifier\s*=\s*"mysql-primary-\$\{var\.environment_suffix\}"/
+          /identifier\s*=\s*"mysql-primary-\$\{var\.environment_suffix\}-v2"/
         );
         expect(stackContent).toMatch(
           /identifier\s*=\s*"mysql-secondary-\$\{var\.environment_suffix\}"/
