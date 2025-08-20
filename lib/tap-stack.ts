@@ -30,10 +30,11 @@ import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
 import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
 import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
 import { VpcPeeringConnection } from '@cdktf/provider-aws/lib/vpc-peering-connection';
-// FIX: Corrected the import name from VpcPeeringConnectionAccepter to VpcPeeringConnectionAccepterA
 import { VpcPeeringConnectionAccepterA } from '@cdktf/provider-aws/lib/vpc-peering-connection-accepter';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
+import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
+import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
 
 // --- Reusable Regional Construct ---
 interface RegionalInfraProps {
@@ -47,6 +48,7 @@ interface RegionalInfraProps {
   callerIdentity: DataAwsCallerIdentity;
   uniqueSuffix: string;
   primaryDbArn?: string;
+  rdsPasswordSecret?: SecretsmanagerSecret;
 }
 
 class RegionalInfra extends Construct {
@@ -69,6 +71,7 @@ class RegionalInfra extends Construct {
       callerIdentity,
       uniqueSuffix,
       primaryDbArn,
+      rdsPasswordSecret,
     } = props;
 
     this.vpc = new Vpc(this, 'MainVpc', {
@@ -128,7 +131,9 @@ class RegionalInfra extends Construct {
         engine: 'postgres',
         engineVersion: '16',
         username: 'adminuser',
-        password: 'CHANGEME-use-secrets-manager',
+        password: rdsPasswordSecret
+          ? Fn.lookup(rdsPasswordSecret.arn, 'password', 'CHANGEME-use-secrets-manager')
+          : 'CHANGEME-use-secrets-manager',
         multiAz: true,
         storageEncrypted: true,
         kmsKeyId: kmsKey.arn,
@@ -189,10 +194,11 @@ export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    const domainName = 'pci-multiregion-deploy-test-2.net';
+    // Parameterized domain name for reusability
+    const domainName = process.env.DOMAIN_NAME || 'pci-multiregion-deploy-test-2.net';
     const primaryRegion = 'us-east-1';
     const secondaryRegion = 'us-west-2';
-    const s3ReplicaRegion = 'eu-west-1';
+    const s3ReplicaRegion = 'us-west-2'; // FIX: Replication region changed to us-west-2
 
     const tags = {
       Project: 'MultiRegionPCI',
@@ -233,6 +239,21 @@ export class TapStack extends TerraformStack {
       tags,
     });
 
+    // --- Secrets Manager for RDS password ---
+    const rdsPasswordSecret = new SecretsmanagerSecret(this, 'RdsPasswordSecret', {
+      provider: primaryProvider,
+      name: `pci-rds-password-${uniqueSuffix}`,
+      description: 'RDS master password for PCI stack',
+      recoveryWindowInDays: 7,
+      tags,
+    });
+
+    new SecretsmanagerSecretVersion(this, 'RdsPasswordSecretVersion', {
+      provider: primaryProvider,
+      secretId: rdsPasswordSecret.id,
+      secretString: JSON.stringify({ password: Fn.randomPassword(20, true, true, true, true) }),
+    });
+
     const primaryInfra = new RegionalInfra(this, 'PrimaryInfra', {
       provider: primaryProvider,
       region: primaryRegion,
@@ -243,6 +264,7 @@ export class TapStack extends TerraformStack {
       kmsKey: kmsKeyPrimary,
       callerIdentity,
       uniqueSuffix,
+      rdsPasswordSecret,
     });
 
     const secondaryInfra = new RegionalInfra(this, 'SecondaryInfra', {
@@ -256,6 +278,7 @@ export class TapStack extends TerraformStack {
       callerIdentity,
       uniqueSuffix,
       primaryDbArn: primaryInfra.dbInstance.arn,
+      rdsPasswordSecret,
     });
 
     const peeringConnection = new VpcPeeringConnection(this, 'VpcPeering', {
@@ -267,7 +290,6 @@ export class TapStack extends TerraformStack {
       tags: { ...tags, Name: `peering-${primaryRegion}-to-${secondaryRegion}` },
     });
 
-    // FIX: Corrected the class name from VpcPeeringConnectionAccepter to VpcPeeringConnectionAccepterA
     new VpcPeeringConnectionAccepterA(this, 'VpcPeeringAccepter', {
       provider: secondaryProvider,
       vpcPeeringConnectionId: peeringConnection.id,
