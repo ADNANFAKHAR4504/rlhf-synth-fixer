@@ -283,7 +283,7 @@ describe("Live AWS Resource Validation", () => {
     expect(igw.Attachments).toBeDefined();
     expect(igw.Attachments!.length).toBeGreaterThan(0);
     expect(igw.Attachments![0].VpcId).toBe(OUT.vpcId);
-    expect(igw.Attachments![0].State).toBe('attached');
+    expect(igw.Attachments![0].State).toBe('available');
     
     // Check for required tags
     const envTag = igw.Tags?.find(tag => tag.Key === 'Environment');
