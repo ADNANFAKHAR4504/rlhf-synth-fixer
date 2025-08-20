@@ -1,8 +1,7 @@
 import {
-  ApiGatewayV2Client as ApiGatewayClient,
-  GetApisCommand,
+  ApiGatewayClient,
   GetStagesCommand,
-} from '@aws-sdk/client-apigatewayv2';
+} from '@aws-sdk/client-api-gateway';
 import {
   DescribeSecurityGroupsCommand,
   DescribeVpcsCommand,
@@ -54,7 +53,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Security Requirement 1: S3 Bucket Encryption Verification', () => {
     test('should verify S3 bucket exists and is encrypted with AES-256', async () => {
-      const bucketName = outputs.s3BucketName;
+      const bucketName = outputs.S3BucketName;
       expect(bucketName).toBeDefined();
 
       // Verify bucket exists
@@ -78,6 +77,7 @@ describe('TapStack Integration Tests', () => {
           .ApplyServerSideEncryptionByDefault.SSEAlgorithm
       ).toBe('AES256');
     });
+
     test('should verify logs bucket exists and is encrypted', async () => {
       const logsBucketName = outputs.LogsBucketName;
       if (logsBucketName) {
@@ -99,7 +99,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('Security Requirement 3: API Gateway Logging Verification', () => {
     test('should verify API Gateway has logging enabled', async () => {
-      const apiUrl = outputs.apiEndpoint;
+      const apiUrl = outputs.APIGatewayURL;
       expect(apiUrl).toBeDefined();
 
       // Extract API ID from URL
@@ -107,27 +107,15 @@ describe('TapStack Integration Tests', () => {
       if (apiIdMatch) {
         const apiId = apiIdMatch[1];
 
-        // Get APIs
-        const apisCommand = new GetApisCommand({});
-        const apisResponse = await apiClient.send(apisCommand);
-
-        expect(apisResponse.Items).toBeDefined();
-        expect(apisResponse.Items.length).toBeGreaterThan(0);
-
-        // Find our API
-        const ourApi = apisResponse.Items.find(api => api.ApiId === apiId);
-        expect(ourApi).toBeDefined();
-
         // Get API stages
-        const stagesCommand = new GetStagesCommand({ ApiId: apiId });
+        const stagesCommand = new GetStagesCommand({ RestApiId: apiId });
         const stagesResponse = await apiClient.send(stagesCommand);
 
         expect(stagesResponse.Items).toBeDefined();
         expect(stagesResponse.Items.length).toBeGreaterThan(0);
 
-        // Find prod stage
         const prodStage = stagesResponse.Items.find(
-          stage => stage.StageName === 'prod' || stage.StageName === '$default'
+          stage => stage.StageName === 'prod'
         );
         expect(prodStage).toBeDefined();
         expect(prodStage.AccessLogSettings).toBeDefined();
@@ -294,20 +282,19 @@ describe('TapStack Integration Tests', () => {
   describe('End-to-End Workflow Tests', () => {
     test('should verify complete infrastructure connectivity', async () => {
       // Verify all critical outputs exist
-      expect(outputs.s3BucketName).toBeDefined();
-      expect(outputs.apiEndpoint).toBeDefined();
-      expect(outputs.imageProcessorArn).toBeDefined();
-      expect(outputs.dataAnalyzerArn).toBeDefined();
-      expect(outputs.notificationHandlerArn).toBeDefined();
-      expect(outputs.environmentSuffix).toBeDefined();
+      expect(outputs.VPCId).toBeDefined();
+      expect(outputs.ALBDNSName).toBeDefined();
+      expect(outputs.DatabaseEndpoint).toBeDefined();
+      expect(outputs.S3BucketName).toBeDefined();
+      expect(outputs.KMSKeyId).toBeDefined();
+      expect(outputs.APIGatewayURL).toBeDefined();
     });
 
     test('should verify resources are properly tagged and named', async () => {
       // Verify resources include environment suffix
-      if (outputs.s3BucketName) {
-        expect(outputs.s3BucketName).toMatch(/tap-.*-synthtrainr131/);
+      if (outputs.S3BucketName) {
+        expect(outputs.S3BucketName).toMatch(/tap-synthtrainr142-/);
       }
-      expect(outputs.environmentSuffix).toBe('synthtrainr131');
     });
   });
 });
