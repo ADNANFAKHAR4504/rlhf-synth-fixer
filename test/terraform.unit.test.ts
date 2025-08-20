@@ -78,7 +78,7 @@ describe('Terraform Core Infrastructure (static checks)', () => {
 
   test('EC2 security group has correct rules', () => {
     const ec2Sg = securityHcl.match(
-      /resource\s+"aws_security_group"\s+"ec2"\s*{([\s\S]*?)}/m
+      /resource\s+"aws_security_group"\s+"ec2"\s*{([\s\S]*?)^}/m
     )?.[1];
     expect(ec2Sg).toMatch(/from_port\s*=\s*443/);
     expect(ec2Sg).toMatch(/from_port\s*=\s*80/);
@@ -88,7 +88,7 @@ describe('Terraform Core Infrastructure (static checks)', () => {
 
   test('RDS security group has correct rules', () => {
     const rdsSg = securityHcl.match(
-      /resource\s+"aws_security_group"\s+"rds"\s*{([\s\S]*?)}/m
+      /resource\s+"aws_security_group"\s+"rds"\s*{([\s\S]*?)^}/m
     )?.[1];
     expect(rdsSg).toMatch(/from_port\s*=\s*3306/);
     expect(rdsSg).toMatch(
