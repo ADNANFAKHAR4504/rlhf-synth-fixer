@@ -133,7 +133,7 @@ KMS key ARNs (Logs and S3)
 
 MFA group name
 
-Do / Don’t
+Do / Dont
 
 DO ensure every taggable resource includes Owner: TechTeam.
 
@@ -143,11 +143,11 @@ DO enable KMS key rotation.
 
 DO make the template pass cfn-lint and be valid YAML.
 
-DON’T add AWS Config, Config Recorder, Delivery Channel, or CloudTrail.
+DONT add AWS Config, Config Recorder, Delivery Channel, or CloudTrail.
 
-DON’T add unmanaged/wildcard-broad permissions.
+DONT add unmanaged/wildcard-broad permissions.
 
-DON’T output prose—return only the YAML.
+DONT output prosereturn only the YAML.
 
 Validation & Quality Checks (the template you return must satisfy all):
 

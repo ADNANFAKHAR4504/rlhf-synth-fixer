@@ -24,9 +24,9 @@ one for each Lambda function.
 
 IAM Roles:
 • Create a single, reusable IAM role for all three Lambda functions.
-• The role’s policy must grant permissions for logging to CloudWatch Logs
+• The roles policy must grant permissions for logging to CloudWatch Logs
 (logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents).
-• The role’s policy must also grant granular DynamoDB permissions
+• The roles policy must also grant granular DynamoDB permissions
 (dynamodb:GetItem, dynamodb:PutItem, dynamodb:UpdateItem)
 for each specific table, following the principle of least privilege.
 
@@ -63,7 +63,7 @@ Error Handling:
 which is a key part of error handling.
 
 Template Directives:
-• The template must start with AWSTemplateFormatVersion: ‘2010-09-09’.
+• The template must start with AWSTemplateFormatVersion: 2010-09-09.
 • It must include the Transform: AWS::Serverless-2016-10-31 line.
 • Use the Globals section to define common properties (like Runtime) to reduce redundancy.
 • The final YAML code must be complete, valid, and free of syntax errors.

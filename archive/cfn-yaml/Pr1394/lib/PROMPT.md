@@ -1,20 +1,20 @@
-# CloudFormation YAML Requirement – Production Secure Environment
+# CloudFormation YAML Requirement Production Secure Environment
 
-You are acting as a cloud infrastructure engineer who needs to write a CloudFormation template in YAML.  
-The stack should set up a secure AWS environment for production use in the `us-east-1` region.  
+You are acting as a cloud infrastructure engineer who needs to write a CloudFormation template in YAML. 
+The stack should set up a secure AWS environment for production use in the `us-east-1` region. 
 Every resource name or logical ID must start with the prefix **ProdEnv** to clearly identify that it belongs to the production environment.
 
 ## Requirements
 
 ### 1. VPC Configuration
-- Create a VPC that uses only private subnets — absolutely no public subnets or Internet Gateways.
+- Create a VPC that uses only private subnets absolutely no public subnets or Internet Gateways.
 - Include at least two private subnets across two different Availability Zones for high availability.
 - Do **not** attach any NAT Gateway or Internet Gateway, as there should be **no direct internet access**.
 
 ### 2. EC2 Instances
 - Launch EC2 instances inside this private VPC.
 - EC2 instances must use **IAM Roles** to access specific S3 buckets (e.g., `ProdEnvDataBucket`).
-- Hardcoding access keys or secret keys is **not allowed** — use IAM roles to grant required permissions.
+- Hardcoding access keys or secret keys is **not allowed** use IAM roles to grant required permissions.
 
 ### 3. CloudWatch Monitoring
 - Configure CloudWatch Alarms for each EC2 instance.
