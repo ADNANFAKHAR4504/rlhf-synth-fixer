@@ -63,6 +63,9 @@ Parameters:
     Description: 'ARN of the administrator user for KMS key access (leave empty to use account root)'
     AllowedPattern: '^$|^arn:aws:iam::\d{12}:(user|role)/.+$'
 
+Conditions:
+  HasAdminUser: !Not [!Equals [!Ref AdminUserArn, '']]
+
 Resources:
   # KMS Key for encryption with FIPS 140-3 validated HSM
   SecureKMSKey:
@@ -96,6 +99,27 @@ Resources:
               - 'kms:ScheduleKeyDeletion'
               - 'kms:CancelKeyDeletion'
             Resource: '*'
+          - !If
+            - HasAdminUser
+            - Sid: 'Allow administration of the key by admin user'
+              Effect: Allow
+              Principal:
+                AWS: !Ref AdminUserArn
+              Action:
+                - 'kms:Create*'
+                - 'kms:Describe*'
+                - 'kms:Enable*'
+                - 'kms:List*'
+                - 'kms:Put*'
+                - 'kms:Update*'
+                - 'kms:Revoke*'
+                - 'kms:Disable*'
+                - 'kms:Get*'
+                - 'kms:Delete*'
+                - 'kms:ScheduleKeyDeletion'
+                - 'kms:CancelKeyDeletion'
+              Resource: '*'
+            - !Ref 'AWS::NoValue'
           - Sid: 'Allow use of the key for specific services'
             Effect: Allow
             Principal:
@@ -320,7 +344,7 @@ Resources:
   SecureS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'secure-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -348,7 +372,7 @@ Resources:
   AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'access-logs-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'access-logs-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -545,7 +569,7 @@ Resources:
       SecurityGroupIds:
         - !Ref WebServerSecurityGroup
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -576,7 +600,7 @@ Resources:
   ConfigBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'config-bucket-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketName: !Sub 'config-bucket-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
