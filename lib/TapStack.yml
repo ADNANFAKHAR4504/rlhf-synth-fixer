@@ -28,6 +28,16 @@ Conditions:
 
 Resources:
   # Import existing RDS password secret
+  RDSPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${EnvironmentType}-rds-password'
+      Description: 'RDS Master password'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
 
   # KMS Key for encryption
   EnvironmentKMSKey:
