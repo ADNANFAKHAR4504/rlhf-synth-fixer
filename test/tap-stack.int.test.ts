@@ -169,18 +169,16 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should have WAF Web ACL accessible', async () => {
       try {
-        // Extract the Web ACL ID from the ARN
         const webAclId = outputs.WebAclArn.split('/').pop();
-        expect(webAclId).toBeDefined();
-        
         const command = new GetWebACLCommand({ 
           Id: webAclId,
+          Name: `${environmentSuffix}-web-acl`,
           Scope: 'REGIONAL'
         });
         const response = await wafv2Client.send(command);
         
         expect(response.WebACL).toBeDefined();
-        expect(response.WebACL!.Name).toContain(`${environmentSuffix}-web-acl`);
+        expect(response.WebACL!.Name).toBe(`${environmentSuffix}-web-acl`);
       } catch (error) {
         console.error('WAF Web ACL validation failed:', error);
         throw error;
