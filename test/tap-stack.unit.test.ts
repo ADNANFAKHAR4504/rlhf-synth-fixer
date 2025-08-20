@@ -77,9 +77,13 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('should have private subnet', () => {
-      expect(template.Resources.PrivateSubnet).toBeDefined();
-      expect(template.Resources.PrivateSubnet.Type).toBe('AWS::EC2::Subnet');
-      expect(template.Resources.PrivateSubnet.Properties.CidrBlock).toBe('10.0.2.0/24');
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PrivateSubnet1.Properties.CidrBlock).toBe('10.0.2.0/24');
+      
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet2.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PrivateSubnet2.Properties.CidrBlock).toBe('10.0.3.0/24');
     });
 
     test('should have NAT Gateway and EIP', () => {
@@ -98,7 +102,8 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have subnet route table associations', () => {
       expect(template.Resources.PublicSubnetRouteTableAssociation).toBeDefined();
-      expect(template.Resources.PrivateSubnetRouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
+      expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
     });
   });
 
@@ -338,7 +343,8 @@ describe('TapStack CloudFormation Template', () => {
         'SecureVPC',
         'InternetGateway',
         'PublicSubnet',
-        'PrivateSubnet',
+        'PrivateSubnet1',
+        'PrivateSubnet2',
         'NATGateway',
         'WebSecurityGroup',
         'DatabaseSecurityGroup',
@@ -354,7 +360,7 @@ describe('TapStack CloudFormation Template', () => {
 
       resourcesToCheck.forEach(resourceName => {
         const resource = template.Resources[resourceName];
-        if (resource.Properties.Tags) {
+        if (resource && resource.Properties && resource.Properties.Tags) {
           const nameTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Name');
           if (nameTag) {
             expect(JSON.stringify(nameTag.Value)).toContain('EnvironmentSuffix');

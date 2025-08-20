@@ -124,7 +124,7 @@
                 ]
             }
         },
-        "PrivateSubnet": {
+        "PrivateSubnet1": {
             "Type": "AWS::EC2::Subnet",
             "Properties": {
                 "VpcId": {
@@ -145,7 +145,34 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "private-subnet-${EnvironmentSuffix}"
+                            "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "SecureVPC"
+                },
+                "CidrBlock": "10.0.3.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": {
+                                "Ref": "AWS::Region"
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
                         }
                     }
                 ]
@@ -248,11 +275,22 @@
                 }
             }
         },
-        "PrivateSubnetRouteTableAssociation": {
+        "PrivateSubnet1RouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "SubnetId": {
-                    "Ref": "PrivateSubnet"
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
                 },
                 "RouteTableId": {
                     "Ref": "PrivateRouteTable"
@@ -364,7 +402,7 @@
                                         "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${SecureS3Bucket}/*"
+                                        "Fn::Sub": "${SecureS3Bucket.Arn}/*"
                                     }
                                 },
                                 {
@@ -373,7 +411,10 @@
                                         "s3:ListBucket"
                                     ],
                                     "Resource": {
-                                        "Ref": "SecureS3Bucket"
+                                        "Fn::GetAtt": [
+                                            "SecureS3Bucket",
+                                            "Arn"
+                                        ]
                                     }
                                 }
                             ]
@@ -558,10 +599,10 @@
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
                     {
-                        "Ref": "PrivateSubnet"
+                        "Ref": "PrivateSubnet1"
                     },
                     {
-                        "Ref": "PublicSubnet"
+                        "Ref": "PrivateSubnet2"
                     }
                 ],
                 "Tags": [
@@ -576,6 +617,7 @@
         },
         "SecureRDSInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "DependsOn": "RDSSecret",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "secure-db-${EnvironmentSuffix}"
@@ -640,6 +682,15 @@
             "Properties": {
                 "LogGroupName": {
                     "Fn::Sub": "/aws/vpc/flowlogs-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "EC2LogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/secure-instance-${EnvironmentSuffix}"
                 },
                 "RetentionInDays": 30
             }
@@ -796,6 +847,40 @@
                 ]
             }
         },
+        "UnauthorizedAPICallsMetricFilter": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "CloudTrailLogGroup"
+                },
+                "FilterPattern": "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }",
+                "MetricTransformations": [
+                    {
+                        "MetricNamespace": "CloudTrailMetrics",
+                        "MetricName": "UnauthorizedAPICalls",
+                        "MetricValue": "1",
+                        "DefaultValue": 0
+                    }
+                ]
+            }
+        },
+        "RootAccountUsageMetricFilter": {
+            "Type": "AWS::Logs::MetricFilter",
+            "Properties": {
+                "LogGroupName": {
+                    "Ref": "CloudTrailLogGroup"
+                },
+                "FilterPattern": "{ $.userIdentity.type = \"Root\" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != \"AwsServiceEvent\" }",
+                "MetricTransformations": [
+                    {
+                        "MetricNamespace": "CloudTrailMetrics",
+                        "MetricName": "RootAccountUsage",
+                        "MetricValue": "1",
+                        "DefaultValue": 0
+                    }
+                ]
+            }
+        },
         "UnauthorizedAPICallsAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
@@ -903,6 +988,7 @@
         },
         "ConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
+            "DependsOn": "ConfigurationRecorder",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "config-delivery-${EnvironmentSuffix}"
@@ -1005,13 +1091,24 @@
             }
         },
         "PrivateSubnetId": {
-            "Description": "Private Subnet ID",
+            "Description": "Private Subnet 1 ID",
             "Value": {
-                "Ref": "PrivateSubnet"
+                "Ref": "PrivateSubnet1"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-Private-Subnet-ID"
+                    "Fn::Sub": "${AWS::StackName}-Private-Subnet-1-ID"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Private-Subnet-2-ID"
                 }
             }
         },

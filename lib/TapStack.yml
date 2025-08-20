@@ -77,8 +77,8 @@ Resources:
         - Key: Name
           Value: !Sub 'public-subnet-${EnvironmentSuffix}'
 
-  # Private Subnet
-  PrivateSubnet:
+  # Private Subnet 1
+  PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
@@ -89,7 +89,21 @@ Resources:
           Ref: 'AWS::Region'
       Tags:
         - Key: Name
-          Value: !Sub 'private-subnet-${EnvironmentSuffix}'
+          Value: !Sub 'private-subnet-1-${EnvironmentSuffix}'
+
+  # Private Subnet 2 (for RDS Multi-AZ)
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecureVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: 'AWS::Region'
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-subnet-2-${EnvironmentSuffix}'
 
   # NAT Gateway for Private Subnet
   NATGatewayEIP:
@@ -145,10 +159,16 @@ Resources:
       SubnetId: !Ref PublicSubnet
       RouteTableId: !Ref PublicRouteTable
 
-  PrivateSubnetRouteTableAssociation:
+  PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PrivateSubnet
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
   # Security Groups with Least Privilege
@@ -217,11 +237,11 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${SecureS3Bucket}/*'
+                Resource: !Sub '${SecureS3Bucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref SecureS3Bucket
+                Resource: !GetAtt SecureS3Bucket.Arn
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -322,8 +342,8 @@ Resources:
     Properties:
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
-        - !Ref PrivateSubnet
-        - !Ref PublicSubnet
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       Tags:
         - Key: Name
           Value: !Sub 'db-subnet-group-${EnvironmentSuffix}'
@@ -331,6 +351,7 @@ Resources:
   # RDS Instance with Automated Backups
   SecureRDSInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn: RDSSecret
     Properties:
       DBInstanceIdentifier: !Sub 'secure-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
@@ -378,6 +399,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs-${EnvironmentSuffix}'
+      RetentionInDays: 30
+
+  EC2LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/secure-instance-${EnvironmentSuffix}'
       RetentionInDays: 30
 
   # VPC Flow Logs
@@ -464,6 +491,29 @@ Resources:
               Values:
                 - !Sub '${SecureS3Bucket.Arn}/*'
 
+  # CloudWatch Metric Filters for Security Monitoring
+  UnauthorizedAPICallsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
+      MetricTransformations:
+        - MetricNamespace: 'CloudTrailMetrics'
+          MetricName: 'UnauthorizedAPICalls'
+          MetricValue: '1'
+          DefaultValue: 0
+
+  RootAccountUsageMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: '{ $.userIdentity.type = "Root" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != "AwsServiceEvent" }'
+      MetricTransformations:
+        - MetricNamespace: 'CloudTrailMetrics'
+          MetricName: 'RootAccountUsage'
+          MetricValue: '1'
+          DefaultValue: 0
+
   # CloudWatch Alarms for Security Monitoring
   UnauthorizedAPICallsAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -533,6 +583,7 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    DependsOn: ConfigurationRecorder
     Properties:
       Name: !Sub 'config-delivery-${EnvironmentSuffix}'
       S3BucketName: !Ref LoggingBucket
@@ -611,10 +662,16 @@ Outputs:
       Name: !Sub '${AWS::StackName}-Public-Subnet-ID'
 
   PrivateSubnetId:
-    Description: 'Private Subnet ID'
-    Value: !Ref PrivateSubnet
+    Description: 'Private Subnet 1 ID'
+    Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub '${AWS::StackName}-Private-Subnet-ID'
+      Name: !Sub '${AWS::StackName}-Private-Subnet-1-ID'
+
+  PrivateSubnet2Id:
+    Description: 'Private Subnet 2 ID'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-Subnet-2-ID'
 
   S3BucketName:
     Description: 'Secure S3 Bucket Name'
