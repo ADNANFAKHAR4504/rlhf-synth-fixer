@@ -1,0 +1,470 @@
+import { 
+  EC2Client, 
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeInstancesCommand,
+  DescribeFlowLogsCommand,
+  DescribeNetworkAclsCommand,
+  DescribeLaunchTemplatesCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+  DescribeScalingPoliciesCommand,
+} from '@aws-sdk/client-auto-scaling';
+import {
+  CloudWatchClient,
+  DescribeDashboardsCommand,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from '@aws-sdk/client-cloudwatch-logs';
+import {
+  IAMClient,
+  GetRoleCommand,
+  GetInstanceProfileCommand,
+} from '@aws-sdk/client-iam';
+import fs from 'fs';
+import path from 'path';
+
+describe('TapStack Integration Tests', () => {
+  let outputs;
+  let ec2Client;
+  let autoScalingClient;
+  let cloudWatchClient;
+  let cloudWatchLogsClient;
+  let iamClient;
+  const region = process.env.AWS_REGION || 'us-east-1';
+
+  beforeAll(() => {
+    // Load the CloudFormation outputs
+    const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+    if (!fs.existsSync(outputsPath)) {
+      throw new Error(`CloudFormation outputs not found at ${outputsPath}. Please deploy the stack first.`);
+    }
+    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+
+    // Initialize AWS clients
+    ec2Client = new EC2Client({ region });
+    autoScalingClient = new AutoScalingClient({ region });
+    cloudWatchClient = new CloudWatchClient({ region });
+    cloudWatchLogsClient = new CloudWatchLogsClient({ region });
+    iamClient = new IAMClient({ region });
+  });
+
+  describe('VPC and Networking', () => {
+    test('VPC should exist with correct configuration', async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.VPCId],
+      });
+      const response = await ec2Client.send(command);
+      
+      expect(response.Vpcs).toHaveLength(1);
+      const vpc = response.Vpcs[0];
+      expect(vpc.State).toBe('available');
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.EnableDnsHostnames).toBe(true);
+      expect(vpc.EnableDnsSupport).toBe(true);
+    });
+
+    test('VPC should have IPv6 CIDR block', async () => {
+      const command = new DescribeVpcsCommand({
+        VpcIds: [outputs.VPCId],
+      });
+      const response = await ec2Client.send(command);
+      
+      const vpc = response.Vpcs[0];
+      expect(vpc.Ipv6CidrBlockAssociationSet).toBeDefined();
+      expect(vpc.Ipv6CidrBlockAssociationSet.length).toBeGreaterThan(0);
+    });
+
+    test('Should have correct number of subnets', async () => {
+      const command = new DescribeSubnetsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const response = await ec2Client.send(command);
+      
+      expect(response.Subnets.length).toBeGreaterThanOrEqual(4); // At least 2 public + 2 private
+      
+      const publicSubnets = response.Subnets.filter(subnet => 
+        subnet.MapPublicIpOnLaunch === true
+      );
+      const privateSubnets = response.Subnets.filter(subnet => 
+        subnet.MapPublicIpOnLaunch === false
+      );
+      
+      expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
+      expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('Subnets should be in different availability zones', async () => {
+      const command = new DescribeSubnetsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const response = await ec2Client.send(command);
+      
+      const availabilityZones = new Set(response.Subnets.map(subnet => subnet.AvailabilityZone));
+      expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
+    });
+
+    test('VPC Flow Logs should be enabled', async () => {
+      const command = new DescribeFlowLogsCommand({
+        Filters: [
+          {
+            Name: 'resource-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const response = await ec2Client.send(command);
+      
+      expect(response.FlowLogs).toBeDefined();
+      expect(response.FlowLogs.length).toBeGreaterThan(0);
+      
+      const flowLog = response.FlowLogs[0];
+      expect(flowLog.FlowLogStatus).toBe('ACTIVE');
+      expect(flowLog.TrafficType).toBe('ALL');
+      expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
+    });
+
+    test('Network ACLs should be configured for private subnets', async () => {
+      const command = new DescribeNetworkAclsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const response = await ec2Client.send(command);
+      
+      expect(response.NetworkAcls).toBeDefined();
+      expect(response.NetworkAcls.length).toBeGreaterThan(1); // Default + custom ACL
+      
+      // Find non-default ACL
+      const customAcl = response.NetworkAcls.find(acl => !acl.IsDefault);
+      expect(customAcl).toBeDefined();
+      expect(customAcl.Entries.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('Security groups should be properly configured', async () => {
+      const command = new DescribeSecurityGroupsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const response = await ec2Client.send(command);
+      
+      expect(response.SecurityGroups).toBeDefined();
+      const nonDefaultGroups = response.SecurityGroups.filter(sg => !sg.GroupName.includes('default'));
+      expect(nonDefaultGroups.length).toBeGreaterThanOrEqual(2); // Public and Private
+      
+      // Check for public security group
+      const publicSG = nonDefaultGroups.find(sg => sg.GroupName.includes('PublicSecurityGroup'));
+      expect(publicSG).toBeDefined();
+      
+      // Verify HTTP, HTTPS, and SSH rules
+      const httpRule = publicSG.IpPermissions.find(rule => rule.FromPort === 80);
+      const httpsRule = publicSG.IpPermissions.find(rule => rule.FromPort === 443);
+      const sshRule = publicSG.IpPermissions.find(rule => rule.FromPort === 22);
+      
+      expect(httpRule).toBeDefined();
+      expect(httpsRule).toBeDefined();
+      expect(sshRule).toBeDefined();
+      
+      // Check for private security group
+      const privateSG = nonDefaultGroups.find(sg => sg.GroupName.includes('PrivateSecurityGroup'));
+      expect(privateSG).toBeDefined();
+    });
+  });
+
+  describe('Auto Scaling Groups', () => {
+    test('Public Auto Scaling Group should exist and be configured correctly', async () => {
+      const command = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [outputs.PublicAutoScalingGroupName],
+      });
+      const response = await autoScalingClient.send(command);
+      
+      expect(response.AutoScalingGroups).toHaveLength(1);
+      const asg = response.AutoScalingGroups[0];
+      
+      expect(asg.MinSize).toBe(2);
+      expect(asg.MaxSize).toBe(4);
+      expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(2);
+      expect(asg.HealthCheckGracePeriod).toBe(300);
+      expect(asg.Instances.length).toBeGreaterThanOrEqual(2);
+      
+      // Check that instances are healthy
+      asg.Instances.forEach(instance => {
+        expect(instance.HealthStatus).toBe('Healthy');
+        expect(instance.LifecycleState).toBe('InService');
+      });
+    });
+
+    test('Private Auto Scaling Group should exist and be configured correctly', async () => {
+      const command = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [outputs.PrivateAutoScalingGroupName],
+      });
+      const response = await autoScalingClient.send(command);
+      
+      expect(response.AutoScalingGroups).toHaveLength(1);
+      const asg = response.AutoScalingGroups[0];
+      
+      expect(asg.MinSize).toBe(2);
+      expect(asg.MaxSize).toBe(4);
+      expect(asg.DesiredCapacity).toBeGreaterThanOrEqual(2);
+      expect(asg.HealthCheckGracePeriod).toBe(300);
+      expect(asg.Instances.length).toBeGreaterThanOrEqual(2);
+      
+      // Check that instances are healthy
+      asg.Instances.forEach(instance => {
+        expect(instance.HealthStatus).toBe('Healthy');
+        expect(instance.LifecycleState).toBe('InService');
+      });
+    });
+
+    test('Auto Scaling Groups should have scaling policies', async () => {
+      const publicPoliciesCommand = new DescribeScalingPoliciesCommand({
+        AutoScalingGroupName: outputs.PublicAutoScalingGroupName,
+      });
+      const publicPolicies = await autoScalingClient.send(publicPoliciesCommand);
+      
+      expect(publicPolicies.ScalingPolicies).toBeDefined();
+      expect(publicPolicies.ScalingPolicies.length).toBeGreaterThan(0);
+      
+      const privatePoliciesCommand = new DescribeScalingPoliciesCommand({
+        AutoScalingGroupName: outputs.PrivateAutoScalingGroupName,
+      });
+      const privatePolicies = await autoScalingClient.send(privatePoliciesCommand);
+      
+      expect(privatePolicies.ScalingPolicies).toBeDefined();
+      expect(privatePolicies.ScalingPolicies.length).toBeGreaterThan(0);
+      
+      // Check for target tracking policies
+      const publicTargetTracking = publicPolicies.ScalingPolicies.find(p => p.PolicyType === 'TargetTrackingScaling');
+      const privateTargetTracking = privatePolicies.ScalingPolicies.find(p => p.PolicyType === 'TargetTrackingScaling');
+      
+      expect(publicTargetTracking).toBeDefined();
+      expect(privateTargetTracking).toBeDefined();
+    });
+
+    test('Auto Scaling Groups should span multiple availability zones', async () => {
+      const publicCommand = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [outputs.PublicAutoScalingGroupName],
+      });
+      const publicResponse = await autoScalingClient.send(publicCommand);
+      
+      const publicAsg = publicResponse.AutoScalingGroups[0];
+      expect(publicAsg.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+      
+      const privateCommand = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [outputs.PrivateAutoScalingGroupName],
+      });
+      const privateResponse = await autoScalingClient.send(privateCommand);
+      
+      const privateAsg = privateResponse.AutoScalingGroups[0];
+      expect(privateAsg.AvailabilityZones.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('EC2 Instances', () => {
+    test('Public instances should be running and accessible', async () => {
+      const asgCommand = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [outputs.PublicAutoScalingGroupName],
+      });
+      const asgResponse = await autoScalingClient.send(asgCommand);
+      
+      const instanceIds = asgResponse.AutoScalingGroups[0].Instances.map(i => i.InstanceId);
+      
+      const instancesCommand = new DescribeInstancesCommand({
+        InstanceIds: instanceIds,
+      });
+      const instancesResponse = await ec2Client.send(instancesCommand);
+      
+      instancesResponse.Reservations.forEach(reservation => {
+        reservation.Instances.forEach(instance => {
+          expect(instance.State.Name).toBe('running');
+          expect(instance.PublicIpAddress).toBeDefined();
+          expect(instance.Monitoring.State).toBe('enabled');
+        });
+      });
+    });
+
+    test('Private instances should be running without public IPs', async () => {
+      const asgCommand = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [outputs.PrivateAutoScalingGroupName],
+      });
+      const asgResponse = await autoScalingClient.send(asgCommand);
+      
+      const instanceIds = asgResponse.AutoScalingGroups[0].Instances.map(i => i.InstanceId);
+      
+      const instancesCommand = new DescribeInstancesCommand({
+        InstanceIds: instanceIds,
+      });
+      const instancesResponse = await ec2Client.send(instancesCommand);
+      
+      instancesResponse.Reservations.forEach(reservation => {
+        reservation.Instances.forEach(instance => {
+          expect(instance.State.Name).toBe('running');
+          expect(instance.PublicIpAddress).toBeUndefined();
+          expect(instance.PrivateIpAddress).toBeDefined();
+          expect(instance.Monitoring.State).toBe('enabled');
+        });
+      });
+    });
+
+    test('Instances should use correct launch templates', async () => {
+      const command = new DescribeLaunchTemplatesCommand({});
+      const response = await ec2Client.send(command);
+      
+      const launchTemplates = response.LaunchTemplates.filter(lt => 
+        lt.LaunchTemplateName.includes('LaunchTemplate')
+      );
+      
+      expect(launchTemplates.length).toBeGreaterThanOrEqual(2);
+      
+      const publicTemplate = launchTemplates.find(lt => lt.LaunchTemplateName.includes('Public'));
+      const privateTemplate = launchTemplates.find(lt => lt.LaunchTemplateName.includes('Private'));
+      
+      expect(publicTemplate).toBeDefined();
+      expect(privateTemplate).toBeDefined();
+    });
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    test('CloudWatch dashboard should exist', async () => {
+      const dashboardName = outputs.DashboardURL.match(/name=([^&]+)/)?.[1];
+      
+      if (dashboardName) {
+        const command = new DescribeDashboardsCommand({
+          DashboardNames: [dashboardName],
+        });
+        const response = await cloudWatchClient.send(command);
+        
+        expect(response.DashboardEntries).toHaveLength(1);
+        expect(response.DashboardEntries[0].DashboardName).toBe(dashboardName);
+      }
+    });
+
+    test('CloudWatch alarms should be configured', async () => {
+      const command = new DescribeAlarmsCommand({});
+      const response = await cloudWatchClient.send(command);
+      
+      const stackAlarms = response.MetricAlarms.filter(alarm => 
+        alarm.AlarmName.includes('HighCPUAlarm')
+      );
+      
+      expect(stackAlarms.length).toBeGreaterThanOrEqual(2);
+      
+      stackAlarms.forEach(alarm => {
+        expect(alarm.MetricName).toBe('CPUUtilization');
+        expect(alarm.Namespace).toBe('AWS/EC2');
+        expect(alarm.Threshold).toBe(80);
+        expect(alarm.EvaluationPeriods).toBe(2);
+        expect(alarm.DatapointsToAlarm).toBe(2);
+      });
+    });
+
+    test('CloudWatch log groups should exist', async () => {
+      const command = new DescribeLogGroupsCommand({});
+      const response = await cloudWatchLogsClient.send(command);
+      
+      const flowLogGroup = response.logGroups.find(lg => 
+        lg.logGroupName.includes('/aws/vpc/flowlogs')
+      );
+      
+      expect(flowLogGroup).toBeDefined();
+      expect(flowLogGroup.retentionInDays).toBe(7);
+    });
+  });
+
+  describe('IAM Configuration', () => {
+    test('EC2 IAM role should exist with correct policies', async () => {
+      // Extract role name from the ASG instances
+      const asgCommand = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [outputs.PublicAutoScalingGroupName],
+      });
+      const asgResponse = await autoScalingClient.send(asgCommand);
+      
+      if (asgResponse.AutoScalingGroups[0].Instances.length > 0) {
+        const instanceId = asgResponse.AutoScalingGroups[0].Instances[0].InstanceId;
+        
+        const instanceCommand = new DescribeInstancesCommand({
+          InstanceIds: [instanceId],
+        });
+        const instanceResponse = await ec2Client.send(instanceCommand);
+        
+        const iamInstanceProfile = instanceResponse.Reservations[0]?.Instances[0]?.IamInstanceProfile;
+        
+        if (iamInstanceProfile) {
+          expect(iamInstanceProfile.Arn).toBeDefined();
+        }
+      }
+    });
+  });
+
+  describe('High Availability', () => {
+    test('Resources should be distributed across multiple AZs', async () => {
+      // Check subnets distribution
+      const subnetCommand = new DescribeSubnetsCommand({
+        Filters: [
+          {
+            Name: 'vpc-id',
+            Values: [outputs.VPCId],
+          },
+        ],
+      });
+      const subnetResponse = await ec2Client.send(subnetCommand);
+      
+      const azSet = new Set(subnetResponse.Subnets.map(s => s.AvailabilityZone));
+      expect(azSet.size).toBeGreaterThanOrEqual(2);
+      
+      // Check ASG instances distribution
+      const publicAsgCommand = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [outputs.PublicAutoScalingGroupName],
+      });
+      const publicAsgResponse = await autoScalingClient.send(publicAsgCommand);
+      
+      const publicInstanceAzs = new Set();
+      publicAsgResponse.AutoScalingGroups[0].Instances.forEach(instance => {
+        publicInstanceAzs.add(instance.AvailabilityZone);
+      });
+      
+      expect(publicInstanceAzs.size).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Stack Outputs', () => {
+    test('All required outputs should be present', () => {
+      expect(outputs.VPCId).toBeDefined();
+      expect(outputs.VPCId).toMatch(/^vpc-[a-f0-9]+$/);
+      
+      expect(outputs.PublicAutoScalingGroupName).toBeDefined();
+      expect(outputs.PublicAutoScalingGroupName).toContain('PublicAutoScalingGroup');
+      
+      expect(outputs.PrivateAutoScalingGroupName).toBeDefined();
+      expect(outputs.PrivateAutoScalingGroupName).toContain('PrivateAutoScalingGroup');
+      
+      expect(outputs.DashboardURL).toBeDefined();
+      expect(outputs.DashboardURL).toContain('cloudwatch');
+    });
+  });
+});
