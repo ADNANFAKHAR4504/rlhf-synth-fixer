@@ -17,6 +17,8 @@ import {
   RdsModule,
   S3Module,
   VpcModule,
+  AlbModule,      // ✅ Added missing import
+  Route53Module,  // ✅ Added missing import
 } from './module';
 
 interface TapStackProps {
@@ -25,6 +27,9 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
+  // ✅ Added Route53 configuration
+  domainName?: string;
+  recordName?: string;
 }
 
 const AWS_REGION_OVERRIDE = '';
@@ -40,6 +45,10 @@ export class TapStack extends TerraformStack {
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+    
+    // ✅ Added Route53 configuration with defaults
+    const domainName = props?.domainName || 'example.com';
+    const recordName = props?.recordName || `app-${environmentSuffix}`;
 
     new AwsProvider(this, 'aws', {
       region: awsRegion,
@@ -80,12 +89,19 @@ export class TapStack extends TerraformStack {
           protocol: 'tcp',
           cidrBlocks: ['0.0.0.0/0'],
         },
-      ],
-      egress: [
+        // ✅ Added HTTPS support for future SSL implementation
         {
           fromPort: 443,
           toPort: 443,
           protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
           cidrBlocks: ['0.0.0.0/0'],
         },
       ],
@@ -161,6 +177,7 @@ export class TapStack extends TerraformStack {
       instanceProfileName: iam.instanceProfileName,
       ec2SecurityGroupId: ec2SecurityGroup.id,
     });
+
     // Configuration parameters
     const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
       this,
@@ -181,6 +198,23 @@ export class TapStack extends TerraformStack {
       vpcId: vpc.vpcIdOutput,
       privateSubnetIds: vpc.privateSubnetIdsOutput,
       dbSecurityGroupId: dbSecurityGroup.id,
+    });
+
+    // ✅ SOLUTION 1: Add ALB Module instantiation
+    const alb = new AlbModule(this, 'application-load-balancer', {
+      name: `fullstack-alb-${environmentSuffix}`,
+      vpcId: vpc.vpcIdOutput,
+      publicSubnetIds: vpc.publicSubnetIdsOutput,
+      targetGroupArn: ec2.targetGroupArnOutput, // ✅ Using EC2 target group output
+      albSecurityGroupId: albSecurityGroup.id,
+    });
+
+    // ✅ SOLUTION 2: Add Route53 Module instantiation
+    new Route53Module(this, 'dns-record', {
+      zoneName: domainName,
+      recordName: recordName,
+      albZoneId: alb.albZoneIdOutput,     // ✅ Using ALB zone ID output
+      albDnsName: alb.albDnsNameOutput,   // ✅ Using ALB DNS name output
     });
 
     new CloudwatchModule(this, 'alarms', {
