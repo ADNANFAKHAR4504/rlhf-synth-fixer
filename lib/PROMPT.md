@@ -6,7 +6,7 @@ Create a single Terraform configuration file named tap_stack.tf containing all v
 5.Encrypt all EBS volumes and sensitive data at rest using AWS KMS with an AWS-managed key.
 6. Define IAM roles and policies strictly following the principle of least privilege.
 7.Adjust security groups to only allow incoming traffic on necessary ports defined by variables and specific CIDR only of the subnet or VPC CIDR only
-8. Ensure all web-facing resources are accessible exclusively over HTTPS and HTTP.
+8. Ensure all web-facing resources are accessible exclusively over HTTPS only.
 9.Enable detailed logging for all possible AWS resources EC2, RDS, IAM with logs ceintralized in CloudWatch Logs. 
 10.Configure CloudWatch Alarms to monitor and alert on security-related events based on customizable thresholds for CPU alarms only.Also no cloudtrail logging is needed as per the task requirement.
 11. Apply S3 Buckets configuration enforcing Block Public Access to prevent unintended public exposure.

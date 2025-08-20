@@ -527,14 +527,6 @@ resource "aws_security_group" "primary_web" {
   }
 
   ingress {
-    description = "HTTP redirect"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
     description = "SSH"
     from_port   = 22
     to_port     = 22
@@ -698,14 +690,6 @@ resource "aws_security_group" "secondary_web" {
     description = "HTTPS"
     from_port   = var.web_port
     to_port     = var.web_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTP redirect"
-    from_port   = 80
-    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
