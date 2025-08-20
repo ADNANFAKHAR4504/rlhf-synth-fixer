@@ -52,7 +52,7 @@ MFA enforcement must be applied for the AWS Management Console.
 
 All resources should follow the company naming convention:
 
-Prefix with "corp" followed by projectName and the resource type (e.g., corp-nova-ec2, corp-nova-s3).
+Prefix with "corp" followed by projectName & the resource type (e.g., corp-nova-ec2, corp-nova-s3).
 
 Do not include AWS Config Rules or CloudTrail in this stack.
 
