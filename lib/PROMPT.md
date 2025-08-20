@@ -6,7 +6,7 @@ Requirement:
 
 Deploy infrastructure across two AWS regions (us-east-1 as primary, us-west-2 as secondary) with failover capabilities to ensure high availability.
 
-Provision an Amazon RDS MySQL instance in each region, configured with Multi-AZ to support automatic failover.
+Provision an Amazon RDS MySQL instance in each region, configured with Multi-AZ to support automatic failovers.
 
 Create a VPC in each region with public and private subnets, using the CIDR block 10.0.0.0/16.
 
