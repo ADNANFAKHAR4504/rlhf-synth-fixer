@@ -352,7 +352,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${SecureDataBucket}/*'
+                - !Sub '${SecureDataBucket.Arn}/*'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-security-audit-${Environment}'
