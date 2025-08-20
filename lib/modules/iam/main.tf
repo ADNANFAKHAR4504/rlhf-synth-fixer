@@ -120,7 +120,7 @@ data "aws_iam_policy_document" "lambda_policy" {
 ###############
 
 resource "aws_iam_role" "cloudtrail" {
-  name               = "${var.project_name}-${var.environment_suffix}-cloudtrail-role"
+  name_prefix        = "${var.project_name}-${var.environment_suffix}-cloudtrail-role-"
   assume_role_policy = data.aws_iam_policy_document.cloudtrail_assume.json
   tags               = var.common_tags
 }
@@ -133,7 +133,7 @@ resource "aws_iam_role_policy" "cloudtrail" {
 
 resource "aws_iam_role" "vpc_flow" {
   count              = var.enable_vpc_flow_logs ? 1 : 0
-  name               = "${var.project_name}-${var.environment_suffix}-vpc-flow-role"
+  name_prefix        = "${var.project_name}-${var.environment_suffix}-vpc-flow-role-"
   assume_role_policy = data.aws_iam_policy_document.vpc_flow_assume.json
   tags               = var.common_tags
 }
@@ -146,7 +146,7 @@ resource "aws_iam_role_policy" "vpc_flow" {
 }
 
 resource "aws_iam_role" "ec2" {
-  name               = "${var.project_name}-${var.environment_suffix}-ec2-role"
+  name_prefix        = "${var.project_name}-${var.environment_suffix}-ec2-role-"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume.json
   tags               = var.common_tags
 }
@@ -158,13 +158,13 @@ resource "aws_iam_role_policy" "ec2" {
 }
 
 resource "aws_iam_instance_profile" "ec2" {
-  name = "${var.project_name}-${var.environment_suffix}-ec2-profile"
-  role = aws_iam_role.ec2.name
-  tags = var.common_tags
+  name_prefix = "${var.project_name}-${var.environment_suffix}-ec2-profile-"
+  role        = aws_iam_role.ec2.name
+  tags        = var.common_tags
 }
 
 resource "aws_iam_role" "lambda" {
-  name               = "${var.project_name}-${var.environment_suffix}-lambda-role"
+  name_prefix        = "${var.project_name}-${var.environment_suffix}-lambda-role-"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
   tags               = var.common_tags
 }
