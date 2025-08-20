@@ -650,6 +650,8 @@ resource "aws_s3_bucket" "primary" {
   provider = aws.primary
   bucket   = "${local.name_prefix}-storage-primary-${random_id.bucket_suffix.hex}"
 
+  force_destroy = true
+
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-storage-primary"
     Region = var.primary_region
@@ -660,6 +662,8 @@ resource "aws_s3_bucket" "primary" {
 resource "aws_s3_bucket" "secondary" {
   provider = aws.secondary
   bucket   = "${local.name_prefix}-storage-secondary-${random_id.bucket_suffix.hex}"
+
+  force_destroy = true
 
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-storage-secondary"
