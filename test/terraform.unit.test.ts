@@ -1,6 +1,6 @@
 // tests/unit/terraform.unit.test.ts
 // Comprehensive unit tests for Terraform infrastructure
-// Tests tap_stack.tf, provider.tf, outputs.tf, and user_data.sh
+// Tests tap_stack.tf and provider.tf
 // No Terraform commands are executed - only static analysis
 
 import fs from "fs";
@@ -9,8 +9,8 @@ import path from "path";
 // File paths
 const TAP_STACK_PATH = path.resolve(__dirname, "../lib/tap_stack.tf");
 const PROVIDER_PATH = path.resolve(__dirname, "../lib/provider.tf");
-const OUTPUTS_PATH = path.resolve(__dirname, "../lib/outputs.tf");
-const USER_DATA_PATH = path.resolve(__dirname, "../lib/user_data.sh");
+
+
 
 // Helper function to read file content
 const readFile = (filePath: string): string => {
@@ -41,13 +41,9 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(fs.existsSync(PROVIDER_PATH)).toBe(true);
     });
 
-    test("outputs.tf exists", () => {
-      expect(fs.existsSync(OUTPUTS_PATH)).toBe(true);
-    });
 
-    test("user_data.sh exists", () => {
-      expect(fs.existsSync(USER_DATA_PATH)).toBe(true);
-    });
+
+
   });
 
   // =============================================================================
@@ -335,9 +331,9 @@ describe("Terraform Infrastructure Unit Tests", () => {
         expect(stackContent).toMatch(/max_size\s*=\s*local\.env_config\.max_size/);
       });
 
-      test("configures user data with templatefile", () => {
-        expect(stackContent).toMatch(/user_data\s*=\s*base64encode\(templatefile\(/);
-        expect(stackContent).toMatch(/user_data\.sh/);
+      test("configures user data inline", () => {
+        expect(stackContent).toMatch(/user_data\s*=\s*base64encode\(<<-EOF/);
+        expect(stackContent).toMatch(/#!\/bin\/bash/);
       });
 
       test("deploys instances in private subnets", () => {
@@ -382,14 +378,21 @@ describe("Terraform Infrastructure Unit Tests", () => {
   });
 
   // =============================================================================
-  // OUTPUTS TESTS (outputs.tf)
+  // OUTPUTS TESTS (inline in tap_stack.tf)
   // =============================================================================
   
-  describe("Terraform Outputs (outputs.tf)", () => {
+  describe("Terraform Outputs (inline)", () => {
     let outputsContent: string;
 
     beforeAll(() => {
-      outputsContent = readFile(OUTPUTS_PATH);
+      const stackContent = readFile(TAP_STACK_PATH);
+      // Extract outputs section from tap_stack.tf
+      const outputsMatch = stackContent.match(/# TERRAFORM OUTPUTS[\s\S]*$/m);
+      if (outputsMatch) {
+        outputsContent = outputsMatch[0];
+      } else {
+        throw new Error('Could not find outputs section in tap_stack.tf');
+      }
     });
 
     describe("VPC and Networking Outputs", () => {
@@ -497,18 +500,25 @@ describe("Terraform Infrastructure Unit Tests", () => {
   });
 
   // =============================================================================
-  // USER DATA SCRIPT TESTS (user_data.sh)
+  // USER DATA SCRIPT TESTS (inline in tap_stack.tf)
   // =============================================================================
   
-  describe("User Data Script (user_data.sh)", () => {
+  describe("User Data Script (inline)", () => {
     let userDataContent: string;
 
     beforeAll(() => {
-      userDataContent = readFile(USER_DATA_PATH);
+      const stackContent = readFile(TAP_STACK_PATH);
+      // Extract user_data content from both launch templates
+      const userDataMatches = stackContent.match(/user_data\s*=\s*base64encode\(<<-EOF([\s\S]*?)EOF\s*\)/g);
+      if (userDataMatches && userDataMatches.length > 0) {
+        userDataContent = userDataMatches[0];
+      } else {
+        throw new Error('Could not find inline user_data in tap_stack.tf');
+      }
     });
 
     test("has proper bash shebang", () => {
-      expect(userDataContent).toMatch(/^#!/);
+      expect(userDataContent).toMatch(/#!\/bin\/bash/);
     });
 
     test("sets error handling with 'set -e'", () => {
@@ -516,9 +526,9 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("uses Terraform template variables", () => {
-      expect(userDataContent).toMatch(/\$\{environment\}/);
-      expect(userDataContent).toMatch(/\$\{region\}/);
-      expect(userDataContent).toMatch(/\$\{bucket_name\}/);
+      expect(userDataContent).toMatch(/\$\{var\.environment\}/);
+      expect(userDataContent).toMatch(/\$\{var\.(primary|secondary)_region\}/);
+      expect(userDataContent).toMatch(/\$\{aws_s3_bucket\.(primary|secondary)\.bucket\}/);
     });
 
     test("installs required packages", () => {
@@ -552,7 +562,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("integrates with S3", () => {
       expect(userDataContent).toMatch(/aws\s+s3\s+cp/);
-      expect(userDataContent).toMatch(/s3:\/\/.*bucket_name/);
+      expect(userDataContent).toMatch(/s3:\/\/\$BUCKET_NAME/);
     });
 
     test("includes error handling for S3 operations", () => {
@@ -583,7 +593,13 @@ describe("Terraform Infrastructure Unit Tests", () => {
     beforeAll(() => {
       stackContent = readFile(TAP_STACK_PATH);
       providerContent = readFile(PROVIDER_PATH);
-      outputsContent = readFile(OUTPUTS_PATH);
+      // Extract outputs section from tap_stack.tf since it's now inline
+      const outputsMatch = stackContent.match(/# TERRAFORM OUTPUTS[\s\S]*$/m);
+      if (outputsMatch) {
+        outputsContent = outputsMatch[0];
+      } else {
+        throw new Error('Could not find outputs section in tap_stack.tf');
+      }
     });
 
     test("variables used in stack are defined in provider", () => {
@@ -625,8 +641,9 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(Math.abs(primaryProviderUsage - secondaryProviderUsage)).toBeLessThan(5);
     });
 
-    test("template file reference matches actual file", () => {
-      expect(stackContent).toMatch(/templatefile\(.*user_data\.sh/);
+    test("inline user data contains proper script content", () => {
+      expect(stackContent).toMatch(/user_data\s*=\s*base64encode\(<<-EOF/);
+      expect(stackContent).toMatch(/#!\/bin\/bash/);
     });
   });
 
@@ -1093,8 +1110,9 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     describe("Environment Variable Propagation", () => {
       test("user data script receives environment variables", () => {
-        expect(stackContent).toMatch(/templatefile.*user_data\.sh/);
-        expect(stackContent).toMatch(/environment\s*=\s*var\.environment/);
+        expect(stackContent).toMatch(/ENVIRONMENT="\$\{var\.environment\}"/);
+        expect(stackContent).toMatch(/REGION="\$\{var\.(primary|secondary)_region\}"/);
+        expect(stackContent).toMatch(/BUCKET_NAME="\$\{aws_s3_bucket\.(primary|secondary)\.bucket\}"/);
       });
 
       test("load balancer configuration varies by environment", () => {

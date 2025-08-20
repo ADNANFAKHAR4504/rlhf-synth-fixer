@@ -1,7 +1,7 @@
 # Multi-Region AWS Infrastructure with Auto Scaling and Load Balancing
 
 ## Overview
-This Terraform configuration creates a comprehensive, production-ready, multi-region AWS infrastructure featuring:
+This single-file Terraform configuration creates a comprehensive, production-ready, multi-region AWS infrastructure featuring:
 
 - **Multi-region deployment** (Primary: us-east-1, Secondary: us-west-2)
 - **High availability** with multiple availability zones
@@ -51,7 +51,24 @@ This Terraform configuration creates a comprehensive, production-ready, multi-re
 
 ---
 
-## 1. TERRAFORM PROVIDER CONFIGURATION
+## COMPLETE TERRAFORM CONFIGURATION
+
+This configuration is contained in a single `tap_stack.tf` file that includes:
+
+1. **Provider Configuration** - Multi-region AWS providers and variables  
+2. **Infrastructure Resources** - Complete infrastructure setup with inline user data
+3. **Terraform Outputs** - Comprehensive outputs for all resources
+
+### File Structure
+```
+lib/
+├── provider.tf        # Provider configuration and variables
+└── tap_stack.tf       # Complete infrastructure with inline user data and outputs
+```
+
+---
+
+## 1. TERRAFORM PROVIDER CONFIGURATION (provider.tf)
 
 ```hcl
 # =============================================================================
@@ -181,7 +198,9 @@ variable "desired_capacity" {
 
 ---
 
-## 2. MAIN INFRASTRUCTURE CONFIGURATION
+## 2. MAIN INFRASTRUCTURE CONFIGURATION (tap_stack.tf)
+
+This comprehensive file contains all infrastructure resources, inline user data scripts, and outputs.
 
 ```hcl
 # =============================================================================
@@ -1303,7 +1322,9 @@ resource "aws_autoscaling_group" "secondary" {
 
 ---
 
-## 3. TERRAFORM OUTPUTS
+## 3. TERRAFORM OUTPUTS (included in tap_stack.tf)
+
+The outputs are now included at the end of the main `tap_stack.tf` file, providing comprehensive visibility into all created resources:
 
 ```hcl
 # =============================================================================
@@ -1655,7 +1676,7 @@ output "health_check_url_secondary" {
 ```
 
 **Explanation:**
-The outputs provide comprehensive visibility into all created resources, organized by categories:
+The outputs are now integrated at the end of `tap_stack.tf` and provide comprehensive visibility into all created resources, organized by categories:
 - **Network Infrastructure**: VPC, subnet, and gateway information
 - **Security**: Security group identifiers
 - **IAM**: Role ARNs and profile names for integration
@@ -1664,22 +1685,29 @@ The outputs provide comprehensive visibility into all created resources, organiz
 - **Compute**: Auto Scaling Group and Launch Template information
 - **Application URLs**: Direct access to the deployed applications and health checks
 
+This consolidated approach eliminates the need for separate files while maintaining clear organization through comments and logical grouping.
+
 ---
 
-## 4. EC2 USER DATA BOOTSTRAP SCRIPT
+## 4. INLINE USER DATA BOOTSTRAP SCRIPT
 
-```bash
-#!/bin/bash
+The user data script is now embedded directly in the launch template resources within `tap_stack.tf` using Terraform's heredoc syntax. This eliminates the need for a separate file and simplifies deployment.
 
-# user_data.sh - Bootstrap script for EC2 instances
-# This script is executed when EC2 instances are launched
+**Note**: The user data is defined inline within the launch template resources using the following pattern:
 
-set -e
-
-# Variables passed from Terraform
-ENVIRONMENT="${environment}"
-REGION="${region}"
-BUCKET_NAME="${bucket_name}"
+```hcl
+user_data = base64encode(<<-EOF
+  #!/bin/bash
+  
+  # Bootstrap script for EC2 instances
+  # This script is executed when EC2 instances are launched
+  
+  set -e
+  
+  # Variables from Terraform
+  ENVIRONMENT="${var.environment}"
+  REGION="${var.primary_region}"  # or var.secondary_region
+  BUCKET_NAME="${aws_s3_bucket.primary.bucket}"  # or secondary
 
 # System updates and basic packages
 yum update -y
@@ -1837,8 +1865,14 @@ aws s3 cp /tmp/instance-info.txt s3://${bucket_name}/instances/$(curl -s http://
 /opt/aws/bin/cfn-signal -e $? --stack ${environment} --resource AutoScalingGroup --region ${region} || echo "CFN signal not available"
 ```
 
+EOF
+)
+```
+
 **Explanation:**
-The user data script provides comprehensive instance bootstrapping:
+The inline user data script provides comprehensive instance bootstrapping and offers several advantages:
+
+**Script Features:**
 - **System Setup**: Updates packages and installs required software (Apache, AWS CLI, monitoring tools)
 - **CloudWatch Integration**: Configures detailed monitoring for CPU, memory, disk, and application logs
 - **Web Application**: Creates a responsive HTML application showing instance information
@@ -1846,6 +1880,12 @@ The user data script provides comprehensive instance bootstrapping:
 - **S3 Integration**: Tests connectivity to the assigned S3 bucket
 - **Logging**: Comprehensive logging of setup progress and status
 - **Error Handling**: Graceful failure handling with appropriate fallbacks
+
+**Benefits of Inline Approach:**
+- **Simplified Deployment**: No external file dependencies
+- **Better Version Control**: All infrastructure code in one repository
+- **Easier Maintenance**: Direct variable substitution using Terraform interpolation
+- **Reduced Complexity**: Eliminates templatefile() function calls and path dependencies
 
 ---
 
@@ -1920,4 +1960,4 @@ terraform apply \
 - S3 storage class optimization (Standard_IA for replicas)
 - Auto scaling based on demand
 
-This infrastructure provides a robust, scalable, and secure foundation for modern web applications with multi-region deployment capabilities.
+This consolidated single-file infrastructure configuration provides a robust, scalable, and secure foundation for modern web applications with multi-region deployment capabilities. The unified approach simplifies maintenance, deployment, and version control while maintaining clear organization and comprehensive functionality.
