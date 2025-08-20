@@ -609,12 +609,6 @@ export class TapStack extends cdk.Stack {
       apiKeyParameterName
     );
 
-    // Retrieve allowed CIDRs from SSM Parameter Store
-    const allowedCidrsParameter = ssm.StringParameter.fromStringParameterName(
-      this,
-      'AllowedCidrsParameter',
-      allowedCidrsParameterName
-    );
     // Create dedicated log group for API Gateway with retention
     const apiLogGroup = new logs.LogGroup(this, 'ApiGatewayLogGroup', {
       logGroupName: `/aws/apigateway/tap-${this.environmentSuffix}-api`,
