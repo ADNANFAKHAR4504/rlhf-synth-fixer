@@ -8,7 +8,7 @@
 variable "aws_region" {
   description = "AWS region for all resources (consumed by provider.tf)"
   type        = string
-  default     = "ca-central-1"
+  default     = "us-west-2"
 }
 
 variable "project_name" {
