@@ -21,7 +21,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Secure AWS infrastructure with VPC, subnets across 2 AZs, NAT Gateway, encrypted S3 bucket, and restricted SSH access'
+        'Production-ready secure AWS infrastructure with VPC, subnets across 2 AZs, NAT Gateway, encrypted S3 bucket, and comprehensive monitoring'
       );
     });
   });
@@ -36,7 +36,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('prod');
       expect(envSuffixParam.Description).toBe(
-        'Environment suffix for all resources'
+        'Environment suffix for all resources (dev, staging, prod)'
       );
       expect(envSuffixParam.AllowedPattern).toBe('^[a-z0-9-]+$');
     });
@@ -47,12 +47,43 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.ProjectName.Default).toBe('secureinfra');
     });
 
+    test('should have CostCenter parameter', () => {
+      expect(template.Parameters.CostCenter).toBeDefined();
+      expect(template.Parameters.CostCenter.Type).toBe('String');
+      expect(template.Parameters.CostCenter.Default).toBe('infrastructure');
+    });
+
     test('should have VPC CIDR parameters', () => {
       expect(template.Parameters.VpcCidr).toBeDefined();
       expect(template.Parameters.PublicSubnet1Cidr).toBeDefined();
       expect(template.Parameters.PublicSubnet2Cidr).toBeDefined();
       expect(template.Parameters.PrivateSubnet1Cidr).toBeDefined();
       expect(template.Parameters.PrivateSubnet2Cidr).toBeDefined();
+    });
+
+    test('should have TrustedCidr parameter', () => {
+      expect(template.Parameters.TrustedCidr).toBeDefined();
+      expect(template.Parameters.TrustedCidr.Default).toBe('192.168.1.0/24');
+    });
+
+    test('should have feature toggle parameters', () => {
+      expect(template.Parameters.EnableVPCFlowLogs).toBeDefined();
+      expect(template.Parameters.EnableS3AccessLogging).toBeDefined();
+      expect(template.Parameters.EnableVPCFlowLogs.AllowedValues).toEqual([
+        'true',
+        'false',
+      ]);
+      expect(template.Parameters.EnableS3AccessLogging.AllowedValues).toEqual([
+        'true',
+        'false',
+      ]);
+    });
+  });
+
+  describe('Conditions', () => {
+    test('should have conditions for optional features', () => {
+      expect(template.Conditions.CreateVPCFlowLogs).toBeDefined();
+      expect(template.Conditions.CreateS3AccessLogging).toBeDefined();
     });
   });
 
@@ -71,12 +102,16 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have Internet Gateway', () => {
       expect(template.Resources.InternetGateway).toBeDefined();
-      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+      expect(template.Resources.InternetGateway.Type).toBe(
+        'AWS::EC2::InternetGateway'
+      );
     });
 
     test('should have Internet Gateway attachment', () => {
       expect(template.Resources.InternetGatewayAttachment).toBeDefined();
-      expect(template.Resources.InternetGatewayAttachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
+      expect(template.Resources.InternetGatewayAttachment.Type).toBe(
+        'AWS::EC2::VPCGatewayAttachment'
+      );
     });
   });
 
@@ -122,28 +157,44 @@ describe('TapStack CloudFormation Template', () => {
   describe('Route Tables', () => {
     test('should have public route table', () => {
       expect(template.Resources.PublicRouteTable).toBeDefined();
-      expect(template.Resources.PublicRouteTable.Type).toBe('AWS::EC2::RouteTable');
+      expect(template.Resources.PublicRouteTable.Type).toBe(
+        'AWS::EC2::RouteTable'
+      );
     });
 
     test('should have private route tables', () => {
       expect(template.Resources.PrivateRouteTable1).toBeDefined();
       expect(template.Resources.PrivateRouteTable2).toBeDefined();
-      expect(template.Resources.PrivateRouteTable1.Type).toBe('AWS::EC2::RouteTable');
-      expect(template.Resources.PrivateRouteTable2.Type).toBe('AWS::EC2::RouteTable');
+      expect(template.Resources.PrivateRouteTable1.Type).toBe(
+        'AWS::EC2::RouteTable'
+      );
+      expect(template.Resources.PrivateRouteTable2.Type).toBe(
+        'AWS::EC2::RouteTable'
+      );
     });
 
     test('should have route table associations', () => {
-      expect(template.Resources.PublicSubnet1RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PublicSubnet2RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PrivateSubnet1RouteTableAssociation).toBeDefined();
-      expect(template.Resources.PrivateSubnet2RouteTableAssociation).toBeDefined();
+      expect(
+        template.Resources.PublicSubnet1RouteTableAssociation
+      ).toBeDefined();
+      expect(
+        template.Resources.PublicSubnet2RouteTableAssociation
+      ).toBeDefined();
+      expect(
+        template.Resources.PrivateSubnet1RouteTableAssociation
+      ).toBeDefined();
+      expect(
+        template.Resources.PrivateSubnet2RouteTableAssociation
+      ).toBeDefined();
     });
   });
 
   describe('Security Group', () => {
     test('should have SSH security group', () => {
       expect(template.Resources.SSHSecurityGroup).toBeDefined();
-      expect(template.Resources.SSHSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(template.Resources.SSHSecurityGroup.Type).toBe(
+        'AWS::EC2::SecurityGroup'
+      );
     });
 
     test('SSH security group should have correct rules', () => {
@@ -152,7 +203,9 @@ describe('TapStack CloudFormation Template', () => {
       expect(sg.Properties.SecurityGroupIngress[0].IpProtocol).toBe('tcp');
       expect(sg.Properties.SecurityGroupIngress[0].FromPort).toBe(22);
       expect(sg.Properties.SecurityGroupIngress[0].ToPort).toBe(22);
-      expect(sg.Properties.SecurityGroupIngress[0].CidrIp).toBe('192.168.1.0/24');
+      expect(sg.Properties.SecurityGroupIngress[0].CidrIp).toEqual({
+        Ref: 'TrustedCidr',
+      });
     });
 
     test('security group should include environment suffix in name', () => {
@@ -172,7 +225,9 @@ describe('TapStack CloudFormation Template', () => {
     test('S3 bucket should have encryption enabled', () => {
       const bucket = template.Resources.SecureS3Bucket;
       expect(bucket.Properties.BucketEncryption).toBeDefined();
-      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(
+        bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration
+      ).toBeDefined();
       expect(
         bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
           .ServerSideEncryptionByDefault.SSEAlgorithm
@@ -188,10 +243,26 @@ describe('TapStack CloudFormation Template', () => {
       expect(pac.RestrictPublicBuckets).toBe(true);
     });
 
+    test('S3 bucket should have versioning enabled', () => {
+      const bucket = template.Resources.SecureS3Bucket;
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+    });
 
     test('should have access logs bucket', () => {
       expect(template.Resources.S3AccessLogsBucket).toBeDefined();
-      expect(template.Resources.S3AccessLogsBucket.Type).toBe('AWS::S3::Bucket');
+      expect(template.Resources.S3AccessLogsBucket.Type).toBe(
+        'AWS::S3::Bucket'
+      );
+      expect(template.Resources.S3AccessLogsBucket.Condition).toBe(
+        'CreateS3AccessLogging'
+      );
+    });
+
+    test('should have S3 bucket policy', () => {
+      expect(template.Resources.SecureS3BucketPolicy).toBeDefined();
+      expect(template.Resources.SecureS3BucketPolicy.Type).toBe(
+        'AWS::S3::BucketPolicy'
+      );
     });
   });
 
@@ -205,6 +276,20 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Resources.VPCFlowLogRole).toBeDefined();
       expect(template.Resources.VPCFlowLogGroup).toBeDefined();
       expect(template.Resources.VPCFlowLog).toBeDefined();
+      expect(template.Resources.VPCFlowLogRole.Condition).toBe(
+        'CreateVPCFlowLogs'
+      );
+      expect(template.Resources.VPCFlowLogGroup.Condition).toBe(
+        'CreateVPCFlowLogs'
+      );
+      expect(template.Resources.VPCFlowLog.Condition).toBe('CreateVPCFlowLogs');
+    });
+
+    test('should have NAT Gateway monitoring alarm', () => {
+      expect(template.Resources.NATGatewayBytesOutAlarm).toBeDefined();
+      expect(template.Resources.NATGatewayBytesOutAlarm.Type).toBe(
+        'AWS::CloudWatch::Alarm'
+      );
     });
   });
 
@@ -212,6 +297,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
         'VPCId',
+        'VPCCidr',
         'PublicSubnet1Id',
         'PublicSubnet2Id',
         'PrivateSubnet1Id',
@@ -220,6 +306,11 @@ describe('TapStack CloudFormation Template', () => {
         'SecureS3BucketName',
         'SecureS3BucketArn',
         'NATGatewayId',
+        'NATGatewayEIP',
+        'S3LogGroupName',
+        'EnvironmentSuffix',
+        'ProjectName',
+        'StackName',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -227,12 +318,24 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
+    test('conditional outputs should exist', () => {
+      expect(template.Outputs.S3AccessLogsBucketName).toBeDefined();
+      expect(template.Outputs.S3AccessLogsBucketName.Condition).toBe(
+        'CreateS3AccessLogging'
+      );
+
+      expect(template.Outputs.VPCFlowLogGroupName).toBeDefined();
+      expect(template.Outputs.VPCFlowLogGroupName.Condition).toBe(
+        'CreateVPCFlowLogs'
+      );
+    });
+
     test('VPCId output should be correct', () => {
       const output = template.Outputs.VPCId;
       expect(output.Description).toBe('ID of the VPC');
       expect(output.Value).toEqual({ Ref: 'VPC' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${ProjectName}-VPC-ID-${EnvironmentSuffix}',
+        'Fn::Sub': '${AWS::StackName}-VPCId',
       });
     });
 
@@ -240,7 +343,7 @@ describe('TapStack CloudFormation Template', () => {
       const output = template.Outputs.PublicSubnet1Id;
       expect(output.Value).toEqual({ Ref: 'PublicSubnet1' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${ProjectName}-Public-Subnet-AZ1-ID-${EnvironmentSuffix}',
+        'Fn::Sub': '${AWS::StackName}-PublicSubnet1Id',
       });
     });
 
@@ -248,7 +351,7 @@ describe('TapStack CloudFormation Template', () => {
       const output = template.Outputs.SSHSecurityGroupId;
       expect(output.Value).toEqual({ Ref: 'SSHSecurityGroup' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${ProjectName}-SSH-SG-ID-${EnvironmentSuffix}',
+        'Fn::Sub': '${AWS::StackName}-SSHSecurityGroupId',
       });
     });
 
@@ -256,7 +359,7 @@ describe('TapStack CloudFormation Template', () => {
       const bucketNameOutput = template.Outputs.SecureS3BucketName;
       expect(bucketNameOutput.Value).toEqual({ Ref: 'SecureS3Bucket' });
       expect(bucketNameOutput.Export.Name).toEqual({
-        'Fn::Sub': '${ProjectName}-Secure-S3-Bucket-Name-${EnvironmentSuffix}',
+        'Fn::Sub': '${AWS::StackName}-SecureS3BucketName',
       });
 
       const bucketArnOutput = template.Outputs.SecureS3BucketArn;
@@ -264,7 +367,7 @@ describe('TapStack CloudFormation Template', () => {
         'Fn::GetAtt': ['SecureS3Bucket', 'Arn'],
       });
       expect(bucketArnOutput.Export.Name).toEqual({
-        'Fn::Sub': '${ProjectName}-Secure-S3-Bucket-ARN-${EnvironmentSuffix}',
+        'Fn::Sub': '${AWS::StackName}-SecureS3BucketArn',
       });
     });
   });
@@ -285,17 +388,17 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have appropriate number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(6);
+      expect(parameterCount).toBe(11); // Updated to match actual count
     });
 
     test('should have appropriate number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThanOrEqual(20);
+      expect(resourceCount).toBeGreaterThanOrEqual(25); // Updated for additional resources
     });
 
     test('should have appropriate number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(9);
+      expect(outputCount).toBe(17); // Updated to match actual count
     });
 
     test('should validate CloudFormation template syntax', () => {
@@ -310,22 +413,27 @@ describe('TapStack CloudFormation Template', () => {
       // Check EnvironmentSuffix parameter constraints
       const envParam = template.Parameters.EnvironmentSuffix;
       expect(envParam.AllowedPattern).toBe('^[a-z0-9-]+$');
-      // ConstraintDescription is optional in basic template
-      
+      expect(envParam.ConstraintDescription).toBe(
+        'Must contain only lowercase letters, numbers, and hyphens'
+      );
+
       // Check ProjectName parameter constraints
       const projectParam = template.Parameters.ProjectName;
       expect(projectParam.AllowedPattern).toBe('^[a-z0-9-]+$');
+      expect(projectParam.ConstraintDescription).toBe(
+        'Must contain only lowercase letters, numbers, and hyphens'
+      );
     });
 
     test('should have metadata for CloudFormation Interface', () => {
-      // Metadata is optional in basic templates
-      if (template.Metadata) {
-        expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
-        expect(template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups).toBeDefined();
-      } else {
-        // Basic template may not have metadata, which is acceptable
-        expect(template.Parameters).toBeDefined();
-      }
+      expect(template.Metadata).toBeDefined();
+      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+      expect(
+        template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups
+      ).toBeDefined();
+      expect(
+        template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups
+      ).toHaveLength(3);
     });
   });
 
@@ -340,45 +448,51 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('export names should follow project naming convention', () => {
-      // Test VPCId export
+    test('export names should follow stack naming convention', () => {
+      // Test VPCId export (uses stack name, not project name)
       const vpcOutput = template.Outputs.VPCId;
       expect(vpcOutput.Export.Name).toEqual({
-        'Fn::Sub': '${ProjectName}-VPC-ID-${EnvironmentSuffix}',
+        'Fn::Sub': '${AWS::StackName}-VPCId',
       });
-      
+
       // Test SSH Security Group export
       const sgOutput = template.Outputs.SSHSecurityGroupId;
       expect(sgOutput.Export.Name).toEqual({
-        'Fn::Sub': '${ProjectName}-SSH-SG-ID-${EnvironmentSuffix}',
+        'Fn::Sub': '${AWS::StackName}-SSHSecurityGroupId',
       });
     });
 
-    test('S3 bucket names should include environment suffix', () => {
+    test('S3 bucket names should include environment suffix and account ID', () => {
       const bucket = template.Resources.SecureS3Bucket;
       expect(bucket.Properties.BucketName).toEqual({
         'Fn::Sub': [
           '${projectname}-secure-bucket-${environment}-${AWS::AccountId}-${region}',
           {
-            'projectname': { 'Ref': 'ProjectName' },
-            'environment': { 'Ref': 'EnvironmentSuffix' },
-            'region': { 'Ref': 'AWS::Region' }
-          }
-        ]
+            projectname: { Ref: 'ProjectName' },
+            environment: { Ref: 'EnvironmentSuffix' },
+            region: { Ref: 'AWS::Region' },
+          },
+        ],
       });
     });
   });
 
   describe('Additional Security Features', () => {
-    test('should have VPC Flow Logs configured', () => {
+    test('should have VPC Flow Logs configured conditionally', () => {
       expect(template.Resources.VPCFlowLog).toBeDefined();
       expect(template.Resources.VPCFlowLogRole).toBeDefined();
       expect(template.Resources.VPCFlowLogGroup).toBeDefined();
+      expect(template.Resources.VPCFlowLog.Condition).toBe('CreateVPCFlowLogs');
     });
 
-    test('should have S3 access logs bucket', () => {
+    test('should have S3 access logs bucket conditionally', () => {
       expect(template.Resources.S3AccessLogsBucket).toBeDefined();
-      expect(template.Resources.S3AccessLogsBucket.Type).toBe('AWS::S3::Bucket');
+      expect(template.Resources.S3AccessLogsBucket.Type).toBe(
+        'AWS::S3::Bucket'
+      );
+      expect(template.Resources.S3AccessLogsBucket.Condition).toBe(
+        'CreateS3AccessLogging'
+      );
     });
 
     test('should have CloudWatch log groups', () => {
@@ -397,18 +511,12 @@ describe('TapStack CloudFormation Template', () => {
       // S3 buckets should have deletion policy for QA pipeline cleanup
       const secureS3Bucket = template.Resources.SecureS3Bucket;
       const accessLogsBucket = template.Resources.S3AccessLogsBucket;
-      
-      // For QA compliance, ensure buckets can be deleted (no Retain policy)
-      expect(secureS3Bucket.DeletionPolicy).not.toBe('Retain');
-      expect(accessLogsBucket.DeletionPolicy).not.toBe('Retain');
-      
-      // If deletion policy is set, it should be Delete for QA
-      if (secureS3Bucket.DeletionPolicy) {
-        expect(secureS3Bucket.DeletionPolicy).toBe('Delete');
-      }
-      if (accessLogsBucket.DeletionPolicy) {
-        expect(accessLogsBucket.DeletionPolicy).toBe('Delete');
-      }
+
+      // Check deletion policies are set to Delete for QA compliance
+      expect(secureS3Bucket.DeletionPolicy).toBe('Delete');
+      expect(secureS3Bucket.UpdateReplacePolicy).toBe('Delete');
+      expect(accessLogsBucket.DeletionPolicy).toBe('Delete');
+      expect(accessLogsBucket.UpdateReplacePolicy).toBe('Delete');
     });
   });
 
@@ -416,9 +524,11 @@ describe('TapStack CloudFormation Template', () => {
     test('should support environment suffix in all resource names', () => {
       // Check that key resources include environment suffix
       const vpc = template.Resources.VPC;
-      const nameTag = vpc.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      const nameTag = vpc.Properties.Tags.find(
+        (tag: any) => tag.Key === 'Name'
+      );
       expect(nameTag.Value).toEqual({
-        'Fn::Sub': '${ProjectName}-VPC-${EnvironmentSuffix}'
+        'Fn::Sub': '${ProjectName}-VPC-${EnvironmentSuffix}',
       });
     });
 
@@ -426,13 +536,13 @@ describe('TapStack CloudFormation Template', () => {
       const requiredExports = [
         'VPCId',
         'PublicSubnet1Id',
-        'PublicSubnet2Id', 
+        'PublicSubnet2Id',
         'PrivateSubnet1Id',
         'PrivateSubnet2Id',
         'SSHSecurityGroupId',
         'SecureS3BucketName',
         'SecureS3BucketArn',
-        'NATGatewayId'
+        'NATGatewayId',
       ];
 
       requiredExports.forEach(exportName => {
@@ -447,9 +557,10 @@ describe('TapStack CloudFormation Template', () => {
       Object.values(template.Outputs).forEach((output: any) => {
         expect(output.Value).toBeDefined();
         // Value should be either Ref, GetAtt, or Sub function
-        const hasValidValue = output.Value.Ref || 
-                             output.Value['Fn::GetAtt'] || 
-                             output.Value['Fn::Sub'];
+        const hasValidValue =
+          output.Value.Ref ||
+          output.Value['Fn::GetAtt'] ||
+          output.Value['Fn::Sub'];
         expect(hasValidValue).toBeTruthy();
       });
     });
@@ -458,23 +569,29 @@ describe('TapStack CloudFormation Template', () => {
       // VPC should have proper tags
       const vpc = template.Resources.VPC;
       const tags = vpc.Properties.Tags;
-      
-      // Check for basic required tags
+
+      // Check for required tags
       const nameTag = tags.find((tag: any) => tag.Key === 'Name');
       expect(nameTag).toBeDefined();
-      expect(nameTag.Value).toEqual({ 'Fn::Sub': '${ProjectName}-VPC-${EnvironmentSuffix}' });
-      
-      // Environment tag should exist
+      expect(nameTag.Value).toEqual({
+        'Fn::Sub': '${ProjectName}-VPC-${EnvironmentSuffix}',
+      });
+
       const envTag = tags.find((tag: any) => tag.Key === 'Environment');
       expect(envTag).toBeDefined();
-      // Environment tag value may be hardcoded or parameterized
-      expect(envTag.Value).toBeDefined();
-      
-      // CostCenter may be optional in basic template
+      expect(envTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+
+      const projectTag = tags.find((tag: any) => tag.Key === 'Project');
+      expect(projectTag).toBeDefined();
+      expect(projectTag.Value).toEqual({ Ref: 'ProjectName' });
+
       const costCenterTag = tags.find((tag: any) => tag.Key === 'CostCenter');
-      if (costCenterTag) {
-        expect(costCenterTag.Value).toBeDefined();
-      }
+      expect(costCenterTag).toBeDefined();
+      expect(costCenterTag.Value).toEqual({ Ref: 'CostCenter' });
+
+      const managedByTag = tags.find((tag: any) => tag.Key === 'ManagedBy');
+      expect(managedByTag).toBeDefined();
+      expect(managedByTag.Value).toBe('CloudFormation');
     });
   });
 });
