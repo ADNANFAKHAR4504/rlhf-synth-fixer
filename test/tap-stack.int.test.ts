@@ -173,6 +173,67 @@ describe('TapStack CloudFormation Template - Integration', () => {
     });
   });
 
+  describe('KMS Database Encryption (Live)', () => {
+    test('Database KMS key should be accessible if deployed', () => {
+      if (!outputs.DatabaseKMSKeyId) {
+        console.log(
+          '💡 Database KMS key not deployed yet. Deploy with: npm run cfn:deploy-yaml'
+        );
+        expect(true).toBe(true);
+        return;
+      }
+
+      expect(outputs.DatabaseKMSKeyId).toBeDefined();
+      expect(typeof outputs.DatabaseKMSKeyId).toBe('string');
+      expect(outputs.DatabaseKMSKeyId).toMatch(
+        /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+      );
+    });
+
+    test('Database KMS key ARN should be accessible if deployed', () => {
+      if (!outputs.DatabaseKMSKeyArn) {
+        console.log(
+          '💡 Database KMS key ARN not deployed yet. Deploy with: npm run cfn:deploy-yaml'
+        );
+        expect(true).toBe(true);
+        return;
+      }
+
+      expect(outputs.DatabaseKMSKeyArn).toBeDefined();
+      expect(typeof outputs.DatabaseKMSKeyArn).toBe('string');
+      expect(outputs.DatabaseKMSKeyArn).toMatch(
+        /^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+      );
+    });
+
+    test('KMS key should be in the correct region', () => {
+      if (!outputs.DatabaseKMSKeyArn) {
+        console.log(
+          '💡 Database KMS key ARN not deployed yet. Deploy with: npm run cfn:deploy-yaml'
+        );
+        expect(true).toBe(true);
+        return;
+      }
+
+      // KMS key should be in the same region as the stack
+      expect(outputs.DatabaseKMSKeyArn).toContain('us-east-1');
+    });
+
+    test('Both KMS key ID and ARN should reference the same key', () => {
+      if (!outputs.DatabaseKMSKeyId || !outputs.DatabaseKMSKeyArn) {
+        console.log(
+          '💡 Database KMS key outputs not available yet. Deploy with: npm run cfn:deploy-yaml'
+        );
+        expect(true).toBe(true);
+        return;
+      }
+
+      // Extract key ID from ARN and compare with direct key ID output
+      const keyIdFromArn = outputs.DatabaseKMSKeyArn.split('/').pop();
+      expect(keyIdFromArn).toBe(outputs.DatabaseKMSKeyId);
+    });
+  });
+
   describe('S3 Bucket (Live)', () => {
     test('S3 bucket should be accessible if deployed', () => {
       if (!outputs.S3BucketName) {
@@ -292,14 +353,18 @@ describe('TapStack CloudFormation Template - Integration', () => {
         console.log('   - Application Load Balancer (HTTPS enabled)');
         console.log('   - SSL Certificate (automatically created)');
         console.log('   - Auto Scaling Group with EC2 instances');
-        console.log('   - RDS MySQL database');
+        console.log('   - RDS MySQL database with KMS encryption');
+        console.log('   - Customer-managed KMS key for database encryption');
         console.log('   - S3 bucket for static content');
         console.log('   - CloudWatch alarms and scaling policies');
-        console.log('\n🔒 SSL Features:');
-        console.log('   - Automatic certificate creation in ACM');
+        console.log('\n🔒 Security Features:');
+        console.log('   - Automatic SSL certificate creation in ACM');
         console.log('   - HTTPS listener on port 443');
         console.log('   - HTTP redirect to HTTPS on port 80');
         console.log('   - Certificate validation via DNS');
+        console.log('   - Customer-managed KMS key for database encryption');
+        console.log('   - Database encryption at rest with KMS');
+        console.log('   - KMS key alias for easier management');
       }
 
       expect(true).toBe(true);

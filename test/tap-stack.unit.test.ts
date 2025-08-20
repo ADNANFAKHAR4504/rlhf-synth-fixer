@@ -213,6 +213,58 @@ describe('TapStack CloudFormation Template - Unit', () => {
       );
       expect(secret.Properties.GenerateSecretString).toBeDefined();
     });
+
+    test('defines database KMS key with correct properties', () => {
+      const kmsKey = template.Resources.DatabaseKMSKey;
+      expect(kmsKey.Type).toBe('AWS::KMS::Key');
+      expect(kmsKey.Properties.Description['Fn::Sub']).toContain(
+        'KMS Key for ${AWS::StackName} RDS Database encryption'
+      );
+      expect(kmsKey.Properties.KeyPolicy).toBeDefined();
+      expect(kmsKey.Properties.KeyPolicy.Version).toBe('2012-10-17');
+      expect(kmsKey.Properties.KeyPolicy.Statement).toHaveLength(2);
+
+      // Verify account root access statement
+      const rootStatement = kmsKey.Properties.KeyPolicy.Statement[0];
+      expect(rootStatement.Effect).toBe('Allow');
+      expect(rootStatement.Action).toBe('kms:*');
+      expect(rootStatement.Principal.AWS['Fn::Sub']).toContain(
+        'iam::${AWS::AccountId}:root'
+      );
+
+      // Verify RDS service access statement
+      const rdsStatement = kmsKey.Properties.KeyPolicy.Statement[1];
+      expect(rdsStatement.Effect).toBe('Allow');
+      expect(rdsStatement.Principal.Service).toBe('rds.amazonaws.com');
+      expect(rdsStatement.Action).toContain('kms:Encrypt');
+      expect(rdsStatement.Action).toContain('kms:Decrypt');
+      expect(rdsStatement.Action).toContain('kms:DescribeKey');
+
+      // Verify tags
+      expect(kmsKey.Properties.Tags).toBeDefined();
+      expect(kmsKey.Properties.Tags).toHaveLength(3);
+      const nameTag = kmsKey.Properties.Tags.find(
+        (tag: any) => tag.Key === 'Name'
+      );
+      const envTag = kmsKey.Properties.Tags.find(
+        (tag: any) => tag.Key === 'Environment'
+      );
+      const purposeTag = kmsKey.Properties.Tags.find(
+        (tag: any) => tag.Key === 'Purpose'
+      );
+      expect(nameTag.Value['Fn::Sub']).toContain('Database-KMS-Key');
+      expect(envTag.Value.Ref).toBe('Environment');
+      expect(purposeTag.Value).toBe('RDS Encryption');
+    });
+
+    test('defines database KMS key alias', () => {
+      const kmsAlias = template.Resources.DatabaseKMSKeyAlias;
+      expect(kmsAlias.Type).toBe('AWS::KMS::Alias');
+      expect(kmsAlias.Properties.AliasName['Fn::Sub']).toContain(
+        'alias/${AWS::StackName}-database-key'
+      );
+      expect(kmsAlias.Properties.TargetKeyId.Ref).toBe('DatabaseKMSKey');
+    });
   });
 
   describe('RDS Database', () => {
@@ -239,6 +291,18 @@ describe('TapStack CloudFormation Template - Unit', () => {
       expect(db.Properties.StorageEncrypted).toBe(true);
       expect(db.Properties.MultiAZ).toBe(true);
       expect(db.Properties.PubliclyAccessible).toBe(false);
+
+      // Verify KMS key is used for encryption
+      expect(db.Properties.KmsKeyId).toBeDefined();
+      expect(db.Properties.KmsKeyId.Ref).toBe('DatabaseKMSKey');
+
+      // Verify Secrets Manager integration
+      expect(db.Properties.MasterUsername['Fn::Sub']).toContain(
+        '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
+      );
+      expect(db.Properties.MasterUserPassword['Fn::Sub']).toContain(
+        '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      );
     });
   });
 
@@ -400,6 +464,33 @@ describe('TapStack CloudFormation Template - Unit', () => {
         template.Outputs.ALBLogDeliveryRoleArn.Value['Fn::GetAtt']
       ).toBeDefined();
     });
+
+    test('outputs include database KMS key ID', () => {
+      expect(template.Outputs.DatabaseKMSKeyId).toBeDefined();
+      expect(template.Outputs.DatabaseKMSKeyId.Description).toBe(
+        'KMS Key ID used for RDS Database encryption'
+      );
+      expect(template.Outputs.DatabaseKMSKeyId.Value.Ref).toBe(
+        'DatabaseKMSKey'
+      );
+      expect(
+        template.Outputs.DatabaseKMSKeyId.Export.Name['Fn::Sub']
+      ).toContain('Database-KMS-Key-ID');
+    });
+
+    test('outputs include database KMS key ARN', () => {
+      expect(template.Outputs.DatabaseKMSKeyArn).toBeDefined();
+      expect(template.Outputs.DatabaseKMSKeyArn.Description).toBe(
+        'KMS Key ARN used for RDS Database encryption'
+      );
+      expect(template.Outputs.DatabaseKMSKeyArn.Value['Fn::GetAtt']).toEqual([
+        'DatabaseKMSKey',
+        'Arn',
+      ]);
+      expect(
+        template.Outputs.DatabaseKMSKeyArn.Export.Name['Fn::Sub']
+      ).toContain('Database-KMS-Key-ARN');
+    });
   });
 
   describe('Resource Counts', () => {
@@ -415,7 +506,7 @@ describe('TapStack CloudFormation Template - Unit', () => {
 
     test('has correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(8); // Updated count to include ALBLogDeliveryRoleArn
+      expect(outputCount).toBe(10); // Updated count to include DatabaseKMSKeyId and DatabaseKMSKeyArn
     });
   });
 });

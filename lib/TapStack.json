@@ -866,6 +866,72 @@
                 ]
             }
         },
+        "DatabaseKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS Key for ${AWS::StackName} RDS Database encryption"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "rds.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-Database-KMS-Key"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "RDS Encryption"
+                    }
+                ]
+            }
+        },
+        "DatabaseKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${AWS::StackName}-database-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "DatabaseKMSKey"
+                }
+            }
+        },
         "DatabaseSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
@@ -911,6 +977,9 @@
                 "AllocatedStorage": 20,
                 "StorageType": "gp2",
                 "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "DatabaseKMSKey"
+                },
                 "MultiAZ": true,
                 "DBSubnetGroupName": {
                     "Ref": "DatabaseSubnetGroup"
@@ -1025,7 +1094,7 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "HealthCheckPath": "/",
+                "HealthCheckPath": "/health",
                 "HealthCheckProtocol": "HTTP",
                 "HealthCheckIntervalSeconds": 30,
                 "HealthCheckTimeoutSeconds": 5,
@@ -1612,6 +1681,31 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-ALB-Log-Delivery-Role-ARN"
+                }
+            }
+        },
+        "DatabaseKMSKeyId": {
+            "Description": "KMS Key ID used for RDS Database encryption",
+            "Value": {
+                "Ref": "DatabaseKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Database-KMS-Key-ID"
+                }
+            }
+        },
+        "DatabaseKMSKeyArn": {
+            "Description": "KMS Key ARN used for RDS Database encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DatabaseKMSKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Database-KMS-Key-ARN"
                 }
             }
         }
