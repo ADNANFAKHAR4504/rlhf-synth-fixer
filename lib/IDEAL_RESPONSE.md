@@ -443,6 +443,354 @@ output "vpc_id" {
 output "vpc_cidr_block" {
   value = aws_vpc.main.cidr_block
 }
+
+########################
+# EXISTING RESOURCES ...
+# (All your previous resources remain unchanged)
+########################
+
+# -------------------------------------------------
+# NEW RESOURCES ADDED FOR COMPLIANCE (2025-08-20)
+# -------------------------------------------------
+
+########################
+# EC2 Launch Template for ASG
+########################
+resource "aws_launch_template" "secure_prod_lt" {
+  name_prefix   = "secure-prod-lt-${local.env_suffix}-"
+  image_id      = data.aws_ami.latest_amazon_linux.id
+  instance_type = "t3.micro"
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_profile.name
+  }
+
+  user_data = base64encode(file("user-data.sh"))
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name        = "secure-ec2-${local.env_suffix}"
+      Environment = local.env_suffix
+      ManagedBy   = "terraform"
+      Project     = "secure-env"
+    }
+  }
+}
+
+data "aws_ami" "latest_amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+output "ec2_launch_template_id" {
+  value = aws_launch_template.secure_prod_lt.id
+}
+
+########################
+# EC2 Auto Scaling Group
+########################
+resource "aws_autoscaling_group" "secure_prod_asg" {
+  name                = "secure-prod-asg-${local.env_suffix}"
+  min_size            = 3
+  max_size            = 6
+  desired_capacity    = 3
+  vpc_zone_identifier = [aws_subnet.public1.id, aws_subnet.public2.id]
+  launch_template {
+    id      = aws_launch_template.secure_prod_lt.id
+    version = "$Latest"
+  }
+  tags = [
+    {
+      key                 = "Name"
+      value               = "secure-prod-asg-${local.env_suffix}"
+      propagate_at_launch = true
+    },
+    {
+      key                 = "Environment"
+      value               = local.env_suffix
+      propagate_at_launch = true
+    }
+  ]
+}
+
+# Example public subnets (add these if not present)
+resource "aws_subnet" "public1" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-west-2a"
+  map_public_ip_on_launch = true
+  tags = {
+    Name        = "secure-prod-public1-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+resource "aws_subnet" "public2" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "us-west-2b"
+  map_public_ip_on_launch = true
+  tags = {
+    Name        = "secure-prod-public2-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+output "autoscaling_group_name" {
+  value = aws_autoscaling_group.secure_prod_asg.name
+}
+
+########################
+# Application Load Balancer (ALB)
+########################
+resource "aws_lb" "secure_prod_alb" {
+  name               = "secure-prod-alb-${local.env_suffix}"
+  internal           = false
+  load_balancer_type = "application"
+  subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
+  security_groups    = [aws_security_group.alb_sg.id]
+  tags = {
+    Name        = "secure-prod-alb-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+resource "aws_security_group" "alb_sg" {
+  name        = "secure-prod-alb-sg-${local.env_suffix}"
+  vpc_id      = aws_vpc.main.id
+  description = "Allow 443 inbound for ALB"
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name        = "secure-prod-alb-sg-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+output "alb_dns_name" {
+  value = aws_lb.secure_prod_alb.dns_name
+}
+
+resource "aws_lb_target_group" "secure_prod_tg" {
+  name     = "secure-prod-tg-${local.env_suffix}"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+  health_check {
+    enabled             = true
+    interval            = 30
+    path                = "/"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    healthy_threshold   = 3
+    unhealthy_threshold = 2
+    matcher             = "200-399"
+  }
+  tags = {
+    Name        = "secure-prod-tg-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+resource "aws_lb_listener" "secure_prod_listener" {
+  load_balancer_arn = aws_lb.secure_prod_alb.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = var.alb_certificate_arn # Provide this in variables
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.secure_prod_tg.arn
+  }
+}
+
+resource "aws_autoscaling_attachment" "asg_attach" {
+  autoscaling_group_name = aws_autoscaling_group.secure_prod_asg.name
+  alb_target_group_arn   = aws_lb_target_group.secure_prod_tg.arn
+}
+
+output "alb_target_group_arn" {
+  value = aws_lb_target_group.secure_prod_tg.arn
+}
+
+########################
+# RDS Multi-AZ Instance
+########################
+resource "aws_db_subnet_group" "secure_prod_db_subnet" {
+  name       = "secure-prod-db-subnet-${local.env_suffix}"
+  subnet_ids = [aws_subnet.public1.id, aws_subnet.public2.id]
+  tags = {
+    Name        = "secure-prod-db-subnet-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+resource "aws_db_instance" "secure_prod_db" {
+  identifier              = "secure-prod-db-${local.env_suffix}"
+  allocated_storage       = 20
+  engine                  = "mysql"
+  instance_class          = "db.t3.micro"
+  username                = "admin"
+  password                = jsondecode(data.aws_secretsmanager_secret_version.rds_password_version.secret_string)["password"]
+  db_subnet_group_name    = aws_db_subnet_group.secure_prod_db_subnet.name
+  vpc_security_group_ids  = [aws_security_group.rds_sg.id]
+  multi_az                = true
+  skip_final_snapshot     = true
+  publicly_accessible     = false
+  tags = {
+    Name        = "secure-prod-db-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+data "aws_secretsmanager_secret_version" "rds_password_version" {
+  secret_id = aws_secretsmanager_secret.rds_password.id
+}
+
+resource "aws_security_group" "rds_sg" {
+  name        = "secure-prod-rds-sg-${local.env_suffix}"
+  vpc_id      = aws_vpc.main.id
+  description = "DB SG for secure production"
+  ingress {
+    from_port   = 3306
+    to_port     = 3306
+    protocol    = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = {
+    Name        = "secure-prod-rds-sg-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+output "rds_instance_endpoint" {
+  value = aws_db_instance.secure_prod_db.endpoint
+}
+
+########################
+# DynamoDB Table with Auto Scaling
+########################
+resource "aws_dynamodb_table" "secure_prod_table" {
+  name         = "secure-prod-table-${local.env_suffix}"
+  billing_mode = "PROVISIONED"
+  hash_key     = "id"
+  attribute {
+    name = "id"
+    type = "S"
+  }
+  read_capacity  = 5
+  write_capacity = 5
+  tags = {
+    Name        = "secure-prod-table-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+resource "aws_appautoscaling_target" "dynamodb_read" {
+  max_capacity       = 20
+  min_capacity       = 5
+  resource_id        = "table/${aws_dynamodb_table.secure_prod_table.name}"
+  scalable_dimension = "dynamodb:table:ReadCapacityUnits"
+  service_namespace  = "dynamodb"
+}
+
+resource "aws_appautoscaling_policy" "dynamodb_read_policy" {
+  name               = "secure-prod-table-read-policy-${local.env_suffix}"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.dynamodb_read.resource_id
+  scalable_dimension = aws_appautoscaling_target.dynamodb_read.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.dynamodb_read.service_namespace
+  target_tracking_scaling_policy_configuration {
+    target_value       = 70.0
+    predefined_metric_specification {
+      predefined_metric_type = "DynamoDBReadCapacityUtilization"
+    }
+    scale_in_cooldown  = 60
+    scale_out_cooldown = 60
+  }
+}
+
+resource "aws_appautoscaling_target" "dynamodb_write" {
+  max_capacity       = 20
+  min_capacity       = 5
+  resource_id        = "table/${aws_dynamodb_table.secure_prod_table.name}"
+  scalable_dimension = "dynamodb:table:WriteCapacityUnits"
+  service_namespace  = "dynamodb"
+}
+
+resource "aws_appautoscaling_policy" "dynamodb_write_policy" {
+  name               = "secure-prod-table-write-policy-${local.env_suffix}"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.dynamodb_write.resource_id
+  scalable_dimension = aws_appautoscaling_target.dynamodb_write.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.dynamodb_write.service_namespace
+  target_tracking_scaling_policy_configuration {
+    target_value       = 70.0
+    predefined_metric_specification {
+      predefined_metric_type = "DynamoDBWriteCapacityUtilization"
+    }
+    scale_in_cooldown  = 60
+    scale_out_cooldown = 60
+  }
+}
+
+output "dynamodb_table_name" {
+  value = aws_dynamodb_table.secure_prod_table.name
+}
+
+output "dynamodb_table_arn" {
+  value = aws_dynamodb_table.secure_prod_table.arn
+}
+
+resource "aws_acm_certificate" "alb_cert" {
+  domain_name       = "test-${local.env_suffix}.example.com"
+  validation_method = "DNS"
+
+  tags = {
+    Name        = "test-cert-${local.env_suffix}"
+    Environment = local.env_suffix
+  }
+}
+
+# For ALB listener
+resource "aws_lb_listener" "secure_prod_listener" {
+  load_balancer_arn = aws_lb.secure_prod_alb.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate.alb_cert.arn # <-- uses newly created cert!
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.secure_prod_tg.arn
+  }
+}
+
+output "alb_certificate_arn" {
+  value = aws_acm_certificate.alb_cert.arn
+}
 ```
 
 ---

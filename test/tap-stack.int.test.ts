@@ -1,6 +1,16 @@
 import { CloudWatchClient, GetDashboardCommand } from "@aws-sdk/client-cloudwatch";
-import { DescribeNetworkAclsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
+import { DescribeTableCommand, DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DescribeInstancesCommand, DescribeNetworkAclsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+  Listener,
+  TargetGroup
+} from "@aws-sdk/client-elastic-load-balancing-v2";
 import { GetRoleCommand, IAMClient, ListAttachedRolePoliciesCommand } from "@aws-sdk/client-iam";
+import { DescribeDBInstancesCommand, RDSClient } from "@aws-sdk/client-rds";
 import { GetBucketEncryptionCommand, GetBucketLocationCommand, GetBucketTaggingCommand, GetBucketVersioningCommand, S3Client } from "@aws-sdk/client-s3";
 import { DescribeSecretCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import * as fs from "fs";
@@ -38,6 +48,14 @@ describe("Terraform E2E Integration Tests", () => {
   let rdsSecretName: string;
   let cloudwatchDashboardName: string;
 
+  // Newly added outputs for new resources
+  let autoscalingGroupName: string;
+  let albDnsName: string;
+  let albTargetGroupArn: string;
+  let rdsInstanceEndpoint: string;
+  let dynamodbTableName: string;
+  let dynamodbTableArn: string;
+
   beforeAll(() => {
     outputs = loadOutputs();
     bucketName = outputs.bucket_name?.value || outputs.bucket_name;
@@ -54,8 +72,17 @@ describe("Terraform E2E Integration Tests", () => {
     ec2RoleName = outputs.ec2_role_name?.value || outputs.ec2_role_name;
     rdsSecretName = outputs.rds_secret_name?.value || outputs.rds_secret_name;
     cloudwatchDashboardName = outputs.cloudwatch_dashboard_name?.value || outputs.cloudwatch_dashboard_name;
+
+    // New outputs
+    autoscalingGroupName = outputs.autoscaling_group_name?.value || outputs.autoscaling_group_name;
+    albDnsName = outputs.alb_dns_name?.value || outputs.alb_dns_name;
+    albTargetGroupArn = outputs.alb_target_group_arn?.value || outputs.alb_target_group_arn;
+    rdsInstanceEndpoint = outputs.rds_instance_endpoint?.value || outputs.rds_instance_endpoint;
+    dynamodbTableName = outputs.dynamodb_table_name?.value || outputs.dynamodb_table_name;
+    dynamodbTableArn = outputs.dynamodb_table_arn?.value || outputs.dynamodb_table_arn;
   });
 
+  // --- Existing tests (unaltered) ---
   describe("S3 Bucket", () => {
     let s3: S3Client;
     beforeAll(() => {
@@ -64,7 +91,6 @@ describe("Terraform E2E Integration Tests", () => {
 
     test("bucket exists in expected region", async () => {
       const loc = await s3.send(new GetBucketLocationCommand({ Bucket: bucketName }));
-      // AWS returns "US" for us-west-2, so normalize it
       const location = loc.LocationConstraint as string | undefined;
       const actualRegion =
         location === undefined || location === "" || location === "US"
@@ -100,7 +126,6 @@ describe("Terraform E2E Integration Tests", () => {
     });
 
     test("RDS secret exists", async () => {
-      // Always use environment from dynamic value
       const secretName = rdsSecretName || `secure-rds-password-${environment}`;
       const res = await secrets.send(new DescribeSecretCommand({ SecretId: secretName }));
       expect(res.Name).toBe(secretName);
@@ -115,7 +140,6 @@ describe("Terraform E2E Integration Tests", () => {
     });
 
     test("VPC exists", async () => {
-      // Prefer to use vpcId from outputs if available
       if (vpcId) {
         const vpcs = await ec2.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
         expect(vpcs.Vpcs?.length).toBe(1);
@@ -124,7 +148,6 @@ describe("Terraform E2E Integration Tests", () => {
         expect(vpc?.CidrBlock).toBe("10.0.0.0/16");
         expect(vpc?.Tags?.some(t => t.Key === "ManagedBy" && t.Value === "terraform")).toBe(true);
       } else {
-        // Fallback to tag search if output not set
         const vpcs = await ec2.send(new DescribeVpcsCommand({ Filters: [{ Name: "tag:Name", Values: ["secure-prod-vpc"] }] }));
         expect(vpcs.Vpcs?.length).toBeGreaterThan(0);
         const vpc = vpcs.Vpcs && vpcs.Vpcs[0];
@@ -154,7 +177,6 @@ describe("Terraform E2E Integration Tests", () => {
       }
       expect(nacl).toBeTruthy();
       const ingressRules = nacl?.Entries?.filter(e => e.Egress === false) || [];
-      console.log("NACL ingress rules:", ingressRules);
       expect(ingressRules.some(
         e => e.RuleAction === "allow" &&
           (Number(e.Protocol) === 6) &&
@@ -178,14 +200,12 @@ describe("Terraform E2E Integration Tests", () => {
     });
 
     test("EC2 role exists, policies attached", async () => {
-      // Always use environment from dynamic value
       const roleName = ec2RoleName || `secure-ec2-role-${environment}`;
       const roleRes = await iam.send(new GetRoleCommand({ RoleName: roleName }));
       expect(roleRes.Role).toBeDefined();
       expect(roleRes.Role?.RoleName).toBe(roleName);
       expect(roleRes.Role?.Tags?.some(t => t.Key === "ManagedBy" && t.Value === "terraform")).toBe(true);
 
-      // Fetch attached policies for the role
       const attachedPoliciesRes = await iam.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
       const policyNames = attachedPoliciesRes.AttachedPolicies?.map(p => p.PolicyName) || [];
 
@@ -205,12 +225,97 @@ describe("Terraform E2E Integration Tests", () => {
     });
 
     test("dashboard exists", async () => {
-      // Always use environment from dynamic value
       const dashboardName = cloudwatchDashboardName || `secure-dashboard-${environment}`;
       const res = await cw.send(new GetDashboardCommand({ DashboardName: dashboardName }));
       expect(res.DashboardName).toBe(dashboardName);
       expect(res.DashboardBody).toBeDefined();
       expect(JSON.parse(res.DashboardBody!).widgets.length).toBeGreaterThan(0);
+    });
+  });
+
+  // --- New tests for new resources ---
+
+  describe("EC2 Auto Scaling Group", () => {
+    let ec2: EC2Client;
+    beforeAll(() => {
+      ec2 = new EC2Client({ region: testRegion });
+    });
+
+    test("Auto Scaling Group exists and has at least 3 t3.micro instances", async () => {
+      expect(autoscalingGroupName).toBeDefined();
+      const describeInstancesRes = await ec2.send(new DescribeInstancesCommand({
+        Filters: [
+          { Name: "tag:aws:autoscaling:groupName", Values: [autoscalingGroupName] }
+        ]
+      }));
+      const instances = describeInstancesRes.Reservations?.flatMap(r => r.Instances ?? []) ?? [];
+      expect(instances.length).toBeGreaterThanOrEqual(3);
+      instances.forEach(instance => {
+        expect(instance.InstanceType).toBe("t3.micro");
+        expect(instance.State?.Name).toBe("running");
+      });
+    });
+  });
+
+  describe("Application Load Balancer", () => {
+    let elbv2: ElasticLoadBalancingV2Client;
+    beforeAll(() => {
+      elbv2 = new ElasticLoadBalancingV2Client({ region: testRegion });
+    });
+
+    test("ALB exists and is accessible", async () => {
+      expect(albDnsName).toBeDefined();
+      const lbRes = await elbv2.send(new DescribeLoadBalancersCommand({ Names: [albDnsName] }));
+      expect(lbRes.LoadBalancers?.length).toBeGreaterThan(0);
+      const alb = lbRes.LoadBalancers![0];
+      expect(alb.DNSName).toBe(albDnsName);
+      expect(alb.Scheme).toBe("internet-facing");
+      expect(alb.Type).toBe("application");
+    });
+
+    test("ALB has HTTPS listener on port 443", async () => {
+      const lbRes = await elbv2.send(new DescribeLoadBalancersCommand({ Names: [albDnsName] }));
+      const albArn = lbRes.LoadBalancers![0].LoadBalancerArn;
+      const listenersRes = await elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: albArn }));
+      expect(listenersRes.Listeners?.some((l: Listener) => l.Port === 443 && l.Protocol === "HTTPS")).toBe(true);
+    });
+
+    test("ALB forwards to the correct target group", async () => {
+      const lbRes = await elbv2.send(new DescribeLoadBalancersCommand({ Names: [albDnsName] }));
+      const albArn = lbRes.LoadBalancers![0].LoadBalancerArn;
+      const tgRes = await elbv2.send(new DescribeTargetGroupsCommand({ LoadBalancerArn: albArn }));
+      expect(tgRes.TargetGroups?.some((tg: TargetGroup) => tg.TargetGroupArn === albTargetGroupArn)).toBe(true);
+    });
+  });
+
+  describe("RDS Multi-AZ Instance", () => {
+    let rds: RDSClient;
+    beforeAll(() => {
+      rds = new RDSClient({ region: testRegion });
+    });
+
+    test("RDS DB instance is provisioned, Multi-AZ, and healthy", async () => {
+      expect(rdsInstanceEndpoint).toBeDefined();
+      const dbRes = await rds.send(new DescribeDBInstancesCommand({}));
+      const dbInstance = dbRes.DBInstances?.find(db => db.Endpoint?.Address === rdsInstanceEndpoint);
+      expect(dbInstance).toBeDefined();
+      expect(dbInstance?.MultiAZ).toBe(true);
+      expect(["available", "backing-up"]).toContain(dbInstance?.DBInstanceStatus);
+      expect(dbInstance?.Engine).toMatch(/mysql|postgres/i);
+    });
+  });
+
+  describe("DynamoDB Table with Auto Scaling", () => {
+    let dynamodb: DynamoDBClient;
+    beforeAll(() => {
+      dynamodb = new DynamoDBClient({ region: testRegion });
+    });
+
+    test("DynamoDB table exists and is active", async () => {
+      expect(dynamodbTableName).toBeDefined();
+      const tableRes = await dynamodb.send(new DescribeTableCommand({ TableName: dynamodbTableName }));
+      expect(tableRes.Table?.TableStatus).toBe("ACTIVE");
+      expect(tableRes.Table?.TableArn).toBe(dynamodbTableArn);
     });
   });
 });
