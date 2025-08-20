@@ -187,6 +187,9 @@
         "AppLogBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "app-logs-${AWS::Region}-${AWS::AccountId}"
+                },
                 "LifecycleConfiguration": {
                     "Rules": [
                         {
@@ -237,9 +240,6 @@
         "LaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "LaunchTemplateName": {
-                    "Fn::Sub": "${Environment}-WebAppLT"
-                },
                 "LaunchTemplateData": {
                     "InstanceType": {
                         "Ref": "InstanceType"
@@ -253,6 +253,9 @@
                     "UserData": {
                         "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl enable httpd\nsystemctl start httpd\necho \"Welcome to the High Availability Web App\" > /var/www/html/index.html\n"
                     }
+                },
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${Environment}-WebAppLT"
                 }
             }
         },
@@ -370,8 +373,8 @@
                         ]
                     }
                 },
-                "MinSize": 2,
-                "MaxSize": 10,
+                "MinSize": "2",
+                "MaxSize": "10",
                 "TargetGroupARNs": [
                     {
                         "Ref": "TargetGroup"
