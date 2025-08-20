@@ -136,7 +136,7 @@ Quality, security, and style requirements
 
 No wildcard (“*”) permissions unless absolutely unavoidable; justify in comments if used.
 
-Use constructs and helper functions to keep tapstack.ts clear and maintainable.
+Use constructs and helper functions to keep tapstack.ts clear & maintainable.
 
 Add explanatory comments for every security-critical choice.
 
