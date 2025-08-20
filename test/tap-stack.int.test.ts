@@ -25,9 +25,46 @@ describe('FinanceApp Integration Tests', () => {
     }
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Integration tests are implemented', async () => {
-      expect(true).toBe(true);
+  describe('Template Metadata', () => {
+    test('should have CloudFormation interface metadata', () => {
+      expect(template.Metadata).toBeDefined();
+      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    });
+  });
+
+  describe('Parameter Validation', () => {
+    test('Environment parameter should have correct properties', () => {
+      const envParam = template.Parameters.Environment;
+      expect(envParam.Type).toBe('String');
+      expect(envParam.Default).toBe('dev');
+      expect(envParam.AllowedValues).toEqual(['dev', 'prod']);
+      expect(envParam.Description).toBe('Environment name for resource naming (lowercase for S3 compatibility)');
+    });
+
+    test('KeyPairName parameter should be optional', () => {
+      const keyPairParam = template.Parameters.KeyPairName;
+      expect(keyPairParam.Type).toBe('String');
+      expect(keyPairParam.Default).toBe('');
+      expect(keyPairParam.Description).toBe('EC2 Key Pair for SSH access (leave empty to disable SSH)');
+    });
+
+    test('AmiId parameter should use SSM reference', () => {
+      const amiParam = template.Parameters.AmiId;
+      expect(amiParam.Type).toBe('AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>');
+      expect(amiParam.Default).toBe('/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2');
+    });
+
+    test('should have all VPC and subnet CIDR parameters', () => {
+      expect(template.Parameters.VpcCidr).toBeDefined();
+      expect(template.Parameters.PublicSubnet1Cidr).toBeDefined();
+      expect(template.Parameters.PublicSubnet2Cidr).toBeDefined();
+      expect(template.Parameters.PrivateSubnet1Cidr).toBeDefined();
+      expect(template.Parameters.PrivateSubnet2Cidr).toBeDefined();
+    });
+
+    test('should have database configuration parameters', () => {
+      expect(template.Parameters.DBInstanceClass).toBeDefined();
+      expect(template.Parameters.DBAllocatedStorage).toBeDefined();
     });
   });
 
@@ -104,13 +141,15 @@ describe('FinanceApp Integration Tests', () => {
         stmt.Resource && stmt.Resource['Fn::Sub']
       );
       const bucketStatement = statements.find((stmt: any) => 
-        stmt.Resource && stmt.Resource.Ref
+        stmt.Resource && stmt.Resource['Fn::GetAtt']
       );
       
       expect(objectStatement.Resource).toEqual({
         'Fn::Sub': '${FinanceAppS3Bucket.Arn}/*'
       });
-      expect(bucketStatement.Resource).toEqual({ Ref: 'FinanceAppS3Bucket' });
+      expect(bucketStatement.Resource).toEqual({ 
+        'Fn::GetAtt': ['FinanceAppS3Bucket', 'Arn']
+      });
     });
   });
 
@@ -282,6 +321,58 @@ describe('FinanceApp Integration Tests', () => {
       expect(ingressRules).toHaveLength(1);
       expect(ingressRules[0].SourceSecurityGroupId).toEqual({ Ref: 'WebSecurityGroup' });
     });
+
+    test('KMS key should be configured for encryption', () => {
+      const kmsKey = template.Resources.FinanceAppKMSKey;
+      expect(kmsKey).toBeDefined();
+      expect(kmsKey.Type).toBe('AWS::KMS::Key');
+      expect(kmsKey.Properties.Description).toContain('KMS key for FinanceApp encryption');
+      expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
+    });
+
+    test('S3 bucket should use KMS encryption', () => {
+      const s3Bucket = template.Resources.FinanceAppS3Bucket;
+      const encryption = s3Bucket.Properties.BucketEncryption;
+      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(encryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toEqual({
+        Ref: 'FinanceAppKMSKey'
+      });
+    });
+
+    test('RDS should use KMS encryption', () => {
+      const rds = template.Resources.FinanceAppDatabase;
+      expect(rds.Properties.StorageEncrypted).toBe(true);
+      expect(rds.Properties.KmsKeyId).toEqual({ Ref: 'FinanceAppKMSKey' });
+    });
+
+    test('IAM roles should follow least privilege principle', () => {
+      const ec2Role = template.Resources.EC2Role;
+      // Should not have explicit role name for security
+      expect(ec2Role.Properties.RoleName).toBeUndefined();
+      
+      // Check S3 policy is scoped to specific bucket
+      const s3Policy = ec2Role.Properties.Policies.find((policy: any) => 
+        policy.PolicyName === 'S3AccessPolicy'
+      );
+      const statements = s3Policy.PolicyDocument.Statement;
+      expect(statements).toHaveLength(2); // One for object operations, one for list bucket
+      
+      // Check CloudWatch permissions are via managed policy
+      expect(ec2Role.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      );
+    });
+
+    test('security groups should have descriptive rules', () => {
+      const webSG = template.Resources.WebSecurityGroup;
+      expect(webSG.Properties.GroupDescription).toBe('Security group for web tier');
+      
+      const albSG = template.Resources.ALBSecurityGroup;
+      expect(albSG.Properties.GroupDescription).toBe('Security group for Application Load Balancer');
+      
+      const dbSG = template.Resources.DBSecurityGroup;
+      expect(dbSG.Properties.GroupDescription).toBe('Security group for RDS database');
+    });
   });
 
   describe('Data Flow Integration', () => {
@@ -389,6 +480,82 @@ describe('FinanceApp Integration Tests', () => {
     });
   });
 
+  describe('High Availability Configuration', () => {
+    test('resources should be distributed across multiple AZs', () => {
+      const publicSubnet1 = template.Resources.PublicSubnet1;
+      const publicSubnet2 = template.Resources.PublicSubnet2;
+      const privateSubnet1 = template.Resources.PrivateSubnet1;
+      const privateSubnet2 = template.Resources.PrivateSubnet2;
+      
+      expect(publicSubnet1.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+      });
+      expect(publicSubnet2.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+      });
+      expect(privateSubnet1.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [0, { 'Fn::GetAZs': '' }]
+      });
+      expect(privateSubnet2.Properties.AvailabilityZone).toEqual({
+        'Fn::Select': [1, { 'Fn::GetAZs': '' }]
+      });
+    });
+
+    test('RDS should have Multi-AZ enabled for high availability', () => {
+      const rds = template.Resources.FinanceAppDatabase;
+      expect(rds.Properties.MultiAZ).toBe(true);
+    });
+
+    test('Auto Scaling Group should span multiple availability zones', () => {
+      const asg = template.Resources.WebAutoScalingGroup;
+      expect(asg.Properties.VPCZoneIdentifier).toHaveLength(2);
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(asg.Properties.VPCZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet2' });
+    });
+
+    test('ALB should be configured across multiple subnets', () => {
+      const alb = template.Resources.WebApplicationLoadBalancer;
+      expect(alb.Properties.Subnets).toHaveLength(2);
+      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet1' });
+      expect(alb.Properties.Subnets).toContainEqual({ Ref: 'PublicSubnet2' });
+    });
+  });
+
+  describe('Resource Naming Convention', () => {
+    test('resources should follow ProjectName-Resource-Environment naming pattern', () => {
+      const vpc = template.Resources.FinanceAppVPC;
+      const nameTag = vpc.Properties.Tags.find((tag: any) => tag.Key === 'Name');
+      expect(nameTag.Value['Fn::Sub']).toBe('FinanceApp-VPC-${Environment}');
+      
+      const asg = template.Resources.WebAutoScalingGroup;
+      expect(asg.Properties.AutoScalingGroupName['Fn::Sub']).toBe('FinanceApp-WebASG-${Environment}');
+    });
+
+    test('all resources should have consistent tagging', () => {
+      const requiredTags = ['Environment', 'Department', 'Owner'];
+      const resourcesToCheck = [
+        'FinanceAppVPC',
+        'PublicSubnet1',
+        'PublicSubnet2',
+        'PrivateSubnet1',
+        'PrivateSubnet2',
+        'FinanceAppS3Bucket',
+        'FinanceAppDatabase'
+      ];
+      
+      resourcesToCheck.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        if (resource.Properties.Tags) {
+          const tags = resource.Properties.Tags;
+          requiredTags.forEach(tagKey => {
+            const tag = tags.find((t: any) => t.Key === tagKey);
+            expect(tag).toBeDefined();
+          });
+        }
+      });
+    });
+  });
+
   describe('Deployment Readiness', () => {
     test('template should have all required parameters with defaults', () => {
       const params = template.Parameters;
@@ -417,6 +584,24 @@ describe('FinanceApp Integration Tests', () => {
       const s3 = template.Resources.FinanceAppS3Bucket;
       expect(s3.Properties.BucketEncryption).toBeDefined();
       expect(s3.Properties.VersioningConfiguration.Status).toBe('Enabled');
+    });
+
+    test('web instances should be in private subnets for security', () => {
+      const asg = template.Resources.WebAutoScalingGroup;
+      const vpcZoneIdentifier = asg.Properties.VPCZoneIdentifier;
+      
+      expect(vpcZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(vpcZoneIdentifier).toContainEqual({ Ref: 'PrivateSubnet2' });
+    });
+
+    test('database should be in private subnets only', () => {
+      const dbSubnetGroup = template.Resources.DBSubnetGroup;
+      const subnetIds = dbSubnetGroup.Properties.SubnetIds;
+      
+      expect(subnetIds).toContainEqual({ Ref: 'PrivateSubnet1' });
+      expect(subnetIds).toContainEqual({ Ref: 'PrivateSubnet2' });
+      expect(subnetIds).not.toContainEqual({ Ref: 'PublicSubnet1' });
+      expect(subnetIds).not.toContainEqual({ Ref: 'PublicSubnet2' });
     });
   });
 
