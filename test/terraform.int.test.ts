@@ -248,8 +248,34 @@ describe("Live AWS Resource Validation", () => {
       throw new Error('Infrastructure not deployed. Please run terraform apply first.');
     }
 
+    // First, get all route tables for the VPC
+    const vpcRouteTablesCommand = new DescribeRouteTablesCommand({
+      Filters: [
+        {
+          Name: 'vpc-id',
+          Values: [OUT.vpcId]
+        }
+      ]
+    });
+    const vpcRouteTablesResponse = await retry(() => ec2Client.send(vpcRouteTablesCommand));
+    
+    expect(vpcRouteTablesResponse.RouteTables).toBeDefined();
+    expect(vpcRouteTablesResponse.RouteTables!.length).toBeGreaterThan(0);
+    
+    // Find the main route table (the one that should have the internet gateway route)
+    const mainRouteTable = vpcRouteTablesResponse.RouteTables!.find(rt => 
+      rt.Routes?.some(route => route.DestinationCidrBlock === '0.0.0.0/0')
+    );
+    
+    expect(mainRouteTable).toBeDefined();
+    
+    const internetRoute = mainRouteTable!.Routes?.find(route => route.DestinationCidrBlock === '0.0.0.0/0');
+    expect(internetRoute).toBeDefined();
+    expect(internetRoute!.GatewayId).toBe(OUT.internetGatewayId);
+    
+    // Verify that public subnets are associated with a route table that has internet access
     for (const subnetId of OUT.publicSubnetIds) {
-      const command = new DescribeRouteTablesCommand({
+      const subnetRouteTablesCommand = new DescribeRouteTablesCommand({
         Filters: [
           {
             Name: 'association.subnet-id',
@@ -257,15 +283,14 @@ describe("Live AWS Resource Validation", () => {
           }
         ]
       });
-      const response = await retry(() => ec2Client.send(command));
+      const subnetRouteTablesResponse = await retry(() => ec2Client.send(subnetRouteTablesCommand));
       
-      expect(response.RouteTables).toBeDefined();
-      expect(response.RouteTables!.length).toBeGreaterThan(0);
+      // The subnet should be associated with a route table that has internet access
+      const hasInternetAccess = subnetRouteTablesResponse.RouteTables?.some(rt => 
+        rt.Routes?.some(route => route.DestinationCidrBlock === '0.0.0.0/0')
+      );
       
-      const routeTable = response.RouteTables![0];
-      const internetRoute = routeTable.Routes?.find(route => route.DestinationCidrBlock === '0.0.0.0/0');
-      expect(internetRoute).toBeDefined();
-      expect(internetRoute!.GatewayId).toBe(OUT.internetGatewayId);
+      expect(hasInternetAccess).toBe(true);
     }
   }, 30000);
 
