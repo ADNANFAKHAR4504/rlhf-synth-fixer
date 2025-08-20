@@ -12,6 +12,8 @@ import { Construct } from 'constructs';
 
 // ? Import your stacks here
 import { SecureModules, ModulesConfig } from './modules';
+import { Fn } from 'cdktf';
+
 // import { MyStack } from './my-stack';
 
 interface TapStackProps {
@@ -133,12 +135,12 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'public_subnet_ids', {
-      value: secureInfra.publicSubnets.map(subnet => subnet.id),
+      value: Fn.tolist(secureInfra.publicSubnets.map(subnet => subnet.id)),
       description: 'Public subnet IDs',
     });
 
     new TerraformOutput(this, 'private_subnet_ids', {
-      value: secureInfra.privateSubnets.map(subnet => subnet.id),
+      value: Fn.tolist(secureInfra.privateSubnets.map(subnet => subnet.id)),
       description:
         'Private subnet IDs where application resources are deployed',
     });

@@ -1,4 +1,5 @@
 import { Construct } from 'constructs';
+import { Fn } from 'cdktf';
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
@@ -342,7 +343,7 @@ export class SecureModules extends Construct {
     // DB Subnet Group for RDS - spans multiple AZs for high availability
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       name: `${config.appName.toLowerCase()}-db-subnet-group`,
-      subnetIds: this.privateSubnets.map(subnet => subnet.id),
+      subnetIds: Fn.tolist(this.privateSubnets.map(subnet => subnet.id)),
       description: 'Subnet group for RDS instance',
       tags: {
         Name: `${config.appName}-DB-SubnetGroup`,

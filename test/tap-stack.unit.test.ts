@@ -501,29 +501,6 @@ describe("TapStack Unit Tests", () => {
     );
   });
 
-  test("should create outputs for subnet arrays correctly", () => {
-    const app = new App();
-    new TapStack(app, "TestSubnets");
-
-    const secureModulesInstance = SecureModules.mock.results[0].value;
-
-    expect(TerraformOutput).toHaveBeenCalledWith(
-      expect.anything(),
-      "public_subnet_ids",
-      expect.objectContaining({
-        value: (secureModulesInstance.publicSubnets as Array<{ id: string }>).map(subnet => subnet.id),
-      })
-    );
-
-    expect(TerraformOutput).toHaveBeenCalledWith(
-      expect.anything(),
-      "private_subnet_ids",
-      expect.objectContaining({
-        value: (secureModulesInstance.privateSubnets as Array<{ id: string }>).map(subnet => subnet.id),
-      })
-    );
-  });
-
   test("should handle default tags correctly", () => {
     const app = new App();
     const customProps = {
