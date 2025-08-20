@@ -17,6 +17,23 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0c02fb55956c7d316
+    us-west-1:
+      AMI: ami-0d53d72369335a9d6
+    us-west-2:
+      AMI: ami-06b21ccaeff8cd686
+    eu-west-1:
+      AMI: ami-04b70fa74e45c3917
+    eu-central-1:
+      AMI: ami-0ab1a82de7ca5889c
+    ap-southeast-1:
+      AMI: ami-0df7a207adb9748c7
+    ap-northeast-1:
+      AMI: ami-0d52744d6551d851e
+
 Resources:
   # VPC Configuration
   SecureVPC:
@@ -270,6 +287,34 @@ Resources:
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LoggingBucket.Arn
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !GetAtt LoggingBucket.Arn
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Ref AWS::AccountId
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${LoggingBucket.Arn}/config/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+                AWS:SourceAccount: !Ref AWS::AccountId
 
   # RDS Subnet Group
   DBSubnetGroup:
@@ -470,12 +515,12 @@ Resources:
                 Action:
                   - s3:GetBucketAcl
                   - s3:ListBucket
-                Resource: !Ref LoggingBucket
+                Resource: !GetAtt LoggingBucket.Arn
               - Effect: Allow
                 Action:
                   - s3:PutObject
                   - s3:GetBucketAcl
-                Resource: !Sub '${LoggingBucket}/config/*'
+                Resource: !Sub '${LoggingBucket.Arn}/config/*'
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
@@ -491,7 +536,7 @@ Resources:
     Properties:
       Name: !Sub 'config-delivery-${EnvironmentSuffix}'
       S3BucketName: !Ref LoggingBucket
-      S3KeyPrefix: 'config/'
+      S3KeyPrefix: 'config'
 
   # Config Rules for Compliance
   S3BucketSSLRequestsOnlyRule:
@@ -518,7 +563,7 @@ Resources:
   WebServerInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-06b21ccaeff8cd686 # Amazon Linux 2023 AMI in us-west-2
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       InstanceType: t3.micro
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds:

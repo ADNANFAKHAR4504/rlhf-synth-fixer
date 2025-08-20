@@ -192,9 +192,12 @@ describe('TapStack CloudFormation Template', () => {
       expect(policy.Type).toBe('AWS::S3::BucketPolicy');
       
       const statements = policy.Properties.PolicyDocument.Statement;
-      expect(statements).toHaveLength(2);
+      expect(statements).toHaveLength(5);
       expect(statements[0].Sid).toBe('AWSCloudTrailAclCheck');
       expect(statements[1].Sid).toBe('AWSCloudTrailWrite');
+      expect(statements[2].Sid).toBe('AWSConfigBucketPermissionsCheck');
+      expect(statements[3].Sid).toBe('AWSConfigBucketExistenceCheck');
+      expect(statements[4].Sid).toBe('AWSConfigBucketDelivery');
     });
   });
 
@@ -300,7 +303,7 @@ describe('TapStack CloudFormation Template', () => {
       expect(instance).toBeDefined();
       expect(instance.Type).toBe('AWS::EC2::Instance');
       expect(instance.Properties.InstanceType).toBe('t3.micro');
-      expect(instance.Properties.ImageId).toBe('ami-06b21ccaeff8cd686');
+      expect(instance.Properties.ImageId).toEqual({'Fn::FindInMap': ['RegionMap', {'Ref': 'AWS::Region'}, 'AMI']});
     });
   });
 
