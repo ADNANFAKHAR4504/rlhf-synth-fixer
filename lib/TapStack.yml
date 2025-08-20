@@ -27,17 +27,7 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, 'production']
 
 Resources:
-  # Secret for RDS password
-  RDSPasswordSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub '${EnvironmentType}-rds-password'
-      Description: 'RDS Master password'
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+  # Import existing RDS password secret
 
   # KMS Key for encryption
   EnvironmentKMSKey:
