@@ -5,7 +5,7 @@ variable "aws_region" {
   description = "AWS region for resource deployment"
   type        = string
   default     = "us-east-1"
-  
+
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.aws_region))
     error_message = "AWS region must be a valid region identifier."
@@ -16,7 +16,7 @@ variable "environment" {
   description = "Environment name (e.g., prod, staging, dev)"
   type        = string
   default     = "prod"
-  
+
   validation {
     condition     = contains(["prod", "staging", "dev"], var.environment)
     error_message = "Environment must be one of: prod, staging, dev."
@@ -27,7 +27,7 @@ variable "project_name" {
   description = "Project name for resource naming and tagging"
   type        = string
   default     = "secure-app"
-  
+
   validation {
     condition     = can(regex("^[a-z0-9-]+$", var.project_name))
     error_message = "Project name must contain only lowercase letters, numbers, and hyphens."
@@ -38,7 +38,7 @@ variable "bucket_names" {
   description = "List of S3 bucket names to create"
   type        = list(string)
   default     = ["data", "logs", "backups"]
-  
+
   validation {
     condition     = length(var.bucket_names) > 0
     error_message = "At least one bucket name must be provided."
@@ -49,16 +49,16 @@ variable "bucket_names" {
 locals {
   # Common tags applied to all resources
   common_tags = {
-    Environment   = var.environment
-    Project      = var.project_name
-    ManagedBy    = "terraform"
-    Region       = var.aws_region
-    CreatedDate  = timestamp()
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+    Region      = var.aws_region
+    CreatedDate = timestamp()
   }
-  
+
   # Generate unique bucket names with project prefix and random suffix
   bucket_suffix = random_id.bucket_suffix.hex
-  
+
   # Create bucket configurations with full names
   bucket_configs = {
     for name in var.bucket_names : name => {
@@ -71,7 +71,7 @@ locals {
 # Random ID for unique bucket naming
 resource "random_id" "bucket_suffix" {
   byte_length = 4
-  
+
   keepers = {
     project     = var.project_name
     environment = var.environment
@@ -87,9 +87,9 @@ data "aws_partition" "current" {}
 # S3 Buckets with comprehensive security configuration
 resource "aws_s3_bucket" "secure_buckets" {
   for_each = local.bucket_configs
-  
+
   bucket = each.value.full_name
-  
+
   tags = merge(local.common_tags, {
     Name    = each.value.full_name
     Purpose = each.value.purpose
@@ -99,86 +99,86 @@ resource "aws_s3_bucket" "secure_buckets" {
 # S3 Bucket versioning configuration
 resource "aws_s3_bucket_versioning" "bucket_versioning" {
   for_each = aws_s3_bucket.secure_buckets
-  
+
   bucket = each.value.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
-  
+
   depends_on = [aws_s3_bucket.secure_buckets]
 }
 
 # S3 Bucket server-side encryption configuration (AES-256/SSE-S3)
 resource "aws_s3_bucket_server_side_encryption_configuration" "bucket_encryption" {
   for_each = aws_s3_bucket.secure_buckets
-  
+
   bucket = each.value.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
     }
-    
+
     bucket_key_enabled = true
   }
-  
+
   depends_on = [aws_s3_bucket.secure_buckets]
 }
 
 # S3 Bucket public access block - Prevent all public access
 resource "aws_s3_bucket_public_access_block" "bucket_pab" {
   for_each = aws_s3_bucket.secure_buckets
-  
+
   bucket = each.value.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
-  
+
   depends_on = [aws_s3_bucket.secure_buckets]
 }
 
 # S3 Bucket notification configuration for security monitoring
 resource "aws_s3_bucket_notification" "bucket_notification" {
   for_each = aws_s3_bucket.secure_buckets
-  
+
   bucket = each.value.id
-  
+
   depends_on = [aws_s3_bucket.secure_buckets]
 }
 
 # S3 Bucket lifecycle configuration for cost optimization
 resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
   for_each = aws_s3_bucket.secure_buckets
-  
+
   bucket = each.value.id
-  
+
   rule {
     id     = "transition_to_ia"
     status = "Enabled"
-    
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
     }
-    
+
     transition {
       days          = 90
       storage_class = "GLACIER"
     }
-    
+
     noncurrent_version_transition {
       noncurrent_days = 30
       storage_class   = "STANDARD_IA"
     }
-    
+
     noncurrent_version_expiration {
       noncurrent_days = 365
     }
   }
-  
+
   depends_on = [aws_s3_bucket_versioning.bucket_versioning]
 }
 
@@ -188,21 +188,21 @@ resource "aws_s3_bucket_logging" "bucket_logging" {
     for k, v in aws_s3_bucket.secure_buckets : k => v
     if k != "logs" # Don't log the logs bucket to itself
   }
-  
+
   bucket = each.value.id
-  
+
   target_bucket = aws_s3_bucket.secure_buckets["logs"].id
   target_prefix = "access-logs/${each.key}/"
-  
+
   depends_on = [aws_s3_bucket.secure_buckets]
 }
 
 # IAM Role for S3 access with assume role policy
 resource "aws_iam_role" "s3_access_role" {
   for_each = local.bucket_configs
-  
+
   name = "${var.project_name}-s3-${each.key}-role-${var.environment}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -220,7 +220,7 @@ resource "aws_iam_role" "s3_access_role" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-s3-${each.key}-role-${var.environment}"
     Purpose = "S3 access for ${each.key} bucket"
@@ -230,10 +230,10 @@ resource "aws_iam_role" "s3_access_role" {
 # IAM Policy for S3 bucket access (principle of least privilege)
 resource "aws_iam_policy" "s3_bucket_policy" {
   for_each = local.bucket_configs
-  
+
   name        = "${var.project_name}-s3-${each.key}-policy-${var.environment}"
   description = "Policy for accessing ${each.key} S3 bucket"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -268,7 +268,7 @@ resource "aws_iam_policy" "s3_bucket_policy" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-s3-${each.key}-policy-${var.environment}"
     Purpose = "S3 policy for ${each.key} bucket"
@@ -278,7 +278,7 @@ resource "aws_iam_policy" "s3_bucket_policy" {
 # Attach IAM policy to IAM role
 resource "aws_iam_role_policy_attachment" "s3_policy_attachment" {
   for_each = local.bucket_configs
-  
+
   role       = aws_iam_role.s3_access_role[each.key].name
   policy_arn = aws_iam_policy.s3_bucket_policy[each.key].arn
 }
@@ -286,7 +286,7 @@ resource "aws_iam_role_policy_attachment" "s3_policy_attachment" {
 # IAM Role for cross-service access (read-only)
 resource "aws_iam_role" "s3_readonly_role" {
   name = "${var.project_name}-s3-readonly-role-${var.environment}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -304,7 +304,7 @@ resource "aws_iam_role" "s3_readonly_role" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-s3-readonly-role-${var.environment}"
     Purpose = "Read-only access to all project S3 buckets"
@@ -315,7 +315,7 @@ resource "aws_iam_role" "s3_readonly_role" {
 resource "aws_iam_policy" "s3_readonly_policy" {
   name        = "${var.project_name}-s3-readonly-policy-${var.environment}"
   description = "Read-only policy for all project S3 buckets"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -344,7 +344,7 @@ resource "aws_iam_policy" "s3_readonly_policy" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name    = "${var.project_name}-s3-readonly-policy-${var.environment}"
     Purpose = "Read-only access policy for all S3 buckets"
@@ -360,9 +360,9 @@ resource "aws_iam_role_policy_attachment" "s3_readonly_policy_attachment" {
 # S3 Bucket policies for additional security
 resource "aws_s3_bucket_policy" "bucket_policies" {
   for_each = aws_s3_bucket.secure_buckets
-  
+
   bucket = each.value.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -414,7 +414,7 @@ resource "aws_s3_bucket_policy" "bucket_policies" {
       }
     ]
   })
-  
+
   depends_on = [
     aws_s3_bucket_public_access_block.bucket_pab,
     aws_iam_role.s3_access_role,

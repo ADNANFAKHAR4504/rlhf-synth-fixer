@@ -67,8 +67,8 @@ locals {
 
   # /24s inside /16
   public_subnet_cidrs = [
-    cidrsubnet(var.vpc_cidr, 8, 1),   # 10.0.1.0/24
-    cidrsubnet(var.vpc_cidr, 8, 2),   # 10.0.2.0/24
+    cidrsubnet(var.vpc_cidr, 8, 1), # 10.0.1.0/24
+    cidrsubnet(var.vpc_cidr, 8, 2), # 10.0.2.0/24
   ]
   private_subnet_cidrs = [
     cidrsubnet(var.vpc_cidr, 8, 101), # 10.0.101.0/24

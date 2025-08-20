@@ -410,31 +410,31 @@ output "us_west_2_nat_gateway_eip_id" {
 output "us_east_2_infrastructure" {
   description = "Infrastructure details for us-east-2 region"
   value = {
-    region                = "us-east-2"
-    vpc_id               = aws_vpc.us_east_2.id
-    vpc_cidr_block       = aws_vpc.us_east_2.cidr_block
-    internet_gateway_id  = aws_internet_gateway.us_east_2.id
-    public_subnet_ids    = aws_subnet.public_us_east_2[*].id
-    private_subnet_ids   = aws_subnet.private_us_east_2[*].id
-    public_route_table_id = aws_route_table.public_us_east_2.id
+    region                 = "us-east-2"
+    vpc_id                 = aws_vpc.us_east_2.id
+    vpc_cidr_block         = aws_vpc.us_east_2.cidr_block
+    internet_gateway_id    = aws_internet_gateway.us_east_2.id
+    public_subnet_ids      = aws_subnet.public_us_east_2[*].id
+    private_subnet_ids     = aws_subnet.private_us_east_2[*].id
+    public_route_table_id  = aws_route_table.public_us_east_2.id
     private_route_table_id = aws_route_table.private_us_east_2.id
-    nat_gateway_id       = aws_nat_gateway.us_east_2.id
-    nat_gateway_eip_id   = aws_eip.nat_us_east_2.id
+    nat_gateway_id         = aws_nat_gateway.us_east_2.id
+    nat_gateway_eip_id     = aws_eip.nat_us_east_2.id
   }
 }
 
 output "us_west_2_infrastructure" {
   description = "Infrastructure details for us-west-2 region"
   value = {
-    region                = "us-west-2"
-    vpc_id               = aws_vpc.us_west_2.id
-    vpc_cidr_block       = aws_vpc.us_west_2.cidr_block
-    internet_gateway_id  = aws_internet_gateway.us_west_2.id
-    public_subnet_ids    = aws_subnet.public_us_west_2[*].id
-    private_subnet_ids   = aws_subnet.private_us_west_2[*].id
-    public_route_table_id = aws_route_table.public_us_west_2.id
+    region                 = "us-west-2"
+    vpc_id                 = aws_vpc.us_west_2.id
+    vpc_cidr_block         = aws_vpc.us_west_2.cidr_block
+    internet_gateway_id    = aws_internet_gateway.us_west_2.id
+    public_subnet_ids      = aws_subnet.public_us_west_2[*].id
+    private_subnet_ids     = aws_subnet.private_us_west_2[*].id
+    public_route_table_id  = aws_route_table.public_us_west_2.id
     private_route_table_id = aws_route_table.private_us_west_2.id
-    nat_gateway_id       = aws_nat_gateway.us_west_2.id
-    nat_gateway_eip_id   = aws_eip.nat_us_west_2.id
+    nat_gateway_id         = aws_nat_gateway.us_west_2.id
+    nat_gateway_eip_id     = aws_eip.nat_us_west_2.id
   }
 }

@@ -196,16 +196,16 @@ data "aws_caller_identity" "current" {}
 # =============================================================================
 
 resource "aws_kms_key" "primary_encryption" {
-  provider               = aws.us_east_2
-  description            = "KMS key for ${local.primary_prefix} encryption"
+  provider                = aws.us_east_2
+  description             = "KMS key for ${local.primary_prefix} encryption"
   deletion_window_in_days = 7
-  enable_key_rotation    = true
+  enable_key_rotation     = true
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid       = "Enable IAM User Permissions"
-      Effect    = "Allow"
+      Sid    = "Enable IAM User Permissions"
+      Effect = "Allow"
       Principal = {
         AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
       }
@@ -227,16 +227,16 @@ resource "aws_kms_alias" "primary_encryption" {
 }
 
 resource "aws_kms_key" "secondary_encryption" {
-  provider               = aws.us_west_1
-  description            = "KMS key for ${local.secondary_prefix} encryption"
+  provider                = aws.us_west_1
+  description             = "KMS key for ${local.secondary_prefix} encryption"
   deletion_window_in_days = 7
-  enable_key_rotation    = true
+  enable_key_rotation     = true
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid       = "Enable IAM User Permissions"
-      Effect    = "Allow"
+      Sid    = "Enable IAM User Permissions"
+      Effect = "Allow"
       Principal = {
         AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
       }
@@ -417,7 +417,7 @@ resource "aws_subnet" "secondary_public" {
   cidr_block              = local.secondary_public_subnets[count.index].cidr
   availability_zone       = element(data.aws_availability_zones.secondary.names, count.index)
   map_public_ip_on_launch = true
-  depends_on        = [aws_vpc.secondary]
+  depends_on              = [aws_vpc.secondary]
   tags = merge(local.common_tags, {
     Name   = "${local.secondary_prefix}-public-subnet-new-${count.index + 1}"
     Type   = "public"
@@ -443,7 +443,7 @@ resource "aws_eip" "secondary_nat" {
   provider   = aws.us_west_1
   count      = length(local.secondary_public_subnets)
   domain     = "vpc"
-  depends_on = [aws_internet_gateway.secondary,aws_vpc.secondary]
+  depends_on = [aws_internet_gateway.secondary, aws_vpc.secondary]
   tags = merge(local.common_tags, {
     Name   = "${local.secondary_prefix}-nat-eip-new-${count.index + 1}"
     Region = var.secondary_region
@@ -459,13 +459,13 @@ resource "aws_nat_gateway" "secondary" {
     Region = var.secondary_region
   })
 
-  depends_on = [aws_internet_gateway.secondary,aws_vpc.secondary]
+  depends_on = [aws_internet_gateway.secondary, aws_vpc.secondary]
 }
 
 resource "aws_route_table" "secondary_public" {
-  provider = aws.us_west_1
-  vpc_id   = aws_vpc.secondary.id
-  depends_on        = [aws_vpc.secondary]
+  provider   = aws.us_west_1
+  vpc_id     = aws_vpc.secondary.id
+  depends_on = [aws_vpc.secondary]
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
@@ -487,7 +487,7 @@ resource "aws_route_table" "secondary_private" {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary[count.index].id
   }
-  depends_on        = [aws_vpc.secondary]
+  depends_on = [aws_vpc.secondary]
   tags = merge(local.common_tags, {
     Name   = "${local.secondary_prefix}-private-rt-new-${count.index + 1}"
     Type   = "private"
@@ -513,7 +513,7 @@ resource "aws_route_table_association" "secondary_private" {
 # =============================================================================
 
 resource "aws_security_group" "primary_web" {
-  provider   = aws.us_east_2
+  provider    = aws.us_east_2
   name_prefix = "${local.primary_prefix}-web-new-"
   vpc_id      = aws_vpc.primary.id
   description = "Security group for web servers in primary region"
@@ -554,7 +554,7 @@ resource "aws_security_group" "primary_web" {
 }
 
 resource "aws_security_group" "primary_app" {
-  provider   = aws.us_east_2
+  provider    = aws.us_east_2
   name_prefix = "${local.primary_prefix}-app-new-"
   vpc_id      = aws_vpc.primary.id
   description = "Security group for application servers in primary region"
@@ -595,7 +595,7 @@ resource "aws_security_group" "primary_app" {
 }
 
 resource "aws_security_group" "primary_db" {
-  provider   = aws.us_east_2
+  provider    = aws.us_east_2
   name_prefix = "${local.primary_prefix}-db-new-"
   vpc_id      = aws_vpc.primary.id
   description = "Security group for database servers in primary region"
@@ -636,7 +636,7 @@ resource "aws_security_group" "primary_db" {
 }
 
 resource "aws_security_group" "secondary_db" {
-  provider   = aws.us_west_1
+  provider    = aws.us_west_1
   name_prefix = "${local.secondary_prefix}-db-new-"
   vpc_id      = aws_vpc.secondary.id
   description = "Security group for database servers in secondary region"
@@ -681,7 +681,7 @@ resource "aws_security_group" "secondary_db" {
 # =============================================================================
 
 resource "aws_security_group" "secondary_web" {
-  provider   = aws.us_west_1
+  provider    = aws.us_west_1
   name_prefix = "${local.secondary_prefix}-web-new-"
   vpc_id      = aws_vpc.secondary.id
   description = "Security group for web servers in secondary region"
@@ -722,7 +722,7 @@ resource "aws_security_group" "secondary_web" {
 }
 
 resource "aws_security_group" "secondary_app" {
-  provider   = aws.us_west_1
+  provider    = aws.us_west_1
   name_prefix = "${local.secondary_prefix}-app-new-"
   vpc_id      = aws_vpc.secondary.id
   description = "Security group for application servers in secondary region"
@@ -772,8 +772,8 @@ resource "aws_iam_role" "ec2_instance_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
     }]
   })
@@ -853,8 +853,8 @@ resource "aws_iam_role" "rds_enhanced_monitoring" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
       Principal = { Service = "monitoring.rds.amazonaws.com" }
     }]
   })
@@ -928,9 +928,9 @@ resource "aws_s3_bucket_public_access_block" "primary_logs" {
   provider = aws.us_east_2
   bucket   = aws_s3_bucket.primary_logs.id
 
-  block_public_acls    = true
-  block_public_policy  = true
-  ignore_public_acls   = true
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
   restrict_public_buckets = true
 
   depends_on = [aws_s3_bucket.primary_logs]
@@ -990,9 +990,9 @@ resource "aws_s3_bucket_public_access_block" "secondary_logs" {
   provider = aws.us_west_1
   bucket   = aws_s3_bucket.secondary_logs.id
 
-  block_public_acls    = true
-  block_public_policy  = true
-  ignore_public_acls   = true
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
   restrict_public_buckets = true
 
   depends_on = [aws_s3_bucket.secondary_logs]
@@ -1003,14 +1003,14 @@ resource "aws_s3_bucket_public_access_block" "secondary_logs" {
 # =============================================================================
 
 resource "aws_instance" "primary_web" {
-  provider                  = aws.us_east_2
-  count                     = length(local.primary_public_subnets)
-  ami                       = data.aws_ami.amazon_linux_primary.id
-  instance_type             = var.instance_type
-  subnet_id                 = aws_subnet.primary_public[count.index].id
-  vpc_security_group_ids    = [aws_security_group.primary_web.id]
+  provider                    = aws.us_east_2
+  count                       = length(local.primary_public_subnets)
+  ami                         = data.aws_ami.amazon_linux_primary.id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.primary_public[count.index].id
+  vpc_security_group_ids      = [aws_security_group.primary_web.id]
   associate_public_ip_address = true
-  iam_instance_profile      = aws_iam_instance_profile.ec2_instance_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.ec2_instance_profile.name
 
   root_block_device {
     encrypted  = true
@@ -1018,22 +1018,22 @@ resource "aws_instance" "primary_web" {
   }
 
   tags = merge(local.common_tags, {
-    Name                       = "${local.primary_prefix}-web-new-${count.index + 1}"
-    Role                       = "web"
-    Region                     = var.aws_region
-    VulnerabilityAssessment    = "passed"  # Simulated tag
+    Name                    = "${local.primary_prefix}-web-new-${count.index + 1}"
+    Role                    = "web"
+    Region                  = var.aws_region
+    VulnerabilityAssessment = "passed" # Simulated tag
   })
 }
 
 resource "aws_instance" "primary_app" {
-  provider                  = aws.us_east_2
-  count                     = length(local.primary_private_subnets)
-  ami                       = data.aws_ami.amazon_linux_primary.id
-  instance_type             = var.instance_type
-  subnet_id                 = aws_subnet.primary_private[count.index].id
-  vpc_security_group_ids    = [aws_security_group.primary_app.id]
+  provider                    = aws.us_east_2
+  count                       = length(local.primary_private_subnets)
+  ami                         = data.aws_ami.amazon_linux_primary.id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.primary_private[count.index].id
+  vpc_security_group_ids      = [aws_security_group.primary_app.id]
   associate_public_ip_address = false
-  iam_instance_profile      = aws_iam_instance_profile.ec2_instance_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.ec2_instance_profile.name
 
   root_block_device {
     encrypted  = true
@@ -1041,22 +1041,22 @@ resource "aws_instance" "primary_app" {
   }
 
   tags = merge(local.common_tags, {
-    Name                       = "${local.primary_prefix}-app-new-${count.index + 1}"
-    Role                       = "app"
-    Region                     = var.aws_region
-    VulnerabilityAssessment    = "passed"
+    Name                    = "${local.primary_prefix}-app-new-${count.index + 1}"
+    Role                    = "app"
+    Region                  = var.aws_region
+    VulnerabilityAssessment = "passed"
   })
 }
 
 resource "aws_instance" "secondary_web" {
-  provider                  = aws.us_west_1
-  count                     = length(local.secondary_public_subnets)
-  ami                       = data.aws_ami.amazon_linux_secondary.id
-  instance_type             = var.instance_type
-  subnet_id                 = aws_subnet.secondary_public[count.index].id
-  vpc_security_group_ids    = [aws_security_group.secondary_web.id]
+  provider                    = aws.us_west_1
+  count                       = length(local.secondary_public_subnets)
+  ami                         = data.aws_ami.amazon_linux_secondary.id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.secondary_public[count.index].id
+  vpc_security_group_ids      = [aws_security_group.secondary_web.id]
   associate_public_ip_address = true
-  iam_instance_profile      = aws_iam_instance_profile.ec2_instance_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.ec2_instance_profile.name
 
   root_block_device {
     encrypted  = true
@@ -1064,22 +1064,22 @@ resource "aws_instance" "secondary_web" {
   }
 
   tags = merge(local.common_tags, {
-    Name                       = "${local.secondary_prefix}-web-new-${count.index + 1}"
-    Role                       = "web"
-    Region                     = var.secondary_region
-    VulnerabilityAssessment    = "passed"
+    Name                    = "${local.secondary_prefix}-web-new-${count.index + 1}"
+    Role                    = "web"
+    Region                  = var.secondary_region
+    VulnerabilityAssessment = "passed"
   })
 }
 
 resource "aws_instance" "secondary_app" {
-  provider                  = aws.us_west_1
-  count                     = length(local.secondary_private_subnets)
-  ami                       = data.aws_ami.amazon_linux_secondary.id
-  instance_type             = var.instance_type
-  subnet_id                 = aws_subnet.secondary_private[count.index].id
-  vpc_security_group_ids    = [aws_security_group.secondary_app.id]
+  provider                    = aws.us_west_1
+  count                       = length(local.secondary_private_subnets)
+  ami                         = data.aws_ami.amazon_linux_secondary.id
+  instance_type               = var.instance_type
+  subnet_id                   = aws_subnet.secondary_private[count.index].id
+  vpc_security_group_ids      = [aws_security_group.secondary_app.id]
   associate_public_ip_address = false
-  iam_instance_profile      = aws_iam_instance_profile.ec2_instance_profile.name
+  iam_instance_profile        = aws_iam_instance_profile.ec2_instance_profile.name
 
   root_block_device {
     encrypted  = true
@@ -1087,10 +1087,10 @@ resource "aws_instance" "secondary_app" {
   }
 
   tags = merge(local.common_tags, {
-    Name                       = "${local.secondary_prefix}-app-new-${count.index + 1}"
-    Role                       = "app"
-    Region                     = var.secondary_region
-    VulnerabilityAssessment    = "passed"
+    Name                    = "${local.secondary_prefix}-app-new-${count.index + 1}"
+    Role                    = "app"
+    Region                  = var.secondary_region
+    VulnerabilityAssessment = "passed"
   })
 }
 
@@ -1130,8 +1130,8 @@ resource "random_password" "primary_db_username" {
 }
 # Generate random password for RDS
 resource "random_password" "primary_db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&()*+-=:?@^_"
 }
 # Generate random username for RDS
@@ -1144,34 +1144,34 @@ resource "random_password" "secondary_db_username" {
 }
 # Generate random password for RDS
 resource "random_password" "secondary_db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&()*+-=:?@^_"
 }
 resource "random_id" "rds_snapshot_suffix" {
   byte_length = 4
 }
 resource "aws_db_instance" "primary" {
-  provider               = aws.us_east_2
-  identifier             = "${local.primary_prefix}-rds-new"
-  engine                 = "mysql"
-  instance_class         = var.db_instance_class
-  allocated_storage      = var.db_allocated_storage
-  db_subnet_group_name   = aws_db_subnet_group.primary.name
-  vpc_security_group_ids = [aws_security_group.primary_db.id]
-  multi_az               = false
-  publicly_accessible    = false
-  storage_encrypted      = true
-  kms_key_id             = aws_kms_key.primary_encryption.arn
-  backup_retention_period= var.rds_backup_retention_period
-  deletion_protection    = true
-  username               = random_password.primary_db_username.result  # placeholder - secure externally
-  password               = random_password.primary_db_password.result  # placeholder - secure externally
-  skip_final_snapshot    = false
+  provider                  = aws.us_east_2
+  identifier                = "${local.primary_prefix}-rds-new"
+  engine                    = "mysql"
+  instance_class            = var.db_instance_class
+  allocated_storage         = var.db_allocated_storage
+  db_subnet_group_name      = aws_db_subnet_group.primary.name
+  vpc_security_group_ids    = [aws_security_group.primary_db.id]
+  multi_az                  = false
+  publicly_accessible       = false
+  storage_encrypted         = true
+  kms_key_id                = aws_kms_key.primary_encryption.arn
+  backup_retention_period   = var.rds_backup_retention_period
+  deletion_protection       = true
+  username                  = random_password.primary_db_username.result # placeholder - secure externally
+  password                  = random_password.primary_db_password.result # placeholder - secure externally
+  skip_final_snapshot       = false
   final_snapshot_identifier = "primarydb-final-snapshot-new-${random_id.rds_snapshot_suffix.hex}"
-  monitoring_role_arn    = aws_iam_role.rds_enhanced_monitoring.arn
-  monitoring_interval    = 60
-  copy_tags_to_snapshot  = true
+  monitoring_role_arn       = aws_iam_role.rds_enhanced_monitoring.arn
+  monitoring_interval       = 60
+  copy_tags_to_snapshot     = true
   tags = merge(local.common_tags, {
     Name   = "${local.primary_prefix}-tapstack-rds"
     Region = var.aws_region
@@ -1179,26 +1179,26 @@ resource "aws_db_instance" "primary" {
 }
 
 resource "aws_db_instance" "secondary" {
-  provider               = aws.us_west_1
-  identifier             = "${local.secondary_prefix}-rds-new"
-  engine                 = "mysql"
-  instance_class         = var.db_instance_class
-  allocated_storage      = var.db_allocated_storage
-  db_subnet_group_name   = aws_db_subnet_group.secondary.name
-  vpc_security_group_ids = [aws_security_group.secondary_db.id]
-  multi_az               = false
-  publicly_accessible    = false
-  storage_encrypted      = true
-  kms_key_id             = aws_kms_key.secondary_encryption.arn
-  backup_retention_period= var.rds_backup_retention_period
-  deletion_protection    = true
-  username               = random_password.secondary_db_username.result  # placeholder - secure externally
-  password               = random_password.secondary_db_password.result  # placeholder - secure externally
-  skip_final_snapshot    = false
+  provider                  = aws.us_west_1
+  identifier                = "${local.secondary_prefix}-rds-new"
+  engine                    = "mysql"
+  instance_class            = var.db_instance_class
+  allocated_storage         = var.db_allocated_storage
+  db_subnet_group_name      = aws_db_subnet_group.secondary.name
+  vpc_security_group_ids    = [aws_security_group.secondary_db.id]
+  multi_az                  = false
+  publicly_accessible       = false
+  storage_encrypted         = true
+  kms_key_id                = aws_kms_key.secondary_encryption.arn
+  backup_retention_period   = var.rds_backup_retention_period
+  deletion_protection       = true
+  username                  = random_password.secondary_db_username.result # placeholder - secure externally
+  password                  = random_password.secondary_db_password.result # placeholder - secure externally
+  skip_final_snapshot       = false
   final_snapshot_identifier = "secondarydb-final-snapshot-new-${random_id.rds_snapshot_suffix.hex}"
-  monitoring_role_arn    = aws_iam_role.rds_enhanced_monitoring.arn
-  monitoring_interval    = 60
-  copy_tags_to_snapshot  = true
+  monitoring_role_arn       = aws_iam_role.rds_enhanced_monitoring.arn
+  monitoring_interval       = 60
+  copy_tags_to_snapshot     = true
   tags = merge(local.common_tags, {
     Name   = "${local.secondary_prefix}-rds-new"
     Region = var.secondary_region

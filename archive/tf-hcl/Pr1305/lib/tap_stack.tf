@@ -323,7 +323,7 @@ resource "aws_lb_listener" "main" {
 
 # SSL certificate and HTTPS listener (placeholder for production)
 resource "aws_lb_listener" "https" {
-  count = 0  # Disabled to simplify deployment
+  count = 0 # Disabled to simplify deployment
 
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
@@ -338,7 +338,7 @@ resource "aws_lb_listener" "https" {
 }
 
 resource "aws_acm_certificate" "main" {
-  count = 0  # Disabled to simplify deployment
+  count = 0 # Disabled to simplify deployment
 
   domain_name       = "${var.app_name}-${var.environment_suffix}.example.com"
   validation_method = "DNS"
@@ -481,8 +481,8 @@ resource "random_id" "suffix" {
 }
 
 resource "random_password" "db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 

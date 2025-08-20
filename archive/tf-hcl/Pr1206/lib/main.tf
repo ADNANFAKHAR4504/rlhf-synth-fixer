@@ -226,7 +226,7 @@ resource "aws_security_group" "vpc_endpoints" {
 resource "aws_vpc_endpoint" "s3" {
   vpc_id       = aws_vpc.main.id
   service_name = "com.amazonaws.${data.aws_region.current.name}.s3"
-  
+
   route_table_ids = concat(
     [aws_route_table.public.id],
     aws_route_table.private[*].id
@@ -236,7 +236,7 @@ resource "aws_vpc_endpoint" "s3" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = "*"
         Action = [
           "s3:GetObject",
@@ -262,7 +262,7 @@ resource "aws_vpc_endpoint" "s3" {
 resource "aws_vpc_endpoint" "dynamodb" {
   vpc_id       = aws_vpc.main.id
   service_name = "com.amazonaws.${data.aws_region.current.name}.dynamodb"
-  
+
   route_table_ids = concat(
     [aws_route_table.public.id],
     aws_route_table.private[*].id

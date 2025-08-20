@@ -5,20 +5,20 @@ resource "aws_security_group" "web" {
 
   # HTTP
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
-    description = "HTTP from ALB"
+    description     = "HTTP from ALB"
   }
 
   # HTTPS
   ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
-    description = "HTTPS from ALB"
+    description     = "HTTPS from ALB"
   }
 
   # SSH from VPC only

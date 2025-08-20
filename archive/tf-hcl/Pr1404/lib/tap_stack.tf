@@ -230,10 +230,10 @@ resource "aws_s3_bucket_policy" "secure_data" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyInsecureConnections"
-        Effect = "Deny"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.secure_data.arn,
           "${aws_s3_bucket.secure_data.arn}/*"
@@ -245,10 +245,10 @@ resource "aws_s3_bucket_policy" "secure_data" {
         }
       },
       {
-        Sid    = "AllowVPCEndpointAccess"
-        Effect = "Allow"
+        Sid       = "AllowVPCEndpointAccess"
+        Effect    = "Allow"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.secure_data.arn,
           "${aws_s3_bucket.secure_data.arn}/*"
@@ -277,9 +277,9 @@ resource "aws_iam_group_policy" "mfa_enforcement" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyAllExceptUsersWithMFA"
-        Effect = "Deny"
-        Action = "*"
+        Sid      = "DenyAllExceptUsersWithMFA"
+        Effect   = "Deny"
+        Action   = "*"
         Resource = "*"
         Condition = {
           BoolIfExists = {
@@ -366,11 +366,11 @@ data "aws_ami" "amazon_linux" {
 
 # EC2 Instance
 resource "aws_instance" "main" {
-  ami                     = data.aws_ami.amazon_linux.id
-  instance_type           = "t3.micro"
-  subnet_id               = aws_subnet.private_1.id
-  vpc_security_group_ids  = [aws_security_group.ec2.id]
-  iam_instance_profile    = aws_iam_instance_profile.ec2_profile.name
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.private_1.id
+  vpc_security_group_ids      = [aws_security_group.ec2.id]
+  iam_instance_profile        = aws_iam_instance_profile.ec2_profile.name
   associate_public_ip_address = false
 
   tags = {

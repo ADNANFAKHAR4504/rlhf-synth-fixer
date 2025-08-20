@@ -116,9 +116,9 @@ resource "random_id" "key_suffix" {
 # Locals
 #################
 locals {
-  env          = "prod"
-  name_prefix  = local.env
-  name_suffix  = random_id.namer.hex
+  env           = "prod"
+  name_prefix   = local.env
+  name_suffix   = random_id.namer.hex
   unique_prefix = "${local.name_prefix}-${var.project_code}-${local.name_suffix}"
 
   common_tags = {
@@ -316,8 +316,8 @@ resource "tls_private_key" "bastion" {
 }
 
 resource "aws_key_pair" "bastion" {
-  count     = var.bastion_key_name == "" ? 1 : 0
-  key_name  = local.bastion_key_name_final
+  count      = var.bastion_key_name == "" ? 1 : 0
+  key_name   = local.bastion_key_name_final
   public_key = var.bastion_ssh_public_key != "" ? var.bastion_ssh_public_key : tls_private_key.bastion[0].public_key_openssh
 
   tags = merge(local.common_tags, {
@@ -359,14 +359,14 @@ resource "aws_instance" "bastion" {
 # IAM for Private EC2 -> S3 + KMS (all names include unique suffix)
 #################
 resource "aws_iam_role" "app_role" {
-  name               = "${local.unique_prefix}-app-role"
+  name = "${local.unique_prefix}-app-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Sid      = "EC2Trust",
-      Effect   = "Allow",
+      Sid       = "EC2Trust",
+      Effect    = "Allow",
       Principal = { Service = "ec2.amazonaws.com" },
-      Action   = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 
@@ -394,9 +394,9 @@ resource "aws_iam_policy" "app_s3_policy" {
         }
       },
       {
-        Sid      = "RWOnAppPrefix",
-        Effect   = "Allow",
-        Action   = [
+        Sid    = "RWOnAppPrefix",
+        Effect = "Allow",
+        Action = [
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject"
@@ -467,8 +467,8 @@ resource "aws_kms_key" "app" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid      = "EnableRootPermissions",
-        Effect   = "Allow",
+        Sid    = "EnableRootPermissions",
+        Effect = "Allow",
         Principal = {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         },
@@ -476,8 +476,8 @@ resource "aws_kms_key" "app" {
         Resource = "*"
       },
       {
-        Sid      = "AllowAppRoleUseOfKey",
-        Effect   = "Allow",
+        Sid    = "AllowAppRoleUseOfKey",
+        Effect = "Allow",
         Principal = {
           AWS = aws_iam_role.app_role.arn
         },
@@ -547,10 +547,10 @@ resource "aws_s3_bucket_policy" "app" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid      = "DenyInsecureTransport",
-        Effect   = "Deny",
+        Sid       = "DenyInsecureTransport",
+        Effect    = "Deny",
         Principal = "*",
-        Action   = "s3:*",
+        Action    = "s3:*",
         Resource = [
           aws_s3_bucket.app.arn,
           "${aws_s3_bucket.app.arn}/*"
@@ -560,11 +560,11 @@ resource "aws_s3_bucket_policy" "app" {
         }
       },
       {
-        Sid      = "DenyIncorrectEncryptionHeader",
-        Effect   = "Deny",
+        Sid       = "DenyIncorrectEncryptionHeader",
+        Effect    = "Deny",
         Principal = "*",
-        Action   = "s3:PutObject",
-        Resource = "${aws_s3_bucket.app.arn}/*",
+        Action    = "s3:PutObject",
+        Resource  = "${aws_s3_bucket.app.arn}/*",
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -572,11 +572,11 @@ resource "aws_s3_bucket_policy" "app" {
         }
       },
       {
-        Sid      = "DenyWrongKmsKey",
-        Effect   = "Deny",
+        Sid       = "DenyWrongKmsKey",
+        Effect    = "Deny",
         Principal = "*",
-        Action   = "s3:PutObject",
-        Resource = "${aws_s3_bucket.app.arn}/*",
+        Action    = "s3:PutObject",
+        Resource  = "${aws_s3_bucket.app.arn}/*",
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption-aws-kms-key-id" = aws_kms_key.app.arn

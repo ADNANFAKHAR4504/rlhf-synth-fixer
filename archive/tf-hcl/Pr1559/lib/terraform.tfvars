@@ -1,2 +1,2 @@
 projectname = "example"
-aws_region = "us-west-1"
+aws_region  = "us-west-1"

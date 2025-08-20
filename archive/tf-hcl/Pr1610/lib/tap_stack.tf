@@ -76,8 +76,8 @@ variable "common_tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)
   default = {
-    Project     = "TAP"
-    ManagedBy   = "Terraform"
+    Project   = "TAP"
+    ManagedBy = "Terraform"
   }
 }
 
@@ -128,14 +128,14 @@ data "aws_region" "current" {}
 
 # Generate random password for RDS
 resource "random_password" "primary_db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&()*+-=:?@^_"
 }
 
 resource "random_password" "secondary_db_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&()*+-=:?@^_"
 }
 
@@ -197,7 +197,7 @@ resource "aws_subnet" "primary_private" {
 resource "aws_eip" "primary_nat" {
   count = length(local.primary_public_subnets)
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.primary]
 
   tags = merge(local.primary_tags, {
@@ -329,7 +329,7 @@ resource "aws_eip" "secondary_nat" {
   provider = aws.us_west_1
   count    = length(local.secondary_public_subnets)
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.secondary]
 
   tags = merge(local.secondary_tags, {
@@ -611,7 +611,7 @@ resource "aws_db_instance" "primary" {
   max_allocated_storage = var.db_allocated_storage * 2
   storage_type          = "gp2"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.primary_rds.arn
+  kms_key_id            = aws_kms_key.primary_rds.arn
 
   # Database configuration
   db_name  = "tapdb"
@@ -626,25 +626,25 @@ resource "aws_db_instance" "primary" {
 
   # Backup configuration
   backup_retention_period = var.backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  copy_tags_to_snapshot  = true
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+  copy_tags_to_snapshot   = true
 
   # Security configuration
-  deletion_protection = var.enable_deletion_protection
-  skip_final_snapshot = false
+  deletion_protection       = var.enable_deletion_protection
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.primary_name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   # Monitoring configuration
-  monitoring_interval = 60
-  monitoring_role_arn = aws_iam_role.rds_enhanced_monitoring.arn
+  monitoring_interval             = 60
+  monitoring_role_arn             = aws_iam_role.rds_enhanced_monitoring.arn
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Parameter group
   parameter_group_name = aws_db_parameter_group.primary.name
 
   # Performance Insights
-  performance_insights_enabled = true
+  performance_insights_enabled    = true
   performance_insights_kms_key_id = aws_kms_key.primary_rds.arn
 
   tags = merge(local.primary_tags, {
@@ -674,7 +674,7 @@ resource "aws_db_instance" "secondary" {
   max_allocated_storage = var.db_allocated_storage * 2
   storage_type          = "gp2"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.secondary_rds.arn
+  kms_key_id            = aws_kms_key.secondary_rds.arn
 
   # Database configuration
   db_name  = "tapdb"
@@ -689,25 +689,25 @@ resource "aws_db_instance" "secondary" {
 
   # Backup configuration
   backup_retention_period = var.backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  copy_tags_to_snapshot  = true
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+  copy_tags_to_snapshot   = true
 
   # Security configuration
-  deletion_protection = var.enable_deletion_protection
-  skip_final_snapshot = false
+  deletion_protection       = var.enable_deletion_protection
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.secondary_name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   # Monitoring configuration
-  monitoring_interval = 60
-  monitoring_role_arn = aws_iam_role.secondary_rds_enhanced_monitoring.arn
+  monitoring_interval             = 60
+  monitoring_role_arn             = aws_iam_role.secondary_rds_enhanced_monitoring.arn
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Parameter group
   parameter_group_name = aws_db_parameter_group.secondary.name
 
   # Performance Insights
-  performance_insights_enabled = true
+  performance_insights_enabled    = true
   performance_insights_kms_key_id = aws_kms_key.secondary_rds.arn
 
   tags = merge(local.secondary_tags, {
@@ -737,7 +737,7 @@ resource "aws_secretsmanager_secret" "primary_db_password" {
 }
 
 resource "aws_secretsmanager_secret_version" "primary_db_password" {
-  secret_id     = aws_secretsmanager_secret.primary_db_password.id
+  secret_id = aws_secretsmanager_secret.primary_db_password.id
   secret_string = jsonencode({
     username = aws_db_instance.primary.username
     password = random_password.primary_db_password.result
@@ -763,7 +763,7 @@ resource "aws_secretsmanager_secret" "secondary_db_password" {
 resource "aws_secretsmanager_secret_version" "secondary_db_password" {
   provider = aws.us_west_1
 
-  secret_id     = aws_secretsmanager_secret.secondary_db_password.id
+  secret_id = aws_secretsmanager_secret.secondary_db_password.id
   secret_string = jsonencode({
     username = aws_db_instance.secondary.username
     password = random_password.secondary_db_password.result
@@ -992,7 +992,7 @@ resource "aws_cloudwatch_log_group" "secondary_rds_slow_query" {
 resource "aws_cloudwatch_log_group" "security" {
   name              = "/aws/security/unauthorized"
   retention_in_days = 90
-  tags = merge(var.common_tags, { Type = "Security" })
+  tags              = merge(var.common_tags, { Type = "Security" })
 }
 
 resource "aws_sns_topic" "security_alerts" {
@@ -1212,11 +1212,11 @@ output "tap_project_environment" {
 }
 
 output "all_primary_subnets" {
-  value = concat(aws_subnet.primary_public[*].id, aws_subnet.primary_private[*].id)
+  value       = concat(aws_subnet.primary_public[*].id, aws_subnet.primary_private[*].id)
   description = "All subnet IDs in primary region"
 }
 
 output "all_secondary_subnets" {
-  value = concat(aws_subnet.secondary_public[*].id, aws_subnet.secondary_private[*].id)
+  value       = concat(aws_subnet.secondary_public[*].id, aws_subnet.secondary_private[*].id)
   description = "All subnet IDs in secondary region"
 }

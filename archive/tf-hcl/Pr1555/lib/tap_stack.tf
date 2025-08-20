@@ -202,7 +202,7 @@ resource "aws_iam_role_policy" "log_writer_policy" {
         Resource = "${aws_s3_bucket.logs_bucket.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-server-side-encryption" = "aws:kms"
+            "s3:x-amz-server-side-encryption"                = "aws:kms"
             "s3:x-amz-server-side-encryption-aws-kms-key-id" = aws_kms_key.logs_encryption_key.arn
           }
         }
@@ -305,8 +305,8 @@ resource "aws_cloudtrail" "security_trail" {
   s3_key_prefix  = "cloudtrail-logs"
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = ["kms.amazonaws.com", "rdsdata.amazonaws.com"]
 
     data_resource {

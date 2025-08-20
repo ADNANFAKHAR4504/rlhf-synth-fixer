@@ -243,10 +243,10 @@
 
 terraform {
   backend "s3" {
-    bucket         = "piplinebucketturingtask"
-    key            = "terraform.tfstate" # Path to state file in bucket
-    region         = "us-east-1"
-    encrypt        = true
+    bucket  = "piplinebucketturingtask"
+    key     = "terraform.tfstate" # Path to state file in bucket
+    region  = "us-east-1"
+    encrypt = true
   }
 }
 
@@ -256,7 +256,7 @@ data "aws_region" "name" {}
 
 output "aws_caller_identity" {
   value = data.aws_caller_identity.current.arn
-} 
+}
 
 # S3 Bucket
 resource "aws_s3_bucket" "staticfilesbucket" {
@@ -297,10 +297,10 @@ resource "aws_s3_bucket_versioning" "staticfilesbucket_versioning" {
 
 # Upload the index.html file to the S3 bucket
 resource "aws_s3_object" "index_html" {
-  bucket = aws_s3_bucket.staticfilesbucket.id
-  key    = "index.html"              # Object name in the bucket
-  source = "${path.module}/index.html" # Local file path
-  etag   = filemd5("${path.module}/index.html") # Forces update when file changes
+  bucket       = aws_s3_bucket.staticfilesbucket.id
+  key          = "index.html"                         # Object name in the bucket
+  source       = "${path.module}/index.html"          # Local file path
+  etag         = filemd5("${path.module}/index.html") # Forces update when file changes
   content_type = "text/html"
 }
 
@@ -366,7 +366,7 @@ resource "aws_cloudfront_distribution" "turing_distribution" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate  = false
+    cloudfront_default_certificate = false
   }
 }
 
@@ -390,7 +390,7 @@ resource "aws_s3_bucket_policy" "staticfilesbucket_policy" {
     ]
   })
 
-  depends_on = [ aws_cloudfront_distribution.turing_distribution ]
+  depends_on = [aws_cloudfront_distribution.turing_distribution]
 }
 
 # -----------------------
@@ -410,7 +410,7 @@ resource "aws_backup_plan" "s3_backup_plan" {
   rule {
     rule_name         = "daily-s3-backup"
     target_vault_name = aws_backup_vault.s3_backup_vault.name
-    schedule          = "cron(0 5 * * ? *)"  # Daily at 5 AM UTC
+    schedule          = "cron(0 5 * * ? *)" # Daily at 5 AM UTC
 
     lifecycle {
       delete_after = 30
@@ -425,8 +425,8 @@ resource "aws_iam_role" "backup_role" {
     Version = "2012-10-17",
     Statement = [
       {
-        Action    = "sts:AssumeRole",
-        Effect    = "Allow",
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
         Principal = {
           Service = "backup.amazonaws.com"
         }

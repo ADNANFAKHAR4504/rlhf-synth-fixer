@@ -10,7 +10,7 @@ resource "aws_secretsmanager_secret" "app_secrets" {
 }
 
 resource "aws_secretsmanager_secret_version" "app_secrets_version" {
-  secret_id     = aws_secretsmanager_secret.app_secrets.id
+  secret_id = aws_secretsmanager_secret.app_secrets.id
   secret_string = jsonencode({
     db_password = random_password.db_password.result
     api_key     = "production-api-key-placeholder"

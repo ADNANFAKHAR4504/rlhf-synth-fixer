@@ -166,9 +166,9 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
 
 # DynamoDB table for Terraform state locking
 resource "aws_dynamodb_table" "terraform_state_lock" {
-  name           = "${var.project_name}-terraform-state-lock"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "LockID"
+  name         = "${var.project_name}-terraform-state-lock"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
 
   attribute {
     name = "LockID"
@@ -201,7 +201,7 @@ resource "aws_s3_bucket" "sensitive_buckets" {
 resource "aws_s3_bucket_versioning" "sensitive_buckets" {
   count  = length(aws_s3_bucket.sensitive_buckets)
   bucket = aws_s3_bucket.sensitive_buckets[count.index].id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -245,7 +245,7 @@ data "aws_iam_policy_document" "sensitive_bucket_access" {
       "s3:ListBucket"
     ]
     resources = [for bucket in aws_s3_bucket.sensitive_buckets : bucket.arn]
-    
+
     # Restrict to specific IP ranges or VPC endpoints if needed
     condition {
       test     = "StringEquals"
@@ -327,13 +327,13 @@ data "aws_iam_policy_document" "sensitive_bucket_policy" {
 
   # Deny all access except to authorized users and roles
   statement {
-    sid       = "DenyAllExceptAuthorizedPrincipals"
-    effect    = "Deny"
+    sid    = "DenyAllExceptAuthorizedPrincipals"
+    effect = "Deny"
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-    actions   = ["s3:*"]
+    actions = ["s3:*"]
     resources = [
       aws_s3_bucket.sensitive_buckets[count.index].arn,
       "${aws_s3_bucket.sensitive_buckets[count.index].arn}/*"
@@ -352,13 +352,13 @@ data "aws_iam_policy_document" "sensitive_bucket_policy" {
 
   # Enforce SSL/TLS for all requests
   statement {
-    sid       = "DenyInsecureConnections"
-    effect    = "Deny"
+    sid    = "DenyInsecureConnections"
+    effect = "Deny"
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-    actions   = ["s3:*"]
+    actions = ["s3:*"]
     resources = [
       aws_s3_bucket.sensitive_buckets[count.index].arn,
       "${aws_s3_bucket.sensitive_buckets[count.index].arn}/*"
@@ -383,13 +383,13 @@ resource "aws_s3_bucket_policy" "sensitive_buckets" {
 data "aws_iam_policy_document" "terraform_state_bucket_policy" {
   # Deny all access except to the current AWS account
   statement {
-    sid       = "DenyAllExceptAccountRoot"
-    effect    = "Deny"
+    sid    = "DenyAllExceptAccountRoot"
+    effect = "Deny"
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-    actions   = ["s3:*"]
+    actions = ["s3:*"]
     resources = [
       aws_s3_bucket.terraform_state.arn,
       "${aws_s3_bucket.terraform_state.arn}/*"
@@ -404,13 +404,13 @@ data "aws_iam_policy_document" "terraform_state_bucket_policy" {
 
   # Enforce SSL/TLS for all requests
   statement {
-    sid       = "DenyInsecureConnections"
-    effect    = "Deny"
+    sid    = "DenyInsecureConnections"
+    effect = "Deny"
     principals {
       type        = "*"
       identifiers = ["*"]
     }
-    actions   = ["s3:*"]
+    actions = ["s3:*"]
     resources = [
       aws_s3_bucket.terraform_state.arn,
       "${aws_s3_bucket.terraform_state.arn}/*"
@@ -476,7 +476,7 @@ output "authorized_users_access_keys" {
   description = "Access keys for authorized users (sensitive)"
   value = {
     for idx, key in aws_iam_access_key.authorized_users_keys : var.authorized_user_names[idx] => {
-      access_key_id = key.id
+      access_key_id     = key.id
       secret_access_key = key.secret
     }
   }
@@ -515,7 +515,7 @@ output "backend_configuration" {
 # Example of how to configure the backend (add this to your backend configuration)
 output "backend_config_example" {
   description = "Example backend configuration block"
-  value = <<-EOT
+  value       = <<-EOT
     terraform {
       backend "s3" {
         bucket         = "${aws_s3_bucket.terraform_state.id}"
