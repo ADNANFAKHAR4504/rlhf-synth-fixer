@@ -300,6 +300,10 @@ resource "aws_apigatewayv2_stage" "tap_api_stage" {
   name        = "$default"
   auto_deploy = true
 
+  lifecycle {
+    ignore_changes = [name]
+  }
+
   tags = {
     Name        = "TAP API Gateway Stage"
     Environment = var.environment
@@ -455,10 +459,6 @@ resource "aws_wafv2_web_acl" "api_gateway_waf" {
   rule {
     name     = "RateLimitRule"
     priority = 1
-
-    override_action {
-      none {}
-    }
 
     statement {
       rate_based_statement {
