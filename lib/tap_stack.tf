@@ -453,7 +453,7 @@ resource "aws_db_instance" "primary" {
   provider = aws.primary
 
   # Basic Configuration
-  identifier = "mysql-primary-${var.environment_suffix}"
+  identifier = "mysql-primary-${var.environment_suffix}-v2"
   engine     = "mysql"
   #engine_version = "8.0.36"
   instance_class = var.db_instance_class
