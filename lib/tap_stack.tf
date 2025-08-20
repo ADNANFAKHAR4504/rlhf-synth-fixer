@@ -140,7 +140,7 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
   
   # VPC and subnet IDs
-  vpc_id = var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id
+  vpc_id = var.vpc_id != "" ? var.vpc_id : aws_vpc.main[0].id
   private_subnet_ids = length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : aws_subnet.default_private[*].id
   public_subnet_ids = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : aws_subnet.default_public[*].id
 }
@@ -158,18 +158,17 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Auto-detect VPC and subnets if not provided
-data "aws_vpc" "default" {
+# Create VPC if not provided
+resource "aws_vpc" "main" {
   count = var.vpc_id == "" ? 1 : 0
-  default = true
-}
-
-data "aws_subnets" "all" {
-  count = length(var.private_subnet_ids) == 0 ? 1 : 0
-  filter {
-    name   = "vpc-id"
-    values = [var.vpc_id != "" ? var.vpc_id : data.aws_vpc.default[0].id]
-  }
+  
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-vpc"
+  })
 }
 
 # Create default subnets if none exist
@@ -395,6 +394,10 @@ resource "aws_kms_alias" "main" {
 # S3 Buckets
 resource "random_id" "bucket_suffix" {
   byte_length = 4
+}
+
+resource "random_id" "iam_suffix" {
+  byte_length = 8
 }
 
 # Access Logs Bucket
@@ -823,7 +826,7 @@ resource "aws_iam_role_policy" "cloudtrail" {
 
 resource "aws_iam_role" "ec2_role" {
   # Use unique name to prevent conflicts
-  name = "prod-ec2-role-${random_id.bucket_suffix.hex}-${formatdate("YYYYMMDD", timestamp())}"
+  name = "prod-ec2-role-${random_id.iam_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -854,7 +857,7 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm_core" {
 
 resource "aws_iam_instance_profile" "ec2_profile" {
   # Use unique name to prevent conflicts
-  name = "prod-ec2-instance-profile-${random_id.bucket_suffix.hex}-${formatdate("YYYYMMDD", timestamp())}"
+  name = "prod-ec2-instance-profile-${random_id.iam_suffix.hex}"
   role = aws_iam_role.ec2_role.name
 
   # Prevent cycle when replacing due to name changes
@@ -901,7 +904,10 @@ resource "aws_cloudtrail" "main" {
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:${data.aws_partition.current.partition}:s3:::*/"]
+      values = [
+        "${aws_s3_bucket.app_data.arn}/*",
+        "${aws_s3_bucket.cloudtrail.arn}/*"
+      ]
     }
   }
 
