@@ -21,5 +21,11 @@
     "Config",
     "SSM"
   ],
-  "subtask": "Security and Compliance Implementation"
+  "subtask": "Security and Compliance Implementation",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ashish-a-turing",
+  "dockerS3Location": ""
 }
