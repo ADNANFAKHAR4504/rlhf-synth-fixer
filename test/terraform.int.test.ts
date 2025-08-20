@@ -37,8 +37,8 @@ describe('Terraform Infrastructure Integration Tests', () => {
       expect(vpc.State).toBe('available');
       
       // Check DNS settings
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      expect((vpc as any).EnableDnsHostnames).toBe(true);
+      expect((vpc as any).EnableDnsSupport).toBe(true);
       
       // Check tags
       const tags = vpc.Tags || [];
