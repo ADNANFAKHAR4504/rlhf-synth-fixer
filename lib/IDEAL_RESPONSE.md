@@ -4,7 +4,7 @@
 # =============================================================================
 # VARIABLES
 # =============================================================================
-
+```
 variable "aws_region" {
   description = "Primary AWS region"
   type        = string
@@ -1464,3 +1464,4 @@ output "secondary_db_sg_arn" {
   value       = aws_security_group.secondary_db.arn
   description = "Secondary Database Security Group ARN"
 }
+```
