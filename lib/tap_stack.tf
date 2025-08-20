@@ -9,6 +9,12 @@ locals {
   s3_name_tag        = "secure-s3-${local.env_suffix}"              # <--- uses suffix
 }
 
+resource "random_string" "suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
   tags = {
@@ -294,7 +300,7 @@ resource "random_password" "rds_password" {
 }
 
 resource "aws_secretsmanager_secret" "rds_password" {
-  name        = "secure-rds-password-${local.env_suffix}"                   # <--- uses suffix
+  name        = "secure-rds-password-${local.env_suffix}-${random_string.suffix.result}" # <--- now always unique!
   description = "RDS instance password for secure production environment"
   tags        = merge(var.bucket_tags, { Environment = local.env_suffix })  # <--- uses suffix
 }
@@ -390,4 +396,4 @@ output "vpc_id" {
 
 output "vpc_cidr_block" {
   value = aws_vpc.main.cidr_block
-} 
+}
