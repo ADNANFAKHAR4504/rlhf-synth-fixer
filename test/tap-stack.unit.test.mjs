@@ -145,10 +145,17 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('should configure API Gateway throttling', () => {
-      template.hasResourceProperties('AWS::ApiGateway::Stage', {
-        ThrottleBurstLimit: 2000,
-        ThrottleRateLimit: 1000,
-      });
+      const stages = template.findResources('AWS::ApiGateway::Stage');
+      const stage = Object.values(stages)[0];
+
+      // Check that one of the method settings has throttling configured
+      const hasThrottling = stage.Properties.MethodSettings.some(
+        setting =>
+          setting.ThrottlingRateLimit === 1000 &&
+          setting.ThrottlingBurstLimit === 2000
+      );
+
+      expect(hasThrottling).toBe(true);
     });
 
     test('should create health check endpoint', () => {
