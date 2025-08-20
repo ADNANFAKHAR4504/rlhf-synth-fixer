@@ -9,7 +9,7 @@
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "Security Configuration",
-    "General Infrastructure Tooling QA", 
+    "General Infrastructure Tooling QA",
     "Network Configuration",
     "Database Management",
     "Access Control",
@@ -18,7 +18,7 @@
   "training_quality": 9,
   "aws_services": [
     "IAM",
-    "VPC", 
+    "VPC",
     "EC2",
     "RDS",
     "S3",
@@ -32,5 +32,11 @@
     "SNS",
     "Lambda",
     "ELB"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "inframarauder",
+  "dockerS3Location": ""
 }
