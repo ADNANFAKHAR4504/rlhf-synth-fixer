@@ -1309,7 +1309,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
                 },
                 "VPCSecurityGroups": [
                     {
@@ -1336,8 +1336,6 @@
                         "Arn"
                     ]
                 },
-                "EnablePerformanceInsights": true,
-                "PerformanceInsightsRetentionPeriod": 7,
                 "AutoMinorVersionUpgrade": true,
                 "CopyTagsToSnapshot": true,
                 "Tags": [
