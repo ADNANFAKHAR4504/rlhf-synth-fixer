@@ -400,7 +400,7 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
       }
     });
 
-    // ---------- Replaced ALB test: listener-aware & opt-in socket probe ----------
+    // ---------- ALB test: listener-aware & opt-in socket probe ----------
     // helpers
     const resolveDns = async (host: string) => {
       await dns.promises.lookup(host);
@@ -439,7 +439,14 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
       await elbv2.send(new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] }));
 
       const ls = await elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: lbArn }));
-      const listeners = (ls.Listeners || []).map(l => ({ port: l.Port, proto: l.Protocol }));
+
+      type SimpleListener = { Port?: number; Protocol?: string };
+      const listeners: SimpleListener[] = (ls.Listeners ?? []).map((l: any) => ({
+        Port: l.Port as number | undefined,
+        Protocol: typeof l.Protocol === 'string'
+          ? l.Protocol
+          : (l.Protocol ? String(l.Protocol) : undefined),
+      }));
 
       if (!listeners.length) {
         console.log('ALB has no listeners; DNS resolved, skipping socket probe (this is OK).');
@@ -455,8 +462,8 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
       }
 
       // Prefer HTTPS, else HTTP
-      const httpsL = listeners.find(l => l.proto === 'HTTPS' || l.port === 443);
-      const httpL  = listeners.find(l => l.proto === 'HTTP'  || l.port === 80);
+      const httpsL = listeners.find((l: SimpleListener) => l.Protocol === 'HTTPS' || l.Port === 443);
+      const httpL  = listeners.find((l: SimpleListener) => l.Protocol === 'HTTP'  || l.Port === 80);
       const target = httpsL ?? httpL;
 
       if (!target) {
@@ -466,7 +473,7 @@ describe('TapStack CloudFormation Template (integration tests)', () => {
       }
 
       try {
-        const status = await httpsHead(dnsName, Number(target.port!));
+        const status = await httpsHead(dnsName, Number(target.Port!));
         expect(status).toBeGreaterThanOrEqual(200);
         expect(status).toBeLessThan(600);
       } catch (e) {
