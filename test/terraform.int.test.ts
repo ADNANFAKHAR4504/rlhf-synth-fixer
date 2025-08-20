@@ -255,7 +255,7 @@ describe("Integration: CloudTrail (logs to S3 + CloudWatch)", () => {
     expect(t?.S3BucketName).toBe(trailBucket);
     expect(t?.CloudWatchLogsLogGroupArn).toContain(cloudTrailLogGroupName);
     // Verify KMS encryption
-    expect(t?.KMSKeyId).toBe(kmsKeyArn);
+    expect(t?.KmsKeyId).toBe(kmsKeyArn);
     // Verify it includes global service events
     expect(t?.IncludeGlobalServiceEvents).toBe(true);
   });
