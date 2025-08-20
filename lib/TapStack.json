@@ -364,9 +364,85 @@
         }
       }
     },
+    "PublicSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for resources in public subnets",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTP traffic from internet"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTPS traffic from internet"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "tap-public-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PrivateSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for resources in private subnets",
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "-1",
+            "SourceSecurityGroupId": {
+              "Ref": "PublicSecurityGroup"
+            },
+            "Description": "Allow all traffic from public security group"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "tap-private-sg-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
     "ArtifactsBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
+        "BucketName": {
+          "Fn::Sub": "tap-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+        },
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
@@ -621,6 +697,28 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-PrivateInstanceProfileArn"
+        }
+      }
+    },
+    "PublicSecurityGroupId": {
+      "Description": "ID of the security group for public subnet resources",
+      "Value": {
+        "Ref": "PublicSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PublicSecurityGroupId"
+        }
+      }
+    },
+    "PrivateSecurityGroupId": {
+      "Description": "ID of the security group for private subnet resources",
+      "Value": {
+        "Ref": "PrivateSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PrivateSecurityGroupId"
         }
       }
     }

@@ -3,7 +3,7 @@ import {
   DescribeStacksCommand,
 } from '@aws-sdk/client-cloudformation';
 import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeRouteTablesCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeRouteTablesCommand, DescribeSecurityGroupsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { GetBucketVersioningCommand, GetPublicAccessBlockCommand, S3Client } from '@aws-sdk/client-s3';
 
 const region = process.env.AWS_REGION || 'us-east-1';
@@ -146,5 +146,60 @@ describe('TapStack live integration tests', () => {
       );
       expect(hasDefaultToIgw).toBe(true);
     }
+  });
+
+  test('Security groups exist and have correct configuration', async () => {
+    if (skipIfNoStack()) return;
+    const publicSgId = outputs['PublicSecurityGroupId'];
+    const privateSgId = outputs['PrivateSecurityGroupId'];
+    const vpcId = outputs['VpcId'];
+    
+    expect(publicSgId).toBeTruthy();
+    expect(privateSgId).toBeTruthy();
+    
+    const ec2 = new EC2Client({ region });
+    
+    // Check public security group
+    const publicSgResp = await ec2.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [publicSgId] })
+    );
+    console.log('Public SecurityGroup:', publicSgResp.SecurityGroups);
+    const publicSg = publicSgResp.SecurityGroups?.[0];
+    expect(publicSg?.VpcId).toBe(vpcId);
+    expect(publicSg?.GroupName).toContain('PublicSecurityGroup');
+    
+    // Verify HTTP and HTTPS ingress rules
+    const ingressRules = publicSg?.IpPermissions || [];
+    const httpRule = ingressRules.find(rule => rule.FromPort === 80 && rule.ToPort === 80);
+    const httpsRule = ingressRules.find(rule => rule.FromPort === 443 && rule.ToPort === 443);
+    expect(httpRule).toBeTruthy();
+    expect(httpsRule).toBeTruthy();
+    
+    // Check private security group
+    const privateSgResp = await ec2.send(
+      new DescribeSecurityGroupsCommand({ GroupIds: [privateSgId] })
+    );
+    console.log('Private SecurityGroup:', privateSgResp.SecurityGroups);
+    const privateSg = privateSgResp.SecurityGroups?.[0];
+    expect(privateSg?.VpcId).toBe(vpcId);
+    expect(privateSg?.GroupName).toContain('PrivateSecurityGroup');
+    
+    // Verify private SG allows traffic from public SG
+    const privateIngressRules = privateSg?.IpPermissions || [];
+    const hasPublicSgIngress = privateIngressRules.some(rule =>
+      rule.UserIdGroupPairs?.some(pair => pair.GroupId === publicSgId)
+    );
+    expect(hasPublicSgIngress).toBe(true);
+  });
+
+  test('S3 bucket name follows unique naming pattern', async () => {
+    if (skipIfNoStack()) return;
+    const bucketName = outputs['ArtifactsBucketName'];
+    expect(bucketName).toBeTruthy();
+    
+    // Verify bucket name pattern: tap-artifacts-{env}-{account}-{region}
+    const namePattern = /^tap-artifacts-\w+-\d{12}-[\w-]+$/;
+    expect(bucketName).toMatch(namePattern);
+    console.log('S3 Bucket Name Pattern Verified:', bucketName);
   });
 });

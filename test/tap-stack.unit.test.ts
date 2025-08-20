@@ -123,6 +123,48 @@ describe('TapStack CloudFormation Template (Unit)', () => {
     });
   });
 
+  describe('Security Groups', () => {
+    test('should include security groups for public and private subnets', () => {
+      const publicSG = template.Resources.PublicSecurityGroup;
+      const privateSG = template.Resources.PrivateSecurityGroup;
+      
+      expect(publicSG).toBeDefined();
+      expect(publicSG.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(publicSG.Properties.GroupDescription).toBe('Security group for resources in public subnets');
+      expect(publicSG.Properties.VpcId).toEqual({ Ref: 'VPC' });
+      
+      expect(privateSG).toBeDefined();
+      expect(privateSG.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(privateSG.Properties.GroupDescription).toBe('Security group for resources in private subnets');
+      expect(privateSG.Properties.VpcId).toEqual({ Ref: 'VPC' });
+    });
+
+    test('public security group should allow HTTP/HTTPS ingress', () => {
+      const publicSG = template.Resources.PublicSecurityGroup;
+      const ingress = publicSG.Properties.SecurityGroupIngress;
+      
+      const httpRule = ingress.find((rule: any) => rule.FromPort === 80);
+      const httpsRule = ingress.find((rule: any) => rule.FromPort === 443);
+      
+      expect(httpRule).toBeDefined();
+      expect(httpRule.IpProtocol).toBe('tcp');
+      expect(httpRule.CidrIp).toBe('0.0.0.0/0');
+      
+      expect(httpsRule).toBeDefined();
+      expect(httpsRule.IpProtocol).toBe('tcp');
+      expect(httpsRule.CidrIp).toBe('0.0.0.0/0');
+    });
+
+    test('private security group should allow traffic from public security group', () => {
+      const privateSG = template.Resources.PrivateSecurityGroup;
+      const ingress = privateSG.Properties.SecurityGroupIngress;
+      
+      expect(ingress).toHaveLength(1);
+      expect(ingress[0].IpProtocol).toBe('-1');
+      expect(ingress[0].SourceSecurityGroupId).toEqual({ Ref: 'PublicSecurityGroup' });
+    });
+  });
+
   describe('S3 Bucket Security', () => {
     test('ArtifactsBucket must have versioning enabled and security controls', () => {
       const bucket = template.Resources.ArtifactsBucket;
@@ -137,6 +179,13 @@ describe('TapStack CloudFormation Template (Unit)', () => {
         bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
           .ServerSideEncryptionByDefault.SSEAlgorithm
       ).toBe('AES256');
+    });
+
+    test('ArtifactsBucket must have unique deterministic name', () => {
+      const bucket = template.Resources.ArtifactsBucket;
+      expect(bucket.Properties.BucketName).toEqual({
+        'Fn::Sub': 'tap-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+      });
     });
   });
 
@@ -209,6 +258,8 @@ describe('TapStack CloudFormation Template (Unit)', () => {
         'ArtifactsBucketName',
         'PrivateInstanceRoleArn',
         'PrivateInstanceProfileArn',
+        'PublicSecurityGroupId',
+        'PrivateSecurityGroupId',
       ];
       expectedOutputs.forEach(name =>
         expect(template.Outputs[name]).toBeDefined()
@@ -226,6 +277,12 @@ describe('TapStack CloudFormation Template (Unit)', () => {
       });
       expect(template.Outputs.PrivateInstanceProfileArn.Value).toEqual({
         'Fn::GetAtt': ['PrivateInstanceProfile', 'Arn'],
+      });
+      expect(template.Outputs.PublicSecurityGroupId.Value).toEqual({
+        Ref: 'PublicSecurityGroup',
+      });
+      expect(template.Outputs.PrivateSecurityGroupId.Value).toEqual({
+        Ref: 'PrivateSecurityGroup',
       });
     });
   });
