@@ -3,6 +3,7 @@
 ########################
 
 resource "aws_cloudtrail" "main" {
+  provider = aws.primary
   name                          = "${var.name_prefix}-${var.environment}-cloudtrail"
   s3_bucket_name                = aws_s3_bucket.this.id
   include_global_service_events = true
@@ -20,6 +21,7 @@ resource "aws_cloudtrail" "main" {
 }
 
 resource "aws_cloudwatch_log_group" "cloudtrail" {
+  provider = aws.primary
   name              = "/aws/cloudtrail/${var.name_prefix}-${var.environment}"
   retention_in_days = 90
   tags = {
