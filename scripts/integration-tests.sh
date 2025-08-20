@@ -27,7 +27,14 @@ if [ "$LANGUAGE" = "py" ]; then
   pipenv run test-py-integration
 else
   echo "✅ Running default integration tests..."
-  npm run test:integration
+  # Check if we're in CI with live infrastructure deployed
+  if [ "$CI" = "1" ] && [ -f "cfn-outputs/flat-outputs.json" ]; then
+    echo "✅ Live infrastructure detected in CI, running live infrastructure tests..."
+    npm run test:live
+  else
+    echo "✅ No live infrastructure detected, running standard integration tests..."
+    npm run test:integration
+  fi
 fi
 
 echo "Integration tests completed successfully"
