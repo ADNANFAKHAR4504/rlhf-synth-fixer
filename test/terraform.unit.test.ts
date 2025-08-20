@@ -247,7 +247,7 @@ describe("IaC AWS Nova Model - Enterprise Security Validation", () => {
     test("14. AWS Config service IAM role with managed policy", () => {
       expect(stackContent).toMatch(/resource\s+"aws_iam_role"\s+"config_role"/);
       expect(stackContent).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"config_policy"/);
-      expect(stackContent).toMatch(/arn:aws:iam::aws:policy\/service-role\/ConfigRole/);
+      expect(stackContent).toMatch(/arn:aws:iam::aws:policy\/service-role\/AWS_ConfigRole/);
     });
 
     test("15. VPC Flow Logs IAM role with specific permissions", () => {

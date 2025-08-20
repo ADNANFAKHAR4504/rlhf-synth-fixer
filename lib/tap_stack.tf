@@ -35,6 +35,7 @@ locals {
 
   vpc_cidr = "10.0.0.0/16"
   azs      = ["${var.aws_region}a", "${var.aws_region}b", "${var.aws_region}c"]
+  name_suffix = var.environment
 }
 
 # Data sources
@@ -44,10 +45,6 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Random ID for unique naming
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
-}
 
 # KMS Keys for encryption
 resource "aws_kms_key" "main" {
@@ -97,7 +94,7 @@ resource "aws_kms_key" "main" {
         Sid    = "Allow CloudWatch Logs to use the key"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.${data.aws_region.current.id}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -115,7 +112,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${var.project_name}-main"
+  name          = "alias/${var.project_name}-main-${local.name_suffix}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -166,7 +163,7 @@ resource "aws_kms_key" "dnssec" {
 }
 
 resource "aws_kms_alias" "dnssec" {
-  name          = "alias/${var.project_name}-dnssec"
+  name          = "alias/${var.project_name}-dnssec-${local.name_suffix}"
   target_key_id = aws_kms_key.dnssec.key_id
 }
 
@@ -192,7 +189,7 @@ resource "aws_flow_log" "vpc_flow_log" {
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/flowlogs/${var.project_name}"
+  name              = "/aws/vpc/flowlogs/${var.project_name}-${local.name_suffix}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
 
@@ -200,7 +197,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_log" {
 }
 
 resource "aws_iam_role" "flow_log_role" {
-  name = "${var.project_name}-flow-log-role"
+  name = "${var.project_name}-flow-log-role-${local.name_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -219,7 +216,7 @@ resource "aws_iam_role" "flow_log_role" {
 }
 
 resource "aws_iam_role_policy" "flow_log_policy" {
-  name = "${var.project_name}-flow-log-policy"
+  name = "${var.project_name}-flow-log-policy-${local.name_suffix}"
   role = aws_iam_role.flow_log_role.id
 
   policy = jsonencode({
@@ -279,7 +276,7 @@ resource "aws_subnet" "database" {
 }
 
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
+  name       = "${var.project_name}-db-subnet-group-${local.name_suffix}"
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(local.common_tags, {
@@ -302,7 +299,7 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-nat-eip-${count.index + 1}-${random_id.bucket_suffix.hex}"
+    Name = "${var.project_name}-nat-eip-${count.index + 1}-${local.name_suffix}"
   })
 }
 
@@ -358,7 +355,7 @@ resource "aws_route_table_association" "private" {
 
 # Enhanced Security Groups
 resource "aws_security_group" "web" {
-  name_prefix = "${var.project_name}-web-"
+  name_prefix = "${var.project_name}-web-${local.name_suffix}-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for web tier"
 
@@ -393,7 +390,7 @@ resource "aws_security_group" "web" {
 }
 
 resource "aws_security_group" "app" {
-  name_prefix = "${var.project_name}-app-"
+  name_prefix = "${var.project_name}-app-${local.name_suffix}-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for application tier"
 
@@ -420,7 +417,7 @@ resource "aws_security_group" "app" {
 }
 
 resource "aws_security_group" "database" {
-  name_prefix = "${var.project_name}-db-"
+  name_prefix = "${var.project_name}-db-${local.name_suffix}-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for database tier"
 
@@ -540,7 +537,7 @@ resource "aws_network_acl_association" "private" {
 
 # Enhanced WAF with latest security rules
 resource "aws_wafv2_web_acl" "main" {
-  name  = "${var.project_name}-waf"
+  name  = "${var.project_name}-waf-${local.name_suffix}"
   scope = "REGIONAL"
 
   default_action {
@@ -640,7 +637,7 @@ resource "aws_wafv2_web_acl" "main" {
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}WAF"
+    metric_name                = "${var.project_name}WAF${local.name_suffix}"
     sampled_requests_enabled   = true
   }
 
@@ -659,7 +656,7 @@ resource "aws_route53_zone" "main" {
 resource "aws_route53_key_signing_key" "main" {
   hosted_zone_id             = aws_route53_zone.main.id
   key_management_service_arn = aws_kms_key.dnssec.arn
-  name                       = "${var.project_name}-ksk"
+  name                       = "${var.project_name}-ksk-${local.name_suffix}"
 }
 
 resource "aws_route53_hosted_zone_dnssec" "main" {
@@ -668,7 +665,7 @@ resource "aws_route53_hosted_zone_dnssec" "main" {
 
 # Enhanced S3 Configuration
 resource "aws_s3_bucket" "main" {
-  bucket = "${var.project_name}-${random_id.bucket_suffix.hex}"
+  bucket = "${var.project_name}-${local.name_suffix}"
 
   tags = local.common_tags
 }
@@ -712,7 +709,7 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
 
 # CloudTrail S3 bucket for logging
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "${var.project_name}-cloudtrail-${random_id.bucket_suffix.hex}"
+  bucket = "${var.project_name}-cloudtrail-${local.name_suffix}"
 
   tags = local.common_tags
 }
@@ -779,13 +776,13 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # Enhanced IAM with MFA enforcement
 resource "aws_iam_user" "admin_user" {
-  name = "${var.project_name}-admin"
+  name = "${var.project_name}-admin-${local.name_suffix}"
 
   tags = local.common_tags
 }
 
 resource "aws_iam_policy" "mfa_enforcement" {
-  name        = "${var.project_name}-mfa-enforcement"
+  name        = "${var.project_name}-mfa-enforcement-${local.name_suffix}"
   description = "Policy to enforce MFA for all operations"
 
   policy = jsonencode({
@@ -855,7 +852,7 @@ resource "aws_iam_user_policy_attachment" "mfa_enforcement" {
 
 # Application IAM role with least privilege
 resource "aws_iam_role" "app_role" {
-  name = "${var.project_name}-app-role"
+  name = "${var.project_name}-app-role-${local.name_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -879,7 +876,7 @@ resource "aws_iam_role" "app_role" {
 }
 
 resource "aws_iam_policy" "app_policy" {
-  name        = "${var.project_name}-app-policy"
+  name        = "${var.project_name}-app-policy-${local.name_suffix}"
   description = "Policy for application with least privilege access"
 
   policy = jsonencode({
@@ -938,13 +935,13 @@ resource "aws_iam_role_policy_attachment" "app_policy_attachment" {
 }
 
 resource "aws_iam_instance_profile" "app_profile" {
-  name = "${var.project_name}-app-profile"
+  name = "${var.project_name}-app-profile-${local.name_suffix}"
   role = aws_iam_role.app_role.name
 }
 
 # Enhanced CloudTrail for comprehensive logging
 resource "aws_cloudtrail" "main" {
-  name           = "${var.project_name}-trail"
+  name           = "${var.project_name}-trail-${local.name_suffix}"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
   kms_key_id     = aws_kms_key.main.arn
 
@@ -973,7 +970,7 @@ resource "aws_cloudtrail" "main" {
 
 # Config S3 bucket
 resource "aws_s3_bucket" "config" {
-  bucket = "${var.project_name}-config-${random_id.bucket_suffix.hex}"
+  bucket = "${var.project_name}-config-${local.name_suffix}"
 
   tags = local.common_tags
 }
@@ -1054,12 +1051,12 @@ resource "aws_s3_bucket_policy" "config" {
 
 # Enhanced AWS Config for compliance monitoring
 resource "aws_config_delivery_channel" "main" {
-  name           = "${var.project_name}-config-delivery-channel"
+  name           = "${var.project_name}-config-delivery-channel-${local.name_suffix}"
   s3_bucket_name = aws_s3_bucket.config.bucket
 }
 
 resource "aws_config_configuration_recorder" "main" {
-  name     = "${var.project_name}-recorder"
+  name     = "${var.project_name}-recorder-${local.name_suffix}"
   role_arn = aws_iam_role.config_role.arn
 
   recording_group {
@@ -1071,7 +1068,7 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_iam_role" "config_role" {
-  name = "${var.project_name}-config-role"
+  name = "${var.project_name}-config-role-${local.name_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1096,7 +1093,7 @@ resource "aws_iam_role_policy_attachment" "config_policy" {
 
 # AWS Config Rules for compliance
 resource "aws_config_config_rule" "root_access_key_check" {
-  name = "${var.project_name}-root-access-key-check"
+  name = "${var.project_name}-root-access-key-check-${local.name_suffix}"
 
   source {
     owner             = "AWS"
@@ -1107,7 +1104,7 @@ resource "aws_config_config_rule" "root_access_key_check" {
 }
 
 resource "aws_config_config_rule" "mfa_enabled_for_iam_console_access" {
-  name = "${var.project_name}-mfa-enabled-for-iam-console-access"
+  name = "${var.project_name}-mfa-enabled-for-iam-console-access-${local.name_suffix}"
 
   source {
     owner             = "AWS"
@@ -1118,7 +1115,7 @@ resource "aws_config_config_rule" "mfa_enabled_for_iam_console_access" {
 }
 
 resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
-  name = "${var.project_name}-s3-bucket-public-read-prohibited"
+  name = "${var.project_name}-s3-bucket-public-read-prohibited-${local.name_suffix}"
 
   source {
     owner             = "AWS"
@@ -1129,7 +1126,7 @@ resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
 }
 
 resource "aws_config_config_rule" "encrypted_volumes" {
-  name = "${var.project_name}-encrypted-volumes"
+  name = "${var.project_name}-encrypted-volumes-${local.name_suffix}"
 
   source {
     owner             = "AWS"
@@ -1141,7 +1138,7 @@ resource "aws_config_config_rule" "encrypted_volumes" {
 
 # CloudWatch Dashboard for monitoring
 resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "${var.project_name}-dashboard"
+  dashboard_name = "${var.project_name}-dashboard-${local.name_suffix}"
 
   dashboard_body = jsonencode({
     widgets = [
@@ -1187,7 +1184,7 @@ resource "aws_cloudwatch_dashboard" "main" {
 
 # CloudWatch Alarms for security monitoring
 resource "aws_cloudwatch_metric_alarm" "high_error_rate" {
-  alarm_name          = "${var.project_name}-high-error-rate"
+  alarm_name          = "${var.project_name}-high-error-rate-${local.name_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "5XXError"
@@ -1206,7 +1203,7 @@ resource "aws_cloudwatch_metric_alarm" "high_error_rate" {
 }
 
 resource "aws_sns_topic" "alerts" {
-  name              = "${var.project_name}-alerts"
+  name              = "${var.project_name}-alerts-${local.name_suffix}"
   kms_master_key_id = aws_kms_key.main.arn
 
   tags = local.common_tags
@@ -1276,7 +1273,7 @@ resource "aws_vpc_endpoint" "kms" {
 }
 
 resource "aws_security_group" "vpc_endpoint" {
-  name_prefix = "${var.project_name}-vpc-endpoint-"
+  name_prefix = "${var.project_name}-vpc-endpoint-${local.name_suffix}-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for VPC endpoints"
 
@@ -1399,7 +1396,7 @@ output "iam_instance_profile_name" {
 
 output "cloudwatch_dashboard_url" {
   description = "CloudWatch dashboard URL"
-  value       = "https://${data.aws_region.current.id}.console.aws.amazon.com/cloudwatch/home?region=${data.aws_region.current.id}#dashboards:name=${var.project_name}-dashboard"
+  value       = "https://${data.aws_region.current.id}.console.aws.amazon.com/cloudwatch/home?region=${data.aws_region.current.id}#dashboards:name=${var.project_name}-dashboard-${local.name_suffix}"
 }
 
 output "guardduty_detector_id" {
