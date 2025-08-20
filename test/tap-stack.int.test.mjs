@@ -3,26 +3,26 @@ import fs from 'fs';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { EC2Client, DescribeVpcsCommand, DescribeFlowLogsCommand } from '@aws-sdk/client-ec2';
-import { APIGatewayClient, GetRestApiCommand } from '@aws-sdk/client-api-gateway';
-
-// Mock AWS clients for testing without actual deployment
-jest.mock('@aws-sdk/client-ssm');
-jest.mock('@aws-sdk/client-s3');
-jest.mock('@aws-sdk/client-rds');
-jest.mock('@aws-sdk/client-ec2');
-jest.mock('@aws-sdk/client-api-gateway');
+import {
+  EC2Client,
+  DescribeVpcsCommand,
+  DescribeFlowLogsCommand,
+} from '@aws-sdk/client-ec2';
+import {
+  APIGatewayClient,
+  GetRestApiCommand,
+} from '@aws-sdk/client-api-gateway';
 
 // Mock the cfn-outputs file since we're not actually deploying
 const mockOutputs = {
   ApiEndpoint: 'https://test123.execute-api.us-east-1.amazonaws.com/prod/',
   DataBucketName: 'prod-sec-data-123456789012-us-east-1',
   DatabaseEndpoint: 'db-tap-postgres.cluster-xyz.us-east-1.rds.amazonaws.com',
-  VpcId: 'vpc-12345678'
+  VpcId: 'vpc-12345678',
 };
 
 // Mock fs.readFileSync to return our mock outputs
-jest.spyOn(fs, 'readFileSync').mockImplementation((path) => {
+jest.spyOn(fs, 'readFileSync').mockImplementation(path => {
   if (path.includes('flat-outputs.json')) {
     return JSON.stringify(mockOutputs);
   }
@@ -36,7 +36,9 @@ describe('TAP Infrastructure Integration Tests', () => {
 
   beforeAll(() => {
     try {
-      outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+      outputs = JSON.parse(
+        fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+      );
     } catch (error) {
       // If outputs file doesn't exist, use mock outputs
       outputs = mockOutputs;
@@ -50,37 +52,34 @@ describe('TAP Infrastructure Integration Tests', () => {
   describe('S3 Bucket Configuration', () => {
     test('should verify S3 data bucket exists and is accessible', async () => {
       const s3Client = new S3Client({ region: 'us-east-1' });
-      const mockSend = jest.fn().mockResolvedValue({});
-      s3Client.send = mockSend;
 
       const command = new HeadBucketCommand({
-        Bucket: outputs.DataBucketName
+        Bucket: outputs.DataBucketName,
       });
 
-      await s3Client.send(command);
+      // This will make an actual AWS call when integration tests run
+      await expect(s3Client.send(command)).resolves.not.toThrow();
 
-      expect(mockSend).toHaveBeenCalledWith(command);
       expect(outputs.DataBucketName).toMatch(/^prod-sec-data-/);
     });
 
     test('should verify bucket name follows naming convention', () => {
-      expect(outputs.DataBucketName).toMatch(/^prod-sec-data-\d{12}-us-east-1$/);
+      expect(outputs.DataBucketName).toMatch(
+        /^prod-sec-data-\d{12}-us-east-1$/
+      );
     });
   });
 
   describe('RDS Database Configuration', () => {
     test('should verify RDS instance exists and is encrypted', async () => {
       const rdsClient = new RDSClient({ region: 'us-east-1' });
-      const mockSend = jest.fn().mockResolvedValue({
-        DBInstances: [{
-          DBInstanceIdentifier: 'db-tap-postgres',
-          StorageEncrypted: true,
-          Engine: 'postgres'
-        }]
-      });
-      rdsClient.send = mockSend;
 
-      const response = await rdsClient.send(new DescribeDBInstancesCommand({}));
+      // This will make an actual AWS call when integration tests run
+      const response = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: 'db-tap-postgres',
+        })
+      );
 
       expect(response.DBInstances[0].StorageEncrypted).toBe(true);
       expect(response.DBInstances[0].Engine).toBe('postgres');
@@ -95,18 +94,13 @@ describe('TAP Infrastructure Integration Tests', () => {
   describe('VPC and Networking Configuration', () => {
     test('should verify VPC exists', async () => {
       const ec2Client = new EC2Client({ region: 'us-east-1' });
-      const mockSend = jest.fn().mockResolvedValue({
-        Vpcs: [{
-          VpcId: outputs.VpcId,
-          State: 'available',
-          CidrBlock: '10.0.0.0/16'
-        }]
-      });
-      ec2Client.send = mockSend;
 
-      const response = await ec2Client.send(new DescribeVpcsCommand({
-        VpcIds: [outputs.VpcId]
-      }));
+      // This will make an actual AWS call when integration tests run
+      const response = await ec2Client.send(
+        new DescribeVpcsCommand({
+          VpcIds: [outputs.VpcId],
+        })
+      );
 
       expect(response.Vpcs[0].State).toBe('available');
       expect(response.Vpcs[0].CidrBlock).toBe('10.0.0.0/16');
@@ -114,24 +108,18 @@ describe('TAP Infrastructure Integration Tests', () => {
 
     test('should verify VPC Flow Logs are enabled', async () => {
       const ec2Client = new EC2Client({ region: 'us-east-1' });
-      const mockSend = jest.fn().mockResolvedValue({
-        FlowLogs: [{
-          FlowLogId: 'fl-12345678',
-          ResourceId: outputs.VpcId,
-          TrafficType: 'ALL',
-          FlowLogStatus: 'ACTIVE'
-        }]
-      });
-      ec2Client.send = mockSend;
 
-      const response = await ec2Client.send(new DescribeFlowLogsCommand({
-        Filter: [
-          {
-            Name: 'resource-id',
-            Values: [outputs.VpcId]
-          }
-        ]
-      }));
+      // This will make an actual AWS call when integration tests run
+      const response = await ec2Client.send(
+        new DescribeFlowLogsCommand({
+          Filter: [
+            {
+              Name: 'resource-id',
+              Values: [outputs.VpcId],
+            },
+          ],
+        })
+      );
 
       expect(response.FlowLogs[0].TrafficType).toBe('ALL');
       expect(response.FlowLogs[0].FlowLogStatus).toBe('ACTIVE');
@@ -141,60 +129,49 @@ describe('TAP Infrastructure Integration Tests', () => {
   describe('API Gateway Configuration', () => {
     test('should verify API Gateway is accessible', async () => {
       const apiClient = new APIGatewayClient({ region: 'us-east-1' });
-      const mockSend = jest.fn().mockResolvedValue({
-        id: 'test123',
-        name: 'Tap Secure API',
-        description: 'Secure API with comprehensive logging'
-      });
-      apiClient.send = mockSend;
 
       // Extract API ID from endpoint
       const apiId = outputs.ApiEndpoint.split('.')[0].replace('https://', '');
-      
-      const response = await apiClient.send(new GetRestApiCommand({
-        restApiId: apiId
-      }));
+
+      // This will make an actual AWS call when integration tests run
+      const response = await apiClient.send(
+        new GetRestApiCommand({
+          restApiId: apiId,
+        })
+      );
 
       expect(response.name).toBe('Tap Secure API');
-      expect(outputs.ApiEndpoint).toMatch(/^https:\/\/.+\.execute-api\.us-east-1\.amazonaws\.com\/prod\/$/);
+      expect(outputs.ApiEndpoint).toMatch(
+        /^https:\/\/.+\.execute-api\.us-east-1\.amazonaws\.com\/prod\/$/
+      );
     });
 
     test('should verify API endpoint URL format', () => {
-      expect(outputs.ApiEndpoint).toMatch(/^https:\/\/.+\.execute-api\.us-east-1\.amazonaws\.com\/prod\/$/);
+      expect(outputs.ApiEndpoint).toMatch(
+        /^https:\/\/.+\.execute-api\.us-east-1\.amazonaws\.com\/prod\/$/
+      );
     });
   });
 
   describe('SSM Parameter Store Configuration', () => {
     test('should verify SSM parameters exist', async () => {
       const ssmClient = new SSMClient({ region: 'us-east-1' });
-      const mockSend = jest.fn()
-        .mockResolvedValueOnce({
-          Parameter: {
-            Name: '/tap/database/password',
-            Type: 'SecureString',
-            Value: 'encrypted-value'
-          }
+
+      // Test database password parameter - will make actual AWS call
+      const dbPasswordResponse = await ssmClient.send(
+        new GetParameterCommand({
+          Name: '/tap/database/password',
+          WithDecryption: false,
         })
-        .mockResolvedValueOnce({
-          Parameter: {
-            Name: '/tap/api/key',
-            Type: 'SecureString',
-            Value: 'encrypted-value'
-          }
-        });
-      ssmClient.send = mockSend;
+      );
 
-      // Test database password parameter
-      const dbPasswordResponse = await ssmClient.send(new GetParameterCommand({
-        Name: '/tap/database/password',
-        WithDecryption: false
-      }));
-
-      // Test API key parameter
-      const apiKeyResponse = await ssmClient.send(new GetParameterCommand({
-        Name: '/tap/api/key',
-        WithDecryption: false
-      }));
+      // Test API key parameter - will make actual AWS call
+      const apiKeyResponse = await ssmClient.send(
+        new GetParameterCommand({
+          Name: '/tap/api/key',
+          WithDecryption: false,
+        })
+      );
 
       expect(dbPasswordResponse.Parameter.Type).toBe('SecureString');
       expect(apiKeyResponse.Parameter.Type).toBe('SecureString');
@@ -222,8 +199,13 @@ describe('TAP Infrastructure Integration Tests', () => {
 
   describe('Complete Infrastructure Validation', () => {
     test('should verify all expected outputs are present', () => {
-      const expectedOutputs = ['ApiEndpoint', 'DataBucketName', 'DatabaseEndpoint', 'VpcId'];
-      
+      const expectedOutputs = [
+        'ApiEndpoint',
+        'DataBucketName',
+        'DatabaseEndpoint',
+        'VpcId',
+      ];
+
       expectedOutputs.forEach(output => {
         expect(outputs).toHaveProperty(output);
         expect(outputs[output]).toBeTruthy();
@@ -234,7 +216,9 @@ describe('TAP Infrastructure Integration Tests', () => {
       // Verify critical infrastructure components are configured
       expect(outputs.ApiEndpoint).toMatch(/^https:/);
       expect(outputs.DataBucketName).toMatch(/^prod-sec-data-/);
-      expect(outputs.DatabaseEndpoint).toMatch(/\.rds\.amazonaws\.com$|db-tap-postgres/);
+      expect(outputs.DatabaseEndpoint).toMatch(
+        /\.rds\.amazonaws\.com$|db-tap-postgres/
+      );
       expect(outputs.VpcId).toMatch(/^vpc-/);
     });
   });
@@ -242,19 +226,19 @@ describe('TAP Infrastructure Integration Tests', () => {
   describe('End-to-End Workflow Simulation', () => {
     test('should simulate complete application workflow', async () => {
       // This test simulates a complete workflow using the deployed infrastructure
-      
+
       // 1. Verify API Gateway is accessible
       expect(outputs.ApiEndpoint).toMatch(/^https:/);
-      
+
       // 2. Verify S3 bucket for data storage
       expect(outputs.DataBucketName).toMatch(/^prod-sec-data-/);
-      
+
       // 3. Verify database connectivity endpoint
       expect(outputs.DatabaseEndpoint).toContain('db-tap-postgres');
-      
+
       // 4. Verify VPC for network isolation
       expect(outputs.VpcId).toMatch(/^vpc-/);
-      
+
       // All components are available for a complete application deployment
       expect(true).toBe(true);
     });
@@ -264,7 +248,7 @@ describe('TAP Infrastructure Integration Tests', () => {
       // Database and other services should be configured for HA
       expect(outputs.VpcId).toBeTruthy();
       expect(outputs.DatabaseEndpoint).toBeTruthy();
-      
+
       // The infrastructure is designed for high availability
       expect(true).toBe(true);
     });
