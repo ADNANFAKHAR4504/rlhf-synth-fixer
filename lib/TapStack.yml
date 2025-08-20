@@ -1171,15 +1171,15 @@ Resources:
           import cfnresponse
           import json
           import time
-          
+
           def handler(event, context):
               try:
                   waf = boto3.client('wafv2')
-                  
+
                   if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
                       # Wait for WebACL to be ready
                       time.sleep(30)
-                      
+
                       response = waf.put_logging_configuration(
                           LoggingConfiguration={
                               'ResourceArn': event['ResourceProperties']['WebACLArn'],
@@ -1190,11 +1190,11 @@ Resources:
                               ]
                           }
                       )
-                      
+
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, {
                           'LoggingConfiguration': json.dumps(response['LoggingConfiguration'])
                       })
-                      
+
                   elif event['RequestType'] == 'Delete':
                       try:
                           waf.delete_logging_configuration(
@@ -1202,18 +1202,15 @@ Resources:
                           )
                       except waf.exceptions.WAFNonexistentItemException:
                           pass  # Already deleted
-                      
+
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-                      
+
               except Exception as e:
                   print(f"Error: {str(e)}")
                   cfnresponse.send(event, context, cfnresponse.FAILED, {})
 
   WAFLoggingCustomResource:
     Type: AWS::CloudFormation::CustomResource
-    DependsOn:
-      - WebACL
-      - WAFLogGroup
     Properties:
       ServiceToken: !GetAtt WAFLoggingFunction.Arn
       WebACLArn: !GetAtt WebACL.Arn
@@ -1371,15 +1368,6 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${AWS::StackName}-ConfigDelivery-${EnvironmentSuffix}'
-      S3BucketName: !Ref LoggingBucket
-      S3KeyPrefix: 'config'
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: 'TwentyFour_Hours'
 
   # Config Rules for Financial Compliance
   EncryptedVolumesRule:
