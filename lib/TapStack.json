@@ -440,9 +440,6 @@
     "ArtifactsBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {
-          "Fn::Sub": "tap-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
-        },
         "VersioningConfiguration": {
           "Status": "Enabled"
         },

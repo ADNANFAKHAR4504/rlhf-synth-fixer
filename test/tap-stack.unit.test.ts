@@ -181,11 +181,10 @@ describe('TapStack CloudFormation Template (Unit)', () => {
       ).toBe('AES256');
     });
 
-    test('ArtifactsBucket must have unique deterministic name', () => {
+    test('ArtifactsBucket should not have hardcoded name for auto-generation', () => {
       const bucket = template.Resources.ArtifactsBucket;
-      expect(bucket.Properties.BucketName).toEqual({
-        'Fn::Sub': 'tap-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
-      });
+      // Should not have BucketName property, allowing CloudFormation to auto-generate
+      expect(bucket.Properties.BucketName).toBeUndefined();
     });
   });
 
