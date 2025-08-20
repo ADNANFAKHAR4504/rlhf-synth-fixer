@@ -1343,3 +1343,4 @@ class TapStack(ComponentResource):
       },
       opts=ResourceOptions(parent=self)
     )
+
