@@ -202,7 +202,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref SecureDataBucket
+                Resource: !GetAtt SecureDataBucket.Arn
         - PolicyName: KMSDecryptAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -245,7 +245,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref SecureDataBucket
+                Resource: !GetAtt SecureDataBucket.Arn
                 Condition:
                   StringLike:
                     's3:prefix': 'dev/*'
