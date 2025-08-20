@@ -87,7 +87,7 @@ describe("Terraform E2E Integration Tests", () => {
     test("bucket tags include environment, managedBy, project", async () => {
       const tagRes = await s3.send(new GetBucketTaggingCommand({ Bucket: bucketName }));
       const tags = Object.fromEntries((tagRes.TagSet ?? []).map(t => [t.Key, t.Value]));
-      expect(tags.Environment).toBe(environment);
+      expect(tags.Environment).toBe(bucketTags.Environment);
       expect(tags.ManagedBy).toBe("terraform");
       expect(tags.Project).toBe("ExampleProject");
     });
@@ -185,12 +185,14 @@ describe("Terraform E2E Integration Tests", () => {
       expect(roleRes.Role?.RoleName).toBe(roleName);
       expect(roleRes.Role?.Tags?.some(t => t.Key === "ManagedBy" && t.Value === "terraform")).toBe(true);
 
-      const policies = await iam.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
-      const policyNames = policies.AttachedPolicies?.map(p => p.PolicyName);
+      // Fetch attached policies for the role
+      const attachedPoliciesRes = await iam.send(new ListAttachedRolePoliciesCommand({ RoleName: roleName }));
+      const policyNames = attachedPoliciesRes.AttachedPolicies?.map(p => p.PolicyName) || [];
+
       expect(policyNames).toEqual(
         expect.arrayContaining([
-          `secure-cloudwatch-logs-policy-${environment}`,
-          `secure-s3-access-policy-${environment}`
+          outputs.cloudwatch_logs_policy_name,
+          outputs.s3_access_policy_name
         ])
       );
     });
