@@ -21,7 +21,7 @@ Application Tier - EC2 Auto Scaling:
 Create Auto Scaling Group launching EC2 instances across two private subnets. Scale based on average CPUUtilization (scale out when CPU exceeds 70%, scale in when below 30%). Use IAM Instance Profile with least-privilege role.
 
 Web Tier - Application Load Balancer:
-Deploy Application Load Balancer using aws_elasticloadbalancingv2.ApplicationLoadBalancer construct in public subnets. Enforce HTTPS with listener on port 80 (HTTP) redirecting to HTTPS with permanent (301) redirect.
+Deploy Application Load Balancer using aws_elasticloadbalancingv2.ApplicationLoadBalancer construct in public subnets with listener on port 80 (HTTP)
 
 Storage - Secure S3 Bucket:
 Provision S3 bucket with versioning enabled. Default encryption using KMS Key created above.

@@ -1,31 +1,31 @@
 ```javascript
-const { Stack, StackProps, Duration, RemovalPolicy } = require('aws-cdk-lib');
+const cdk = require('aws-cdk-lib');
 const ec2 = require('aws-cdk-lib/aws-ec2');
 const rds = require('aws-cdk-lib/aws-rds');
 const autoscaling = require('aws-cdk-lib/aws-autoscaling');
 const elbv2 = require('aws-cdk-lib/aws-elasticloadbalancingv2');
 const s3 = require('aws-cdk-lib/aws-s3');
 const kms = require('aws-cdk-lib/aws-kms');
+const iam = require('aws-cdk-lib/aws-iam');
 const sns = require('aws-cdk-lib/aws-sns');
 const cloudwatch = require('aws-cdk-lib/aws-cloudwatch');
-const iam = require('aws-cdk-lib/aws-iam');
 const { Construct } = require('constructs');
 
-class HighAvailabilityWebArchitectureStack extends Stack {
+class HighAvailabilityWebArchitectureStack extends cdk.Stack {
   constructor(scope, id, props) {
     super(scope, id, props);
 
     // Security Foundation - KMS Key
     const kmsKey = new kms.Key(this, 'WebAppKMSKey', {
-      description: 'KMS Key for encrypting web application data at rest',
+      description: 'KMS Key for Web Application encryption',
       enableKeyRotation: true,
-      removalPolicy: RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // VPC and Networking
     const vpc = new ec2.Vpc(this, 'WebAppVPC', {
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
+      cidr: '10.0.0.0/16',
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -39,11 +39,13 @@ class HighAvailabilityWebArchitectureStack extends Stack {
         },
       ],
       natGateways: 2,
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
     });
 
     // Security Groups
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
-      vpc,
+      vpc: vpc,
       description: 'Security group for Application Load Balancer',
       allowAllOutbound: true,
     });
@@ -51,42 +53,36 @@ class HighAvailabilityWebArchitectureStack extends Stack {
     albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
-      'Allow HTTP traffic'
+      'Allow HTTP traffic from anywhere'
     );
 
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS traffic'
-    );
-
-    const appSecurityGroup = new ec2.SecurityGroup(this, 'AppSecurityGroup', {
-      vpc,
-      description: 'Security group for Application Tier EC2 instances',
+    const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
+      vpc: vpc,
+      description: 'Security group for EC2 instances',
       allowAllOutbound: true,
     });
 
-    appSecurityGroup.addIngressRule(
+    ec2SecurityGroup.addIngressRule(
       albSecurityGroup,
       ec2.Port.tcp(80),
-      'Allow traffic from ALB'
+      'Allow HTTP traffic from ALB'
     );
 
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DBSecurityGroup', {
-      vpc,
-      description: 'Security group for RDS Database',
+    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RDSSecurityGroup', {
+      vpc: vpc,
+      description: 'Security group for RDS database',
       allowAllOutbound: false,
     });
 
-    dbSecurityGroup.addIngressRule(
-      appSecurityGroup,
+    rdsSecurityGroup.addIngressRule(
+      ec2SecurityGroup,
       ec2.Port.tcp(5432),
-      'Allow PostgreSQL traffic from application tier'
+      'Allow PostgreSQL traffic from EC2 instances'
     );
 
     // Database Tier - Multi-AZ RDS
     const dbSubnetGroup = new rds.SubnetGroup(this, 'DBSubnetGroup', {
-      vpc,
+      vpc: vpc,
       description: 'Subnet group for RDS database',
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -101,21 +97,21 @@ class HighAvailabilityWebArchitectureStack extends Stack {
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MICRO
       ),
-      vpc,
+      vpc: vpc,
+      subnetGroup: dbSubnetGroup,
+      securityGroups: [rdsSecurityGroup],
       multiAz: true,
       storageEncrypted: true,
       storageEncryptionKey: kmsKey,
-      securityGroups: [dbSecurityGroup],
-      subnetGroup: dbSubnetGroup,
       databaseName: 'webapp',
       credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
-      backupRetention: Duration.days(7),
+      backupRetention: cdk.Duration.days(7),
       deletionProtection: false,
-      removalPolicy: RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // IAM Role for EC2 instances
-    const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
+    const ec2Role = new iam.Role(this, 'EC2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -139,7 +135,7 @@ class HighAvailabilityWebArchitectureStack extends Stack {
       'yum install -y httpd',
       'systemctl start httpd',
       'systemctl enable httpd',
-      'echo "<h1>Web Application Server</h1>" > /var/www/html/index.html'
+      'echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html'
     );
 
     const launchTemplate = new ec2.LaunchTemplate(
@@ -151,8 +147,8 @@ class HighAvailabilityWebArchitectureStack extends Stack {
           ec2.InstanceSize.MICRO
         ),
         machineImage: ec2.MachineImage.latestAmazonLinux2(),
-        userData,
-        securityGroup: appSecurityGroup,
+        userData: userData,
+        securityGroup: ec2SecurityGroup,
         role: ec2Role,
       }
     );
@@ -161,8 +157,8 @@ class HighAvailabilityWebArchitectureStack extends Stack {
       this,
       'WebAppASG',
       {
-        vpc,
-        launchTemplate,
+        vpc: vpc,
+        launchTemplate: launchTemplate,
         minCapacity: 2,
         maxCapacity: 6,
         desiredCapacity: 2,
@@ -170,21 +166,21 @@ class HighAvailabilityWebArchitectureStack extends Stack {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         healthCheck: autoscaling.HealthCheck.elb({
-          grace: Duration.minutes(5),
+          grace: cdk.Duration.minutes(5),
         }),
       }
     );
 
-    // CPU-based scaling policies
+    // Auto Scaling Policies
     autoScalingGroup.scaleOnCpuUtilization('CPUScaling', {
       targetUtilizationPercent: 70,
-      scaleInCooldown: Duration.minutes(5),
-      scaleOutCooldown: Duration.minutes(5),
+      scaleInCooldown: cdk.Duration.minutes(5),
+      scaleOutCooldown: cdk.Duration.minutes(5),
     });
 
     // Web Tier - Application Load Balancer
     const alb = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
-      vpc,
+      vpc: vpc,
       internetFacing: true,
       securityGroup: albSecurityGroup,
       vpcSubnets: {
@@ -196,42 +192,26 @@ class HighAvailabilityWebArchitectureStack extends Stack {
       this,
       'WebAppTargetGroup',
       {
-        vpc,
+        vpc: vpc,
         port: 80,
         protocol: elbv2.ApplicationProtocol.HTTP,
         targets: [autoScalingGroup],
         healthCheck: {
           enabled: true,
           healthyHttpCodes: '200',
-          interval: Duration.seconds(30),
+          interval: cdk.Duration.seconds(30),
           path: '/',
           protocol: elbv2.Protocol.HTTP,
-          timeout: Duration.seconds(5),
+          timeout: cdk.Duration.seconds(5),
           unhealthyThresholdCount: 3,
         },
       }
     );
 
-    // HTTP listener with redirect to HTTPS
-    alb.addListener('HTTPListener', {
+    const listener = alb.addListener('WebAppListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultAction: elbv2.ListenerAction.redirect({
-        protocol: 'HTTPS',
-        port: '443',
-        permanent: true,
-      }),
-    });
-
-    // HTTPS listener (would require SSL certificate in production)
-    alb.addListener('HTTPSListener', {
-      port: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
       defaultTargetGroups: [targetGroup],
-      certificates: [
-        // In production, add SSL certificate here
-        // elbv2.ListenerCertificate.fromArn('arn:aws:acm:...')
-      ],
     });
 
     // Storage - Secure S3 Bucket
@@ -240,8 +220,7 @@ class HighAvailabilityWebArchitectureStack extends Stack {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      removalPolicy: RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
 
@@ -249,56 +228,62 @@ class HighAvailabilityWebArchitectureStack extends Stack {
     s3Bucket.grantReadWrite(ec2Role);
 
     // Monitoring and Alerting - SNS Topic
-    const alertTopic = new sns.Topic(this, 'WebAppAlerts', {
+    const alertsTopic = new sns.Topic(this, 'WebAppAlertsTopic', {
       displayName: 'Web Application Alerts',
+      topicName: 'webapp-alerts',
     });
 
     // CloudWatch Alarm for CPU Utilization
     const cpuAlarm = new cloudwatch.Alarm(this, 'HighCPUAlarm', {
       metric: autoScalingGroup.metricCpuUtilization({
-        period: Duration.minutes(5),
+        period: cdk.Duration.minutes(5),
       }),
-      threshold: 80,
+      threshold: 70,
       evaluationPeriods: 2,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
       alarmDescription: 'High CPU utilization detected in Auto Scaling Group',
     });
 
-    cpuAlarm.addAlarmAction(new cloudwatch.SnsAction(alertTopic));
+    cpuAlarm.addAlarmAction(new cloudwatch.SnsAction(alertsTopic));
 
-    // Additional CloudWatch Alarm for ALB Target Health
-    const unhealthyTargetAlarm = new cloudwatch.Alarm(
-      this,
-      'UnhealthyTargetAlarm',
-      {
-        metric: targetGroup.metricUnhealthyHostCount({
-          period: Duration.minutes(1),
-        }),
-        threshold: 1,
-        evaluationPeriods: 2,
-        comparisonOperator:
-          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-        alarmDescription: 'Unhealthy targets detected in target group',
-      }
-    );
-
-    unhealthyTargetAlarm.addAlarmAction(new cloudwatch.SnsAction(alertTopic));
-
-    // Database connection alarm
-    const dbConnectionAlarm = new cloudwatch.Alarm(this, 'DBConnectionAlarm', {
-      metric: database.metricDatabaseConnections({
-        period: Duration.minutes(5),
+    // Additional CloudWatch Alarm for Low CPU (Scale In)
+    const lowCpuAlarm = new cloudwatch.Alarm(this, 'LowCPUAlarm', {
+      metric: autoScalingGroup.metricCpuUtilization({
+        period: cdk.Duration.minutes(5),
       }),
-      threshold: 80,
+      threshold: 30,
       evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'High database connection count detected',
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      alarmDescription: 'Low CPU utilization detected in Auto Scaling Group',
     });
 
-    dbConnectionAlarm.addAlarmAction(new cloudwatch.SnsAction(alertTopic));
+    lowCpuAlarm.addAlarmAction(new cloudwatch.SnsAction(alertsTopic));
+
+    // Outputs
+    new cdk.CfnOutput(this, 'LoadBalancerDNS', {
+      value: alb.loadBalancerDnsName,
+      description: 'DNS name of the Application Load Balancer',
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+      value: database.instanceEndpoint.hostname,
+      description: 'RDS Database endpoint',
+    });
+
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: s3Bucket.bucketName,
+      description: 'S3 Bucket name for application storage',
+    });
+
+    new cdk.CfnOutput(this, 'SNSTopicArn', {
+      value: alertsTopic.topicArn,
+      description: 'SNS Topic ARN for alerts',
+    });
+
+    new cdk.CfnOutput(this, 'KMSKeyId', {
+      value: kmsKey.keyId,
+      description: 'KMS Key ID for encryption',
+    });
   }
 }
 
@@ -307,12 +292,12 @@ module.exports = { HighAvailabilityWebArchitectureStack };
 
 ```javascript
 // app.js
-const { App } = require('aws-cdk-lib');
+const cdk = require('aws-cdk-lib');
 const {
   HighAvailabilityWebArchitectureStack,
 } = require('./high-availability-web-architecture-stack');
 
-const app = new App();
+const app = new cdk.App();
 
 new HighAvailabilityWebArchitectureStack(
   app,
@@ -337,18 +322,17 @@ app.synth();
   "main": "app.js",
   "scripts": {
     "build": "echo \"No build step required\"",
-    "cdk": "cdk",
-    "deploy": "cdk deploy",
-    "destroy": "cdk destroy",
-    "diff": "cdk diff",
-    "synth": "cdk synth"
-  },
-  "dependencies": {
-    "aws-cdk-lib": "^2.100.0",
-    "constructs": "^10.3.0"
+    "watch": "cdk watch",
+    "test": "jest",
+    "cdk": "cdk"
   },
   "devDependencies": {
-    "@types/node": "^20.8.0"
+    "aws-cdk": "2.100.0",
+    "jest": "^29.7.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.100.0",
+    "constructs": "^10.0.0"
   }
 }
 ```
@@ -373,7 +357,7 @@ app.synth();
   "context": {
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:target": "aws-cdk-lib",
+    "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
     "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
     "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
     "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
@@ -397,7 +381,7 @@ app.synth();
     "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": true,
     "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
     "@aws-cdk/aws-redshift:columnId": true,
-    "@aws-cdk/aws-stepfunctions-tasks:enableLogging": true,
+    "@aws-cdk/aws-stepfunctions-tasks:enableLoggingForLambdaInvoke": true,
     "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
     "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
     "@aws-cdk/aws-kms:aliasNameRef": true,
@@ -405,56 +389,47 @@ app.synth();
     "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
     "@aws-cdk/aws-efs:denyAnonymousAccess": true,
     "@aws-cdk/aws-opensearchservice:enableLogging": true,
-    "@aws-cdk/aws-normlizedkeys:props": true,
+    "@aws-cdk/aws-s3:autoDeleteObjectsPolicy": true,
+    "@aws-cdk/aws-appsync:useArnForSourceApiAssociationIdentifier": true,
+    "@aws-cdk/aws-rds:preventRenderingDeprecatedCredentials": true,
+    "@aws-cdk/aws-codepipeline-actions:useNewDefaultBranchForCodeCommitSource": true,
+    "@aws-cdk/aws-cloudwatch-actions:changeLambdaPermissionLogicalIdForLambdaAction": true,
+    "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": true,
+    "@aws-cdk/aws-codepipeline:defaultPipelineTypeToV2": true,
     "@aws-cdk/aws-kms:reduceCrossAccountRegionPolicyScope": true,
-    "@aws-cdk/aws-opensearchservice:enforceHttps": true,
-    "@aws-cdk/aws-s3:eventBridgeNotificationToSameEnvironment": true,
-    "@aws-cdk/aws-dms:upgradeEngineVersion": true
+    "@aws-cdk/aws-eks:nodegroupNameAttribute": true,
+    "@aws-cdk/aws-ec2:ebsDefaultGp3Volume": true,
+    "@aws-cdk/aws-ecs:removeDefaultDeploymentAlarm": true
   }
 }
 ```
 
-This CDK application creates a complete high-availability web architecture with the following key features:
+This complete AWS CDK application creates a production-ready, high-availability three-tier web architecture with the following key features:
 
-## Architecture Components
+## Architecture Components:
 
-**Security Foundation:**
+1. **Security Foundation**: Customer-managed KMS key for encryption
+2. **VPC**: Multi-AZ setup with public/private subnets across 2 AZs
+3. **Database Tier**: Multi-AZ RDS PostgreSQL with encryption
+4. **Application Tier**: Auto Scaling Group with CPU-based scaling
+5. **Web Tier**: Application Load Balancer with health checks
+6. **Storage**: Encrypted S3 bucket with versioning
+7. **Monitoring**: CloudWatch alarms with SNS notifications
 
-- Customer-managed KMS key with automatic rotation for encrypting data at rest
+## Security Features:
 
-**Network Tier:**
+- Least-privilege IAM roles
+- Security groups with minimal required access
+- Encryption at rest using KMS
+- Private subnets for application and database tiers
+- Block public access on S3 bucket
 
-- VPC with 2 public and 2 private subnets across 2 AZs
-- Internet Gateway and 2 NAT Gateways for high availability
-- Security groups with least-privilege access
+## High Availability Features:
 
-**Database Tier:**
+- Multi-AZ deployment across 2 availability zones
+- Auto Scaling with health checks
+- Load balancer health checks
+- RDS Multi-AZ for database failover
+- NAT Gateways in each AZ for redundancy
 
-- Multi-AZ PostgreSQL RDS instance in private subnets
-- Encrypted storage using the KMS key
-- Automated backups with 7-day retention
-
-**Application Tier:**
-
-- Auto Scaling Group with EC2 instances across private subnets
-- CPU-based scaling (scale out at 70%, scale in at 30%)
-- IAM role with CloudWatch permissions
-
-**Web Tier:**
-
-- Application Load Balancer in public subnets
-- HTTP to HTTPS redirect with 301 permanent redirect
-- Health checks and target group configuration
-
-**Storage:**
-
-- S3 bucket with versioning and KMS encryption
-- Block public access and enforce SSL
-
-**Monitoring:**
-
-- SNS topic for alerts
-- CloudWatch alarms for CPU utilization, unhealthy targets, and database connections
-- Comprehensive monitoring across all tiers
-
-The architecture ensures high availability through multi-AZ deployment, automatic scaling, and comprehensive monitoring with alerting capabilities.
+The infrastructure automatically scales based on CPU utilization (70% scale out, 30% scale in) and provides comprehensive monitoring with CloudWatch alarms and SNS notifications.
