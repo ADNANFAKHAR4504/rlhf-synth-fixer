@@ -725,7 +725,6 @@ resource "aws_s3_account_public_access_block" "account" {
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/flowlogs/${local.name_prefix}"
   retention_in_days = var.flow_logs_retention_days
-  kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-logs"
@@ -735,7 +734,6 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/${local.name_prefix}"
   retention_in_days = var.app_logs_retention_days
-  kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-cloudtrail-logs"
@@ -1149,6 +1147,8 @@ resource "aws_ssm_maintenance_window_task" "patch_task" {
   task_arn         = "AWS-RunPatchBaseline"
   priority         = 1
   service_role_arn = aws_iam_role.ec2_role.arn
+  max_concurrency  = 1
+  max_errors       = 1
 
   targets {
     key    = "WindowTargetIds"
