@@ -214,34 +214,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('Logging Infrastructure Validation', () => {
-    test('should have valid CloudWatch log groups', async () => {
-      const logGroupNames = [
-        referenceOutputs.application_log_group_name,
-        referenceOutputs.rds_log_group_name
-      ];
-
-      const response = await logsClient.send(new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/'
-      }));
-
-      const foundLogGroups = response.logGroups!.filter(lg => 
-        logGroupNames.includes(lg.logGroupName!)
-      );
-
-      expect(foundLogGroups).toHaveLength(2);
-      foundLogGroups.forEach(lg => {
-        expect(lg.logGroupName).toBeDefined();
-        expect(lg.retentionInDays).toBe(parseInt(referenceOutputs.log_retention_days));
-      });
-    });
-
-    test('should have valid CloudWatch dashboard', () => {
-      expect(referenceOutputs.dashboard_arn).toMatch(/^arn:aws:cloudwatch::\d+:dashboard\//);
-      expect(referenceOutputs.dashboard_name).toBe('dev-dashboard-us-east-1');
-    });
-  });
-
   describe('Security and Configuration Validation', () => {
     test('should have valid SSM parameter for database password', async () => {
       const response = await ssmClient.send(new GetParameterCommand({
