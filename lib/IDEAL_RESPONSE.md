@@ -91,20 +91,20 @@ filename = "hello_world.py"
 # S3 bucket for frontend assets
 
 resource "aws_s3_bucket" "frontend_bucket" {
-bucket = "${var.frontend_bucket_name}-${data.aws_caller_identity.current.account_id}"
+bucket = "${var.frontend_bucket_name}-${data.aws_caller_identity.current.account_id}-${random_id.bucket_suffix.hex}"
 force_destroy = true
-
-# Force recreation to ensure public access block settings are properly applied
-
-lifecycle {
-create_before_destroy = true
-}
 
 tags = {
 Name = "Frontend Assets Bucket"
 Environment = var.environment
 Owner = var.owner
 }
+}
+
+# Random ID for unique bucket naming
+
+resource "random_id" "bucket_suffix" {
+byte_length = 4
 }
 
 # Configure S3 bucket for static website hosting

@@ -43,7 +43,7 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
 
     test('should create the correct number of resources', () => {
       const resourceCount = plan.planned_values.root_module.resources.length;
-      expect(resourceCount).toBe(23); // Updated count for simplified stack with bucket ownership controls
+      expect(resourceCount).toBe(24); // Updated count for simplified stack with random ID and bucket ownership controls
     });
 
     test('S3 bucket should have versioning and encryption enabled', () => {
@@ -175,6 +175,14 @@ if (fs.existsSync(PLAN_JSON_PATH)) {
       expect(ownershipControls.values.rule[0].object_ownership).toBe(
         'BucketOwnerPreferred'
       );
+    });
+
+    test('Random ID should be created for unique bucket naming', () => {
+      const randomId = plan.planned_values.root_module.resources.find(
+        (r: any) => r.type === 'random_id' && r.name === 'bucket_suffix'
+      );
+      expect(randomId).toBeDefined();
+      expect(randomId.values.byte_length).toBe(4);
     });
 
     test('Cognito User Pool should have strong password policy', () => {
