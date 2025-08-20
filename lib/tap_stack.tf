@@ -599,9 +599,8 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # CloudTrail
 # Use a data source to reference the existing CloudTrail by name
-
 resource "aws_cloudtrail" "main" {
-  name           = "${local.name_prefix}-cloudtrail-new"
+  name           = "${local.name_prefix}-cloudtrail"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
   
   include_global_service_events = true
@@ -761,13 +760,11 @@ output "cloudtrail_s3_bucket_name" {
   description = "Name of the CloudTrail S3 bucket"
   value       = aws_s3_bucket.cloudtrail.bucket
 }
-
 # CloudTrail Output
 output "cloudtrail_arn" {
   description = "ARN of the CloudTrail"
   value       = aws_cloudtrail.main.arn
 }
-
 # SSM Parameter Outputs
 output "rds_username_parameter_name" {
   description = "Name of the SSM parameter storing RDS username"
