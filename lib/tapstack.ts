@@ -497,7 +497,7 @@ export class TapStack extends cdk.Stack {
                 'guardduty:CreateDetector',
                 'guardduty:GetDetector',
                 'guardduty:UpdateDetector',
-                'guardduty:ListDetectors', 
+                'guardduty:ListDetectors',
                 'ec2:DescribeRegions',
               ],
               resources: ['*'], // GuardDuty requires global permissions for multi-region operations
@@ -509,20 +509,27 @@ export class TapStack extends cdk.Stack {
 
     // Create a custom resource that enables GuardDuty across multiple key regions
     // In a production environment, you would implement a Lambda function to iterate all regions
-    const primaryRegions = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'];
-    
+    const primaryRegions = [
+      'us-east-1',
+      'us-west-2',
+      'eu-west-1',
+      'ap-southeast-1',
+    ];
+
     const guardDutyCustomResource = new cr.AwsCustomResource(
       this,
-      'GuardDutyAllRegions', 
+      'GuardDutyAllRegions',
       {
         onCreate: {
           service: 'EC2',
           action: 'describeRegions',
           region: 'us-east-1',
-          physicalResourceId: cr.PhysicalResourceId.of('guardduty-multi-region-setup'),
+          physicalResourceId: cr.PhysicalResourceId.of(
+            'guardduty-multi-region-setup'
+          ),
         },
         onUpdate: {
-          service: 'EC2', 
+          service: 'EC2',
           action: 'describeRegions',
           region: 'us-east-1',
         },
@@ -549,7 +556,8 @@ export class TapStack extends cdk.Stack {
               FindingPublishingFrequency: 'FIFTEEN_MINUTES',
             },
             region: region,
-            physicalResourceId: cr.PhysicalResourceId.fromResponse('DetectorId'),
+            physicalResourceId:
+              cr.PhysicalResourceId.fromResponse('DetectorId'),
           },
           onUpdate: {
             service: 'GuardDuty',
@@ -563,7 +571,7 @@ export class TapStack extends cdk.Stack {
           },
           onDelete: {
             service: 'GuardDuty',
-            action: 'updateDetector', 
+            action: 'updateDetector',
             parameters: {
               DetectorId: new cr.PhysicalResourceIdReference(),
               Enable: false, // Disable rather than delete for safety
@@ -604,7 +612,7 @@ export class TapStack extends cdk.Stack {
     // Retrieve allowed CIDRs from SSM Parameter Store
     const allowedCidrsParameter = ssm.StringParameter.fromStringParameterName(
       this,
-      'AllowedCidrsParameter', 
+      'AllowedCidrsParameter',
       allowedCidrsParameterName
     );
     // Create dedicated log group for API Gateway with retention
@@ -737,9 +745,9 @@ export class TapStack extends cdk.Stack {
     usagePlan.addApiKey(apiKey);
 
     // Use the allowed CIDRs parameter for additional security configuration
-    // Note: In a full implementation, you would use allowedCidrsParameter.stringValue 
+    // Note: In a full implementation, you would use allowedCidrsParameter.stringValue
     // to configure resource policies or WAF rules
-    
+
     return { api, logGroup: apiLogGroup };
   }
 
