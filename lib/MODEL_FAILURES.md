@@ -143,3 +143,14 @@
 - Removed the separate `BucketServerSideEncryptionConfigurationV2Args` constructor call
 - Moved the encryption rules directly into the `BucketServerSideEncryptionConfigurationV2` resource constructor
 - This eliminates the unnecessary intermediate step and fixes the missing `bucket` parameter issue
+
+### 11. **S3 Resource Type Compatibility Issue**
+
+**Problem**: The deployment was failing with `AttributeError: module 'pulumi_aws.s3' has no attribute 'BucketPublicAccessBlockV2'` and similar errors for `BucketPolicyV2` because these V2 resource types don't exist in the current Pulumi AWS provider version.
+
+**Fix**:
+
+- Updated `BucketPublicAccessBlockV2` to `BucketPublicAccessBlock`
+- Updated `BucketPolicyV2` to `BucketPolicy`
+- These resources don't have V2 versions in the current Pulumi AWS provider
+- The V1 versions provide the same functionality and are fully compatible

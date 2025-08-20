@@ -153,7 +153,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
   )
 
   # Block public access
-  aws.s3.BucketPublicAccessBlockV2(
+  aws.s3.BucketPublicAccessBlock(
     f"{project_name}-{environment}-public-access-block-{region}",
     bucket=bucket.id,
     block_public_acls=True,
@@ -415,7 +415,7 @@ def create_cloudtrail(region: str, bucket: aws.s3.Bucket, tags: Dict[str, str]) 
     ]
   )
 
-  aws.s3.BucketPolicyV2(
+  aws.s3.BucketPolicy(
     f"{project_name}-{environment}-cloudtrail-policy-{region}",
     bucket=bucket.id,
     policy=cloudtrail_policy.json,

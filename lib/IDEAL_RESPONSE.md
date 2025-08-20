@@ -82,7 +82,7 @@ def create_s3_bucket(region: str, tags: Dict[str, str]) -> aws.s3.Bucket:
     )
 
     # Block public access
-    aws.s3.BucketPublicAccessBlockV2(
+    aws.s3.BucketPublicAccessBlock(
         f"{project_name}-{environment}-public-access-block-{region}",
         bucket=bucket.id,
         block_public_acls=True,
