@@ -47,7 +47,7 @@ export class TapStack extends TerraformStack {
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // ✅ Added Route53 configuration with defaults
-    const domainName = props?.domainName || 'example.com';
+    const domainName = props?.domainName || 'tr-example.com';
     const recordName = props?.recordName || `app-${environmentSuffix}`;
 
     new AwsProvider(this, 'aws', {
@@ -209,13 +209,13 @@ export class TapStack extends TerraformStack {
       albSecurityGroupId: albSecurityGroup.id,
     });
 
-    // // ✅ SOLUTION 2: Add Route53 Module instantiation
-    // new Route53Module(this, 'dns-record', {
-    //   zoneName: domainName,
-    //   recordName: recordName,
-    //   albZoneId: alb.albZoneIdOutput, // ✅ Using ALB zone ID output
-    //   albDnsName: alb.albDnsNameOutput, // ✅ Using ALB DNS name output
-    // });
+    // ✅ SOLUTION 2: Add Route53 Module instantiation
+    new Route53Module(this, 'dns-record', {
+      zoneName: domainName,
+      recordName: recordName,
+      albZoneId: alb.albZoneIdOutput, // ✅ Using ALB zone ID output
+      albDnsName: alb.albDnsNameOutput, // ✅ Using ALB DNS name output
+    });
 
     new CloudwatchModule(this, 'alarms', {
       instanceId: ec2.instanceIdOutput,
