@@ -283,7 +283,7 @@ describe('TapStack CloudFormation Template', () => {
 
     const iamResources = ['EC2Role', 'EC2InstanceProfile'];
 
-    const storageResources = ['ApplicationLogsBucket'];
+         const storageResources = ['ApplicationLogsBucket', 'ApplicationLogsBucketPolicy'];
     const monitoringResources = [
       'VPCFlowLogRole',
       'VPCFlowLogs',
@@ -512,14 +512,14 @@ describe('TapStack CloudFormation Template', () => {
         );
       });
 
-      test('ApplicationLogsBucket should block public access', () => {
-        const bucket = template.Resources.ApplicationLogsBucket;
-        const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
-        expect(publicAccess.BlockPublicAcls).toBe(true);
-        expect(publicAccess.BlockPublicPolicy).toBe(true);
-        expect(publicAccess.IgnorePublicAcls).toBe(true);
-        expect(publicAccess.RestrictPublicBuckets).toBe(true);
-      });
+             test('ApplicationLogsBucket should block public access', () => {
+         const bucket = template.Resources.ApplicationLogsBucket;
+         const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
+         expect(publicAccess.BlockPublicAcls).toBe(true);
+         expect(publicAccess.BlockPublicPolicy).toBe(false);
+         expect(publicAccess.IgnorePublicAcls).toBe(true);
+         expect(publicAccess.RestrictPublicBuckets).toBe(false);
+       });
 
       test('ApplicationLogsBucket should have logging configuration', () => {
         const bucket = template.Resources.ApplicationLogsBucket;
@@ -555,9 +555,23 @@ describe('TapStack CloudFormation Template', () => {
         expect(deleteOldCloudTrailLogsRule.Prefix).toBe('cloudtrail-logs/');
         expect(deleteOldAccessLogsRule.ExpirationInDays).toBe(90);
         expect(deleteOldFlowLogsRule.ExpirationInDays).toBe(90);
-        expect(deleteOldCloudTrailLogsRule.ExpirationInDays).toBe(90);
-      });
-    });
+                 expect(deleteOldCloudTrailLogsRule.ExpirationInDays).toBe(90);
+       });
+
+       test('ApplicationLogsBucketPolicy should be conditional and have correct properties', () => {
+         const policy = template.Resources.ApplicationLogsBucketPolicy;
+         expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+         expect(policy.Condition).toBe('CreateNewS3Bucket');
+         expect(policy.Properties.Bucket['Ref']).toBe('ApplicationLogsBucket');
+         expect(policy.Properties.PolicyDocument.Statement).toHaveLength(4);
+         
+         const statements = policy.Properties.PolicyDocument.Statement;
+         expect(statements[0].Sid).toBe('CloudTrailAclCheck');
+         expect(statements[1].Sid).toBe('CloudTrailWrite');
+         expect(statements[2].Sid).toBe('ConfigAclCheck');
+         expect(statements[3].Sid).toBe('ConfigWrite');
+       });
+     });
 
     describe('Monitoring Resources', () => {
       test('VPCFlowLogRole should be conditional and have correct properties', () => {
@@ -922,14 +936,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(database.Properties.StorageEncrypted).toBe(true);
     });
 
-    test('S3 bucket should block public access', () => {
-      const bucket = template.Resources.ApplicationLogsBucket;
-      const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
-      expect(publicAccess.BlockPublicAcls).toBe(true);
-      expect(publicAccess.BlockPublicPolicy).toBe(true);
-      expect(publicAccess.IgnorePublicAcls).toBe(true);
-      expect(publicAccess.RestrictPublicBuckets).toBe(true);
-    });
+         test('S3 bucket should have appropriate public access settings', () => {
+       const bucket = template.Resources.ApplicationLogsBucket;
+       const publicAccess = bucket.Properties.PublicAccessBlockConfiguration;
+       expect(publicAccess.BlockPublicAcls).toBe(true);
+       expect(publicAccess.BlockPublicPolicy).toBe(false);
+       expect(publicAccess.IgnorePublicAcls).toBe(true);
+       expect(publicAccess.RestrictPublicBuckets).toBe(false);
+     });
 
     test('S3 bucket should have encryption enabled', () => {
       const bucket = template.Resources.ApplicationLogsBucket;

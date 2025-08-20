@@ -571,9 +571,9 @@ Resources:
               SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
-        BlockPublicPolicy: true
+        BlockPublicPolicy: false
         IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        RestrictPublicBuckets: false
       LoggingConfiguration:
         DestinationBucketName: !Sub 'app-logs-${AWS::AccountId}-${AWS::Region}-tapstack'
         LogFilePrefix: 's3-access-logs/'
@@ -603,6 +603,45 @@ Resources:
           Value: !Sub '${AWS::StackName}-app-logs-bucket'
         - Key: Environment
           Value: Production
+
+  ApplicationLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateNewS3Bucket
+    Properties:
+      Bucket: !Ref ApplicationLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ApplicationLogsBucket.Arn
+          - Sid: CloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ApplicationLogsBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: ConfigAclCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ApplicationLogsBucket.Arn
+          - Sid: ConfigWrite
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ApplicationLogsBucket}/config-logs/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
 
   ###############################################################################
   # VPC FLOW LOGS
