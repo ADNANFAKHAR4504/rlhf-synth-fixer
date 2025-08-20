@@ -91,7 +91,7 @@ Parameters:
   CertificateArnParameter:
     Type: String
     Description: 'ARN of the ACM SSL/TLS certificate for the Application Load Balancer.'
-    Default: 'arn:aws:acm:us-east-2:718240086340:certificate/10a6769d-2d1b-4baf-8da1-63e0373ef582'
+    Default: 'arn:aws:acm:us-east-1:718240086340:certificate/d3003292-683c-4983-9ac4-e086e5209472'
 
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'production']
@@ -521,6 +521,96 @@ Resources:
         - Key: 'Name'
           Value: !Sub 'FinancialApp-CriticalOperations-Role-${EnvironmentSuffix}'
 
+  # Enhanced MFA Enforcement Policy
+  MFAEnforcementPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub '${AWS::StackName}-MFAEnforcementPolicy-${EnvironmentSuffix}'
+      Description: 'Comprehensive MFA enforcement policy for financial application'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow users to manage their own MFA devices
+          - Sid: 'AllowManageOwnMFA'
+            Effect: Allow
+            Action:
+              - 'iam:CreateVirtualMFADevice'
+              - 'iam:DeleteVirtualMFADevice'
+              - 'iam:EnableMFADevice'
+              - 'iam:ResyncMFADevice'
+              - 'iam:DeactivateMFADevice'
+              - 'iam:GetUser'
+              - 'iam:ListMFADevices'
+              - 'iam:ListVirtualMFADevices'
+            Resource:
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:mfa/&{aws:username}'
+              - !Sub 'arn:aws:iam::${AWS::AccountId}:user/&{aws:username}'
+          # Deny all other actions without MFA
+          - Sid: 'DenyAllExceptMFAManagementWithoutMFA'
+            Effect: Deny
+            NotAction:
+              - 'iam:CreateVirtualMFADevice'
+              - 'iam:EnableMFADevice'
+              - 'iam:GetUser'
+              - 'iam:ListMFADevices'
+              - 'iam:ListVirtualMFADevices'
+              - 'iam:ResyncMFADevice'
+              - 'iam:ChangePassword'
+              - 'sts:GetSessionToken'
+            Resource: '*'
+            Condition:
+              BoolIfExists:
+                'aws:MultiFactorAuthPresent': 'false'
+          # Require MFA for high-privilege actions
+          - Sid: 'RequireMFAForHighPrivilegeActions'
+            Effect: Deny
+            Action:
+              - 'iam:CreateRole'
+              - 'iam:DeleteRole'
+              - 'iam:CreatePolicy'
+              - 'iam:DeletePolicy'
+              - 'iam:AttachRolePolicy'
+              - 'iam:DetachRolePolicy'
+              - 'iam:AttachUserPolicy'
+              - 'iam:DetachUserPolicy'
+              - 'ec2:TerminateInstances'
+              - 'rds:DeleteDBInstance'
+              - 's3:DeleteBucket'
+              - 'kms:ScheduleKeyDeletion'
+              - 'kms:DisableKey'
+            Resource: '*'
+            Condition:
+              Bool:
+                'aws:MultiFactorAuthPresent': 'false'
+
+  # Financial Application Users Group with MFA Requirements
+  FinancialAppUsersGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Sub '${AWS::StackName}-FinancialAppUsers-${EnvironmentSuffix}'
+      ManagedPolicyArns:
+        - !Ref MFAEnforcementPolicy
+      Policies:
+        - PolicyName: !Sub 'FinancialAppAccessPolicy-${EnvironmentSuffix}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Sub '${ApplicationDataBucket}/*'
+                Condition:
+                  Bool:
+                    'aws:MultiFactorAuthPresent': 'true'
+              - Effect: Allow
+                Action:
+                  - 'rds-db:connect'
+                Resource: !Sub 'arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${RDSInstance}/${DBUsername}'
+                Condition:
+                  Bool:
+                    'aws:MultiFactorAuthPresent': 'true'
+
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -938,6 +1028,120 @@ Resources:
       TreatMissingData: 'notBreaching'
 
   # ==============================================
+  # AWS WAF FOR APPLICATION PROTECTION
+  # ==============================================
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${AWS::StackName}-WebACL-${EnvironmentSuffix}'
+      Scope: 'REGIONAL'
+      Description: 'WAF for FinancialApp - Financial Industry Protection'
+      DefaultAction:
+        Allow: {}
+      Rules:
+        # AWS Managed Rule - Core Rule Set (OWASP Top 10)
+        - Name: 'AWSManagedRulesCommonRuleSet'
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: 'AWS'
+              Name: 'AWSManagedRulesCommonRuleSet'
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'CommonRuleSetMetric'
+        # AWS Managed Rule - Known Bad Inputs
+        - Name: 'AWSManagedRulesKnownBadInputsRuleSet'
+          Priority: 2
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: 'AWS'
+              Name: 'AWSManagedRulesKnownBadInputsRuleSet'
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'KnownBadInputsMetric'
+        # SQL Injection Protection
+        - Name: 'AWSManagedRulesSQLiRuleSet'
+          Priority: 3
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: 'AWS'
+              Name: 'AWSManagedRulesSQLiRuleSet'
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'SQLiRuleSetMetric'
+        # Rate Limiting for DDoS Protection
+        - Name: 'RateLimitRule'
+          Priority: 4
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: 'IP'
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'RateLimitMetric'
+        # Geo-blocking for high-risk countries (financial compliance)
+        - Name: 'GeoBlockingRule'
+          Priority: 5
+          Statement:
+            GeoMatchStatement:
+              CountryCodes: ['CN', 'RU', 'IR', 'KP']
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'GeoBlockingMetric'
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${AWS::StackName}-WebACL-${EnvironmentSuffix}'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'FinancialApp-WAF-${EnvironmentSuffix}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Ref ApplicationLoadBalancer
+      WebACLArn: !GetAtt WebACL.Arn
+
+  # WAF Logging Configuration
+  WAFLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/wafv2/${AWS::StackName}-${EnvironmentSuffix}'
+      RetentionInDays: 30
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'FinancialApp-WAF-Logs-${EnvironmentSuffix}'
+
+  WAFLoggingConfiguration:
+    Type: AWS::WAFv2::LoggingConfiguration
+    Properties:
+      ResourceArn: !GetAtt WebACL.Arn
+      LogDestinationConfigs:
+        - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/wafv2/${AWS::StackName}-${EnvironmentSuffix}'
+      RedactedFields:
+        - SingleHeader:
+            Name: 'authorization'
+        - SingleHeader:
+            Name: 'cookie'
+
+  # ==============================================
   # VPC FLOW LOGS FOR SECURITY MONITORING
   # ==============================================
   VPCFlowLogsRole:
@@ -982,6 +1186,186 @@ Resources:
       Tags:
         - Key: 'Name'
           Value: !Sub 'FinancialApp-VPC-FlowLogs-${EnvironmentSuffix}'
+
+  # ==============================================
+  # GUARDDUTY THREAT DETECTION
+  # ==============================================
+  GuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: 'FIFTEEN_MINUTES'
+      DataSources:
+        S3Logs:
+          Enable: true
+        MalwareProtection:
+          ScanEc2InstanceWithFindings:
+            EbsVolumes: true
+        Kubernetes:
+          AuditLogs:
+            Enable: true
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'FinancialApp-GuardDuty-${EnvironmentSuffix}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+
+  # ==============================================
+  # AWS CLOUDTRAIL COMPREHENSIVE LOGGING
+  # ==============================================
+  CloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}-${EnvironmentSuffix}'
+      RetentionInDays: 90
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'FinancialApp-CloudTrail-Logs-${EnvironmentSuffix}'
+
+  CloudTrailLogStream:
+    Type: AWS::Logs::LogStream
+    Properties:
+      LogGroupName: !Ref CloudTrailLogGroup
+      LogStreamName: !Sub '${AWS::StackName}-CloudTrail-LogStream-${EnvironmentSuffix}'
+
+  CloudTrailRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: !Sub 'CloudTrailLogsPolicy-${EnvironmentSuffix}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub '${CloudTrailLogGroup}*'
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub '${AWS::StackName}-CloudTrail-${EnvironmentSuffix}'
+      S3BucketName: !Ref LoggingBucket
+      S3KeyPrefix: 'cloudtrail-logs/'
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup}:*'
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+      EventSelectors:
+        - ReadWriteType: 'All'
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values: 
+                - !Sub '${ApplicationDataBucket}/*'
+                - !Sub '${LoggingBucket}/*'
+      InsightSelectors:
+        - InsightType: 'ApiCallRateInsight'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'FinancialApp-CloudTrail-${EnvironmentSuffix}'
+        - Key: 'Environment'
+          Value: !Ref Environment
+
+  # ==============================================
+  # AWS CONFIG COMPLIANCE RULES
+  # ==============================================
+  ConfigServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/ConfigRole'
+      Policies:
+        - PolicyName: !Sub 'ConfigDeliveryPermissions-${EnvironmentSuffix}'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketAcl'
+                  - 's3:ListBucket'
+                Resource: !GetAtt LoggingBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Sub '${LoggingBucket}/config/*'
+
+  ConfigurationRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      Name: !Sub '${AWS::StackName}-ConfigRecorder-${EnvironmentSuffix}'
+      RoleARN: !GetAtt ConfigServiceRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      Name: !Sub '${AWS::StackName}-ConfigDelivery-${EnvironmentSuffix}'
+      S3BucketName: !Ref LoggingBucket
+      S3KeyPrefix: 'config/'
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: 'TwentyFour_Hours'
+
+  # Config Rules for Financial Compliance
+  EncryptedVolumesRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-encrypted-volumes-${EnvironmentSuffix}'
+      Description: 'Checks whether EBS volumes are encrypted'
+      Source:
+        Owner: 'AWS'
+        SourceIdentifier: 'ENCRYPTED_VOLUMES'
+
+  RDSEncryptionEnabledRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-rds-encryption-enabled-${EnvironmentSuffix}'
+      Description: 'Checks whether RDS instances have encryption enabled'
+      Source:
+        Owner: 'AWS'
+        SourceIdentifier: 'RDS_STORAGE_ENCRYPTED'
+
+  S3BucketPublicAccessProhibitedRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-s3-bucket-public-access-prohibited-${EnvironmentSuffix}'
+      Description: 'Checks that S3 buckets do not allow public access'
+      Source:
+        Owner: 'AWS'
+        SourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED'
+
+  SecurityGroupSSHRestrictedRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: !Sub '${AWS::StackName}-sg-ssh-restricted-${EnvironmentSuffix}'
+      Description: 'Checks whether security groups restrict SSH access from 0.0.0.0/0'
+      Source:
+        Owner: 'AWS'
+        SourceIdentifier: 'INCOMING_SSH_DISABLED'
 
 # ==============================================
 # OUTPUTS
@@ -1076,3 +1460,33 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  WebACLArn:
+    Description: 'AWS WAF WebACL ARN for application protection'
+    Value: !GetAtt WebACL.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WebACL-ARN'
+
+  GuardDutyDetectorId:
+    Description: 'GuardDuty Detector ID for threat detection'
+    Value: !Ref GuardDutyDetector
+    Export:
+      Name: !Sub '${AWS::StackName}-GuardDuty-DetectorId'
+
+  CloudTrailArn:
+    Description: 'CloudTrail ARN for comprehensive audit logging'
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+
+  ConfigurationRecorderName:
+    Description: 'AWS Config Configuration Recorder name'
+    Value: !Ref ConfigurationRecorder
+    Export:
+      Name: !Sub '${AWS::StackName}-Config-RecorderName'
+
+  MFAEnforcementPolicyArn:
+    Description: 'MFA Enforcement Policy ARN for enhanced security'
+    Value: !Ref MFAEnforcementPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-MFA-Policy-ARN'

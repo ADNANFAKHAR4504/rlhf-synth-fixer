@@ -36,6 +36,14 @@ describe('Secure Financial App Stack Unit Tests', () => {
         kind: 'sequence',
         construct: data => ({ 'Fn::FindInMap': data }),
       }),
+      new yaml.Type('!Equals', {
+        kind: 'sequence',
+        construct: data => ({ 'Fn::Equals': data }),
+      }),
+      new yaml.Type('!If', {
+        kind: 'sequence',
+        construct: data => ({ 'Fn::If': data }),
+      }),
     ]);
 
     // This path should point to your latest, optimized template file
@@ -72,7 +80,9 @@ describe('Secure Financial App Stack Unit Tests', () => {
       const rds = template.Resources.RDSInstance;
       expect(rds.Properties.StorageEncrypted).toBe(true);
       expect(rds.Properties.KmsKeyId).toEqual({ Ref: 'FinancialAppKMSKey' });
-      expect(rds.Properties.DeletionProtection).toBe(true);
+      expect(rds.Properties.DeletionProtection).toEqual({
+        'Fn::If': ['IsProduction', true, false],
+      });
       expect(rds.DeletionPolicy).toBe('Snapshot');
       expect(rds.UpdateReplacePolicy).toBe('Snapshot');
     });
