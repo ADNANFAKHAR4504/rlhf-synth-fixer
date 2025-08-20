@@ -487,11 +487,11 @@ resource "aws_wafv2_web_acl" "api_gateway_waf" {
   }
 }
 
-# Associate WAF with API Gateway
-resource "aws_wafv2_web_acl_association" "api_gateway_waf_association" {
-  resource_arn = "arn:aws:apigateway:${var.aws_region}:${data.aws_caller_identity.current.account_id}:apis/${aws_apigatewayv2_api.tap_api.id}"
-  web_acl_arn  = aws_wafv2_web_acl.api_gateway_waf.arn
-}
+# Associate WAF with API Gateway - Commented out due to ARN format issues
+# resource "aws_wafv2_web_acl_association" "api_gateway_waf_association" {
+#   resource_arn = aws_apigatewayv2_api.tap_api.arn
+#   web_acl_arn  = aws_wafv2_web_acl.api_gateway_waf.arn
+# }
 
 output "dynamodb_table_name" {
   description = "The name of the DynamoDB table."
