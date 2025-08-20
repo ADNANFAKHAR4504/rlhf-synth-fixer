@@ -20,18 +20,18 @@ resource "aws_kms_key" "primary" {
         Resource = "*"
       },
         {
-          Sid      = "Allow CloudWatch Logs to use the key"
-          Effect   = "Allow"
+          Sid      = "Allow CloudWatch Logs to use the key",
+          Effect   = "Allow",
           Principal = {
             Service = "logs.us-east-1.amazonaws.com"
-          }
+          },
           Action   = [
             "kms:Encrypt",
             "kms:Decrypt",
             "kms:ReEncrypt*",
             "kms:GenerateDataKey*",
             "kms:DescribeKey"
-          ]
+          ],
           Resource = "*"
         }
     ]
@@ -65,18 +65,18 @@ resource "aws_kms_key" "secondary" {
         Resource = "*"
       },
         {
-          Sid      = "Allow CloudWatch Logs to use the key"
-          Effect   = "Allow"
+          Sid      = "Allow CloudWatch Logs to use the key",
+          Effect   = "Allow",
           Principal = {
             Service = "logs.us-west-2.amazonaws.com"
-          }
+          },
           Action   = [
             "kms:Encrypt",
             "kms:Decrypt",
             "kms:ReEncrypt*",
             "kms:GenerateDataKey*",
             "kms:DescribeKey"
-          ]
+          ],
           Resource = "*"
         }
     ]
