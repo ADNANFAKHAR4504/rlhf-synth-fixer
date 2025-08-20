@@ -1,4 +1,9 @@
-```
+# AWS CloudFormation Template - Ideal Response
+
+## Description
+This CloudFormation template creates a secure and scalable network infrastructure with VPC, public and private subnets across three availability zones, Internet Gateway, NAT Gateways for high availability, comprehensive security groups and NACLs, VPC Flow Logs, and an S3 bucket with versioning and encryption following AWS best practices.
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Secure and scalable network infrastructure with VPC, subnets, gateways, security groups, NACLs, and S3 bucket following AWS best practices

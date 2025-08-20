@@ -1,12 +1,4 @@
-# Production-grade AWS CloudFormation template for secure, compliant infrastructure in `us-east-1` region
-**Designed to meet PCI-DSS standards with full automation and best practices for security and compliance**
-
-This ideal response incorporates critical improvements for QA automation and multi-environment deployment safety:
-- **EnvironmentSuffix parameter** for conflict-free parallel deployments
-- **No retention policies** to ensure complete resource cleanup
-- **Environment-scoped resource naming** for deployment isolation
-
-```yml
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   secure-config-us-east-1.yml
@@ -20,6 +12,9 @@ Description: >
   - RDS in private/isolated subnets (encrypted, secrets in SecretsManager)
   - Least-privilege IAM roles, SSM patch automation, CloudWatch alarms, WAF + CloudFront
 
+# ---------------------------
+# PARAMETERS
+# ---------------------------
 Parameters:
   Environment:
     Type: String
@@ -40,63 +35,188 @@ Parameters:
     Description: 'Suffix to append to resource names to avoid conflicts between deployments'
     Default: 'dev'
 
+  BucketNamePrefix:
+    Type: String
+    Description: 'Optional prefix to guarantee bucket-name uniqueness (leave empty to let CFN generate names)'
+    Default: ''
+
   VpcCidr:
     Type: String
+    Description: 'VPC CIDR block'
     Default: 10.0.0.0/16
-    Description: CIDR block for main VPC
 
-  PublicSubnetCidr:
+  AZCount:
+    Type: Number
+    Description: 'Number of AZs to use (1-3)'
+    Default: 2
+    MinValue: 1
+    MaxValue: 3
+
+  PublicSubnetMask:
+    Type: Number
+    Description: 'Additional subnet bits for Fn::Cidr (public). Example: 8 -> /24 when VPC is /16'
+    Default: 8
+    MinValue: 0
+    MaxValue: 16
+
+  PrivateSubnetMask:
+    Type: Number
+    Description: 'Additional subnet bits for Fn::Cidr (private). Example: 8 -> /24 when VPC is /16'
+    Default: 8
+    MinValue: 0
+    MaxValue: 16
+
+  IsolatedSubnetMask:
+    Type: Number
+    Description: 'Additional subnet bits for Fn::Cidr (isolated). Example: 8 -> /24 when VPC is /16'
+    Default: 8
+    MinValue: 0
+    MaxValue: 16
+
+  CreateNatGateways:
     Type: String
-    Default: 10.0.1.0/24
-    Description: CIDR block for public subnet (internet facing)
+    Description: 'Create NAT Gateways for private subnets? (true|false)'
+    Default: 'true'
+    AllowedValues: ['true', 'false']
 
-  PrivateSubnetCidr:
+  PatchWindowCron:
     Type: String
-    Default: 10.0.2.0/24
-    Description: CIDR block for private subnet (app servers)
+    Description: 'Cron schedule for the patch maintenance window (SSM). Use CloudWatch cron format.'
+    Default: 'cron(0 2 ? * SUN *)'
 
-  IsolatedSubnetCidr:
+  PatchWindowTimezone:
     Type: String
-    Default: 10.0.3.0/24
-    Description: CIDR block for isolated subnet (DB, sensitive workloads)
+    Description: 'Timezone for the maintenance window schedule (e.g., UTC, US/Eastern)'
+    Default: 'UTC'
 
-  DBUsername:
+  DBInstanceClass:
     Type: String
-    NoEcho: true
-    Default: dbadmin
-    Description: RDS master username (NoEcho for secrecy)
+    Description: 'RDS instance class'
+    Default: db.t3.medium
+    AllowedValues:
+      - db.t3.micro
+      - db.t3.small
+      - db.t3.medium
+      - db.t3.large
+      - db.r5.large
 
-  DBPassword:
+  DBEngine:
     Type: String
-    NoEcho: true
-    MinLength: 12
-    MaxLength: 64
-    Description: RDS master user password, minimum 12 chars
+    Description: 'RDS engine'
+    Default: aurora-mysql
+    AllowedValues:
+      - aurora
+      - aurora-mysql
+      - mysql
+      - postgres
 
+  DBAllocatedStorage:
+    Type: Number
+    Description: 'Allocated storage for DB (GB), ignored for Aurora where appropriate'
+    Default: 20
+    MinValue: 20
+    MaxValue: 65536
+
+  CreateCloudFront:
+    Type: String
+    Description: 'Create CloudFront distribution + WAF for public-facing content (true|false)'
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  ACMCertificateArn:
+    Type: String
+    Description: '(Optional) ACM certificate ARN (must be in us-east-1 for CloudFront). Leave empty to use CloudFront default cert.'
+    Default: ''
+
+  AdminCIDR:
+    Type: String
+    Description: 'CIDR block for admin access (SSH/management). Strongly recommended to supply secure CIDR.'
+    Default: 0.0.0.0/0
+
+  LogGroupNamePrefix:
+    Type: String
+    Description: 'Optional prefix for CloudWatch Log Group names to ensure uniqueness across deployments'
+    Default: ''
+
+  ExistingCloudTrailArn:
+    Type: String
+    Description: 'ARN of existing CloudTrail trail to use (leave empty to create new trail)'
+    Default: ''
+
+  CreateConfigRecorder:
+    Type: String
+    Description: 'Create new AWS Config recorder (true|false). Set to false if one already exists in the region.'
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+# ---------------------------
+# CONDITIONS
+# ---------------------------
+Conditions:
+  UseNatGateways: !Equals [!Ref CreateNatGateways, 'true']
+  UseCloudFront: !Equals [!Ref CreateCloudFront, 'true']
+  UseCustomCert: !Not [!Equals [!Ref ACMCertificateArn, '']]
+  HasSecondAZ: !Not [!Equals [!Ref AZCount, 1]]
+  HasBucketNamePrefix: !Not [!Equals [!Ref BucketNamePrefix, '']]
+  HasLogGroupNamePrefix: !Not [!Equals [!Ref LogGroupNamePrefix, '']]
+  HasExistingCloudTrail: !Not [!Equals [!Ref ExistingCloudTrailArn, '']]
+  CreateNewCloudTrail: !Equals [!Ref ExistingCloudTrailArn, '']
+  IsAuroraEngine:
+    !Or [
+      !Equals [!Ref DBEngine, 'aurora'],
+      !Equals [!Ref DBEngine, 'aurora-mysql'],
+    ]
+  IsNotAuroraEngine:
+    !Not [
+      !Or [
+        !Equals [!Ref DBEngine, 'aurora'],
+        !Equals [!Ref DBEngine, 'aurora-mysql'],
+      ],
+    ]
+  CreateNewConfigRecorder: !Equals [!Ref CreateConfigRecorder, 'true']
+
+# ---------------------------
+# HELPER & COMMON TAGS (used inline)
+# ---------------------------
+# Note: CloudFormation does not have global tags, so tags are added to each resource where supported.
+
+# ---------------------------
+# RESOURCES
+# ---------------------------
+
+# ---------------------------
+# KMS - Primary CMK (used by S3 logs, CloudTrail, CloudWatch Logs, RDS)
+# ---------------------------
 Resources:
-  # ===== KMS Keys with rotation enabled =====
-  S3KMSKey:
+  PrimaryKmsKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: "KMS key for encrypting S3 buckets with rotation enabled"
+      Description: !Sub 'Primary CMK for ${Environment} - encryption for logs, cloudtrail, s3, rds'
       EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Sid: Allow account usage
+          - Sid: AllowRootAndAdmins
             Effect: Allow
             Principal:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: kms:*
+            Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow CloudTrail to use this key
+          - Sid: AllowCloudTrailAndLogs
             Effect: Allow
             Principal:
-              Service: cloudtrail.amazonaws.com
+              Service:
+                - cloudtrail.amazonaws.com
+                - !Sub 'logs.${AWS::Region}.amazonaws.com'
+                - s3.amazonaws.com
+                - cloudfront.amazonaws.com
             Action:
-              - kms:GenerateDataKey*
               - kms:Decrypt
               - kms:DescribeKey
+              - kms:Encrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:CreateGrant
             Resource: '*'
       Tags:
         - Key: Environment
@@ -104,39 +224,16 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  S3KMSKeyAlias:
+  PrimaryKmsAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/s3-encryption-key
-      TargetKeyId: !Ref S3KMSKey
+      AliasName: !Sub alias/${Environment}-${EnvironmentSuffix}-primary-kms
+      TargetKeyId: !Ref PrimaryKmsKey
 
-  RDSKMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: "KMS key for encrypting RDS databases with rotation enabled"
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Allow account usage
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: kms:*
-            Resource: '*'
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+  # ---------------------------
+  # VPC + Subnets + RouteTables + NAT + NACLs
+  # ---------------------------
 
-  RDSKMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: alias/rds-encryption-key
-      TargetKeyId: !Ref RDSKMSKey
-
-  # ===== VPC and Subnets setup =====
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -145,50 +242,101 @@ Resources:
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-vpc'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-vpc'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  PublicSubnet:
+  # derive subnet CIDRs using Fn::Cidr - allocate 6 subnets (3 per AZ): public/private/isolated across AZCount
+
+  # Public subnets (create two by default or AZCount)
+  PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Ref PublicSubnetCidr
-      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 6, !Ref PublicSubnetMask]]
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-subnet'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-public-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  PrivateSubnet:
+  PublicSubnet2:
+    Condition: HasSecondAZ
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Ref PrivateSubnetCidr
-      AvailabilityZone: !Select [1, !GetAZs 'us-east-1']
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 6, !Ref PublicSubnetMask]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-private-subnet'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-public-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  IsolatedSubnet:
+  # Private subnets
+  PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: !Ref IsolatedSubnetCidr
-      AvailabilityZone: !Select [2, !GetAZs 'us-east-1']
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 6, !Ref PrivateSubnetMask]]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-isolated-subnet'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-private-1'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  PrivateSubnet2:
+    Condition: HasSecondAZ
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 6, !Ref PrivateSubnetMask]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-private-2'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Isolated subnets (for RDS)
+  IsolatedSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [4, !Cidr [!Ref VpcCidr, 6, !Ref IsolatedSubnetMask]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-isolated-1'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  IsolatedSubnet2:
+    Condition: HasSecondAZ
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [5, !Cidr [!Ref VpcCidr, 6, !Ref IsolatedSubnetMask]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-isolated-2'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -199,21 +347,55 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-igw'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-igw'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  VPCGatewayAttachment:
+  AttachIGW:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
 
-  NatGatewayEIP:
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-public-rt'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachIGW
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteAssociation:
+    Condition: HasSecondAZ
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # NAT (optional)
+  NatEIP1:
+    Condition: UseNatGateways
     Type: AWS::EC2::EIP
-    DependsOn: VPCGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
@@ -222,168 +404,296 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  NatGateway:
+  NatGateway1:
+    Condition: UseNatGateways
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NatGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet
+      AllocationId: !GetAtt NatEIP1.AllocationId
+      SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-nat-gateway'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-nat-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  # Route Tables & Associations for Subnets
-
-  PublicRouteTable:
+  PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-public-rt'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-private-rt-1'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: VPCGatewayAttachment
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet
-
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-private-rt'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-
-  PrivateRoute:
+  PrivateDefaultRoute1:
+    Condition: UseNatGateways
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway1
 
-  PrivateSubnetRouteTableAssociation:
+  PrivateSubnet1RouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      SubnetId: !Ref PrivateSubnet
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable1
 
+  PrivateSubnet2RouteAssociation:
+    Condition: HasSecondAZ
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable1
+
+  # Isolated (no route to IGW or NAT) / DB subnet table
   IsolatedRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-isolated-rt'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-isolated-rt'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  IsolatedSubnetRouteTableAssociation:
+  IsolatedSubnet1RouteAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
+      SubnetId: !Ref IsolatedSubnet1
       RouteTableId: !Ref IsolatedRouteTable
-      SubnetId: !Ref IsolatedSubnet
 
-  # ===== Security Groups with least privilege rules =====
+  IsolatedSubnet2RouteAssociation:
+    Condition: HasSecondAZ
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref IsolatedSubnet2
+      RouteTableId: !Ref IsolatedRouteTable
+
+  # ---------------------------
+  # Network ACLs (skeleton - fine tune with required rules)
+  # ---------------------------
+  PublicNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-public-nacl'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # Allow HTTP/HTTPS inbound
+  PublicNaclInboundHTTP:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      PortRange:
+        From: 80
+        To: 80
+      CidrBlock: 0.0.0.0/0
+
+  PublicNaclInboundHTTPS:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 110
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      PortRange:
+        From: 443
+        To: 443
+      CidrBlock: 0.0.0.0/0
+
+  PublicNaclOutbound:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+
+  PublicSubnetNaclAssoc1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      NetworkAclId: !Ref PublicNetworkAcl
+
+  PublicSubnetNaclAssoc2:
+    Condition: HasSecondAZ
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      NetworkAclId: !Ref PublicNetworkAcl
+
+  PrivateNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-private-nacl'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  PrivateNaclInbound:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: false
+      CidrBlock: !Ref VpcCidr
+
+  PrivateNaclOutbound:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+
+  PrivateSubnetNaclAssoc1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      NetworkAclId: !Ref PrivateNetworkAcl
+
+  PrivateSubnetNaclAssoc2:
+    Condition: HasSecondAZ
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      NetworkAclId: !Ref PrivateNetworkAcl
+
+  # ---------------------------
+  # SECURITY GROUPS (least privilege)
+  # ---------------------------
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Allow HTTPS and HTTP from internet'
+      GroupDescription: Web (ALB / CloudFront origin) security group
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: 'Allow HTTPS traffic'
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: 'Allow HTTP traffic (redirect)'
+          Description: HTTPS
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
-          Description: 'Allow all outbound'
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-web-sg'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-web-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  ApplicationSecurityGroup:
+  AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Allow app traffic from web servers and to DB'
+      GroupDescription: Application servers security group
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
           SourceSecurityGroupId: !Ref WebSecurityGroup
-          Description: 'Allow app port from web SG'
+          Description: App port from web tier
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AdminCIDR
+          Description: Admin SSH access
       SecurityGroupEgress:
         - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-          Description: 'Allow DB access'
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-app-sg'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-app-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  DatabaseSecurityGroup:
+  DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Allow MySQL from app servers only'
+      GroupDescription: Database security group - only allow from app SG
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref ApplicationSecurityGroup
-          Description: 'Allow MySQL traffic from app SG'
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+          Description: MySQL (or DB port) access from App tier
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub '${Environment}-database-sg'
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-db-sg'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  # ===== IAM Roles and Instance Profiles with least privilege =====
-  EC2Role:
+  # ---------------------------
+  # IAM Roles / Instance Profile (least privilege)
+  # ---------------------------
+
+  CloudTrailRole:
+    Condition: CreateNewCloudTrail
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-ec2-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Path: '/'
+      Policies:
+        - PolicyName: CloudTrailToCloudWatch
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*
+
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -393,25 +703,32 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Path: '/'
       Policies:
-        - PolicyName: S3AccessPolicy
+        - PolicyName: EC2S3ScopedAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
+              - Sid: AllowS3GetPutOnlyToSecureDataBucket
+                Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
-              - Effect: Allow
+                Resource:
+                  - !Sub '${SecureDataBucket.Arn}/*'
+              - Sid: AllowS3ListBucket
+                Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}'
-              - Effect: Allow
+                Resource:
+                  - !GetAtt SecureDataBucket.Arn
+              - Sid: AllowKMSDecrypt
+                Effect: Allow
                 Action:
                   - kms:Decrypt
                   - kms:GenerateDataKey
-                Resource: !GetAtt S3KMSKey.Arn
+                Resource:
+                  - !GetAtt PrimaryKmsKey.Arn
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -421,28 +738,70 @@ Resources:
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${Environment}-ec2-instance-profile'
       Roles:
-        - !Ref EC2Role
+        - !Ref EC2InstanceRole
+      Path: '/'
 
-  # ===== S3 Buckets with Encryption and Logging =====
-  SecureS3Bucket:
+  RDSMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ---------------------------
+  # Secrets Manager - DB credentials
+  # ---------------------------
+  DatabaseCredentialsSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: !Sub 'Database credentials for ${Environment}'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "dbadmin_${Environment}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\\'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ---------------------------
+  # S3 Buckets (no fixed names to avoid collisions; CFN will generate names unless prefix provided)
+  # ---------------------------
+
+  SecureDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-financial-secure-${AWS::AccountId}'
+      # optional stable name using prefix + account + region, but if prefix empty, CFN generates unique name
+      BucketName: !If
+        - HasBucketNamePrefix
+        - !Sub '${BucketNamePrefix}-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
+        - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3KMSKey
-            BucketKeyEnabled: true
-      VersioningConfiguration:
-        Status: Enabled
+              KMSMasterKeyID: !Ref PrimaryKmsKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
       LoggingConfiguration:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: access-logs/
@@ -452,15 +811,54 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
+  # Bucket policy to enforce HTTPS and SSE-KMS usage when uploading
+  SecureDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SecureDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${SecureDataBucket.Arn}'
+              - !Sub '${SecureDataBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+          - Sid: DenyUnEncryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${SecureDataBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: aws:kms
+          - !If
+            - UseCloudFront
+            - Sid: AllowCloudFrontServicePrincipal
+              Effect: Allow
+              Principal:
+                CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+              Action: s3:GetObject
+              Resource: !Sub '${SecureDataBucket.Arn}/*'
+            - !Ref AWS::NoValue
+
   AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-access-logs-${AWS::AccountId}'
+      BucketName: !If
+        - HasBucketNamePrefix
+        - !Sub '${BucketNamePrefix}-access-logs-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}'
+        - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3KMSKey
+              KMSMasterKeyID: !Ref PrimaryKmsKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -473,14 +871,18 @@ Resources:
           Value: !Ref Owner
 
   CloudTrailBucket:
+    Condition: CreateNewCloudTrail
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-cloudtrail-${AWS::AccountId}'
+      BucketName: !If
+        - HasBucketNamePrefix
+        - !Sub '${BucketNamePrefix}-cloudtrail-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}'
+        - !Ref AWS::NoValue
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3KMSKey
+              KMSMasterKeyID: !Ref PrimaryKmsKey
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -493,6 +895,7 @@ Resources:
           Value: !Ref Owner
 
   CloudTrailBucketPolicy:
+    Condition: CreateNewCloudTrail
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref CloudTrailBucket
@@ -503,118 +906,132 @@ Resources:
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !Sub arn:aws:s3:::${CloudTrailBucket}
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt CloudTrailBucket.Arn
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub arn:aws:s3:::${CloudTrailBucket}/AWSLogs/${AWS::AccountId}/*
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
 
-  # ===== CloudTrail configuration with encryption =====
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If
+        - HasBucketNamePrefix
+        - !Sub '${BucketNamePrefix}-config-${Environment}-${EnvironmentSuffix}-${AWS::AccountId}'
+        - !Ref AWS::NoValue
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref PrimaryKmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowConfigService
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+              - s3:ListBucket
+            Resource: !Sub 'arn:aws:s3:::${ConfigBucket}'
+          - Sid: AllowConfigPuts
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ConfigBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  # ---------------------------
+  # CloudWatch LogGroups (encrypted)
+  # ---------------------------
+  CloudTrailLogGroup:
+    Condition: CreateNewCloudTrail
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !If
+        - HasLogGroupNamePrefix
+        - !Sub '/aws/cloudtrail/${LogGroupNamePrefix}-${Environment}-${AWS::AccountId}'
+        - !Sub '/aws/cloudtrail/${Environment}-${AWS::AccountId}'
+      RetentionInDays: 365
+      KmsKeyId: !GetAtt PrimaryKmsKey.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  S3AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !If
+        - HasLogGroupNamePrefix
+        - !Sub '/aws/s3/${LogGroupNamePrefix}-${Environment}-access-${AWS::AccountId}'
+        - !Sub '/aws/s3/${Environment}-access-${AWS::AccountId}'
+      RetentionInDays: 365
+      KmsKeyId: !GetAtt PrimaryKmsKey.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ---------------------------
+  # CloudTrail (multi-region) with KMS encryption and CloudWatch integration
+  # ---------------------------
   CloudTrail:
+    Condition: CreateNewCloudTrail
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
     Properties:
-      TrailName: !Sub '${Environment}-financial-cloudtrail'
+      TrailName: !Sub '${Environment}-${EnvironmentSuffix}-financial-cloudtrail'
       S3BucketName: !Ref CloudTrailBucket
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
-      KMSKeyId: !Ref S3KMSKey
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: AWS::S3::Object
-              Values:
-                - !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
+      KMSKeyId: !Ref PrimaryKmsKey
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+      IsLogging: true
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  # ===== RDS with encryption and private subnet deployment =====
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: 'Subnet group for RDS databases in private and isolated subnets'
-      SubnetIds:
-        - !Ref PrivateSubnet
-        - !Ref IsolatedSubnet
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-
-  RDSInstance:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-financial-db'
-      Engine: mysql
-      EngineVersion: '8.0.35'
-      DBInstanceClass: db.t3.medium
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
-      AllocatedStorage: 100
-      StorageType: gp3
-      StorageEncrypted: true
-      KmsKeyId: !Ref RDSKMSKey
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      BackupRetentionPeriod: 7
-      MultiAZ: true
-      PubliclyAccessible: false
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-
-  # ===== AWS Config Rule for CIS EC2 Benchmark Compliance =====
-  ConfigRecorderRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: AWSConfigPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetBucketAcl
-                Resource: !Sub 'arn:aws:s3:::${SecureS3Bucket}/*'
-              - Effect: Allow
-                Action:
-                  - cloudwatch:PutMetricData
-                Resource: '*'
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-
-  ConfigRecorder:
+  # ---------------------------
+  # AWS Config: recorder, delivery, conformance pack (CIS)
+  # ---------------------------
+  ConfigurationRecorder:
+    Condition: CreateNewConfigRecorder
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: default
-      RoleARN: !GetAtt ConfigRecorderRole.Arn
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-config-recorder'
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -622,57 +1039,85 @@ Resources:
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: default
-      S3BucketName: !Ref SecureS3Bucket
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: One_Hour
-      S3KeyPrefix: config
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: One_Hour
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-config-delivery-channel'
+      S3BucketName: !Ref ConfigBucket
 
-  CisEc2ComplianceRule:
+  # AWS Config managed rules (CIS Foundations equivalent)
+  S3BucketEncryptionConfigRule:
     Type: AWS::Config::ConfigRule
     Properties:
-      ConfigRuleName: cis-ec2-benchmark-compliance
-      Description: Ensure EC2 instances comply with CIS benchmarks
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-s3-bucket-server-side-encryption-enabled'
       Source:
         Owner: AWS
-        SourceIdentifier: CIS_EC2_INSTANCE_BENCHMARK
-      Scope:
-        ComplianceResourceTypes:
-          - AWS::EC2::Instance
-      InputParameters: '{}'
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
 
-  # ===== AWS Systems Manager Patch Manager Setup =====
+  S3BucketPublicReadProhibitedConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-s3-bucket-public-read-prohibited'
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+
+  IAMUserMFAConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-iam-user-mfa-enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_USER_MFA_ENABLED
+
+  RootAccountMFAConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-root-account-mfa-enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED
+
+  VPCDefaultSecurityGroupClosedConfigRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-${EnvironmentSuffix}-vpc-default-security-group-closed'
+      Source:
+        Owner: AWS
+        SourceIdentifier: VPC_DEFAULT_SECURITY_GROUP_CLOSED
+
+  # ---------------------------
+  # Systems Manager Patching (PatchBaseline + MaintenanceWindow + Association)
+  # ---------------------------
   PatchBaseline:
     Type: AWS::SSM::PatchBaseline
     Properties:
-      Name: !Sub '${Environment}-patch-baseline'
-      Description: 'Patch baseline for Linux instances'
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-patch-baseline'
+      Description: 'Patch baseline for EC2 instances (security critical)'
       OperatingSystem: AMAZON_LINUX_2
       ApprovalRules:
         PatchRules:
-          - ApproveAfterDays: 7
-            ComplianceLevel: HIGH
-            EnableNonSecurity: false
+          - PatchFilterGroup:
+              PatchFilters:
+                - Key: CLASSIFICATION
+                  Values:
+                    - Security
+                - Key: SEVERITY
+                  Values:
+                    - Critical
+            ApproveAfterDays: 0
+      ApprovedPatchesComplianceLevel: CRITICAL
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  MaintenanceWindow:
+  PatchMaintenanceWindow:
     Type: AWS::SSM::MaintenanceWindow
     Properties:
-      Name: !Sub '${Environment}-patch-maintenance-window'
-      Schedule: 'cron(0 3 ? * SUN *)' # Every Sunday 3AM UTC
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-patch-window'
+      Schedule: !Ref PatchWindowCron
       Duration: 4
       Cutoff: 1
+      ScheduleTimezone: !Ref PatchWindowTimezone
       AllowUnassociatedTargets: false
       Tags:
         - Key: Environment
@@ -680,95 +1125,321 @@ Resources:
         - Key: Owner
           Value: !Ref Owner
 
-  # ===== AWS WAFv2 Web ACL for CloudFront protection =====
-  WebACL:
-    Type: AWS::WAFv2::WebACL
+  PatchAssociation:
+    Type: AWS::SSM::Association
     Properties:
-      Name: !Sub '${Environment}-waf'
-      Scope: CLOUDFRONT
-      DefaultAction:
-        Block: {}
-      VisibilityConfig:
-        SampledRequestsEnabled: true
-        CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${Environment}-waf-metric'
-      Rules:
-        - Name: AWSManagedRulesCommonRuleSet
-          Priority: 1
-          OverrideAction:
-            None: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: common-rule-set
+      Name: AWS-RunPatchBaseline
+      AssociationName: !Sub '${Environment}-${EnvironmentSuffix}-run-patch-baseline'
+      Targets:
+        - Key: tag:PatchGroup
+          Values:
+            - !Sub '${Environment}-${EnvironmentSuffix}-patch-group'
+      ScheduleExpression: !Ref PatchWindowCron
+      Parameters:
+        Operation:
+          - Install
+      ComplianceSeverity: CRITICAL
 
-  # ===== CloudWatch Metric Filter and Alarm for Unauthorized API Calls =====
-  UnauthorizedAPICallsLogGroup:
-    Type: AWS::Logs::LogGroup
+  # ---------------------------
+  # RDS - Subnet group & instance (private/isolated) - encrypted with KMS + secrets
+  # ---------------------------
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
     Properties:
-      RetentionInDays: 90
+      DBSubnetGroupDescription: !Sub '${Environment} DB subnet group (private/isolated)'
+      SubnetIds: !If
+        - HasSecondAZ
+        - - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        - - !Ref PrivateSubnet1
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
-  UnauthorizedAPICallsMetricFilter:
+  # Aurora Cluster (for Aurora engines) or Single Instance (for non-Aurora engines)
+  RDSAuroraCluster:
+    Condition: IsAuroraEngine
+    Type: AWS::RDS::DBCluster
+    Properties:
+      DBClusterIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-financial-cluster'
+      Engine: !Ref DBEngine
+      MasterUsername:
+        !Join [
+          '',
+          [
+            '{{resolve:secretsmanager:',
+            !Ref DatabaseCredentialsSecret,
+            ':SecretString:username}}',
+          ],
+        ]
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseCredentialsSecret}:SecretString:password}}'
+      StorageEncrypted: true
+      KmsKeyId: !Ref PrimaryKmsKey
+      VpcSecurityGroupIds:
+        - !Ref DbSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7
+      DeletionProtection: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  RDSAuroraInstance:
+    Condition: IsAuroraEngine
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-financial-aurora-instance'
+      DBClusterIdentifier: !Ref RDSAuroraCluster
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: !Ref DBEngine
+      PubliclyAccessible: false
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  RDSInstance:
+    Condition: IsNotAuroraEngine
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-financial-db'
+      AllocatedStorage: !Ref DBAllocatedStorage
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: !Ref DBEngine
+      MasterUsername:
+        !Join [
+          '',
+          [
+            '{{resolve:secretsmanager:',
+            !Ref DatabaseCredentialsSecret,
+            ':SecretString:username}}',
+          ],
+        ]
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseCredentialsSecret}:SecretString:password}}'
+      StorageEncrypted: true
+      KmsKeyId: !Ref PrimaryKmsKey
+      VPCSecurityGroups:
+        - !Ref DbSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: 7
+      MultiAZ: true
+      PubliclyAccessible: false
+      DeletionProtection: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ---------------------------
+  # WAFv2 (CLOUDFRONT scope) + CloudFront Distribution (OAI) protecting SecureDataBucket
+  # ---------------------------
+  WebACL:
+    Condition: UseCloudFront
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-financial-waf'
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${Environment}-${EnvironmentSuffix}-FinancialWAF'
+      Rules:
+        - Name: AWSManagedCommonRuleSet
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSetMetric
+        - Name: AWSManagedSQLiRuleSet
+          Priority: 2
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: SQLiRuleSetMetric
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  CloudFrontOAI:
+    Condition: UseCloudFront
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for ${Environment} SecureDataBucket'
+
+  CloudFrontDistribution:
+    Condition: UseCloudFront
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub '${Environment} Secure Distribution'
+        Enabled: true
+        Origins:
+          - Id: SecureBucketOrigin
+            DomainName: !GetAtt SecureDataBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOAI}'
+        DefaultCacheBehavior:
+          TargetOriginId: SecureBucketOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        ViewerCertificate: !If
+          - UseCustomCert
+          - {
+              AcmCertificateArn: !Ref ACMCertificateArn,
+              SslSupportMethod: sni-only,
+            }
+          - { CloudFrontDefaultCertificate: true }
+        HttpVersion: http2
+        PriceClass: PriceClass_All
+        WebACLId: !GetAtt WebACL.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  # ---------------------------
+  # CloudWatch Metric Filter + Alarm for Unauthorized API calls
+  # ---------------------------
+  CloudTrailMetricFilter:
+    Condition: CreateNewCloudTrail
     Type: AWS::Logs::MetricFilter
     Properties:
-      LogGroupName: !Ref UnauthorizedAPICallsLogGroup
-      FilterPattern: '{ $.errorCode = "AccessDenied*" || $.errorCode = "UnauthorizedOperation" }'
+      LogGroupName: !Ref CloudTrailLogGroup
+      FilterPattern: '{ ($.errorCode = "AccessDenied*") || ($.errorCode = "UnauthorizedOperation") }'
       MetricTransformations:
         - MetricValue: '1'
-          MetricNamespace: 'Security'
-          MetricName: 'UnauthorizedAPICall'
+          MetricNamespace: CloudTrailMetrics
+          MetricName: UnauthorizedApiCalls
 
-  UnauthorizedAPICallAlarm:
+  UnauthorizedApiCallsAlarm:
+    Condition: CreateNewCloudTrail
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-UnauthorizedAPICallAlarm'
-      AlarmDescription: 'Alarm for unauthorized API calls'
-      Namespace: Security
-      MetricName: UnauthorizedAPICall
+      AlarmName: !Sub '${Environment}-${EnvironmentSuffix}-unauthorized-api-calls'
+      AlarmDescription: 'Alarm fired when CloudTrail logs show unauthorized API calls'
+      Namespace: CloudTrailMetrics
+      MetricName: UnauthorizedApiCalls
       Statistic: Sum
       Period: 300
       EvaluationPeriods: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
-      AlarmActions: []
-      OKActions: []
+      TreatMissingData: notBreaching
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
           Value: !Ref Owner
 
+  # ---------------------------
+  # Outputs
+  # ---------------------------
 Outputs:
   VPCId:
     Description: VPC Id
     Value: !Ref VPC
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-VPC-ID'
 
-  PublicSubnetId:
-    Description: Public Subnet Id
-    Value: !Ref PublicSubnet
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-PublicSubnet1-ID'
 
-  PrivateSubnetId:
-    Description: Private Subnet Id
-    Value: !Ref PrivateSubnet
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-PrivateSubnet1-ID'
 
-  IsolatedSubnetId:
-    Description: Isolated Subnet Id
-    Value: !Ref IsolatedSubnet
+  IsolatedSubnet1Id:
+    Description: Isolated Subnet 1 ID
+    Value: !Ref IsolatedSubnet1
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-IsolatedSubnet1-ID'
 
-  SecureS3BucketName:
-    Description: Name of secure encrypted S3 bucket
-    Value: !Ref SecureS3Bucket
+  SecureDataBucketName:
+    Description: Secure data S3 bucket name
+    Value: !Ref SecureDataBucket
 
-  RDSInstanceEndpoint:
-    Description: RDS Instance Endpoint
-    Value: !GetAtt RDSInstance.Endpoint.Address
+  CloudTrailBucketName:
+    Condition: CreateNewCloudTrail
+    Description: CloudTrail S3 bucket name
+    Value: !Ref CloudTrailBucket
+
+  ExistingCloudTrailArnOutput:
+    Condition: HasExistingCloudTrail
+    Description: ARN of the existing CloudTrail trail being used
+    Value: !Ref ExistingCloudTrailArn
+
+  ConfigBucketName:
+    Description: AWS Config delivery S3 bucket
+    Value: !Ref ConfigBucket
+
+  PrimaryKmsKeyId:
+    Description: Primary KMS Key id
+    Value: !Ref PrimaryKmsKey
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-PrimaryKmsKeyId'
+
+  CloudFrontDistributionId:
+    Condition: UseCloudFront
+    Description: CloudFront distribution ID
+    Value: !Ref CloudFrontDistribution
+
+  DatabaseSecretArn:
+    Description: ARN of the database credentials secret
+    Value: !Ref DatabaseCredentialsSecret
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-DatabaseSecretArn'
+
+  RDSClusterIdentifier:
+    Condition: IsAuroraEngine
+    Description: Aurora DB Cluster Identifier
+    Value: !Ref RDSAuroraCluster
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-RDSClusterIdentifier'
+
+  RDSInstanceIdentifier:
+    Description: RDS Instance Identifier
+    Value: !If
+      - IsAuroraEngine
+      - !Ref RDSAuroraInstance
+      - !Ref RDSInstance
+    Export:
+      Name: !Sub '${Environment}-${EnvironmentSuffix}-RDSInstanceIdentifier'
 ```

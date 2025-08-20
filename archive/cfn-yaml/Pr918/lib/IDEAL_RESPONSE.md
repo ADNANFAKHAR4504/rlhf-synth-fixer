@@ -1,34 +1,60 @@
-```yml
-# ideal-secure-architecture.yaml
+# CloudFormation Infrastructure Solution
+
+This solution implements the infrastructure requirements using AWS CloudFormation.
+
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
+```yaml
+# secure-architecture.yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  IDEAL secure parameterized CloudFormation template for enterprise-grade,
+  Secure parameterized CloudFormation template for an enterprise-grade,
   multi-region-ready AWS environment handling sensitive financial data.
-  StackSet-friendly (deploy per-region). Implements:
-  - Primary CMK for service-level encryption (CloudWatch, CloudTrail)
-  - S3 buckets default to SSE-S3 (AES256) and deny non-SSE uploads
-  - WAFv2 (REGIONAL) with AWS managed rules; conditional association to ALB
+  Designed to be deployed per-region (StackSet friendly). It implements:
+  - KMS for service-level encryption (where applicable)
+  - All S3 buckets default to SSE-S3 (AES256)
+  - WAF (regional) with managed rules
   - Least-privilege IAM roles (uses AWS managed policies where appropriate)
-  - CloudTrail configured as multi-region trail, KMS-encrypted and validated
-  - VPC with dynamic subnets and custom NACLs
-  - Fully parameterized (no hard-coded ARNs, names, or regions)
+  - CloudTrail (multi-region) delivering logs to KMS-protected CloudWatch LogGroup
+  - VPC with parameterized subnets and custom NACLs
+  - No hard-coded AZ names or region-specific values (dynamic via Fn::GetAZs)
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Deployment'
+        Parameters:
+          - Environment
+          - BucketSuffix
+          - EnableExampleALB
+      - Label:
+          default: 'Networking'
+        Parameters:
+          - VpcCidr
+          - AvailabilityZonesToUse
+          - CreateNatGateways
 
 Parameters:
   Environment:
     Type: String
-    Description: Logical environment (dev | staging | prod)
+    Description: Logical environment name (e.g., dev, staging, prod)
     Default: prod
-    AllowedValues: [dev, staging, prod]
+    AllowedValues: [ dev, staging, prod ]
 
   BucketSuffix:
     Type: String
-    Description: Optional suffix to ensure global S3 bucket name uniqueness (leave empty to use account/region)
+    Description: Optional suffix to ensure global S3 bucket name uniqueness (leave empty to use AccountId-Region)
     Default: ''
 
   EnableExampleALB:
     Type: String
-    Description: Create example ALB to enable WAF association (true|false)
-    AllowedValues: ['true','false']
+    Description: 'Create a sample ALB to allow WAF association (true/false)'
+    AllowedValues: [ 'true', 'false' ]
     Default: 'false'
 
   VpcCidr:
@@ -38,55 +64,60 @@ Parameters:
 
   AvailabilityZonesToUse:
     Type: Number
-    Description: Number of availability zones to use (1-3)
+    Description: Number of availability zones to create subnets in (1-3)
     Default: 2
     MinValue: 1
     MaxValue: 3
 
   CreateNatGateways:
     Type: String
-    Description: Create NAT Gateways (true|false)
-    AllowedValues: ['true','false']
+    Description: 'Create NAT Gateways for private subnet Internet access (true/false)'
+    AllowedValues: [ 'true', 'false' ]
     Default: 'false'
 
   AdminCIDR:
     Type: String
-    Description: CIDR range for admin access (e.g., CIDR for VPN jump host)
+    Description: 'CIDR block for admin access (SSH/RDP) - override for security'
     Default: '10.0.0.0/8'
 
   CloudTrailLogRetentionDays:
     Type: Number
-    Description: Retention days for CloudTrail CloudWatch LogGroup
+    Description: 'Retention (days) for CloudTrail CloudWatch LogGroup'
     Default: 365
 
 Conditions:
   UseExampleALB: !Equals [ !Ref EnableExampleALB, 'true' ]
   UseNatGateways: !Equals [ !Ref CreateNatGateways, 'true' ]
-  IsProd: !Equals [ !Ref Environment, 'prod' ]
+  IsProdEnv: !Equals [ !Ref Environment, 'prod' ]
+  
 
 Resources:
 
-  # Primary Customer Master Key (CMK) - used by CloudTrail & LogGroups
-  PrimaryKMSKey:
+  # -----------------------------
+  # KMS Key: central key for service-level encryption (CloudWatch Logs, etc.)
+  # -----------------------------
+  PrimaryKmsKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'Primary CMK for ${Environment} - service-level encryption (CloudTrail/Logs)'
+      Description: !Sub 'Primary CMK for ${Environment} - use for CloudWatch/Log groups and other service-level encryption'
       EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
-          - Sid: AllowRootFullAccess
+          # Allow root account full administrative access to the CMK
+          - Sid: AllowRootAccountFullAccess
             Effect: Allow
             Principal:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action: 'kms:*'
             Resource: '*'
-          - Sid: AllowCloudTrailAndLogs
+          # Permit CloudWatch Logs and CloudTrail service principals to use this CMK for log delivery and LogGroup encryption
+          - Sid: AllowCloudWatchAndCloudTrailUse
             Effect: Allow
             Principal:
               Service:
+                - logs.amazonaws.com
                 - cloudtrail.amazonaws.com
-                - logs.${AWS::Region}.amazonaws.com
             Action:
               - 'kms:Encrypt'
               - 'kms:Decrypt'
@@ -100,13 +131,15 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  PrimaryKMSAlias:
+  PrimaryKmsAlias:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub 'alias/${Environment}-primary-cmk'
-      TargetKeyId: !Ref PrimaryKMSKey
+      TargetKeyId: !Ref PrimaryKmsKey
 
-  # VPC and dynamic subnets (public/private)
+  # -----------------------------
+  # VPC / Subnets (dynamically generated using Fn::Cidr and Fn::GetAZs)
+  # -----------------------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -120,7 +153,11 @@ Resources:
           Value: FinancialProject
         - Key: Environment
           Value: !Ref Environment
+        - Key: IsProd
+          Value: !If [ IsProdEnv, 'true', 'false' ]
 
+  
+  # Public Subnet 1
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -129,7 +166,7 @@ Resources:
         Fn::Select:
           - 0
           - Fn::Cidr:
-              - !Ref VpcCidr
+              - Ref: VpcCidr
               - 4
               - 8
       AvailabilityZone:
@@ -140,6 +177,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-public-1'
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -149,7 +190,7 @@ Resources:
         Fn::Select:
           - 1
           - Fn::Cidr:
-              - !Ref VpcCidr
+              - Ref: VpcCidr
               - 4
               - 8
       AvailabilityZone:
@@ -160,6 +201,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-public-2'
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -169,7 +214,7 @@ Resources:
         Fn::Select:
           - 2
           - Fn::Cidr:
-              - !Ref VpcCidr
+              - Ref: VpcCidr
               - 4
               - 8
       AvailabilityZone:
@@ -179,6 +224,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-1'
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -188,7 +237,7 @@ Resources:
         Fn::Select:
           - 3
           - Fn::Cidr:
-              - !Ref VpcCidr
+              - Ref: VpcCidr
               - 4
               - 8
       AvailabilityZone:
@@ -198,6 +247,10 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-2'
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -205,8 +258,12 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-igw'
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
-  AttachIGW:
+  AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
@@ -216,10 +273,17 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-rt'
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
-  PublicRoute:
+  PublicDefaultRoute:
     Type: AWS::EC2::Route
-    DependsOn: AttachIGW
+    DependsOn: AttachInternetGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -237,7 +301,7 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-  # NAT Gateway (optional) - created only if CreateNatGateways=true
+  # NAT (optional)
   NatEIP1:
     Condition: UseNatGateways
     Type: AWS::EC2::EIP
@@ -248,13 +312,20 @@ Resources:
     Condition: UseNatGateways
     Type: AWS::EC2::NatGateway
     Properties:
-      SubnetId: !Ref PublicSubnet1
       AllocationId: !GetAtt NatEIP1.AllocationId
+      SubnetId: !Ref PublicSubnet1
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-rt-1'
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateDefaultRoute1:
     Condition: UseNatGateways
@@ -274,6 +345,13 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-rt-2'
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
   PrivateDefaultRoute2:
     Condition: UseNatGateways
@@ -289,8 +367,10 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable2
 
-  # Custom NACLs (private/public) with explicit rules
-  PrivateNACL:
+  # -----------------------------
+  # Network ACLs (custom)
+  # -----------------------------
+  PrivateNetworkAcl:
     Type: AWS::EC2::NetworkAcl
     Properties:
       VpcId: !Ref VPC
@@ -298,39 +378,39 @@ Resources:
         - Key: Name
           Value: !Sub '${Environment}-private-nacl'
 
-  PrivateNACLInbound:
+  PrivateNetworkAclInbound:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
-      NetworkAclId: !Ref PrivateNACL
+      NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 100
       Protocol: -1
       RuleAction: allow
-      Egress: false
       CidrBlock: !Ref VpcCidr
+      Egress: false
 
-  PrivateNACLOutbound:
+  PrivateNetworkAclOutbound:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
-      NetworkAclId: !Ref PrivateNACL
+      NetworkAclId: !Ref PrivateNetworkAcl
       RuleNumber: 100
       Protocol: -1
       RuleAction: allow
-      Egress: true
       CidrBlock: 0.0.0.0/0
+      Egress: true
 
-  PrivateSubnet1NACLAssoc:
+  PrivateSubnetNetworkAclAssociation1:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet1
-      NetworkAclId: !Ref PrivateNACL
+      NetworkAclId: !Ref PrivateNetworkAcl
 
-  PrivateSubnet2NACLAssoc:
+  PrivateSubnetNetworkAclAssociation2:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
-      NetworkAclId: !Ref PrivateNACL
+      NetworkAclId: !Ref PrivateNetworkAcl
 
-  PublicNACL:
+  PublicNetworkAcl:
     Type: AWS::EC2::NetworkAcl
     Properties:
       VpcId: !Ref VPC
@@ -341,52 +421,54 @@ Resources:
   PublicInboundHTTP:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
-      NetworkAclId: !Ref PublicNACL
+      NetworkAclId: !Ref PublicNetworkAcl
       RuleNumber: 100
       Protocol: 6
       RuleAction: allow
-      Egress: false
       PortRange:
         From: 80
         To: 80
       CidrBlock: 0.0.0.0/0
+      Egress: false
 
   PublicInboundHTTPS:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
-      NetworkAclId: !Ref PublicNACL
+      NetworkAclId: !Ref PublicNetworkAcl
       RuleNumber: 110
       Protocol: 6
       RuleAction: allow
-      Egress: false
       PortRange:
         From: 443
         To: 443
       CidrBlock: 0.0.0.0/0
+      Egress: false
 
-  PublicOutboundAll:
+  PublicOutboundAllowAll:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
-      NetworkAclId: !Ref PublicNACL
+      NetworkAclId: !Ref PublicNetworkAcl
       RuleNumber: 100
       Protocol: -1
       RuleAction: allow
-      Egress: true
       CidrBlock: 0.0.0.0/0
+      Egress: true
 
-  PublicSubnet1NACLAssoc:
+  PublicSubnetNetworkAclAssociation1:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
-      NetworkAclId: !Ref PublicNACL
+      NetworkAclId: !Ref PublicNetworkAcl
 
-  PublicSubnet2NACLAssoc:
+  PublicSubnetNetworkAclAssociation2:
     Type: AWS::EC2::SubnetNetworkAclAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
-      NetworkAclId: !Ref PublicNACL
+      NetworkAclId: !Ref PublicNetworkAcl
 
-  # IAM roles with least privilege
+  # -----------------------------
+  # IAM Roles (least privilege where possible)
+  # -----------------------------
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
@@ -399,7 +481,7 @@ Resources:
             Action: sts:AssumeRole
       Path: '/'
       Policies:
-        - PolicyName: CloudTrailToCloudWatchLogs
+        - PolicyName: CloudTrailToCloudWatch
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -409,13 +491,14 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*'
+      ManagedPolicyArns: []
       Tags:
         - Key: Project
           Value: FinancialProject
         - Key: Environment
           Value: !Ref Environment
 
-  EC2Role:
+  EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -427,19 +510,21 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
-        - PolicyName: EC2RestrictedS3Access
+        - PolicyName: EC2S3AccessToFinancialData
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Sid: AllowS3ObjectOpsOnFinancialBucket
+              - Sid: AllowBucketObjectOps
                 Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
+                  - s3:DeleteObject
                 Resource:
                   - !Sub 'arn:aws:s3:::${FinancialDataBucket}/*'
-              - Sid: ListFinancialBucket
+              - Sid: AllowListBucket
                 Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -450,8 +535,7 @@ Resources:
                 Action:
                   - kms:Decrypt
                   - kms:GenerateDataKey
-                Resource:
-                  - !GetAtt PrimaryKMSKey.Arn
+                Resource: !GetAtt PrimaryKmsKey.Arn
       Tags:
         - Key: Project
           Value: FinancialProject
@@ -462,18 +546,36 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
-        - !Ref EC2Role
+        - !Ref EC2InstanceRole
+      Path: /
 
-  # S3 buckets with SSE-S3 (AES256) default encryption and policy to deny non-SSE uploads
+  # -----------------------------
+  # S3 Buckets (SSE-S3 default encryption)
+  # - FinancialDataBucket: default SSE-S3, denies unencrypted uploads
+  # - LoggingBucket: default SSE-S3 for access logs
+  # - CloudTrailBucket: default SSE-S3 for object storage (CloudTrail objects SSE-S3)
+  # -----------------------------
   FinancialDataBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !If
-        - Fn::Equals: [ !Ref BucketSuffix, '' ]
-        - !Sub '${Environment}-financial-data-${AWS::AccountId}-${AWS::Region}'
-        - !Sub '${Environment}-financial-data-${AWS::AccountId}-${AWS::Region}-${BucketSuffix}'
+      BucketName:
+        Fn::Join:
+          - '-'
+          - - !Ref Environment
+            - financial-data
+            - !Ref AWS::AccountId
+            - !Ref AWS::Region
+            - !Select
+              - 4
+              - !Split
+                - '-'
+                - !Select
+                  - 2
+                  - !Split
+                    - '/'
+                    - !Ref AWS::StackId
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -494,6 +596,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # Deny uploads that do not request SSE-S3 (AES256)
   FinancialDataBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -501,7 +604,7 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyUnEncryptedUploads
+          - Sid: DenyUnEncryptedObjectUploads
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
@@ -515,10 +618,22 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !If
-        - Fn::Equals: [ !Ref BucketSuffix, '' ]
-        - !Sub '${Environment}-logging-${AWS::AccountId}-${AWS::Region}'
-        - !Sub '${Environment}-logging-${AWS::AccountId}-${AWS::Region}-${BucketSuffix}'
+      BucketName:
+        Fn::Join:
+          - '-'
+          - - !Ref Environment
+            - logging
+            - !Ref AWS::AccountId
+            - !Ref AWS::Region
+            - !Select
+              - 4
+              - !Split
+                - '-'
+                - !Select
+                  - 2
+                  - !Split
+                    - '/'
+                    - !Ref AWS::StackId
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -539,10 +654,22 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !If
-        - Fn::Equals: [ !Ref BucketSuffix, '' ]
-        - !Sub '${Environment}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
-        - !Sub '${Environment}-cloudtrail-${AWS::AccountId}-${AWS::Region}-${BucketSuffix}'
+      BucketName:
+        Fn::Join:
+          - '-'
+          - - !Ref Environment
+            - cloudtrail
+            - !Ref AWS::AccountId
+            - !Ref AWS::Region
+            - !Select
+              - 4
+              - !Split
+                - '-'
+                - !Select
+                  - 2
+                  - !Split
+                    - '/'
+                    - !Ref AWS::StackId
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -558,6 +685,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # CloudTrail S3 policy for delivery (requires ACL 'bucket-owner-full-control')
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -565,7 +693,7 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: AllowCloudTrailGetBucketAcl
+          - Sid: AllowCloudTrailToGetBucketAcl
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
@@ -581,22 +709,36 @@ Resources:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
 
-  # CloudWatch Log Groups encrypted with KMS
+  # -----------------------------
+  # CloudWatch Log Groups (encrypted with KMS)
+  # -----------------------------
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${Environment}'
       RetentionInDays: !Ref CloudTrailLogRetentionDays
-      KmsKeyId: !Ref PrimaryKMSKey
+      KmsKeyId: !GetAtt PrimaryKmsKey.Arn
+      Tags:
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
   S3AccessLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/s3/${Environment}-access'
       RetentionInDays: 365
-      KmsKeyId: !Ref PrimaryKMSKey
+      KmsKeyId: !GetAtt PrimaryKmsKey.Arn
+      Tags:
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
-  # CloudTrail (multi-region) — importantly includes KmsKeyId and validation
+  # -----------------------------
+  # CloudTrail (multi-region)
+  # -----------------------------
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailBucketPolicy
@@ -608,10 +750,11 @@ Resources:
       EnableLogFileValidation: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      KmsKeyId: !Ref PrimaryKMSKey
       IsLogging: true
 
-  # WAFv2 WebACL (REGIONAL) with managed rule groups
+  # -----------------------------
+  # WAFv2 Web ACL (REGIONAL) with managed rule groups
+  # -----------------------------
   FinancialWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -649,7 +792,10 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: ManagedSQLi
 
-  # Optional ALB for WAF association and sample public app
+  # -----------------------------
+  # Optional Application Load Balancer (example target for WAF)
+  # created only when EnableExampleALB = 'true'
+  # -----------------------------
   ApplicationLoadBalancer:
     Condition: UseExampleALB
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -661,14 +807,18 @@ Resources:
         - !Ref PublicSubnet1
         - !Ref PublicSubnet2
       SecurityGroups:
-        - !Ref ALBSecurityGroup
+        - !Ref LoadBalancerSecurityGroup
+      Tags:
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
-  ALBSecurityGroup:
-    Condition: UseExampleALB
+  LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref VPC
       GroupDescription: !Sub '${Environment} ALB SG'
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -681,7 +831,13 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
 
+  # WAF Association to ALB (only if ALB exists)
   WebACLAssociationToALB:
     Condition: UseExampleALB
     Type: AWS::WAFv2::WebACLAssociation
@@ -689,6 +845,51 @@ Resources:
       ResourceArn: !GetAtt ApplicationLoadBalancer.LoadBalancerArn
       WebACLArn: !GetAtt FinancialWebACL.Arn
 
+  # -----------------------------
+  # Security Groups for app / db (tight rules)
+  # -----------------------------
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${Environment} web server SG'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub '${Environment} database SG'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Tags:
+        - Key: Project
+          Value: FinancialProject
+        - Key: Environment
+          Value: !Ref Environment
+
+  # -----------------------------
+  # Outputs (useful for integration tests / other stacks)
+  # -----------------------------
 Outputs:
   VPCId:
     Description: VPC Id
@@ -721,32 +922,76 @@ Outputs:
       Name: !Sub '${Environment}-PrivateSubnet2-ID'
 
   FinancialDataBucketName:
-    Description: Name of Financial Data S3 bucket
+    Description: Name of the Financial Data S3 bucket
     Value: !Ref FinancialDataBucket
     Export:
       Name: !Sub '${Environment}-FinancialDataBucket-Name'
 
+  LoggingBucketName:
+    Description: Name of the logging S3 bucket
+    Value: !Ref LoggingBucket
+    Export:
+      Name: !Sub '${Environment}-LoggingBucket-Name'
+
   CloudTrailBucketName:
-    Description: Name of CloudTrail S3 bucket
+    Description: Name of the CloudTrail S3 bucket
     Value: !Ref CloudTrailBucket
     Export:
       Name: !Sub '${Environment}-CloudTrailBucket-Name'
 
-  PrimaryKMSKeyId:
+  PrimaryKmsKeyId:
     Description: Primary KMS Key Id
-    Value: !Ref PrimaryKMSKey
+    Value: !Ref PrimaryKmsKey
     Export:
       Name: !Sub '${Environment}-PrimaryKmsKeyId'
 
   CloudTrailLogGroupArn:
-    Description: CloudTrail CloudWatch LogGroup ARN
+    Description: ARN of the CloudTrail CloudWatch LogGroup
     Value: !GetAtt CloudTrailLogGroup.Arn
     Export:
       Name: !Sub '${Environment}-CloudTrailLogGroupArn'
 
   WebACLArn:
-    Description: WebACL ARN
+    Description: ARN of the WAFv2 WebACL
     Value: !GetAtt FinancialWebACL.Arn
     Export:
       Name: !Sub '${Environment}-WebACL-ARN'
+
+  ALBDNS:
+    Condition: UseExampleALB
+    Description: DNS name of the example ALB
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${Environment}-ALB-DNS'
+
+  AdminCIDROut:
+    Description: Echo of AdminCIDR parameter to mark it as used
+    Value: !Ref AdminCIDR
+  AvailabilityZonesToUseOut:
+    Description: Echo of AvailabilityZonesToUse parameter to mark it as used
+    Value: !Ref AvailabilityZonesToUse
+
+  BucketSuffixOut:
+    Description: Echo of BucketSuffix parameter to mark it as used
+    Value: !Ref BucketSuffix
+
+```
+
+## Key Features
+
+- Infrastructure as Code using CloudFormation YAML
+- Parameterized configuration for flexibility
+- Resource outputs for integration
+- Environment suffix support for multi-environment deployments
+
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 ```

@@ -5,37 +5,37 @@ Design an infrastructure that supports automated **failover and failback** betwe
 
 ## High-Level Requirements:
 1. **EC2 Instances**
-   - Provision two EC2 instances:
-     - One **primary** instance.
-     - One **standby** instance.
-   - Each must be placed in a **different Availability Zone** within the **same AWS Region**.
-   - Use a publicly accessible **Amazon Linux 2 AMI** and ensure SSH access via a key pair parameter.
+- Provision two EC2 instances:
+- One **primary** instance.
+- One **standby** instance.
+- Each must be placed in a **different Availability Zone** within the **same AWS Region**.
+- Use a publicly accessible **Amazon Linux 2 AMI** and ensure SSH access via a key pair parameter.
 
 2. **Route 53 DNS & Health Checks**
-   - Use **Route 53 failover routing policy** to manage traffic between primary and standby.
-   - Create a **Route 53 health check** to continuously monitor the health of the primary instance (e.g., HTTP port 80).
-   - Create two **Route 53 DNS records** pointing to the EC2 public IPs with the failover routing policy:
-     - Primary: `SetIdentifier = Primary`, `Failover = PRIMARY`
-     - Standby: `SetIdentifier = Standby`, `Failover = SECONDARY`, associated with health check
+- Use **Route 53 failover routing policy** to manage traffic between primary and standby.
+- Create a **Route 53 health check** to continuously monitor the health of the primary instance (e.g., HTTP port 80).
+- Create two **Route 53 DNS records** pointing to the EC2 public IPs with the failover routing policy:
+- Primary: `SetIdentifier = Primary`, `Failover = PRIMARY`
+- Standby: `SetIdentifier = Standby`, `Failover = SECONDARY`, associated with health check
 
 3. **Automation**
-   - Ensure **automatic failover** if the primary becomes unhealthy.
-   - Ensure **automatic recovery** (failback) once the primary instance is healthy again.
+- Ensure **automatic failover** if the primary becomes unhealthy.
+- Ensure **automatic recovery** (failback) once the primary instance is healthy again.
 
 4. **IAM and Security**
-   - Add necessary IAM roles or security groups for EC2 and Route 53.
-   - Allow HTTP (80) and SSH (22) access from public sources.
+- Add necessary IAM roles or security groups for EC2 and Route 53.
+- Allow HTTP (80) and SSH (22) access from public sources.
 
 5. **Parameters**
-   - Include parameters for:
-     - KeyPairName
-     - InstanceType (default: t3.micro)
-     - HostedZoneId
-     - DomainName
+- Include parameters for:
+- KeyPairName
+- InstanceType (default: t3.micro)
+- HostedZoneId
+- DomainName
 
 6. **Outputs**
-   - Output the public IP addresses and DNS names of both EC2 instances.
-   - Output the health check ID and the Route 53 record set names.
+- Output the public IP addresses and DNS names of both EC2 instances.
+- Output the health check ID and the Route 53 record set names.
 
 ## Validation:
 The generated YAML must be:
@@ -45,7 +45,7 @@ The generated YAML must be:
 
 ## Reference:
 Follow AWS best practices as described in:
-👉 https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html
+https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html
 
 ## Deliverable:
 A single CloudFormation **YAML file** with:

@@ -12,9 +12,9 @@ Main points:
 
 Code structure:
 
-- MultiRegionNetworkingConstruct – VPCs + peering
-- RdsConstruct – RDS setup per region
-- ElastiCacheConstruct – Redis setup per region
+- MultiRegionNetworkingConstruct - VPCs + peering
+- RdsConstruct - RDS setup per region
+- ElastiCacheConstruct - Redis setup per region
 - Root stack ties it all together
 
 Each construct should take config options (CIDR blocks, regions, etc.), not hardcode stuff. Keep it clean and reusable.  
