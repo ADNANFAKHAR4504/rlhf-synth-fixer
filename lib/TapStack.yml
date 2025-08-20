@@ -1129,18 +1129,95 @@ Resources:
         - Key: 'Name'
           Value: !Sub 'FinancialApp-WAF-Logs-${EnvironmentSuffix}'
 
-  WAFLoggingConfiguration:
-    Type: AWS::WAFv2::LoggingConfiguration
+  # WAF Logging Setup via Custom Resource (Workaround for timing issues)
+  WAFLoggingRole:
+    Type: AWS::IAM::Role
     Properties:
-      ResourceArn: !GetAtt WebACL.Arn
-      LogDestinationConfigs:
-        - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-${WAFLogGroup}:*'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: WAFLoggingPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - wafv2:PutLoggingConfiguration
+                  - wafv2:GetLoggingConfiguration
+                  - wafv2:DeleteLoggingConfiguration
+                  - logs:CreateLogDelivery
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                Resource: '*'
 
-      RedactedFields:
-        - SingleHeader:
-            Name: 'authorization'
-        - SingleHeader:
-            Name: 'cookie'
+  WAFLoggingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-WAFLogging-${EnvironmentSuffix}'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt WAFLoggingRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+          import time
+          
+          def handler(event, context):
+              try:
+                  waf = boto3.client('wafv2')
+                  
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      # Wait for WebACL to be ready
+                      time.sleep(30)
+                      
+                      response = waf.put_logging_configuration(
+                          LoggingConfiguration={
+                              'ResourceArn': event['ResourceProperties']['WebACLArn'],
+                              'LogDestinationConfigs': [event['ResourceProperties']['LogDestination']],
+                              'RedactedFields': [
+                                  {'SingleHeader': {'Name': 'authorization'}},
+                                  {'SingleHeader': {'Name': 'cookie'}}
+                              ]
+                          }
+                      )
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                          'LoggingConfiguration': json.dumps(response['LoggingConfiguration'])
+                      })
+                      
+                  elif event['RequestType'] == 'Delete':
+                      try:
+                          waf.delete_logging_configuration(
+                              ResourceArn=event['ResourceProperties']['WebACLArn']
+                          )
+                      except waf.exceptions.WAFNonexistentItemException:
+                          pass  # Already deleted
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  WAFLoggingCustomResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - WebACL
+      - WAFLogGroup
+    Properties:
+      ServiceToken: !GetAtt WAFLoggingFunction.Arn
+      WebACLArn: !GetAtt WebACL.Arn
+      LogDestination: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-${WAFLogGroup}:*'
 
   # ==============================================
   # VPC FLOW LOGS FOR SECURITY MONITORING
