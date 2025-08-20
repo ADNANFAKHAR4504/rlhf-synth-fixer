@@ -663,6 +663,7 @@ Resources:
 
   ConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    DependsOn: ConfigDeliveryChannel
     Properties:
       Name: !Sub 'config-recorder-${EnvironmentSuffix}'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -672,7 +673,6 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
-    DependsOn: ConfigurationRecorder
     Properties:
       Name: !Sub 'config-delivery-${EnvironmentSuffix}'
       S3BucketName: !Ref LoggingBucket

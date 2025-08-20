@@ -1056,6 +1056,7 @@
         },
         "ConfigurationRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
+            "DependsOn": "ConfigDeliveryChannel",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "config-recorder-${EnvironmentSuffix}"
@@ -1074,7 +1075,6 @@
         },
         "ConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
-            "DependsOn": "ConfigurationRecorder",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "config-delivery-${EnvironmentSuffix}"
