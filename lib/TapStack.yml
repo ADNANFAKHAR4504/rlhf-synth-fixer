@@ -407,9 +407,7 @@ Resources:
                   - kms:Decrypt
                   - kms:GenerateDataKey
                   - kms:DescribeKey
-                Resource:
-                  - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/rds"
-                  - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/secretsmanager"
+                Resource: !Ref KMSKey
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -455,7 +453,7 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      KmsKeyId: alias/aws/rds
+      KmsKeyId: !Ref KMSKey
       MultiAZ: true
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
@@ -478,7 +476,7 @@ Resources:
     Properties:
       Name: !Sub "${ResourceNamePrefix}DBCredentials"
       Description: "Database credentials for the web application"
-      KmsKeyId: alias/aws/secretsmanager
+      KmsKeyId: !Ref KMSKey
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: "password"
@@ -615,6 +613,14 @@ Resources:
             EOF
 
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeType: gp3
+              VolumeSize: 20
+              Encrypted: true
+              KmsKeyId: !Ref KMSKey
+              DeleteOnTermination: true
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -764,6 +770,111 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # KMS Key for EBS and RDS Encryption
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "KMS key for ${ProjectName} encryption"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow CloudFormation Service
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+            Resource: "*"
+          - Sid: Allow EC2 Service
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService": !Sub "ec2.${AWS::Region}.amazonaws.com"
+          - Sid: Allow Auto Scaling Service
+            Effect: Allow
+            Principal:
+              Service: autoscaling.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: "*"
+          - Sid: Allow RDS Service
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService": !Sub "rds.${AWS::Region}.amazonaws.com"
+          - Sid: Allow Secrets Manager Service
+            Effect: Allow
+            Principal:
+              Service: secretsmanager.amazonaws.com
+            Action:
+              - kms:CreateGrant
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey
+              - kms:GenerateDataKeyWithoutPlainText
+              - kms:ReEncrypt*
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "kms:ViaService": !Sub "secretsmanager.${AWS::Region}.amazonaws.com"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-KMS-Key"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${ResourceNamePrefix}-key"
+      TargetKeyId: !Ref KMSKey
+
 Outputs:
   VPCId:
     Description: "VPC ID"
@@ -830,3 +941,15 @@ Outputs:
     Value: !Ref EC2KeyPair
     Export:
       Name: !Sub "${AWS::StackName}-KeyPair-Name"
+
+  KMSKeyArn:
+    Description: "KMS Key ARN for encryption"
+    Value: !Ref KMSKey
+    Export:
+      Name: !Sub "${AWS::StackName}-KMS-Key-ARN"
+
+  KMSKeyAlias:
+    Description: "KMS Key Alias"
+    Value: !Ref KMSKeyAlias
+    Export:
+      Name: !Sub "${AWS::StackName}-KMS-Key-Alias"
