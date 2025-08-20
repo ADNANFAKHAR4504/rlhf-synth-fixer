@@ -341,7 +341,7 @@ EOF
         iam.ManagedPolicy.fromManagedPolicyName(
           this,
           'AWSLambdaBasicExecutionRole',
-          'service-role/AWSLambdaBasicExecutionRole'
+          'AWSLambdaBasicExecutionRole'
         ),
       ],
       inlinePolicies: {
