@@ -7,6 +7,7 @@ import path from 'path';
 
 const STACK_REL = '../lib/tap_stack.tf'; // adjust if your structure differs
 const PROVIDER_REL = '../lib/provider.tf';
+const VARS_REL = '../lib/vars.tf';
 const stackPath = path.resolve(__dirname, STACK_REL);
 const providerPath = path.resolve(__dirname, PROVIDER_REL);
 
@@ -26,8 +27,11 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
     expect(content).not.toMatch(/\bprovider\s+"aws"\s*{/);
   });
 
-  test('declares aws_region variable in tap_stack.tf', () => {
-    const content = fs.readFileSync(stackPath, 'utf8');
+  test('declares aws_region variable in vars.tf (not in tap_stack.tf)', () => {
+    const varsPath = path.resolve(__dirname, VARS_REL);
+    const exists = fs.existsSync(varsPath);
+    expect(exists).toBe(true);
+    const content = fs.readFileSync(varsPath, 'utf8');
     expect(content).toMatch(/variable\s+"aws_region"\s*{/);
   });
 
@@ -46,40 +50,36 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
     );
   });
 
-  test('declares create_vpcs and create_cloudtrail with secure defaults (false)', () => {
-    const content = fs.readFileSync(stackPath, 'utf8');
+  test('declares create_vpcs and create_cloudtrail with secure defaults (false) in vars.tf', () => {
+    const varsPath = path.resolve(__dirname, VARS_REL);
+    const content = fs.readFileSync(varsPath, 'utf8');
     expect(content).toMatch(/variable\s+"create_vpcs"[\s\S]*?default\s*=\s*false/);
     expect(content).toMatch(/variable\s+"create_cloudtrail"[\s\S]*?default\s*=\s*false/);
   });
 
-  test('declares sensitive db_password variable', () => {
-    const content = fs.readFileSync(stackPath, 'utf8');
+  test('declares sensitive db_password variable in vars.tf', () => {
+    const varsPath = path.resolve(__dirname, VARS_REL);
+    const content = fs.readFileSync(varsPath, 'utf8');
     expect(content).toMatch(/variable\s+"db_password"[\s\S]*?sensitive\s*=\s*true/);
   });
 
-  test('SSH ingress does not allow 0.0.0.0/0 (uses allowed_cidr_blocks)', () => {
+  test('network_xregion module is wired with allowed_cidr_blocks variable', () => {
     const content = fs.readFileSync(stackPath, 'utf8');
-    // Ensure SSH rule exists
-    expect(content).toMatch(/ingress[\s\S]*from_port\s*=\s*22[\s\S]*to_port\s*=\s*22/);
-    // Prefer SSH rule to use allowed_cidr_blocks variable (don’t hard-fail if broader CIDR is present)
-    expect(content).toMatch(/ingress[\s\S]*from_port\s*=\s*22[\s\S]*cidr_blocks\s*=\s*var\.allowed_cidr_blocks/);
+    expect(content).toMatch(/module\s+"network_xregion"\s*{[\s\S]*allowed_cidr_blocks\s*=\s*var\.allowed_cidr_blocks/);
   });
 
-  test('S3 buckets are encrypted with KMS (aws:kms) and reference KMS keys', () => {
+  test('S3 modules use KMS keys (module wiring)', () => {
     const content = fs.readFileSync(stackPath, 'utf8');
-    // At least one SSE configuration must exist (primary|secondary|logging)
-    expect(content).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"(primary|secondary|logging)"/);
-    // Must use aws:kms
-    expect(content).toMatch(/sse_algorithm\s*=\s*"aws:kms"/);
-    // Must reference a KMS key for encryption
-    expect(content).toMatch(/kms_master_key_id\s*=\s*aws_kms_key\.(primary|secondary)\.arn/);
+    expect(content).toMatch(/module\s+"s3_buckets"[\s\S]*primary_kms_key_arn\s*=\s*module\.kms_keys\.primary_key_arn/);
+    expect(content).toMatch(/module\s+"s3_buckets"[\s\S]*secondary_kms_key_arn\s*=\s*module\.kms_keys\.secondary_key_arn/);
+    expect(content).toMatch(/module\s+"s3_replication"[\s\S]*source_kms_key_arn\s*=\s*module\.kms_keys\.primary_key_arn/);
   });
 
-  test('key resources are defined (KMS, S3, DynamoDB)', () => {
+  test('key modules are defined (KMS keys, S3, Data)', () => {
     const content = fs.readFileSync(stackPath, 'utf8');
-    expect(content).toMatch(/resource\s+"aws_kms_key"\s+"primary"/);
-    expect(content).toMatch(/resource\s+"aws_s3_bucket"\s+"primary"/);
-    expect(content).toMatch(/resource\s+"aws_dynamodb_table"\s+"primary"/);
+    expect(content).toMatch(/module\s+"kms_keys"\s*{/);
+    expect(content).toMatch(/module\s+"s3_buckets"\s*{/);
+    expect(content).toMatch(/module\s+"data"\s*{/);
   });
 
   test('expected outputs are present', () => {

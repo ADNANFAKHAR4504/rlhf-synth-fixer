@@ -54,6 +54,7 @@ variable "db_password" {
   type        = string
   sensitive   = true
   description = "RDS master password"
+  default     = ""
 }
 
 variable "resource_suffix" {

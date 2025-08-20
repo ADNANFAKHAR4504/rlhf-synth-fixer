@@ -1,3 +1,16 @@
+# Generate password if not provided
+resource "random_password" "db" {
+  length      = 16
+  special     = false
+  min_lower   = 1
+  min_upper   = 1
+  min_numeric = 1
+}
+
+locals {
+  effective_db_password = var.db_password != "" ? var.db_password : random_password.db.result
+}
+
 # DynamoDB Tables (primary and secondary)
 resource "aws_dynamodb_table" "primary" {
   name             = "tap-stack-table-${var.resource_suffix}"
@@ -85,7 +98,7 @@ resource "aws_db_instance" "primary" {
   instance_class         = "db.t3.micro"
   db_name                = "primarydb"
   username               = "admin"
-  password               = var.db_password
+  password               = local.effective_db_password
   multi_az               = true
   publicly_accessible    = false
   db_subnet_group_name   = aws_db_subnet_group.primary[0].name
@@ -110,7 +123,7 @@ resource "aws_db_instance" "secondary" {
   instance_class         = "db.t3.micro"
   db_name                = "secondarydb"
   username               = "admin"
-  password               = var.db_password
+  password               = local.effective_db_password
   multi_az               = true
   publicly_accessible    = false
   db_subnet_group_name   = aws_db_subnet_group.secondary[0].name
