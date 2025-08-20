@@ -26,6 +26,35 @@ resource "aws_iam_role" "ec2" {
   }
 }
 
+resource "aws_iam_policy" "ec2_s3_access" {
+  name_prefix = "${var.project_name}-ec2-s3-access-policy"
+  description = "Allow EC2 instances to access the test data S3 bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Effect   = "Allow"
+        Resource = [
+          "arn:aws:s3:::test-data-bucket",
+          "arn:aws:s3:::test-data-bucket/*"
+        ]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_s3_access" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = aws_iam_policy.ec2_s3_access.arn
+}
+
 
 resource "aws_iam_user" "main" {
   count = length(var.iam_users)
