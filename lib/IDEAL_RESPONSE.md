@@ -219,7 +219,7 @@ Service = "lambda.amazonaws.com"
 
 # IAM Policy for Lambda execution
 
-resource "aws_iam_policy" "lambda_exec_policy" {
+resource "aws*iam_policy" "lambda_exec_policy" {
 name = var.iam_policy_name
 policy = jsonencode({
 Version = "2012-10-17"
@@ -231,7 +231,7 @@ Action = [
 "logs:PutLogEvents"
 ]
 Effect = "Allow"
-Resource = "arn:aws:logs:_:_:\*"
+Resource = "arn:aws:logs:*:\_:\*"
 },
 {
 Action = [
@@ -336,7 +336,7 @@ action = "lambda:InvokeFunction"
 function_name = aws_lambda_function.tap_lambda.function_name
 principal = "apigateway.amazonaws.com"
 
-source_arn = "${aws_apigatewayv2_api.tap_api.execution_arn}/_/_"
+source*arn = "${aws_apigatewayv2_api.tap_api.execution_arn}/*/\_"
 }
 
 # CloudFront Origin Access Control for S3
