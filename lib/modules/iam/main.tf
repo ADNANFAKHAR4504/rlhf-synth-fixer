@@ -58,7 +58,7 @@ data "aws_iam_policy_document" "cloudtrail_policy" {
 
 data "aws_iam_policy_document" "vpc_flow_policy" {
   statement {
-    actions   = [
+    actions = [
       "logs:CreateLogGroup",
       "logs:CreateLogStream",
       "logs:PutLogEvents",
@@ -106,7 +106,7 @@ data "aws_iam_policy_document" "lambda_policy" {
     resources = ["arn:aws:logs:*:*:*"]
   }
   statement {
-    actions   = [
+    actions = [
       "ec2:DescribeSecurityGroups",
       "ec2:AuthorizeSecurityGroupIngress",
       "ec2:RevokeSecurityGroupIngress"

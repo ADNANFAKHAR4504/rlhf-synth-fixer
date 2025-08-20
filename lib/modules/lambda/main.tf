@@ -54,7 +54,7 @@ EOF
 resource "aws_cloudwatch_event_rule" "sg_changes" {
   name = "${var.project_name}-${var.environment_suffix}-sg-changes"
   event_pattern = jsonencode({
-    source      = ["aws.ec2"]
+    source        = ["aws.ec2"]
     "detail-type" = ["AWS API Call via CloudTrail"]
     detail = {
       eventSource = ["ec2.amazonaws.com"]
