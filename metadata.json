@@ -5,5 +5,23 @@
   "turn_type": "single",
   "po_id": "291581",
   "team": "2",
-  "startedAt": "2025-08-19T15:15:43.223Z"
+  "startedAt": "2025-08-19T15:15:43.223Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "security",
+    "database",
+    "networking",
+    "scaling"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "EC2",
+    "ALB",
+    "RDS",
+    "S3",
+    "KMS",
+    "IAM"
+  ]
 }
