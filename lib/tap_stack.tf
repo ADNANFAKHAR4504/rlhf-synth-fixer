@@ -652,8 +652,8 @@ resource "aws_route53_query_log" "main" {
     aws_iam_role_policy.route53_query_log
   ]
 
-  destination_arn = aws_cloudwatch_log_group.route53_dns.arn
-  zone_id         = aws_route53_zone.private.zone_id
+  cloudwatch_log_group_arn = aws_cloudwatch_log_group.route53_dns.arn
+  zone_id                  = aws_route53_zone.private.zone_id
 }
 
 # DNS Records
