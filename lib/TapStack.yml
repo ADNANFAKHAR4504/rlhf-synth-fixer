@@ -462,7 +462,7 @@ Resources:
           DataResources:
             - Type: AWS::S3::Object
               Values:
-                - !Sub '${SecureS3Bucket}/*'
+                - !Sub '${SecureS3Bucket.Arn}/*'
 
   # CloudWatch Alarms for Security Monitoring
   UnauthorizedAPICallsAlarm:

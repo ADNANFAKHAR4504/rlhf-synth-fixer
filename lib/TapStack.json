@@ -787,7 +787,7 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${SecureS3Bucket}/*"
+                                        "Fn::Sub": "${SecureS3Bucket.Arn}/*"
                                     }
                                 ]
                             }
