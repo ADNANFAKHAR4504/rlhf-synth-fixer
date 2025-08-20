@@ -260,7 +260,7 @@ describe('Secure Web Application CloudFormation Template', () => {
 
   describe('S3 Buckets', () => {
     test('should have S3 buckets with proper security', () => {
-      const buckets = ['S3Bucket', 'S3LoggingBucket', 'CloudTrailBucket', 'ConfigBucket'];
+      const buckets = ['S3Bucket', 'S3LoggingBucket', 'CloudTrailBucket'];
       
       buckets.forEach(bucketName => {
         expect(template.Resources[bucketName]).toBeDefined();
@@ -269,7 +269,7 @@ describe('Secure Web Application CloudFormation Template', () => {
     });
 
     test('S3 buckets should block public access', () => {
-      const buckets = ['S3Bucket', 'S3LoggingBucket', 'CloudTrailBucket', 'ConfigBucket'];
+      const buckets = ['S3Bucket', 'S3LoggingBucket', 'CloudTrailBucket'];
       
       buckets.forEach(bucketName => {
         const bucket = template.Resources[bucketName];
@@ -282,7 +282,7 @@ describe('Secure Web Application CloudFormation Template', () => {
     });
 
     test('S3 buckets should be encrypted with KMS', () => {
-      const buckets = ['S3Bucket', 'S3LoggingBucket', 'CloudTrailBucket', 'ConfigBucket'];
+      const buckets = ['S3Bucket', 'S3LoggingBucket', 'CloudTrailBucket'];
       
       buckets.forEach(bucketName => {
         const bucket = template.Resources[bucketName];
@@ -302,16 +302,20 @@ describe('Secure Web Application CloudFormation Template', () => {
       expect(trail.Properties.EnableLogFileValidation).toBe(true);
     });
 
-    test('should have AWS Config', () => {
-      expect(template.Resources.ConfigurationRecorder).toBeDefined();
-      expect(template.Resources.DeliveryChannel).toBeDefined();
-      expect(template.Resources.ConfigRole).toBeDefined();
+    test('should have AWS Config Rules for compliance monitoring', () => {
+      // AWS Config Rules using existing ConfigurationRecorder in the account
+      expect(template.Resources.S3BucketPublicReadProhibitedRule).toBeDefined();
+      expect(template.Resources.S3BucketPublicWriteProhibitedRule).toBeDefined();
+      expect(template.Resources.S3BucketEncryptionRule).toBeDefined();
+      expect(template.Resources.RDSInstanceEncryptionRule).toBeDefined();
+      expect(template.Resources.VPCDefaultSecurityGroupClosedRule).toBeDefined();
     });
 
-    test('Config should record all resources', () => {
-      const recorder = template.Resources.ConfigurationRecorder;
-      expect(recorder.Properties.RecordingGroup.AllSupported).toBe(true);
-      expect(recorder.Properties.RecordingGroup.IncludeGlobalResourceTypes).toBe(true);
+    test('AWS Config Rules should have correct properties', () => {
+      const s3ReadRule = template.Resources.S3BucketPublicReadProhibitedRule;
+      expect(s3ReadRule.Type).toBe('AWS::Config::ConfigRule');
+      expect(s3ReadRule.Properties.Source.Owner).toBe('AWS');
+      expect(s3ReadRule.Properties.Source.SourceIdentifier).toBe('S3_BUCKET_PUBLIC_READ_PROHIBITED');
     });
 
     test('should have CloudWatch Log Groups', () => {
@@ -386,7 +390,12 @@ describe('Secure Web Application CloudFormation Template', () => {
         'WebACLArn',
         'KMSKeyId',
         'BastionHostPublicIP',
-        'CloudTrailArn'
+        'CloudTrailArn',
+        'S3BucketPublicReadProhibitedRuleName',
+        'S3BucketPublicWriteProhibitedRuleName',
+        'S3BucketEncryptionRuleName',
+        'RDSInstanceEncryptionRuleName',
+        'VPCDefaultSecurityGroupClosedRuleName'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -412,7 +421,7 @@ describe('Secure Web Application CloudFormation Template', () => {
     });
 
     test('S3 buckets should not have retention policies that prevent deletion', () => {
-      const buckets = ['S3Bucket', 'S3LoggingBucket', 'CloudTrailBucket', 'ConfigBucket'];
+      const buckets = ['S3Bucket', 'S3LoggingBucket', 'CloudTrailBucket'];
       
       buckets.forEach(bucketName => {
         const bucket = template.Resources[bucketName];

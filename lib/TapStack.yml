@@ -660,7 +660,7 @@ Resources:
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub 'securewebapp-${EnvironmentSuffix}-database-${AWS::AccountId}'
+      DBInstanceIdentifier: !Sub '${AWS::StackName}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -812,77 +812,79 @@ Resources:
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       KMSKeyId: !Ref KMSKey
 
-  # AWS Config (Commented out due to region limit of 1 ConfigurationRecorder per account)
-  # ConfigRole:
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Version: '2012-10-17'
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service: config.amazonaws.com
-  #           Action: sts:AssumeRole
-  #     ManagedPolicyArns:
-  #       - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+  # AWS Config Rules (using existing ConfigurationRecorder in the account)
+  # Note: AWS Config ConfigurationRecorder and DeliveryChannel already exist in the account
+  # We only need to create Config Rules for compliance monitoring
+  
+  # AWS Config Rule: S3 Bucket Public Read Prohibited
+  S3BucketPublicReadProhibitedRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-S3BucketPublicReadProhibited'
+      Description: 'Checks that S3 buckets do not allow public read access'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
+      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
 
-  # ConfigBucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Sub 'securewebapp-${EnvironmentSuffix}-config-bucket-${AWS::AccountId}'
-  #     BucketEncryption:
-  #       ServerSideEncryptionConfiguration:
-  #         - ServerSideEncryptionByDefault:
-  #             SSEAlgorithm: aws:kms
-  #             KMSMasterKeyID: !Ref KMSKey
-  #     PublicAccessBlockConfiguration:
-  #       BlockPublicAcls: true
-  #       BlockPublicPolicy: true
-  #       IgnorePublicAcls: true
-  #       RestrictPublicBuckets: true
+  # AWS Config Rule: S3 Bucket Public Write Prohibited
+  S3BucketPublicWriteProhibitedRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-S3BucketPublicWriteProhibited'
+      Description: 'Checks that S3 buckets do not allow public write access'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED
+      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
 
-  # ConfigBucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref ConfigBucket
-  #     PolicyDocument:
-  #       Statement:
-  #         - Sid: AWSConfigBucketPermissionsCheck
-  #           Effect: Allow
-  #           Principal:
-  #             Service: config.amazonaws.com
-  #           Action: s3:GetBucketAcl
-  #           Resource: !GetAtt ConfigBucket.Arn
-  #         - Sid: AWSConfigBucketExistenceCheck
-  #           Effect: Allow
-  #           Principal:
-  #             Service: config.amazonaws.com
-  #           Action: s3:ListBucket
-  #           Resource: !GetAtt ConfigBucket.Arn
-  #         - Sid: AWSConfigBucketDelivery
-  #           Effect: Allow
-  #           Principal:
-  #             Service: config.amazonaws.com
-  #           Action: s3:PutObject
-  #           Resource: !Sub '${ConfigBucket.Arn}/*'
-  #           Condition:
-  #             StringEquals:
-  #               's3:x-amz-acl': bucket-owner-full-control
+  # AWS Config Rule: S3 Bucket Encryption
+  S3BucketEncryptionRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-S3BucketEncryption'
+      Description: 'Checks that S3 buckets have default encryption enabled'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::S3::Bucket
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
+      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
 
-  # ConfigurationRecorder:
-  #   Type: AWS::Config::ConfigurationRecorder
-  #   Properties:
-  #     Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-ConfigRecorder'
-  #     RoleARN: !GetAtt ConfigRole.Arn
-  #     RecordingGroup:
-  #       AllSupported: true
-  #       IncludeGlobalResourceTypes: true
+  # AWS Config Rule: RDS Instance Encryption
+  RDSInstanceEncryptionRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-RDSInstanceEncryption'
+      Description: 'Checks that RDS instances have encryption enabled'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::RDS::DBInstance
+      Source:
+        Owner: AWS
+        SourceIdentifier: RDS_INSTANCE_ENCRYPTION_ENABLED
+      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
 
-  # DeliveryChannel:
-  #   Type: AWS::Config::DeliveryChannel
-  #   Properties:
-  #     Name: !Sub '${EnvironmentName}-${EnvironmentSuffix}-DeliveryChannel'
-  #     S3BucketName: !Ref ConfigBucket
+  # AWS Config Rule: VPC Default Security Group Closed
+  VPCDefaultSecurityGroupClosedRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub '${EnvironmentName}-${EnvironmentSuffix}-VPCDefaultSecurityGroupClosed'
+      Description: 'Checks that the default security group of any VPC does not allow inbound or outbound traffic'
+      Scope:
+        ComplianceResourceTypes:
+          - AWS::EC2::SecurityGroup
+      Source:
+        Owner: AWS
+        SourceIdentifier: VPC_DEFAULT_SECURITY_GROUP_CLOSED
+      MaximumExecutionFrequency: One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly
 
   # Bastion Host
   BastionHost:
@@ -991,3 +993,36 @@ Outputs:
     Export:
       Name: !Sub '${EnvironmentName}-CloudTrail-ARN'
 
+  # AWS Config Rule Outputs
+  S3BucketPublicReadProhibitedRuleName:
+    Description: S3 Bucket Public Read Prohibited Config Rule Name
+    Value: !Ref S3BucketPublicReadProhibitedRule
+    Export:
+      Name: !Sub '${EnvironmentName}-S3BucketPublicReadProhibitedRule-Name'
+
+  S3BucketPublicWriteProhibitedRuleName:
+    Description: S3 Bucket Public Write Prohibited Config Rule Name
+    Value: !Ref S3BucketPublicWriteProhibitedRule
+    Export:
+      Name: !Sub '${EnvironmentName}-S3BucketPublicWriteProhibitedRule-Name'
+
+  S3BucketEncryptionRuleName:
+    Description: S3 Bucket Encryption Config Rule Name
+    Value: !Ref S3BucketEncryptionRule
+    Export:
+      Name: !Sub '${EnvironmentName}-S3BucketEncryptionRule-Name'
+
+  RDSInstanceEncryptionRuleName:
+    Description: RDS Instance Encryption Config Rule Name
+    Value: !Ref RDSInstanceEncryptionRule
+    Export:
+      Name: !Sub '${EnvironmentName}-RDSInstanceEncryptionRule-Name'
+
+  VPCDefaultSecurityGroupClosedRuleName:
+    Description: VPC Default Security Group Closed Config Rule Name
+    Value: !Ref VPCDefaultSecurityGroupClosedRule
+    Export:
+      Name: !Sub '${EnvironmentName}-VPCDefaultSecurityGroupClosedRule-Name'
+
+# Template Capabilities
+# Note: This template requires CAPABILITY_IAM and CAPABILITY_NAMED_IAM for IAM resources

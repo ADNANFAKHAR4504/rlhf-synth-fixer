@@ -1390,148 +1390,107 @@
                 }
             }
         },
-        "ConfigRole": {
-            "Type": "AWS::IAM::Role",
+
+        "S3BucketPublicReadProhibitedRule": {
+            "Type": "AWS::Config::ConfigRule",
             "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
+                "ConfigRuleName": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-S3BucketPublicReadProhibited"
+                },
+                "Description": "Checks that S3 buckets do not allow public read access",
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::S3::Bucket"
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-                ]
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_READ_PROHIBITED"
+                },
+                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
             }
         },
-        "ConfigBucket": {
-            "Type": "AWS::S3::Bucket",
+
+        "S3BucketPublicWriteProhibitedRule": {
+            "Type": "AWS::Config::ConfigRule",
             "Properties": {
-                "BucketName": {
-                    "Fn::Join": [
-                        "",
-                        [
-                            {
-                                "Fn::Sub": "${AWS::StackName}"
-                            },
-                            "-config-",
-                            {
-                                "Ref": "AWS::AccountId"
-                            }
-                        ]
+                "ConfigRuleName": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-S3BucketPublicWriteProhibited"
+                },
+                "Description": "Checks that S3 buckets do not allow public write access",
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::S3::Bucket"
                     ]
                 },
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "KMSKey"
-                                }
-                            }
-                        }
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
+                },
+                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
+            }
+        },
+
+        "S3BucketEncryptionRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-S3BucketEncryption"
+                },
+                "Description": "Checks that S3 buckets have default encryption enabled",
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::S3::Bucket"
                     ]
                 },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
-                }
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+                },
+                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
             }
         },
-        "ConfigBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
+
+        "RDSInstanceEncryptionRule": {
+            "Type": "AWS::Config::ConfigRule",
             "Properties": {
-                "Bucket": {
-                    "Ref": "ConfigBucket"
+                "ConfigRuleName": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-RDSInstanceEncryption"
                 },
-                "PolicyDocument": {
-                    "Statement": [
-                        {
-                            "Sid": "AWSConfigBucketPermissionsCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "ConfigBucket",
-                                    "Arn"
-                                ]
-                            }
-                        },
-                        {
-                            "Sid": "AWSConfigBucketExistenceCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:ListBucket",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "ConfigBucket",
-                                    "Arn"
-                                ]
-                            }
-                        },
-                        {
-                            "Sid": "AWSConfigBucketDelivery",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "config.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${ConfigBucket.Arn}/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "ConfigurationRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ConfigRecorder"
-                },
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigRole",
-                        "Arn"
+                "Description": "Checks that RDS instances have encryption enabled",
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::RDS::DBInstance"
                     ]
                 },
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                }
-            }
-        },
-        "DeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-DeliveryChannel"
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "RDS_INSTANCE_ENCRYPTION_ENABLED"
                 },
-                "S3BucketName": {
-                    "Ref": "ConfigBucket"
-                }
+                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
             }
         },
+
+        "VPCDefaultSecurityGroupClosedRule": {
+            "Type": "AWS::Config::ConfigRule",
+            "Properties": {
+                "ConfigRuleName": {
+                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-VPCDefaultSecurityGroupClosed"
+                },
+                "Description": "Checks that the default security group of any VPC does not allow inbound or outbound traffic",
+                "Scope": {
+                    "ComplianceResourceTypes": [
+                        "AWS::EC2::SecurityGroup"
+                    ]
+                },
+                "Source": {
+                    "Owner": "AWS",
+                    "SourceIdentifier": "VPC_DEFAULT_SECURITY_GROUP_CLOSED"
+                },
+                "MaximumExecutionFrequency": "One_Hour_3_Hours_6_Hours_12_Hours_Daily_Weekly"
+            }
+        },
+
         "BastionHost": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
@@ -1731,6 +1690,66 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${EnvironmentName}-CloudTrail-ARN"
+                }
+            }
+        },
+
+        "S3BucketPublicReadProhibitedRuleName": {
+            "Description": "S3 Bucket Public Read Prohibited Config Rule Name",
+            "Value": {
+                "Ref": "S3BucketPublicReadProhibitedRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-S3BucketPublicReadProhibitedRule-Name"
+                }
+            }
+        },
+
+        "S3BucketPublicWriteProhibitedRuleName": {
+            "Description": "S3 Bucket Public Write Prohibited Config Rule Name",
+            "Value": {
+                "Ref": "S3BucketPublicWriteProhibitedRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-S3BucketPublicWriteProhibitedRule-Name"
+                }
+            }
+        },
+
+        "S3BucketEncryptionRuleName": {
+            "Description": "S3 Bucket Encryption Config Rule Name",
+            "Value": {
+                "Ref": "S3BucketEncryptionRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-S3BucketEncryptionRule-Name"
+                }
+            }
+        },
+
+        "RDSInstanceEncryptionRuleName": {
+            "Description": "RDS Instance Encryption Config Rule Name",
+            "Value": {
+                "Ref": "RDSInstanceEncryptionRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-RDSInstanceEncryptionRule-Name"
+                }
+            }
+        },
+
+        "VPCDefaultSecurityGroupClosedRuleName": {
+            "Description": "VPC Default Security Group Closed Config Rule Name",
+            "Value": {
+                "Ref": "VPCDefaultSecurityGroupClosedRule"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPCDefaultSecurityGroupClosedRule-Name"
                 }
             }
         }
