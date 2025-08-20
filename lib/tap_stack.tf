@@ -142,3 +142,8 @@ output "rds_endpoint" {
   description = "The endpoint of the RDS instance"
   value       = module.database.rds_endpoint
 }
+
+output "s3_logs_bucket_name" {
+  description = "The name of the S3 logs bucket"
+  value       = module.storage.s3_logs_bucket_name
+}

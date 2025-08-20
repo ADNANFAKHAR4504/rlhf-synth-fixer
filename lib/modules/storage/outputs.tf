@@ -13,3 +13,8 @@ output "vpc_endpoint_s3_id" {
   description = "The ID of the S3 VPC endpoint"
   value       = aws_vpc_endpoint.s3.id
 }
+
+output "s3_logs_bucket_name" {
+  description = "The name of the S3 logs bucket"
+  value       = aws_s3_bucket.logs.id
+}
