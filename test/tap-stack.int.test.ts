@@ -1,39 +1,37 @@
-import fs from 'fs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInstancesCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  S3Client,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  ListObjectsV2Command,
-} from '@aws-sdk/client-s3';
+  AutoScalingClient,
+  DescribeAutoScalingGroupsCommand,
+} from '@aws-sdk/client-auto-scaling';
 import {
   CloudFrontClient,
   GetDistributionCommand,
 } from '@aws-sdk/client-cloudfront';
 import {
-  Route53Client,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
   ListHostedZonesCommand,
   ListResourceRecordSetsCommand,
+  Route53Client,
 } from '@aws-sdk/client-route-53';
 import {
-  AutoScalingClient,
-  DescribeAutoScalingGroupsCommand,
-} from '@aws-sdk/client-auto-scaling';
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
@@ -238,7 +236,7 @@ describe('TapStack Integration Tests', () => {
       );
 
       expect(hostedZone).toBeDefined();
-      expect(hostedZone?.Name).toBe(`tap-app-${environmentSuffix}.example.com.`);
+      expect(hostedZone?.Name).toBe(`tap-app-${environmentSuffix}.local.`);
     });
 
     test('DNS records are created for ALB and CloudFront', async () => {
@@ -257,19 +255,19 @@ describe('TapStack Integration Tests', () => {
       
       // Check for API A record
       const apiARecord = recordSets.find(rs => 
-        rs.Type === 'A' && rs.Name === `api.tap-app-${environmentSuffix}.example.com.`
+        rs.Type === 'A' && rs.Name === `api.tap-app-${environmentSuffix}.local.`
       );
       expect(apiARecord).toBeDefined();
 
       // Check for API AAAA record
       const apiAAAARecord = recordSets.find(rs => 
-        rs.Type === 'AAAA' && rs.Name === `api.tap-app-${environmentSuffix}.example.com.`
+        rs.Type === 'AAAA' && rs.Name === `api.tap-app-${environmentSuffix}.local.`
       );
       expect(apiAAAARecord).toBeDefined();
 
       // Check for www A record
       const wwwARecord = recordSets.find(rs => 
-        rs.Type === 'A' && rs.Name === `www.tap-app-${environmentSuffix}.example.com.`
+        rs.Type === 'A' && rs.Name === `www.tap-app-${environmentSuffix}.local.`
       );
       expect(wwwARecord).toBeDefined();
     });
