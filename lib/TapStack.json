@@ -18,7 +18,7 @@
             "Description": "CIDR block for public subnet in AZ2"
         },
         "InstanceType": {
-            "Type": "String",
+            "Type": "String", 
             "Default": "t3.micro",
             "AllowedValues": [
                 "t2.micro",
