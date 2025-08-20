@@ -1,334 +1,492 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Enterprise CI/CD Pipeline for Web Application with CodePipeline, CodeBuild, and Elastic Beanstalk deployment'
-
-Parameters:
-  CodeCommitRepositoryName:
-    Type: String
-    Description: Name of the existing CodeCommit repository
-    Default: my-web-app-repo
-
-  ElasticBeanstalkApplicationName:
-    Type: String
-    Description: Name of the existing Elastic Beanstalk application
-    Default: web-application
-
-  ElasticBeanstalkEnvironmentName:
-    Type: String
-    Description: Name of the existing Elastic Beanstalk environment
-    Default: web-environment
-
-  BranchName:
-    Type: String
-    Description: Branch to track for pipeline triggers
-    Default: main
-
-  EnvironmentSuffix:
-    Type: String
-    Description: Environment suffix (e.g. dev, stage, prod)
-    Default: dev
-
-Resources:
-  # S3 Bucket for Pipeline Artifacts
-  PipelineArtifactStore:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${EnvironmentSuffix}-pipeline-artifacts-${AWS::AccountId}-${AWS::Region}'
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldArtifacts
-            Status: Enabled
-            ExpirationInDays: 30
-            NoncurrentVersionExpirationInDays: 7
-
-  # IAM Role for CodePipeline
-  CodePipelineServiceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-codepipeline-service-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: codepipeline.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CodePipelinePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketVersioning
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                  - s3:PutObject
-                Resource:
-                  - !Sub '${PipelineArtifactStore.Arn}/*'
-                  - !GetAtt PipelineArtifactStore.Arn
-              - Effect: Allow
-                Action:
-                  - codecommit:*
-                Resource: !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${CodeCommitRepositoryName}'
-              - Effect: Allow
-                Action:
-                  - codebuild:BatchGetBuilds
-                  - codebuild:StartBuild
-                Resource: !GetAtt CodeBuildProject.Arn
-              - Effect: Allow
-                Action:
-                  - elasticbeanstalk:*
-                Resource: '*'
-
-  # IAM Role for CodeBuild
-  CodeBuildServiceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-codebuild-service-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: codebuild.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CodeBuildPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:*
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${EnvironmentSuffix}-*'
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                  - s3:PutObject
-                Resource: !Sub '${PipelineArtifactStore.Arn}/*'
-              - Effect: Allow
-                Action:
-                  - codecommit:GitPull
-                Resource: !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${CodeCommitRepositoryName}'
-              - Effect: Allow
-                Action:
-                  - ec2:Describe*
-                  - ec2:CreateNetworkInterface
-                  - ec2:DeleteNetworkInterface
-                  - ec2:DescribeSecurityGroups
-                Resource: '*'
-
-  # CodeBuild Project
-  CodeBuildProject:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Name: !Sub '${EnvironmentSuffix}-web-app-build'
-      Description: 'Build project for web application'
-      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
-      Artifacts:
-        Type: CODEPIPELINE
-      Environment:
-        Type: LINUX_CONTAINER
-        ComputeType: BUILD_GENERAL1_MEDIUM
-        Image: aws/codebuild/standard:7.0
-        EnvironmentVariables:
-          - Name: AWS_DEFAULT_REGION
-            Value: !Ref AWS::Region
-          - Name: AWS_ACCOUNT_ID
-            Value: !Ref AWS::AccountId
-          - Name: ENVIRONMENT
-            Value: !Ref EnvironmentSuffix
-      Source:
-        Type: CODEPIPELINE
-        BuildSpec: |
-          version: 0.2
-          phases:
-            install:
-              runtime-versions:
-                nodejs: 18
-              commands:
-                - echo Installing dependencies...
-                - npm ci
-            pre_build:
-              commands:
-                - npm run lint
-                - npm test
-            build:
-              commands:
-                - npm run build
-            post_build:
-              commands:
-                - echo Build completed on `date`
-          artifacts:
-            files:
-              - '**/*'
-            exclude-paths:
-              - node_modules/**/*
-              - .git/**/*
-              - '*.md'
-      TimeoutInMinutes: 15
-
-  # CloudWatch Event Rule for CodeCommit changes
-  CodeCommitEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub '${EnvironmentSuffix}-codecommit-pipeline-trigger'
-      EventPattern:
-        source:
-          - aws.codecommit
-        detail-type:
-          - CodeCommit Repository State Change
-        resources:
-          - !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${CodeCommitRepositoryName}'
-        detail:
-          event:
-            - referenceCreated
-            - referenceUpdated
-          referenceType:
-            - branch
-          referenceName:
-            - !Ref BranchName
-      State: ENABLED
-      Targets:
-        - Arn: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CodePipeline}'
-          Id: PipelineTarget
-          RoleArn: !GetAtt CloudWatchEventRole.Arn
-
-  # IAM Role for CloudWatch Events
-  CloudWatchEventRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${EnvironmentSuffix}-cloudwatch-event-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CloudWatchEventPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action: codepipeline:StartPipelineExecution
-                Resource: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${CodePipeline}'
-
-  # CodePipeline
-  CodePipeline:
-    Type: AWS::CodePipeline::Pipeline
-    Properties:
-      Name: !Sub '${EnvironmentSuffix}-web-app-pipeline'
-      RoleArn: !GetAtt CodePipelineServiceRole.Arn
-      ArtifactStore:
-        Type: S3
-        Location: !Ref PipelineArtifactStore
-      Stages:
-        - Name: Source
-          Actions:
-            - Name: SourceAction
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Provider: CodeCommit
-                Version: '1'
-              Configuration:
-                RepositoryName: !Ref CodeCommitRepositoryName
-                BranchName: !Ref BranchName
-                PollForSourceChanges: false
-              OutputArtifacts:
-                - Name: SourceOutput
-
-        - Name: Build
-          Actions:
-            - Name: BuildAction
-              ActionTypeId:
-                Category: Build
-                Owner: AWS
-                Provider: CodeBuild
-                Version: '1'
-              Configuration:
-                ProjectName: !Ref CodeBuildProject
-              InputArtifacts:
-                - Name: SourceOutput
-              OutputArtifacts:
-                - Name: BuildOutput
-
-        - Name: Deploy
-          Actions:
-            - Name: DeployAction
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: ElasticBeanstalk
-                Version: '1'
-              Configuration:
-                ApplicationName: !Ref ElasticBeanstalkApplicationName
-                EnvironmentName: !Ref ElasticBeanstalkEnvironmentName
-              InputArtifacts:
-                - Name: BuildOutput
-
-  # CloudWatch Log Group for CodeBuild
-  CodeBuildLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/codebuild/${EnvironmentSuffix}-web-app-build'
-      RetentionInDays: 14
-
-  # CloudWatch Dashboard for Pipeline & Build
-  PipelineDashboard:
-    Type: AWS::CloudWatch::Dashboard
-    Properties:
-      DashboardName: !Sub '${EnvironmentSuffix}-pipeline-dashboard'
-      DashboardBody: !Sub |
-        {
-          "widgets": [
-            {
-              "type": "metric",
-              "x": 0,
-              "y": 0,
-              "width": 12,
-              "height": 6,
-              "properties": {
-                "metrics": [
-                  [ "AWS/CodeBuild", "Builds", "ProjectName", "${CodeBuildProject}" ],
-                  [ "AWS/CodePipeline", "PipelineExecutionTime", "PipelineName", "${CodePipeline}" ]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "Build & Pipeline Metrics"
-              }
-            }
-          ]
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production CI/CD Pipeline for Web Application with CodePipeline, CodeBuild, and Elastic Beanstalk deployment",
+    "Parameters": {
+        "CodeCommitRepositoryName": {
+            "Type": "String",
+            "Description": "Name of the existing CodeCommit repository",
+            "Default": "my-web-app-repo"
+        },
+        "ElasticBeanstalkApplicationName": {
+            "Type": "String",
+            "Description": "Name of the existing Elastic Beanstalk application",
+            "Default": "web-application"
+        },
+        "ElasticBeanstalkEnvironmentName": {
+            "Type": "String",
+            "Description": "Name of the existing Elastic Beanstalk environment",
+            "Default": "web-environment"
+        },
+        "BranchName": {
+            "Type": "String",
+            "Description": "Branch to track for pipeline triggers",
+            "Default": "main"
         }
-
-Outputs:
-  PipelineName:
-    Description: 'Name of the created CodePipeline'
-    Value: !Ref CodePipeline
-
-  PipelineUrl:
-    Description: 'URL of the CodePipeline in AWS Console'
-    Value: !Sub 'https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${CodePipeline}/view'
-
-  CodeBuildProjectName:
-    Description: 'Name of the CodeBuild project'
-    Value: !Ref CodeBuildProject
-
-  ArtifactsBucketName:
-    Description: 'Name of the S3 bucket storing pipeline artifacts'
-    Value: !Ref PipelineArtifactStore
+    },
+    "Resources": {
+        "prodPipelineArtifactStore": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "prod-pipeline-artifacts-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldArtifacts",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 30,
+                            "NoncurrentVersionExpirationInDays": 7
+                        }
+                    ]
+                }
+            }
+        },
+        "prodCodePipelineServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "prod-codepipeline-service-role",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codepipeline.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodePipelinePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketVersioning",
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${prodPipelineArtifactStore.Arn}/*"
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "prodPipelineArtifactStore",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codecommit:*"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${CodeCommitRepositoryName}"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codebuild:BatchGetBuilds",
+                                        "codebuild:StartBuild"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "prodCodeBuildProject",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "elasticbeanstalk:*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "prodCodeBuildServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "prod-codebuild-service-role",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codebuild.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodeBuildPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:*"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/prod-*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${prodPipelineArtifactStore.Arn}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codecommit:GitPull"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${CodeCommitRepositoryName}"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:Describe*",
+                                        "ec2:CreateNetworkInterface",
+                                        "ec2:DeleteNetworkInterface",
+                                        "ec2:DescribeSecurityGroups"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "prodCodeBuildProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "Properties": {
+                "Name": "prod-web-app-build",
+                "Description": "Build project for web application",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "prodCodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_MEDIUM",
+                    "Image": "aws/codebuild/standard:7.0",
+                    "EnvironmentVariables": [
+                        {
+                            "Name": "AWS_DEFAULT_REGION",
+                            "Value": {
+                                "Ref": "AWS::Region"
+                            }
+                        },
+                        {
+                            "Name": "AWS_ACCOUNT_ID",
+                            "Value": {
+                                "Ref": "AWS::AccountId"
+                            }
+                        },
+                        {
+                            "Name": "ENVIRONMENT",
+                            "Value": "prod"
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "version: 0.2\nphases:\n  install:\n    runtime-versions:\n      nodejs: 18\n    commands:\n      - echo Installing dependencies...\n      - npm ci\n  pre_build:\n    commands:\n      - npm run lint\n      - npm test\n  build:\n    commands:\n      - npm run build\n  post_build:\n    commands:\n      - echo Build completed on `date`\nartifacts:\n  files:\n    - '**/*'\n  exclude-paths:\n    - node_modules/**/*\n    - .git/**/*\n    - '*.md'\n"
+                },
+                "TimeoutInMinutes": 15
+            }
+        },
+        "prodCodeCommitEventRule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": "prod-codecommit-pipeline-trigger",
+                "EventPattern": {
+                    "source": [
+                        "aws.codecommit"
+                    ],
+                    "detail-type": [
+                        "CodeCommit Repository State Change"
+                    ],
+                    "resources": [
+                        {
+                            "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${CodeCommitRepositoryName}"
+                        }
+                    ],
+                    "detail": {
+                        "event": [
+                            "referenceCreated",
+                            "referenceUpdated"
+                        ],
+                        "referenceType": [
+                            "branch"
+                        ],
+                        "referenceName": [
+                            {
+                                "Ref": "BranchName"
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${prodCodePipeline}"
+                        },
+                        "Id": "PipelineTarget",
+                        "RoleArn": {
+                            "Fn::GetAtt": [
+                                "prodCloudWatchEventRole",
+                                "Arn"
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "prodCloudWatchEventRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "prod-cloudwatch-event-role",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "events.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchEventPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "codepipeline:StartPipelineExecution",
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${prodCodePipeline}"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "prodCodePipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "Name": "prod-web-app-pipeline",
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "prodCodePipelineServiceRole",
+                        "Arn"
+                    ]
+                },
+                "ArtifactStore": {
+                    "Type": "S3",
+                    "Location": {
+                        "Ref": "prodPipelineArtifactStore"
+                    }
+                },
+                "Stages": [
+                    {
+                        "Name": "Source",
+                        "Actions": [
+                            {
+                                "Name": "SourceAction",
+                                "ActionTypeId": {
+                                    "Category": "Source",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeCommit",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "RepositoryName": {
+                                        "Ref": "CodeCommitRepositoryName"
+                                    },
+                                    "BranchName": {
+                                        "Ref": "BranchName"
+                                    },
+                                    "PollForSourceChanges": false
+                                },
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Build",
+                        "Actions": [
+                            {
+                                "Name": "BuildAction",
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "prodCodeBuildProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "SourceOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Deploy",
+                        "Actions": [
+                            {
+                                "Name": "DeployAction",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "ElasticBeanstalk",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ApplicationName": {
+                                        "Ref": "ElasticBeanstalkApplicationName"
+                                    },
+                                    "EnvironmentName": {
+                                        "Ref": "ElasticBeanstalkEnvironmentName"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "prodCodeBuildLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": "/aws/codebuild/prod-web-app-build",
+                "RetentionInDays": 14
+            }
+        }
+    },
+    "Outputs": {
+        "PipelineName": {
+            "Description": "Name of the created CodePipeline",
+            "Value": {
+                "Ref": "prodCodePipeline"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineName"
+                }
+            }
+        },
+        "PipelineUrl": {
+            "Description": "URL of the CodePipeline in AWS Console",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${prodCodePipeline}/view"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineUrl"
+                }
+            }
+        },
+        "CodeBuildProjectName": {
+            "Description": "Name of the CodeBuild project",
+            "Value": {
+                "Ref": "prodCodeBuildProject"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CodeBuildProject"
+                }
+            }
+        },
+        "ArtifactsBucketName": {
+            "Description": "Name of the S3 bucket storing pipeline artifacts",
+            "Value": {
+                "Ref": "prodPipelineArtifactStore"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArtifactsBucket"
+                }
+            }
+        }
+    }
+}
