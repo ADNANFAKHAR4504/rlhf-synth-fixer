@@ -1224,7 +1224,9 @@ Resources:
                 Action:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
-                Resource: !Sub '${CloudTrailLogGroup}:*'
+                Resource: 
+                  - !GetAtt CloudTrailLogGroup.Arn
+                  - !Sub '${CloudTrailLogGroup}:*'
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
