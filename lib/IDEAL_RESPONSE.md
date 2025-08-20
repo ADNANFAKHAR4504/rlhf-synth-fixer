@@ -1,5 +1,4 @@
 ```hcl
-# variables.tf
 variable "project_name" {
   description = "Name of the project"
   type        = string
@@ -102,7 +101,6 @@ variable "vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-# locals.tf
 locals {
   common_tags = {
     Project     = var.project_name
@@ -153,7 +151,6 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
-# main.tf
 # VPC and Networking
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
