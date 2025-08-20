@@ -1134,7 +1134,8 @@ Resources:
     Properties:
       ResourceArn: !GetAtt WebACL.Arn
       LogDestinationConfigs:
-        - !Sub '${WAFLogGroup}:*'
+        - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-${WAFLogGroup}:*'
+
       RedactedFields:
         - SingleHeader:
             Name: 'authorization'
@@ -1299,7 +1300,7 @@ Resources:
     Properties:
       Name: !Sub '${AWS::StackName}-ConfigDelivery-${EnvironmentSuffix}'
       S3BucketName: !Ref LoggingBucket
-      S3KeyPrefix: 'config'
+      S3KeyPrefix: 'config/'
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: 'TwentyFour_Hours'
 
