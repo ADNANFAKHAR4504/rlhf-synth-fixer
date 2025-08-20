@@ -51,9 +51,9 @@ This solution provisions a comprehensive, secure AWS infrastructure using Terraf
 ### DNS & Service Discovery
 - **Private Hosted Zone**: tap.internal domain for internal service discovery
 - **DNS Records**: 
-  - bastion.tap.internal → Bastion host private IP
-  - app-1.tap.internal, app-2.tap.internal → Private instance IPs
-  - database.tap.internal → RDS endpoint CNAME
+  - bastion.tap.internal resolves to Bastion host private IP
+  - app-1.tap.internal, app-2.tap.internal resolve to Private instance IPs
+  - database.tap.internal resolves to RDS endpoint CNAME
 
 ## AWS Services Utilized
 

@@ -312,4 +312,223 @@ describe("Terraform Infrastructure Code Unit Tests", () => {
     });
   });
 
+  describe("Infrastructure Logic Validation", () => {
+    test("terraform syntax validation", () => {
+      const content = fs.readFileSync(stackPath, "utf8");
+      
+      // Validate proper block structure
+      const resourceBlocks = content.match(/resource\s+"[^"]+"\s+"[^"]+"\s*{/g);
+      const dataBlocks = content.match(/data\s+"[^"]+"\s+"[^"]+"\s*{/g);
+      const variableBlocks = content.match(/variable\s+"[^"]+"\s*{/g);
+      const outputBlocks = content.match(/output\s+"[^"]+"\s*{/g);
+      
+      expect(resourceBlocks).toBeTruthy();
+      expect(dataBlocks).toBeTruthy();
+      expect(variableBlocks).toBeTruthy();
+      expect(outputBlocks).toBeTruthy();
+      
+      // Validate that resource types are properly quoted
+      expect(content).toMatch(/resource\s+"aws_/);
+      expect(content).toMatch(/data\s+"aws_/);
+      
+      // Check for required Terraform syntax patterns
+      expect(content).toMatch(/=\s*{/); // Assignment with braces
+      expect(content).toMatch(/}\s*$/m); // Proper block closures
+      
+      // Ensure no obvious syntax errors
+      expect(content).not.toMatch(/\$\${[^}]*\$\{/); // No nested interpolation issues
+      expect(content).not.toMatch(/"\s*\+\s*"/); // No string concatenation issues
+      
+      console.log(`✅ Syntax validation: ${resourceBlocks?.length} resources, ${dataBlocks?.length} data sources, ${variableBlocks?.length} variables, ${outputBlocks?.length} outputs`);
+    });
+
+    test("resource dependency logic validation", () => {
+      const content = fs.readFileSync(stackPath, "utf8");
+      
+      // VPC must be referenced by subnets
+      expect(content).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+      
+      // Subnets must be referenced by instances
+      expect(content).toMatch(/subnet_id\s*=\s*aws_subnet\.(public|private)/);
+      
+      // Security groups must be referenced by instances
+      expect(content).toMatch(/vpc_security_group_ids\s*=\s*\[aws_security_group/);
+      
+      // KMS key must be referenced by encrypted resources
+      expect(content).toMatch(/kms_key_id\s*=\s*aws_kms_key\.tap_key\.arn/);
+      
+      // Validate that EC2 instances reference valid AMI data source
+      expect(content).toMatch(/ami\s*=\s*data\.aws_ami\.amazon_linux\.id/);
+      
+      // Validate that instances use generated key pair
+      expect(content).toMatch(/key_name\s*=\s*aws_key_pair\.main\.key_name/);
+      
+      console.log('✅ Resource dependency logic validated');
+    });
+
+    test("network architecture logic validation", () => {
+      const content = fs.readFileSync(stackPath, "utf8");
+      
+      // Public subnets must have internet gateway route
+      expect(content).toMatch(/gateway_id\s*=\s*aws_internet_gateway\.main\.id/);
+      
+      // Private subnets must have NAT gateway route
+      expect(content).toMatch(/nat_gateway_id\s*=\s*aws_nat_gateway\.main/);
+      
+      // NAT gateways must be in public subnets
+      expect(content).toMatch(/subnet_id\s*=\s*aws_subnet\.public\[count\.index\]\.id/);
+      
+      // Bastion must be in public subnet
+      const bastionMatch = content.match(/resource\s+"aws_instance"\s+"bastion"[\s\S]*?subnet_id\s*=\s*aws_subnet\.public\[0\]\.id/);
+      expect(bastionMatch).toBeTruthy();
+      
+      // Private instances must be in private subnets
+      const privateInstanceMatch = content.match(/resource\s+"aws_instance"\s+"private"[\s\S]*?subnet_id\s*=\s*aws_subnet\.private\[count\.index\]\.id/);
+      expect(privateInstanceMatch).toBeTruthy();
+      
+      console.log('✅ Network architecture logic validated');
+    });
+
+    test("security group rules logic validation", () => {
+      const content = fs.readFileSync(stackPath, "utf8");
+      
+      // Bastion security group SSH rule
+      const bastionSSHMatch = content.match(/resource\s+"aws_security_group"\s+"bastion"[\s\S]*?from_port\s*=\s*22[\s\S]*?to_port\s*=\s*22/);
+      expect(bastionSSHMatch).toBeTruthy();
+      
+      // Private instances security group references bastion
+      expect(content).toMatch(/security_groups\s*=\s*\[aws_security_group\.bastion\.id\]/);
+      
+      // RDS security group references private instances
+      expect(content).toMatch(/security_groups\s*=\s*\[aws_security_group\.private_instances\.id\]/);
+      
+      // Validate MySQL port for RDS
+      const rdsPortMatch = content.match(/from_port\s*=\s*3306[\s\S]*?to_port\s*=\s*3306/);
+      expect(rdsPortMatch).toBeTruthy();
+      
+      console.log('✅ Security group rules logic validated');
+    });
+
+    test("encryption and security logic validation", () => {
+      const content = fs.readFileSync(stackPath, "utf8");
+      
+      // All storage resources must use KMS encryption
+      expect(content).toMatch(/kms_master_key_id\s*=\s*aws_kms_key\.tap_key\.arn/);
+      expect(content).toMatch(/kms_key_id\s*=\s*aws_kms_key\.tap_key\.arn/);
+      
+      // S3 bucket must have public access blocked
+      expect(content).toMatch(/block_public_acls\s*=\s*true/);
+      expect(content).toMatch(/block_public_policy\s*=\s*true/);
+      expect(content).toMatch(/ignore_public_acls\s*=\s*true/);
+      expect(content).toMatch(/restrict_public_buckets\s*=\s*true/);
+      
+      // SSM parameters must be SecureString type
+      expect(content).toMatch(/type\s*=\s*"SecureString"/);
+      
+      // KMS key must have rotation enabled
+      expect(content).toMatch(/enable_key_rotation\s*=\s*true/);
+      
+      console.log('✅ Encryption and security logic validated');
+    });
+
+    test("resource naming consistency logic", () => {
+      const content = fs.readFileSync(stackPath, "utf8");
+      
+      // All resources should use the random_id suffix for uniqueness
+      expect(content).toMatch(/random_id\.bucket_suffix\.hex/);
+      
+      // Check that suffix is used in resource names
+      const resourcesWithSuffix = [
+        /tap-stack-bucket-\$\{random_id\.bucket_suffix\.hex\}/,
+        /tap-ec2-role-\$\{random_id\.bucket_suffix\.hex\}/,
+        /tap-key-\$\{random_id\.bucket_suffix\.hex\}/,
+        /\/tap\/ec2\/private-key-\$\{random_id\.bucket_suffix\.hex\}/,
+        /\/tap\/rds\/password-\$\{random_id\.bucket_suffix\.hex\}/
+      ];
+      
+      resourcesWithSuffix.forEach(pattern => {
+        expect(content).toMatch(pattern);
+      });
+      
+      // Validate consistent naming prefix
+      expect(content).toMatch(/Name\s*=\s*"tap-/);
+      
+      console.log('✅ Resource naming consistency logic validated');
+    });
+
+    test("high availability architecture logic", () => {
+      const content = fs.readFileSync(stackPath, "utf8");
+      
+      // Multiple AZs should be used
+      expect(content).toMatch(/data\.aws_availability_zones\.available\.names\[count\.index\]/);
+      
+      // Count should be 2 for HA
+      const countMatches = content.match(/count\s*=\s*2/g);
+      expect(countMatches).toBeTruthy();
+      expect(countMatches?.length).toBeGreaterThan(2); // Multiple resources with count=2
+      
+      // Verify HA components
+      expect(content).toMatch(/resource\s+"aws_subnet"\s+"public"[\s\S]*?count\s*=\s*2/);
+      expect(content).toMatch(/resource\s+"aws_subnet"\s+"private"[\s\S]*?count\s*=\s*2/);
+      expect(content).toMatch(/resource\s+"aws_nat_gateway"[\s\S]*?count\s*=\s*2/);
+      expect(content).toMatch(/resource\s+"aws_instance"\s+"private"[\s\S]*?count\s*=\s*2/);
+      
+      console.log('✅ High availability architecture logic validated');
+    });
+
+    test("monitoring and logging logic validation", () => {
+      const content = fs.readFileSync(stackPath, "utf8");
+      
+      // VPC Flow Logs must reference VPC
+      expect(content).toMatch(/vpc_id\s*=\s*aws_vpc\.main\.id/);
+      
+      // CloudWatch log groups must have retention
+      expect(content).toMatch(/retention_in_days\s*=\s*14/);
+      
+      // CloudWatch alarms must have proper configuration
+      expect(content).toMatch(/comparison_operator\s*=\s*"GreaterThanThreshold"/);
+      expect(content).toMatch(/threshold\s*=\s*"80"/);
+      expect(content).toMatch(/metric_name\s*=\s*"CPUUtilization"/);
+      
+      // IAM role for VPC Flow Logs
+      expect(content).toMatch(/iam_role_arn\s*=\s*aws_iam_role\.flow_log\.arn/);
+      
+      console.log('✅ Monitoring and logging logic validated');
+    });
+
+    test("configuration drift prevention", () => {
+      const content = fs.readFileSync(stackPath, "utf8");
+      
+      // Ensure consistent region usage
+      const regionReferences = content.match(/us-west-2/g);
+      expect(regionReferences).toBeTruthy();
+      expect(regionReferences?.length).toBeGreaterThan(1);
+      
+      // Ensure no hardcoded account IDs (should use data source)
+      expect(content).not.toMatch(/\d{12}/); // 12-digit account ID
+      expect(content).toMatch(/data\.aws_caller_identity\.current\.account_id/);
+      
+      // Ensure no hardcoded AZ names (should use data source)
+      expect(content).not.toMatch(/us-west-2[abc]/);
+      expect(content).toMatch(/data\.aws_availability_zones\.available/);
+      
+      console.log('✅ Configuration drift prevention validated');
+    });
+
+    test("terraform state management validation", () => {
+      const providerContent = fs.readFileSync(providerPath, "utf8");
+      
+      // Terraform version constraints
+      expect(providerContent).toMatch(/required_version\s*=\s*">=\s*1\.0"/);
+      
+      // AWS provider version constraints
+      expect(providerContent).toMatch(/version\s*=\s*"~>\s*5\.0"/);
+      
+      // Backend configuration should be external (not in code)
+      expect(providerContent).not.toMatch(/backend\s+"s3"/);
+      
+      console.log('✅ Terraform state management validated');
+    });
+  });
+
 });
