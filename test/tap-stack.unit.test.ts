@@ -602,7 +602,7 @@ describe('TapStack CloudFormation Template', () => {
         const channel = template.Resources.ConfigDeliveryChannel;
         expect(channel.Type).toBe('AWS::Config::DeliveryChannel');
         expect(channel.Condition).toBe('CreateNewS3Bucket');
-        expect(channel.Properties.S3KeyPrefix).toBe('config-logs/');
+        expect(channel.Properties.S3KeyPrefix).toBe('config-logs');
         expect(
           channel.Properties.ConfigSnapshotDeliveryProperties.DeliveryFrequency
         ).toBe('One_Hour');

@@ -691,7 +691,7 @@ Resources:
     Properties:
       Name: !Sub '${AWS::StackName}-config-delivery'
       S3BucketName: !Ref ApplicationLogsBucket
-      S3KeyPrefix: 'config-logs/'
+      S3KeyPrefix: 'config-logs'
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: One_Hour
 
