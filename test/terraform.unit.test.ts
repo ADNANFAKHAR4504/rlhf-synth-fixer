@@ -1,4 +1,3 @@
-// tests/unit/terraform.unit.test.ts
 import { describe, expect, test } from '@jest/globals';
 import fs from 'fs';
 import path from 'path';

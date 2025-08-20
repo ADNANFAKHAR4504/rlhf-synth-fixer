@@ -1,3 +1,25 @@
+# main.tf
+# Main infrastructure resources with comprehensive security controls
+# Problem ID: security_configuration_as_code_Terraform_HCL_h7js29a0kdr1
+
+terraform {
+  required_version = ">= 1.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = local.common_tags
+  }
+}
 
 # Local values for consistent tagging and naming
 locals {
@@ -655,122 +677,6 @@ resource "aws_s3_bucket_policy" "alb_logs" {
   policy = data.aws_iam_policy_document.alb_logs_s3_policy.json
 }
 
-# CloudWatch alarm for RDS CPU utilization
-resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
-  alarm_name          = "${local.name_prefix}-rds-cpu-high"
-  alarm_description   = "Alarm when RDS CPU utilization is high"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/RDS"
-  period              = "300"
-  statistic           = "Average"
-  threshold           = "75"
-
-  dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main.id
-  }
-
-  alarm_actions = [aws_sns_topic.alarms.arn]
-  ok_actions    = [aws_sns_topic.alarms.arn]
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-rds-cpu-alarm"
-    Type = "monitoring"
-  })
-}
-
-# Security group for Application Load Balancer
-resource "aws_security_group" "alb" {
-  name        = "${local.name_prefix}-alb-sg"
-  description = "Security group for ALB"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description = "Allow HTTP from allowed CIDR blocks"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
-  }
-
-  ingress {
-    description = "Allow HTTPS from allowed CIDR blocks"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
-  }
-
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-alb-sg"
-    Type = "security"
-  })
-}
-
-# Security group for EC2 instances
-resource "aws_security_group" "ec2" {
-  name        = "${local.name_prefix}-ec2-sg"
-  description = "Security group for EC2 instances"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description     = "Allow HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-ec2-sg"
-    Type = "security"
-  })
-}
-
-# Security group for RDS database
-resource "aws_security_group" "rds" {
-  name        = "${local.name_prefix}-rds-sg"
-  description = "Security group for RDS database"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description     = "Allow MySQL/PostgreSQL from EC2 instances"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2.id]
-  }
-
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-rds-sg"
-    Type = "security"
-  })
-}
 data "aws_iam_policy_document" "alb_logs_s3_policy" {
   statement {
     effect = "Allow"
@@ -784,172 +690,3 @@ data "aws_iam_policy_document" "alb_logs_s3_policy" {
 }
 
 data "aws_elb_service_account" "main" {}
-# Data sources for dynamic infrastructure values
-# Security-focused data source definitions
-
-# Get current AWS account information
-data "aws_caller_identity" "current" {}
-
-# Get current AWS region information
-data "aws_region" "current" {}
-
-# Get available availability zones
-data "aws_availability_zones" "available" {
-  state = "available"
-
-  filter {
-    name   = "opt-in-status"
-    values = ["opt-in-not-required"]
-  }
-}
-
-# Get latest Amazon Linux 2 AMI (trusted source)
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  filter {
-    name   = "state"
-    values = ["available"]
-  }
-}
-
-# Get latest Ubuntu LTS AMI (trusted source)
-data "aws_ami" "ubuntu" {
-  most_recent = true
-  owners      = ["099720109477"] # Canonical
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  filter {
-    name   = "state"
-    values = ["available"]
-  }
-}
-
-# Get current partition for ARN construction
-data "aws_partition" "current" {}
-
-# IAM policy document for EC2 instance role
-data "aws_iam_policy_document" "ec2_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
-
-    effect = "Allow"
-  }
-}
-
-# IAM policy document for Lambda execution role
-data "aws_iam_policy_document" "lambda_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      type        = "Service"
-      identifiers = ["lambda.amazonaws.com"]
-    }
-
-    effect = "Allow"
-  }
-}
-
-# IAM policy document for S3 access from EC2
-data "aws_iam_policy_document" "ec2_s3_access" {
-  statement {
-    sid    = "AllowS3Access"
-    effect = "Allow"
-
-    actions = [
-      "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
-      "s3:ListBucket"
-    ]
-
-    resources = [
-      aws_s3_bucket.app_data.arn,
-      "${aws_s3_bucket.app_data.arn}/*"
-    ]
-  }
-
-  statement {
-    sid    = "AllowKMSAccess"
-    effect = "Allow"
-
-    actions = [
-      "kms:Decrypt",
-      "kms:DescribeKey"
-    ]
-
-    resources = [aws_kms_key.s3_key.arn]
-  }
-}
-
-# IAM policy document for CloudWatch logs access
-data "aws_iam_policy_document" "cloudwatch_logs_policy" {
-  statement {
-    sid    = "AllowCloudWatchLogs"
-    effect = "Allow"
-
-    actions = [
-      "logs:CreateLogGroup",
-      "logs:CreateLogStream",
-      "logs:PutLogEvents",
-      "logs:DescribeLogStreams",
-      "logs:DescribeLogGroups"
-    ]
-
-    resources = [
-      "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/*",
-      "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*"
-    ]
-  }
-}
-
-output "vpc_id" {
-  description = "ID of the main VPC"
-  value       = aws_vpc.main.id
-}
-
-output "instance_ids" {
-  description = "IDs of the EC2 instances"
-  value       = aws_autoscaling_group.app.instances
-}
-
-output "rds_endpoint" {
-  description = "Endpoint of the RDS database"
-  value       = aws_db_instance.main.endpoint
-  sensitive   = true
-}
-
-output "s3_bucket_names" {
-  description = "Names of the S3 buckets"
-  value = {
-    app_data = aws_s3_bucket.app_data.id
-    alb_logs = aws_s3_bucket.alb_logs.id
-  }
-}
-

@@ -1,4 +1,3 @@
-// tests/integration/terraform.int.test.ts
 import { describe, expect, test } from '@jest/globals';
 import { execSync } from 'child_process';
 import path from 'path';
