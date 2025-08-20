@@ -198,7 +198,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:GetObjectVersion
-                Resource: !Sub '${SecureDataBucket}/*'
+                Resource: !Sub '${SecureDataBucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -241,7 +241,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${SecureDataBucket}/dev/*'
+                Resource: !Sub '${SecureDataBucket.Arn}/dev/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
