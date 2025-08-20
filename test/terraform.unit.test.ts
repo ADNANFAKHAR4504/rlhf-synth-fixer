@@ -17,7 +17,8 @@ describe('Terraform Unit Tests', () => {
       for (const e of entries) {
         const full = path.join(dir, e.name);
         if (e.isDirectory()) contents.push(...readAllTf(full));
-        else if (e.isFile() && full.endsWith('.tf')) contents.push(fs.readFileSync(full, 'utf8'));
+        else if (e.isFile() && full.endsWith('.tf'))
+          contents.push(fs.readFileSync(full, 'utf8'));
       }
       return contents;
     };
@@ -181,7 +182,14 @@ describe('Terraform Unit Tests', () => {
   describe('Security Groups', () => {
     test('creates EC2 security group', () => {
       expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"ec2"/);
-      expect(stackContent).not.toMatch(/name_prefix/); // Should use name, not name_prefix
+      // Inspect only the EC2 security group block to ensure it uses 'name' and not 'name_prefix'
+      const sgMatch = stackContent.match(
+        /resource\s+"aws_security_group"\s+"ec2"\s*{[\s\S]*?}/
+      );
+      expect(sgMatch).not.toBeNull();
+      const sgBlock = sgMatch ? sgMatch[0] : '';
+      expect(sgBlock).toMatch(/\bname\s*=/);
+      expect(sgBlock).not.toMatch(/\bname_prefix\s*=/);
     });
 
     test('configures SSH access conditionally', () => {
