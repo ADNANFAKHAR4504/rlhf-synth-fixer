@@ -76,7 +76,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.1.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-1'
@@ -86,7 +86,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.2.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs 'us-east-1']
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentSuffix}-private-subnet-2'
@@ -96,7 +96,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.101.0/24'
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -107,7 +107,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: '10.0.102.0/24'
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs 'us-east-1']
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -278,9 +278,9 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-      LoggingConfiguration:
-        DestinationBucketName: !Ref LoggingBucket
-        LogFilePrefix: access-logs/
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-${EnvironmentSuffix}-secure-bucket'
       LifecycleConfiguration:
         Rules:
           - Id: DeleteOldLogs
@@ -362,7 +362,7 @@ Resources:
           DataResources:
             - Type: AWS::S3::Object
               Values:
-                - !Sub '${SecureS3Bucket.Arn}/*'
+                - 'arn:aws:s3:::*/*'
 
   # CloudWatch Log Groups
   S3LogGroup:

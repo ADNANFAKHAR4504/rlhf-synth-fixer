@@ -61,9 +61,12 @@ try {
     VPCId: 'vpc-mock',
     PrivateSubnet1Id: 'subnet-private-1',
     PrivateSubnet2Id: 'subnet-private-2',
+    WebSecurityGroupId: 'sg-0123456789abcdef0',
+    DatabaseSecurityGroupId: 'sg-0123456789abcdef1',
     S3BucketName: 'project-x-dev-secure-123456789012',
     KMSKeyId: 'arn:aws:kms:us-east-1:123456789012:key/mock',
     APIGatewayURL: 'https://mock.execute-api.us-east-1.amazonaws.com/prod',
+    APIGatewayRegionalURL: 'https://mock.execute-api.us-east-1.amazonaws.com',
     APIGatewayId: 'mock-api-id',
     EC2InstanceProfileArn: 'arn:aws:iam::123456789012:instance-profile/mock'
   };
