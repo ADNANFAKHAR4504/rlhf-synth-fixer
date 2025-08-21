@@ -1,4 +1,7 @@
 
+# CloudFormation Template - Production Web Application Infrastructure
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production Web Application Infrastructure - Multi-Region Deployment'
 
