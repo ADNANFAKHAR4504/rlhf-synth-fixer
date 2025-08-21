@@ -1,4 +1,4 @@
-g# Infrastructure Improvements Made
+# Infrastructure Improvements Made
 
 ## Original Issues and Solutions
 
@@ -129,6 +129,18 @@ g# Infrastructure Improvements Made
 - **Configurable log retention** instead of permanent retention
 - **Clean resource dependencies** for proper deletion order
 - **All resources tagged** for easy identification and cleanup
+
+### 12. Deployment Compatibility Issues
+
+**Problem**: Template required parameters that weren't provided by existing deployment scripts.
+
+**Solution**: Made template compatible with existing deployment process:
+
+- **Optional Secrets Manager ARN** with empty string default
+- **Default values** for all new parameters (StageName='prod', LogRetentionInDays=14)
+- **Conditional IAM policies** that only grant Secrets Manager permissions when ARN is provided
+- **Graceful Lambda handling** of missing or empty Secrets Manager configuration
+- **Backward compatibility** with existing package.json deployment commands
 
 ## Quality Assurance Improvements
 

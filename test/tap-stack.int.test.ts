@@ -148,6 +148,11 @@ describe('TapStack Serverless API Integration Tests', () => {
           expect(response.parsedBody).toBeDefined();
           expect(response.parsedBody.message).toBeDefined();
           expect(response.parsedBody.environment).toBeDefined();
+          expect(response.parsedBody.secrets_loaded).toBeDefined();
+          expect(response.parsedBody.has_secrets_manager).toBeDefined();
+          // When no secrets manager ARN is provided, should be false
+          expect(response.parsedBody.has_secrets_manager).toBe(false);
+          expect(response.parsedBody.secrets_loaded).toBe(0);
         }
 
         // Check for proper CORS headers

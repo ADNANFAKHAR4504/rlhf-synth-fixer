@@ -49,9 +49,10 @@
         },
         "SecretsManagerSecretArn": {
             "Type": "String",
-            "Description": "ARN of the Secrets Manager secret containing environment variables",
-            "AllowedPattern": "^arn:aws:secretsmanager:.*$",
-            "ConstraintDescription": "Must be a valid Secrets Manager ARN"
+            "Default": "",
+            "Description": "ARN of the Secrets Manager secret containing environment variables (optional)",
+            "AllowedPattern": "^(arn:aws:secretsmanager:.*|)$",
+            "ConstraintDescription": "Must be a valid Secrets Manager ARN or empty string"
         },
         "LogRetentionInDays": {
             "Type": "Number",
@@ -78,6 +79,20 @@
             ]
         }
     },
+    "Conditions": {
+        "HasSecretsManager": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "SecretsManagerSecretArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
     "Resources": {
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
@@ -100,25 +115,33 @@
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
                 ],
-                "Policies": [
-                    {
-                        "PolicyName": "SecretsManagerAccess",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "secretsmanager:GetSecretValue"
-                                    ],
-                                    "Resource": {
-                                        "Ref": "SecretsManagerSecretArn"
-                                    }
+                "Policies": {
+                    "Fn::If": [
+                        "HasSecretsManager",
+                        [
+                            {
+                                "PolicyName": "SecretsManagerAccess",
+                                "PolicyDocument": {
+                                    "Version": "2012-10-17",
+                                    "Statement": [
+                                        {
+                                            "Effect": "Allow",
+                                            "Action": [
+                                                "secretsmanager:GetSecretValue"
+                                            ],
+                                            "Resource": {
+                                                "Ref": "SecretsManagerSecretArn"
+                                            }
+                                        }
+                                    ]
                                 }
-                            ]
+                            }
+                        ],
+                        {
+                            "Ref": "AWS::NoValue"
                         }
-                    }
-                ],
+                    ]
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -171,7 +194,7 @@
                     ]
                 },
                 "Code": {
-                    "ZipFile": "import json\nimport boto3\nimport os\n\nsecrets_client = boto3.client('secretsmanager')\n\ndef lambda_handler(event, context):\n    try:\n        # Get secret ARN from environment variable\n        secret_arn = os.environ.get('SECRET_ARN')\n        \n        if secret_arn:\n            # Retrieve secret\n            response = secrets_client.get_secret_value(SecretId=secret_arn)\n            secret_data = json.loads(response['SecretString'])\n            print(f\"Successfully loaded {len(secret_data)} environment variables from Secrets Manager\")\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'Hello from TapStack!',\n                'environment': os.environ.get('ENVIRONMENT', 'unknown')\n            })\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error'\n            })\n        }\n"
+                    "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    try:\n        # Get secret ARN from environment variable\n        secret_arn = os.environ.get('SECRET_ARN', '').strip()\n        secret_count = 0\n        \n        if secret_arn:\n            try:\n                # Initialize secrets client only if we have a secret ARN\n                secrets_client = boto3.client('secretsmanager')\n                response = secrets_client.get_secret_value(SecretId=secret_arn)\n                secret_data = json.loads(response['SecretString'])\n                secret_count = len(secret_data)\n                print(f\"Successfully loaded {secret_count} environment variables from Secrets Manager\")\n            except Exception as secret_error:\n                print(f\"Warning: Could not load secrets from {secret_arn}: {str(secret_error)}\")\n                secret_count = 0\n        else:\n            print(\"No Secrets Manager ARN provided, skipping secret loading\")\n        \n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'message': 'Hello from TapStack!',\n                'environment': os.environ.get('ENVIRONMENT', 'unknown'),\n                'secrets_loaded': secret_count,\n                'has_secrets_manager': bool(secret_arn)\n            })\n        }\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            'body': json.dumps({\n                'error': 'Internal server error'\n            })\n        }\n"
                 },
                 "Environment": {
                     "Variables": {

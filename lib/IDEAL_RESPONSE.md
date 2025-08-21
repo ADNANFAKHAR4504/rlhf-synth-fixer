@@ -40,9 +40,10 @@ Parameters:
 
   SecretsManagerSecretArn:
     Type: String
-    Description: 'ARN of the Secrets Manager secret containing environment variables'
-    AllowedPattern: '^arn:aws:secretsmanager:.*$'
-    ConstraintDescription: 'Must be a valid Secrets Manager ARN'
+    Default: ''
+    Description: 'ARN of the Secrets Manager secret containing environment variables (optional)'
+    AllowedPattern: '^(arn:aws:secretsmanager:.*|)$'
+    ConstraintDescription: 'Must be a valid Secrets Manager ARN or empty string'
 
   LogRetentionInDays:
     Type: Number
@@ -69,6 +70,9 @@ Parameters:
         3653,
       ]
 
+Conditions:
+  HasSecretsManager: !Not [!Equals [!Ref SecretsManagerSecretArn, '']]
+
 Resources:
   # IAM Role for Lambda Function
   LambdaExecutionRole:
@@ -84,15 +88,17 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: SecretsManagerAccess
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - secretsmanager:GetSecretValue
-                Resource: !Ref SecretsManagerSecretArn
+      Policies: !If
+        - HasSecretsManager
+        - - PolicyName: SecretsManagerAccess
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - secretsmanager:GetSecretValue
+                  Resource: !Ref SecretsManagerSecretArn
+        - !Ref AWS::NoValue
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -125,18 +131,25 @@ Resources:
           import boto3
           import os
 
-          secrets_client = boto3.client('secretsmanager')
-
           def lambda_handler(event, context):
               try:
                   # Get secret ARN from environment variable
-                  secret_arn = os.environ.get('SECRET_ARN')
+                  secret_arn = os.environ.get('SECRET_ARN', '').strip()
+                  secret_count = 0
                   
                   if secret_arn:
-                      # Retrieve secret
-                      response = secrets_client.get_secret_value(SecretId=secret_arn)
-                      secret_data = json.loads(response['SecretString'])
-                      print(f"Successfully loaded {len(secret_data)} environment variables from Secrets Manager")
+                      try:
+                          # Initialize secrets client only if we have a secret ARN
+                          secrets_client = boto3.client('secretsmanager')
+                          response = secrets_client.get_secret_value(SecretId=secret_arn)
+                          secret_data = json.loads(response['SecretString'])
+                          secret_count = len(secret_data)
+                          print(f"Successfully loaded {secret_count} environment variables from Secrets Manager")
+                      except Exception as secret_error:
+                          print(f"Warning: Could not load secrets from {secret_arn}: {str(secret_error)}")
+                          secret_count = 0
+                  else:
+                      print("No Secrets Manager ARN provided, skipping secret loading")
                   
                   return {
                       'statusCode': 200,
@@ -146,7 +159,9 @@ Resources:
                       },
                       'body': json.dumps({
                           'message': 'Hello from TapStack!',
-                          'environment': os.environ.get('ENVIRONMENT', 'unknown')
+                          'environment': os.environ.get('ENVIRONMENT', 'unknown'),
+                          'secrets_loaded': secret_count,
+                          'has_secrets_manager': bool(secret_arn)
                       })
                   }
               except Exception as e:
