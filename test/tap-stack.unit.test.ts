@@ -165,7 +165,7 @@ describe('TapStack Unit Tests', () => {
       const subnets = stack.subnets['us-east-1'];
       expect(subnets).toHaveLength(2);
       
-      await pulumi.all([subnets[0].availabilityZone, subnets[1].availabilityZone]).apply(([az1, az2]) => {
+      await pulumi.all([subnets[0].availabilityZone, subnets[11].availabilityZone]).apply(([az1, az2]) => {
         expect(az1).toBe('us-east-1a');
         expect(az2).toBe('us-east-1b');
       });
@@ -174,7 +174,7 @@ describe('TapStack Unit Tests', () => {
     it('should have different CIDR blocks for each subnet', async () => {
       const subnets = stack.subnets['us-east-1'];
       
-      await pulumi.all([subnets[0].cidrBlock, subnets[1].cidrBlock]).apply(([cidr1, cidr2]) => {
+      await pulumi.all([subnets[0].cidrBlock, subnets[11].cidrBlock]).apply(([cidr1, cidr2]) => {
         expect(cidr1).toBe('10.0.1.0/24');
         expect(cidr2).toBe('10.0.2.0/24');
       });
@@ -228,4 +228,10 @@ describe('TapStack Unit Tests', () => {
       });
     });
   });
+
+  // REMOVED: Config-related tests since Config resources were removed from the stack
+  // - No more tests for ConfigurationRecorder
+  // - No more tests for DeliveryChannel
+  // - No more tests for Config Bucket
+  // This is because existing Config recorders already exist in your AWS account
 });

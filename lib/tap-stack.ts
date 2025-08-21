@@ -136,7 +136,7 @@ export class TapStack extends pulumi.ComponentResource {
         description: `KMS Customer Managed Key for ${region}`,
         enableKeyRotation: true,
         deletionWindowInDays: 30,
-        policy: pulumi.all([aws.getCallerIdentityOutput()]).apply(([id]) => JSON.stringify({
+        policy: pulumi.all([aws.getCallerIdentityOutput({})]).apply(([id]) => JSON.stringify({
           Version: '2012-10-17',
           Id: 'key-default-1',
           Statement: [
@@ -311,69 +311,10 @@ export class TapStack extends pulumi.ComponentResource {
           maxPasswordAge: 90,
         }, { provider });
 
-        // AWS Config (Recorder and Delivery Channel) ONLY ONCE PER ACCOUNT
-        const configRole = new aws.iam.Role(`${prefix}-config-role`, {
-          assumeRolePolicy: JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [{
-              Effect: 'Allow',
-              Principal: { Service: 'config.amazonaws.com' },
-              Action: 'sts:AssumeRole',
-            }],
-          }),
-          tags: {
-            ...tags,
-            Environment: 'Production',
-            Name: `${prefix}-config-role`,
-          },
-        }, { provider });
-
-        new aws.iam.RolePolicyAttachment(`${prefix}-config-role-policy`, {
-          role: configRole.name,
-          policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
-        }, { provider });
-
-        // S3 Bucket for Config
-        const configBucket = new aws.s3.Bucket(`${prefix}-config-bucket`, {
-          bucket: `${prefix}-config-bucket-${Date.now()}`.toLowerCase(),
-          tags: {
-            ...tags,
-            Environment: 'Production',
-            Name: `${prefix}-config-bucket`,
-          },
-        }, { provider });
-
-        new aws.s3.BucketServerSideEncryptionConfigurationV2(`${prefix}-config-bucket-encryption`, {
-          bucket: configBucket.id,
-          rules: [{
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'aws:kms',
-              kmsMasterKeyId: kmsKey.arn,
-            },
-          }],
-        }, { provider });
-
-        new aws.s3.BucketPublicAccessBlock(`${prefix}-config-bucket-pab`, {
-          bucket: configBucket.id,
-          blockPublicAcls: true,
-          blockPublicPolicy: true,
-          ignorePublicAcls: true,
-          restrictPublicBuckets: true,
-        }, { provider });
-
-        new aws.cfg.Recorder(`${prefix}-config-recorder`, {
-          name: `${prefix}-recorder`,
-          roleArn: configRole.arn,
-          recordingGroup: {
-            allSupported: true,
-            includeGlobalResourceTypes: true,
-          },
-        }, { provider });
-
-        new aws.cfg.DeliveryChannel(`${prefix}-config-delivery`, {
-          name: `${prefix}-delivery`,
-          s3BucketName: configBucket.bucket,
-        }, { provider });
+        // Config resources removed since they already exist:
+        // - ConfigRecorder-pr1768 in us-east-1
+        // - config-recorder-pr1739 in us-west-2
+        // - SecurityRecorder-default-eu-central-1 in eu-central-1
       }
     }
 
