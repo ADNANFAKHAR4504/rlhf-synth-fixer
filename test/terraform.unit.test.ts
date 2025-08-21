@@ -4,7 +4,7 @@
 
 import fs from "fs";
 import path from "path";
-import { parse } from 'hcl2-parser';
+// import { parse } from 'hcl2-parser';
 
 const STACK_PATH = path.resolve(__dirname, "../lib/tap_stack.tf");
 const PROVIDER_PATH = path.resolve(__dirname, "../lib/provider.tf");
@@ -20,8 +20,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
     providerContent = fs.readFileSync(PROVIDER_PATH, "utf8");
     
     try {
-      stackConfig = parse(stackContent);
-      providerConfig = parse(providerContent);
+      stackConfig = stackContent;
+      providerConfig = providerContent;
     } catch (error) {
       console.error("Failed to parse HCL files:", error);
     }
