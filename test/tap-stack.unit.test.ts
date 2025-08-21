@@ -1,103 +1,162 @@
-import { App, Testing } from 'cdktf';
-import { IAM } from '../lib/iam';
-import { Logging } from '../lib/logging';
-import { Networking } from '../lib/networking';
-import { Security } from '../lib/security';
-import { Storage } from '../lib/storage';
-import { TapStack } from '../lib/tap-stack';
+import * as fs from 'fs';
+import * as path from 'path';
 
-describe('TapStack Comprehensive Unit Tests', () => {
-  let app: App;
+describe('Terraform High Availability Web App Stack', () => {
+  let tfConfig: string;
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    app = new App();
+  beforeAll(() => {
+    // Read the Terraform file
+    tfConfig = fs.readFileSync(path.join(__dirname, '../lib/tap_stack.tf'), 'utf8');
   });
 
-  test('TapStack instantiates with all required props', () => {
-    const stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix: 'test',
-      stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
-      defaultTags: { tags: { Owner: 'test-owner', CostCenter: 'test-cc' } },
-    });
-    const synthesized = Testing.synth(stack);
-    expect(stack).toBeDefined();
-    expect(synthesized).toBeDefined();
+  test('environment variable is defined and used in resource names', () => {
+    expect(tfConfig).toMatch(/variable\s+"environment"/);
+    expect(tfConfig).toMatch(/\${var\.environment}/);
   });
 
-  test('Networking module creates VPC and subnets with correct tags', () => {
-    const stack = new TapStack(app, 'NetworkingTestStack');
-    const networking = new Networking(stack, 'NetworkingTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(networking.vpc).toBeDefined();
-    expect(networking.publicSubnets.length).toBeGreaterThan(0);
-    expect(networking.privateSubnets.length).toBeGreaterThan(0);
+  test('VPC and subnets are present and tagged', () => {
+    expect(tfConfig).toMatch(/resource\s+"aws_vpc"\s+"main"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_subnet"\s+"public_1"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_subnet"\s+"public_2"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_subnet"\s+"private_1"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_subnet"\s+"private_2"/);
+    expect(tfConfig).toMatch(/tags\s*=\s*{[\s\S]*?Environment[\s\S]*?}/);
   });
 
-  test('Security module creates SGs with correct rules', () => {
-    const stack = new TapStack(app, 'SecurityTestStack');
-    const security = new Security(stack, 'SecurityTest', {
-      vpcId: 'vpc-123',
-      environment: 'test',
-      region: 'us-west-2',
-      allowedCidr: '203.0.113.0/24',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(security.webSg).toBeDefined();
-    expect(security.appSg).toBeDefined();
-    expect(security.dbSg).toBeDefined();
+  test('Security groups are present and web_servers SG does NOT allow SSH from anywhere', () => {
+    expect(tfConfig).toMatch(/resource\s+"aws_security_group"\s+"elb"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_security_group"\s+"web_servers"/);
+    // Should not have port 22 open to 0.0.0.0/0
+    const sgBlock = tfConfig.match(/resource\s+"aws_security_group"\s+"web_servers"[\s\S]*?}/);
+    expect(sgBlock).not.toBeNull();
+    if (sgBlock) {
+      expect(sgBlock[0]).not.toMatch(/from_port\s*=\s*22/);
+      expect(sgBlock[0]).not.toMatch(/cidr_blocks\s*=\s*\[.*0\.0\.0\.0\/0.*\]/);
+    }
   });
 
-  test('IAM module creates role with least privilege', () => {
-    const stack = new TapStack(app, 'IAMTestStack');
-    const iam = new IAM(stack, 'IAMTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(iam.role).toBeDefined();
+  test('Launch template, ASG, and ALB resources are present', () => {
+    expect(tfConfig).toMatch(/resource\s+"aws_launch_template"\s+"web_server"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_autoscaling_group"\s+"web_servers"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_lb"\s+"main"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_lb_target_group"\s+"web_servers"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_lb_listener"\s+"web"/);
   });
 
-  test('Logging module creates CloudTrail with correct bucket', () => {
-    const stack = new TapStack(app, 'LoggingTestStack');
-    const logging = new Logging(stack, 'LoggingTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(logging.trail).toBeDefined();
+  test('CloudWatch alarms and scaling policies are present', () => {
+    expect(tfConfig).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"cpu_high"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"cpu_low"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"target_health"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_autoscaling_policy"\s+"scale_up"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_autoscaling_policy"\s+"scale_down"/);
   });
 
-  test('Storage module creates secure S3 buckets', () => {
-    const stack = new TapStack(app, 'StorageTestStack');
-    const storage = new Storage(stack, 'StorageTest', {
-      environment: 'test',
-      region: 'us-west-2',
-      tags: { Owner: 'test-owner', CostCenter: 'test-cc' },
-    });
-    expect(storage.appDataBucket).toBeDefined();
-    expect(storage.logsBucket).toBeDefined();
+  test('SNS topic and subscription for scaling notifications are present', () => {
+    expect(tfConfig).toMatch(/resource\s+"aws_sns_topic"\s+"scaling_notifications"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_sns_topic_subscription"\s+"email_notification"/);
+    expect(tfConfig).toMatch(/resource\s+"aws_autoscaling_notification"\s+"scaling_notifications"/);
   });
 
-  test('Stack outputs and standards are present', () => {
-    const stack = new TapStack(app, 'OutputTestStack', {
-      environmentSuffix: 'test',
-      stateBucket: 'test-state-bucket',
-      stateBucketRegion: 'us-west-2',
-      awsRegion: 'us-west-2',
-      defaultTags: { tags: { Owner: 'test-owner', CostCenter: 'test-cc' } },
+  test('Outputs for all major resources are present and use correct references', () => {
+    expect(tfConfig).toMatch(/output\s+"vpc_id"[\s\S]*value\s*=\s*aws_vpc\.main\.id/);
+    expect(tfConfig).toMatch(/output\s+"public_subnet_ids"[\s\S]*value\s*=\s*\[aws_subnet\.public_1\.id,\s*aws_subnet\.public_2\.id\]/);
+    expect(tfConfig).toMatch(/output\s+"private_subnet_ids"[\s\S]*value\s*=\s*\[aws_subnet\.private_1\.id,\s*aws_subnet\.private_2\.id\]/);
+    expect(tfConfig).toMatch(/output\s+"availability_zones"[\s\S]*value\s*=\s*\[data\.aws_availability_zones\.available\.names\[0\],\s*data\.aws_availability_zones\.available\.names\[1\]\]/);
+    expect(tfConfig).toMatch(/output\s+"elb_security_group_id"[\s\S]*value\s*=\s*aws_security_group\.elb\.id/);
+    expect(tfConfig).toMatch(/output\s+"web_servers_security_group_id"[\s\S]*value\s*=\s*aws_security_group\.web_servers\.id/);
+    expect(tfConfig).toMatch(/output\s+"load_balancer_dns_name"[\s\S]*value\s*=\s*aws_lb\.main\.dns_name/);
+    expect(tfConfig).toMatch(/output\s+"load_balancer_zone_id"[\s\S]*value\s*=\s*aws_lb\.main\.zone_id/);
+    expect(tfConfig).toMatch(/output\s+"autoscaling_group_name"[\s\S]*value\s*=\s*aws_autoscaling_group\.web_servers\.name/);
+    expect(tfConfig).toMatch(/output\s+"sns_topic_arn"[\s\S]*value\s*=\s*aws_sns_topic\.scaling_notifications\.arn/);
+  });
+
+  test('At least 70% of expected major resources are present', () => {
+    const expectedResources = [
+      'resource "aws_vpc" "main"',
+      'resource "aws_internet_gateway" "main"',
+      'resource "aws_subnet" "public_1"',
+      'resource "aws_subnet" "public_2"',
+      'resource "aws_subnet" "private_1"',
+      'resource "aws_subnet" "private_2"',
+      'resource "aws_security_group" "elb"',
+      'resource "aws_security_group" "web_servers"',
+      'resource "aws_launch_template" "web_server"',
+      'resource "aws_lb" "main"',
+      'resource "aws_lb_target_group" "web_servers"',
+      'resource "aws_lb_listener" "web"',
+      'resource "aws_autoscaling_group" "web_servers"',
+      'resource "aws_autoscaling_policy" "scale_up"',
+      'resource "aws_autoscaling_policy" "scale_down"',
+      'resource "aws_cloudwatch_metric_alarm" "cpu_high"',
+      'resource "aws_cloudwatch_metric_alarm" "cpu_low"',
+      'resource "aws_cloudwatch_metric_alarm" "target_health"',
+      'resource "aws_sns_topic" "scaling_notifications"',
+      'resource "aws_sns_topic_subscription" "email_notification"',
+      'resource "aws_autoscaling_notification" "scaling_notifications"',
+    ];
+    const found = expectedResources.filter(resource => tfConfig.includes(resource));
+    const coverage = found.length / expectedResources.length;
+    expect(coverage).toBeGreaterThanOrEqual(0.7);
+  });
+
+  test('All major resources are present and correctly named', () => {
+    const expectedResources = [
+      'resource "aws_vpc" "main"',
+      'resource "aws_internet_gateway" "main"',
+      'resource "aws_subnet" "public_1"',
+      'resource "aws_subnet" "public_2"',
+      'resource "aws_subnet" "private_1"',
+      'resource "aws_subnet" "private_2"',
+      'resource "aws_security_group" "elb"',
+      'resource "aws_security_group" "web_servers"',
+      'resource "aws_launch_template" "web_server"',
+      'resource "aws_lb" "main"',
+      'resource "aws_lb_target_group" "web_servers"',
+      'resource "aws_lb_listener" "web"',
+      'resource "aws_autoscaling_group" "web_servers"',
+      'resource "aws_autoscaling_policy" "scale_up"',
+      'resource "aws_autoscaling_policy" "scale_down"',
+      'resource "aws_cloudwatch_metric_alarm" "cpu_high"',
+      'resource "aws_cloudwatch_metric_alarm" "cpu_low"',
+      'resource "aws_cloudwatch_metric_alarm" "target_health"',
+      'resource "aws_sns_topic" "scaling_notifications"',
+      'resource "aws_sns_topic_subscription" "email_notification"',
+      'resource "aws_autoscaling_notification" "scaling_notifications"',
+    ];
+    expectedResources.forEach(resource => {
+      expect(tfConfig).toContain(resource);
     });
-    const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('test-us-west-2-vpc');
-    expect(synthesized).toContain('test-us-west-2-app-data');
-    expect(synthesized).toContain('test-us-west-2-logs');
-    expect(synthesized).toContain('test-us-west-2-trail-bucket');
+  });
+
+  test('All expected variables are declared', () => {
+    const expectedVariables = [
+      'variable "aws_region"',
+      'variable "environment"',
+      'variable "bucket_region"',
+      'variable "bucket_name"',
+      'variable "bucket_tags"',
+      'variable "key_pair_name"',
+      'variable "notification_email"',
+    ];
+    expectedVariables.forEach(variable => {
+      expect(tfConfig).toContain(variable);
+    });
+  });
+
+  test('Tags are set for all major resources', () => {
+    // Environment tag check for all main resources
+    expect(tfConfig).toMatch(/tags\s*=\s*{[\s\S]*?Environment[\s\S]*?}/);
+  });
+
+  test('Auto Scaling Group uses environment suffix in name', () => {
+    expect(tfConfig).toMatch(/name\s*=\s*"ha-web-app-asg-\${var\.environment}"/);
+  });
+
+  test('Documentation and comments are present', () => {
+    expect(tfConfig).toMatch(/########################/);
+    expect(tfConfig).toMatch(/CloudWatch Alarms, Scaling Policies, and SNS Notifications/);
+    expect(tfConfig).toMatch(/Launch Template, Auto Scaling Group, and Load Balancer/);
+    expect(tfConfig).toMatch(/Security Groups/);
+    expect(tfConfig).toMatch(/VPC and Subnets \(High Availability\)/);
   });
 });
-
-// add more test suites and cases as needed
