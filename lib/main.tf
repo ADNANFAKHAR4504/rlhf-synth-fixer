@@ -118,8 +118,11 @@ data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnet_ids" "default_vpc" {
-  vpc_id = data.aws_vpc.default.id
+data "aws_subnets" "default_vpc" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 # Resolve a recent Amazon Linux 2 AMI for convenience (if you later add EC2)
@@ -273,6 +276,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "static" {
     id     = "expire-objects-365"
     status = "Enabled"
 
+    filter {}
+
     expiration {
       days = 365
     }
@@ -422,7 +427,7 @@ resource "aws_lambda_function" "app" {
 
   # If your Lambda needs VPC access to reach RDS, specify subnet_ids & security_group_ids:
   vpc_config {
-    subnet_ids         = slice(data.aws_subnet_ids.default_vpc.ids, 0, 2)
+    subnet_ids         = slice(data.aws_subnets.default_vpc.ids, 0, 2)
     security_group_ids = [aws_security_group.lambda_sg.id]
   }
 
@@ -514,7 +519,7 @@ resource "aws_api_gateway_stage" "prod" {
 ########################################
 resource "aws_db_subnet_group" "default" {
   name       = "${var.project}-db-subnet-group-${local.suffix_hex}"
-  subnet_ids = slice(data.aws_subnet_ids.default_vpc.ids, 0, 2)
+  subnet_ids = slice(data.aws_subnets.default_vpc.ids, 0, 2)
   tags       = local.common_tags
   lifecycle {
     prevent_destroy = false
