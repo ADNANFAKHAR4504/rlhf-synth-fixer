@@ -23,20 +23,32 @@ Parameters:
     Description: 'Database master username'
     Default: 'admin'
     NoEcho: true
-  
-  DBPassword:
-    Type: String
-    Description: 'Database master password'
-    MinLength: 8
-    MaxLength: 41
-    NoEcho: true
-    Default: 'TempPassword123!'
 
-Mappings:
-  RegionMap:
-    us-west-2:
-      AZ1: 'us-west-2a'
-      AZ2: 'us-west-2b'
+
+  UseExistingCloudFrontWebACL:
+    Type: String
+    Description: 'Set to true to attach an existing CloudFront WebACL and skip creating a new one'
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+
+  ExistingCloudFrontWebACLArn:
+    Type: String
+    Description: 'ARN of an existing CloudFront WebACL (CLOUDFRONT scope). Required when UseExistingCloudFrontWebACL is true.'
+    Default: ''
+
+  EnableConfig:
+    Type: String
+    Description: 'Set to true to provision AWS Config resources; set to false to skip in accounts without required permissions.'
+    AllowedValues: ['true', 'false']
+    Default: 'false'
+  
+# (no Mappings required)
+
+Conditions:
+  CreateCloudFrontWebACL: !And [ !Equals [ !Ref UseExistingCloudFrontWebACL, 'false' ], !Equals [ !Ref AWS::Region, 'us-east-1' ] ]
+  HasExistingCloudFrontWebACL: !And [ !Equals [ !Ref UseExistingCloudFrontWebACL, 'true' ], !Not [ !Equals [ !Ref ExistingCloudFrontWebACLArn, '' ] ] ]
+  UseAnyWebACL: !Or [ { Condition: CreateCloudFrontWebACL }, { Condition: HasExistingCloudFrontWebACL } ]
+  CreateConfig: !Equals [ !Ref EnableConfig, 'true' ]
 
 Resources:
   # ============================================================================
@@ -64,6 +76,8 @@ Resources:
           - Id: DeleteOldLogs
             Status: Enabled
             ExpirationInDays: 90
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   # CloudTrail Bucket Policy
   CloudTrailBucketPolicy:
@@ -105,40 +119,19 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - 'arn:aws:s3:::*/*'
+                - !Sub '${ApplicationDataBucket.Arn}/'
 
-  # Config Service Role
-  ConfigRole:
-    Type: AWS::IAM::Role
+  # Config Service-Linked Role (preferred for AWS Config)
+  ConfigServiceLinkedRole:
+    Type: AWS::IAM::ServiceLinkedRole
+    Condition: CreateConfig
     Properties:
-      RoleName: !Sub 'role-${ProjectName}-${Environment}-config'
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
-      Policies:
-        - PolicyName: ConfigBucketDeliveryRolePolicy
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketAcl
-                  - s3:ListBucket
-                Resource: !GetAtt ConfigBucket.Arn
-              - Effect: Allow
-                Action: s3:PutObject
-                Resource: !Sub '${ConfigBucket.Arn}/*'
-                Condition:
-                  StringEquals:
-                    's3:x-amz-acl': bucket-owner-full-control
+      AWSServiceName: config.amazonaws.com
 
   # Config S3 Bucket
   ConfigBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateConfig
     Properties:
       BucketName: !Sub 's3-${ProjectName}-${Environment}-config-${AWS::AccountId}'
       BucketEncryption:
@@ -154,16 +147,44 @@ Resources:
   # Config Delivery Channel
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: CreateConfig
     Properties:
       Name: !Sub 'delivery-${ProjectName}-${Environment}'
       S3BucketName: !Ref ConfigBucket
 
+  # Allow AWS Config to deliver to the S3 bucket
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateConfig
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ConfigBucket.Arn
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ConfigBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
   # Config Configuration Recorder
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateConfig
+    DependsOn: ConfigServiceLinkedRole
     Properties:
       Name: !Sub 'recorder-${ProjectName}-${Environment}'
-      RoleARN: !GetAtt ConfigRole.Arn
+      RoleARN: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig'
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -171,6 +192,7 @@ Resources:
   # Config Rule - S3 Bucket Public Read Prohibited
   ConfigRuleS3PublicRead:
     Type: AWS::Config::ConfigRule
+    Condition: CreateConfig
     DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName: !Sub 'rule-${ProjectName}-${Environment}-s3-public-read-prohibited'
@@ -213,7 +235,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       Tags:
@@ -225,7 +247,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       Tags:
@@ -237,7 +259,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.0.10.0/24
       Tags:
         - Key: Name
@@ -248,7 +270,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: 10.0.11.0/24
       Tags:
         - Key: Name
@@ -376,7 +398,6 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'sg-${ProjectName}-${Environment}-database'
       GroupDescription: 'Security group for RDS database'
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -393,16 +414,17 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub 'rds-${ProjectName}-${Environment}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0'
+      EngineVersion: '8.0.42'
       AllocatedStorage: 20
-      StorageType: gp2
+      StorageType: gp3
       StorageEncrypted: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -424,7 +446,6 @@ Resources:
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'sg-${ProjectName}-${Environment}-lambda'
       GroupDescription: 'Security group for Lambda function'
       VpcId: !Ref VPC
       SecurityGroupEgress:
@@ -433,11 +454,6 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
           Description: 'HTTPS outbound'
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-          Description: 'MySQL to database'
       Tags:
         - Key: Name
           Value: !Sub 'sg-${ProjectName}-${Environment}-lambda'
@@ -446,8 +462,8 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'role-${ProjectName}-${Environment}-lambda'
       AssumeRolePolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -456,6 +472,7 @@ Resources:
       Policies:
         - PolicyName: LambdaVPCExecutionPolicy
           PolicyDocument:
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -467,6 +484,7 @@ Resources:
                 Resource: '*'
         - PolicyName: LambdaLogsPolicy
           PolicyDocument:
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -480,7 +498,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'lambda-${ProjectName}-${Environment}-hello'
-      Runtime: python3.9
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       VpcConfig:
@@ -520,6 +538,7 @@ Resources:
   # WAF Web ACL
   WebACL:
     Type: AWS::WAFv2::WebACL
+    Condition: CreateCloudFrontWebACL
     Properties:
       Name: !Sub 'waf-${ProjectName}-${Environment}'
       Scope: CLOUDFRONT
@@ -548,9 +567,9 @@ Resources:
 
   # CloudFront Origin Access Identity
   OriginAccessIdentity:
-    Type: AWS::CloudFront::OriginAccessIdentity
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Properties:
-      OriginAccessIdentityConfig:
+      CloudFrontOriginAccessIdentityConfig:
         Comment: !Sub 'OAI for ${ProjectName}-${Environment}'
 
   # CloudFront Distribution
@@ -585,7 +604,7 @@ Resources:
         Enabled: true
         HttpVersion: http2
         PriceClass: PriceClass_100
-        WebACLId: !GetAtt WebACL.Arn
+        WebACLId: !If [ UseAnyWebACL, !If [ CreateCloudFrontWebACL, !GetAtt WebACL.Arn, !Ref ExistingCloudFrontWebACLArn ], !Ref 'AWS::NoValue' ]
         ViewerCertificate:
           CloudFrontDefaultCertificate: true
       Tags:
@@ -598,13 +617,26 @@ Resources:
     Properties:
       Bucket: !Ref ApplicationDataBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: AllowCloudFrontAccess
             Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}'
+              CanonicalUser: !GetAtt OriginAccessIdentity.S3CanonicalUserId
             Action: s3:GetObject
             Resource: !Sub '${ApplicationDataBucket.Arn}/*'
+
+  # Secrets Manager secret for RDS master password
+  DBMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'secret-${ProjectName}-${Environment}-db-master'
+      Description: 'RDS master user password'
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludePunctuation: true
 
 # ============================================================================
 # OUTPUTS
@@ -673,7 +705,8 @@ Outputs:
 
   WebACLArn:
     Description: 'WAF Web ACL ARN'
-    Value: !GetAtt WebACL.Arn
+    Condition: UseAnyWebACL
+    Value: !If [ CreateCloudFrontWebACL, !GetAtt WebACL.Arn, !Ref ExistingCloudFrontWebACLArn ]
     Export:
       Name: !Sub '${AWS::StackName}-WebACL-ARN'
 

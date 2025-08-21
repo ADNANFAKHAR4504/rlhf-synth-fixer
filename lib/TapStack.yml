@@ -76,6 +76,8 @@ Resources:
           - Id: DeleteOldLogs
             Status: Enabled
             ExpirationInDays: 90
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
   # CloudTrail Bucket Policy
   CloudTrailBucketPolicy:
@@ -703,7 +705,8 @@ Outputs:
 
   WebACLArn:
     Description: 'WAF Web ACL ARN'
-    Value: !If [ UseAnyWebACL, !If [ CreateCloudFrontWebACL, !GetAtt WebACL.Arn, !Ref ExistingCloudFrontWebACLArn ], '' ]
+    Condition: UseAnyWebACL
+    Value: !If [ CreateCloudFrontWebACL, !GetAtt WebACL.Arn, !Ref ExistingCloudFrontWebACLArn ]
     Export:
       Name: !Sub '${AWS::StackName}-WebACL-ARN'
 

@@ -147,7 +147,9 @@
                         }
                     ]
                 }
-            }
+            },
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain"
         },
         "CloudTrailBucketPolicy": {
             "Type": "AWS::S3::BucketPolicy",
@@ -1189,24 +1191,19 @@
         },
         "WebACLArn": {
             "Description": "WAF Web ACL ARN",
+            "Condition": "UseAnyWebACL",
             "Value": {
                 "Fn::If": [
-                    "UseAnyWebACL",
+                    "CreateCloudFrontWebACL",
                     {
-                        "Fn::If": [
-                            "CreateCloudFrontWebACL",
-                            {
-                                "Fn::GetAtt": [
-                                    "WebACL",
-                                    "Arn"
-                                ]
-                            },
-                            {
-                                "Ref": "ExistingCloudFrontWebACLArn"
-                            }
+                        "Fn::GetAtt": [
+                            "WebACL",
+                            "Arn"
                         ]
                     },
-                    ""
+                    {
+                        "Ref": "ExistingCloudFrontWebACLArn"
+                    }
                 ]
             },
             "Export": {
