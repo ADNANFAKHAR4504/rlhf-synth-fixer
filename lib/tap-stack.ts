@@ -280,13 +280,12 @@ export class TapStack extends TerraformStack {
         }
       );
 
-      // FIX: Add an explicit dependency on the replica bucket's versioning configuration.
       new S3BucketReplicationConfigurationA(
         this,
         `S3ReplicationConfig${constructIdSuffix}`,
         {
           provider: primaryProvider,
-          dependsOn: [s3ReplicationRole, replicaVersioning], // This ensures versioning is enabled on the destination first
+          dependsOn: [replicaVersioning], // FIX: Explicitly depend on replica versioning
           role: s3ReplicationRole.arn,
           bucket: primaryBucket.id,
           rule: [
@@ -294,7 +293,7 @@ export class TapStack extends TerraformStack {
               id: 'primary-to-replica',
               status: 'Enabled',
               destination: { bucket: replicaBucket.arn },
-              deleteMarkerReplication: { status: 'Enabled' },
+              // FIX: Removed incompatible DeleteMarkerReplication setting
             },
           ],
         }
@@ -353,6 +352,7 @@ export class TapStack extends TerraformStack {
         kmsMasterKeyId: kmsKey.id,
         tags: config.tags,
       });
+
       const logGroup = new CloudwatchLogGroup(
         this,
         `LogGroup${constructIdSuffix}`,
@@ -361,9 +361,11 @@ export class TapStack extends TerraformStack {
           name: `/ecs/webapp${resourceNameSuffix}`,
           retentionInDays: 30,
           kmsKeyId: kmsKey.id,
+          dependsOn: [kmsKey], // FIX: Explicitly depend on the KMS key
           tags: config.tags,
         }
       );
+
       const ecsTaskExecutionRole = new IamRole(
         this,
         `EcsTaskExecRole${constructIdSuffix}`,
