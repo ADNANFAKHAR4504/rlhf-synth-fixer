@@ -1,675 +1,268 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
+import * as AWS from 'aws-sdk';
+import { describe, beforeAll, afterAll, test, expect } from '@jest/globals';
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
+// Configuration from environment variables
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = process.env.AWS_REGION || 'us-east-1';
 
-// Mock outputs for testing without actual deployment
-const mockOutputs = {
-  VpcId: `vpc-${environmentSuffix}-123456789`,
-  DatabaseEndpoint: `tapdb-${environmentSuffix}.cluster-xyz.us-east-1.rds.amazonaws.com`,
-  KmsKeyId:
-    'arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012',
-  Ec2Instance1Id: `i-${environmentSuffix}123456789abcdef0`,
-  Ec2Instance2Id: `i-${environmentSuffix}234567890abcdef1`,
-  Ec2SecurityGroupId: `sg-${environmentSuffix}123456789abcdef`,
-  RdsSecurityGroupId: `sg-${environmentSuffix}987654321fedcba`,
-  DatabaseSubnetGroupName: `tapdbsubnetgroup${environmentSuffix}`,
-  DatabaseParameterGroupName: `tapdbparametergroup${environmentSuffix}`,
-};
+// AWS Clients
+const ec2 = new AWS.EC2({ region });
+const rds = new AWS.RDS({ region });
+const kms = new AWS.KMS({ region });
+const ssm = new AWS.SSM({ region });
+const cloudWatchLogs = new AWS.CloudWatchLogs({ region });
 
-// Create mock cfn-outputs directory and file for consistent testing
-const outputsDir = 'cfn-outputs';
-const outputsFile = `${outputsDir}/flat-outputs.json`;
+// These should be set as environment variables from your CDK deployment outputs
+const vpcId = process.env.VPC_ID;
+const databaseEndpoint = process.env.DATABASE_ENDPOINT;
+const kmsKeyId = process.env.KMS_KEY_ID;
+const ec2Instance1Id = process.env.EC2_INSTANCE_1_ID;
+const ec2Instance2Id = process.env.EC2_INSTANCE_2_ID;
+const ec2SecurityGroupId = process.env.EC2_SECURITY_GROUP_ID;
+const rdsSecurityGroupId = process.env.RDS_SECURITY_GROUP_ID;
 
-describe('TAP Infrastructure Integration Tests', () => {
-  beforeAll(() => {
-    // Create outputs directory if it doesn't exist
-    if (!fs.existsSync(outputsDir)) {
-      fs.mkdirSync(outputsDir, { recursive: true });
-    }
-    // Create mock outputs file
-    fs.writeFileSync(outputsFile, JSON.stringify(mockOutputs, null, 2));
-  });
+describe('TAP Infrastructure Integration Tests - Live Resources', () => {
+  // Skip tests if required environment variables are not set
+  const requiredEnvVars = [
+    vpcId,
+    databaseEndpoint,
+    kmsKeyId,
+    ec2Instance1Id,
+    ec2Instance2Id,
+    ec2SecurityGroupId,
+    rdsSecurityGroupId,
+  ];
 
-  afterAll(() => {
-    // Clean up mock files
-    if (fs.existsSync(outputsFile)) {
-      fs.unlinkSync(outputsFile);
-    }
-    if (fs.existsSync(outputsDir)) {
-      fs.rmdirSync(outputsDir, { recursive: true });
-    }
-  });
-
-  let outputs: typeof mockOutputs;
-
-  beforeEach(() => {
-    // Read outputs that would come from actual deployment
-    if (fs.existsSync(outputsFile)) {
-      outputs = JSON.parse(fs.readFileSync(outputsFile, 'utf8'));
-    } else {
-      outputs = mockOutputs;
-    }
-  });
+  if (requiredEnvVars.some(v => !v)) {
+    console.warn(
+      'Skipping integration tests - required environment variables not set'
+    );
+    return;
+  }
 
   describe('VPC Infrastructure Validation', () => {
-    test('VPC ID is provided and follows naming convention', () => {
-      expect(outputs.VpcId).toBeDefined();
-      expect(outputs.VpcId).toMatch(/^vpc-/);
-      expect(outputs.VpcId).toContain(environmentSuffix);
+    test('VPC exists and is in available state', async () => {
+      const response = await ec2.describeVpcs({ VpcIds: [vpcId!] }).promise();
+
+      expect(response.Vpcs).toHaveLength(1);
+      expect(response.Vpcs![0].State).toBe('available');
+      expect(response.Vpcs![0].VpcId).toBe(vpcId);
     });
 
-    test('VPC allows proper connectivity patterns', async () => {
-      // In a real deployment, we would test actual VPC connectivity
-      // Mock the expected connectivity validation
-      const vpcId = outputs.VpcId;
-      expect(vpcId).toBeDefined();
-      // Simulate VPC connectivity checks that would be done against AWS API
-      expect(typeof vpcId).toBe('string');
-      expect(vpcId.length).toBeGreaterThan(10);
+    test('VPC has required subnets', async () => {
+      const response = await ec2
+        .describeSubnets({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId!] }],
+        })
+        .promise();
+
+      const subnetTypes = response.Subnets!.map(
+        s => s.Tags?.find(t => t.Key === 'aws-cdk:subnet-type')?.Value
+      );
+
+      expect(subnetTypes).toContain('Public');
+      expect(subnetTypes).toContain('Private');
+      expect(subnetTypes).toContain('Isolated');
     });
   });
 
   describe('Security Groups Validation', () => {
-    test('EC2 Security Group exists and allows HTTP/HTTPS', async () => {
-      const securityGroupId = outputs.Ec2SecurityGroupId;
+    test('EC2 Security Group allows HTTP/HTTPS inbound', async () => {
+      const response = await ec2
+        .describeSecurityGroups({
+          GroupIds: [ec2SecurityGroupId!],
+        })
+        .promise();
 
-      expect(securityGroupId).toBeDefined();
-      expect(securityGroupId).toMatch(/^sg-/);
-      expect(securityGroupId).toContain(environmentSuffix);
+      const securityGroup = response.SecurityGroups![0];
+      const httpRule = securityGroup.IpPermissions?.find(
+        p => p.FromPort === 80 && p.ToPort === 80 && p.IpProtocol === 'tcp'
+      );
+      const httpsRule = securityGroup.IpPermissions?.find(
+        p => p.FromPort === 443 && p.ToPort === 443 && p.IpProtocol === 'tcp'
+      );
 
-      // In real deployment, we would validate actual security group rules
-      // Mock the security group rules validation
-      const mockSecurityGroupRules = [
-        { protocol: 'tcp', port: 80, cidr: '0.0.0.0/0' },
-        { protocol: 'tcp', port: 443, cidr: '0.0.0.0/0' },
-      ];
-
-      expect(mockSecurityGroupRules).toHaveLength(2);
-      expect(mockSecurityGroupRules.some(rule => rule.port === 80)).toBe(true);
-      expect(mockSecurityGroupRules.some(rule => rule.port === 443)).toBe(true);
+      expect(httpRule).toBeDefined();
+      expect(httpsRule).toBeDefined();
     });
 
-    test('RDS Security Group restricts access to EC2 only', async () => {
-      const rdsSecurityGroupId = outputs.RdsSecurityGroupId;
-      const ec2SecurityGroupId = outputs.Ec2SecurityGroupId;
+    test('RDS Security Group allows PostgreSQL from EC2 Security Group', async () => {
+      const response = await ec2
+        .describeSecurityGroups({
+          GroupIds: [rdsSecurityGroupId!],
+        })
+        .promise();
 
-      expect(rdsSecurityGroupId).toBeDefined();
-      expect(rdsSecurityGroupId).toMatch(/^sg-/);
+      const securityGroup = response.SecurityGroups![0];
+      const postgresRule = securityGroup.IpPermissions?.find(
+        p => p.FromPort === 5432 && p.ToPort === 5432 && p.IpProtocol === 'tcp'
+      );
 
-      // Mock validation that RDS SG only allows access from EC2 SG
-      const mockRdsIngressRules = [
-        {
-          protocol: 'tcp',
-          port: 5432,
-          sourceSecurityGroup: ec2SecurityGroupId,
-        },
-      ];
-
-      expect(mockRdsIngressRules).toHaveLength(1);
-      expect(mockRdsIngressRules[0].sourceSecurityGroup).toBe(
+      expect(postgresRule).toBeDefined();
+      expect(postgresRule?.UserIdGroupPairs?.[0]?.GroupId).toBe(
         ec2SecurityGroupId
       );
-      expect(mockRdsIngressRules[0].port).toBe(5432);
     });
   });
 
   describe('EC2 Instances Validation', () => {
-    test('EC2 instances are running and accessible via SSM', async () => {
-      const instance1Id = outputs.Ec2Instance1Id;
-      const instance2Id = outputs.Ec2Instance2Id;
+    test('EC2 instances are running', async () => {
+      const response = await ec2
+        .describeInstances({
+          InstanceIds: [ec2Instance1Id!, ec2Instance2Id!],
+        })
+        .promise();
 
-      expect(instance1Id).toBeDefined();
-      expect(instance2Id).toBeDefined();
-      expect(instance1Id).toMatch(/^i-/);
-      expect(instance2Id).toMatch(/^i-/);
+      const instances = response.Reservations!.flatMap(r => r.Instances!);
 
-      // Mock SSM connectivity test
-      const mockSSMStatus = {
-        [instance1Id]: 'Online',
-        [instance2Id]: 'Online',
-      };
-
-      expect(mockSSMStatus[instance1Id]).toBe('Online');
-      expect(mockSSMStatus[instance2Id]).toBe('Online');
+      expect(instances).toHaveLength(2);
+      instances.forEach(instance => {
+        expect(instance.State?.Name).toBe('running');
+      });
     });
 
-    test('EC2 instances have encrypted EBS volumes', async () => {
-      const instance1Id = outputs.Ec2Instance1Id;
-      const instance2Id = outputs.Ec2Instance2Id;
+    test('EC2 instances have encrypted volumes', async () => {
+      const response = await ec2
+        .describeInstances({
+          InstanceIds: [ec2Instance1Id!, ec2Instance2Id!],
+        })
+        .promise();
 
-      // Mock EBS encryption check
-      const mockVolumeEncryption = {
-        [instance1Id]: { encrypted: true, kmsKeyId: outputs.KmsKeyId },
-        [instance2Id]: { encrypted: true, kmsKeyId: outputs.KmsKeyId },
-      };
+      const instances = response.Reservations!.flatMap(r => r.Instances!);
 
-      expect(mockVolumeEncryption[instance1Id].encrypted).toBe(true);
-      expect(mockVolumeEncryption[instance2Id].encrypted).toBe(true);
-      expect(mockVolumeEncryption[instance1Id].kmsKeyId).toBe(outputs.KmsKeyId);
-    });
+      for (const instance of instances) {
+        const blockDevices = instance.BlockDeviceMappings || [];
+        for (const device of blockDevices) {
+          const volumeResponse = await ec2
+            .describeVolumes({
+              VolumeIds: [device.Ebs!.VolumeId!],
+            })
+            .promise();
 
-    test('EC2 instances can reach internet for updates', async () => {
-      const instance1Id = outputs.Ec2Instance1Id;
-      const instance2Id = outputs.Ec2Instance2Id;
-
-      // Mock internet connectivity test through NAT Gateway
-      const mockInternetConnectivity = {
-        [instance1Id]: { canReachInternet: true, route: 'NAT Gateway' },
-        [instance2Id]: { canReachInternet: true, route: 'NAT Gateway' },
-      };
-
-      expect(mockInternetConnectivity[instance1Id].canReachInternet).toBe(true);
-      expect(mockInternetConnectivity[instance2Id].canReachInternet).toBe(true);
-    });
+          expect(volumeResponse.Volumes![0].Encrypted).toBe(true);
+        }
+      }
+    }, 30000); // Longer timeout for volume checks
   });
 
   describe('RDS Database Validation', () => {
-    test('Database endpoint is accessible and properly configured', async () => {
-      const dbEndpoint = outputs.DatabaseEndpoint;
+    test('RDS instance is available and encrypted', async () => {
+      // Extract DB identifier from endpoint
+      const dbIdentifier = databaseEndpoint!.split('.')[0];
 
-      expect(dbEndpoint).toBeDefined();
-      expect(dbEndpoint).toContain(environmentSuffix);
-      expect(dbEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
+      const response = await rds
+        .describeDBInstances({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+        .promise();
 
-      // Mock database configuration validation
-      const mockDbConfig = {
-        engine: 'postgres',
-        version: '15.3',
-        multiAZ: true,
-        encrypted: true,
-        backupRetentionPeriod: 7,
-      };
+      const dbInstance = response.DBInstances![0];
 
-      expect(mockDbConfig.engine).toBe('postgres');
-      expect(mockDbConfig.multiAZ).toBe(true);
-      expect(mockDbConfig.encrypted).toBe(true);
+      expect(dbInstance.DBInstanceStatus).toBe('available');
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.MultiAZ).toBe(true);
+      expect(dbInstance.PubliclyAccessible).toBe(false);
     });
 
-    test('Database is not publicly accessible', async () => {
-      // Mock public accessibility check
-      const mockDbPublicAccess = {
-        publiclyAccessible: false,
-        subnetGroup: outputs.DatabaseSubnetGroupName,
-      };
+    test('RDS has Performance Insights enabled', async () => {
+      const dbIdentifier = databaseEndpoint!.split('.')[0];
 
-      expect(mockDbPublicAccess.publiclyAccessible).toBe(false);
-      expect(mockDbPublicAccess.subnetGroup).toBe(
-        outputs.DatabaseSubnetGroupName
-      );
-    });
+      const response = await rds
+        .describeDBInstances({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+        .promise();
 
-    test('Database connectivity from EC2 instances works', async () => {
-      const dbEndpoint = outputs.DatabaseEndpoint;
-      const ec2Instance1 = outputs.Ec2Instance1Id;
-      const ec2Instance2 = outputs.Ec2Instance2Id;
+      const dbInstance = response.DBInstances![0];
 
-      // Mock database connectivity test from EC2
-      const mockDbConnectivity = {
-        [ec2Instance1]: { canConnect: true, port: 5432 },
-        [ec2Instance2]: { canConnect: true, port: 5432 },
-      };
-
-      expect(mockDbConnectivity[ec2Instance1].canConnect).toBe(true);
-      expect(mockDbConnectivity[ec2Instance2].canConnect).toBe(true);
-      expect(mockDbConnectivity[ec2Instance1].port).toBe(5432);
+      expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
+      expect(dbInstance.PerformanceInsightsKMSKeyId).toBe(kmsKeyId);
     });
   });
 
   describe('KMS Encryption Validation', () => {
-    test('KMS key is properly configured and accessible', async () => {
-      const kmsKeyId = outputs.KmsKeyId;
+    test('KMS key exists and is enabled', async () => {
+      const response = await kms.describeKey({ KeyId: kmsKeyId! }).promise();
 
-      expect(kmsKeyId).toBeDefined();
-      expect(kmsKeyId).toMatch(/^arn:aws:kms:/);
-
-      // Mock KMS key validation
-      const mockKmsKeyDetails = {
-        keyRotationEnabled: true,
-        keyState: 'Enabled',
-        keyUsage: 'ENCRYPT_DECRYPT',
-      };
-
-      expect(mockKmsKeyDetails.keyRotationEnabled).toBe(true);
-      expect(mockKmsKeyDetails.keyState).toBe('Enabled');
-      expect(mockKmsKeyDetails.keyUsage).toBe('ENCRYPT_DECRYPT');
+      expect(response.KeyMetadata!.KeyState).toBe('Enabled');
+      expect(response.KeyMetadata!.Enabled).toBe(true);
     });
 
-    test('Resources are encrypted with the correct KMS key', async () => {
-      const kmsKeyId = outputs.KmsKeyId;
+    test('KMS key has rotation enabled', async () => {
+      const response = await kms
+        .getKeyRotationStatus({ KeyId: kmsKeyId! })
+        .promise();
 
-      // Mock encryption validation for different resources
-      const mockResourceEncryption = {
-        rds: { encrypted: true, kmsKeyId },
-        ebs: { encrypted: true, kmsKeyId },
-        secrets: { encrypted: true, kmsKeyId },
-      };
-
-      Object.values(mockResourceEncryption).forEach(resource => {
-        expect(resource.encrypted).toBe(true);
-        expect(resource.kmsKeyId).toBe(kmsKeyId);
-      });
+      expect(response.KeyRotationEnabled).toBe(true);
     });
   });
 
-  describe('Network Security Validation', () => {
-    test('Private subnets do not have direct internet access', async () => {
-      // Mock private subnet route table validation
-      const mockPrivateSubnetRoutes = [
-        { destination: '0.0.0.0/0', target: 'NAT Gateway' },
-        { destination: '10.0.0.0/16', target: 'local' },
-      ];
+  describe('Network Connectivity Validation', () => {
+    test('Private subnets have NAT gateway routes', async () => {
+      const subnetsResponse = await ec2
+        .describeSubnets({
+          Filters: [
+            { Name: 'vpc-id', Values: [vpcId!] },
+            { Name: 'tag:aws-cdk:subnet-type', Values: ['Private'] },
+          ],
+        })
+        .promise();
 
-      // Should not have routes directly to Internet Gateway
-      const hasDirectInternetRoute = mockPrivateSubnetRoutes.some(
-        route => route.target === 'Internet Gateway'
-      );
+      for (const subnet of subnetsResponse.Subnets!) {
+        const routeTablesResponse = await ec2
+          .describeRouteTables({
+            Filters: [
+              { Name: 'association.subnet-id', Values: [subnet.SubnetId!] },
+            ],
+          })
+          .promise();
 
-      expect(hasDirectInternetRoute).toBe(false);
+        const hasNatRoute = routeTablesResponse.RouteTables![0].Routes?.some(
+          route => route.NatGatewayId !== undefined
+        );
 
-      // Should have route through NAT Gateway
-      const hasNATRoute = mockPrivateSubnetRoutes.some(
-        route => route.target === 'NAT Gateway'
-      );
-
-      expect(hasNATRoute).toBe(true);
+        expect(hasNatRoute).toBe(true);
+      }
     });
 
-    test('Database subnets are completely isolated', async () => {
-      // Mock database subnet route table validation
-      const mockDbSubnetRoutes = [
-        { destination: '10.0.0.0/16', target: 'local' },
-      ];
+    test('Database subnets are isolated', async () => {
+      const subnetsResponse = await ec2
+        .describeSubnets({
+          Filters: [
+            { Name: 'vpc-id', Values: [vpcId!] },
+            { Name: 'tag:aws-cdk:subnet-type', Values: ['Isolated'] },
+          ],
+        })
+        .promise();
 
-      // Should not have any routes to internet
-      const hasInternetRoute = mockDbSubnetRoutes.some(
-        route => route.destination === '0.0.0.0/0'
-      );
+      for (const subnet of subnetsResponse.Subnets!) {
+        const routeTablesResponse = await ec2
+          .describeRouteTables({
+            Filters: [
+              { Name: 'association.subnet-id', Values: [subnet.SubnetId!] },
+            ],
+          })
+          .promise();
 
-      expect(hasInternetRoute).toBe(false);
-      expect(mockDbSubnetRoutes).toHaveLength(1); // Only local route
-    });
-  });
+        const hasInternetRoute =
+          routeTablesResponse.RouteTables![0].Routes?.some(
+            route => route.GatewayId && route.GatewayId.startsWith('igw-')
+          );
 
-  describe('High Availability Validation', () => {
-    test('Resources are distributed across multiple AZs', async () => {
-      // Mock AZ distribution validation
-      const mockAZDistribution = {
-        ec2Instances: ['us-east-1a', 'us-east-1b'],
-        rdsInstance: ['us-east-1a', 'us-east-1b'], // Multi-AZ
-        natGateways: ['us-east-1a', 'us-east-1b'],
-      };
-
-      expect(mockAZDistribution.ec2Instances).toHaveLength(2);
-      expect(mockAZDistribution.rdsInstance).toHaveLength(2);
-      expect(mockAZDistribution.natGateways).toHaveLength(2);
-
-      // Ensure different AZs are used
-      expect(new Set(mockAZDistribution.ec2Instances).size).toBe(2);
-    });
-
-    test('RDS Multi-AZ is enabled', async () => {
-      // Mock RDS Multi-AZ validation
-      const mockRdsConfig = {
-        multiAZ: true,
-        backupRetentionPeriod: 7,
-        preferredBackupWindow: '03:00-04:00',
-      };
-
-      expect(mockRdsConfig.multiAZ).toBe(true);
-      expect(mockRdsConfig.backupRetentionPeriod).toBeGreaterThan(0);
+        expect(hasInternetRoute).toBe(false);
+      }
     });
   });
 
-  describe('Monitoring and Logging Validation', () => {
-    test('RDS Performance Insights is enabled', async () => {
-      // Mock Performance Insights validation
-      const mockPerformanceInsights = {
-        enabled: true,
-        kmsKeyId: outputs.KmsKeyId,
-        retentionPeriod: 7,
-      };
+  describe('Monitoring Validation', () => {
+    test('CloudWatch log groups exist for EC2 instances', async () => {
+      const logGroupsResponse = await cloudWatchLogs
+        .describeLogGroups({
+          logGroupNamePrefix: `/aws/ec2/tap-${environmentSuffix}`,
+        })
+        .promise();
 
-      expect(mockPerformanceInsights.enabled).toBe(true);
-      expect(mockPerformanceInsights.kmsKeyId).toBe(outputs.KmsKeyId);
-    });
-
-    test('CloudWatch logs are configured for EC2 instances', async () => {
-      // Mock CloudWatch logs validation
-      const mockCloudWatchLogs = {
-        logGroups: [`/aws/ec2/tap-${environmentSuffix}`],
-        retention: 14, // days
-      };
-
-      expect(mockCloudWatchLogs.logGroups).toHaveLength(1);
-      expect(mockCloudWatchLogs.logGroups[0]).toContain(environmentSuffix);
-    });
-  });
-
-  describe('Environment Suffix Validation', () => {
-    test('All resource names include environment suffix', () => {
-      Object.entries(outputs).forEach(([key, value]) => {
-        if (typeof value === 'string' && key !== 'KmsKeyId') {
-          expect(value).toContain(environmentSuffix);
-        }
-      });
-    });
-
-    test('Environment suffix prevents resource conflicts', () => {
-      // Mock validation that resources are uniquely named
-      const resourceNames = [
-        outputs.VpcId,
-        outputs.Ec2Instance1Id,
-        outputs.Ec2Instance2Id,
-        outputs.DatabaseSubnetGroupName,
-      ];
-
-      resourceNames.forEach(name => {
-        expect(name).toContain(environmentSuffix);
-      });
-
-      // Ensure all names are unique
-      expect(new Set(resourceNames).size).toBe(resourceNames.length);
-    });
-  });
-
-  describe('Security Groups Validation', () => {
-    test('EC2 Security Group exists and allows HTTP/HTTPS', async () => {
-      const securityGroupId = outputs.Ec2SecurityGroupId;
-      
-      expect(securityGroupId).toBeDefined();
-      expect(securityGroupId).toMatch(/^sg-/);
-      expect(securityGroupId).toContain(environmentSuffix);
-      
-      // In real deployment, we would validate actual security group rules
-      // Mock the security group rules validation
-      const mockSecurityGroupRules = [
-        { protocol: 'tcp', port: 80, cidr: '0.0.0.0/0' },
-        { protocol: 'tcp', port: 443, cidr: '0.0.0.0/0' },
-      ];
-      
-      expect(mockSecurityGroupRules).toHaveLength(2);
-      expect(mockSecurityGroupRules.some(rule => rule.port === 80)).toBe(true);
-      expect(mockSecurityGroupRules.some(rule => rule.port === 443)).toBe(true);
-    });
-
-    test('RDS Security Group restricts access to EC2 only', async () => {
-      const rdsSecurityGroupId = outputs.RdsSecurityGroupId;
-      const ec2SecurityGroupId = outputs.Ec2SecurityGroupId;
-      
-      expect(rdsSecurityGroupId).toBeDefined();
-      expect(rdsSecurityGroupId).toMatch(/^sg-/);
-      
-      // Mock validation that RDS SG only allows access from EC2 SG
-      const mockRdsIngressRules = [
-        { 
-          protocol: 'tcp', 
-          port: 5432, 
-          sourceSecurityGroup: ec2SecurityGroupId 
-        },
-      ];
-      
-      expect(mockRdsIngressRules).toHaveLength(1);
-      expect(mockRdsIngressRules[0].sourceSecurityGroup).toBe(ec2SecurityGroupId);
-      expect(mockRdsIngressRules[0].port).toBe(5432);
-    });
-  });
-
-  describe('EC2 Instances Validation', () => {
-    test('EC2 instances are running and accessible via SSM', async () => {
-      const instance1Id = outputs.Ec2Instance1Id;
-      const instance2Id = outputs.Ec2Instance2Id;
-      
-      expect(instance1Id).toBeDefined();
-      expect(instance2Id).toBeDefined();
-      expect(instance1Id).toMatch(/^i-/);
-      expect(instance2Id).toMatch(/^i-/);
-      
-      // Mock SSM connectivity test
-      const mockSSMStatus = {
-        [instance1Id]: 'Online',
-        [instance2Id]: 'Online',
-      };
-      
-      expect(mockSSMStatus[instance1Id]).toBe('Online');
-      expect(mockSSMStatus[instance2Id]).toBe('Online');
-    });
-
-    test('EC2 instances have encrypted EBS volumes', async () => {
-      const instance1Id = outputs.Ec2Instance1Id;
-      const instance2Id = outputs.Ec2Instance2Id;
-      
-      // Mock EBS encryption check
-      const mockVolumeEncryption = {
-        [instance1Id]: { encrypted: true, kmsKeyId: outputs.KmsKeyId },
-        [instance2Id]: { encrypted: true, kmsKeyId: outputs.KmsKeyId },
-      };
-      
-      expect(mockVolumeEncryption[instance1Id].encrypted).toBe(true);
-      expect(mockVolumeEncryption[instance2Id].encrypted).toBe(true);
-      expect(mockVolumeEncryption[instance1Id].kmsKeyId).toBe(outputs.KmsKeyId);
-    });
-
-    test('EC2 instances can reach internet for updates', async () => {
-      const instance1Id = outputs.Ec2Instance1Id;
-      const instance2Id = outputs.Ec2Instance2Id;
-      
-      // Mock internet connectivity test through NAT Gateway
-      const mockInternetConnectivity = {
-        [instance1Id]: { canReachInternet: true, route: 'NAT Gateway' },
-        [instance2Id]: { canReachInternet: true, route: 'NAT Gateway' },
-      };
-      
-      expect(mockInternetConnectivity[instance1Id].canReachInternet).toBe(true);
-      expect(mockInternetConnectivity[instance2Id].canReachInternet).toBe(true);
-    });
-  });
-
-  describe('RDS Database Validation', () => {
-    test('Database endpoint is accessible and properly configured', async () => {
-      const dbEndpoint = outputs.DatabaseEndpoint;
-      
-      expect(dbEndpoint).toBeDefined();
-      expect(dbEndpoint).toContain(environmentSuffix);
-      expect(dbEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
-      
-      // Mock database configuration validation
-      const mockDbConfig = {
-        engine: 'postgres',
-        version: '15.3',
-        multiAZ: true,
-        encrypted: true,
-        backupRetentionPeriod: 7,
-      };
-      
-      expect(mockDbConfig.engine).toBe('postgres');
-      expect(mockDbConfig.multiAZ).toBe(true);
-      expect(mockDbConfig.encrypted).toBe(true);
-    });
-
-    test('Database is not publicly accessible', async () => {
-      // Mock public accessibility check
-      const mockDbPublicAccess = {
-        publiclyAccessible: false,
-        subnetGroup: outputs.DatabaseSubnetGroupName,
-      };
-      
-      expect(mockDbPublicAccess.publiclyAccessible).toBe(false);
-      expect(mockDbPublicAccess.subnetGroup).toBe(outputs.DatabaseSubnetGroupName);
-    });
-
-    test('Database connectivity from EC2 instances works', async () => {
-      const dbEndpoint = outputs.DatabaseEndpoint;
-      const ec2Instance1 = outputs.Ec2Instance1Id;
-      const ec2Instance2 = outputs.Ec2Instance2Id;
-      
-      // Mock database connectivity test from EC2
-      const mockDbConnectivity = {
-        [ec2Instance1]: { canConnect: true, port: 5432 },
-        [ec2Instance2]: { canConnect: true, port: 5432 },
-      };
-      
-      expect(mockDbConnectivity[ec2Instance1].canConnect).toBe(true);
-      expect(mockDbConnectivity[ec2Instance2].canConnect).toBe(true);
-      expect(mockDbConnectivity[ec2Instance1].port).toBe(5432);
-    });
-  });
-
-  describe('KMS Encryption Validation', () => {
-    test('KMS key is properly configured and accessible', async () => {
-      const kmsKeyId = outputs.KmsKeyId;
-      
-      expect(kmsKeyId).toBeDefined();
-      expect(kmsKeyId).toMatch(/^arn:aws:kms:/);
-      
-      // Mock KMS key validation
-      const mockKmsKeyDetails = {
-        keyRotationEnabled: true,
-        keyState: 'Enabled',
-        keyUsage: 'ENCRYPT_DECRYPT',
-      };
-      
-      expect(mockKmsKeyDetails.keyRotationEnabled).toBe(true);
-      expect(mockKmsKeyDetails.keyState).toBe('Enabled');
-      expect(mockKmsKeyDetails.keyUsage).toBe('ENCRYPT_DECRYPT');
-    });
-
-    test('Resources are encrypted with the correct KMS key', async () => {
-      const kmsKeyId = outputs.KmsKeyId;
-      
-      // Mock encryption validation for different resources
-      const mockResourceEncryption = {
-        rds: { encrypted: true, kmsKeyId },
-        ebs: { encrypted: true, kmsKeyId },
-        secrets: { encrypted: true, kmsKeyId },
-      };
-      
-      Object.values(mockResourceEncryption).forEach(resource => {
-        expect(resource.encrypted).toBe(true);
-        expect(resource.kmsKeyId).toBe(kmsKeyId);
-      });
-    });
-  });
-
-  describe('Network Security Validation', () => {
-    test('Private subnets do not have direct internet access', async () => {
-      // Mock private subnet route table validation
-      const mockPrivateSubnetRoutes = [
-        { destination: '0.0.0.0/0', target: 'NAT Gateway' },
-        { destination: '10.0.0.0/16', target: 'local' },
-      ];
-      
-      // Should not have routes directly to Internet Gateway
-      const hasDirectInternetRoute = mockPrivateSubnetRoutes.some(
-        route => route.target === 'Internet Gateway'
-      );
-      
-      expect(hasDirectInternetRoute).toBe(false);
-      
-      // Should have route through NAT Gateway
-      const hasNATRoute = mockPrivateSubnetRoutes.some(
-        route => route.target === 'NAT Gateway'
-      );
-      
-      expect(hasNATRoute).toBe(true);
-    });
-
-    test('Database subnets are completely isolated', async () => {
-      // Mock database subnet route table validation
-      const mockDbSubnetRoutes = [
-        { destination: '10.0.0.0/16', target: 'local' },
-      ];
-      
-      // Should not have any routes to internet
-      const hasInternetRoute = mockDbSubnetRoutes.some(
-        route => route.destination === '0.0.0.0/0'
-      );
-      
-      expect(hasInternetRoute).toBe(false);
-      expect(mockDbSubnetRoutes).toHaveLength(1); // Only local route
-    });
-  });
-
-  describe('High Availability Validation', () => {
-    test('Resources are distributed across multiple AZs', async () => {
-      // Mock AZ distribution validation
-      const mockAZDistribution = {
-        ec2Instances: ['us-east-1a', 'us-east-1b'],
-        rdsInstance: ['us-east-1a', 'us-east-1b'], // Multi-AZ
-        natGateways: ['us-east-1a', 'us-east-1b'],
-      };
-      
-      expect(mockAZDistribution.ec2Instances).toHaveLength(2);
-      expect(mockAZDistribution.rdsInstance).toHaveLength(2);
-      expect(mockAZDistribution.natGateways).toHaveLength(2);
-      
-      // Ensure different AZs are used
-      expect(new Set(mockAZDistribution.ec2Instances).size).toBe(2);
-    });
-
-    test('RDS Multi-AZ is enabled', async () => {
-      // Mock RDS Multi-AZ validation
-      const mockRdsConfig = {
-        multiAZ: true,
-        backupRetentionPeriod: 7,
-        preferredBackupWindow: '03:00-04:00',
-      };
-      
-      expect(mockRdsConfig.multiAZ).toBe(true);
-      expect(mockRdsConfig.backupRetentionPeriod).toBeGreaterThan(0);
-    });
-  });
-
-  describe('Monitoring and Logging Validation', () => {
-    test('RDS Performance Insights is enabled', async () => {
-      // Mock Performance Insights validation
-      const mockPerformanceInsights = {
-        enabled: true,
-        kmsKeyId: outputs.KmsKeyId,
-        retentionPeriod: 7,
-      };
-      
-      expect(mockPerformanceInsights.enabled).toBe(true);
-      expect(mockPerformanceInsights.kmsKeyId).toBe(outputs.KmsKeyId);
-    });
-
-    test('CloudWatch logs are configured for EC2 instances', async () => {
-      // Mock CloudWatch logs validation
-      const mockCloudWatchLogs = {
-        logGroups: [`/aws/ec2/tap-${environmentSuffix}`],
-        retention: 14, // days
-      };
-      
-      expect(mockCloudWatchLogs.logGroups).toHaveLength(1);
-      expect(mockCloudWatchLogs.logGroups[0]).toContain(environmentSuffix);
-    });
-  });
-
-  describe('Environment Suffix Validation', () => {
-    test('All resource names include environment suffix', () => {
-      Object.entries(outputs).forEach(([key, value]) => {
-        if (typeof value === 'string' && key !== 'KmsKeyId') {
-          expect(value).toContain(environmentSuffix);
-        }
-      });
-    });
-
-    test('Environment suffix prevents resource conflicts', () => {
-      // Mock validation that resources are uniquely named
-      const resourceNames = [
-        outputs.VpcId,
-        outputs.Ec2Instance1Id,
-        outputs.Ec2Instance2Id,
-        outputs.DatabaseSubnetGroupName,
-      ];
-      
-      resourceNames.forEach(name => {
-        expect(name).toContain(environmentSuffix);
-      });
-      
-      // Ensure all names are unique
-      expect(new Set(resourceNames).size).toBe(resourceNames.length);
+      expect(logGroupsResponse.logGroups!.length).toBeGreaterThan(0);
     });
   });
 });
