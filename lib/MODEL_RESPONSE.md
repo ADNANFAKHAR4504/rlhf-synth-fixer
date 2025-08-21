@@ -8,7 +8,7 @@ data "aws_availability_zones" "available" {
   state = "available"
   filter {
     name   = "zone-name"
-    values = ["us-west-2a", "us-west-2b", "us-west-2c"]
+    values = ["us-east-2a", "us-east-2b", "us-east-2c"]
   }
 }
 
@@ -876,7 +876,7 @@ resource "aws_route53_health_check" "prod_health_check" {
   resource_path                   = "/"
   failure_threshold               = 3
   request_interval                = 30
-  cloudwatch_alarm_region         = "us-west-2"
+  cloudwatch_alarm_region         = "us-east-2"
   cloudwatch_alarm_name           = "prod-health-check-alarm"
   insufficient_data_health_status = "Failure"
 
@@ -948,7 +948,7 @@ provider "aws" {
 ## Key Features Implemented
 
 ### **High Availability Architecture**
-- **Multi-AZ deployment** across us-west-2a, us-west-2b, and us-west-2c
+- **Multi-AZ deployment** across us-east-2a, us-east-2b, and us-east-2c
 - **Auto Scaling Group** with health checks and automatic scaling policies
 - **Application Load Balancer** distributing traffic across multiple AZs
 - **RDS Multi-AZ** for database high availability

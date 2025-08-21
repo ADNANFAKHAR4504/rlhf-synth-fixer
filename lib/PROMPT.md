@@ -1,6 +1,6 @@
 # High Availability AWS Infrastructure
 
-I need to deploy a production-ready infrastructure in us-west-2 across three availability zones (us-west-2a, us-west-2b, us-west-2c) with the following requirements:
+I need to deploy a production-ready infrastructure in us-east-2 across three availability zones (us-east-2a, us-east-2b, us-east-2c) with the following requirements:
 
 ## Core Infrastructure
 - VPC with public and private subnets across 3 AZs
@@ -26,7 +26,7 @@ I need to deploy a production-ready infrastructure in us-west-2 across three ava
 - Tag everything with 'environment: production' and 'purpose: high-availability'
 
 ## Deployment Constraints
-- Deploy in us-west-2 region only
+- Deploy in us-east-2 region only
 - Use TerraformHCL
 - Keep deployment time reasonable (avoid long-running resources)
 - Ensure all resources are properly tagged and follow AWS best practices
