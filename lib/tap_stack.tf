@@ -538,7 +538,7 @@ resource "aws_ssm_patch_baseline" "security_patches" {
 
     patch_filter {
       key    = "CLASSIFICATION"
-      values = ["Security", "Bugfix", "Critical"]
+      values = ["Security", "Bugfix"]
     }
 
     patch_filter {
@@ -1068,11 +1068,6 @@ resource "aws_cloudtrail" "main" {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.app_data.arn}/*"]
     }
-
-    data_resource {
-      type   = "AWS::S3::Bucket"
-      values = [aws_s3_bucket.app_data.arn]
-    }
   }
 
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
@@ -1086,7 +1081,7 @@ resource "aws_cloudtrail" "main" {
 # SSL/TLS Certificate for HTTPS
 resource "aws_acm_certificate" "main" {
   domain_name       = "${var.project_name}.example.com"
-  validation_method = "DNS"
+  validation_method = "EMAIL"
 
   subject_alternative_names = [
     "*.${var.project_name}.example.com"
@@ -1505,6 +1500,15 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail_logs_replica" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_versioning" "cloudtrail_logs_replica" {
+  provider = aws.west
+  bucket   = aws_s3_bucket.cloudtrail_logs_replica.id
+  
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 # IAM Role for S3 Cross-Region Replication
 resource "aws_iam_role" "s3_replication" {
   name = "${local.resource_prefix}-s3-replication-role"
@@ -1587,9 +1591,12 @@ resource "aws_s3_bucket_replication_configuration" "app_data" {
 
 # S3 Bucket Replication Configuration - CloudTrail Logs
 resource "aws_s3_bucket_replication_configuration" "cloudtrail_logs" {
-  depends_on = [aws_s3_bucket_versioning.cloudtrail_logs]
-  role       = aws_iam_role.s3_replication.arn
-  bucket     = aws_s3_bucket.cloudtrail_logs.id
+  depends_on = [
+    aws_s3_bucket_versioning.cloudtrail_logs,
+    aws_s3_bucket_versioning.cloudtrail_logs_replica
+  ]
+  role   = aws_iam_role.s3_replication.arn
+  bucket = aws_s3_bucket.cloudtrail_logs.id
 
   rule {
     id     = "replicate-cloudtrail-to-west"
@@ -1618,7 +1625,7 @@ resource "aws_db_instance" "main_replica" {
   identifier = "${local.resource_prefix}-database-replica"
 
   # Read replica configuration
-  replicate_source_db = aws_db_instance.main.identifier
+  replicate_source_db = "${data.aws_region.current.name}:${aws_db_instance.main.identifier}"
 
   instance_class = "db.t3.micro"
 
@@ -1677,11 +1684,6 @@ resource "aws_cloudtrail" "west" {
     data_resource {
       type   = "AWS::S3::Object"
       values = ["${aws_s3_bucket.app_data_replica.arn}/*"]
-    }
-
-    data_resource {
-      type   = "AWS::S3::Bucket"
-      values = [aws_s3_bucket.app_data_replica.arn]
     }
   }
 
