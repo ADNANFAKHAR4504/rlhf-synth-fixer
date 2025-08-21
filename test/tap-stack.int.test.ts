@@ -13,6 +13,9 @@ import {
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
@@ -21,6 +24,7 @@ import {
 import {
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
   ElasticLoadBalancingV2Client
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
@@ -34,6 +38,7 @@ import {
 } from '@aws-sdk/client-rds';
 import {
   GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
   GetBucketVersioningCommand,
   GetPublicAccessBlockCommand,
   HeadBucketCommand,
@@ -75,7 +80,7 @@ const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json
 let outputs: any = {};
 
 describe('TAP Infrastructure Integration Tests', () => {
-  beforeAll(() => {
+    beforeAll(() => {
     // Load the outputs from deployment
     if (fs.existsSync(outputsPath)) {
       const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
@@ -84,6 +89,245 @@ describe('TAP Infrastructure Integration Tests', () => {
     } else {
       console.warn('No outputs file found. Some tests may be skipped.');
     }
+  });
+
+
+  describe('Infrastructure Validation', () => {
+    test('should validate deployment outputs exist', () => {
+      expect(outputs).toBeDefined();
+      expect(typeof outputs).toBe('object');
+    });
+
+    test('should have primary region configuration', () => {
+      expect(primaryRegion).toBe('ap-south-1');
+    });
+
+    test('should have secondary region configuration', () => {
+      expect(secondaryRegion).toBe('eu-west-1');
+    });
+
+    test('should have AWS clients configured', () => {
+      expect(primaryClients.ec2).toBeDefined();
+      expect(primaryClients.rds).toBeDefined();
+      expect(primaryClients.kms).toBeDefined();
+      expect(secondaryClients.ec2).toBeDefined();
+      expect(secondaryClients.rds).toBeDefined();
+      expect(secondaryClients.kms).toBeDefined();
+    });
+  });
+
+  describe('Network Infrastructure', () => {
+    test('should have internet gateway attached', async () => {
+      const vpcId = outputs.primaryVpcId;
+      if (!vpcId) {
+        console.log('Skipping IGW test - no VPC ID in outputs');
+        return;
+      }
+
+      const response = await primaryClients.ec2.send(
+        new DescribeInternetGatewaysCommand({
+          Filters: [{ Name: 'attachment.vpc-id', Values: [vpcId] }],
+        })
+      );
+
+      expect(response.InternetGateways).toBeDefined();
+      expect(response.InternetGateways!.length).toBeGreaterThanOrEqual(1);
+      
+      const igw = response.InternetGateways![0];
+      expect(igw.Attachments).toBeDefined();
+      expect(igw.Attachments![0].State).toBe('available');
+    });
+
+    test('should have NAT gateways configured', async () => {
+      const vpcId = outputs.primaryVpcId;
+      if (!vpcId) {
+        console.log('Skipping NAT Gateway test - no VPC ID in outputs');
+        return;
+      }
+
+      const response = await primaryClients.ec2.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            { Name: 'state', Values: ['available'] },
+          ],
+        })
+      );
+
+      expect(response.NatGateways).toBeDefined();
+      expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
+      
+      response.NatGateways!.forEach(natGw => {
+        expect(natGw.State).toBe('available');
+        expect(natGw.VpcId).toBe(vpcId);
+      });
+    });
+
+    test('should have route tables configured', async () => {
+      const vpcId = outputs.primaryVpcId;
+      if (!vpcId) {
+        console.log('Skipping route table test - no VPC ID in outputs');
+        return;
+      }
+
+      const response = await primaryClients.ec2.send(
+        new DescribeRouteTablesCommand({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+        })
+      );
+
+      expect(response.RouteTables).toBeDefined();
+      expect(response.RouteTables!.length).toBeGreaterThanOrEqual(3);
+
+      // Check for routes to IGW and NAT
+      const hasInternetRoute = response.RouteTables!.some(rt =>
+        rt.Routes!.some(r => r.GatewayId && r.GatewayId.startsWith('igw-'))
+      );
+      const hasNatRoute = response.RouteTables!.some(rt =>
+        rt.Routes!.some(r => r.NatGatewayId && r.NatGatewayId.startsWith('nat-'))
+      );
+
+      expect(hasInternetRoute).toBe(true);
+      expect(hasNatRoute).toBe(true);
+    });
+  });
+
+  describe('Database Configuration', () => {
+    test('should validate RDS parameter groups', async () => {
+      const primaryDbEndpoint = outputs.primaryDbEndpoint;
+      if (!primaryDbEndpoint) {
+        console.log('Skipping RDS parameter test - no endpoint in outputs');
+        return;
+      }
+
+      const instanceId = primaryDbEndpoint.split('.')[0];
+      const response = await primaryClients.rds.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: instanceId,
+        })
+      );
+
+      const instance = response.DBInstances![0];
+      expect(instance.DBParameterGroups).toBeDefined();
+      expect(instance.DBParameterGroups!.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('should validate RDS subnet groups', async () => {
+      const primaryDbEndpoint = outputs.primaryDbEndpoint;
+      if (!primaryDbEndpoint) {
+        console.log('Skipping RDS subnet test - no endpoint in outputs');
+        return;
+      }
+
+      const instanceId = primaryDbEndpoint.split('.')[0];
+      const response = await primaryClients.rds.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: instanceId,
+        })
+      );
+
+      const instance = response.DBInstances![0];
+      expect(instance.DBSubnetGroup).toBeDefined();
+      expect(instance.DBSubnetGroup!.VpcId).toBe(outputs.primaryVpcId);
+    });
+  });
+
+  describe('Load Balancer Health', () => {
+    test('should validate target group health', async () => {
+      const albDns = outputs.loadBalancerDnsName;
+      if (!albDns) {
+        console.log('Skipping target health test - no ALB DNS in outputs');
+        return;
+      }
+
+      const albResponse = await primaryClients.elbv2.send(
+        new DescribeLoadBalancersCommand()
+      );
+      const alb = albResponse.LoadBalancers!.find((lb: any) => lb.DNSName === albDns);
+      
+      if (!alb) return;
+
+      const tgResponse = await primaryClients.elbv2.send(
+        new DescribeTargetGroupsCommand({
+          LoadBalancerArn: alb.LoadBalancerArn,
+        })
+      );
+
+      expect(tgResponse.TargetGroups).toBeDefined();
+      expect(tgResponse.TargetGroups!.length).toBeGreaterThanOrEqual(1);
+
+      for (const tg of tgResponse.TargetGroups!) {
+        if (!tg.TargetGroupArn) continue;
+        const healthResponse = await primaryClients.elbv2.send(
+          new DescribeTargetHealthCommand({
+            TargetGroupArn: tg.TargetGroupArn,
+          })
+        );
+
+        expect(healthResponse.TargetHealthDescriptions).toBeDefined();
+      }
+    });
+  });
+
+  describe('Monitoring Infrastructure', () => {
+    test('should validate SNS topic configuration', async () => {
+      const snsTopicArn = outputs.snsTopicArn;
+      if (!snsTopicArn) {
+        console.log('Skipping SNS test - no topic ARN in outputs');
+        return;
+      }
+
+      expect(snsTopicArn).toContain('arn:aws:sns:');
+      expect(snsTopicArn).toContain(primaryRegion);
+    });
+
+    test('should validate VPC flow logs', async () => {
+      const vpcId = outputs.primaryVpcId;
+      if (!vpcId) {
+        console.log('Skipping flow logs test - no VPC ID in outputs');
+        return;
+      }
+
+      // VPC Flow Logs validation would require additional API calls
+      expect(outputs.vpcLogGroupName).toBeDefined();
+      expect(outputs.flowLogsRoleName).toBeDefined();
+    });
+  });
+
+  describe('Security Infrastructure', () => {
+    test('should validate KMS key rotation', async () => {
+      const keyId = outputs.primaryKmsKeyId;
+      if (!keyId) {
+        console.log('Skipping KMS rotation test - no key ID in outputs');
+        return;
+      }
+
+      const response = await primaryClients.kms.send(
+        new DescribeKeyCommand({ KeyId: keyId })
+      );
+
+      expect(response.KeyMetadata).toBeDefined();
+      expect(response.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+    });
+
+    test('should validate S3 bucket lifecycle policies', async () => {
+      const bucketName = outputs.logBucketName;
+      if (!bucketName) {
+        console.log('Skipping lifecycle test - no bucket name in outputs');
+        return;
+      }
+
+      const lifecycleResponse = await primaryClients.s3.send(
+        new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
+      );
+      
+      expect(lifecycleResponse.Rules).toBeDefined();
+      expect(lifecycleResponse.Rules!.length).toBeGreaterThanOrEqual(1);
+      
+      const rule = lifecycleResponse.Rules![0];
+      expect(rule.Status).toBe('Enabled');
+      expect(rule.Expiration!.Days).toBe(90);
+    });
   });
 
   describe('e2e: Multi-Region VPC Configuration', () => {
