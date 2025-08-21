@@ -422,6 +422,7 @@ resource "aws_lambda_function" "app" {
   role             = aws_iam_role.lambda_exec.arn
   handler          = var.lambda_handler
   runtime          = var.lambda_runtime
+  memory_size      = 256
   publish          = true
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
