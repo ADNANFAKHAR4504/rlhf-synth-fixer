@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr877",
+  "team": "synth",
+  "startedAt": "2025-08-17T20:52:48+05:30",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

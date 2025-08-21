@@ -1,11 +1,11 @@
 # Prompt: Generate Secure AWS CloudFormation YAML (`secure-config.yaml`)
 
-You are an expert AWS CloudFormation engineer with extensive experience in security-focused Infrastructure as Code (IaC). Your task is to **generate a complete CloudFormation YAML template** that fulfills the exact requirements specified in the “Provided Data” section below.  
+You are an expert AWS CloudFormation engineer with extensive experience in security-focused Infrastructure as Code (IaC). Your task is to **generate a complete CloudFormation YAML template** that fulfills the exact requirements specified in the Provided Data section below. 
 **The Provided Data is immutable and must not be altered, omitted, or paraphrased.** All constraints, environment details, and statements must remain exactly as written.
 
 ---
 
-## PROVIDED DATA (IMMUTABLE – DO NOT MODIFY)
+## PROVIDED DATA (IMMUTABLE DO NOT MODIFY)
 
 **Constraints:**
 
@@ -23,7 +23,7 @@ You have been tasked with implementing a security configuration for a company's 
 6. Implement network ACLs within the VPC to block access from suspicious IP ranges.
 7. Ensure that RDS instances are configured not to allow public access.
 
-**Expected output:**  
+**Expected output:** 
 A YAML-based AWS CloudFormation template that incorporates all the required security configurations. The solution should create or update necessary AWS resources to apply these configurations, ensuring that the infrastructure conforms to the specified constraints.
 
 **Proposed Statement:**
@@ -36,28 +36,28 @@ You are working on securing an AWS cloud environment using AWS CloudFormation. T
 
 Follow Anthropic best prompt engineering practices:
 
-1. **Output format** — Provide **only** the complete `secure-config.yaml` CloudFormation YAML template, with inline comments explaining key security configurations.
-2. **No additional commentary** — Do not include explanations outside of YAML comments.
-3. **Validation** — Ensure the generated template passes AWS CloudFormation validation (`aws cloudformation validate-template`) and linter checks (`cfn-lint`).
-4. **Parameters** — Include parameters for configurable items such as:
-   - Allowed IP ranges
-   - Suspicious IP ranges for Network ACL blocking
-   - Logging bucket names for S3 server-access logs
-   - KMS Key IDs (optional: auto-generate if not provided)
-5. **Security best practices** — Implement:
-   - Least privilege for IAM roles and policies
-   - AWS WAF with common exploit protections (SQL injection, XSS, etc.)
-   - GuardDuty enabled at the account level
-   - RDS with `PubliclyAccessible` set to `false`
-   - All data encrypted at rest with AWS KMS managed keys
-   - Network ACLs to explicitly block suspicious IP ranges
-6. **Tagging** — Apply consistent tagging (`Project`, `Environment`, `Owner`) to all resources for cost tracking and resource identification.
-7. **Region** — Ensure the template is compatible with the specified AWS region.
-8. **Idempotency** — The template must support repeated deployments without creating duplicate resources.
+1. **Output format** Provide **only** the complete `secure-config.yaml` CloudFormation YAML template, with inline comments explaining key security configurations.
+2. **No additional commentary** Do not include explanations outside of YAML comments.
+3. **Validation** Ensure the generated template passes AWS CloudFormation validation (`aws cloudformation validate-template`) and linter checks (`cfn-lint`).
+4. **Parameters** Include parameters for configurable items such as:
+- Allowed IP ranges
+- Suspicious IP ranges for Network ACL blocking
+- Logging bucket names for S3 server-access logs
+- KMS Key IDs (optional: auto-generate if not provided)
+5. **Security best practices** Implement:
+- Least privilege for IAM roles and policies
+- AWS WAF with common exploit protections (SQL injection, XSS, etc.)
+- GuardDuty enabled at the account level
+- RDS with `PubliclyAccessible` set to `false`
+- All data encrypted at rest with AWS KMS managed keys
+- Network ACLs to explicitly block suspicious IP ranges
+6. **Tagging** Apply consistent tagging (`Project`, `Environment`, `Owner`) to all resources for cost tracking and resource identification.
+7. **Region** Ensure the template is compatible with the specified AWS region.
+8. **Idempotency** The template must support repeated deployments without creating duplicate resources.
 
 ---
 
 ## FINAL TASK FOR AI
 
-Generate the full production-ready CloudFormation YAML template (`secure-config.yaml`) that fully implements every item in the **Provided Data** without modification, adhering to the **Generation Instructions**.  
+Generate the full production-ready CloudFormation YAML template (`secure-config.yaml`) that fully implements every item in the **Provided Data** without modification, adhering to the **Generation Instructions**. 
 The output must be valid YAML, self-contained, and immediately deployable via AWS CloudFormation.

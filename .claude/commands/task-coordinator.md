@@ -30,7 +30,7 @@ another round. The idea of this is to make sure that we are truly finding flaws 
 
 If `tasks.csv` is present in the repository:
 
-1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" from tasks
+1. Select the first task that has difficulty as 'hard' or 'medium' and is not in status "in_progress" or "done" from tasks
 csv. Be aware that, in the csv file there are some rows that take more than 1 line of the file.
 2. Set the status column to in_progress.
 3. Create a new git worktree inside worktree folder. Call the branch IAC-synth-{task_id}.

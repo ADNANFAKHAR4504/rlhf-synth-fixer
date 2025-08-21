@@ -20,35 +20,35 @@ Create **CloudFormation YAML templates** that can be used to deploy an **Amazon 
 
 1. **Multi-Region Deployment**:
 
-   * You must define two separate CloudFormation stacks (or templates), one per region (`us-west-1` and `us-west-2`).
-   * Each template should create **one DynamoDB table** in its respective region.
+* You must define two separate CloudFormation stacks (or templates), one per region (`us-west-1` and `us-west-2`).
+* Each template should create **one DynamoDB table** in its respective region.
 
 2. **Region-Specific Capacity Settings**:
 
-   * Each stack must configure the DynamoDB table’s **read and write capacity** values differently.
-   * For `us-west-1`: Hardcode `ReadCapacityUnits: 5` and `WriteCapacityUnits: 5`.
-   * For `us-west-2`: Make `ReadCapacityUnits` and `WriteCapacityUnits` configurable using **CloudFormation Parameters**.
+* Each stack must configure the DynamoDB tables **read and write capacity** values differently.
+* For `us-west-1`: Hardcode `ReadCapacityUnits: 5` and `WriteCapacityUnits: 5`.
+* For `us-west-2`: Make `ReadCapacityUnits` and `WriteCapacityUnits` configurable using **CloudFormation Parameters**.
 
 3. **Use of CloudFormation Intrinsic Functions**:
 
-   * Apply intrinsic functions like `Fn::GetAtt`, `Fn::ImportValue`, `Ref`, `Fn::Sub`, and `Fn::Join` where appropriate.
-   * If using a **shared resource or exporting any output for inter-stack use**, use `Export` and `Fn::ImportValue` for referencing across stacks.
-   * Maintain **logical dependencies and referential integrity** using these functions.
+* Apply intrinsic functions like `Fn::GetAtt`, `Fn::ImportValue`, `Ref`, `Fn::Sub`, and `Fn::Join` where appropriate.
+* If using a **shared resource or exporting any output for inter-stack use**, use `Export` and `Fn::ImportValue` for referencing across stacks.
+* Maintain **logical dependencies and referential integrity** using these functions.
 
 4. **Template Validation & Execution**:
 
-   * The CloudFormation YAML templates must be syntactically and semantically valid.
-   * When deployed using AWS CloudFormation, the stacks should:
+* The CloudFormation YAML templates must be syntactically and semantically valid.
+* When deployed using AWS CloudFormation, the stacks should:
 
-     * Launch successfully without any errors.
-     * Create DynamoDB tables in the specified regions.
-     * Properly reflect the read/write capacity configurations per region.
-   * Consider necessary IAM permissions (e.g., for stack creation, DynamoDB provisioning).
+* Launch successfully without any errors.
+* Create DynamoDB tables in the specified regions.
+* Properly reflect the read/write capacity configurations per region.
+* Consider necessary IAM permissions (e.g., for stack creation, DynamoDB provisioning).
 
 5. **Reusability and Modularity**:
 
-   * Structure your templates to promote **modularity**, allowing future extension or reusability across environments.
-   * Document parameters, resource definitions, and outputs clearly.
+* Structure your templates to promote **modularity**, allowing future extension or reusability across environments.
+* Document parameters, resource definitions, and outputs clearly.
 
 ---
 

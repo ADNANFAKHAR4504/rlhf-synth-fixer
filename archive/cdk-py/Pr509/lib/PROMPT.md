@@ -7,14 +7,14 @@ project-root/
 ├── tap.py # Entry point (equivalent to app.py)
 └── lib/
 └── tap_stack.py # Stack definition
-📌 Requirements:
+Requirements:
 Programming Language: Python
 
 CDK Tooling: Use AWS CDK (v2 preferred)
 
 Region: us-east-1
 
-🧱 Infrastructure Components:
+Infrastructure Components:
 VPC:
 
 Create a VPC with at least two subnets across different Availability Zones.
@@ -47,7 +47,7 @@ Store sensitive data (e.g., DB credentials) using AWS Secrets Manager.
 
 EC2 instances must retrieve credentials at runtime (or on bootstrap) securely.
 
-📦 Code Structure & Practices:
+Code Structure & Practices:
 All resources should be defined modularly within tap_stack.py.
 
 Follow AWS best practices for:
