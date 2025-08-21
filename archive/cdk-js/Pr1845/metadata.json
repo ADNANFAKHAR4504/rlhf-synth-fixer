@@ -9,7 +9,7 @@
   "subtask": "Serverless Architecture Implementation",
   "subject_labels": [
     "Serverless Infrastructure",
-    "API Gateway Configuration", 
+    "API Gateway Configuration",
     "Lambda Functions",
     "Security Configuration",
     "WAF Protection",
@@ -22,7 +22,7 @@
   "training_quality": 9,
   "aws_services": [
     "AWS Lambda",
-    "Amazon API Gateway", 
+    "Amazon API Gateway",
     "AWS WAF",
     "Amazon CloudWatch",
     "AWS X-Ray",
@@ -32,5 +32,11 @@
     "Amazon SNS",
     "AWS Config",
     "AWS Systems Manager Parameter Store"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
