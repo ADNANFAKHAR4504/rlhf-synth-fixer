@@ -1,4 +1,3 @@
-````yaml`
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "TapStack VPC with subnets, routing, security groups, and bastion host"
 
