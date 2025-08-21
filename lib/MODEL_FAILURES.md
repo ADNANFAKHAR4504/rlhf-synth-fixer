@@ -5,7 +5,14 @@
 **Root Cause**: The problem is that model is mixing CommonJS (require) and ESM (import) in the same CDK project.
 Since files have .mjs extensions, Node.js treats them as ES modules, where require is not available.
 
-**Resolution**:  Update all require statements to import
+**Resolution**:  Update all require statements to `import`
+
+```javascript
+import { CloudWatchLoggingConstruct } from './constructs/cloudwatch-logging.mjs';
+import { EC2InstancesConstruct } from './constructs/ec2-instances.mjs';
+import { IAMRolesConstruct } from './constructs/iam-roles.mjs';
+import { SecurityGroupConstruct } from './constructs/security-group.mjs';
+```
 
 ---
 
@@ -77,3 +84,11 @@ export class TapStack extends cdk.Stack {
   }
 }
 ```
+
+---
+
+**Issue**: SyntaxError: The requested module `./constructs/cloudwatch-logging.mjs` does not provide an export named 'CloudWatchLoggingConstruct'
+
+**Root Cause**: Since we are using .mjs everywhere, convert your construct file to use export instead of module.exports
+
+**Resolution**: use `export { CloudWatchLoggingConstruct }` instead of `module.exports = { CloudWatchLoggingConstruct };`
