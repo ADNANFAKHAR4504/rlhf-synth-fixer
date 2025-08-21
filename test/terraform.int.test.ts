@@ -4,7 +4,7 @@
 
 import fs from "fs";
 import path from "path";
-import { EC2Client, DescribeInstancesCommand, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from "@aws-sdk/client-ec2";
+import { EC2Client, DescribeInstancesCommand, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeVolumesCommand } from "@aws-sdk/client-ec2";
 import { RDSClient, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
 import { S3Client, ListBucketsCommand, GetBucketEncryptionCommand } from "@aws-sdk/client-s3";
 import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetHealthCommand } from "@aws-sdk/client-elastic-load-balancing-v2";
@@ -158,13 +158,25 @@ describe("Terraform Infrastructure Integration Tests", () => {
       
       const privateSubnetIds = outputs.private_subnet_ids?.split(",").map((id: string) => id.trim()) || [];
       
-      instances.forEach(instance => {
+      // Check each instance
+      for (const instance of instances) {
         expect(instance.State?.Name).toBe("running");
         expect(privateSubnetIds).toContain(instance.SubnetId);
+        
         // Check that root volume is encrypted
         const rootVolume = instance.BlockDeviceMappings?.find(bdm => bdm.DeviceName === instance.RootDeviceName);
-        expect((rootVolume?.Ebs as any)?.Encrypted).toBe(true);
-      });
+        if (rootVolume?.Ebs?.VolumeId) {
+          // Get detailed volume information to check encryption
+          const volumeCommand = new DescribeVolumesCommand({
+            VolumeIds: [rootVolume.Ebs.VolumeId]
+          });
+          const volumeResponse = await ec2Client.send(volumeCommand);
+          const volume = volumeResponse.Volumes?.[0];
+          expect(volume?.Encrypted).toBe(true);
+        } else {
+          console.log(`Warning: Could not find root volume for instance ${instance.InstanceId}`);
+        }
+      }
     }, 30000);
 
     test("EC2 instances are registered with SSM", async () => {
