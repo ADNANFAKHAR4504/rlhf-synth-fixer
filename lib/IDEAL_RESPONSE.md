@@ -162,7 +162,7 @@ class TapStack extends cdk.Stack {
 
     // Use a specific AMI ID for us-east-1 to avoid DescribeImages permission requirement
     const amazonLinux = ec2.MachineImage.genericLinux({
-      'us-east-1': 'ami-0abcdef1234567890', // Amazon Linux 2 AMI
+      'us-east-1': 'ami-0e95a5e2743ec9ec9', // Amazon Linux 2 AMI
       'us-west-2': 'ami-05c3dc660cb6907f0', // Fallback for other regions
     });
 
