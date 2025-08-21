@@ -27,3 +27,18 @@ output "cloudwatch_logs_policy" {
   description = "IAM policy document for CloudWatch logs access"
   value       = data.aws_iam_policy_document.cloudwatch_logs_policy.json
 }
+
+output "availability_zones" {
+  description = "List of available availability zones"
+  value       = data.aws_availability_zones.available.names
+}
+
+output "partition" {
+  description = "Current AWS partition"
+  value       = data.aws_partition.current.partition
+}
+
+output "caller_identity_account_id" {
+  description = "Current AWS account ID"
+  value       = data.aws_caller_identity.current.account_id
+}

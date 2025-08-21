@@ -17,6 +17,7 @@ locals {
   name_prefix = "${var.project_name}-${var.environment}"
 }
 
+
 #######################
 # Modules
 #######################
@@ -83,7 +84,7 @@ resource "aws_subnet" "public" {
 
   vpc_id                  = aws_vpc.main.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  availability_zone       = module.data.availability_zones[count.index]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
@@ -99,7 +100,7 @@ resource "aws_subnet" "private" {
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
-  availability_zone = data.aws_availability_zones.available.names[count.index]
+  availability_zone = module.data.availability_zones[count.index]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
@@ -114,7 +115,7 @@ resource "aws_subnet" "database" {
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 20)
-  availability_zone = data.aws_availability_zones.available.names[count.index]
+  availability_zone = module.data.availability_zones[count.index]
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-database-subnet-${count.index + 1}"
@@ -233,7 +234,7 @@ resource "aws_kms_key" "rds_key" {
         Sid    = "Enable IAM User Permissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+          AWS = "arn:${module.data.partition}:iam::${module.data.caller_identity_account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -281,7 +282,7 @@ resource "aws_kms_key" "s3_key" {
         Sid    = "Enable IAM User Permissions"
         Effect = "Allow"
         Principal = {
-          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+          AWS = "arn:${module.data.partition}:iam::${module.data.caller_identity_account_id}:root"
         }
         Action   = "kms:*"
         Resource = "*"
@@ -455,7 +456,7 @@ resource "aws_iam_role" "lambda_role" {
 # Attach VPC execution policy to Lambda role
 resource "aws_iam_role_policy_attachment" "lambda_vpc_policy" {
   role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+  policy_arn = "arn:${module.data.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 #######################

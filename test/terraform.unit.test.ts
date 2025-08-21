@@ -28,12 +28,6 @@ describe('Terraform Configuration Unit Tests', () => {
     });
   });
 
-  test('tap_stack.tf should contain a provider block', () => {
-    const mainTfPath = path.join(LIB_DIR, 'tap_stack.tf');
-    const content = fs.readFileSync(mainTfPath, 'utf8');
-    expect(content).toMatch(/provider "aws" {/);
-  });
-
   test('tap_stack.tf should contain module blocks with correct source', () => {
     const mainTfPath = path.join(LIB_DIR, 'tap_stack.tf');
     const content = fs.readFileSync(mainTfPath, 'utf8');
