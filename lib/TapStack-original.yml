@@ -1,0 +1,728 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Security Configuration as Code - Comprehensive AWS Security Services Stack'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - NotificationEmail
+          - EnableMacie
+          - EnableEKSProtection
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for security notifications'
+    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    ConstraintDescription: 'Must be a valid email address'
+
+  EnableMacie:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable Amazon Macie for sensitive data discovery'
+
+  EnableEKSProtection:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable GuardDuty EKS protection features'
+
+Conditions:
+  ShouldCreateMacie: !Equals [!Ref EnableMacie, 'true']
+  ShouldEnableEKS: !Equals [!Ref EnableEKSProtection, 'true']
+
+Resources:
+  # KMS Key for Security Services
+  SecurityServicesKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS Key for Security Services - ${EnvironmentSuffix}'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudTrail to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: Allow Config to use the key
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'SecurityServices-KMS-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  SecurityServicesKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/security-services-${EnvironmentSuffix}'
+      TargetKeyId: !Ref SecurityServicesKMSKey
+
+  # S3 Bucket for CloudTrail Logs
+  CloudTrailLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecurityServicesKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: !Sub 'CloudTrail-Logs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  CloudTrailLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailLogsBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${CloudTrailLogsBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-server-side-encryption': aws:kms
+                's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt SecurityServicesKMSKey.Arn
+
+  # S3 Bucket for Config
+  ConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'aws-config-${AWS::AccountId}-${EnvironmentSuffix}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref SecurityServicesKMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'Config-Bucket-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ConfigBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref AWS::AccountId
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:ListBucket
+            Resource: !GetAtt ConfigBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref AWS::AccountId
+          - Sid: AWSConfigBucketDelivery
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ConfigBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-server-side-encryption': aws:kms
+                's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt SecurityServicesKMSKey.Arn
+                'AWS:SourceAccount': !Ref AWS::AccountId
+
+  # SNS Topic for Security Notifications
+  SecurityNotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'security-notifications-${EnvironmentSuffix}'
+      DisplayName: !Sub 'Security Notifications - ${EnvironmentSuffix}'
+      KmsMasterKeyId: !Ref SecurityServicesKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub 'Security-Notifications-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  SecurityNotificationsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SecurityNotificationsTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  # IAM Role for Config
+  ConfigServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ConfigServiceRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ConfigServicePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:ListBucket
+                Resource: !GetAtt ConfigBucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${ConfigBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListAllMyBuckets
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - config:Put*
+                  - config:Get*
+                  - config:List*
+                  - config:Describe*
+                  - config:BatchGet*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - iam:GetRole
+                  - iam:GetRolePolicy
+                  - iam:ListRolePolicies
+                  - iam:ListAttachedRolePolicies
+                  - iam:GetUser
+                  - iam:GetUserPolicy
+                  - iam:ListUserPolicies
+                  - iam:ListAttachedUserPolicies
+                  - iam:GetGroup
+                  - iam:GetGroupPolicy
+                  - iam:ListGroupPolicies
+                  - iam:ListAttachedGroupPolicies
+                  - iam:GetPolicy
+                  - iam:GetPolicyVersion
+                  - iam:ListPolicyVersions
+                  - iam:ListEntitiesForPolicy
+                  - iam:GetAccountAuthorizationDetails
+                  - iam:GetAccountPasswordPolicy
+                  - iam:GetAccountSummary
+                  - iam:ListAccountAliases
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - organizations:ListAccounts
+                  - organizations:DescribeOrganization
+                  - organizations:DescribeAccount
+                  - organizations:ListRoots
+                  - organizations:ListChildren
+                  - organizations:ListParents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - elasticloadbalancing:Describe*
+                  - autoscaling:Describe*
+                  - cloudwatch:Describe*
+                  - cloudwatch:GetMetric*
+                  - cloudwatch:ListMetrics
+                  - sns:ListTopics
+                  - sns:GetTopicAttributes
+                  - sns:ListSubscriptions
+                  - sns:GetSubscriptionAttributes
+                  - s3:GetBucket*
+                  - s3:ListBucket
+                  - s3:ListAllMyBuckets
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetLifecycleConfiguration
+                  - s3:GetBucketPolicy
+                  - s3:GetBucketPolicyStatus
+                  - s3:GetBucketVersioning
+                  - s3:GetBucketAcl
+                  - s3:GetBucketLogging
+                  - s3:GetBucketNotification
+                  - s3:GetBucketTagging
+                  - s3:GetBucketWebsite
+                  - s3:GetBucketLocation
+                  - s3:GetReplicationConfiguration
+                  - s3:GetAccelerateConfiguration
+                  - s3:GetEncryptionConfiguration
+                  - s3:GetBucketRequestPayment
+                  - s3:GetBucketCORS
+                  - s3:GetBucketPublicAccessBlock
+                  - s3:GetBucketOwnershipControls
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'Config-Service-Role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # AWS CloudTrail - Commented out due to AWS trail limit
+  # Note: Account already has maximum number of trails. 
+  # If you need CloudTrail, consider using an existing trail or deleting an unused one.
+
+  # AWS Config - Use existing resources if available
+  ConfigResourcesCheck:
+    Type: Custom::ConfigResourcesCheck
+    DependsOn: ConfigBucketPolicy
+    Properties:
+      ServiceToken: !GetAtt ConfigResourcesCheckFunction.Arn
+      RoleArn: !GetAtt ConfigServiceRole.Arn
+      S3BucketName: !Ref ConfigBucket
+      EnvironmentSuffix: !Ref EnvironmentSuffix
+
+  ConfigResourcesCheckFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'ConfigResourcesCheck-${EnvironmentSuffix}'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt ConfigResourcesCheckRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+
+          def handler(event, context):
+              config = boto3.client('config')
+              
+              try:
+                  if event['RequestType'] == 'Delete':
+                      # Stop recorder if it exists
+                      try:
+                          recorders = config.describe_configuration_recorders()
+                          if recorders['ConfigurationRecorders']:
+                              config.stop_configuration_recorder(
+                                  ConfigurationRecorderName=recorders['ConfigurationRecorders'][0]['name']
+                              )
+                      except:
+                          pass
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+                  
+                  role_arn = event['ResourceProperties']['RoleArn']
+                  s3_bucket = event['ResourceProperties']['S3BucketName']
+                  suffix = event['ResourceProperties']['EnvironmentSuffix']
+                  
+                  # Check for existing delivery channel
+                  delivery_channels = config.describe_delivery_channels()
+                  if delivery_channels['DeliveryChannels']:
+                      delivery_channel_name = delivery_channels['DeliveryChannels'][0]['name']
+                      print(f"Found existing delivery channel: {delivery_channel_name}")
+                      # Update existing channel
+                      config.put_delivery_channel(
+                          DeliveryChannel={
+                              'name': delivery_channel_name,
+                              's3BucketName': s3_bucket
+                          }
+                      )
+                  else:
+                      # Create new delivery channel
+                      delivery_channel_name = f'security-config-delivery-{suffix}'
+                      config.put_delivery_channel(
+                          DeliveryChannel={
+                              'name': delivery_channel_name,
+                              's3BucketName': s3_bucket
+                          }
+                      )
+                      print(f"Created new delivery channel: {delivery_channel_name}")
+                  
+                  # Check for existing recorder
+                  recorders = config.describe_configuration_recorders()
+                  if recorders['ConfigurationRecorders']:
+                      recorder_name = recorders['ConfigurationRecorders'][0]['name']
+                      print(f"Found existing recorder: {recorder_name}")
+                      # Update existing recorder
+                      config.put_configuration_recorder(
+                          ConfigurationRecorder={
+                              'name': recorder_name,
+                              'roleARN': role_arn,
+                              'recordingGroup': {
+                                  'allSupported': True,
+                                  'includeGlobalResourceTypes': True
+                              }
+                          }
+                      )
+                  else:
+                      # Create new recorder
+                      recorder_name = f'security-config-recorder-{suffix}'
+                      config.put_configuration_recorder(
+                          ConfigurationRecorder={
+                              'name': recorder_name,
+                              'roleARN': role_arn,
+                              'recordingGroup': {
+                                  'allSupported': True,
+                                  'includeGlobalResourceTypes': True
+                              }
+                          }
+                      )
+                      print(f"Created new recorder: {recorder_name}")
+                  
+                  # Start the recorder
+                  config.start_configuration_recorder(ConfigurationRecorderName=recorder_name)
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                      'RecorderName': recorder_name,
+                      'DeliveryChannelName': delivery_channel_name
+                  })
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {}, str(e))
+
+  ConfigResourcesCheckRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ConfigResourcesCheckRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ConfigResourcesManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:DescribeConfigurationRecorders
+                  - config:DescribeDeliveryChannels
+                  - config:PutConfigurationRecorder
+                  - config:PutDeliveryChannel
+                  - config:StartConfigurationRecorder
+                  - config:StopConfigurationRecorder
+                  - iam:PassRole
+                Resource: '*'
+
+
+  # Config Rules
+  RootAccessKeyCheck:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigResourcesCheck
+    Properties:
+      ConfigRuleName: !Sub 'root-access-key-check-${EnvironmentSuffix}'
+      Description: 'Checks whether the root user access key is available'
+      Source:
+        Owner: AWS
+        SourceIdentifier: ROOT_ACCESS_KEY_CHECK
+
+  S3BucketPublicAccessProhibited:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigResourcesCheck
+    Properties:
+      ConfigRuleName: !Sub 's3-bucket-public-access-prohibited-${EnvironmentSuffix}'
+      Description: 'Checks if S3 buckets are publicly accessible'
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_ACCESS_PROHIBITED
+
+  # Amazon GuardDuty - Use existing detector if available
+  GuardDutyDetectorCheck:
+    Type: Custom::GuardDutyDetectorCheck
+    Properties:
+      ServiceToken: !GetAtt GuardDutyDetectorCheckFunction.Arn
+      Region: !Ref AWS::Region
+
+  GuardDutyDetectorCheckFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'GuardDutyDetectorCheck-${EnvironmentSuffix}'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt GuardDutyDetectorCheckRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import json
+
+          def handler(event, context):
+              guardduty = boto3.client('guardduty', region_name=event['ResourceProperties']['Region'])
+              
+              try:
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+                  
+                  # Check for existing detector
+                  response = guardduty.list_detectors()
+                  
+                  if response['DetectorIds']:
+                      detector_id = response['DetectorIds'][0]
+                      print(f"Found existing detector: {detector_id}")
+                      # Update existing detector settings
+                      try:
+                          guardduty.update_detector(
+                              DetectorId=detector_id,
+                              Enable=True,
+                              FindingPublishingFrequency='FIFTEEN_MINUTES'
+                          )
+                      except Exception as e:
+                          print(f"Could not update detector: {str(e)}")
+                  else:
+                      # Create new detector
+                      response = guardduty.create_detector(
+                          Enable=True,
+                          FindingPublishingFrequency='FIFTEEN_MINUTES'
+                      )
+                      detector_id = response['DetectorId']
+                      print(f"Created new detector: {detector_id}")
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'DetectorId': detector_id})
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {}, str(e))
+
+  GuardDutyDetectorCheckRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'GuardDutyDetectorCheckRole-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: GuardDutyDetectorManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - guardduty:ListDetectors
+                  - guardduty:CreateDetector
+                  - guardduty:UpdateDetector
+                  - guardduty:GetDetector
+                Resource: '*'
+
+  # AWS Security Hub
+  SecurityHub:
+    Type: AWS::SecurityHub::Hub
+    Properties:
+      Tags:
+        Name: !Sub 'Security-Hub-${EnvironmentSuffix}'
+        Environment: !Ref EnvironmentSuffix
+      EnableDefaultStandards: true
+      ControlFindingGenerator: SECURITY_CONTROL
+
+  # Security Hub Standards Subscriptions
+  # Note: Standards subscriptions are enabled via EnableDefaultStandards property
+
+  # Amazon Macie (Conditional)
+  MacieSession:
+    Type: AWS::Macie2::Session
+    Condition: ShouldCreateMacie
+    Properties:
+      Status: ENABLED
+      FindingPublishingFrequency: FIFTEEN_MINUTES
+
+  # EventBridge Rules for Security Alerts
+  GuardDutyEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'guardduty-high-severity-${EnvironmentSuffix}'
+      Description: 'Captures high severity GuardDuty findings'
+      EventPattern:
+        source: ['aws.guardduty']
+        detail-type: ['GuardDuty Finding']
+        detail:
+          severity: [7, 7.0, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 8, 8.0, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 9, 9.0, 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8, 9.9, 10]
+      State: ENABLED
+      Targets:
+        - Arn: !Ref SecurityNotificationsTopic
+          Id: 'SecurityNotificationTarget'
+
+  SecurityHubEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'securityhub-critical-findings-${EnvironmentSuffix}'
+      Description: 'Captures critical Security Hub findings'
+      EventPattern:
+        source: ['aws.securityhub']
+        detail-type: ['Security Hub Findings - Imported']
+        detail:
+          findings:
+            Severity:
+              Label: ['CRITICAL', 'HIGH']
+      State: ENABLED
+      Targets:
+        - Arn: !Ref SecurityNotificationsTopic
+          Id: 'SecurityHubNotificationTarget'
+
+  # CloudWatch Alarms - Removed as Config metrics might not be immediately available
+
+  # Original DynamoDB Table (preserved from existing template)
+  TurnAroundPromptTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: !Sub 'TurnAroundPromptTable${EnvironmentSuffix}'
+      AttributeDefinitions:
+        - AttributeName: 'id'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'id'
+          KeyType: 'HASH'
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: false
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: !Ref SecurityServicesKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub 'TurnAroundPromptTable-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+Outputs:
+  # Original Outputs (preserved)
+  TurnAroundPromptTableName:
+    Description: 'Name of the DynamoDB table'
+    Value: !Ref TurnAroundPromptTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableName'
+
+  TurnAroundPromptTableArn:
+    Description: 'ARN of the DynamoDB table'
+    Value: !GetAtt TurnAroundPromptTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TurnAroundPromptTableArn'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  # Security Services Outputs
+  KMSKeyId:
+    Description: 'KMS Key ID for security services'
+    Value: !Ref SecurityServicesKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityKMSKey'
+
+  # CloudTrailArn output removed - CloudTrail not created due to AWS limit
+
+  GuardDutyDetectorId:
+    Description: 'GuardDuty Detector ID'
+    Value: !GetAtt GuardDutyDetectorCheck.DetectorId
+    Export:
+      Name: !Sub '${AWS::StackName}-GuardDutyDetectorId'
+
+  SecurityHubArn:
+    Description: 'Security Hub ARN'
+    Value: !Ref SecurityHub
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityHubArn'
+
+  SecurityNotificationsTopicArn:
+    Description: 'SNS Topic for security notifications'
+    Value: !Ref SecurityNotificationsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityNotificationsTopic'
+
+  MacieSessionArn:
+    Description: 'Macie Session ARN'
+    Value: !If [ShouldCreateMacie, !Ref MacieSession, 'Not Created']
+    Export:
+      Name: !Sub '${AWS::StackName}-MacieSessionArn'
+
+  ConfigRecorderName:
+    Description: 'Config Recorder Name'
+    Value: !GetAtt ConfigResourcesCheck.RecorderName
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigRecorderName'
