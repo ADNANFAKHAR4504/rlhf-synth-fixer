@@ -390,9 +390,9 @@ describe('TapStack Integration Tests', () => {
       
       // 2. Auto Scaling Group and EC2 Instances
       console.log('🖥️ Testing Auto Scaling Group and EC2 instances...');
+      const asgName = getOutput('AutoScalingGroupName');
       const autoScalingGroups = await autoscaling.describeAutoScalingGroups({
-        AutoScalingGroupNames: Object.values(outputs)
-          .filter(value => typeof value === 'string' && value.includes('AutoScaling'))
+        AutoScalingGroupNames: [asgName]
       }).promise();
       
       if (autoScalingGroups.AutoScalingGroups.length > 0) {
@@ -422,11 +422,16 @@ describe('TapStack Integration Tests', () => {
           status: 'PASS',
           details: `ALB has ${targetGroups.TargetGroups.length} target groups, ${targetHealth.TargetHealthDescriptions.length} targets`
         };
+      } else {
+        testResults.loadbalancer = {
+          status: 'FAIL',
+          details: 'No target groups found for load balancer'
+        };
       }
       
       // 4. RDS Database Connectivity
       console.log('🗃️ Testing RDS database...');
-      const rdsEndpoint = getOutput('RdsEndpoint');
+      const rdsEndpoint = getOutput('DatabaseEndpoint');
       const dbInstances = await rds.describeDBInstances().promise();
       const myDbInstance = dbInstances.DBInstances.find(db => 
         db.Endpoint?.Address === rdsEndpoint
@@ -436,6 +441,11 @@ describe('TapStack Integration Tests', () => {
         testResults.database = {
           status: myDbInstance.DBInstanceStatus === 'available' ? 'PASS' : 'PENDING',
           details: `RDS instance ${myDbInstance.DBInstanceIdentifier} is ${myDbInstance.DBInstanceStatus}`
+        };
+      } else {
+        testResults.database = {
+          status: 'SKIP',
+          details: 'RDS instance not found with matching endpoint'
         };
       }
       
@@ -468,6 +478,11 @@ describe('TapStack Integration Tests', () => {
         testResults.lambda = {
           status: myLambda.State === 'Active' ? 'PASS' : 'PENDING',
           details: `Lambda function ${myLambda.FunctionName} is ${myLambda.State}`
+        };
+      } else {
+        testResults.lambda = {
+          status: 'SKIP',
+          details: 'Lambda function not found for this environment'
         };
       }
       
@@ -551,7 +566,7 @@ describe('TapStack Integration Tests', () => {
       
       // Summary Report
       console.log('\n📋 COMPREHENSIVE END-TO-END TEST SUMMARY:');
-      console.log('=' * 60);
+      console.log('='.repeat(60));
       
       let passCount = 0;
       let totalTests = 0;
@@ -571,7 +586,7 @@ describe('TapStack Integration Tests', () => {
         console.log(`${statusIcon} ${component.toUpperCase()}: ${result.status} - ${result.details}`);
       });
       
-      console.log('=' * 60);
+      console.log('='.repeat(60));
       console.log(`🎯 OVERALL SCORE: ${passCount}/${totalTests} components passed (${Math.round(passCount/totalTests*100)}%)`);
       
       // Assertions for the test framework
