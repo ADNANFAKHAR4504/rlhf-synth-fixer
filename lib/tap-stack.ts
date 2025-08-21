@@ -369,12 +369,12 @@ export class TapStack extends pulumi.ComponentResource {
       this.cloudWatchLogGroups[region] = logGroup;
 
       // S3 Bucket for CloudTrail logs
-      // S3 Bucket for CloudTrail logs
+      // S3 Bucket for CloudTrail logs - Step 2: Use consistent naming
       const s3Bucket = new aws.s3.Bucket(
         `${prefix}-cloudtrail-bucket`,
         {
-          bucket: `${prefix}-cloudtrail-bucket-${Date.now()}`.toLowerCase(),
-          forceDestroy: true, // Allows bucket deletion with objects
+          bucket: `${prefix}-cloudtrail-bucket`.toLowerCase(), // Remove Date.now()
+          forceDestroy: true,
           tags: {
             ...tags,
             Environment: 'Production',
@@ -384,7 +384,7 @@ export class TapStack extends pulumi.ComponentResource {
         { provider }
       );
 
-      // S3 Bucket Policy for CloudTrail
+      // FIXED: Comprehensive S3 Bucket Policy for CloudTrail with all required permissions
       new aws.s3.BucketPolicy(
         `${prefix}-cloudtrail-bucket-policy`,
         {
