@@ -217,7 +217,7 @@ Resources:
               AWS:
                 - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
                 # Cross-account trust for multi-account support
-                - !Sub 'arn:aws:iam::123456789012:root' # Replace with target account ID(s)
+                - 'arn:aws:iam::123456789012:root' # Replace with target account ID(s)
             Action: sts:AssumeRole
             Condition:
               Bool:
@@ -248,11 +248,6 @@ Resources:
                   - account:List*
                 Resource: '*'
               # Add more granular permissions as needed
-  # EBS ENCRYPTION BY DEFAULT
-  EBSEncryptionByDefault:
-    Type: AWS::EC2::EBSEncryptionByDefault
-    Properties:
-      Enabled: true
 
   # CloudTrail Role
   CloudTrailRole:
