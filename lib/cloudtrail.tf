@@ -5,9 +5,9 @@
 data "aws_caller_identity" "current" {}
 
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  provider           = aws.primary
-  name               = "/aws/cloudtrail/${var.name_prefix}-${var.environment}"
-  retention_in_days  = 90
+  provider          = aws.primary
+  name              = "/aws/cloudtrail/${var.name_prefix}-${var.environment}"
+  retention_in_days = 90
   tags = {
     Name        = "${var.name_prefix}-${var.environment}-cloudtrail-logs"
     Environment = var.environment
@@ -47,7 +47,7 @@ resource "aws_iam_role_policy" "cloudtrail_logs" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = aws_cloudwatch_log_group.cloudtrail.arn
+        Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:log-stream:*"  # <-- Updated to allow log stream
       }
     ]
   })
