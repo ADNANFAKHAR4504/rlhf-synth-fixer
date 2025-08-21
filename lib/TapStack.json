@@ -12,9 +12,23 @@
             "MaxLength": 20
         },
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "Name of an existing EC2 KeyPair to enable SSH access",
-            "Default": "my-key-pair"
+            "Type": "String",
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access (leave empty to disable SSH)",
+            "Default": ""
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Mappings": {
@@ -659,7 +673,15 @@
                     },
                     "InstanceType": "t2.micro",
                     "KeyName": {
-                        "Ref": "KeyPairName"
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     },
                     "IamInstanceProfile": {
                         "Arn": {

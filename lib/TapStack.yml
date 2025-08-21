@@ -12,11 +12,14 @@ Parameters:
     MaxLength: 20
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: Name of an existing EC2 KeyPair to enable SSH access
-    Default: my-key-pair
+    Type: String
+    Description: Name of an existing EC2 KeyPair to enable SSH access (leave empty to disable SSH)
+    Default: ""
 
 
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, ""]]
 
 Mappings:
   RegionAMIMap:
@@ -355,7 +358,7 @@ Resources:
       LaunchTemplateData:
         ImageId: !FindInMap [RegionAMIMap, !Ref 'AWS::Region', AMI]
         InstanceType: t2.micro
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref "AWS::NoValue"]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
