@@ -43,7 +43,7 @@ export class ComputeConstruct extends Construct {
       ec2SecurityGroupId,
       instanceProfileName,
       webAclArn,
-      // accessLogsBucket, // Temporarily unused due to ALB access logging disabled
+      accessLogsBucket,
     } = props;
 
     const amiData = new dataAwsAmi.DataAwsAmi(this, 'amazon-linux', {
@@ -160,15 +160,11 @@ EOF
       subnets: publicSubnetIds,
       enableDeletionProtection: false,
 
-      // Temporarily disabled ALB access logging due to S3 permissions issue
-      // TODO: Re-enable once S3 bucket permissions are resolved
-      /*
       accessLogs: {
         bucket: accessLogsBucket,
         enabled: true,
         prefix: 'alb-access-logs',
       },
-      */
 
       tags: {
         ...config.tags,
