@@ -628,7 +628,7 @@ export class TapStack extends pulumi.ComponentResource {
         {
           name: `${name}-db-${region}`,
           identifier: `${name}-db-${region}`,
-          instanceClass: 'db.t3.micro',
+          instanceClass: 'db.t3.medium',
           allocatedStorage: 20,
           dbName: 'appdb',
           username: 'admin',
@@ -636,6 +636,7 @@ export class TapStack extends pulumi.ComponentResource {
           securityGroupIds: [dbSg.securityGroupId],
           kmsKeyId: dbKms.keyArn,
           backupRetentionPeriod: 7,
+          performanceInsightsEnabled: true,
           tags: { ...this.tags, Region: region },
         },
         { provider: this.providers[region], parent: this }

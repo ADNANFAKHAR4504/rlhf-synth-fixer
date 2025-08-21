@@ -45,6 +45,8 @@ export interface RdsInstanceArgs {
   deletionProtection?: boolean;
   skipFinalSnapshot?: boolean;
   finalSnapshotIdentifier?: string;
+  performanceInsightsEnabled?: boolean; // <-- ADDED
+  performanceInsightsKmsKeyId?: pulumi.Input<string>;
   enabledCloudwatchLogsExports?: string[];
   monitoringInterval?: number;
   monitoringRoleArn?: pulumi.Input<string>;
@@ -78,6 +80,7 @@ export interface SecureRdsInstanceArgs {
   securityGroupIds: pulumi.Input<string>[];
   kmsKeyId?: pulumi.Input<string>;
   backupRetentionPeriod?: number;
+  performanceInsightsEnabled?: boolean; // <-- ADDED
   tags?: Record<string, string>;
 }
 
@@ -218,6 +221,9 @@ export class RdsInstanceComponent extends pulumi.ComponentResource {
         finalSnapshotIdentifier:
           args.finalSnapshotIdentifier ||
           `${args.name}-final-snapshot-${Date.now()}`,
+        performanceInsightsEnabled: args.performanceInsightsEnabled, // <-- ADDED
+        performanceInsightsKmsKeyId:
+          args.performanceInsightsKmsKeyId || args.kmsKeyId,
         enabledCloudwatchLogsExports: args.enabledCloudwatchLogsExports,
         monitoringInterval: args.monitoringInterval || 0,
         monitoringRoleArn: args.monitoringRoleArn,
@@ -341,11 +347,13 @@ export class SecureRdsInstanceComponent extends pulumi.ComponentResource {
         autoMinorVersionUpgrade: true,
         deletionProtection: true,
         skipFinalSnapshot: false,
+        performanceInsightsEnabled: args.performanceInsightsEnabled, // <-- ADDED
+        performanceInsightsKmsKeyId: args.kmsKeyId,
         enabledCloudwatchLogsExports:
           engine === 'mysql'
             ? ['error', 'general', 'slowquery']
             : ['postgresql'],
-        monitoringInterval: 0, // Changed from 60 to 0
+        monitoringInterval: 0,
         tags: args.tags,
       },
       { parent: this, provider: opts?.provider }
