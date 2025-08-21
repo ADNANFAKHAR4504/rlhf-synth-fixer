@@ -38,24 +38,17 @@ resource "aws_iam_role" "cloudtrail_logs" {
 resource "aws_iam_role_policy" "cloudtrail_logs" {
   name = "${var.name_prefix}-${var.environment}-cloudtrail-logs-policy"
   role = aws_iam_role.cloudtrail_logs.id
+
   policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogStream"
-        ]
-        Resource = aws_cloudwatch_log_group.cloudtrail.arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:PutLogEvents"
-        ]
-        Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:log-stream:*"
-      }
-    ]
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+    }]
   })
 }
 
@@ -139,8 +132,13 @@ resource "aws_cloudtrail" "main" {
     ManagedBy   = "terraform"
     Project     = "secure-env"
   }
-  depends_on = [aws_cloudwatch_log_group.cloudtrail, aws_s3_bucket_policy.cloudtrail, aws_s3_bucket_server_side_encryption_configuration.this]
-}
+  depends_on = [
+    aws_iam_role_policy.cloudtrail_logs,
+    aws_cloudwatch_log_group.cloudtrail,
+    aws_s3_bucket_policy.cloudtrail,
+    aws_s3_bucket_server_side_encryption_configuration.this
+  ]
+  }
 
 output "cloudtrail_arn" {
   value = aws_cloudtrail.main.arn
