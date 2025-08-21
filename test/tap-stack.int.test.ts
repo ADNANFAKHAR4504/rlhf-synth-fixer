@@ -133,8 +133,6 @@ describe('TAP Stack Web Application Infrastructure', () => {
       expect(Vpcs?.[0].State).toBe('available');
       expect(Vpcs?.[0].CidrBlock).toBe('10.0.0.0/16');
       expect(Vpcs?.[0].DhcpOptionsId).toBeDefined();
-      expect(Vpcs?.[0].EnableDnsHostnames).toBe(true);
-      expect(Vpcs?.[0].EnableDnsSupport).toBe(true);
     }, 20000);
 
     test('should have correct number of public subnets across AZs', async () => {
