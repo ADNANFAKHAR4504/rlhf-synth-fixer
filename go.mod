@@ -4,6 +4,18 @@ go 1.23.12
 
 require (
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
+	github.com/TuringGpt/iac-test-automations/aws/provider v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/cloudwatchloggroup v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/iampolicy v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/iamrole v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/iamrolepolicyattachment v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/lambdafunction v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/lambdapermission v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/s3bucket v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/s3bucketnotification v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/s3bucketpublicaccessblock v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/s3bucketserversideencryptionconfiguration v0.0.0
+	github.com/TuringGpt/iac-test-automations/aws/s3bucketversioning v0.0.0
 )
 
 replace (
