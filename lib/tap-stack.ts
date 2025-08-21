@@ -25,11 +25,12 @@ import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
 
+// Interface updated to remove dependencies on existing infrastructure
 export interface EnvironmentConfig {
   readonly envName: 'dev' | 'test' | 'prod';
   readonly awsRegion: string;
   readonly replicaRegion: string;
-  readonly vpcCidr: string;
+  readonly vpcCidr: string; // Now we only need a CIDR block
   readonly tags: { [key: string]: string };
 }
 
@@ -118,25 +119,12 @@ export class TapStack extends TerraformStack {
           tags: { ...config.tags, Name: `priv-subnet-b${constructIdSuffix}` },
         }
       );
+
       const igw = new InternetGateway(this, `Igw${constructIdSuffix}`, {
         provider: primaryProvider,
         vpcId: vpc.id,
         tags: config.tags,
       });
-      const natEip = new Eip(this, `NatEip${constructIdSuffix}`, {
-        provider: primaryProvider,
-        domain: 'vpc',
-        tags: config.tags,
-      });
-      const natGw = new NatGateway(this, `NatGw${constructIdSuffix}`, {
-        provider: primaryProvider,
-        allocationId: natEip.id,
-        subnetId: publicSubnetA.id,
-        dependsOn: [igw],
-        tags: config.tags,
-      });
-
-      // FIX: Add Route Tables to use the IGW and NAT Gateway
       const publicRouteTable = new RouteTable(
         this,
         `PublicRouteTable${constructIdSuffix}`,
@@ -158,6 +146,18 @@ export class TapStack extends TerraformStack {
         routeTableId: publicRouteTable.id,
       });
 
+      const natEip = new Eip(this, `NatEip${constructIdSuffix}`, {
+        provider: primaryProvider,
+        domain: 'vpc',
+        dependsOn: [igw],
+        tags: config.tags,
+      });
+      const natGw = new NatGateway(this, `NatGw${constructIdSuffix}`, {
+        provider: primaryProvider,
+        allocationId: natEip.id,
+        subnetId: publicSubnetA.id,
+        tags: config.tags,
+      });
       const privateRouteTable = new RouteTable(
         this,
         `PrivateRouteTable${constructIdSuffix}`,
@@ -189,11 +189,15 @@ export class TapStack extends TerraformStack {
           tags: config.tags,
         }
       );
-      new S3BucketVersioningA(this, `S3ReplicaVersioning${constructIdSuffix}`, {
-        provider: replicaProvider,
-        bucket: replicaBucket.id,
-        versioningConfiguration: { status: 'Enabled' },
-      });
+      const replicaVersioning = new S3BucketVersioningA(
+        this,
+        `S3ReplicaVersioning${constructIdSuffix}`,
+        {
+          provider: replicaProvider,
+          bucket: replicaBucket.id,
+          versioningConfiguration: { status: 'Enabled' },
+        }
+      );
 
       const primaryBucket = new S3Bucket(
         this,
@@ -276,12 +280,13 @@ export class TapStack extends TerraformStack {
         }
       );
 
+      // FIX: Add an explicit dependency on the replica bucket's versioning configuration.
       new S3BucketReplicationConfigurationA(
         this,
         `S3ReplicationConfig${constructIdSuffix}`,
         {
           provider: primaryProvider,
-          dependsOn: [s3ReplicationRole],
+          dependsOn: [s3ReplicationRole, replicaVersioning], // This ensures versioning is enabled on the destination first
           role: s3ReplicationRole.arn,
           bucket: primaryBucket.id,
           rule: [
@@ -295,7 +300,7 @@ export class TapStack extends TerraformStack {
         }
       );
 
-      // Security Groups, now using the created VPC ID
+      // Security Groups now use the created VPC ID
       const albSg = new SecurityGroup(this, `AlbSg${constructIdSuffix}`, {
         provider: primaryProvider,
         name: `alb-sg${resourceNameSuffix}`,
