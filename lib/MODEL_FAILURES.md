@@ -1,5 +1,4 @@
-# Model Failures and Corrections
-
+# Model Failures and Corrections 
 This document captures issues encountered in generated infrastructure code and tests, the root causes, and the corrective actions applied.
 
 ## Summary of Failures
