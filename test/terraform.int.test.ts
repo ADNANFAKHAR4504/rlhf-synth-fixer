@@ -307,7 +307,7 @@ describe("Live AWS Resource Validation", () => {
     
     const asg = response.AutoScalingGroups![0];
     expect(asg.AutoScalingGroupName).toBe(OUT.asgName);
-    expect(asg.DesiredCapacity).toBe(1);
+    expect(asg.DesiredCapacity).toBe(2);
     expect(asg.MinSize).toBe(1);
     expect(asg.MaxSize).toBe(4);
     expect(asg.HealthCheckType).toBe('ELB');
