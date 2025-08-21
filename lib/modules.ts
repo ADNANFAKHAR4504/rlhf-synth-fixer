@@ -96,77 +96,77 @@ export class SecureModules extends Construct {
       targetKeyId: this.kmsKey.keyId,
     });
 
-    // VPC
-    this.vpc = new Vpc(this, 'vpc', {
-      cidrBlock: vpcCidr,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      tags: {
-        Name: `${appName}-VPC`,
-      },
-    });
+    // // VPC
+    // this.vpc = new Vpc(this, 'vpc', {
+    //   cidrBlock: vpcCidr,
+    //   enableDnsHostnames: true,
+    //   enableDnsSupport: true,
+    //   tags: {
+    //     Name: `${appName}-VPC`,
+    //   },
+    // });
 
-    // Internet Gateway
-    const igw = new InternetGateway(this, 'igw', {
-      vpcId: this.vpc.id,
-      tags: {
-        Name: `${appName}-IGW`,
-      },
-    });
+    // // Internet Gateway
+    // const igw = new InternetGateway(this, 'igw', {
+    //   vpcId: this.vpc.id,
+    //   tags: {
+    //     Name: `${appName}-IGW`,
+    //   },
+    // });
 
-    // Public Subnets
-    this.publicSubnets = [];
-    publicSubnetCidrs.forEach((cidr, index) => {
-      const subnet = new Subnet(this, `public-subnet-${index}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: cidr,
-        availabilityZone: availabilityZones[index],
-        mapPublicIpOnLaunch: true,
-        tags: {
-          Name: `${appName}-Public-Subnet-${index + 1}`,
-          Type: 'Public',
-        },
-      });
-      this.publicSubnets.push(subnet);
-    });
+    // // Public Subnets
+    // this.publicSubnets = [];
+    // publicSubnetCidrs.forEach((cidr, index) => {
+    //   const subnet = new Subnet(this, `public-subnet-${index}`, {
+    //     vpcId: this.vpc.id,
+    //     cidrBlock: cidr,
+    //     availabilityZone: availabilityZones[index],
+    //     mapPublicIpOnLaunch: true,
+    //     tags: {
+    //       Name: `${appName}-Public-Subnet-${index + 1}`,
+    //       Type: 'Public',
+    //     },
+    //   });
+    //   this.publicSubnets.push(subnet);
+    // });
 
-    // Private Subnets
-    this.privateSubnets = [];
-    privateSubnetCidrs.forEach((cidr, index) => {
-      const subnet = new Subnet(this, `private-subnet-${index}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: cidr,
-        availabilityZone: availabilityZones[index],
-        tags: {
-          Name: `${appName}-Private-Subnet-${index + 1}`,
-          Type: 'Private',
-        },
-      });
-      this.privateSubnets.push(subnet);
-    });
+    // // Private Subnets
+    // this.privateSubnets = [];
+    // privateSubnetCidrs.forEach((cidr, index) => {
+    //   const subnet = new Subnet(this, `private-subnet-${index}`, {
+    //     vpcId: this.vpc.id,
+    //     cidrBlock: cidr,
+    //     availabilityZone: availabilityZones[index],
+    //     tags: {
+    //       Name: `${appName}-Private-Subnet-${index + 1}`,
+    //       Type: 'Private',
+    //     },
+    //   });
+    //   this.privateSubnets.push(subnet);
+    // });
 
     // Route table for public subnets
-    const publicRouteTable = new RouteTable(this, 'public-rt', {
-      vpcId: this.vpc.id,
-      tags: {
-        Name: `${appName}-Public-RT`,
-      },
-    });
+    // const publicRouteTable = new RouteTable(this, 'public-rt', {
+    //   vpcId: this.vpc.id,
+    //   tags: {
+    //     Name: `${appName}-Public-RT`,
+    //   },
+    // });
 
-    // Route to internet gateway
-    new Route(this, 'public-route', {
-      routeTableId: publicRouteTable.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      gatewayId: igw.id,
-    });
+    // // Route to internet gateway
+    // new Route(this, 'public-route', {
+    //   routeTableId: publicRouteTable.id,
+    //   destinationCidrBlock: '0.0.0.0/0',
+    //   gatewayId: igw.id,
+    // });
 
-    // Associate public subnets with route table
-    this.publicSubnets.forEach((subnet, index) => {
-      new RouteTableAssociation(this, `public-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
-    });
+    // // Associate public subnets with route table
+    // this.publicSubnets.forEach((subnet, index) => {
+    //   new RouteTableAssociation(this, `public-rta-${index}`, {
+    //     subnetId: subnet.id,
+    //     routeTableId: publicRouteTable.id,
+    //   });
+    // });
 
     // Lambda execution role
     this.lambdaRole = new IamRole(this, 'lambda-role', {
@@ -336,74 +336,74 @@ export class SecureModules extends Construct {
       },
     });
 
-    // DB Subnet Group - HARDCODED subnet IDs
-    const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: `${appName.toLowerCase()}-db-subnet-group`,
-      // HARDCODED: Direct reference to subnet IDs
-      subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
-      description: 'Subnet group for RDS instance',
-      tags: {
-        Name: `${appName}-DB-SubnetGroup`,
-      },
-    });
+    // // DB Subnet Group - HARDCODED subnet IDs
+    // const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
+    //   name: `${appName.toLowerCase()}-db-subnet-group`,
+    //   // HARDCODED: Direct reference to subnet IDs
+    //   subnetIds: [this.privateSubnets[0].id, this.privateSubnets[1].id],
+    //   description: 'Subnet group for RDS instance',
+    //   tags: {
+    //     Name: `${appName}-DB-SubnetGroup`,
+    //   },
+    // });
 
-    // Security Group for RDS
-    const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
-      name: `${appName}-RDS-SG`,
-      description: 'Security group for RDS instance',
-      vpcId: this.vpc.id,
-      tags: {
-        Name: `${appName}-RDS-SG`,
-      },
-    });
+    // // Security Group for RDS
+    // const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
+    //   name: `${appName}-RDS-SG`,
+    //   description: 'Security group for RDS instance',
+    //   vpcId: this.vpc.id,
+    //   tags: {
+    //     Name: `${appName}-RDS-SG`,
+    //   },
+    // });
 
     // RDS security group rule
-    new SecurityGroupRule(this, 'rds-sg-ingress', {
-      type: 'ingress',
-      fromPort: 3306,
-      toPort: 3306,
-      protocol: 'tcp',
-      sourceSecurityGroupId: lambdaSecurityGroup.id,
-      securityGroupId: rdsSecurityGroup.id,
-      description: 'MySQL access from Lambda',
-    });
+    // new SecurityGroupRule(this, 'rds-sg-ingress', {
+    //   type: 'ingress',
+    //   fromPort: 3306,
+    //   toPort: 3306,
+    //   protocol: 'tcp',
+    //   sourceSecurityGroupId: lambdaSecurityGroup.id,
+    //   securityGroupId: rdsSecurityGroup.id,
+    //   description: 'MySQL access from Lambda',
+    // });
 
-    // RDS Instance
-    this.rdsInstance = new DbInstance(this, 'rds-instance', {
-      identifier: `${appName.toLowerCase()}-database`,
-      engine: 'mysql',
-      engineVersion: '8.0',
-      instanceClass: 'db.t3.micro',
-      allocatedStorage: 20,
-      storageType: 'gp2',
-      storageEncrypted: true,
-      kmsKeyId: this.kmsKey.arn,
-      dbName: 'myappdb',
-      username: 'admin',
-      password: 'ChangeMe123!',
-      vpcSecurityGroupIds: [rdsSecurityGroup.id],
-      dbSubnetGroupName: dbSubnetGroup.name,
-      backupRetentionPeriod: 7,
-      backupWindow: '03:00-04:00',
-      maintenanceWindow: 'sun:04:00-sun:05:00',
-      skipFinalSnapshot: false,
-      finalSnapshotIdentifier: `${appName.toLowerCase()}-final-snapshot`,
-      deletionProtection: true,
-      tags: {
-        Name: `${appName}-RDS-Instance`,
-      },
-    });
+    // // RDS Instance
+    // this.rdsInstance = new DbInstance(this, 'rds-instance', {
+    //   identifier: `${appName.toLowerCase()}-database`,
+    //   engine: 'mysql',
+    //   engineVersion: '8.0',
+    //   instanceClass: 'db.t3.micro',
+    //   allocatedStorage: 20,
+    //   storageType: 'gp2',
+    //   storageEncrypted: true,
+    //   kmsKeyId: this.kmsKey.arn,
+    //   dbName: 'myappdb',
+    //   username: 'admin',
+    //   password: 'ChangeMe123!',
+    //   vpcSecurityGroupIds: [rdsSecurityGroup.id],
+    //   dbSubnetGroupName: dbSubnetGroup.name,
+    //   backupRetentionPeriod: 7,
+    //   backupWindow: '03:00-04:00',
+    //   maintenanceWindow: 'sun:04:00-sun:05:00',
+    //   skipFinalSnapshot: false,
+    //   finalSnapshotIdentifier: `${appName.toLowerCase()}-final-snapshot`,
+    //   deletionProtection: true,
+    //   tags: {
+    //     Name: `${appName}-RDS-Instance`,
+    //   },
+    // });
 
-    // EBS Volume
-    this.ebsVolume = new EbsVolume(this, 'ebs-volume', {
-      availabilityZone: availabilityZones[0],
-      size: 10,
-      type: 'gp3',
-      encrypted: true,
-      kmsKeyId: this.kmsKey.keyId,
-      tags: {
-        Name: `${appName}-EBS-Volume`,
-      },
-    });
+    // // EBS Volume
+    // this.ebsVolume = new EbsVolume(this, 'ebs-volume', {
+    //   availabilityZone: availabilityZones[0],
+    //   size: 10,
+    //   type: 'gp3',
+    //   encrypted: true,
+    //   kmsKeyId: this.kmsKey.keyId,
+    //   tags: {
+    //     Name: `${appName}-EBS-Volume`,
+    //   },
+    // });
   }
 }
