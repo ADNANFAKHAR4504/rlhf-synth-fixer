@@ -806,12 +806,16 @@ resource "aws_acm_certificate" "alb_cert" {
   }
 }
 
+locals {
+  alb_cert_dvo = tolist(aws_acm_certificate.alb_cert.domain_validation_options)
+}
+
 resource "aws_route53_record" "alb_cert_validation" {
-  count   = length(aws_acm_certificate.alb_cert.domain_validation_options)
+  count   = length(local.alb_cert_dvo)
   zone_id = aws_route53_zone.secure_prod_zone.zone_id
-  name    = aws_acm_certificate.alb_cert.domain_validation_options[count.index].resource_record_name
-  type    = aws_acm_certificate.alb_cert.domain_validation_options[count.index].resource_record_type
-  records = [aws_acm_certificate.alb_cert.domain_validation_options[count.index].resource_record_value]
+  name    = local.alb_cert_dvo[count.index].resource_record_name
+  type    = local.alb_cert_dvo[count.index].resource_record_type
+  records = [local.alb_cert_dvo[count.index].resource_record_value]
   ttl     = 60
 }
 
