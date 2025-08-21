@@ -51,7 +51,8 @@ const CFN_SCHEMA = new yaml.Schema([
 describe('TapStack Integration Tests', () => {
   let template: any;
   let outputs: any;
-  const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'pr1847'}`; // Use environment suffix from CI
+  const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'pr1847'}`;
+  const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr1847';
 
   beforeAll(() => {
     // Load TapStack.yml
@@ -76,9 +77,9 @@ describe('TapStack Integration Tests', () => {
           VpcId: outputs.VPCId,
           CidrBlock: '10.0.0.0/16',
           Tags: [
-            { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-vpc` },
+            { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-vpc` },
             { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-            { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+            { Key: 'Environment', Value: envSuffix },
             { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
           ],
         }],
@@ -95,9 +96,9 @@ describe('TapStack Integration Tests', () => {
             AvailabilityZone: 'us-east-1a',
             MapPublicIpOnLaunch: true,
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicsubneta` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicsubneta` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
           },
@@ -108,9 +109,9 @@ describe('TapStack Integration Tests', () => {
             AvailabilityZone: 'us-east-1b',
             MapPublicIpOnLaunch: true,
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicsubnetb` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicsubnetb` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
           },
@@ -121,9 +122,9 @@ describe('TapStack Integration Tests', () => {
             AvailabilityZone: 'us-east-1a',
             MapPublicIpOnLaunch: false,
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatesubneta` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatesubneta` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
           },
@@ -134,9 +135,9 @@ describe('TapStack Integration Tests', () => {
             AvailabilityZone: 'us-east-1b',
             MapPublicIpOnLaunch: false,
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatesubnetb` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatesubnetb` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
           },
@@ -151,9 +152,9 @@ describe('TapStack Integration Tests', () => {
             NatGatewayId: 'nat-123',
             SubnetId: outputs.PublicSubnets.split(',')[0],
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgatewaya` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgatewaya` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
           },
@@ -161,9 +162,9 @@ describe('TapStack Integration Tests', () => {
             NatGatewayId: 'nat-456',
             SubnetId: outputs.PublicSubnets.split(',')[1],
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgatewayb` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgatewayb` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
           },
@@ -172,9 +173,9 @@ describe('TapStack Integration Tests', () => {
             NatGatewayId: 'nat-789',
             SubnetId: outputs.PublicSubnets.split(',')[0],
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgateway` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgateway` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
           },
@@ -189,9 +190,9 @@ describe('TapStack Integration Tests', () => {
             RouteTableId: 'rtb-public',
             VpcId: outputs.VPCId,
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicrt` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicrt` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
             Routes: [{ DestinationCidrBlock: '0.0.0.0/0', GatewayId: 'igw-123' }],
@@ -200,9 +201,9 @@ describe('TapStack Integration Tests', () => {
             RouteTableId: 'rtb-private-a',
             VpcId: outputs.VPCId,
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privaterta` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privaterta` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
             Routes: [{ DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-123' : 'nat-789' }],
@@ -211,9 +212,9 @@ describe('TapStack Integration Tests', () => {
             RouteTableId: 'rtb-private-b',
             VpcId: outputs.VPCId,
             Tags: [
-              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatertb` },
+              { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatertb` },
               { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-              { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+              { Key: 'Environment', Value: envSuffix },
               { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
             ],
             Routes: [{ DestinationCidrBlock: '0.0.0.0/0', NatGatewayId: template.Parameters.CreateNatPerAZ.Default === 'true' ? 'nat-456' : 'nat-789' }],
@@ -225,9 +226,9 @@ describe('TapStack Integration Tests', () => {
     mockS3.getBucketTagging.mockImplementation(() => ({
       promise: async () => ({
         TagSet: [
-          { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-databucket` },
+          { Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-databucket` },
           { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-          { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+          { Key: 'Environment', Value: envSuffix },
           { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
         ],
       }),
@@ -257,7 +258,7 @@ describe('TapStack Integration Tests', () => {
     mockIAM.getRole.mockImplementation(() => ({
       promise: async () => ({
         Role: {
-          RoleName: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-role`,
+          RoleName: `${template.Parameters.ProjectName.Default}-${envSuffix}-role`,
           Arn: outputs.EnvironmentRoleARN,
           AssumeRolePolicyDocument: JSON.stringify({
             Version: '2012-10-17',
@@ -269,7 +270,7 @@ describe('TapStack Integration Tests', () => {
           }),
           Tags: [
             { Key: 'Project', Value: template.Parameters.ProjectName.Default },
-            { Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default },
+            { Key: 'Environment', Value: envSuffix },
             { Key: 'CreatedBy', Value: template.Parameters.Owner.Default },
           ],
         },
@@ -310,7 +311,7 @@ describe('TapStack Integration Tests', () => {
 
     test('DataBucketName matches naming convention', () => {
       expect(outputs.DataBucketName).toMatch(
-        new RegExp(`^${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-databucket-\\d{12}-us-east-1$`)
+        new RegExp(`^${template.Parameters.ProjectName.Default}-${envSuffix}-databucket-\\d{12}-us-east-1$`)
       );
     });
 
@@ -321,7 +322,7 @@ describe('TapStack Integration Tests', () => {
 
     test('EnvironmentRoleARN is a valid IAM role ARN', () => {
       expect(outputs.EnvironmentRoleARN).toMatch(
-        new RegExp(`^arn:aws:iam::\\d{12}:role/${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-role$`)
+        new RegExp(`^arn:aws:iam::\\d{12}:role/${template.Parameters.ProjectName.Default}-${envSuffix}-role$`)
       );
     });
   });
@@ -370,9 +371,9 @@ describe('TapStack Integration Tests', () => {
       const vpc = result.Vpcs![0];
       expect(vpc.VpcId).toBe(outputs.VPCId);
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc.Tags).toContainEqual({ Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-vpc` });
+      expect(vpc.Tags).toContainEqual({ Key: 'Name', Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-vpc` });
       expect(vpc.Tags).toContainEqual({ Key: 'Project', Value: template.Parameters.ProjectName.Default });
-      expect(vpc.Tags).toContainEqual({ Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default });
+      expect(vpc.Tags).toContainEqual({ Key: 'Environment', Value: envSuffix });
       expect(vpc.Tags).toContainEqual({ Key: 'CreatedBy', Value: template.Parameters.Owner.Default });
     });
 
@@ -387,14 +388,14 @@ describe('TapStack Integration Tests', () => {
       expect(publicSubnets[0].AvailabilityZone).toBe('us-east-1a');
       expect(publicSubnets[0].Tags).toContainEqual({
         Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicsubneta`,
+        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicsubneta`,
       });
       expect(publicSubnets[1].SubnetId).toBe(outputs.PublicSubnets.split(',')[1]);
       expect(publicSubnets[1].CidrBlock).toBe('10.0.64.0/18');
       expect(publicSubnets[1].AvailabilityZone).toBe('us-east-1b');
       expect(publicSubnets[1].Tags).toContainEqual({
         Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-publicsubnetb`,
+        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-publicsubnetb`,
       });
     });
 
@@ -409,14 +410,14 @@ describe('TapStack Integration Tests', () => {
       expect(privateSubnets[0].AvailabilityZone).toBe('us-east-1a');
       expect(privateSubnets[0].Tags).toContainEqual({
         Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatesubneta`,
+        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatesubneta`,
       });
       expect(privateSubnets[1].SubnetId).toBe(outputs.PrivateSubnets.split(',')[1]);
       expect(privateSubnets[1].CidrBlock).toBe('10.0.192.0/18');
       expect(privateSubnets[1].AvailabilityZone).toBe('us-east-1b');
       expect(privateSubnets[1].Tags).toContainEqual({
         Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-privatesubnetb`,
+        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-privatesubnetb`,
       });
     });
 
@@ -429,19 +430,19 @@ describe('TapStack Integration Tests', () => {
         expect(result.NatGateways![0].SubnetId).toBe(outputs.PublicSubnets.split(',')[0]);
         expect(result.NatGateways![0].Tags).toContainEqual({
           Key: 'Name',
-          Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgatewaya`,
+          Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgatewaya`,
         });
         expect(result.NatGateways![1].SubnetId).toBe(outputs.PublicSubnets.split(',')[1]);
         expect(result.NatGateways![1].Tags).toContainEqual({
           Key: 'Name',
-          Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgatewayb`,
+          Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgatewayb`,
         });
       } else {
         expect(result.NatGateways).toHaveLength(1);
         expect(result.NatGateways![0].SubnetId).toBe(outputs.PublicSubnets.split(',')[0]);
         expect(result.NatGateways![0].Tags).toContainEqual({
           Key: 'Name',
-          Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgateway`,
+          Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgateway`,
         });
       }
     });
@@ -483,10 +484,10 @@ describe('TapStack Integration Tests', () => {
       const tagging = await mockS3.getBucketTagging({ Bucket: outputs.DataBucketName }).promise();
       expect(tagging.TagSet).toContainEqual({
         Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-databucket`,
+        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-databucket`,
       });
       expect(tagging.TagSet).toContainEqual({ Key: 'Project', Value: template.Parameters.ProjectName.Default });
-      expect(tagging.TagSet).toContainEqual({ Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default });
+      expect(tagging.TagSet).toContainEqual({ Key: 'Environment', Value: envSuffix });
       expect(tagging.TagSet).toContainEqual({ Key: 'CreatedBy', Value: template.Parameters.Owner.Default });
 
       const encryption = await mockS3.getBucketEncryption({ Bucket: outputs.DataBucketName }).promise();
@@ -513,7 +514,7 @@ describe('TapStack Integration Tests', () => {
   // IAM Role
   describe('IAM Role', () => {
     test('EnvironmentRole exists with correct configuration', async () => {
-      const result = await mockIAM.getRole({ RoleName: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-role` }).promise();
+      const result = await mockIAM.getRole({ RoleName: `${template.Parameters.ProjectName.Default}-${envSuffix}-role` }).promise();
       expect(result.Role).toBeDefined();
       expect(result.Role!.Arn).toBe(outputs.EnvironmentRoleARN);
       expect(result.Role!.AssumeRolePolicyDocument).toBeDefined();
@@ -522,7 +523,7 @@ describe('TapStack Integration Tests', () => {
         template.Parameters.TeamPrincipalARN.Default || `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || '123456789012'}:root`
       );
       expect(result.Role!.Tags).toContainEqual({ Key: 'Project', Value: template.Parameters.ProjectName.Default });
-      expect(result.Role!.Tags).toContainEqual({ Key: 'Environment', Value: template.Parameters.EnvironmentSuffix.Default });
+      expect(result.Role!.Tags).toContainEqual({ Key: 'Environment', Value: envSuffix });
       expect(result.Role!.Tags).toContainEqual({ Key: 'CreatedBy', Value: template.Parameters.Owner.Default });
     });
   });
@@ -536,13 +537,13 @@ describe('TapStack Integration Tests', () => {
       expect(result.NatGateways?.length).toBe(1);
       expect(result.NatGateways![0].Tags).toContainEqual({
         Key: 'Name',
-        Value: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-natgateway`,
+        Value: `${template.Parameters.ProjectName.Default}-${envSuffix}-natgateway`,
       });
       template.Parameters.CreateNatPerAZ.Default = 'true'; // Reset
     });
 
     test('TeamPrincipalARN empty uses account root', async () => {
-      const result = await mockIAM.getRole({ RoleName: `${template.Parameters.ProjectName.Default}-${template.Parameters.EnvironmentSuffix.Default}-role` }).promise();
+      const result = await mockIAM.getRole({ RoleName: `${template.Parameters.ProjectName.Default}-${envSuffix}-role` }).promise();
       expect(result.Role).toBeDefined();
       expect(result.Role!.AssumeRolePolicyDocument).toBeDefined();
       const policyDoc = JSON.parse(result.Role!.AssumeRolePolicyDocument as string);
