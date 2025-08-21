@@ -396,7 +396,7 @@ export class SecureModules extends Construct {
           fromPort: 3306,
           toPort: 3306,
           protocol: 'tcp',
-          cidrBlocks: [vpcCidr],
+          cidrBlocks: [vpcCidr], // Use VPC CIDR instead
           description: 'MySQL outbound to RDS',
         },
       ],
@@ -416,8 +416,8 @@ export class SecureModules extends Construct {
           fromPort: 3306,
           toPort: 3306,
           protocol: 'tcp',
-          securityGroups: [lambdaSecurityGroup.id],
-          description: 'MySQL access from Lambda',
+          cidrBlocks: privateSubnetCidrs, // Use private subnet CIDRs
+          description: 'MySQL access from private subnets',
         },
       ],
       tags: {
