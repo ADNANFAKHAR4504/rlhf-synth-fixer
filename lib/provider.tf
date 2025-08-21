@@ -10,7 +10,7 @@ terraform {
     }
   }
 
-    backend "s3" {
+  backend "s3" {
     bucket       = "iac-rlhf-states-254123"
     key          = "iac-test-automations/lib/terraform.tfstate"
     region       = "us-west-2"
@@ -18,7 +18,7 @@ terraform {
     encrypt      = true
     # dynamodb_table = "terraform-locks"  # Optional but recommended for state locking
   }
-  
+
 }
 
 # Primary AWS provider for general resources

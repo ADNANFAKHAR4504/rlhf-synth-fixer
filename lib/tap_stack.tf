@@ -81,19 +81,19 @@ variable "ec2_instance_type" {
 variable "vpc_id" {
   description = "VPC ID to deploy resources in"
   type        = string
-  default     = ""  # Will be auto-detected if empty
+  default     = "" # Will be auto-detected if empty
 }
 
 variable "private_subnet_ids" {
   description = "List of private subnet IDs"
   type        = list(string)
-  default     = []  # Will be auto-detected if empty
+  default     = [] # Will be auto-detected if empty
 }
 
 variable "public_subnet_ids" {
   description = "List of public subnet IDs"
   type        = list(string)
-  default     = []  # Will be auto-detected if empty
+  default     = [] # Will be auto-detected if empty
 }
 
 variable "flow_logs_retention_days" {
@@ -138,11 +138,11 @@ locals {
   }
 
   name_prefix = "${var.project_name}-${var.environment}"
-  
+
   # VPC and subnet IDs
-  vpc_id = var.vpc_id != "" ? var.vpc_id : aws_vpc.main[0].id
+  vpc_id             = var.vpc_id != "" ? var.vpc_id : aws_vpc.main[0].id
   private_subnet_ids = length(var.private_subnet_ids) > 0 ? var.private_subnet_ids : aws_subnet.default_private[*].id
-  public_subnet_ids = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : aws_subnet.default_public[*].id
+  public_subnet_ids  = length(var.public_subnet_ids) > 0 ? var.public_subnet_ids : aws_subnet.default_public[*].id
 }
 
 # Data Sources
@@ -163,11 +163,11 @@ data "aws_availability_zones" "available" {
 # Create VPC if not provided
 resource "aws_vpc" "main" {
   count = var.vpc_id == "" ? 1 : 0
-  
+
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
   })
@@ -176,11 +176,11 @@ resource "aws_vpc" "main" {
 # Create default subnets if none exist
 resource "aws_subnet" "default_private" {
   count = length(var.private_subnet_ids) == 0 ? 2 : 0
-  
+
   vpc_id            = local.vpc_id
   cidr_block        = "10.0.${count.index + 1}.0/24"
   availability_zone = data.aws_availability_zones.available.names[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
   })
@@ -188,13 +188,13 @@ resource "aws_subnet" "default_private" {
 
 resource "aws_subnet" "default_public" {
   count = length(var.public_subnet_ids) == 0 ? 2 : 0
-  
+
   vpc_id            = local.vpc_id
   cidr_block        = "10.0.${count.index + 10}.0/24"
   availability_zone = data.aws_availability_zones.available.names[count.index]
-  
+
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
   })
@@ -203,9 +203,9 @@ resource "aws_subnet" "default_public" {
 # Internet Gateway for public subnets
 resource "aws_internet_gateway" "default" {
   count = length(var.public_subnet_ids) == 0 ? 1 : 0
-  
+
   vpc_id = local.vpc_id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-igw"
   })
@@ -214,14 +214,14 @@ resource "aws_internet_gateway" "default" {
 # Route table for public subnets
 resource "aws_route_table" "public" {
   count = length(var.public_subnet_ids) == 0 ? 1 : 0
-  
+
   vpc_id = local.vpc_id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.default[0].id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-rt"
   })
@@ -230,7 +230,7 @@ resource "aws_route_table" "public" {
 # Route table association for public subnets
 resource "aws_route_table_association" "public" {
   count = length(var.public_subnet_ids) == 0 ? 2 : 0
-  
+
   subnet_id      = aws_subnet.default_public[count.index].id
   route_table_id = aws_route_table.public[0].id
 }
@@ -905,7 +905,7 @@ resource "aws_cloudtrail" "main" {
     exclude_management_event_sources = []
 
     data_resource {
-      type   = "AWS::S3::Object"
+      type = "AWS::S3::Object"
       values = [
         "${aws_s3_bucket.app_data.arn}/*",
         "${aws_s3_bucket.cloudtrail.arn}/*"
