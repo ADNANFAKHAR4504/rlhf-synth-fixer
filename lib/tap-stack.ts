@@ -1,7 +1,5 @@
 /* eslint-disable prettier/prettier */
 
-
-
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -33,7 +31,7 @@ export class TapStack extends pulumi.ComponentResource {
       const provider = new aws.Provider(`${region}-provider`, { region });
       const prefix = `${name}-${region}`;
 
-      // Create VPC with DNS support
+      // VPC
       const vpc = new aws.ec2.Vpc(`${prefix}-vpc`, {
         cidrBlock: '10.0.0.0/16',
         enableDnsSupport: true,
@@ -46,7 +44,7 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.vpcs[region] = vpc;
 
-      // Create Internet Gateway
+      // IGW
       const igw = new aws.ec2.InternetGateway(`${prefix}-igw`, {
         vpcId: vpc.id,
         tags: {
@@ -57,10 +55,9 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.internetGateways[region] = igw;
 
-      // Create subnets across multiple AZs
+      // Subnets in 2 AZs
       const subnets: aws.ec2.Subnet[] = [];
       const azs = ['a', 'b'];
-      
       for (let i = 0; i < azs.length; i++) {
         const subnet = new aws.ec2.Subnet(`${prefix}-subnet-${azs[i]}`, {
           vpcId: vpc.id,
@@ -77,15 +74,13 @@ export class TapStack extends pulumi.ComponentResource {
       }
       this.subnets[region] = subnets;
 
-      // Create Route Table
+      // RouteTable
       const routeTable = new aws.ec2.RouteTable(`${prefix}-rt`, {
         vpcId: vpc.id,
-        routes: [
-          {
-            cidrBlock: '0.0.0.0/0',
-            gatewayId: igw.id,
-          },
-        ],
+        routes: [{
+          cidrBlock: '0.0.0.0/0',
+          gatewayId: igw.id,
+        }],
         tags: {
           ...tags,
           Environment: 'Production',
@@ -94,7 +89,7 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.routeTables[region] = routeTable;
 
-      // Associate route table with subnets
+      // Associate RouteTable
       subnets.forEach((subnet, index) => {
         new aws.ec2.RouteTableAssociation(`${prefix}-rta-${index}`, {
           subnetId: subnet.id,
@@ -102,34 +97,31 @@ export class TapStack extends pulumi.ComponentResource {
         }, { provider });
       });
 
-      // Security Group with restricted access
+      // SecurityGroup limiting ingress/egress
       const sg = new aws.ec2.SecurityGroup(`${prefix}-sg`, {
         vpcId: vpc.id,
         description: 'Secure security group with restricted access',
         ingress: [
           {
             protocol: 'tcp',
-            fromPort: 443,
-            toPort: 443,
-            cidrBlocks: ['10.0.0.0/16'], // Only VPC internal traffic
+            fromPort: 443, toPort: 443, 
+            cidrBlocks: ['10.0.0.0/16'],
             description: 'HTTPS from VPC',
           },
           {
             protocol: 'tcp',
-            fromPort: 22,
-            toPort: 22,
-            cidrBlocks: ['10.0.0.0/24'], // More restrictive for SSH
+            fromPort: 22, toPort: 22,
+            cidrBlocks: ['10.0.0.0/24'],
             description: 'SSH from admin subnet',
-          },
+          }
         ],
         egress: [
           {
             protocol: '-1',
-            fromPort: 0,
-            toPort: 0,
+            fromPort: 0, toPort: 0,
             cidrBlocks: ['0.0.0.0/0'],
             description: 'All outbound traffic',
-          },
+          }
         ],
         tags: {
           ...tags,
@@ -139,31 +131,26 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.securityGroups[region] = sg;
 
-      // KMS Customer Managed Key for encryption
+      // KMS Key with compliant key policy
       const kmsKey = new aws.kms.Key(`${prefix}-kms`, {
         description: `KMS Customer Managed Key for ${region}`,
         enableKeyRotation: true,
         deletionWindowInDays: 30,
-        policy: JSON.stringify({
+        policy: pulumi.all([aws.getCallerIdentityOutput()]).apply(([id]) => JSON.stringify({
           Version: '2012-10-17',
+          Id: 'key-default-1',
           Statement: [
             {
               Sid: 'Enable IAM User Permissions',
               Effect: 'Allow',
-              Principal: { AWS: '*' },
+              Principal: { 
+                AWS: `arn:aws:iam::${id.accountId}:root`
+              },
               Action: 'kms:*',
               Resource: '*',
-              Condition: {
-                StringEquals: {
-                  'kms:ViaService': [
-                    `s3.${region}.amazonaws.com`,
-                    `rds.${region}.amazonaws.com`,
-                  ],
-                },
-              },
-            },
-          ],
-        }),
+            }
+          ]
+        })),
         tags: {
           ...tags,
           Environment: 'Production',
@@ -172,23 +159,20 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.kmsKeys[region] = kmsKey;
 
-      // KMS Key Alias
       new aws.kms.Alias(`${prefix}-kms-alias`, {
         name: `alias/${prefix}-key`,
-        targetKeyId: kmsKey.keyId,
+        targetKeyId: kmsKey.id,
       }, { provider });
 
-      // IAM Role for API Gateway with least privilege
+      // IAM Role for API Gateway (least privilege)
       const apiGatewayRole = new aws.iam.Role(`${prefix}-apigateway-role`, {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: { Service: 'apigateway.amazonaws.com' },
-              Action: 'sts:AssumeRole',
-            },
-          ],
+          Statement: [{
+            Effect: 'Allow',
+            Principal: { Service: 'apigateway.amazonaws.com' },
+            Action: 'sts:AssumeRole',
+          }],
         }),
         tags: {
           ...tags,
@@ -197,7 +181,6 @@ export class TapStack extends pulumi.ComponentResource {
         },
       }, { provider });
 
-      // Attach minimal required policy for CloudWatch logging
       new aws.iam.RolePolicyAttachment(`${prefix}-apigateway-policy`, {
         role: apiGatewayRole.name,
         policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs',
@@ -205,27 +188,22 @@ export class TapStack extends pulumi.ComponentResource {
 
       this.iamRoles[region] = apiGatewayRole;
 
-      // VPC Endpoint for API Gateway - Fixed property name
+      // VPC Endpoint for API Gateway, restrict by policy
       const vpcEndpoint = new aws.ec2.VpcEndpoint(`${prefix}-apigw-vpce`, {
-        vpcId: vpc.id,
         serviceName: `com.amazonaws.${region}.execute-api`,
+        vpcId: vpc.id,
         vpcEndpointType: 'Interface',
         subnetIds: subnets.map(s => s.id),
         securityGroupIds: [sg.id],
         privateDnsEnabled: true,
-        // Fixed: use 'policy' instead of 'policyDocument'
         policy: JSON.stringify({
           Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: '*',
-              Action: [
-                'execute-api:Invoke',
-              ],
-              Resource: '*',
-            },
-          ],
+          Statement: [{
+            Effect: 'Allow',
+            Principal: '*',
+            Action: ['execute-api:Invoke'],
+            Resource: '*',
+          }]
         }),
         tags: {
           ...tags,
@@ -235,27 +213,25 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.vpcEndpoints[region] = vpcEndpoint;
 
-      // API Gateway restricted to VPC Endpoint - Fixed types array
+      // API Gateway, VPC endpoint restriction
       const restApi = new aws.apigateway.RestApi(`${prefix}-api`, {
         endpointConfiguration: {
-          types: 'PRIVATE', // Fixed: use string instead of array
+          types: 'PRIVATE',
           vpcEndpointIds: [vpcEndpoint.id],
         },
         policy: pulumi.all([vpcEndpoint.id]).apply(([vpceId]) => JSON.stringify({
           Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: '*',
-              Action: 'execute-api:Invoke',
-              Resource: 'arn:aws:execute-api:*:*:*',
-              Condition: {
-                StringEquals: {
-                  'aws:SourceVpce': vpceId,
-                },
-              },
-            },
-          ],
+          Statement: [{
+            Effect: 'Allow',
+            Principal: '*',
+            Action: 'execute-api:Invoke',
+            Resource: 'arn:aws:execute-api:*:*:*',
+            Condition: {
+              StringEquals: {
+                'aws:SourceVpce': vpceId,
+              }
+            }
+          }]
         })),
         tags: {
           ...tags,
@@ -265,7 +241,7 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.apiGateways[region] = restApi;
 
-      // CloudWatch Log Group for comprehensive logging
+      // CloudWatch Log Group
       const logGroup = new aws.cloudwatch.LogGroup(`${prefix}-apigw-logs`, {
         name: `/aws/apigateway/${prefix}`,
         retentionInDays: 90,
@@ -278,7 +254,7 @@ export class TapStack extends pulumi.ComponentResource {
       }, { provider });
       this.cloudWatchLogGroups[region] = logGroup;
 
-      // S3 Bucket for CloudTrail logs - Fixed by creating separate bucket resource
+      // S3 Bucket for CloudTrail logs
       const s3Bucket = new aws.s3.Bucket(`${prefix}-cloudtrail-bucket`, {
         bucket: `${prefix}-cloudtrail-bucket-${Date.now()}`.toLowerCase(),
         tags: {
@@ -288,20 +264,16 @@ export class TapStack extends pulumi.ComponentResource {
         },
       }, { provider });
 
-      // S3 Bucket Server Side Encryption - separate resource
-      new aws.s3.BucketServerSideEncryptionConfiguration(`${prefix}-bucket-encryption`, {
+      new aws.s3.BucketServerSideEncryptionConfigurationV2(`${prefix}-bucket-encryption`, {
         bucket: s3Bucket.id,
-        rules: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'aws:kms',
-              kmsMasterKeyId: kmsKey.arn,
-            },
-          },
-        ],
+        rules: [{ 
+          applyServerSideEncryptionByDefault: { 
+            sseAlgorithm: 'aws:kms',
+            kmsMasterKeyId: kmsKey.arn
+          }
+        }],
       }, { provider });
 
-      // Fixed: S3 Bucket Public Access Block - separate resource
       new aws.s3.BucketPublicAccessBlock(`${prefix}-bucket-pab`, {
         bucket: s3Bucket.id,
         blockPublicAcls: true,
@@ -312,7 +284,6 @@ export class TapStack extends pulumi.ComponentResource {
 
       this.s3Buckets[region] = s3Bucket;
 
-      // CloudTrail for security auditing
       new aws.cloudtrail.Trail(`${prefix}-cloudtrail`, {
         s3BucketName: s3Bucket.bucket,
         includeGlobalServiceEvents: region === 'us-east-1',
@@ -326,7 +297,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
       }, { provider });
 
-      // IAM Password Policy for credential rotation (only in us-east-1)
+      // Password Policy (only once per account, us-east-1)
       if (region === 'us-east-1') {
         new aws.iam.AccountPasswordPolicy('account-password-policy', {
           minimumPasswordLength: 14,
@@ -339,37 +310,85 @@ export class TapStack extends pulumi.ComponentResource {
           passwordReusePrevention: 5,
           maxPasswordAge: 90,
         }, { provider });
+
+        // AWS Config (Recorder and Delivery Channel) ONLY ONCE PER ACCOUNT
+        const configRole = new aws.iam.Role(`${prefix}-config-role`, {
+          assumeRolePolicy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [{
+              Effect: 'Allow',
+              Principal: { Service: 'config.amazonaws.com' },
+              Action: 'sts:AssumeRole',
+            }],
+          }),
+          tags: {
+            ...tags,
+            Environment: 'Production',
+            Name: `${prefix}-config-role`,
+          },
+        }, { provider });
+
+        new aws.iam.RolePolicyAttachment(`${prefix}-config-role-policy`, {
+          role: configRole.name,
+          policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
+        }, { provider });
+
+        // S3 Bucket for Config
+        const configBucket = new aws.s3.Bucket(`${prefix}-config-bucket`, {
+          bucket: `${prefix}-config-bucket-${Date.now()}`.toLowerCase(),
+          tags: {
+            ...tags,
+            Environment: 'Production',
+            Name: `${prefix}-config-bucket`,
+          },
+        }, { provider });
+
+        new aws.s3.BucketServerSideEncryptionConfigurationV2(`${prefix}-config-bucket-encryption`, {
+          bucket: configBucket.id,
+          rules: [{
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: kmsKey.arn,
+            },
+          }],
+        }, { provider });
+
+        new aws.s3.BucketPublicAccessBlock(`${prefix}-config-bucket-pab`, {
+          bucket: configBucket.id,
+          blockPublicAcls: true,
+          blockPublicPolicy: true,
+          ignorePublicAcls: true,
+          restrictPublicBuckets: true,
+        }, { provider });
+
+        new aws.cfg.Recorder(`${prefix}-config-recorder`, {
+          name: `${prefix}-recorder`,
+          roleArn: configRole.arn,
+          recordingGroup: {
+            allSupported: true,
+            includeGlobalResourceTypes: true,
+          },
+        }, { provider });
+
+        new aws.cfg.DeliveryChannel(`${prefix}-config-delivery`, {
+          name: `${prefix}-delivery`,
+          s3BucketName: configBucket.bucket,
+        }, { provider });
       }
-
-      // Config Rule for automatic compliance remediation
-      new aws.cfg.Recorder(`${prefix}-config-recorder`, {
-        name: `${prefix}-recorder`,
-        roleArn: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig`,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: region === 'us-east-1',
-        },
-      }, { provider });
-
-      new aws.cfg.DeliveryChannel(`${prefix}-config-delivery`, {
-        name: `${prefix}-delivery`,
-        s3BucketName: s3Bucket.bucket,
-      }, { provider });
-
-
-      this.registerOutputs({
-        vpcs: this.vpcs,
-        securityGroups: this.securityGroups,
-        kmsKeys: this.kmsKeys,
-        apiGateways: this.apiGateways,
-        vpcEndpoints: this.vpcEndpoints,
-        iamRoles: this.iamRoles,
-        cloudWatchLogGroups: this.cloudWatchLogGroups,
-        subnets: this.subnets,
-        routeTables: this.routeTables,
-        internetGateways: this.internetGateways,
-        s3Buckets: this.s3Buckets,
-      });
     }
+
+    this.registerOutputs({
+      vpcs: this.vpcs,
+      securityGroups: this.securityGroups,
+      kmsKeys: this.kmsKeys,
+      apiGateways: this.apiGateways,
+      vpcEndpoints: this.vpcEndpoints,
+      iamRoles: this.iamRoles,
+      cloudWatchLogGroups: this.cloudWatchLogGroups,
+      subnets: this.subnets,
+      routeTables: this.routeTables,
+      internetGateways: this.internetGateways,
+      s3Buckets: this.s3Buckets,
+    });
   }
 }
