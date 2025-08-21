@@ -403,7 +403,7 @@ resource "aws_cloudwatch_dashboard" "secure_prod" {
           region = var.aws_region
           title  = "EC2 CPU Utilization"
         }
-      }
+      },
       {
         type    = "metric"
         x       = 12
@@ -419,7 +419,7 @@ resource "aws_cloudwatch_dashboard" "secure_prod" {
           region = var.aws_region
           title  = "RDS CPU Utilization"
         }
-      }
+      },
       {
         type    = "metric"
         x       = 0
