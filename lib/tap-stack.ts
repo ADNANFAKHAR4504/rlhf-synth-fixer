@@ -734,7 +734,7 @@ export class TapStack extends pulumi.ComponentResource {
       const logGroups = createApplicationLogGroups(`${name}-logs-${region}`, {
         name: `${name}-${region}`,
         retentionInDays: 90,
-        kmsKeyId: appKms.keyArn,
+        // kmsKeyId: appKms.keyArn,
         tags: this.tags,
       });
 
@@ -742,7 +742,7 @@ export class TapStack extends pulumi.ComponentResource {
       const awsConfig = createAwsConfig(`${name}-config-${region}`, {
         name: `${name}-config-${region}`,
         s3BucketName: configBucket.bucketId,
-        s3KmsKeyArn: appKms.keyArn,
+        // s3KmsKeyArn: appKms.keyArn,
         tags: this.tags,
       });
 
