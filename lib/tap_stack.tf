@@ -8,13 +8,9 @@ variable "aws_region" {
 }
 # main.tf
 
-# Data sources for availability zones
-data "aws_availability_zones" "available" {
-  state = "available"
-  filter {
-    name   = "zone-name"
-    values = ["us-west-2a", "us-west-2b", "us-west-2c"]
-  }
+# Local values for availability zones
+locals {
+  availability_zones = ["us-east-2a", "us-east-2b", "us-east-2c"]
 }
 
 # Data source for latest Amazon Linux 2 AMI
@@ -62,7 +58,7 @@ resource "aws_subnet" "prod_public_subnets" {
   count                   = 3
   vpc_id                  = aws_vpc.prod_vpc.id
   cidr_block              = "10.0.${count.index + 1}.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  availability_zone       = local.availability_zones[count.index]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
@@ -76,7 +72,7 @@ resource "aws_subnet" "prod_private_subnets" {
   count             = 3
   vpc_id            = aws_vpc.prod_vpc.id
   cidr_block        = "10.0.${count.index + 10}.0/24"
-  availability_zone = data.aws_availability_zones.available.names[count.index]
+  availability_zone = local.availability_zones[count.index]
 
   tags = merge(local.common_tags, {
     Name = "prod-private-subnet-${count.index + 1}"
@@ -873,7 +869,7 @@ resource "aws_route53_health_check" "prod_health_check" {
   resource_path                   = "/"
   failure_threshold               = 3
   request_interval                = 30
-  cloudwatch_alarm_region         = "us-west-2"
+  cloudwatch_alarm_region         = var.aws_region
   cloudwatch_alarm_name           = "prod-health-check-alarm"
   insufficient_data_health_status = "Unhealthy"
 
