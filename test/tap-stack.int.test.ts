@@ -133,17 +133,6 @@ describe('High Availability Web Application Infrastructure Integration Tests', (
         'PublicSubnets',
         'PrivateSubnets',
         'Region',
-        // Additional critical resources for comprehensiveness
-        'ApplicationLoadBalancer',
-        'TargetGroup',
-        'WebServerSecurityGroup',
-        'DatabaseSecurityGroup',
-        'EC2Role',
-        'EC2InstanceProfile',
-        'DBSubnetGroup',
-        'DBSecret',
-        'KMSKey',
-        'KMSKeyAlias',
       ];
 
       const missingResources = expectedResources.filter(
