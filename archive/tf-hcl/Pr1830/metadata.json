@@ -18,9 +18,15 @@
   "training_quality": 8,
   "aws_services": [
     "S3",
-    "VPC", 
+    "VPC",
     "Security Groups",
     "IAM",
     "Random"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mianadnanfakharhayyat",
+  "dockerS3Location": ""
 }
