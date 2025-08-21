@@ -1,15 +1,15 @@
-Hey team, we’ve got an important task ahead of us. We need to set up a secure infrastructure using AWS CloudFormation. The goal is to make sure everything is scalable, fault-tolerant, and follows best practices for security.
+Hey folks, we’ve got a pretty important job to tackle: let’s build out a secure AWS infrastructure using CloudFormation. The big picture here is to make sure our setup is not just scalable and resilient, but also locked down tight from a security perspective.
 
-First, everything needs to be deployed in the `us-west-2` region. We should stick to a consistent naming convention like `{team}-{environment}-{component}` so it’s easier to manage and identify resources later.
+Everything should land in the `us-west-2` region, and let’s keep our resource names consistent—something like `{team}-{environment}-{component}` so it’s easy to spot what belongs to who and where.
 
-We need to ensure logging is enabled for all AWS services we use. This will help us track what’s happening in the system and catch any suspicious activity. For data security, everything stored at rest must be encrypted using AWS KMS. This includes S3 buckets, RDS databases, and any other storage we use. There can’t be any exceptions here.
+Logging needs to be switched on everywhere. We want to see what’s happening across all our AWS services, so if anything weird pops up, we’ll catch it early. And don’t forget: any data at rest—whether it’s in S3, RDS, or anywhere else—has to be encrypted with AWS KMS. No exceptions.
 
-When it comes to permissions, we should avoid static access keys. Instead, we’ll use IAM roles to grant services the access they need. This will reduce the risk of credential leaks and improve security.
+We’re steering clear of static access keys. Instead, let’s use IAM roles to give services the permissions they need. That way, we’re not leaving any credentials lying around that could get us in trouble.
 
-For EC2 instances, we need to make sure they’re part of an Auto Scaling group. This will help us handle traffic spikes and maintain high availability without manual intervention. We also need to protect the application from common web threats like SQL Injection and Cross-Site Scripting (XSS). AWS WAF is a great tool for this, so let’s make sure it’s part of the setup.
+For EC2, let’s make sure we’re using Auto Scaling groups. That’ll help us handle traffic spikes and keep things running smoothly without babysitting servers. And since we want to keep the app safe from stuff like SQL injection and XSS, AWS WAF should be in the mix too.
 
-Finally, we need to ensure everything complies with the CIS AWS Foundations Benchmark version 1.3.0. This will help us meet industry-standard security requirements and avoid any compliance headaches.
+On top of all that, we need to make sure we’re ticking all the boxes for the CIS AWS Foundations Benchmark (version 1.3.0). That’ll keep us in line with industry standards and save us headaches down the road.
 
-We’re looking for a CloudFormation template called `SecureInfraStack` that includes all of this. It should deploy without errors in the `us-west-2` region and allow for configurable parameters like environment suffix and team name. The template should also export key resource identifiers like the VPC ID, Auto Scaling Group name, and WAF ARN so we can integrate it with other stacks. It’s important that the stack passes all the provided security constraints and test cases.
+So, what we’re after is a CloudFormation template—let’s call it `SecureInfraStack`—that pulls all this together. It should work out of the box in `us-west-2`, let us set things like the environment suffix and team name, and export the important resource IDs (like VPC, ASG, WAF ARN) so we can hook it up to other stacks if we need to. And of course, it’s got to pass all the security checks and tests we throw at it.
 
-The goal is to have a production-ready infrastructure that’s secure, scalable, and fault-tolerant. Let’s make sure it’s solid and meets all the best practices outlined.
+Bottom line: we want a production-ready setup that’s secure, scalable, and tough enough for anything we throw at it. Let’s make sure it’s solid and follows all the best practices we’ve talked
