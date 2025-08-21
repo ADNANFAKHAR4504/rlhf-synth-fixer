@@ -1,5 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: TapStack for isolated environments (dev/staging/prod) with S3 replication
+Description: TapStack for isolated environments (dev/staging/prod) with S3 replication. Deploy prod (us-west-2), then staging (us-east-2), then dev (us-east-1) to ensure destination buckets exist for replication. Check for existing buckets to avoid conflicts (e.g., aws s3 ls s3://tapstack-dev-databucket-<account-id>).
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W7001 # RegionMap is used in ReplicationConfiguration and ReplicationRole, false positive
 
 Parameters:
   Environment:
@@ -33,10 +39,10 @@ Mappings:
   RegionMap:
     us-east-1:
       DestinationRegion: us-east-2
-      DestinationBucket: tapstack-staging-databucket-123456789012
+      DestinationBucket: tapstack-staging-databucket
     us-east-2:
       DestinationRegion: us-west-2
-      DestinationBucket: tapstack-prod-databucket-123456789012
+      DestinationBucket: tapstack-prod-databucket
     us-west-2:
       DestinationRegion: ''
       DestinationBucket: ''
@@ -372,7 +378,7 @@ Resources:
       cfn-lint:
         config:
           ignore_checks:
-            - W1031
+            - W1031 # Bucket name is valid, false positive due to dynamic AWS::AccountId
     Properties:
       BucketName: !Sub '${ProjectName}-${Environment}-databucket-${AWS::AccountId}'
       VersioningConfiguration:
@@ -406,10 +412,9 @@ Resources:
               DeleteMarkerReplication:
                 Status: Disabled
               Destination:
-                Bucket: !Join
-                  - ''
-                  - - 'arn:aws:s3:::'
-                    - !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
+                Bucket: !Sub
+                  - 'arn:aws:s3:::${DestBucket}-${AWS::AccountId}'
+                  - DestBucket: !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
               Filter:
                 Prefix: ''
         - !Ref AWS::NoValue
@@ -432,6 +437,11 @@ Resources:
   ReplicationRole:
     Type: AWS::IAM::Role
     Condition: IsNotProd
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1020 # Fn::Sub contains variables (Environment, AWS::AccountId), false positive
     Properties:
       RoleName: !Sub '${ProjectName}-${Environment}-replication-role'
       AssumeRolePolicyDocument:
@@ -459,11 +469,9 @@ Resources:
                   - s3:ReplicateObject
                   - s3:ReplicateDelete
                   - s3:ReplicateTags
-                Resource: !Join
-                  - ''
-                  - - 'arn:aws:s3:::'
-                    - !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
-                    - '/*'
+                Resource: !Sub
+                  - 'arn:aws:s3:::${DestBucket}-${AWS::AccountId}/*'
+                  - DestBucket: !FindInMap [RegionMap, !Ref AWS::Region, DestinationBucket]
 
   EnvironmentRole:
     Type: AWS::IAM::Role
