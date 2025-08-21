@@ -52,6 +52,26 @@ if [ "$PLATFORM" = "cdk" ]; then
   npm run cdk:deploy
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
+  # Preflight for CDKTF Go: ensure local bindings and Go deps before deploy
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
+    if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
+      echo "Running cdktf get to generate .gen..."
+      npm run cdktf:get || npx --yes cdktf get
+    fi
+    if [ ! -d ".gen/aws" ]; then
+      echo "❌ .gen/aws missing after cdktf get; aborting"
+      exit 1
+    fi
+    # Ensure CDKTF core deps are present to satisfy .gen imports
+    export GOPROXY=${GOPROXY:-direct}
+    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
+    go clean -modcache || true
+    go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
+    go mod tidy
+  fi
   npm run cdktf:deploy
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
