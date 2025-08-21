@@ -7,7 +7,10 @@ jest.mock("@pulumi/pulumi", () => ({
     AssetArchive: jest.fn().mockImplementation(() => ({})),
     StringAsset: jest.fn().mockImplementation(() => ({}))
   },
-  interpolate: jest.fn().mockImplementation((template) => `interpolated-${Date.now()}`)
+  interpolate: jest.fn().mockImplementation((template) => `interpolated-${Date.now()}`),
+  all: jest.fn().mockImplementation((resources) => ({
+    apply: jest.fn().mockImplementation((fn) => fn(resources.map(r => r.arn)))
+  }))
 }));
 
 jest.mock("@pulumi/aws", () => ({
