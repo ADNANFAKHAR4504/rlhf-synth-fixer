@@ -603,7 +603,6 @@
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Snapshot",
             "UpdateReplacePolicy": "Snapshot",
-            "DependsOn": "DBMasterSecret",
             "Properties": {
                 "DBInstanceIdentifier": {
                     "Fn::Sub": "rds-${ProjectName}-${Environment}"
