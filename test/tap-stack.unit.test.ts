@@ -208,20 +208,6 @@ describe('TapStack', () => {
         })
       );
 
-      expect(RdsModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'rds',
-        expect.objectContaining({
-          namePrefix: 'MyApp-',
-          vpcId: 'vpc-12345',
-          subnetIds: ['subnet-private-1', 'subnet-private-2', 'subnet-private-3'],
-          securityGroupIds: ['sg-rds-12345'],
-          tags: expect.objectContaining({
-            Project: 'MyApp'
-          })
-        })
-      );
-
       expect(AlbModule).toHaveBeenCalledWith(
         expect.anything(),
         'alb',

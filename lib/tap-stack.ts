@@ -4,19 +4,19 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { DataAwsAvailabilityZones} from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { AutoscalingAttachment } from '@cdktf/provider-aws/lib/autoscaling-attachment';
 import {
   VpcModule,
   S3Module,
-  RdsModule,
   Ec2Module,
   AlbModule,
   Route53Module,
   CloudWatchModule,
   IamModule,
   SecurityGroupModule,
-} from "../lib/modules";
+} from '../lib/modules';
+import { TerraformOutput } from 'cdktf';
 
 // ? Import your stacks here
 // import { MyStack } from './my-stack';
@@ -53,60 +53,60 @@ export class TapStack extends TerraformStack {
     });
 
     // Common configuration
-    const namePrefix = "MyApp-";
+    const namePrefix = 'MyApp-';
     const projectTags = {
-      Project: "MyApp",
+      Project: 'MyApp',
     };
 
     // Get availability zones
-    const azs = new DataAwsAvailabilityZones(this, "azs", {
-      state: "available",
+    const azs = new DataAwsAvailabilityZones(this, 'azs', {
+      state: 'available',
     });
 
     // Create VPC with public and private subnets across 3 AZs
-    const vpcModule = new VpcModule(this, "vpc", {
+    const vpcModule = new VpcModule(this, 'vpc', {
       namePrefix,
       tags: projectTags,
-      cidrBlock: "10.0.0.0/16",
-      availabilityZones: [
-        azs.names[0],
-        azs.names[1],
-        azs.names[2],
-      ],
+      cidrBlock: '10.0.0.0/16',
+      availabilityZones: [azs.names[0], azs.names[1], azs.names[2]],
     });
 
     // Create S3 bucket
-    const s3Module = new S3Module(this, "s3", {
+    const s3Module = new S3Module(this, 's3', {
       namePrefix,
       tags: projectTags,
       bucketName: `${namePrefix.toLowerCase()}app-bucket-${Date.now()}`,
     });
 
     // Create Security Groups
-    const securityGroupModule = new SecurityGroupModule(this, "security-groups", {
-      namePrefix,
-      tags: projectTags,
-      vpcId: vpcModule.vpc.id,
-    });
+    const securityGroupModule = new SecurityGroupModule(
+      this,
+      'security-groups',
+      {
+        namePrefix,
+        tags: projectTags,
+        vpcId: vpcModule.vpc.id,
+      }
+    );
 
     // Create IAM roles and instance profile
-    const iamModule = new IamModule(this, "iam", {
+    const iamModule = new IamModule(this, 'iam', {
       namePrefix,
       tags: projectTags,
       s3BucketArn: s3Module.bucket.arn,
     });
 
     // Create RDS database
-    const rdsModule = new RdsModule(this, "rds", {
-      namePrefix,
-      tags: projectTags,
-      vpcId: vpcModule.vpc.id,
-      subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
-      securityGroupIds: [securityGroupModule.rdsSecurityGroup.id],
-    });
+    // const rdsModule = new RdsModule(this, 'rds', {
+    //   namePrefix,
+    //   tags: projectTags,
+    //   vpcId: vpcModule.vpc.id,
+    //   subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
+    //   securityGroupIds: [securityGroupModule.rdsSecurityGroup.id],
+    // });
 
     // Create Application Load Balancer
-    const albModule = new AlbModule(this, "alb", {
+    const albModule = new AlbModule(this, 'alb', {
       namePrefix,
       tags: projectTags,
       vpcId: vpcModule.vpc.id,
@@ -115,7 +115,7 @@ export class TapStack extends TerraformStack {
     });
 
     // Create EC2 instances with Auto Scaling
-    const ec2Module = new Ec2Module(this, "ec2", {
+    const ec2Module = new Ec2Module(this, 'ec2', {
       namePrefix,
       tags: projectTags,
       vpcId: vpcModule.vpc.id,
@@ -125,22 +125,22 @@ export class TapStack extends TerraformStack {
     });
 
     // Attach Auto Scaling Group to Load Balancer Target Group
-    new AutoscalingAttachment(this, "asg-attachment", {
+    new AutoscalingAttachment(this, 'asg-attachment', {
       autoscalingGroupName: ec2Module.autoScalingGroup.id,
       lbTargetGroupArn: albModule.targetGroup.arn,
     });
 
     // Create Route53 hosted zone and record
-    const route53Module = new Route53Module(this, "route53", {
+    const route53Module = new Route53Module(this, 'route53', {
       namePrefix,
       tags: projectTags,
-      domainName: "myapp.example.com",
+      domainName: 'myapp.example.com',
       albDnsName: albModule.loadBalancer.dnsName,
       albZoneId: albModule.loadBalancer.zoneId,
     });
 
     // Create CloudWatch log group
-    const cloudWatchModule = new CloudWatchModule(this, "cloudwatch", {
+    const cloudWatchModule = new CloudWatchModule(this, 'cloudwatch', {
       namePrefix,
       tags: projectTags,
       logGroupName: `${namePrefix}application-logs`,
@@ -162,5 +162,112 @@ export class TapStack extends TerraformStack {
     // ? Add your stack instantiations here
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
+    // VPC Outputs
+    new TerraformOutput(this, 'vpc-id', {
+      value: vpcModule.vpc.id,
+      description: 'ID of the VPC',
+    });
+
+    new TerraformOutput(this, 'public-subnet-ids', {
+      value: vpcModule.publicSubnets.map(subnet => subnet.id),
+      description: 'IDs of the public subnets',
+    });
+
+    new TerraformOutput(this, 'private-subnet-ids', {
+      value: vpcModule.privateSubnets.map(subnet => subnet.id),
+      description: 'IDs of the private subnets',
+    });
+
+    // S3 Outputs
+    new TerraformOutput(this, 's3-bucket-name', {
+      value: s3Module.bucket.bucket,
+      description: 'Name of the S3 bucket',
+    });
+
+    new TerraformOutput(this, 's3-bucket-arn', {
+      value: s3Module.bucket.arn,
+      description: 'ARN of the S3 bucket',
+    });
+
+    // Security Group Outputs
+    new TerraformOutput(this, 'alb-security-group-id', {
+      value: securityGroupModule.albSecurityGroup.id,
+      description: 'ID of the ALB Security Group',
+    });
+
+    new TerraformOutput(this, 'ec2-security-group-id', {
+      value: securityGroupModule.ec2SecurityGroup.id,
+      description: 'ID of the EC2 Security Group',
+    });
+
+    new TerraformOutput(this, 'rds-security-group-id', {
+      value: securityGroupModule.rdsSecurityGroup.id,
+      description: 'ID of the RDS Security Group',
+    });
+
+    // IAM Outputs
+    new TerraformOutput(this, 'instance-profile-name', {
+      value: iamModule.instanceProfile.name,
+      description: 'Name of the EC2 Instance Profile',
+    });
+    // ALB Outputs
+    new TerraformOutput(this, 'load-balancer-dns', {
+      value: albModule.loadBalancer.dnsName,
+      description: 'DNS name of the Application Load Balancer',
+    });
+
+    new TerraformOutput(this, 'load-balancer-zone-id', {
+      value: albModule.loadBalancer.zoneId,
+      description: 'Zone ID of the Application Load Balancer',
+    });
+
+    new TerraformOutput(this, 'load-balancer-arn', {
+      value: albModule.loadBalancer.arn,
+      description: 'ARN of the Application Load Balancer',
+    });
+
+    new TerraformOutput(this, 'target-group-arn', {
+      value: albModule.targetGroup.arn,
+      description: 'ARN of the Target Group',
+    });
+
+    // EC2 Auto Scaling Outputs
+    new TerraformOutput(this, 'auto-scaling-group-name', {
+      value: ec2Module.autoScalingGroup.name,
+      description: 'Name of the Auto Scaling Group',
+    });
+
+    new TerraformOutput(this, 'launch-template-id', {
+      value: ec2Module.launchTemplate.id,
+      description: 'ID of the Launch Template',
+    });
+
+    // Route53 Outputs
+    new TerraformOutput(this, 'hosted-zone-id', {
+      value: route53Module.hostedZone.zoneId,
+      description: 'ID of the Route53 Hosted Zone',
+    });
+
+    new TerraformOutput(this, 'domain-name', {
+      value: route53Module.record.name,
+      description: 'Domain name configured in Route53',
+    });
+
+    // CloudWatch Outputs
+    new TerraformOutput(this, 'log-group-name', {
+      value: cloudWatchModule.logGroup.name,
+      description: 'Name of the CloudWatch Log Group',
+    });
+
+    new TerraformOutput(this, 'log-group-arn', {
+      value: cloudWatchModule.logGroup.arn,
+      description: 'ARN of the CloudWatch Log Group',
+    });
+
+    // Availability Zones Output
+    new TerraformOutput(this, 'availability-zones', {
+      value: [azs.names[0], azs.names[1], azs.names[2]],
+      description: 'Availability zones used for the infrastructure',
+    });
   }
 }

@@ -1,4 +1,4 @@
-import { Construct } from "constructs";
+import { Construct } from 'constructs';
 import {
   vpc,
   subnet,
@@ -21,10 +21,10 @@ import {
   route53Zone,
   route53Record,
   cloudwatchLogGroup,
-  dataAwsAmi
-} from "@cdktf/provider-aws";
-import { DbSubnetGroup } from "@cdktf/provider-aws/lib/db-subnet-group";
-import { DbInstance } from "@cdktf/provider-aws/lib/db-instance";
+  dataAwsAmi,
+} from '@cdktf/provider-aws';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 export interface BaseModuleProps {
   namePrefix: string;
   tags: { [key: string]: string };
@@ -47,7 +47,7 @@ export class VpcModule extends Construct {
     super(scope, id);
 
     // Create VPC
-    this.vpc = new vpc.Vpc(this, "vpc", {
+    this.vpc = new vpc.Vpc(this, 'vpc', {
       cidrBlock: props.cidrBlock,
       enableDnsHostnames: true,
       enableDnsSupport: true,
@@ -58,7 +58,7 @@ export class VpcModule extends Construct {
     });
 
     // Create Internet Gateway
-    this.internetGateway = new internetGateway.InternetGateway(this, "igw", {
+    this.internetGateway = new internetGateway.InternetGateway(this, 'igw', {
       vpcId: this.vpc.id,
       tags: {
         Name: `${props.namePrefix}igw`,
@@ -75,7 +75,7 @@ export class VpcModule extends Construct {
         mapPublicIpOnLaunch: true,
         tags: {
           Name: `${props.namePrefix}public-subnet-${index + 1}`,
-          Type: "Public",
+          Type: 'Public',
           ...props.tags,
         },
       });
@@ -89,15 +89,15 @@ export class VpcModule extends Construct {
         availabilityZone: az,
         tags: {
           Name: `${props.namePrefix}private-subnet-${index + 1}`,
-          Type: "Private",
+          Type: 'Private',
           ...props.tags,
         },
       });
     });
 
     // Create EIP for NAT Gateway
-    this.natEip = new eip.Eip(this, "nat-eip", {
-      domain: "vpc",
+    this.natEip = new eip.Eip(this, 'nat-eip', {
+      domain: 'vpc',
       tags: {
         Name: `${props.namePrefix}nat-eip`,
         ...props.tags,
@@ -105,7 +105,7 @@ export class VpcModule extends Construct {
     });
 
     // Create NAT Gateway in first public subnet
-    this.natGateway = new natGateway.NatGateway(this, "nat-gateway", {
+    this.natGateway = new natGateway.NatGateway(this, 'nat-gateway', {
       allocationId: this.natEip.id,
       subnetId: this.publicSubnets[0].id,
       tags: {
@@ -115,7 +115,7 @@ export class VpcModule extends Construct {
     });
 
     // Create route table for public subnets
-    const publicRouteTable = new routeTable.RouteTable(this, "public-rt", {
+    const publicRouteTable = new routeTable.RouteTable(this, 'public-rt', {
       vpcId: this.vpc.id,
       tags: {
         Name: `${props.namePrefix}public-rt`,
@@ -124,22 +124,26 @@ export class VpcModule extends Construct {
     });
 
     // Route to Internet Gateway
-    new route.Route(this, "public-route", {
+    new route.Route(this, 'public-route', {
       routeTableId: publicRouteTable.id,
-      destinationCidrBlock: "0.0.0.0/0",
+      destinationCidrBlock: '0.0.0.0/0',
       gatewayId: this.internetGateway.id,
     });
 
     // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
-      new routeTableAssociation.RouteTableAssociation(this, `public-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
+      new routeTableAssociation.RouteTableAssociation(
+        this,
+        `public-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        }
+      );
     });
 
     // Create route table for private subnets
-    const privateRouteTable = new routeTable.RouteTable(this, "private-rt", {
+    const privateRouteTable = new routeTable.RouteTable(this, 'private-rt', {
       vpcId: this.vpc.id,
       tags: {
         Name: `${props.namePrefix}private-rt`,
@@ -148,18 +152,22 @@ export class VpcModule extends Construct {
     });
 
     // Route to NAT Gateway
-    new route.Route(this, "private-route", {
+    new route.Route(this, 'private-route', {
       routeTableId: privateRouteTable.id,
-      destinationCidrBlock: "0.0.0.0/0",
+      destinationCidrBlock: '0.0.0.0/0',
       natGatewayId: this.natGateway.id,
     });
 
     // Associate private subnets with private route table
     this.privateSubnets.forEach((subnet, index) => {
-      new routeTableAssociation.RouteTableAssociation(this, `private-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: privateRouteTable.id,
-      });
+      new routeTableAssociation.RouteTableAssociation(
+        this,
+        `private-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        }
+      );
     });
   }
 }
@@ -174,7 +182,7 @@ export class S3Module extends Construct {
   constructor(scope: Construct, id: string, props: S3ModuleProps) {
     super(scope, id);
 
-    this.bucket = new s3Bucket.S3Bucket(this, "bucket", {
+    this.bucket = new s3Bucket.S3Bucket(this, 'bucket', {
       bucket: props.bucketName,
       tags: props.tags,
     });
@@ -194,7 +202,7 @@ export class RdsModule extends Construct {
   constructor(scope: Construct, id: string, props: RdsModuleProps) {
     super(scope, id);
 
-    this.subnetGroup = new DbSubnetGroup(this, "subnet-group", {
+    this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
       name: `${props.namePrefix}db-subnet-group`,
       subnetIds: props.subnetIds,
       tags: {
@@ -203,16 +211,16 @@ export class RdsModule extends Construct {
       },
     });
 
-    this.instance = new DbInstance(this, "instance", {
+    this.instance = new DbInstance(this, 'instance', {
       identifier: `${props.namePrefix}database`,
-      engine: "mysql",
-      engineVersion: "8.0",
-      instanceClass: "db.t3.micro",
+      engine: 'mysql',
+      engineVersion: '8.0',
+      instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
-      storageType: "gp2",
-      dbName: "myappdb",
-      username: "admin",
-      password: "changeme123!",
+      storageType: 'gp2',
+      dbName: 'myappdb',
+      username: 'admin',
+      password: 'changeme123!',
       vpcSecurityGroupIds: props.securityGroupIds,
       dbSubnetGroupName: this.subnetGroup.name,
       skipFinalSnapshot: true,
@@ -239,44 +247,50 @@ export class Ec2Module extends Construct {
     super(scope, id);
 
     // Get latest Amazon Linux 2 AMI
-    const ami = new dataAwsAmi.DataAwsAmi(this, "amazon-linux", {
+    const ami = new dataAwsAmi.DataAwsAmi(this, 'amazon-linux', {
       mostRecent: true,
-      owners: ["amazon"],
+      owners: ['amazon'],
       filter: [
         {
-          name: "name",
-          values: ["amzn2-ami-hvm-*-x86_64-gp2"],
+          name: 'name',
+          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
         },
       ],
     });
 
-    this.launchTemplate = new launchTemplate.LaunchTemplate(this, "launch-template", {
-      name: `${props.namePrefix}launch-template`,
-      imageId: ami.id,
-      instanceType: "t3.micro",
-      vpcSecurityGroupIds: props.securityGroupIds,
-      iamInstanceProfile: {
-        name: props.iamInstanceProfile,
-      },
-      userData: Buffer.from(`#!/bin/bash
+    this.launchTemplate = new launchTemplate.LaunchTemplate(
+      this,
+      'launch-template',
+      {
+        name: `${props.namePrefix}launch-template`,
+        imageId: ami.id,
+        instanceType: 't3.micro',
+        vpcSecurityGroupIds: props.securityGroupIds,
+        iamInstanceProfile: {
+          name: props.iamInstanceProfile,
+        },
+        userData: Buffer.from(
+          `#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 echo "<h1>Hello from ${props.namePrefix}!</h1>" > /var/www/html/index.html
-      `).toString('base64'),
-      tagSpecifications: [
-        {
-          resourceType: "instance",
-          tags: {
-            Name: `${props.namePrefix}instance`,
-            ...props.tags,
+      `
+        ).toString('base64'),
+        tagSpecifications: [
+          {
+            resourceType: 'instance',
+            tags: {
+              Name: `${props.namePrefix}instance`,
+              ...props.tags,
+            },
           },
-        },
-      ],
-    });
+        ],
+      }
+    );
 
-    this.autoScalingGroup = new autoscalingGroup.AutoscalingGroup(this, "asg", {
+    this.autoScalingGroup = new autoscalingGroup.AutoscalingGroup(this, 'asg', {
       name: `${props.namePrefix}asg`,
       vpcZoneIdentifier: props.subnetIds,
       minSize: 2,
@@ -284,11 +298,11 @@ echo "<h1>Hello from ${props.namePrefix}!</h1>" > /var/www/html/index.html
       desiredCapacity: 3,
       launchTemplate: {
         id: this.launchTemplate.id,
-        version: "$Latest",
+        version: '$Latest',
       },
       tag: [
         {
-          key: "Name",
+          key: 'Name',
           value: `${props.namePrefix}asg`,
           propagateAtLaunch: false,
         },
@@ -316,9 +330,9 @@ export class AlbModule extends Construct {
   constructor(scope: Construct, id: string, props: AlbModuleProps) {
     super(scope, id);
 
-    this.loadBalancer = new lb.Lb(this, "alb", {
+    this.loadBalancer = new lb.Lb(this, 'alb', {
       name: `${props.namePrefix}alb`,
-      loadBalancerType: "application",
+      loadBalancerType: 'application',
       subnets: props.subnetIds,
       securityGroups: props.securityGroupIds,
       tags: {
@@ -327,15 +341,15 @@ export class AlbModule extends Construct {
       },
     });
 
-    this.targetGroup = new lbTargetGroup.LbTargetGroup(this, "target-group", {
+    this.targetGroup = new lbTargetGroup.LbTargetGroup(this, 'target-group', {
       name: `${props.namePrefix}tg`,
       port: 80,
-      protocol: "HTTP",
+      protocol: 'HTTP',
       vpcId: props.vpcId,
       healthCheck: {
         enabled: true,
-        path: "/",
-        protocol: "HTTP",
+        path: '/',
+        protocol: 'HTTP',
         healthyThreshold: 2,
         unhealthyThreshold: 2,
         timeout: 5,
@@ -347,13 +361,13 @@ export class AlbModule extends Construct {
       },
     });
 
-    this.listener = new lbListener.LbListener(this, "listener", {
+    this.listener = new lbListener.LbListener(this, 'listener', {
       loadBalancerArn: this.loadBalancer.arn,
       port: 80,
-      protocol: "HTTP",
+      protocol: 'HTTP',
       defaultAction: [
         {
-          type: "forward",
+          type: 'forward',
           targetGroupArn: this.targetGroup.arn,
         },
       ],
@@ -374,7 +388,7 @@ export class Route53Module extends Construct {
   constructor(scope: Construct, id: string, props: Route53ModuleProps) {
     super(scope, id);
 
-    this.hostedZone = new route53Zone.Route53Zone(this, "hosted-zone", {
+    this.hostedZone = new route53Zone.Route53Zone(this, 'hosted-zone', {
       name: props.domainName,
       tags: {
         Name: `${props.namePrefix}hosted-zone`,
@@ -382,10 +396,10 @@ export class Route53Module extends Construct {
       },
     });
 
-    this.record = new route53Record.Route53Record(this, "record", {
+    this.record = new route53Record.Route53Record(this, 'record', {
       zoneId: this.hostedZone.zoneId,
       name: props.domainName,
-      type: "A",
+      type: 'A',
       alias: {
         name: props.albDnsName,
         zoneId: props.albZoneId,
@@ -405,14 +419,18 @@ export class CloudWatchModule extends Construct {
   constructor(scope: Construct, id: string, props: CloudWatchModuleProps) {
     super(scope, id);
 
-    this.logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(this, "log-group", {
-      name: props.logGroupName,
-      retentionInDays: 14,
-      tags: {
-        Name: `${props.namePrefix}log-group`,
-        ...props.tags,
-      },
-    });
+    this.logGroup = new cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      'log-group',
+      {
+        name: props.logGroupName,
+        retentionInDays: 14,
+        tags: {
+          Name: `${props.namePrefix}log-group`,
+          ...props.tags,
+        },
+      }
+    );
   }
 }
 
@@ -427,36 +445,30 @@ export class IamModule extends Construct {
   constructor(scope: Construct, id: string, props: IamModuleProps) {
     super(scope, id);
 
-    this.ec2Role = new iamRole.IamRole(this, "ec2-role", {
+    this.ec2Role = new iamRole.IamRole(this, 'ec2-role', {
       name: `${props.namePrefix}ec2-role`,
       assumeRolePolicy: JSON.stringify({
-        Version: "2012-10-17",
+        Version: '2012-10-17',
         Statement: [
           {
-            Action: "sts:AssumeRole",
-            Effect: "Allow",
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
             Principal: {
-              Service: "ec2.amazonaws.com",
+              Service: 'ec2.amazonaws.com',
             },
           },
         ],
       }),
       inlinePolicy: [
         {
-          name: "S3ReadOnlyAccess",
+          name: 'S3ReadOnlyAccess',
           policy: JSON.stringify({
-            Version: "2012-10-17",
+            Version: '2012-10-17',
             Statement: [
               {
-                Effect: "Allow",
-                Action: [
-                  "s3:GetObject",
-                  "s3:ListBucket",
-                ],
-                Resource: [
-                  props.s3BucketArn,
-                  `${props.s3BucketArn}/*`,
-                ],
+                Effect: 'Allow',
+                Action: ['s3:GetObject', 's3:ListBucket'],
+                Resource: [props.s3BucketArn, `${props.s3BucketArn}/*`],
               },
             ],
           }),
@@ -469,15 +481,19 @@ export class IamModule extends Construct {
     });
 
     // Attach SSM managed instance core policy
-    new iamRolePolicyAttachment.IamRolePolicyAttachment(this, "ssm-policy", {
+    new iamRolePolicyAttachment.IamRolePolicyAttachment(this, 'ssm-policy', {
       role: this.ec2Role.name,
-      policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+      policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
     });
 
-    this.instanceProfile = new iamInstanceProfile.IamInstanceProfile(this, "instance-profile", {
-      name: `${props.namePrefix}instance-profile`,
-      role: this.ec2Role.name,
-    });
+    this.instanceProfile = new iamInstanceProfile.IamInstanceProfile(
+      this,
+      'instance-profile',
+      {
+        name: `${props.namePrefix}instance-profile`,
+        role: this.ec2Role.name,
+      }
+    );
   }
 }
 
@@ -494,30 +510,30 @@ export class SecurityGroupModule extends Construct {
     super(scope, id);
 
     // ALB Security Group
-    this.albSecurityGroup = new securityGroup.SecurityGroup(this, "alb-sg", {
+    this.albSecurityGroup = new securityGroup.SecurityGroup(this, 'alb-sg', {
       name: `${props.namePrefix}alb-sg`,
-      description: "Security group for Application Load Balancer",
+      description: 'Security group for Application Load Balancer',
       vpcId: props.vpcId,
       ingress: [
         {
           fromPort: 80,
           toPort: 80,
-          protocol: "tcp",
-          cidrBlocks: ["0.0.0.0/0"],
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
         },
         {
           fromPort: 443,
           toPort: 443,
-          protocol: "tcp",
-          cidrBlocks: ["0.0.0.0/0"],
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
         },
       ],
       egress: [
         {
           fromPort: 0,
           toPort: 0,
-          protocol: "-1",
-          cidrBlocks: ["0.0.0.0/0"],
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
         },
       ],
       tags: {
@@ -527,30 +543,30 @@ export class SecurityGroupModule extends Construct {
     });
 
     // EC2 Security Group
-    this.ec2SecurityGroup = new securityGroup.SecurityGroup(this, "ec2-sg", {
+    this.ec2SecurityGroup = new securityGroup.SecurityGroup(this, 'ec2-sg', {
       name: `${props.namePrefix}ec2-sg`,
-      description: "Security group for EC2 instances",
+      description: 'Security group for EC2 instances',
       vpcId: props.vpcId,
       ingress: [
         {
           fromPort: 80,
           toPort: 80,
-          protocol: "tcp",
+          protocol: 'tcp',
           securityGroups: [this.albSecurityGroup.id],
         },
         {
           fromPort: 22,
           toPort: 22,
-          protocol: "tcp",
-          cidrBlocks: ["10.0.0.0/16"],
+          protocol: 'tcp',
+          cidrBlocks: ['10.0.0.0/16'],
         },
       ],
       egress: [
         {
           fromPort: 0,
           toPort: 0,
-          protocol: "-1",
-          cidrBlocks: ["0.0.0.0/0"],
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
         },
       ],
       tags: {
@@ -560,15 +576,15 @@ export class SecurityGroupModule extends Construct {
     });
 
     // RDS Security Group
-    this.rdsSecurityGroup = new securityGroup.SecurityGroup(this, "rds-sg", {
+    this.rdsSecurityGroup = new securityGroup.SecurityGroup(this, 'rds-sg', {
       name: `${props.namePrefix}rds-sg`,
-      description: "Security group for RDS database",
+      description: 'Security group for RDS database',
       vpcId: props.vpcId,
       ingress: [
         {
           fromPort: 3306,
           toPort: 3306,
-          protocol: "tcp",
+          protocol: 'tcp',
           securityGroups: [this.ec2SecurityGroup.id],
         },
       ],
