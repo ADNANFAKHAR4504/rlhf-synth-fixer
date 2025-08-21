@@ -611,3 +611,9 @@ describe('Secure Infrastructure Integration Tests', () => {
     });
   });
 });
+
+// Cleanup function for test teardown (if needed)
+afterAll(async () => {
+  // Add any cleanup logic if needed
+  console.log('Integration tests completed');
+});
