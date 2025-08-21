@@ -1,13 +1,13 @@
 import { Construct } from 'constructs';
-import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
+// import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
 
-// import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-// import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-// import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
@@ -15,19 +15,19 @@ import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 
-// import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
-// import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-// import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-// import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-// import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-// import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-// import { Route } from '@cdktf/provider-aws/lib/route';
-// import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-// import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-// import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
-// import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-// import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
-// import { EbsVolume } from '@cdktf/provider-aws/lib/ebs-volume';
+import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { EbsVolume } from '@cdktf/provider-aws/lib/ebs-volume';
 
 interface SecureModulesProps {
   region: string;
@@ -37,14 +37,14 @@ export class SecureModules extends Construct {
   public readonly kmsKey: KmsKey;
   public readonly kmsAlias: KmsAlias;
   public readonly s3Bucket: S3Bucket;
-  // public readonly vpc: Vpc;
-  // public readonly publicSubnets: Subnet[];
-  // public readonly privateSubnets: Subnet[];
-  // public readonly lambdaRole: IamRole;
-  // public readonly lambdaFunction: LambdaFunction;
-  // public readonly lambdaLogGroup: CloudwatchLogGroup;
-  // public readonly rdsInstance: DbInstance;
-  // public readonly ebsVolume: EbsVolume;
+  public readonly vpc: Vpc;
+  public readonly publicSubnets: Subnet[];
+  public readonly privateSubnets: Subnet[];
+  public readonly lambdaRole: IamRole;
+  public readonly lambdaFunction: LambdaFunction;
+  public readonly lambdaLogGroup: CloudwatchLogGroup;
+  public readonly rdsInstance: DbInstance;
+  public readonly ebsVolume: EbsVolume;
 
   constructor(scope: Construct, id: string, props: SecureModulesProps) {
     super(scope, id);
@@ -56,10 +56,10 @@ export class SecureModules extends Construct {
     // Configuration
     const region = props.region;
     const appName = 'MyApp';
-    // const vpcCidr = '10.0.0.0/16';
-    // const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
-    // const privateSubnetCidrs = ['10.0.10.0/24', '10.0.20.0/24'];
-    // const availabilityZones = [`${region}a`, `${region}b`];
+    const vpcCidr = '10.0.0.0/16';
+    const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
+    const privateSubnetCidrs = ['10.0.10.0/24', '10.0.20.0/24'];
+    const availabilityZones = [`${region}a`, `${region}b`];
 
     // KMS Key for encryption at rest - FIXED POLICY
     this.kmsKey = new KmsKey(this, 'kms-key', {
@@ -164,8 +164,6 @@ export class SecureModules extends Construct {
       targetPrefix: 'access-logs/',
     });
 
-    // COMMENTED OUT - VPC and related resources
-    /*
     // VPC
     this.vpc = new Vpc(this, 'vpc', {
       cidrBlock: vpcCidr,
@@ -420,6 +418,5 @@ export class SecureModules extends Construct {
         Name: `${appName}-EBS-Volume`,
       },
     });
-    */
   }
 }
