@@ -740,13 +740,13 @@ Resources:
         AllSupported: true
         IncludeGlobalResourceTypes: true
 
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${ProjectName}-${Environment}-config-delivery'
-      S3BucketName: !Ref S3WebAssetsBucket
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
+  # ConfigDeliveryChannel:
+  #   Type: AWS::Config::DeliveryChannel
+  #   Properties:
+  #     Name: !Sub '${ProjectName}-${Environment}-config-delivery'
+  #     S3BucketName: !Ref S3WebAssetsBucket
+  #     ConfigSnapshotDeliveryProperties:
+  #       DeliveryFrequency: TwentyFour_Hours
   # ========================================
 
   KMSKey:
