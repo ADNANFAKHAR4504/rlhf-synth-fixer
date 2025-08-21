@@ -59,7 +59,8 @@ describe("TapStack Integration Tests", () => {
     }, 20000);
 
     test("Private subnets exist and are properly configured", async () => {
-      const subnetIds = JSON.parse(stackOutputs["private-subnet-ids"]);
+      // Fix: Use the array directly instead of parsing JSON
+      const subnetIds = stackOutputs["private-subnet-ids"];
       const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: subnetIds }));
       
       expect(Subnets).toHaveLength(2);
@@ -70,7 +71,8 @@ describe("TapStack Integration Tests", () => {
     }, 20000);
 
     test("Public subnets exist and are properly configured", async () => {
-      const subnetIds = JSON.parse(stackOutputs["public-subnet-ids"]);
+      // Fix: Use the array directly instead of parsing JSON
+      const subnetIds = stackOutputs["public-subnet-ids"];
       const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: subnetIds }));
       
       expect(Subnets).toHaveLength(2);
@@ -150,7 +152,8 @@ describe("TapStack Integration Tests", () => {
 
     test("Lambda function exists and is configured in VPC", async () => {
       const functionName = stackOutputs["lambda-function-name"];
-      const privateSubnetIds = JSON.parse(stackOutputs["private-subnet-ids"]);
+      // Fix: Use the array directly instead of parsing JSON
+      const privateSubnetIds = stackOutputs["private-subnet-ids"];
       
       const { Configuration } = await lambdaClient.send(
         new GetFunctionCommand({ FunctionName: functionName })
@@ -182,7 +185,8 @@ describe("TapStack Integration Tests", () => {
 
   describe("Security Compliance", () => {
     test("Security summary contains all required compliance items", () => {
-      const securitySummary = JSON.parse(stackOutputs["security-summary"]);
+      // Fix: Use the object directly instead of parsing JSON
+      const securitySummary = stackOutputs["security-summary"];
       
       expect(securitySummary["encryption_at_rest"]).toBe("Enabled with customer-managed KMS key");
       expect(securitySummary["logging_enabled"]).toBe("S3 access logs and Lambda execution logs");
