@@ -135,9 +135,9 @@ describe('TapStack Integration Tests', () => {
       expect(response.SecurityGroups).toBeDefined();
       expect(response.SecurityGroups?.length).toBeGreaterThan(0);
       
-      // Check for web and database security groups
-      const sgNames = response.SecurityGroups?.map(sg => sg.GroupName) || [];
-      const hasWebSG = sgNames.some(name => name?.includes('web'));
+      // Check for web and database security groups (case-insensitive)
+      const sgNames = response.SecurityGroups?.map(sg => sg.GroupName?.toLowerCase()) || [];
+      const hasWebSG = sgNames.some(name => name?.includes('web') || name?.includes('webserver'));
       const hasDbSG = sgNames.some(name => name?.includes('db') || name?.includes('database'));
       
       expect(hasWebSG || hasDbSG).toBe(true);
