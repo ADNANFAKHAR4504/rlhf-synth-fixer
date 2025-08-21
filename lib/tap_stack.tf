@@ -327,7 +327,7 @@ resource "aws_secretsmanager_secret_version" "app_config" {
 # module: rds
 # ----------------------------
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group"
+  name       = lower("${local.name_prefix}-db-subnet-group")
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(local.common_tags, {

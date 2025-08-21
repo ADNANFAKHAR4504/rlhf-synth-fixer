@@ -36,13 +36,8 @@ describe('Terraform single-file stack: tap_stack.tf', () => {
     expectNotMatch(/\bbackend\s+"/);
   });
 
-  test('declares terraform block with required_providers (aws, random)', () => {
-    expectMatch(/terraform\s*\{/);
-    expectMatch(/required_providers\s*\{/);
-    expectMatch(
-      /aws\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/aws"[\s\S]*?version\s*=\s*"~>\s*5\.0"[\s\S]*?\}/
-    );
-    expectMatch(/random\s*=\s*\{[\s\S]*?source\s*=\s*"hashicorp\/random"/);
+  test('does not define terraform block here (it lives in provider.tf)', () => {
+    expectNotMatch(/terraform\s*\{/);
   });
 
   describe('Variables & locals', () => {
