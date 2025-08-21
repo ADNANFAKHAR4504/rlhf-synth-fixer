@@ -55,6 +55,12 @@ variable "availability_zones" {
   default     = ["us-east-1a", "us-east-1b"]
 }
 
+variable "acm_certificate_arn" {
+  description = "The ARN of the existing ACM certificate for the ALB."
+  type        = string
+  default     = "arn:aws:acm:us-east-1:718240086340:certificate/d3003292-683c-4983-9ac4-e086e5209472"
+}
+
 # Local values
 locals {
   common_tags = {
@@ -1070,7 +1076,7 @@ resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
 
 resource "aws_cloudtrail" "main" {
   count = var.enable_cloudtrail ? 1 : 0
-  
+
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs]
 
   name           = "${local.resource_prefix}-cloudtrail"
@@ -1677,13 +1683,13 @@ resource "aws_s3_bucket_versioning" "cloudtrail_logs" {
 # RDS Read Replica in us-west-2
 resource "aws_db_instance" "main_replica" {
   provider = aws.west
-  count = var.enable_rds_replica ? 1 : 0
+  count    = var.enable_rds_replica ? 1 : 0
 
   identifier = "${local.resource_prefix}-database-replica"
 
-  # Read replica configuration  
+  # Read replica configuration
   replicate_source_db = aws_db_instance.main.identifier
-  
+
   depends_on = [aws_db_instance.main]
 
   instance_class = "db.t3.micro"
@@ -1732,7 +1738,7 @@ resource "aws_kms_alias" "rds_encryption_west" {
 # CloudTrail in us-west-2
 resource "aws_cloudtrail" "west" {
   provider = aws.west
-  count = var.enable_cloudtrail ? 1 : 0
+  count    = var.enable_cloudtrail ? 1 : 0
 
   depends_on = [aws_s3_bucket_policy.cloudtrail_logs_replica]
 
@@ -1782,7 +1788,7 @@ resource "aws_sns_topic" "alerts_west" {
 # CloudWatch Alarms for RDS Replica in us-west-2
 resource "aws_cloudwatch_metric_alarm" "rds_replica_cpu" {
   provider = aws.west
-  count = var.enable_rds_replica ? 1 : 0
+  count    = var.enable_rds_replica ? 1 : 0
 
   alarm_name          = "${local.resource_prefix}-rds-replica-high-cpu"
   comparison_operator = "GreaterThanThreshold"
@@ -1806,7 +1812,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_replica_cpu" {
 
 resource "aws_cloudwatch_metric_alarm" "rds_replica_lag" {
   provider = aws.west
-  count = var.enable_rds_replica ? 1 : 0
+  count    = var.enable_rds_replica ? 1 : 0
 
   alarm_name          = "${local.resource_prefix}-rds-replica-lag"
   comparison_operator = "GreaterThanThreshold"
